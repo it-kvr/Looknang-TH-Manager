@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f3f6f4;
+  --surface: #ffffff;
+  --surface-2: #eaf0ec;
+  --line: #d4e0d8;
+  --ink: #0f2218;
+  --mut: #556b5e;
+  --g: #17804a;
+  --g-soft: rgba(23, 128, 74, 0.12);
+  --lamp: #f5c242;
+  --lamp-soft: rgba(245, 194, 66, 0.18);
+  --red: #dc2626;
+  --red-soft: rgba(220, 38, 38, 0.12);
+}
+
+.dark {
+  --bg: #08130e;
+  --surface: #0f2017;
+  --surface-2: #162c21;
+  --line: #234232;
+  --ink: #eef5f0;
+  --mut: #95b1a1;
+  --g: #28b56b;
+  --g-soft: rgba(40, 181, 107, 0.16);
+  --lamp: #f5c242;
+  --lamp-soft: rgba(245, 194, 66, 0.18);
+  --red: #f87171;
+  --red-soft: rgba(248, 113, 113, 0.16);
+}
+
+html,
+body {
+  background-color: var(--bg);
+  color: var(--ink);
+  font-family: 'Sarabun', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-display {
+  font-family: 'Kanit', 'Sarabun', system-ui, sans-serif;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(105vh) rotate(540deg);
+    opacity: 0;
+  }
+}
+
+.confetti-piece {
+  position: fixed;
+  top: -12px;
+  width: 9px;
+  height: 14px;
+  border-radius: 2px;
+  z-index: 9999;
+  pointer-events: none;
+  animation-name: confetti-fall;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation-fill-mode: forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    display: none;
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "ลูกหนังไทย",
+  "description": "เกมจำลองการคุมทีมฟุตบอลไทยและโหมดนักเตะอาชีพ ไต่เต้าจากลีกระดับจังหวัดสู่ลีกสูงสุด บอลถ้วยประชาชน และเวทีชิงแชมป์ทวีป",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
