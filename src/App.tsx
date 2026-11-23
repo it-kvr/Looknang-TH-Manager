@@ -68,6 +68,7 @@ interface Player {
   offerCoolMd?: number;
   signedSeason?: number;
   signedMd?: number;
+  treatedMd?: number;
 }
 
 type CustomSlot = [SubRole, number, number];
@@ -163,6 +164,7 @@ interface PlayerCareerProfile {
   yc?: number;
   rc?: number;
   sus?: number;
+  inj?: number;
 }
 
 interface AutoRule {
@@ -371,7 +373,7 @@ interface AppSettings {
   mute?: boolean;
   novib?: boolean;
   quick?: boolean;
-  matchSpeed?: 0.5 | 1 | 2 | 4;
+  matchSpeed?: 0.25 | 0.5 | 1 | 2 | 4;
   autoSkipMatch?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
@@ -766,8 +768,8 @@ function saveSettings(s: AppSettings) {
   }
 }
 
-function getDefaultMatchSpeed(st: AppSettings): 0.5 | 1 | 2 | 4 {
-  if (st.matchSpeed === 0.5 || st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 4) return st.matchSpeed;
+function getDefaultMatchSpeed(st: AppSettings): 0.25 | 0.5 | 1 | 2 | 4 {
+  if (st.matchSpeed === 0.25 || st.matchSpeed === 0.5 || st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 4) return st.matchSpeed;
   return 1;
 }
 
@@ -1730,6 +1732,7 @@ function syncMe(s: GameState) {
     q.yc = s.p.yc ?? q.yc ?? 0;
     q.rc = s.p.rc ?? q.rc ?? 0;
     q.sus = s.p.sus ?? q.sus ?? 0;
+    q.inj = s.p.inj ?? q.inj ?? 0;
     if (s.p.no) q.no = s.p.no;
     else if (q.no) s.p.no = q.no;
     q.vis = visOf(q, s.p);
@@ -2518,6 +2521,11 @@ function runPlayerWeek(s: GameState) {
     const g = autoGrow(p, 1);
     if (g) m += ` · พัฒนาอัตโนมัติ (${g})`;
   }
+  if ((p.inj || 0) > 0) {
+    const healStep = p.plan === 2 ? 2 : 1;
+    p.inj = Math.max(0, (p.inj || 0) - healStep);
+    m += p.inj === 0 ? ' · 🩹 หายเจ็บพร้อมลงสนาม!' : ` · 🩹 พักฟื้นเหลือ ${p.inj} นัด`;
+  }
   p.last = m;
   s.news = (s.news ? s.news + ' · ' : '') + m;
   syncMe(s);
@@ -3104,12 +3112,14 @@ function applyPitchPlayerOutcome(
   }
 }
 
-function afterMatchDay(s: GameState) {
+function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; playerNames?: string[] }) {
   const me = s.teams[s.me];
   const mg = s.mode === 'm';
   const lv = s.tr ?? 1;
   const medLv = s.med ?? 1;
   const stf = getStaffState(s);
+  const skipInjTeams = new Set(liveInjMeta?.teamIds || []);
+  const justInjuredNames = new Set(liveInjMeta?.playerNames || []);
 
   me.tacFam = clamp((me.tacFam ?? 65) + 2 + stf.asst, 30, 100);
 
@@ -3124,6 +3134,10 @@ function afterMatchDay(s: GameState) {
           if ((q.sus || 0) > 0) {
             q.sus = (q.sus || 0) - 1;
             if (s.p) s.p.sus = q.sus;
+          }
+          if ((q.inj || 0) > 0 && !justInjuredNames.has(q.n)) {
+            q.inj = Math.max(0, q.inj - 1);
+            if (s.p) s.p.inj = q.inj;
           }
           return;
         }
@@ -3140,12 +3154,15 @@ function afterMatchDay(s: GameState) {
         );
         if ((q.sus || 0) > 0) q.sus = (q.sus || 0) - 1;
         if (q.inj > 0) {
-          q.inj--;
-          if (q.inj > 0 && (Dq.d.rec >= 85 || (mine && (medLv >= 3 || stf.physio >= 2))) && Math.random() < 0.3 + (mine ? (medLv - 1) * 0.08 + stf.physio * 0.08 : 0)) {
+          if (!justInjuredNames.has(q.n)) {
             q.inj--;
+            if (q.inj > 0 && (Dq.d.rec >= 85 || (mine && (medLv >= 3 || stf.physio >= 2))) && Math.random() < 0.3 + (mine ? (medLv - 1) * 0.08 + stf.physio * 0.08 : 0)) {
+              q.inj--;
+            }
           }
         } else if (
           pi &&
+          !skipInjTeams.has(t.id) &&
           Math.random() <
             (q.fit < 60 ? 0.07 : 0.024) *
               (mine && s.tf === 'F' ? 0.5 : 1) *
@@ -5284,12 +5301,15 @@ const LeagueView: React.FC<{
   onInspectTeam: (teamId: number) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState }) => {
+  onNavigate?: (tab: MainTab, sub?: string) => void;
+  onToast?: (msg: string) => void;
+}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const sub = state.tv ?? 0;
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [sideStatTab, setSideStatTab] = useState<'sg' | 'sa' | 'cs' | 'ov'>('sg');
+  const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'deal' | 'act' | 'train'>('all');
 
   const tb = sortTable(state.teams.filter((t) => t.tier === vt));
   const myTierTable = vt === me.tier ? tb : sortTable(state.teams.filter((t) => t.tier === me.tier));
@@ -5318,68 +5338,537 @@ const LeagueView: React.FC<{
     );
   };
 
-  const renderMySummaryBanner = () => {
-    const myRankPow =
-      state.teams
-        .filter((t) => t.tier === me.tier)
-        .map((t) => ({ t, st: teamStats(t, state) }))
-        .sort((a, b) => b.st.ovSq - a.st.ovSq)
-        .findIndex((x) => x.t.id === state.me) + 1;
-    const nTeams = myTierTable.length;
-    const myGd = me.gf - me.ga;
-    const avgOf = (k: 'ovSq' | 'ovXi' | 'at' | 'df') => {
-      const same = state.teams.filter((t) => t.tier === me.tier).map((t) => teamStats(t, state));
-      return Math.round(same.reduce((sum, x) => sum + x[k], 0) / (same.length || 1));
+  const renderImportantNewsPanel = () => {
+    type NewsCat = 'deal' | 'act' | 'train' | 'news';
+    type NewsTone = 'urg' | 'warn' | 'ok' | 'info';
+    interface ImportantNewsItem {
+      id: string;
+      cat: NewsCat;
+      tone: NewsTone;
+      icon: string;
+      tag: string;
+      title: string;
+      detail: string;
+      urgent?: boolean;
+      actionLabel?: string;
+      onAction?: () => void;
+      quickTraining?: boolean;
+    }
+
+    const items: ImportantNewsItem[] = [];
+    const isMgr = state.mode === 'm';
+
+    if (isMgr) {
+      const starters = xi(me);
+      const avgXiFit = Math.round(starters.reduce((sum, q) => sum + (q.fit ?? 100), 0) / Math.max(1, starters.length));
+      const tiredStarters = starters.filter((q) => (q.fit ?? 100) < 74);
+      const lowFitAll = me.sq.filter((q) => !q.inj && (q.fit ?? 100) < 62);
+      const injuredList = me.sq.filter((q) => q.inj > 0);
+      const suspendedList = me.sq.filter((q) => (q.sus || 0) > 0);
+
+      // 1. สัญญานักเตะ & สัญญาสปอนเซอร์ & ข้อเสนอ
+      const ownPlayers = me.sq.filter((q) => !q.loan);
+      const expiredCon = ownPlayers.filter((q) => ensureCon(q).yr <= 0);
+      const expiringSoon = ownPlayers.filter((q) => ensureCon(q).yr === 1);
+      const incomingOffers = getIncomingOffers(state);
+
+      if (expiredCon.length > 0 || expiringSoon.length > 0) {
+        const namesPreview = [...expiredCon, ...expiringSoon]
+          .slice(0, 2)
+          .map((q) => q.n.split(' ')[0])
+          .join(', ');
+        const totalNeed = expiredCon.length + expiringSoon.length;
+        items.push({
+          id: 'contracts-expiring',
+          cat: 'deal',
+          tone: expiredCon.length > 0 ? 'urg' : 'warn',
+          urgent: true,
+          icon: '📄',
+          tag: 'สัญญา',
+          title:
+            expiredCon.length > 0
+              ? `มีนักเตะหมดสัญญา ${expiredCon.length} คน${expiringSoon.length ? ` · ใกล้หมด ${expiringSoon.length} คน` : ''}`
+              : `สัญญาเหลือ ≤ 1 ปี (${expiringSoon.length} คน)`,
+          detail: `${namesPreview}${totalNeed > 2 ? ` +อีก ${totalNeed - 2} คน` : ''} · รีบต่อก่อนค่าเหนื่อยพุ่ง +25%`,
+          actionLabel: 'ต่อสัญญา',
+          onAction: () => onNavigate?.('k', 'con')
+        });
+      } else {
+        items.push({
+          id: 'contracts-ok',
+          cat: 'deal',
+          tone: 'ok',
+          icon: '📄',
+          tag: 'สัญญา',
+          title: `สัญญานักเตะมั่นคง (${ownPlayers.length} คนเหลือ ≥ 2 ปี)`,
+          detail: 'ยังไม่พบผู้เล่นที่เสี่ยงหมดสัญญาในฤดูกาลนี้',
+          actionLabel: 'ดูสัญญา',
+          onAction: () => onNavigate?.('k', 'con')
+        });
+      }
+
+      if (incomingOffers.length > 0) {
+        const topOff = incomingOffers[0];
+        items.push({
+          id: 'transfer-offers',
+          cat: 'deal',
+          tone: 'warn',
+          urgent: true,
+          icon: '💼',
+          tag: 'ข้อเสนอ',
+          title: `มี ${incomingOffers.length} ข้อเสนอซื้อตัวรอพิจารณา`,
+          detail: `${topOff.t} ยื่นซื้อ ${topOff.n} (${topOff.p}k ฿)`,
+          actionLabel: 'เปิดดู',
+          onAction: () => onNavigate?.('k', 'sell')
+        });
+      }
+
+      // 2. สปอนเซอร์ที่ไม่ได้เลือก & ดีลสปอนเซอร์ปัจจุบัน
+      const tierMult = 1 + me.tier * 0.45;
+      const availableDeals = [
+        { name: 'เครื่องดื่มเกลือแร่', perMatch: Math.round(5 * tierMult), signBonus: Math.round(12 * tierMult), ok: true },
+        { name: 'ชุดกีฬาลูกหนังไทย', perMatch: Math.round(7 * tierMult), signBonus: Math.round(15 * tierMult), ok: (state.fan ?? 55) >= 45 },
+        { name: 'เครือข่าย & ถ่ายทอดสด', perMatch: Math.round(10 * tierMult), signBonus: Math.round(22 * tierMult), ok: me.tier >= 1 || (state.fan ?? 55) >= 65 }
+      ].filter((d) => d.ok);
+
+      if (!state.sponsorDeal) {
+        const bestDeal = availableDeals[availableDeals.length - 1] || availableDeals[0];
+        items.push({
+          id: 'sponsor-unselected',
+          cat: 'deal',
+          tone: 'warn',
+          urgent: true,
+          icon: '🤝',
+          tag: 'สปอนเซอร์',
+          title: `ยังไม่ได้เลือกดีลพาร์ทเนอร์ (ว่าง ${availableDeals.length} ดีล)`,
+          detail: bestDeal
+            ? `พร้อมเซ็นรับสูงสุด +${bestDeal.perMatch}k/นัด + โบนัสเซ็น +${bestDeal.signBonus}k ฿`
+            : 'เข้าไปเลือกเซ็นสัญญาเพิ่มรายได้ทุกแมตช์',
+          actionLabel: 'เลือกสปอน',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      } else {
+        const lowLeft = state.sponsorDeal.left <= 2;
+        items.push({
+          id: 'sponsor-active',
+          cat: 'deal',
+          tone: lowLeft ? 'warn' : 'ok',
+          urgent: lowLeft,
+          icon: '🤝',
+          tag: 'สปอนเซอร์',
+          title: `ดีล ${state.sponsorDeal.name} (+${state.sponsorDeal.perMatch}k/นัด)`,
+          detail: lowLeft
+            ? `ใกล้ครบกำหนด! เหลืออีกเพียง ${state.sponsorDeal.left} นัด`
+            : `เหลืออายุสัญญาอีก ${state.sponsorDeal.left} นัด · สปอนหลัก ${['แพ็กเกจมั่นคง', 'โบนัสชัยชนะ', 'บิ๊กแมตช์'][state.sp ?? 0]}`,
+          actionLabel: 'จัดการ',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      }
+
+      if (!state.promo && state.money >= 15) {
+        items.push({
+          id: 'promo-unselected',
+          cat: 'deal',
+          tone: 'info',
+          icon: '📣',
+          tag: 'โปรโมต',
+          title: 'ยังไม่ได้เลือกแคมเปญวันแข่งนัดถัดไป',
+          detail: 'สามารถเปิดโปรโมตตั๋ว (+35%) หรือบูสต์สปอนเซอร์ (+35%) ได้',
+          actionLabel: 'ตั้งค่า',
+          onAction: () => onNavigate?.('f', 'overview')
+        });
+      }
+
+      // 3. กิจกรรมต่างๆ & เหตุการณ์ & แมวมอง
+      if (state.dilemma) {
+        items.push({
+          id: 'active-dilemma',
+          cat: 'act',
+          tone: 'urg',
+          urgent: true,
+          icon: '📌',
+          tag: 'เหตุการณ์ด่วน',
+          title: state.dilemma.title,
+          detail: `${state.dilemma.category} · มีหน้าต่างเหตุการณ์รอการตัดสินใจ`,
+        });
+      }
+
+      const curTurn = state.season * 40 + state.md;
+      const actCool = state.clubActMd != null && curTurn - state.clubActMd < 3;
+      const remCd = state.clubActMd != null ? Math.max(0, 3 - (curTurn - state.clubActMd)) : 0;
+      if (!actCool) {
+        items.push({
+          id: 'club-activity-ready',
+          cat: 'act',
+          tone: 'ok',
+          urgent: true,
+          icon: '🎉',
+          tag: 'กิจกรรม',
+          title: 'กิจกรรมสโมสรพร้อมจัดรอบใหม่แล้ว!',
+          detail: 'พบปะแฟนบอล · Open House · แคมป์ทีม · ติวแท็กติก · การกุศล',
+          actionLabel: 'จัดกิจกรรม',
+          onAction: () => onNavigate?.('u', 'activities')
+        });
+      } else {
+        items.push({
+          id: 'club-activity-cd',
+          cat: 'act',
+          tone: 'info',
+          icon: '⏳',
+          tag: 'กิจกรรม',
+          title: `กิจกรรมสโมสรรอคูลดาวน์อีก ${remCd} นัด`,
+          detail: 'จัดได้ทุก 3 นัด เพื่อปลุกขวัญทีมและแฟนบอล',
+          actionLabel: 'ดูกิจกรรม',
+          onAction: () => onNavigate?.('u', 'activities')
+        });
+      }
+
+      if (state.scout?.results) {
+        items.push({
+          id: 'scout-ready',
+          cat: 'act',
+          tone: 'ok',
+          urgent: true,
+          icon: '🔍',
+          tag: 'แมวมอง',
+          title: `รายงานแมวมอง "${state.scout.label}" ส่งมาแล้ว`,
+          detail: `พบเป้าหมาย ${state.scout.results.length} รายพร้อมยื่นซื้อ`,
+          actionLabel: 'ดูรายงาน',
+          onAction: () => onNavigate?.('k', 'scout')
+        });
+      }
+
+      // 4. การซ้อมทีม
+      const tfNames: Record<TrainingFocus, string> = {
+        FW: 'ซ้อมกองหน้า',
+        MF: 'ซ้อมกองกลาง',
+        DF: 'ซ้อมกองหลัง & โกล์',
+        F: 'พักผ่อน / ฟื้นร่าง'
+      };
+      items.push({
+        id: 'team-training',
+        cat: 'train',
+        tone: 'info',
+        icon: '🏋️',
+        tag: 'การซ้อมทีม',
+        title: `โปรแกรมสัปดาห์: ${tfNames[state.tf || 'MF']} (ศูนย์ฝึก Lv.${state.tr ?? 1})`,
+        detail: state.focusPlayer
+          ? `โฟกัสปั้นพิเศษ: ${state.focusPlayer} (2.2x)`
+          : 'ยังไม่ได้ตั้งนักเตะโฟกัสปั้นพิเศษ (2.2x)',
+        quickTraining: true,
+        actionLabel: 'ตั้งปั้นพิเศษ',
+        onAction: () => onNavigate?.('q', 'tactics')
+      });
+
+      // 5. การพักผ่อน & สภาพร่างกาย
+      const needRest = (tiredStarters.length > 0 || lowFitAll.length > 0 || avgXiFit < 78) && state.tf !== 'F';
+      if (needRest) {
+        items.push({
+          id: 'rest-needed',
+          cat: 'train',
+          tone: avgXiFit < 68 || lowFitAll.length >= 3 ? 'urg' : 'warn',
+          urgent: true,
+          icon: '😴',
+          tag: 'การพักผ่อน',
+          title: `ทีมเริ่มล้า ควรสลับพักผ่อน (ฟิตตัวจริง ${avgXiFit}%)`,
+          detail: `ตัวจริงล้า ${tiredStarters.length} คน${injuredList.length ? ` · เจ็บ ${injuredList.length}` : ''}${suspendedList.length ? ` · แบน ${suspendedList.length}` : ''}`,
+          actionLabel: 'สลับฟื้นร่าง',
+          onAction: () => {
+            SFX.tap();
+            onUpdateState((d) => {
+              d.tf = 'F';
+            });
+            onToast?.('สลับโปรแกรมเป็น "พักผ่อน / ฟื้นร่าง" แล้ว (ฟิต +8%/นัด ลดเสี่ยงเจ็บ 50%)');
+          }
+        });
+      } else if (state.tf === 'F') {
+        items.push({
+          id: 'rest-active',
+          cat: 'train',
+          tone: 'ok',
+          icon: '😴',
+          tag: 'การพักผ่อน',
+          title: `กำลังเข้าโปรแกรมพักผ่อน/ฟื้นร่าง (ฟิตตัวจริง ${avgXiFit}%)`,
+          detail: `ฟื้นฟูความฟิต +8% และลดโอกาสเจ็บ 50%${injuredList.length ? ` · เจ็บ ${injuredList.length} คน` : ''}`,
+          actionLabel: avgXiFit >= 88 ? 'กลับมาซ้อม' : undefined,
+          onAction:
+            avgXiFit >= 88
+              ? () => {
+                  SFX.tap();
+                  onUpdateState((d) => {
+                    d.tf = 'MF';
+                  });
+                  onToast?.('ร่างกายฟื้นเต็มที่แล้ว! สลับกลับสู่โหมดซ้อมกองกลาง');
+                }
+              : undefined
+        });
+      } else {
+        items.push({
+          id: 'rest-ok',
+          cat: 'train',
+          tone: 'ok',
+          icon: '💪',
+          tag: 'การพักผ่อน',
+          title: `สภาพร่างกายพร้อมลุย (ฟิตตัวจริง ${avgXiFit}%)`,
+          detail:
+            injuredList.length || suspendedList.length
+              ? `${injuredList.length ? `🩹 บาดเจ็บ ${injuredList.length} คน` : ''}${injuredList.length && suspendedList.length ? ' · ' : ''}${suspendedList.length ? `🟥 ติดแบน ${suspendedList.length} คน` : ''}`
+              : 'ไม่มีนักเตะบาดเจ็บหรือติดโทษแบน',
+          actionLabel: 'เช็กทีม',
+          onAction: () => onNavigate?.('q', 'squad')
+        });
+      }
+
+      if (injuredList.length > 0) {
+        const injNames = injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj}นัด)`).join(', ');
+        items.push({
+          id: 'club-injured-rehab',
+          cat: 'train',
+          tone: 'urg',
+          urgent: true,
+          icon: '🩹',
+          tag: 'กายภาพฟื้นฟู',
+          title: `มีนักเตะบาดเจ็บ ${injuredList.length} คน — กดทำกายภาพเร่งหายได้`,
+          detail: `${injNames}${injuredList.length > 2 ? ` +${injuredList.length - 2} คน` : ''} · คลิกดูรายชื่อหรือจัดคลินิกกายภาพ`,
+          actionLabel: 'ฟื้นฟูทีม',
+          onAction: () => onNavigate?.('q', 'squad')
+        });
+      }
+
+      // 6. การเงิน / บอร์ด / บอลถ้วย / ฟีดข่าวสารล่าสุด
+      if (state.money < 0 || (state.bd ?? 55) < 35) {
+        items.push({
+          id: 'club-alert-fin-bd',
+          cat: 'news',
+          tone: 'urg',
+          urgent: true,
+          icon: '⚠️',
+          tag: 'แจ้งเตือนด่วน',
+          title: state.money < 0 ? `งบสโมสรติดลบ (${state.money.toLocaleString()}k ฿)` : `ความเชื่อมั่นบอร์ดต่ำ (${state.bd ?? 55}%)`,
+          detail: state.money < 0 ? 'ตลาดซื้อตัวถูกล็อกชั่วคราว ควรปรับสมดุลงบหรือกู้หมุนเวียน' : 'เร่งเก็บชัยชนะเพื่อเรียกศรัทธาบอร์ดบริหาร',
+          actionLabel: 'ดูการเงิน',
+          onAction: () => onNavigate?.('f', 'overview')
+        });
+      }
+    } else if (state.p) {
+      // โหมดนักเตะอาชีพ
+      const p = state.p;
+      const curPlan = PACT[p.plan ?? 1] || PACT[1];
+      if ((p.en ?? 100) < 70 && (p.plan ?? 1) !== 3) {
+        items.push({
+          id: 'player-rest-warn',
+          cat: 'train',
+          tone: p.en < 52 ? 'urg' : 'warn',
+          urgent: true,
+          icon: '😴',
+          tag: 'การพักผ่อน',
+          title: `พลังกายเหลือ ${p.en}% — แนะนำพักผ่อน`,
+          detail: 'หากพลังกายต่ำกว่า 58% โค้ชอาจดรอปเป็นสำรองหรือเปลี่ยนออก',
+          actionLabel: 'ตั้งพักผ่อน',
+          onAction: () => {
+            SFX.tap();
+            onUpdateState((d) => {
+              if (d.p) d.p.plan = 3;
+            });
+            onToast?.('ปรับแผนสัปดาห์นี้เป็น "พักผ่อน" แล้ว');
+          }
+        });
+      } else {
+        items.push({
+          id: 'player-plan-info',
+          cat: 'train',
+          tone: 'ok',
+          icon: curPlan.i,
+          tag: 'การซ้อม/พัก',
+          title: `แผนสัปดาห์นี้: ${curPlan.n} (พลังกาย ${p.en}%)`,
+          detail: curPlan.d,
+          actionLabel: 'เปลี่ยนแผน',
+          onAction: () => onNavigate?.('p')
+        });
+      }
+      if ((p.inj || 0) > 0) {
+        items.push({
+          id: 'player-inj-warn',
+          cat: 'train',
+          tone: 'urg',
+          urgent: true,
+          icon: '🩹',
+          tag: 'ฟื้นฟูอาการเจ็บ',
+          title: `คุณบาดเจ็บพักอีก ${p.inj} นัด — ตั้ง "😴 พักผ่อน" หายไวขึ้น (-2 นัด/สัปดาห์)`,
+          detail: 'สามารถกดทำกายภาพส่วนตัวได้ที่หน้าอาชีพนักเตะเพื่อลดวันพักทันที',
+          actionLabel: 'ไปฟื้นฟู',
+          onAction: () => onNavigate?.('p')
+        });
+      }
+      if ((p.sus || 0) > 0 || (p.yc || 0) >= 2) {
+        items.push({
+          id: 'player-card-warn',
+          cat: 'news',
+          tone: (p.sus || 0) > 0 ? 'urg' : 'warn',
+          urgent: true,
+          icon: (p.sus || 0) > 0 ? '🟥' : '🟨',
+          tag: 'วินัยสนาม',
+          title: (p.sus || 0) > 0 ? `ติดโทษแบน ${p.sus} นัด` : `สะสมใบเหลือง ${p.yc}/3 ใบ`,
+          detail: (p.sus || 0) > 0 ? 'รอชดใช้โทษแบนให้ครบก่อนลงสนาม' : 'อีก 1 ใบเหลืองจะโดนแบนอัตโนมัติ 1 นัด'
+        });
+      }
+    }
+
+    // Add recent state.feed news items
+    (state.feed || []).slice(0, 5).forEach((f, idx) => {
+      items.push({
+        id: `feed-${idx}-${f.m}`,
+        cat: f.cat === 'ฝึกซ้อม' ? 'train' : f.cat === 'การเงิน' || f.cat === 'ข้อเสนอ' ? 'deal' : 'news',
+        tone: f.tone === 'urg' ? 'urg' : f.tone === 'offer' ? 'warn' : f.tone === 'ok' ? 'ok' : 'info',
+        urgent: f.tone === 'urg' || f.tone === 'offer',
+        icon: f.tone === 'urg' ? '🚨' : f.tone === 'offer' ? '💼' : f.tone === 'ok' ? '✨' : '📰',
+        tag: `${f.cat} · นัด ${f.m}`,
+        title: f.txt,
+        detail: `ซีซั่น ${f.s}`
+      });
+    });
+
+    const urgentCount = items.filter((it) => it.urgent).length;
+    const filteredItems = items.filter((it) => {
+      if (newsFilter === 'all') return true;
+      if (newsFilter === 'urg') return !!it.urgent;
+      return it.cat === newsFilter;
+    });
+
+    const toneCls: Record<NewsTone, string> = {
+      urg: 'border-l-[var(--red)] bg-[var(--red-soft)]/45 border-[var(--red)]/25',
+      warn: 'border-l-[var(--lamp)] bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/30',
+      ok: 'border-l-[var(--g)] bg-[var(--g-soft)]/45 border-[var(--g)]/25',
+      info: 'border-l-[var(--mut)]/50 bg-[var(--surface-2)]/65 border-[var(--line)]/70'
+    };
+
+    const tagCls: Record<NewsTone, string> = {
+      urg: 'bg-[var(--red)] text-white',
+      warn: 'bg-[var(--lamp)] text-[#261900]',
+      ok: 'bg-[var(--g)] text-white',
+      info: 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]'
     };
 
     return (
-      <div className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
-        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
-          <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-            <ClubCrest name={me.name} size={28} team={me} club={state.club} isMyClub={state.mode === 'm'} />
+      <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1.5">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">📰 ข่าวสารสำคัญ</span>
+            {urgentCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-[var(--red)] text-white text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0">
+                {urgentCount} เรื่องต้องดู
+              </span>
+            )}
           </div>
-          <div className="min-w-0">
-            <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1">
-              <span className="truncate">{me.name}</span>
-              <span className="px-1.5 py-0.2 rounded-md bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8.5px] font-bold shrink-0">ทีมฉัน</span>
-            </div>
-            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate">
-              {TN[me.tier]} · อันดับ <b className="text-[var(--ink)]">{myRank}/{nTeams}</b> · <b className="text-[var(--g)]">{me.pts}</b> แต้ม ({myGd > 0 ? `+${myGd}` : myGd})
-            </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {vt !== me.tier && (
+              <button
+                type="button"
+                onClick={() => onUpdateState((d) => { d.lg = me.tier; })}
+                className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[10px] mland:text-[8.5px] font-bold cursor-pointer shadow-xs hover:brightness-105"
+              >
+                ลีกฉัน
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 ml-auto">
-          <div className="flex items-center divide-x divide-[var(--line)] rounded-xl mland:rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)]/80 overflow-hidden">
-            {(
-              [
-                ['อันดับพลัง', `#${myRankPow}`, null],
-                ['เฉลี่ย', ms.ovSq, ms.ovSq - avgOf('ovSq')],
-                ['ตัวจริง', ms.ovXi, ms.ovXi - avgOf('ovXi')],
-                ['บุก', ms.at, ms.at - avgOf('at')],
-                ['รับ', ms.df, ms.df - avgOf('df')]
-              ] as const
-            ).map(([lbl, val, diff]) => (
-              <div key={lbl} className="px-2 mland:px-1.5 py-1 mland:py-0.5 text-center min-w-[38px] mland:min-w-[31px]">
-                <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-tight whitespace-nowrap">{lbl}</div>
-                <div className="font-bold text-[11px] mland:text-[9.5px] tabular leading-tight whitespace-nowrap">
-                  {val}
-                  {diff !== null && (
-                    <span className={`ml-0.5 text-[9px] mland:text-[7.5px] ${diff > 0 ? 'text-[var(--g)]' : diff < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
-                      {diff > 0 ? `+${diff}` : diff}
-                    </span>
+
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 mland:pb-0">
+          {(
+            [
+              ['all', 'ทั้งหมด'],
+              ['urg', `สำคัญ (${urgentCount})`],
+              ['deal', 'สัญญา·สปอน'],
+              ['act', 'กิจกรรม'],
+              ['train', 'ซ้อม·พัก']
+            ] as const
+          ).map(([fid, flbl]) => (
+            <button
+              key={fid}
+              type="button"
+              onClick={() => { SFX.tap(); setNewsFilter(fid); }}
+              className={`px-2 py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                newsFilter === fid
+                  ? 'bg-[var(--g)] text-white shadow-xs'
+                  : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              {flbl}
+            </button>
+          ))}
+        </div>
+
+        {/* News Items List */}
+        <div className="max-h-[240px] sm:max-h-[270px] mland:max-h-[168px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
+          {filteredItems.length === 0 ? (
+            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-3 text-center">
+              ไม่มีข่าวสารเร่งด่วนในหมวดนี้
+            </div>
+          ) : (
+            filteredItems.map((it) => (
+              <div
+                key={it.id}
+                className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border border-l-[3px] space-y-1 mland:space-y-0.5 ${toneCls[it.tone]}`}
+              >
+                <div className="flex items-start justify-between gap-2 mland:gap-1.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`px-1.5 py-0.2 rounded text-[9px] mland:text-[7.5px] font-extrabold leading-tight shrink-0 ${tagCls[it.tone]}`}>
+                        {it.icon} {it.tag}
+                      </span>
+                      <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate">
+                        {it.title}
+                      </span>
+                    </div>
+                    <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug mt-0.5 mland:mt-0 truncate">
+                      {it.detail}
+                    </div>
+                  </div>
+                  {it.actionLabel && it.onAction && (
+                    <button
+                      type="button"
+                      onClick={() => { SFX.tap(); it.onAction?.(); }}
+                      className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold shrink-0 cursor-pointer transition-colors"
+                    >
+                      {it.actionLabel}
+                    </button>
                   )}
                 </div>
+
+                {it.quickTraining && (
+                  <div className="flex items-center gap-1 pt-0.5">
+                    <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] font-semibold shrink-0">สลับเร็ว:</span>
+                    {(
+                      [
+                        ['FW', 'หน้า'],
+                        ['MF', 'กลาง'],
+                        ['DF', 'หลัง'],
+                        ['F', 'พักฟื้น']
+                      ] as const
+                    ).map(([tk, tl]) => (
+                      <button
+                        key={tk}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => { d.tf = tk; });
+                          onToast?.(`เปลี่ยนโปรแกรมซ้อมทีมเป็น "${tk === 'F' ? 'พักผ่อน/ฟื้นร่าง' : `โฟกัส${tl}`}"`);
+                        }}
+                        className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors ${
+                          (state.tf || 'MF') === tk
+                            ? 'bg-[var(--g)] text-white shadow-xs'
+                            : 'bg-[var(--surface)] border border-[var(--line)]/80 text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {tl}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
-          {vt !== me.tier && (
-            <button
-              type="button"
-              onClick={() => onUpdateState((d) => { d.lg = me.tier; })}
-              className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer shrink-0 shadow-xs hover:brightness-105"
-            >
-              ลีกฉัน
-            </button>
+            ))
           )}
         </div>
       </div>
@@ -5476,7 +5965,7 @@ const LeagueView: React.FC<{
   const renderStandings = () => (
     <div className="space-y-2.5 lg:space-y-0 mland:space-y-0 lg:flex-1 lg:min-h-0 mland:flex-1 mland:min-h-0 lg:grid lg:grid-cols-[1.36fr_0.94fr] lg:gap-3 mland:grid mland:grid-cols-[1.35fr_0.95fr] mland:gap-2 mland:overflow-hidden">
       <div className="space-y-2 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="lg:hidden mland:hidden">{renderMySummaryBanner()}</div>
+        <div className="lg:hidden mland:hidden">{renderImportantNewsPanel()}</div>
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
           {/* Table Header */}
           <div className="shrink-0 grid grid-cols-[24px_20px_minmax(0,1fr)_22px_22px_22px_22px_30px_36px] sm:grid-cols-[26px_24px_minmax(0,1fr)_44px_24px_24px_24px_24px_34px_40px] items-center gap-0.5 sm:gap-1 px-2.5 sm:px-3 py-1.5 mland:py-1 bg-[var(--surface-2)]/90 text-[10.5px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
@@ -5575,7 +6064,7 @@ const LeagueView: React.FC<{
 
       {/* Right Column: Summary + Live League Stats + Recent Results + History */}
       <div className="space-y-2.5 mland:space-y-1.5 mland:h-full mland:overflow-y-auto mland:pr-0.5">
-        <div className="hidden lg:block mland:block">{renderMySummaryBanner()}</div>
+        <div className="hidden lg:block mland:block">{renderImportantNewsPanel()}</div>
         {renderSideLeagueStats()}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 mland:grid-cols-1 gap-2.5 mland:gap-1.5">
           <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
@@ -6313,11 +6802,20 @@ const SquadTacticsView: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
+  navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
+}> = ({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = state.sub ?? 0;
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
+
+  useEffect(() => {
+    if (navIntent?.tab === 'q') {
+      if (navIntent.sub === 'tactics') setLuTab(1);
+      else if (navIntent.sub === 'squad') setLuTab(2);
+      else if (navIntent.sub === 'xi') setLuTab(0);
+    }
+  }, [navIntent]);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
@@ -7731,7 +8229,8 @@ const MarketView: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team | null) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
+  navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
+}> = ({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
   const me = state.teams[state.me];
   const tx = getLeagueTransferContext(state, me);
   const [marketSource, setMarketSource] = useState<'mk' | 'club'>('mk');
@@ -7749,6 +8248,12 @@ const MarketView: React.FC<{
   const [renewWb, setRenewWb] = useState<0 | 1 | 2>(1);
   const [renewMsg, setRenewMsg] = useState('');
   const [rightTab, setRightTab] = useState<'sell' | 'scout' | 'con'>('sell');
+
+  useEffect(() => {
+    if (navIntent?.tab === 'k' && (navIntent.sub === 'sell' || navIntent.sub === 'scout' || navIntent.sub === 'con')) {
+      setRightTab(navIntent.sub);
+    }
+  }, [navIntent]);
 
   const availableSubRoles: SubRole[] = useMemo(() => {
     if (filter === 'GK' || filter === 'DF' || filter === 'MF' || filter === 'FW') return SPX[filter];
@@ -8932,10 +9437,19 @@ const FinanceClubView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ tab, state, onUpdateState, onToast }) => {
+  navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
+}> = ({ tab, state, onUpdateState, onToast, navIntent }) => {
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'infra' | 'ledger'>('overview');
   const [clubTab, setClubTab] = useState<'info' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
+
+  useEffect(() => {
+    if (navIntent?.tab === 'f' && (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'infra' || navIntent.sub === 'ledger')) {
+      setFinTab(navIntent.sub);
+    } else if (navIntent?.tab === 'u' && (navIntent.sub === 'info' || navIntent.sub === 'identity' || navIntent.sub === 'activities' || navIntent.sub === 'legacy')) {
+      setClubTab(navIntent.sub);
+    }
+  }, [navIntent]);
 
   const me = state.teams[state.me];
 
@@ -10500,6 +11014,34 @@ const FinanceClubView: React.FC<{
               </div>
               <div className="text-[11px] text-[var(--mut)]">แฟน +7% · กระตุ้นดาวรุ่งในทีม</div>
             </button>
+
+            <button
+              type="button"
+              disabled={actCool || state.money < 22}
+              onClick={() => {
+                let healed = 0;
+                onUpdateState((d) => {
+                  d.money -= 22;
+                  logFin(d, 'คลินิกกายภาพ & ฟื้นฟูทีม', -22);
+                  d.teams[d.me].sq.forEach((q) => {
+                    if (q.inj > 0) {
+                      q.inj = Math.max(0, q.inj - 1);
+                      healed++;
+                    }
+                    q.fit = clamp((q.fit ?? 100) + 10, 35, 100);
+                  });
+                  d.clubActMd = curTurn;
+                });
+                onToast(healed > 0 ? `🏥 คลินิกกายภาพสำเร็จ! ลดวันพักผู้บาดเจ็บ ${healed} คน (-1 นัด) · ฟิตทั้งทีม +10%` : '🏥 คลินิกฟื้นฟูสำเร็จ! ความฟิตทั้งทีม +10%');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>🏥 คลินิกกายภาพทีม</span>
+                <span className="tabular">22k</span>
+              </div>
+              <div className="text-[11px] text-[var(--mut)]">ลดเจ็บทุกคน -1 นัด · ฟิตทั้งทีม +10%</div>
+            </button>
           </div>
         </div>
       )}
@@ -10690,9 +11232,10 @@ const PlayerCareerView: React.FC<{
   const avgRt = p.ap ? (p.rs / p.ap).toFixed(2) : '-';
   const perks = p.perks || [];
   const susCount = meSq?.sus ?? p.sus ?? 0;
+  const injCount = meSq?.inj ?? p.inj ?? 0;
   const ycCount = meSq?.yc ?? p.yc ?? 0;
   const rcCount = meSq?.rc ?? p.rc ?? 0;
-  const fakePlayer: Player = { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, fit: p.en, inj: 0, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1 };
+  const fakePlayer: Player = { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1 };
   const details = dtInfo(fakePlayer, p);
   const starters = xi(meTeam);
   const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
@@ -10735,18 +11278,48 @@ const PlayerCareerView: React.FC<{
             <div className="h-full rounded-full transition-all" style={{ width: `${p.en}%`, background: p.en >= 70 ? 'var(--g)' : p.en >= 45 ? 'var(--lamp)' : 'var(--red)' }} />
           </div>
 
-          <div className={`p-2.5 mland:p-1.5 rounded-xl border text-xs mland:text-[10px] space-y-1 mland:space-y-0.5 ${susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
+          <div className={`p-2.5 mland:p-1.5 rounded-xl border text-xs mland:text-[10px] space-y-1.5 mland:space-y-0.5 ${injCount > 0 || susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
             <div className="flex items-center justify-between font-bold">
-              <span>{susCount > 0 ? `🟥 โดนแบน ${susCount} นัด` : mySlot ? `⭐ สถานะ: ตัวจริง (${mySlot})` : '🪑 สถานะ: ตัวสำรอง'}</span>
+              <span>
+                {injCount > 0
+                  ? `🩹 บาดเจ็บ พักอีก ${injCount} นัด`
+                  : susCount > 0
+                    ? `🟥 โดนแบน ${susCount} นัด`
+                    : mySlot
+                      ? `⭐ สถานะ: ตัวจริง (${mySlot})`
+                      : '🪑 สถานะ: ตัวสำรอง'}
+              </span>
               <span className="tabular text-[11px] mland:text-[9.5px]">🟨 {ycCount}/3 · 🟥 {rcCount}</span>
             </div>
             <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
-              {susCount > 0
-                ? 'ชดใช้โทษแบนหมดแล้วจึงจะกลับมาลงสนามได้ (สะสม 3 เหลือง = แบน 1 นัด)'
-                : mySlot
-                  ? 'หากพลังกายต่ำกว่า 58% หรือฟอร์มตก โค้ชอาจดรอปเป็นตัวสำรองหรือเปลี่ยนออก'
-                  : 'มีคู่แข่งตำแหน่งเดียวกันพลังสูงกว่า หรือพลังกายยังล้า — รอโอกาสเปลี่ยนตัวลงครึ่งหลัง'}
+              {injCount > 0
+                ? 'เลือก "😴 พักผ่อน" จะฟื้นเร็ว -2 นัด/สัปดาห์ หรือทำกายภาพส่วนตัวเพื่อลดวันพักทันที'
+                : susCount > 0
+                  ? 'ชดใช้โทษแบนหมดแล้วจึงจะกลับมาลงสนามได้ (สะสม 3 เหลือง = แบน 1 นัด)'
+                  : mySlot
+                    ? 'หากพลังกายต่ำกว่า 58% หรือฟอร์มตก โค้ชอาจดรอปเป็นตัวสำรองหรือเปลี่ยนออก'
+                    : 'มีคู่แข่งตำแหน่งเดียวกันพลังสูงกว่า หรือพลังกายยังล้า — รอโอกาสเปลี่ยนตัวลงครึ่งหลัง'}
             </div>
+            {injCount > 0 && (
+              <button
+                type="button"
+                disabled={(p.rep ?? 10) < 4}
+                onClick={() => {
+                  SFX.tap();
+                  onUpdateState((d) => {
+                    if (!d.p || (d.p.rep ?? 10) < 4) return;
+                    d.p.rep = (d.p.rep ?? 10) - 4;
+                    d.p.inj = Math.max(0, (d.p.inj ?? injCount) - 1);
+                    d.p.en = clamp((d.p.en ?? 80) + 12, 35, 100);
+                    syncMe(d);
+                  });
+                  onToast(injCount - 1 <= 0 ? '💆 กายภาพส่วนตัวสำเร็จ! คุณหายเจ็บพร้อมลงสนามแล้ว' : `💆 กายภาพส่วนตัวสำเร็จ! ลดวันพักเหลือ ${injCount - 1} นัด (+12% พลังกาย)`);
+                }}
+                className="w-full py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer disabled:opacity-45"
+              >
+                💆 ทำกายภาพส่วนตัว (-1 นัด · +12% พลังกาย · ใช้ 4 ชื่อเสียง)
+              </button>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 mland:gap-1 pt-1 mland:pt-0 text-center">
@@ -10892,6 +11465,7 @@ interface FinishedMatchPayload {
   cards: MatchCardEvent[];
   subs: MatchSubEvent[];
   playedNames: Record<number, string[]>;
+  injuries?: { teamId: number; name: string; games: number }[];
 }
 
 type PitchIntent =
@@ -10910,6 +11484,7 @@ type PitchIntent =
 type BallFlightType =
   | 'carry'
   | 'pass'
+  | 'onetwo'
   | 'through'
   | 'lofted'
   | 'cross'
@@ -10946,8 +11521,23 @@ interface LivePitchAgent {
   diveProgress: number;
   diveTargetY?: number;
   acrobatTimer?: number;
-  acrobatType?: 'bicycle' | 'volley' | 'skill';
+  acrobatMax?: number;
+  acrobatType?:
+    | 'bicycle'
+    | 'volley'
+    | 'burst'
+    | 'stepover'
+    | 'spin'
+    | 'shield'
+    | 'slide'
+    | 'tackle'
+    | 'clash'
+    | 'skill_pass'
+    | 'supersave';
   skillSpinDir?: number;
+  actionDirX?: number;
+  actionDirY?: number;
+  injuredOut?: boolean;
   runToX?: number;
   runToY?: number;
   fit: number;
@@ -10973,7 +11563,7 @@ interface LiveBallState {
   progress: number;
   duration: number;
   flightType: BallFlightType;
-  shotStyle?: 'normal' | 'bicycle' | 'volley' | 'curler' | 'header' | 'screamer' | 'chip' | 'panenka';
+  shotStyle?: 'normal' | 'bicycle' | 'volley' | 'curler' | 'trivela' | 'knuckle' | 'header' | 'screamer' | 'chip' | 'panenka';
   carrierId: string | null;
   targetId: string | null;
   shooterId: string | null;
@@ -10984,9 +11574,29 @@ interface LiveBallState {
 
 interface LivePitchFx {
   id: number;
-  type: 'offside' | 'foul' | 'save' | 'block' | 'woodwork' | 'goal' | 'freekick' | 'corner' | 'card' | 'var' | 'penalty' | 'skill';
+  type:
+    | 'offside'
+    | 'foul'
+    | 'save'
+    | 'block'
+    | 'woodwork'
+    | 'goal'
+    | 'freekick'
+    | 'corner'
+    | 'card'
+    | 'var'
+    | 'penalty'
+    | 'skill'
+    | 'slide'
+    | 'clash'
+    | 'tackle'
+    | 'injury'
+    | 'onetwo'
+    | 'through';
   x: number;
   y: number;
+  toX?: number;
+  toY?: number;
   offsideX?: number;
   label: string;
   color: string;
@@ -11107,6 +11717,7 @@ interface LiveMatchWorld {
   freeKicksA: number;
   xgH: number;
   xgA: number;
+  inMatchInjuryCount: number;
 }
 
 const buildAgentsForTeam = (
@@ -11207,7 +11818,8 @@ const drawLivePitchToCanvas = (
   awayGkKit: string,
   showRunVectors: boolean,
   homeTrim = '#ffffff',
-  awayTrim = '#ffffff'
+  awayTrim = '#ffffff',
+  showPositions = true
 ) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -11335,17 +11947,39 @@ const drawLivePitchToCanvas = (
   drawGoal(true, world.goalNetRippleLeft);
   drawGoal(false, world.goalNetRippleRight);
 
-  // 3. Visual FX under players (Offside line, Foul ring, Free kick wall spray & barrier)
+  // 3. Visual FX under players (Offside line, Foul ring, Free kick wall spray & barrier, Slides, One-Two, Clashes)
   if (world.pendingSetPiece?.type === 'freekick' && world.pendingSetPiece.wallPlayers?.length) {
-    const wallPts = world.pendingSetPiece.wallPlayers;
+    const spFk = world.pendingSetPiece;
+    const wallPts = spFk.wallPlayers!;
     ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([3, 3]);
+    // Vanishing spray arc around ball spot
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.58)';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([2, 2]);
+    ctx.beginPath();
+    ctx.arc(px(spFk.x), py(spFk.y), 9, 0, Math.PI * 2);
+    ctx.stroke();
+    // Vanishing foam spray line in front of wall
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.lineWidth = 2.6;
+    ctx.setLineDash([4, 2]);
     ctx.beginPath();
     ctx.moveTo(px(wallPts[0].x), py(wallPts[0].y));
     ctx.lineTo(px(wallPts[wallPts.length - 1].x), py(wallPts[wallPts.length - 1].y));
     ctx.stroke();
+    // Compact wall badge
+    const midWallX = (px(wallPts[0].x) + px(wallPts[wallPts.length - 1].x)) * 0.5;
+    const topWallY = Math.min(py(wallPts[0].y), py(wallPts[wallPts.length - 1].y)) - 15;
+    ctx.setLineDash([]);
+    ctx.font = '800 8.5px Sarabun, sans-serif';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(midWallX - 24, topWallY - 7, 48, 13, 5);
+    ctx.fill();
+    ctx.fillStyle = '#fef08a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧱 กำแพง', midWallX, topWallY);
     ctx.restore();
   }
   world.fx.forEach((fx) => {
@@ -11361,12 +11995,85 @@ const drawLivePitchToCanvas = (
       ctx.stroke();
       ctx.restore();
     }
-    if (fx.type === 'foul' || fx.type === 'save' || fx.type === 'block' || fx.type === 'woodwork' || fx.type === 'goal' || fx.type === 'skill' || fx.type === 'penalty') {
-      const expand = (1 - alpha) * (fx.type === 'goal' ? 32 : fx.type === 'skill' ? 22 : 18) + 6;
+    if ((fx.type === 'onetwo' || fx.type === 'through') && fx.toX != null && fx.toY != null) {
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.88;
+      ctx.strokeStyle = fx.type === 'onetwo' ? '#34d399' : '#facc15';
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([5, 3]);
+      ctx.beginPath();
+      ctx.moveTo(px(fx.x), py(fx.y));
+      ctx.lineTo(px(fx.toX), py(fx.toY));
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (fx.type === 'slide') {
+      const ex = px(fx.toX ?? fx.x + 3);
+      const ey = py(fx.toY ?? fx.y + 1);
+      const sx = px(fx.x);
+      const sy = py(fx.y);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.88;
+      ctx.strokeStyle = 'rgba(186, 230, 253, 0.78)';
+      ctx.lineWidth = 3.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx - (ex - sx) * 0.45, sy - (ey - sy) * 0.45 - 2);
+      ctx.lineTo(ex, ey - 2);
+      ctx.moveTo(sx - (ex - sx) * 0.45, sy - (ey - sy) * 0.45 + 2.5);
+      ctx.lineTo(ex, ey + 2.5);
+      ctx.stroke();
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(ex, ey, 6 + (1 - alpha) * 16, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else if (fx.type === 'clash') {
+      const rad = 7 + (1 - alpha) * 17;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.92;
+      ctx.strokeStyle = '#fb923c';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(px(fx.x) - 3, py(fx.y), rad * 0.85, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = '#fef08a';
+      ctx.beginPath();
+      ctx.arc(px(fx.x) + 3, py(fx.y), rad, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    } else if (fx.type === 'injury') {
+      const ix = px(fx.x);
+      const iy = py(fx.y);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.95;
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 12 + (1 - alpha) * 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(ix - 5, iy - 1.5, 10, 3);
+      ctx.fillRect(ix - 1.5, iy - 5, 3, 10);
+      ctx.restore();
+    } else if (
+      fx.type === 'foul' ||
+      fx.type === 'save' ||
+      fx.type === 'block' ||
+      fx.type === 'woodwork' ||
+      fx.type === 'goal' ||
+      fx.type === 'skill' ||
+      fx.type === 'tackle' ||
+      fx.type === 'penalty'
+    ) {
+      const expand = (1 - alpha) * (fx.type === 'goal' ? 32 : fx.type === 'skill' || fx.type === 'tackle' ? 22 : 18) + 6;
       ctx.save();
       ctx.strokeStyle = fx.color;
       ctx.globalAlpha = alpha * 0.85;
-      ctx.lineWidth = fx.type === 'skill' ? 2.5 : 2.2;
+      ctx.lineWidth = fx.type === 'skill' || fx.type === 'tackle' ? 2.5 : 2.2;
       if (fx.type === 'skill') ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.arc(px(fx.x), py(fx.y), expand, 0, Math.PI * 2);
@@ -11417,22 +12124,34 @@ const drawLivePitchToCanvas = (
     const endPy = py(b.toY);
     const midX = (startPx + endPx) * 0.5;
     const midY = (startPy + endPy) * 0.5 + b.curve * (ph / 100);
-    const isSpecialShot = b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'curler' || b.shotStyle === 'screamer';
+    const isSpecialShot =
+      b.shotStyle === 'bicycle' ||
+      b.shotStyle === 'volley' ||
+      b.shotStyle === 'curler' ||
+      b.shotStyle === 'trivela' ||
+      b.shotStyle === 'knuckle' ||
+      b.shotStyle === 'screamer';
     ctx.save();
     ctx.strokeStyle =
       b.flightType === 'shot' || b.flightType === 'freekick'
         ? b.shotStyle === 'curler'
-          ? 'rgba(56, 189, 248, 0.7)'
-          : isSpecialShot
-            ? 'rgba(251, 191, 36, 0.75)'
-            : 'rgba(248, 113, 113, 0.55)'
-        : b.flightType === 'through'
-          ? 'rgba(250, 204, 21, 0.58)'
-          : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
-            ? 'rgba(96, 165, 250, 0.62)'
-            : 'rgba(255, 255, 255, 0.34)';
-    ctx.lineWidth = isSpecialShot ? 2.4 : b.flightType === 'shot' ? 2 : 1.4;
-    ctx.setLineDash([4, 4]);
+          ? 'rgba(56, 189, 248, 0.75)'
+          : b.shotStyle === 'trivela'
+            ? 'rgba(249, 115, 22, 0.78)'
+            : b.shotStyle === 'knuckle'
+              ? 'rgba(192, 132, 252, 0.78)'
+              : isSpecialShot
+                ? 'rgba(251, 191, 36, 0.78)'
+                : 'rgba(248, 113, 113, 0.55)'
+        : b.flightType === 'onetwo'
+          ? 'rgba(52, 211, 153, 0.72)'
+          : b.flightType === 'through'
+            ? 'rgba(250, 204, 21, 0.68)'
+            : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+              ? 'rgba(96, 165, 250, 0.62)'
+              : 'rgba(255, 255, 255, 0.34)';
+    ctx.lineWidth = isSpecialShot ? 2.5 : b.flightType === 'onetwo' || b.flightType === 'through' || b.flightType === 'shot' ? 2 : 1.4;
+    ctx.setLineDash(b.flightType === 'onetwo' ? [6, 3] : [4, 4]);
     ctx.beginPath();
     ctx.moveTo(startPx, startPy);
     ctx.quadraticCurveTo(midX, midY, endPx, endPy);
@@ -11444,18 +12163,26 @@ const drawLivePitchToCanvas = (
     for (let i = 1; i < b.trail.length; i++) {
       const p0 = b.trail[i - 1];
       const p1 = b.trail[i];
-      const a = (i / b.trail.length) * 0.65;
+      const a = (i / b.trail.length) * 0.72;
       ctx.strokeStyle =
         b.shotStyle === 'curler'
           ? `rgba(56, 189, 248, ${a})`
-          : b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer'
-            ? `rgba(251, 191, 36, ${a})`
-            : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
-              ? `rgba(147, 197, 253, ${a * 0.82})`
-              : b.flightType === 'shot'
-                ? `rgba(254, 240, 138, ${a})`
-                : `rgba(255, 255, 255, ${a * 0.7})`;
-      ctx.lineWidth = 1.6 + (i / b.trail.length) * (b.flightType === 'shot' ? 2.8 : 2.0);
+          : b.shotStyle === 'trivela'
+            ? `rgba(249, 115, 22, ${a})`
+            : b.shotStyle === 'knuckle'
+              ? `rgba(216, 180, 254, ${a})`
+              : b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer'
+                ? `rgba(251, 191, 36, ${a})`
+                : b.flightType === 'onetwo'
+                  ? `rgba(52, 211, 153, ${a})`
+                  : b.flightType === 'through'
+                    ? `rgba(250, 204, 21, ${a})`
+                    : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+                      ? `rgba(147, 197, 253, ${a * 0.85})`
+                      : b.flightType === 'shot'
+                        ? `rgba(254, 240, 138, ${a})`
+                        : `rgba(255, 255, 255, ${a * 0.7})`;
+      ctx.lineWidth = 1.6 + (i / b.trail.length) * (b.flightType === 'shot' || b.flightType === 'freekick' ? 3.2 : 2.1);
       ctx.beginPath();
       ctx.moveTo(px(p0.x), py(p0.y) - p0.z * 0.78);
       ctx.lineTo(px(p1.x), py(p1.y) - p1.z * 0.78);
@@ -11513,46 +12240,146 @@ const drawLivePitchToCanvas = (
     // GK diving stretch offset & extended gloves
     if (ag.intent === 'DIVE' && ag.diveProgress > 0) {
       const diveSin = Math.sin(ag.diveProgress * Math.PI);
-      const diveShiftY = ag.diveDir * diveSin * playerRadius * 1.45;
+      const diveShiftY = ag.diveDir * diveSin * playerRadius * 1.65;
       ctx.translate(0, diveShiftY);
-      ctx.rotate(ag.diveDir * diveSin * 0.72);
+      ctx.rotate(ag.diveDir * diveSin * 0.82);
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#0ea5e9';
-      ctx.lineWidth = 1.1;
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(0, ag.diveDir * (playerRadius * 1.15), playerRadius * 0.34, 0, Math.PI * 2);
+      ctx.arc(0, ag.diveDir * (playerRadius * 1.25), playerRadius * 0.38, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
 
-    // Acrobatics / Skill move visual flair (bicycle kick, volley, skill spin)
+    // Wall defenders stance / brace jump cue
+    if (ag.intent === 'WALL') {
+      ctx.strokeStyle = 'rgba(254, 240, 138, 0.75)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 2.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Acrobatics / Skill move / Duel / Slide / Super Save visual flair (distinct animations!)
     if (ag.acrobatTimer && ag.acrobatTimer > 0) {
-      const acAlpha = clamp(ag.acrobatTimer / 0.65, 0, 1);
+      const maxAc = Math.max(0.2, ag.acrobatMax || 0.72);
+      const prog = clamp(1 - ag.acrobatTimer / maxAc, 0, 1);
+      const acAlpha = clamp(ag.acrobatTimer / maxAc, 0, 1);
+      const arcEnv = Math.sin(prog * Math.PI);
+
       if (ag.acrobatType === 'bicycle') {
-        ctx.translate(0, -playerRadius * 0.55 * Math.sin(acAlpha * Math.PI));
-        ctx.rotate(-0.85 * acAlpha);
-        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.9})`;
-        ctx.lineWidth = 2.2;
+        ctx.translate(0, -playerRadius * 0.95 * arcEnv);
+        ctx.rotate(-1.35 * arcEnv);
+        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.6;
         ctx.beginPath();
-        ctx.arc(0, 0, playerRadius + 5, -Math.PI * 0.8, Math.PI * 0.25);
+        ctx.arc(0, 0, playerRadius + 6, -Math.PI * 0.9, Math.PI * 0.3);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(251, 146, 60, ${acAlpha * 0.85})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 9.5, -Math.PI * 0.7, Math.PI * 0.2);
         ctx.stroke();
       } else if (ag.acrobatType === 'volley') {
-        ctx.rotate(0.45 * acAlpha);
-        ctx.strokeStyle = `rgba(251, 146, 60, ${acAlpha * 0.85})`;
-        ctx.lineWidth = 2;
+        ctx.translate(0, -playerRadius * 0.35 * arcEnv);
+        ctx.rotate(0.58 * arcEnv);
+        ctx.strokeStyle = `rgba(251, 146, 60, ${acAlpha * 0.92})`;
+        ctx.lineWidth = 2.2;
         ctx.beginPath();
-        ctx.arc(0, 0, playerRadius + 4.5, 0, Math.PI * 2);
+        ctx.arc(0, 0, playerRadius + 5, -Math.PI * 0.35, Math.PI * 0.45);
         ctx.stroke();
-      } else if (ag.acrobatType === 'skill') {
+      } else if (ag.acrobatType === 'burst') {
+        const bx1 = -Math.cos(ag.facing) * playerRadius * 0.85;
+        const by1 = -Math.sin(ag.facing) * playerRadius * 0.85;
+        ctx.save();
+        ctx.fillStyle = `rgba(56, 189, 248, ${acAlpha * 0.35})`;
+        ctx.beginPath();
+        ctx.arc(bx1, by1, playerRadius * 0.88, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(bx1 * 1.7, by1 * 1.7, playerRadius * 0.66, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = `rgba(125, 211, 252, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.moveTo(bx1 * 1.9, by1 * 1.9 - 4);
+        ctx.lineTo(0, -4);
+        ctx.moveTo(bx1 * 1.9, by1 * 1.9 + 4);
+        ctx.lineTo(0, 4);
+        ctx.stroke();
+        ctx.restore();
+      } else if (ag.acrobatType === 'stepover') {
+        const sway = Math.sin(prog * Math.PI * 4) * (playerRadius * 0.42);
+        ctx.translate(-Math.sin(ag.facing) * sway, Math.cos(ag.facing) * sway);
+        ctx.strokeStyle = `rgba(244, 114, 182, ${acAlpha * 0.92})`;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.arc(-3, 0, playerRadius + 3.5, Math.PI * 0.65, Math.PI * 1.35);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(3, 0, playerRadius + 3.5, -Math.PI * 0.35, Math.PI * 0.35);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'shield') {
+        ctx.scale(1.08, 1.08);
+        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5.2, ag.facing - 1.1, ag.facing + 1.1);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'spin') {
         const spinDir = ag.skillSpinDir || 1;
-        ctx.rotate(spinDir * (1 - acAlpha) * Math.PI * 2);
+        ctx.rotate(spinDir * prog * Math.PI * 2);
         ctx.strokeStyle = `rgba(192, 132, 252, ${acAlpha * 0.95})`;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.2;
         ctx.setLineDash([4, 3]);
         ctx.beginPath();
         ctx.arc(0, 0, playerRadius + 5, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
+      } else if (ag.acrobatType === 'skill_pass') {
+        ctx.rotate((ag.skillSpinDir || 1) * 0.9 * arcEnv);
+        ctx.strokeStyle = `rgba(232, 121, 249, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5, ag.facing + Math.PI * 0.5, ag.facing + Math.PI * 1.5);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'slide') {
+        const slidePush = arcEnv * playerRadius * 0.72;
+        ctx.translate(Math.cos(ag.facing) * slidePush, Math.sin(ag.facing) * slidePush);
+        ctx.rotate(Math.sin(ag.facing) >= 0 ? 0.52 * arcEnv : -0.52 * arcEnv);
+        ctx.strokeStyle = `rgba(56, 189, 248, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-Math.cos(ag.facing) * playerRadius * 1.4, -Math.sin(ag.facing) * playerRadius * 1.4);
+        ctx.lineTo(Math.cos(ag.facing) * playerRadius * 1.1, Math.sin(ag.facing) * playerRadius * 1.1);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'tackle') {
+        ctx.translate(Math.cos(ag.facing) * arcEnv * 4, Math.sin(ag.facing) * arcEnv * 4);
+        ctx.strokeStyle = `rgba(52, 211, 153, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5.5, ag.facing - 0.95, ag.facing + 0.95);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'clash') {
+        const recoil = Math.sin(prog * Math.PI * 2) * 2.5;
+        ctx.translate((ag.actionDirX || 1) * recoil, (ag.actionDirY || 0) * recoil);
+        ctx.strokeStyle = `rgba(251, 146, 60, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 4.8 + prog * 4, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'supersave') {
+        ctx.strokeStyle = `rgba(56, 189, 248, ${acAlpha * 0.98})`;
+        ctx.lineWidth = 2.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 6 + prog * 7, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.9})`;
+        ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 10 + prog * 9, 0, Math.PI * 2);
+        ctx.stroke();
       }
     }
 
@@ -11632,13 +12459,35 @@ const drawLivePitchToCanvas = (
       ctx.fillText(noStr, bx0 + badgeW / 2, by0 + badgeH / 2 + 0.3);
     }
 
-    // Yellow card mini indicator on shoulder
+    // Yellow card mini indicator on right shoulder (clear of top position badge)
     if (ag.hasYellow) {
       ctx.fillStyle = '#facc15';
       ctx.strokeStyle = '#111827';
       ctx.lineWidth = 0.8;
-      ctx.fillRect(playerRadius * 0.55, -playerRadius * 1.05, 4.5, 6.2);
-      ctx.strokeRect(playerRadius * 0.55, -playerRadius * 1.05, 4.5, 6.2);
+      ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+      ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+    }
+
+    // Crisp position role micro-badge above each player during live play
+    if (showPositions && ag.role) {
+      const roleStr = String(ag.role);
+      const roleFont = Math.max(6.5, Math.round(playerRadius * 0.58));
+      ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
+      const rw = Math.max(15, ctx.measureText(roleStr).width + 5.5);
+      const rh = Math.max(8.5, roleFont + 2.5);
+      const ry = -playerRadius - rh - 1.5;
+      ctx.fillStyle = 'rgba(6, 20, 13, 0.9)';
+      ctx.strokeStyle = ag.isMe ? '#facc15' : kit;
+      ctx.lineWidth = ag.isMe ? 1.15 : 0.9;
+      ctx.beginPath();
+      ctx.roundRect(-rw / 2, ry, rw, rh, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle =
+        ag.pos === 'GK' ? '#fde047' : ag.pos === 'DF' ? '#7dd3fc' : ag.pos === 'MF' ? '#86efac' : '#fda4af';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);
     }
 
     // Live stamina micro-bar under every player on the pitch
@@ -11663,6 +12512,8 @@ const drawLivePitchToCanvas = (
       ctx.roundRect(-bw / 2, by - 6.5, bw, 13, 4);
       ctx.fill();
       ctx.fillStyle = ag.isMe ? '#1a1200' : '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
       ctx.fillText(label, 0, by);
     }
 
@@ -11683,8 +12534,8 @@ const drawLivePitchToCanvas = (
 
   // Elevated 3D match ball
   const drawBy = by - b.z * 0.78;
-  const isSpecialBall = b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer';
-  const isCurlBall = b.shotStyle === 'curler';
+  const isSpecialBall = b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer' || b.shotStyle === 'trivela';
+  const isCurlBall = b.shotStyle === 'curler' || b.shotStyle === 'knuckle';
   const isPowerShot = b.flightType === 'shot' || b.flightType === 'freekick' || b.flightType === 'penalty' || b.flightType === 'shootout_kick';
   ctx.save();
   ctx.translate(bx, drawBy);
@@ -12036,8 +12887,11 @@ const MatchModal: React.FC<{
   const [halftimeTalkUsed, setHalftimeTalkUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
-  const [speed, setSpeed] = useState<0.5 | 1 | 2 | 4>(() => getDefaultMatchSpeed(settings));
+  const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 4>(() => getDefaultMatchSpeed(settings));
+  const [cineSlowMo, setCineSlowMo] = useState(true);
   const [showRunVectors, setShowRunVectors] = useState(true);
+  const [showPositions, setShowPositions] = useState(true);
+  const [injuryAlert, setInjuryAlert] = useState<{ name: string; role: SubRole; no: number; games: number; minute: number } | null>(null);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
   const [goalFlashSide, setGoalFlashSide] = useState<'H' | 'A' | null>(null);
@@ -12141,6 +12995,8 @@ const MatchModal: React.FC<{
     sentOff: [] as string[],
     cards: [] as MatchCardEvent[],
     subs: [] as MatchSubEvent[],
+    injuries: [] as { teamId: number; name: string; games: number }[],
+    injuredNames: [] as string[],
     liveFit: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, Math.round(q.fit ?? 100)])) as Record<string, number>,
     liveForm: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5])) as Record<string, number>,
     userStarted: myInitialStarted,
@@ -12251,7 +13107,8 @@ const MatchModal: React.FC<{
       freeKicksH: 0,
       freeKicksA: 0,
       xgH: 0,
-      xgA: 0
+      xgA: 0,
+      inMatchInjuryCount: 0
     };
   };
 
@@ -12455,6 +13312,137 @@ const MatchModal: React.FC<{
   const isAttackRight = (w: LiveMatchWorld, side: 'H' | 'A') => (side === 'H') !== w.secondHalf;
   const attackDirOf = (w: LiveMatchWorld, side: 'H' | 'A') => (isAttackRight(w, side) ? 1 : -1);
 
+  const tryTriggerInMatchInjury = (
+    w: LiveMatchWorld,
+    victim: LivePitchAgent,
+    curMin: number,
+    severity: 'foul' | 'slide' | 'clash' | 'fatigue',
+    isInstantStep = false
+  ) => {
+    const sr = simRef.current;
+    if (!victim || victim.sentOff || victim.pos === 'GK' || victim.injuredOut) return false;
+    if (w.inMatchInjuryCount >= 2 || sr.injuredNames.includes(victim.id)) return false;
+
+    const sideOrig = victim.side === 'H' ? homeOrig : awayOrig;
+    const isMySide = sideOrig.id === state.me;
+    const pl = sideOrig.sq.find((q) => q.n === victim.id);
+    if (!pl) return false;
+    const D = DT(pl, state.p);
+    const curFit = sr.liveFit[victim.id] ?? victim.fit ?? 100;
+    const medLv = isMySide ? (state.med ?? 1) : 1;
+    const physioLv = isMySide ? (state.staff?.physio ?? 0) : 0;
+    const medMult = Math.max(0.45, 1 - (medLv - 1) * 0.08 - physioLv * 0.08) * (isMySide && state.tf === 'F' ? 0.55 : 1);
+    const tolMult = clamp((132 - (D.d.tol || 65)) / 65, 0.55, 1.45);
+    const fitMult = curFit < 54 ? 1.8 : curFit < 65 ? 1.25 : 0.85;
+    const baseProb = severity === 'foul' ? 0.055 : severity === 'slide' ? 0.038 : severity === 'clash' ? 0.028 : 0.0055;
+    if (Math.random() >= baseProb * medMult * tolMult * fitMult) return false;
+
+    const rawGames = severity === 'foul' ? R(2, 4) : R(1, 3);
+    const games = injD(pl, rawGames, state.p);
+    w.inMatchInjuryCount++;
+    sr.injuredNames.push(victim.id);
+    sr.injuries.push({ teamId: sideOrig.id, name: victim.id, games });
+    victim.injuredOut = true;
+
+    addWorldFx(w, {
+      type: 'injury',
+      x: victim.x,
+      y: victim.y,
+      label: `🩹 ${victim.shortName} เจ็บ! (${games} นัด)`,
+      color: '#ef4444',
+      ttl: 2.8,
+      maxTtl: 2.8
+    });
+    pushLog(curMin, `🩹 บาดเจ็บในสนาม!! ${victim.id} (${sideOrig.name}) เจ็บระหว่างเล่น · คาดพัก ${games} นัด`, 'card');
+
+    const isHomeSide = victim.side === 'H';
+    const curLu = isHomeSide ? sr.homeLu : sr.awayLu;
+    const curPlayed = isHomeSide ? sr.homePlayed : sr.awayPlayed;
+    const subsCount = isHomeSide ? sr.homeSubsCount : sr.awaySubsCount;
+
+    if (isPlayerMode && victim.id === myPlayerName) {
+      sr.userSubOutMin = curMin;
+    }
+
+    if (state.mode === 'm' && isMySide) {
+      if (subsCount < 5 && !isInstantStep) {
+        w.phaseLabel = `🩹 ด่วน! ${victim.shortName} บาดเจ็บ ต้องเปลี่ยนตัวออก!`;
+        w.phaseTone = 'danger';
+        triggerDramaSlow(w, 1.8, `🩹 ${victim.shortName} บาดเจ็บ!`);
+        setInjuryAlert({
+          name: victim.id,
+          role: pl.ro,
+          no: getShirtNo(sideOrig, pl),
+          games,
+          minute: curMin
+        });
+        setSubPickOut(victim.id);
+        setShowTacticsDrawer(true);
+        setMlandMatchTab('tactics');
+        setPaused(true);
+        vibrate(55);
+      } else if (subsCount < 5) {
+        // Instant skip mode auto-sub
+        const bench = sideOrig.sq
+          .filter((q) => !curPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n) && q.pos !== 'GK')
+          .sort((a, b) => (a.pos === pl.pos ? 1 : 0) - (b.pos === pl.pos ? 1 : 0) || b.ov - a.ov);
+        const subIn = bench.find((b) => b.pos === pl.pos) || bench[0];
+        const idx = curLu.indexOf(victim.id);
+        if (subIn && idx >= 0) {
+          curLu[idx] = subIn.n;
+          if (!curPlayed.includes(subIn.n)) curPlayed.push(subIn.n);
+          if (isHomeSide) sr.homeSubsCount++;
+          else sr.awaySubsCount++;
+          sr.subs.push({ m: curMin, t: sideOrig.id, inPlayer: subIn.n, outPlayer: victim.id });
+          pushLog(curMin, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ: 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+        }
+      } else {
+        victim.sentOff = true;
+        sr.sentOff.push(victim.id);
+        setSentOff(sr.sentOff.slice());
+        pushLog(curMin, `⚠️ เปลี่ยนตัวครบโควต้าแล้ว! ${sideOrig.name} จำใจเล่นด้วยผู้เล่นน้อยกว่า`, 'card');
+      }
+      return true;
+    }
+
+    // AI / Career team auto-substitutes injured player immediately
+    const bench = sideOrig.sq
+      .filter((q) => !curPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n) && q.pos !== 'GK')
+      .sort((a, b) => b.ov - a.ov);
+    const subIn = subsCount < 5 ? (bench.find((b) => b.pos === pl.pos) || bench[0]) : undefined;
+    const idx = curLu.indexOf(victim.id);
+    if (subIn && idx >= 0) {
+      curLu[idx] = subIn.n;
+      if (!curPlayed.includes(subIn.n)) curPlayed.push(subIn.n);
+      if (isHomeSide) sr.homeSubsCount++;
+      else sr.awaySubsCount++;
+      sr.subs.push({ m: curMin, t: sideOrig.id, inPlayer: subIn.n, outPlayer: victim.id });
+      const rep = buildAgentsForTeam(sideOrig, victim.side, curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+      const agIdx = w.agents.findIndex((a) => a.id === victim.id);
+      if (agIdx >= 0 && rep[idx]) {
+        rep[idx].x = w.agents[agIdx].x;
+        rep[idx].y = w.agents[agIdx].y;
+        w.agents[agIdx] = rep[idx];
+        if (w.ball.carrierId === victim.id) w.ball.carrierId = subIn.n;
+        if (w.ball.targetId === victim.id) w.ball.targetId = subIn.n;
+      }
+      if (isMySide) {
+        setLiveLu(curLu.slice());
+        setSubsUsed(sr.subs.filter((s) => s.t === sideOrig.id).map((s) => s.inPlayer));
+      } else {
+        setLiveOppLu(curLu.slice());
+      }
+      setSubLog(sr.subs.slice());
+      pushLog(curMin, `🔄 เปลี่ยนตัวฉุกเฉิน (${sideOrig.name}): 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+    } else {
+      victim.sentOff = true;
+      sr.sentOff.push(victim.id);
+      setSentOff(sr.sentOff.slice());
+      pushLog(curMin, `⚠️ ${sideOrig.name} เปลี่ยนตัวไม่ได้แล้ว ต้องฝืนเล่นต่อด้วยผู้เล่น ${11 - sr.sentOff.length} คน`, 'card');
+    }
+    return true;
+  };
+
   // Update all 22 AI agents' tactical targets & off-ball runs ("ทำทาง") smoothly
   const updateAgentTargets = (w: LiveMatchWorld, curMin: number) => {
     const b = w.ball;
@@ -12495,6 +13483,11 @@ const MatchModal: React.FC<{
       if (ag.intentTimer > 0) {
         if (ag.intent === 'CELEBRATE' || ag.intent === 'DIVE') return;
         ag.intentTimer = Math.max(0, ag.intentTimer - 0.016);
+        if (ag.intent === 'MAKE_RUN' && ag.runToX != null && ag.runToY != null) {
+          ag.tx = ag.runToX;
+          ag.ty = ag.runToY;
+          return;
+        }
       }
 
       const isH = ag.side === 'H';
@@ -12993,36 +13986,53 @@ const MatchModal: React.FC<{
     const inBoxNow = (attRight ? carrier.x >= 83.5 : carrier.x <= 16.5) && Math.abs(carrier.y - 50) <= 21.5;
     const onBoxEdgeNow = !inBoxNow && (attRight ? carrier.x >= 80.5 : carrier.x <= 19.5) && Math.abs(carrier.y - 50) <= 23;
 
-    // 2a. Signature Skill Move / Flair Dribble to beat the presser!
-    const dribbleSkill = (carrier.d.spd * 0.42 + carrier.d.run * 0.34 + carrier.d.cur * 0.24) +
+    // 2a. Signature Skill Move / Flair Dribble to beat the presser! (Distinct visual moves)
+    const dribbleSkill =
+      carrier.d.spd * 0.42 +
+      carrier.d.run * 0.34 +
+      carrier.d.cur * 0.24 +
       (carrier.sig === 'spd' || carrier.sig === 'cur' || carrier.sig === 'str' || carrier.sig === 'run' ? 8 : 0);
     if (nearestDef && nearestDefDist < 9.5 && carrier.pos !== 'GK') {
       const skillProb = clamp(
-        0.16 + (dribbleSkill - (nearestDef.d.rd * 0.5 + nearestDef.d.pos * 0.5)) * 0.0045 + (inBoxNow ? 0.08 : 0) + (carrier.sig === 'spd' || carrier.sig === 'cur' ? 0.07 : 0),
-        0.1,
-        0.42
+        0.18 +
+          (dribbleSkill - (nearestDef.d.rd * 0.5 + nearestDef.d.pos * 0.5)) * 0.0045 +
+          (inBoxNow ? 0.08 : 0) +
+          (carrier.sig === 'spd' || carrier.sig === 'cur' ? 0.07 : 0),
+        0.12,
+        0.46
       );
       if (Math.random() < skillProb) {
-        const isBurst = carrier.sig === 'spd' || (carrier.d.spd >= 72 && Math.random() < 0.35);
-        const isShield = carrier.sig === 'str';
-        const isNutmeg = nearestDefDist < 5.2 && Math.random() < 0.32;
-        const skillLabel = isBurst
-          ? `⚡ ${carrier.shortName} กระชากสปีดหนี`
-          : isShield
-            ? `💪 ${carrier.shortName} บังบอลพลิกหนี`
-            : isNutmeg
-              ? `🔥 ${carrier.shortName} ลอดขา!`
-              : carrier.d.cur >= 66 || carrier.sig === 'cur'
-                ? `🪄 ${carrier.shortName} สับขาหลอก!`
-                : `🌀 ${carrier.shortName} หมุนตัว 360°`;
+        const rollSk = Math.random();
+        let skType: NonNullable<LivePitchAgent['acrobatType']> = 'spin';
+        let skillLabel = `🌀 ${carrier.shortName} หมุนตัว 360°`;
+        let fxColor = '#c084fc';
+        let advDist = 6.8;
 
-        carrier.acrobatType = 'skill';
-        carrier.acrobatTimer = 0.65;
+        if (carrier.sig === 'spd' || (carrier.d.spd >= 70 && rollSk < 0.34)) {
+          skType = 'burst';
+          skillLabel = `⚡ ${carrier.shortName} กระชากหนี!`;
+          fxColor = '#38bdf8';
+          advDist = 10.2;
+        } else if (carrier.sig === 'str' || (carrier.d.str >= 70 && rollSk < 0.28)) {
+          skType = 'shield';
+          skillLabel = `💪 ${carrier.shortName} บังบอลพลิกหนี`;
+          fxColor = '#facc15';
+          advDist = 6.2;
+        } else if (rollSk < 0.62) {
+          skType = 'stepover';
+          skillLabel = nearestDefDist < 5.5 && Math.random() < 0.4 ? `🔥 ${carrier.shortName} ลอดขาเอลาสติโก้!` : `🪄 ${carrier.shortName} สับขาหลอก!`;
+          fxColor = '#f472b6';
+          advDist = 7.8;
+        }
+
+        carrier.acrobatType = skType;
+        carrier.acrobatMax = 0.78;
+        carrier.acrobatTimer = 0.78;
         carrier.skillSpinDir = Math.random() < 0.5 ? 1 : -1;
         nearestDef.intent = 'MARK';
-        nearestDef.intentTimer = 0.65;
+        nearestDef.intentTimer = 0.72;
 
-        const advX = clamp(carrier.x + dir * (isBurst ? 9.5 : 6.5), 6, 94);
+        const advX = clamp(carrier.x + dir * advDist, 6, 94);
         const advY = clamp(carrier.y + (50 - carrier.y) * 0.25 + (Math.random() - 0.5) * 10, 7, 93);
         carrier.tx = advX;
         carrier.ty = advY;
@@ -13033,7 +14043,7 @@ const MatchModal: React.FC<{
         b.curve = 0;
         b.maxZ = 0;
         b.progress = 0;
-        b.duration = 0.42;
+        b.duration = skType === 'burst' ? 0.42 : 0.48;
         b.flightType = 'carry';
         b.shotStyle = undefined;
         b.carrierId = carrier.id;
@@ -13043,13 +14053,16 @@ const MatchModal: React.FC<{
           x: carrier.x,
           y: carrier.y,
           label: skillLabel,
-          color: '#c084fc',
-          ttl: 1.9,
-          maxTtl: 1.9
+          color: fxColor,
+          ttl: 2.0,
+          maxTtl: 2.0
         });
+        if (inBoxNow || carrier.isMe || skType === 'burst') {
+          triggerDramaSlow(w, 0.78, skillLabel);
+        }
         w.phaseLabel = `${skillLabel}${carrier.sig === 'spd' || carrier.sig === 'str' || carrier.sig === 'cur' ? ` [จุดเด่น: ${SIGL[carrier.sig]}]` : ''}`;
         w.phaseTone = 'attack';
-        if (inBoxNow || carrier.isMe || Math.random() < 0.34) {
+        if (inBoxNow || carrier.isMe || Math.random() < 0.36) {
           pushLog(curMin, `🪄 โชว์ทักษะ! ${skillLabel} (${attTeam.name}) ฉีกหนี ${nearestDef.shortName} ได้สำเร็จ!`);
         }
         return;
@@ -13068,10 +14081,14 @@ const MatchModal: React.FC<{
         0.26
       );
       if (Math.random() < foulProb && curMin >= 2) {
-        // FOUL + FREE KICK OR PENALTY (+ VAR Check)!
+        // FOUL + FREE KICK OR PENALTY (+ VAR Check & In-Match Injury Check)!
         if (defSide === 'H') w.foulsH++;
         else w.foulsA++;
         SFX.foul();
+        nearestDef.acrobatType = 'slide';
+        nearestDef.acrobatMax = 0.65;
+        nearestDef.acrobatTimer = 0.65;
+        tryTriggerInMatchInjury(w, carrier, curMin, 'foul');
 
         const shouldVarPen = (inBoxNow && Math.random() < 0.38) || (onBoxEdgeNow && Math.random() < 0.36);
         const isHardFoul = nearestDef.tr === 1 || distToGoal < 30 || Math.random() < 0.25;
@@ -13197,7 +14214,7 @@ const MatchModal: React.FC<{
           pushLog(curMin, `⚠️ ${nearestDef.id} (${defTeam.name}) ทำฟาวล์ใส่ ${carrier.id} · ${attTeam.name} ได้ฟรีคิก`);
         }
 
-        const wallCount = distToGoal < 36 ? 3 : 0;
+        const wallCount = distToGoal < 38 ? (distToGoal < 24 ? 4 : 3) : 0;
         const wallPlayers: { x: number; y: number }[] = [];
         if (wallCount > 0) {
           const ang = Math.atan2(50 - carrier.y, goalX - carrier.x);
@@ -13231,72 +14248,158 @@ const MatchModal: React.FC<{
           side,
           x: carrier.x,
           y: carrier.y,
-          waitSec: cardRes === 'R' ? 1.85 : cardRes === 'Y' ? 1.35 : distToGoal < 36 ? 1.45 : 0.75,
+          waitSec: cardRes === 'R' ? 1.9 : cardRes === 'Y' ? 1.45 : distToGoal < 38 ? 1.65 : 0.85,
           wallPlayers
         };
-        w.phaseLabel = distToGoal < 36 ? `⚠️ ฟรีคิกระยะ ${Math.round(distToGoal * 0.9)} หลา!` : `⚠️ ฟาวล์ (${attTeam.name} ได้ฟรีคิก)`;
+        w.phaseLabel = distToGoal < 38 ? `🧱 ตั้งกำแพง! ฟรีคิกระยะ ${Math.round(distToGoal * 0.9)} หลา` : `⚠️ ฟาวล์ (${attTeam.name} ได้ฟรีคิก)`;
         w.phaseTone = cardRes === 'R' ? 'danger' : 'setpiece';
         return;
       }
 
-      // Clean tackle / interception check (safe dribble calc without missing .dr)
+      // Defensive Duel Variety: Slide Tackle ("สไลด์"), Shoulder Clash ("เข้าประทะ"), or Clean Interception ("เข้าสกัด")
       const carrierDribble = carrier.d.spd * 0.55 + carrier.d.run * 0.45 + (carrier.sig === 'str' || carrier.sig === 'spd' ? 6 : 0);
       const defTackleEdge = (nearestDef.sig === 'mrk' || nearestDef.sig === 'pos' ? 8 : 0) + (nearestDef.d.rd + nearestDef.d.pos);
       const tackleProb = clamp(
-        0.15 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
-        0.08,
-        0.33
+        0.18 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
+        0.10,
+        0.38
       );
       if (Math.random() < tackleProb) {
-        b.possessionSide = defSide;
-        b.carrierId = nearestDef.id;
-        b.lastPasserId = null;
-        b.targetId = null;
-        b.x = nearestDef.x;
-        b.y = nearestDef.y;
-        b.fromX = nearestDef.x;
-        b.fromY = nearestDef.y;
-        b.toX = nearestDef.x;
-        b.toY = nearestDef.y;
-        b.progress = 1;
-        b.flightType = 'carry';
-        b.shotStyle = undefined;
-        w.phaseLabel = `🛡️ ${nearestDef.shortName}${nearestDef.sig === 'rd' || nearestDef.sig === 'mrk' ? ` [${SIGL[nearestDef.sig]}]` : ''} แย่งบอลสำเร็จ!`;
-        w.phaseTone = 'normal';
-        SFX.pass();
-        side = defSide;
-        attPool = getTeamPool(side);
-        defPool = getTeamPool(side === 'H' ? 'A' : 'H');
-        carrier = nearestDef;
-        if ((getEffectiveTeamCfg(side, curMin).pass === 3 || carrier.sig === 'dist') && Math.random() < 0.72) {
-          const counterTarget = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.role === 'SS' || a.role === 'CAM');
-          if (counterTarget) {
-            const cAttRight = isAttackRight(w, side);
-            const cDir = cAttRight ? 1 : -1;
-            const cDist = Math.hypot(counterTarget.x - carrier.x, counterTarget.y - carrier.y);
-            b.fromX = carrier.x;
-            b.fromY = carrier.y;
-            b.toX = clamp(counterTarget.x + cDir * 6, 8, 92);
-            b.toY = counterTarget.y;
-            b.curve = (Math.random() - 0.5) * 4.5;
-            b.maxZ = cDist > 22 ? 15 : 8;
-            b.progress = 0;
-            b.duration = cDist > 22 ? 0.68 : 0.54;
-            b.flightType = cDist > 22 ? 'lofted' : 'through';
-            b.shotStyle = undefined;
-            b.carrierId = null;
-            b.targetId = counterTarget.id;
-            b.lastPasserId = carrier.id;
-            w.phaseLabel = cDist > 22 ? `🚀 ${carrier.shortName} เปิดบอลโด่งสวนกลับเร็ว!` : `⚡ ${defTeam.name} สวนกลับเร็ว!`;
+        const duelRoll = Math.random();
+        const isSlideTackle = duelRoll < (defCfg.press === 2 ? 0.42 : 0.30);
+        const isPhysicalClash = !isSlideTackle && duelRoll < 0.68;
+
+        if (isPhysicalClash) {
+          const carPhys = carrier.d.str + (carrier.sig === 'str' ? 12 : 0) + (carrier.fit < 55 ? -8 : 0);
+          const defPhys = nearestDef.d.str + nearestDef.d.pos * 0.35 + (nearestDef.sig === 'str' || nearestDef.sig === 'mrk' ? 10 : 0);
+          const clashDx = carrier.x - nearestDef.x;
+          const clashDy = carrier.y - nearestDef.y;
+          nearestDef.acrobatType = 'clash';
+          nearestDef.acrobatMax = 0.65;
+          nearestDef.acrobatTimer = 0.65;
+          nearestDef.actionDirX = clashDx >= 0 ? 1 : -1;
+          nearestDef.actionDirY = clashDy >= 0 ? 1 : -1;
+          carrier.acrobatType = 'clash';
+          carrier.acrobatMax = 0.65;
+          carrier.acrobatTimer = 0.65;
+          carrier.actionDirX = clashDx >= 0 ? -1 : 1;
+          carrier.actionDirY = clashDy >= 0 ? -1 : 1;
+
+          addWorldFx(w, {
+            type: 'clash',
+            x: (carrier.x + nearestDef.x) * 0.5,
+            y: (carrier.y + nearestDef.y) * 0.5,
+            label: `💥 ${nearestDef.shortName} เบียดปะทะ ${carrier.shortName}!`,
+            color: '#fb923c',
+            ttl: 1.75,
+            maxTtl: 1.75
+          });
+
+          if (carPhys > defPhys + R(-8, 10)) {
+            // Attacker wins the shoulder clash and keeps going!
+            w.phaseLabel = `💪 ${carrier.shortName} แข็งแกร่งเบียดชนะ ${nearestDef.shortName}!`;
             w.phaseTone = 'attack';
-            SFX.kick();
+            tryTriggerInMatchInjury(w, nearestDef, curMin, 'clash');
+          } else {
+            // Defender wins the clash cleanly!
+            tryTriggerInMatchInjury(w, carrier, curMin, 'clash');
+            b.possessionSide = defSide;
+            b.carrierId = nearestDef.id;
+            b.lastPasserId = null;
+            b.targetId = null;
+            b.x = nearestDef.x;
+            b.y = nearestDef.y;
+            b.flightType = 'carry';
+            b.shotStyle = undefined;
+            w.phaseLabel = `💥 ${nearestDef.shortName} เข้าปะทะเบียดแย่งบอลสำเร็จ!`;
+            w.phaseTone = 'normal';
+            SFX.foul();
+            if (Math.random() < 0.35) {
+              pushLog(curMin, `💥 จังหวะปะทะหนัก! ${nearestDef.id} เบียดชนะ ${carrier.id} ตัดบอลคืนให้ ${defTeam.name}`);
+            }
             return;
+          }
+        } else {
+          // Clean Sliding Tackle OR Standing Tackle/Interception
+          const startX = nearestDef.x;
+          const startY = nearestDef.y;
+          nearestDef.x = clamp((nearestDef.x + carrier.x) * 0.52, 4, 96);
+          nearestDef.y = clamp((nearestDef.y + carrier.y) * 0.52, 5, 95);
+          nearestDef.facing = Math.atan2(carrier.y - startY, carrier.x - startX);
+          nearestDef.acrobatType = isSlideTackle ? 'slide' : 'tackle';
+          nearestDef.acrobatMax = isSlideTackle ? 0.72 : 0.6;
+          nearestDef.acrobatTimer = isSlideTackle ? 0.72 : 0.6;
+          addWorldFx(w, {
+            type: isSlideTackle ? 'slide' : 'tackle',
+            x: startX,
+            y: startY,
+            toX: nearestDef.x,
+            toY: nearestDef.y,
+            label: isSlideTackle ? `⚡ ${nearestDef.shortName} สไลด์สวย!` : `🛡️ ${nearestDef.shortName} เข้าสกัด!`,
+            color: isSlideTackle ? '#38bdf8' : '#34d399',
+            ttl: 1.85,
+            maxTtl: 1.85
+          });
+          if (isSlideTackle) {
+            triggerDramaSlow(w, 0.75, `⚡ สไลด์สกัดบอล! · ${nearestDef.shortName}`);
+            tryTriggerInMatchInjury(w, carrier, curMin, 'slide');
+          }
+
+          b.possessionSide = defSide;
+          b.carrierId = nearestDef.id;
+          b.lastPasserId = null;
+          b.targetId = null;
+          b.x = nearestDef.x;
+          b.y = nearestDef.y;
+          b.fromX = nearestDef.x;
+          b.fromY = nearestDef.y;
+          b.toX = nearestDef.x;
+          b.toY = nearestDef.y;
+          b.progress = 1;
+          b.flightType = 'carry';
+          b.shotStyle = undefined;
+          w.phaseLabel = isSlideTackle
+            ? `⚡ ${nearestDef.shortName} พุ่งสไลด์กวาดบอลสะอาด!`
+            : `🛡️ ${nearestDef.shortName}${nearestDef.sig === 'rd' || nearestDef.sig === 'mrk' ? ` [${SIGL[nearestDef.sig]}]` : ''} เข้าสกัดแย่งบอลสำเร็จ!`;
+          w.phaseTone = 'normal';
+          SFX.pass();
+          if (isSlideTackle && Math.random() < 0.48) {
+            pushLog(curMin, `⚡ สไลด์สุดคม! ${nearestDef.id} (${defTeam.name}) กวาดบอลจากเท้า ${carrier.id} ได้อย่างแม่นยำ`);
+          }
+          side = defSide;
+          attPool = getTeamPool(side);
+          defPool = getTeamPool(side === 'H' ? 'A' : 'H');
+          carrier = nearestDef;
+          if ((getEffectiveTeamCfg(side, curMin).pass === 3 || carrier.sig === 'dist') && Math.random() < 0.72) {
+            const counterTarget = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.role === 'SS' || a.role === 'CAM');
+            if (counterTarget) {
+              const cAttRight = isAttackRight(w, side);
+              const cDir = cAttRight ? 1 : -1;
+              const cDist = Math.hypot(counterTarget.x - carrier.x, counterTarget.y - carrier.y);
+              b.fromX = carrier.x;
+              b.fromY = carrier.y;
+              b.toX = clamp(counterTarget.x + cDir * 6, 8, 92);
+              b.toY = counterTarget.y;
+              b.curve = (Math.random() - 0.5) * 4.5;
+              b.maxZ = cDist > 22 ? 15 : 8;
+              b.progress = 0;
+              b.duration = cDist > 22 ? 0.68 : 0.54;
+              b.flightType = cDist > 22 ? 'lofted' : 'through';
+              b.shotStyle = undefined;
+              b.carrierId = null;
+              b.targetId = counterTarget.id;
+              b.lastPasserId = carrier.id;
+              w.phaseLabel = cDist > 22 ? `🚀 ${carrier.shortName} เปิดบอลโด่งสวนกลับเร็ว!` : `⚡ ${defTeam.name} สวนกลับเร็ว!`;
+              w.phaseTone = 'attack';
+              SFX.kick();
+              return;
+            }
           }
         }
       }
     }
 
-    // 3. Should Carrier Shoot? (Diverse Shot Variety + Signature Finishing/Power/Curl)
+    // 3. Should Carrier Shoot? (Bicycle Kick, Curler, Trivela, Knuckleball, Volley, Chip, Screamer)
     const inShootZone = distToGoal < 27 || (distToGoal < 35 && (carrier.d.pw > 68 || carrier.sig === 'pw' || attCfg.tac === 'X'));
     const shootChance = inShootZone
       ? clamp(0.28 + (33 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.08 : 0), 0.25, 0.75)
@@ -13310,16 +14413,37 @@ const MatchModal: React.FC<{
       let maxZAmt = 6 + Math.random() * 3.5;
       let durAmt = clamp(distToGoal / 36, 0.54, 0.82);
 
-      if (distToGoal < 14.5 && (carrier.sig === 'fin' || carrier.sig === 'comp' || carrier.d.fin >= 68) && Math.random() < 0.26) {
+      if (inBoxNow && (carrier.sig === 'fin' || carrier.d.fin >= 67) && Math.random() < 0.16) {
+        shotStyle = 'bicycle';
+        carrier.acrobatType = 'bicycle';
+        carrier.acrobatMax = 0.85;
+        carrier.acrobatTimer = 0.85;
+        curveAmt = (Math.random() - 0.5) * 4;
+        maxZAmt = 6.8;
+        durAmt = 0.56;
+        shotLabel = `🤸 ${carrier.shortName} ตีลังกายิงกลางอากาศ!!`;
+      } else if (distToGoal < 14.5 && (carrier.sig === 'fin' || carrier.sig === 'comp' || carrier.d.fin >= 68) && Math.random() < 0.24) {
         shotStyle = 'chip';
         curveAmt = 0;
-        maxZAmt = 10.2;
-        durAmt = 0.74;
+        maxZAmt = 10.5;
+        durAmt = 0.76;
         shotLabel = `🪶 ${carrier.shortName} ชิพข้ามหัวอย่างเหนือชั้น!`;
-      } else if (carrier.sig === 'cur' || (carrier.d.cur >= carrier.d.pw && Math.random() < 0.55)) {
+      } else if (distToGoal >= 19 && (carrier.sig === 'pw' || carrier.d.pw >= 67) && Math.random() < 0.34) {
+        shotStyle = 'knuckle';
+        curveAmt = (Math.random() - 0.5) * 3.2;
+        maxZAmt = 6.2;
+        durAmt = 0.58;
+        shotLabel = `🌪️ ${carrier.shortName} กดลูกส่ายคนัคเคิลบอล!`;
+      } else if ((carrier.sig === 'cur' || carrier.d.cur >= 66) && Math.random() < 0.36) {
+        shotStyle = 'trivela';
+        curveAmt = (carrier.y < 50 ? -1 : 1) * (6.8 + Math.random() * 4.5);
+        maxZAmt = 7.4;
+        durAmt = 0.62;
+        shotLabel = `🍌 ${carrier.shortName} ดีดไซด์ก้อยโค้งหักศอก!`;
+      } else if (carrier.sig === 'cur' || (carrier.d.cur >= carrier.d.pw && Math.random() < 0.58)) {
         shotStyle = 'curler';
-        curveAmt = (carrier.y < 50 ? 1 : -1) * (6.2 + Math.random() * 4.8);
-        maxZAmt = 7.2;
+        curveAmt = (carrier.y < 50 ? 1 : -1) * (7.2 + Math.random() * 5.2);
+        maxZAmt = 7.5;
         shotLabel = `🌀 ${carrier.shortName}${carrier.sig === 'cur' ? ' [ยิงโค้ง]' : ''} ปั่นโค้งๆ เสียบเสา!`;
       } else if (distToGoal >= 21 && (carrier.sig === 'pw' || carrier.d.pw >= 68)) {
         shotStyle = 'screamer';
@@ -13327,12 +14451,13 @@ const MatchModal: React.FC<{
         maxZAmt = 4.6;
         durAmt = 0.50;
         shotLabel = `💥 ${carrier.shortName}${carrier.sig === 'pw' ? ' [พลังยิง]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
-      } else if (inBoxNow && Math.random() < 0.24) {
+      } else if (inBoxNow && Math.random() < 0.28) {
         shotStyle = 'volley';
         carrier.acrobatType = 'volley';
-        carrier.acrobatTimer = 0.58;
+        carrier.acrobatMax = 0.65;
+        carrier.acrobatTimer = 0.65;
         maxZAmt = 4.2;
-        durAmt = 0.48;
+        durAmt = 0.50;
         shotLabel = `⚡ ${carrier.shortName} ฮาล์ฟวอลเลย์กลางอากาศ!`;
       }
 
@@ -13351,8 +14476,11 @@ const MatchModal: React.FC<{
       b.shooterId = carrier.id;
       w.phaseLabel = shotLabel;
       w.phaseTone = 'danger';
-      triggerDramaSlow(w, 1.05, shotLabel);
+      triggerDramaSlow(w, shotStyle === 'bicycle' || shotStyle === 'curler' || shotStyle === 'trivela' ? 1.45 : 1.15, shotLabel);
       SFX.kick();
+      if (shotStyle === 'bicycle' || shotStyle === 'knuckle' || shotStyle === 'trivela') {
+        pushLog(curMin, `🔥 ${shotLabel} (${attTeam.name})`);
+      }
       return;
     }
 
@@ -13382,6 +14510,54 @@ const MatchModal: React.FC<{
         w.phaseLabel = `🪽 ${carrier.shortName}${carrier.sig === 'crs' ? ' [เปิดบอล]' : ''} เปิดบอลโด่งเข้ากรอบ!`;
         w.phaseTone = 'attack';
         SFX.kick();
+        return;
+      }
+    }
+
+    // 4b. Give-and-Go ("ทำชิง 1-2") with nearby attacking teammate!
+    if (carrier.pos !== 'GK' && (attRight ? carrier.x > 32 && carrier.x < 88 : carrier.x < 68 && carrier.x > 12)) {
+      const partner = attPool
+        .filter((a) => a.id !== carrier.id && a.pos !== 'GK')
+        .map((cand) => ({ cand, d: Math.hypot(cand.x - carrier.x, cand.y - carrier.y) }))
+        .filter((x) => x.d >= 6.5 && x.d <= 18.5)
+        .sort((u, v) => u.d - v.d)[0]?.cand;
+      if (partner && Math.random() < (attCfg.pass === 0 ? 0.30 : 0.21)) {
+        const runDestX = clamp(carrier.x + dir * (11 + Math.random() * 5), 6, 94);
+        const runDestY = clamp(carrier.y + (50 - carrier.y) * 0.22 + (Math.random() - 0.5) * 6, 10, 90);
+        carrier.intent = 'MAKE_RUN';
+        carrier.intentTimer = 1.25;
+        carrier.runToX = runDestX;
+        carrier.runToY = runDestY;
+        carrier.tx = runDestX;
+        carrier.ty = runDestY;
+
+        b.fromX = carrier.x;
+        b.fromY = carrier.y;
+        b.toX = partner.x;
+        b.toY = partner.y;
+        b.curve = 0;
+        b.maxZ = 0;
+        b.progress = 0;
+        b.duration = 0.34;
+        b.flightType = 'onetwo';
+        b.shotStyle = undefined;
+        b.carrierId = null;
+        b.targetId = partner.id;
+        b.lastPasserId = carrier.id;
+        addWorldFx(w, {
+          type: 'onetwo',
+          x: carrier.x,
+          y: carrier.y,
+          toX: partner.x,
+          toY: partner.y,
+          label: `⇄ ทำชิง 1-2! (${carrier.shortName}⇄${partner.shortName})`,
+          color: '#34d399',
+          ttl: 1.5,
+          maxTtl: 1.5
+        });
+        w.phaseLabel = `⇄ ${carrier.shortName} ทำชิง 1-2 กับ ${partner.shortName}!`;
+        w.phaseTone = 'attack';
+        SFX.pass();
         return;
       }
     }
@@ -13464,6 +14640,19 @@ const MatchModal: React.FC<{
       b.carrierId = null;
       b.targetId = runner.id;
       b.lastPasserId = carrier.id;
+      if (!isLoftedThrough) {
+        addWorldFx(w, {
+          type: 'through',
+          x: carrier.x,
+          y: carrier.y,
+          toX: leadX,
+          toY: leadY,
+          label: `👟 แทงทะลุช่อง!`,
+          color: '#facc15',
+          ttl: 1.4,
+          maxTtl: 1.4
+        });
+      }
       w.phaseLabel = isLoftedThrough
         ? `↗️ ${carrier.shortName} ตักบอลโด่งข้ามไลน์ให้ ${runner.shortName}!`
         : `👟 ${carrier.shortName} แทงทะลุช่องให้ ${runner.shortName}${runner.sig === 'run' ? ' [วิ่งหาช่อง]' : ''}!`;
@@ -13496,7 +14685,7 @@ const MatchModal: React.FC<{
       return;
     }
 
-    // 7. Ground Pass / Triangle / Lofted Diagonal Switch
+    // 7. Ground Pass / Flair Pass (Rabona / Backheel) / Lofted Diagonal Switch
     const passCandidates = attPool.filter((a) => a.id !== carrier.id && (a.pos !== 'GK' || (attRight ? carrier.x < 32 : carrier.x > 68)));
     if (passCandidates.length) {
       const scored = passCandidates.map((cand) => {
@@ -13523,6 +14712,13 @@ const MatchModal: React.FC<{
       const receiver = P(pool) || passCandidates[0];
       const dist = Math.hypot(receiver.x - carrier.x, receiver.y - carrier.y);
       const isLofted = dist > 26 || ((carrier.sig === 'dist' || carrier.sig === 'crs') && dist > 21 && Math.random() < 0.65);
+      const isFlairPass = !isLofted && dist < 18 && carrier.pos !== 'GK' && (carrier.d.cur >= 66 || carrier.sig === 'cur') && Math.random() < 0.14;
+      if (isFlairPass) {
+        carrier.acrobatType = 'skill_pass';
+        carrier.acrobatMax = 0.55;
+        carrier.acrobatTimer = 0.55;
+        carrier.skillSpinDir = Math.random() < 0.5 ? 1 : -1;
+      }
       b.fromX = carrier.x;
       b.fromY = carrier.y;
       b.toX = clamp(receiver.x + dir * 2, 5, 95);
@@ -13538,8 +14734,10 @@ const MatchModal: React.FC<{
       b.lastPasserId = carrier.id;
       w.phaseLabel = isLofted
         ? `↗️ ${carrier.shortName}${carrier.sig === 'dist' ? ' [จ่ายแนวหลัง]' : ''} เปิดบอลโด่งเปลี่ยนแกนให้ ${receiver.shortName}`
-        : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
-      w.phaseTone = isLofted ? 'attack' : 'normal';
+        : isFlairPass
+          ? `✨ ${carrier.shortName} ตอกส้น/ไขว้หลังสุดพริ้วให้ ${receiver.shortName}`
+          : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
+      w.phaseTone = isLofted || isFlairPass ? 'attack' : 'normal';
       if (isLofted) SFX.kick();
       else SFX.pass();
     }
@@ -13941,6 +15139,22 @@ const MatchModal: React.FC<{
           else w.blocksA++;
           adjustLiveForm(nearDef.id, 0.2);
           adjustLiveForm(shooter?.id, -0.08);
+          if (b.flightType !== 'freekick') {
+            nearDef.acrobatType = 'slide';
+            nearDef.acrobatMax = 0.6;
+            nearDef.acrobatTimer = 0.6;
+            nearDef.actionDirX = b.toX - nearDef.x;
+            nearDef.actionDirY = b.toY - nearDef.y;
+            addWorldFx(w, {
+              type: 'slide',
+              x: nearDef.x,
+              y: nearDef.y,
+              label: '',
+              color: '#38bdf8',
+              ttl: 0.9,
+              maxTtl: 0.9
+            });
+          }
           addWorldFx(w, {
             type: 'block',
             x: nearDef.x,
@@ -14080,9 +15294,13 @@ const MatchModal: React.FC<{
                       ? 'ชิพข้ามหัวนายด่านเข้าประตูอย่างเยือกเย็น!'
                       : b.shotStyle === 'curler'
                         ? 'ปั่นโค้งเสียบสามเหลี่ยมอย่างเหนือชั้น!'
-                        : b.shotStyle === 'screamer'
-                          ? 'ตะบันไกลสุดแรงบอลพุ่งเสียบตาข่าย!'
-                          : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
+                        : b.shotStyle === 'trivela'
+                          ? 'ตะบันไซด์ก้อยทริเวล่าบอลโค้งหนีมือสุดสวย!'
+                          : b.shotStyle === 'knuckle'
+                            ? 'กดลูกส่ายคนัคเคิลบอลฮุคเสียบตาข่ายสุดเหลือเชื่อ!'
+                            : b.shotStyle === 'screamer'
+                              ? 'ตะบันไกลสุดแรงบอลพุ่งเสียบตาข่าย!'
+                              : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
 
         // Tight-call VAR Goal Check (~15% chance on open-play goals)
         if (b.flightType === 'shot' && w.varChecks < 2 && Math.random() < 0.15) {
@@ -14127,26 +15345,33 @@ const MatchModal: React.FC<{
         else w.savesA++;
         adjustLiveForm(gk?.id, 0.26);
         adjustLiveForm(shooter?.id, -0.06);
+        if (gk) {
+          gk.acrobatType = 'supersave';
+          gk.acrobatMax = 0.9;
+          gk.acrobatTimer = 0.9;
+        }
         const saveTypeText =
           b.shotStyle === 'bicycle'
             ? 'บินปัดลูกตีลังกายิงได้เหลือเชื่อ!'
-            : b.shotStyle === 'curler'
+            : b.shotStyle === 'curler' || b.shotStyle === 'trivela'
               ? 'เหินตัวปัดลูกปั่นโค้งปลายมือ!'
-              : b.shotStyle === 'chip'
-                ? 'ถอยหลังกระโดดคว้าลูกชิพไว้ได้!'
-                : b.shotStyle === 'volley' || b.shotStyle === 'screamer'
-                  ? 'ปฏิกิริยาไวปัดลูกยิงสุดแรงพ้นกรอบ!'
-                  : 'พุ่งปัดปลายมือสุดสวย!';
+              : b.shotStyle === 'knuckle'
+                ? 'ชกลูกส่ายอันตรายพ้นปากประตู!'
+                : b.shotStyle === 'chip'
+                  ? 'ถอยหลังกระโดดคว้าลูกชิพไว้ได้!'
+                  : b.shotStyle === 'volley' || b.shotStyle === 'screamer'
+                    ? 'ปฏิกิริยาไวปัดลูกยิงสุดแรงพ้นกรอบ!'
+                    : 'พุ่งปัดปลายมือสุดสวย!';
         addWorldFx(w, {
           type: 'save',
           x: gk?.x ?? (defRightNow ? 4 : 96),
           y: b.toY,
-          label: `🧤 ${gk?.shortName || 'ผู้รักษาประตู'}${gk?.sig === 'sv' ? ' [เซฟเด่น]' : ''} เซฟ!`,
+          label: `🧤 ซูเปอร์เซฟ! ${gk?.shortName || 'ผู้รักษาประตู'}${gk?.sig === 'sv' ? ' [เซฟเด่น]' : ''}`,
           color: '#38bdf8',
           ttl: 2.5,
           maxTtl: 2.5
         });
-        triggerDramaSlow(w, b.flightType === 'penalty' ? 1.85 : 1.35, `🧤 ซูเปอร์เซฟ! · ${gk?.shortName || 'ผู้รักษาประตู'}`);
+        triggerDramaSlow(w, b.flightType === 'penalty' ? 2.0 : 1.5, `🧤 ซูเปอร์เซฟ! · ${gk?.shortName || 'ผู้รักษาประตู'}`);
         if (b.flightType === 'penalty' || Math.random() < 0.68) {
           pushLog(
             curMin,
@@ -14213,18 +15438,20 @@ const MatchModal: React.FC<{
         b.shooterId = target.id;
         if (isBicycle) {
           target.acrobatType = 'bicycle';
-          target.acrobatTimer = 0.75;
+          target.acrobatMax = 0.85;
+          target.acrobatTimer = 0.85;
           w.phaseLabel = `🤸 ${target.shortName} ตีลังกายิงกลางอากาศ!!`;
-          triggerDramaSlow(w, 1.35, `🤸 ตีลังกายิง!! · ${target.shortName}`);
+          triggerDramaSlow(w, 1.5, `🤸 ตีลังกายิง!! · ${target.shortName}`);
           pushLog(curMin, `🤸 โอ้โห!! ${target.id} (${attTeam.name}) ลอยตัวตีลังกาโอเวอร์เฮดคิกอย่างสุดสวย!`);
         } else if (isVolley) {
           target.acrobatType = 'volley';
+          target.acrobatMax = 0.58;
           target.acrobatTimer = 0.58;
           w.phaseLabel = `⚡ ${target.shortName} วอลเลย์ไม่ต้องจับ!`;
-          triggerDramaSlow(w, 1.1, `⚡ วอลเลย์ · ${target.shortName}`);
+          triggerDramaSlow(w, 1.2, `⚡ วอลเลย์ · ${target.shortName}`);
         } else {
           w.phaseLabel = `🗣️ ${target.shortName}${target.sig === 'hd' ? ' [โหม่งเด่น]' : ''} เทกตัวโหม่งเต็มๆ!`;
-          triggerDramaSlow(w, 0.95, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
+          triggerDramaSlow(w, 1.0, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
         }
         w.phaseTone = 'danger';
         SFX.kick();
@@ -14243,8 +15470,8 @@ const MatchModal: React.FC<{
       return;
     }
 
-    // 3. Resolve Ground Pass / Lofted Ball / Through-Ball / Carry
-    if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'lofted' || b.flightType === 'goalkick') {
+    // 3. Resolve Ground Pass / Lofted Ball / Through-Ball / Give-and-Go (1-2) / Carry
+    if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'lofted' || b.flightType === 'goalkick' || b.flightType === 'onetwo') {
       if (side === 'H') w.passesH++;
       else w.passesA++;
       const receiver = active.find((a) => a.id === b.targetId);
@@ -14258,7 +15485,7 @@ const MatchModal: React.FC<{
           ? clamp(
               0.16 +
                 (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 10 : nearestOpp?.d.rd || 60) - 60) * 0.004) +
-                (b.flightType === 'through' ? 0.14 : b.flightType === 'lofted' ? -0.05 : 0),
+                (b.flightType === 'through' ? 0.14 : b.flightType === 'lofted' ? -0.05 : b.flightType === 'onetwo' ? -0.04 : 0),
               0.07,
               0.45
             )
@@ -14278,6 +15505,42 @@ const MatchModal: React.FC<{
         w.phaseTone = 'normal';
         SFX.pass();
         return;
+      }
+
+      if (b.flightType === 'onetwo' && receiver) {
+        const passer = active.find((a) => a.id === b.lastPasserId && a.id !== receiver.id);
+        if (passer) {
+          const destX = clamp(passer.runToX ?? passer.tx, 6, 94);
+          const destY = clamp(passer.runToY ?? passer.ty, 8, 92);
+          b.fromX = receiver.x;
+          b.fromY = receiver.y;
+          b.toX = destX;
+          b.toY = destY;
+          b.curve = 0;
+          b.maxZ = 0;
+          b.progress = 0;
+          b.duration = 0.34;
+          b.flightType = 'through';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = passer.id;
+          b.lastPasserId = receiver.id;
+          addWorldFx(w, {
+            type: 'through',
+            x: receiver.x,
+            y: receiver.y,
+            toX: destX,
+            toY: destY,
+            label: `👟 ชิ่งคืนสวย!`,
+            color: '#34d399',
+            ttl: 1.35,
+            maxTtl: 1.35
+          });
+          w.phaseLabel = `👟 ${receiver.shortName} ชิ่งคืนทะลุช่องให้ ${passer.shortName}!`;
+          w.phaseTone = 'attack';
+          SFX.pass();
+          return;
+        }
       }
 
       if (receiver) {
@@ -14316,6 +15579,10 @@ const MatchModal: React.FC<{
       else if (curFit < 58) formDelta -= 0.025;
       if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * 0.12;
       if (formDelta !== 0) adjustLiveForm(n, formDelta);
+      if (curFit < 56 && pl.pos !== 'GK' && Math.random() < 0.08) {
+        const ag = w.agents.find((a) => a.id === n);
+        if (ag) tryTriggerInMatchInjury(w, ag, curMin, 'fatigue', true);
+      }
     });
 
     const runAiSubForSide = (isHomeSide: boolean) => {
@@ -14455,6 +15722,9 @@ const MatchModal: React.FC<{
       if (formDelta !== 0) adjustLiveForm(n, formDelta);
       const ag = w.agents.find((a) => a.id === n);
       if (ag) ag.fit = sr.liveFit[n];
+      if (curFit < 56 && pl.pos !== 'GK' && Math.random() < 0.08 && ag) {
+        tryTriggerInMatchInjury(w, ag, curMin, 'fatigue', false);
+      }
     });
 
     const runAiSubForSide = (isHomeSide: boolean) => {
@@ -14762,7 +16032,34 @@ const MatchModal: React.FC<{
     const sr = simRef.current;
     if (sr.done) return;
     sr.done = true;
+    setInjuryAlert(null);
     const w = worldRef.current!;
+
+    // Ensure any injured players still on pitch without manual sub get auto-replaced if bench allows
+    ([true, false] as const).forEach((isHomeSide) => {
+      const sideOrig = isHomeSide ? homeOrig : awayOrig;
+      const curLu = isHomeSide ? sr.homeLu : sr.awayLu;
+      const curPlayed = isHomeSide ? sr.homePlayed : sr.awayPlayed;
+      sr.injuredNames.forEach((injName) => {
+        const idx = curLu.indexOf(injName);
+        if (idx < 0) return;
+        const subsCount = isHomeSide ? sr.homeSubsCount : sr.awaySubsCount;
+        if (subsCount >= 5) return;
+        const injPl = sideOrig.sq.find((q) => q.n === injName);
+        const bench = sideOrig.sq
+          .filter((q) => !curPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n) && q.pos !== 'GK')
+          .sort((a, b) => b.ov - a.ov);
+        const subIn = (injPl ? bench.find((b) => b.pos === injPl.pos) : undefined) || bench[0];
+        if (subIn) {
+          curLu[idx] = subIn.n;
+          if (!curPlayed.includes(subIn.n)) curPlayed.push(subIn.n);
+          if (isHomeSide) sr.homeSubsCount++;
+          else sr.awaySubsCount++;
+          sr.subs.push({ m: 90, t: sideOrig.id, inPlayer: subIn.n, outPlayer: injName });
+        }
+      });
+    });
+
     w.phase = 'ft';
     w.varReview = null;
     w.pendingSetPiece = null;
@@ -14814,7 +16111,7 @@ const MatchModal: React.FC<{
       if (!w) return;
 
       if (!paused && !done && !simRef.current.done && w.phase !== 'halftime') {
-        const speedMul = speed === 4 ? 2.45 : speed === 2 ? 1.25 : speed === 0.5 ? 0.36 : 0.65;
+        const speedMul = speed === 4 ? 2.45 : speed === 2 ? 1.25 : speed === 0.5 ? 0.34 : speed === 0.25 ? 0.15 : 0.65;
 
         // Decay FX, banners & dramatic slow-mo timers in real time for key moments
         const isSlowShot =
@@ -14822,6 +16119,7 @@ const MatchModal: React.FC<{
           w.ball.flightType === 'freekick' ||
           w.ball.flightType === 'penalty' ||
           w.ball.flightType === 'shootout_kick';
+        const slowActive = cineSlowMo && (w.dramaSlowSec > 0 || isSlowShot);
         const isBigFx = (t: LivePitchFx['type']) =>
           t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside';
 
@@ -14915,7 +16213,7 @@ const MatchModal: React.FC<{
             }
           }
           if (canvas) {
-            drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
+            drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions);
           }
           rafId = window.requestAnimationFrame(frame);
           return;
@@ -14963,12 +16261,12 @@ const MatchModal: React.FC<{
         }
 
         // Smooth physical player movement + running stride + GK dive (slow-mo dampened during dramatic events)
-        const baseMoveScale = speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.5 ? 0.48 : 0.74;
-        const moveScale = w.dramaSlowSec > 0 || isSlowShot ? (speedMul < 0.5 ? 0.38 : 0.48) : baseMoveScale;
+        const baseMoveScale = speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
+        const moveScale = slowActive ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34) : baseMoveScale;
         w.agents.forEach((ag) => {
           if (ag.sentOff) return;
           if (ag.acrobatTimer && ag.acrobatTimer > 0) {
-            ag.acrobatTimer = Math.max(0, ag.acrobatTimer - rawDt);
+            ag.acrobatTimer = Math.max(0, ag.acrobatTimer - rawDt * (slowActive ? 0.55 : speedMul < 0.25 ? 0.5 : 1));
           }
           if (ag.intent === 'DIVE' && ag.intentTimer > 0) {
             ag.intentTimer -= rawDt;
@@ -15040,16 +16338,16 @@ const MatchModal: React.FC<{
           }
         } else {
           const b = w.ball;
-          const ballRate = isSlowShot
-            ? speedMul < 0.5 ? 0.34 : 0.44
-            : w.dramaSlowSec > 0
-              ? speedMul < 0.5 ? 0.38 : 0.5
-              : speedMul > 2.0
-                ? 1.48
-                : speedMul > 1.0
-                  ? 1.02
+          const ballRate = slowActive
+            ? speedMul < 0.22 ? 0.13 : speedMul < 0.5 ? 0.19 : 0.24
+            : speedMul > 2.0
+              ? 1.48
+              : speedMul > 1.0
+                ? 1.02
+                : speedMul < 0.22
+                  ? 0.22
                   : speedMul < 0.5
-                    ? 0.48
+                    ? 0.42
                     : 0.72;
           const stepProg = (rawDt * ballRate) / Math.max(0.18, b.duration);
           b.progress = Math.min(1, b.progress + stepProg);
@@ -15068,11 +16366,17 @@ const MatchModal: React.FC<{
             const ctrlY = (b.fromY + b.toY) * 0.5 + b.curve;
             b.x = omt * omt * b.fromX + 2 * omt * t * ctrlX + t * t * b.toX;
             b.y = omt * omt * b.fromY + 2 * omt * t * ctrlY + t * t * b.toY;
+            if (b.shotStyle === 'knuckle') {
+              const ang = Math.atan2(b.toY - b.fromY, b.toX - b.fromX) + Math.PI / 2;
+              const wobble = Math.sin(t * Math.PI * 3.5) * 2.0;
+              b.x = clamp(b.x + Math.cos(ang) * wobble, 0.5, 99.5);
+              b.y = clamp(b.y + Math.sin(ang) * wobble, 1, 99);
+            }
             b.z = Math.sin(t * Math.PI) * b.maxZ;
           }
 
           b.trail.push({ x: b.x, y: b.y, z: b.z });
-          if (b.trail.length > (isSlowShot ? 13 : 9)) b.trail.shift();
+          if (b.trail.length > (slowActive || isSlowShot ? 18 : 9)) b.trail.shift();
 
           if (b.progress >= 1) {
             resolveSegmentArrival(w, Math.max(1, curIntMin));
@@ -15134,7 +16438,7 @@ const MatchModal: React.FC<{
       }
 
       if (canvas) {
-        drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
+        drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions);
       }
       rafId = window.requestAnimationFrame(frame);
     };
@@ -15142,7 +16446,7 @@ const MatchModal: React.FC<{
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, showRunVectors, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
+  }, [paused, done, speed, cineSlowMo, showRunVectors, showPositions, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
@@ -15177,7 +16481,7 @@ const MatchModal: React.FC<{
     w.cardBanner = null;
     setLiveFitMap({ ...simRef.current.liveFit });
     if (canvasRef.current) {
-      drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
+      drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions);
     }
     finalizeMatch();
   };
@@ -15216,11 +16520,64 @@ const MatchModal: React.FC<{
       if (w.ball.targetId === subPickOut) w.ball.targetId = benchPlayer.n;
     }
 
+    const replacedName = subPickOut;
     setLiveLu(myLu.slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
     setSubLog(sr.subs.slice());
-    pushLog(minute, `🔄 เปลี่ยนตัว (${meTeamOrig.name}): 🟢 ${benchPlayer.n} เข้าแทน 🔴 ${subPickOut}`, 'sub');
+    pushLog(minute, `🔄 เปลี่ยนตัว (${meTeamOrig.name}): 🟢 ${benchPlayer.n} เข้าแทน 🔴 ${replacedName}`, 'sub');
+    if (injuryAlert && injuryAlert.name === replacedName) {
+      setInjuryAlert(null);
+    }
     setSubPickOut(null);
+  };
+
+  const handleQuickSubInjured = () => {
+    if (!injuryAlert) return;
+    const sr = simRef.current;
+    const w = worldRef.current!;
+    const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+    const myPlayed = meIsHome ? sr.homePlayed : sr.awayPlayed;
+    const mySubsCount = meIsHome ? sr.homeSubsCount : sr.awaySubsCount;
+    if (mySubsCount >= 5) return;
+    const idx = myLu.indexOf(injuryAlert.name);
+    if (idx < 0) {
+      setInjuryAlert(null);
+      return;
+    }
+    const injPl = meTeamOrig.sq.find((q) => q.n === injuryAlert.name);
+    const bestSub =
+      (injPl ? benchList.find((b) => b.pos === injPl.pos) : undefined) ||
+      benchList.find((b) => b.pos !== 'GK') ||
+      benchList[0];
+    if (!bestSub) return;
+
+    SFX.tap();
+    myLu[idx] = bestSub.n;
+    if (!myPlayed.includes(bestSub.n)) myPlayed.push(bestSub.n);
+    if (meIsHome) sr.homeSubsCount++;
+    else sr.awaySubsCount++;
+    sr.subs.push({ m: minute, t: meTeamOrig.id, inPlayer: bestSub.n, outPlayer: injuryAlert.name });
+
+    const agIdx = w.agents.findIndex((a) => a.id === injuryAlert.name);
+    if (agIdx >= 0) {
+      const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+      if (updated[idx]) {
+        updated[idx].x = w.agents[agIdx].x;
+        updated[idx].y = w.agents[agIdx].y;
+        updated[idx].facing = w.agents[agIdx].facing;
+        w.agents[agIdx] = updated[idx];
+      }
+      if (w.ball.carrierId === injuryAlert.name) w.ball.carrierId = bestSub.n;
+      if (w.ball.targetId === injuryAlert.name) w.ball.targetId = bestSub.n;
+    }
+
+    setLiveLu(myLu.slice());
+    setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
+    setSubLog(sr.subs.slice());
+    pushLog(minute, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ (${meTeamOrig.name}): 🟢 ${bestSub.n} เข้าแทน 🩹 ${injuryAlert.name}`, 'sub');
+    setInjuryAlert(null);
+    setSubPickOut(null);
+    setPaused(false);
   };
 
   const fullTimeAnalysis = useMemo(() => {
@@ -15372,7 +16729,8 @@ const MatchModal: React.FC<{
       finalLu: liveLu,
       cards: fullTimeAnalysis.cards,
       subs: fullTimeAnalysis.subs,
-      playedNames: fullTimeAnalysis.playedNames
+      playedNames: fullTimeAnalysis.playedNames,
+      injuries: srDone.injuries.slice()
     });
   };
 
@@ -16002,6 +17360,46 @@ const MatchModal: React.FC<{
                       </span>
                     </div>
                   </div>
+                  {injuryAlert && !done && (
+                    <div className="px-2.5 sm:px-3 py-1.5 mland:px-2 mland:py-1 bg-rose-950/95 border-b border-rose-400/50 flex flex-wrap items-center justify-between gap-2 text-white shrink-0">
+                      <span className="text-[11px] sm:text-xs mland:text-[10px] font-bold text-rose-200 flex items-center gap-1.5 min-w-0">
+                        <span className="animate-pulse shrink-0">🩹</span>
+                        <span className="truncate">
+                          ด่วน น.{injuryAlert.minute}&apos;: #{injuryAlert.no} {injuryAlert.role} {injuryAlert.name} บาดเจ็บ (พัก {injuryAlert.games} นัด)
+                        </span>
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {benchList.length > 0 && subsUsed.length < 5 && (
+                          <button
+                            type="button"
+                            onClick={handleQuickSubInjured}
+                            className="px-2 py-0.5 rounded-lg bg-emerald-500 text-white text-[10px] font-extrabold cursor-pointer hover:brightness-110 whitespace-nowrap"
+                          >
+                            ⚡ เปลี่ยนตัวด่วนแทนผู้เจ็บ
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSubPickOut(injuryAlert.name);
+                            setShowTacticsDrawer(true);
+                            setMlandMatchTab('tactics');
+                            setPaused(true);
+                          }}
+                          className="px-2 py-0.5 rounded-lg bg-white/15 border border-white/25 text-white text-[10px] font-bold cursor-pointer hover:bg-white/25 whitespace-nowrap"
+                        >
+                          🔄 เลือกเอง
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInjuryAlert(null)}
+                          className="w-5 h-5 rounded-md bg-white/10 text-white/80 text-[10px] font-bold cursor-pointer hover:bg-white/20"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   <div className="relative bg-[#144d2e]">
                     <canvas
                       ref={canvasRef}
@@ -16096,11 +17494,11 @@ const MatchModal: React.FC<{
                     let xPct = 50;
                     let yPct = 50;
                     if (ftPitchMode === 'all') {
-                      xPct = side === 'H' ? clamp(6.5 + ((92 - slot.y) / 78) * 37.5, 6.5, 44) : clamp(93.5 - ((92 - slot.y) / 78) * 37.5, 56, 93.5);
-                      yPct = side === 'H' ? clamp(12 + (slot.x / 100) * 76, 12, 86) : clamp(88 - (slot.x / 100) * 76, 12, 86);
+                      xPct = side === 'H' ? clamp(7.5 + ((92 - slot.y) / 78) * 36.5, 7.5, 44) : clamp(92.5 - ((92 - slot.y) / 78) * 36.5, 56, 92.5);
+                      yPct = side === 'H' ? clamp(14 + (slot.x / 100) * 72, 14, 86) : clamp(86 - (slot.x / 100) * 72, 14, 86);
                     } else {
-                      xPct = clamp(9 + ((92 - slot.y) / 78) * 82, 9, 91);
-                      yPct = clamp(13 + (slot.x / 100) * 74, 13, 86);
+                      xPct = clamp(10 + ((92 - slot.y) / 78) * 80, 10, 90);
+                      yPct = clamp(15 + (slot.x / 100) * 70, 15, 85);
                     }
                     const nodeKit = slot.pos === 'GK' ? gkKit : kit;
                     const nodeTrim = slot.pos === 'GK' ? '#ffffff' : side === 'H' ? homeTrim : awayTrim;
@@ -16161,35 +17559,35 @@ const MatchModal: React.FC<{
                     : rt >= 7.4
                       ? 'bg-emerald-500 text-white border-emerald-200/80'
                       : rt >= 6.4
-                        ? 'bg-slate-800 text-white border-slate-400/60'
+                        ? 'bg-slate-900/95 text-white border-slate-400/50'
                         : 'bg-rose-600 text-white border-rose-200/80';
 
                 return (
-                  <div className="rounded-2xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-lg mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
-                    {/* Pitch Top Bar */}
-                    <div className="px-3 py-2 mland:px-2 mland:py-0.5 bg-[#072113] border-b border-white/15 flex flex-wrap items-center justify-between gap-2 mland:gap-1 text-white shrink-0">
-                      <span className="text-xs mland:text-[9.5px] font-bold flex items-center gap-1">
-                        🏟️ เรตติ้งในสนาม &amp; MOTM
+                  <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0b2e1b] shadow-lg mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
+                    {/* Compact Pitch Top Bar */}
+                    <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[#072113] border-b border-white/15 flex items-center justify-between gap-2 text-white shrink-0">
+                      <span className="text-[11px] sm:text-xs mland:text-[9.5px] font-bold flex items-center gap-1 whitespace-nowrap">
+                        <span>🏟️ เรตติ้งในสนาม</span>
                       </span>
-                      <div className="flex items-center gap-1 p-0.5 rounded-lg bg-white/10 text-[10px] sm:text-[11px] mland:text-[9px]">
+                      <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/10 text-[10px] mland:text-[8.5px] min-w-0">
                         <button
                           type="button"
                           onClick={() => setFtPitchMode('all')}
-                          className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap ${ftPitchMode === 'all' ? 'bg-emerald-500 text-white shadow-xs' : 'text-white/75 hover:text-white'}`}
+                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap ${ftPitchMode === 'all' ? 'bg-emerald-500 text-white shadow-xs' : 'text-white/75 hover:text-white'}`}
                         >
-                          11v11 ทั้งสนาม
+                          ทั้งหมด
                         </button>
                         <button
                           type="button"
                           onClick={() => setFtPitchMode('H')}
-                          className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[100px] truncate ${ftPitchMode === 'H' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/75 hover:text-white'}`}
+                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[92px] truncate ${ftPitchMode === 'H' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/75 hover:text-white'}`}
                         >
                           {homeOrig.name}
                         </button>
                         <button
                           type="button"
                           onClick={() => setFtPitchMode('A')}
-                          className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[100px] truncate ${ftPitchMode === 'A' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/75 hover:text-white'}`}
+                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[92px] truncate ${ftPitchMode === 'A' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/75 hover:text-white'}`}
                         >
                           {awayOrig.name}
                         </button>
@@ -16198,36 +17596,33 @@ const MatchModal: React.FC<{
 
                     {/* Full-Time Turf Stage */}
                     <div
-                      className="relative w-full aspect-[16/10] sm:aspect-[16/9.2] min-h-[290px] sm:min-h-[340px] mland:min-h-0 mland:aspect-auto mland:flex-1 select-none overflow-hidden"
+                      className="relative w-full aspect-[16/9.6] sm:aspect-[16/9] min-h-[265px] sm:min-h-[320px] mland:min-h-0 mland:aspect-auto mland:flex-1 select-none overflow-hidden"
                       style={{
                         backgroundImage:
                           'repeating-linear-gradient(90deg, #175c36 0%, #175c36 8.333%, #1d6b40 8.333%, #1d6b40 16.666%)'
                       }}
                     >
-                      {/* Stadium Light Vignette */}
+                      {/* Subtle Stadium Vignette */}
                       <div
                         className="absolute inset-0 pointer-events-none"
-                        style={{ background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.06) 0%, rgba(0,0,0,0.34) 100%)' }}
+                        style={{ background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.32) 100%)' }}
                       />
 
                       {/* Pitch Line Markings SVG */}
                       <svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
-                        <g stroke="rgba(240,253,244,0.68)" strokeWidth="2.5" fill="none">
+                        <g stroke="rgba(240,253,244,0.58)" strokeWidth="2.2" fill="none">
                           <rect x="26" y="20" width="948" height="520" />
                           <line x1="500" y1="20" x2="500" y2="540" />
                           <circle cx="500" cy="280" r="76" />
-                          <circle cx="500" cy="280" r="4" fill="rgba(240,253,244,0.85)" />
-                          {/* Left Penalty Area */}
+                          <circle cx="500" cy="280" r="3.5" fill="rgba(240,253,244,0.8)" />
                           <rect x="26" y="130" width="145" height="300" />
                           <rect x="26" y="205" width="52" height="150" />
-                          <circle cx="122" cy="280" r="3" fill="rgba(240,253,244,0.85)" />
+                          <circle cx="122" cy="280" r="3" fill="rgba(240,253,244,0.8)" />
                           <path d="M 171 214 A 72 72 0 0 1 171 346" />
-                          {/* Right Penalty Area */}
                           <rect x="829" y="130" width="145" height="300" />
                           <rect x="922" y="205" width="52" height="150" />
-                          <circle cx="878" cy="280" r="3" fill="rgba(240,253,244,0.85)" />
+                          <circle cx="878" cy="280" r="3" fill="rgba(240,253,244,0.8)" />
                           <path d="M 829 214 A 72 72 0 0 0 829 346" />
-                          {/* Goals */}
                           <rect x="10" y="232" width="16" height="96" strokeWidth="2" />
                           <rect x="974" y="232" width="16" height="96" strokeWidth="2" />
                         </g>
@@ -16235,14 +17630,16 @@ const MatchModal: React.FC<{
 
                       {/* Selected Player Detail Inspector Popover */}
                       {pickedInfo && (
-                        <div className="absolute top-2 left-2 z-30 max-w-[260px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                        <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[290px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 backdrop-blur-md border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                           <div className="min-w-0">
-                            <div className="font-bold truncate">
-                              #{pickedInfo.no} · {pickedInfo.role} · {pickedInfo.name}
+                            <div className="font-bold truncate flex items-center gap-1.5">
+                              <span className="text-[#facc15] tabular">#{pickedInfo.no}</span>
+                              <span className="px-1 rounded bg-white/15 text-[9.5px] font-extrabold">{pickedInfo.role}</span>
+                              <span className="truncate">{pickedInfo.name}</span>
                             </div>
-                            <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular">
+                            <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular mt-0.5">
                               <span>{pickedInfo.team.name}</span>
-                              <span className="text-[#facc15] font-bold">⭐ {pickedInfo.rt.toFixed(1)}</span>
+                              <span className="px-1.5 rounded bg-[#facc15]/20 text-[#facc15] font-extrabold">⭐ {pickedInfo.rt.toFixed(1)}</span>
                               {pickedInfo.gl > 0 && <span>⚽{pickedInfo.gl}</span>}
                               {pickedInfo.as > 0 && <span>🎯{pickedInfo.as}</span>}
                               {pickedInfo.cards.map((c, idx) => (
@@ -16252,40 +17649,39 @@ const MatchModal: React.FC<{
                               {pickedInfo.subIn && <span>↑{pickedInfo.subIn.m}&apos;</span>}
                             </div>
                           </div>
-                          <button type="button" onClick={() => setFtPickedPlayer(null)} className="text-white/65 hover:text-white font-bold px-1 cursor-pointer">
+                          <button type="button" onClick={() => setFtPickedPlayer(null)} className="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 font-bold cursor-pointer shrink-0">
                             ✕
                           </button>
                         </div>
                       )}
 
-                      {/* 22 (or 11) Player Nodes on Pitch */}
+                      {/* 22 (or 11) Clean Player Nodes on Pitch */}
                       {visibleNodes.map((n) => {
-                        const sizeCls = ftPitchMode === 'all' ? 'w-8 h-8 sm:w-9 sm:h-9 mland:w-6 mland:h-6' : 'w-10 h-10 sm:w-11 sm:h-11 mland:w-7 mland:h-7';
-                        const faceSize = ftPitchMode === 'all' ? 35 : 43;
+                        const isAll = ftPitchMode === 'all';
+                        const sizeCls = isAll ? 'w-7 h-7 sm:w-8 sm:h-8 mland:w-5.5 mland:h-5.5' : 'w-10 h-10 sm:w-11 sm:h-11 mland:w-7 mland:h-7';
+                        const faceSize = isAll ? 32 : 43;
+                        const isPicked = ftPickedPlayer === n.name;
+                        const hasEvent = n.goals > 0 || n.assists > 0 || n.hasRed || n.hasYellow || n.subOutEv;
                         return (
                           <button
                             key={`${n.side}-${n.name}`}
                             type="button"
                             onClick={() => setFtPickedPlayer((prev) => (prev === n.name ? null : n.name))}
                             style={{ left: `${n.xPct}%`, top: `${n.yPct}%` }}
-                            className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer focus:outline-none ${n.isMotm ? 'z-20' : 'z-10 hover:z-20'}`}
+                            className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer focus:outline-none ${
+                              n.isMotm || isPicked ? 'z-20' : 'z-10 hover:z-20'
+                            }`}
                           >
-                            {/* MOTM Crown Tag */}
-                            {n.isMotm && (
-                              <div className="mb-0.5 mland:mb-0 px-1.5 mland:px-1 py-0.2 rounded-full bg-[#facc15] text-[#1c1300] text-[8px] sm:text-[9px] mland:text-[7px] font-black shadow-md whitespace-nowrap tracking-wide border border-white/80">
-                                👑 MOTM
-                              </div>
-                            )}
-
-                            {/* Player Portrait Circle + Position + Rating + Number + Event Icons */}
                             <div className="relative">
                               <div
                                 className={`${sizeCls} rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-110 mland:[&_svg]:w-full mland:[&_svg]:h-full ${
-                                  n.isMotm
-                                    ? 'ring-2 ring-[#facc15] shadow-[0_0_16px_rgba(250,204,21,0.8)] border-2 border-white'
-                                    : n.isMe
-                                      ? 'ring-2 ring-amber-300 border-2 border-white shadow-md'
-                                      : 'border-2 mland:border border-white/95 shadow-md'
+                                  isPicked
+                                    ? 'ring-2 ring-sky-300 border-2 border-white shadow-lg scale-105'
+                                    : n.isMotm
+                                      ? 'ring-2 ring-[#facc15] shadow-[0_0_14px_rgba(250,204,21,0.85)] border-2 border-white'
+                                      : n.isMe
+                                        ? 'ring-2 ring-amber-300 border-2 border-white shadow-md'
+                                        : 'border-[1.5px] mland:border border-white/90 shadow-md'
                                 }`}
                                 style={{ backgroundColor: n.kit }}
                               >
@@ -16301,14 +17697,26 @@ const MatchModal: React.FC<{
                                 />
                               </div>
 
-                              {/* Position Tag (Top-Left) */}
-                              <span className="absolute -top-1.5 -left-2 mland:-top-1 mland:-left-1.5 px-1 mland:px-0.5 py-0.2 rounded bg-slate-950/90 border border-white/30 text-white text-[7.5px] sm:text-[8.5px] mland:text-[6.5px] font-extrabold leading-none">
-                                {n.role}
-                              </span>
+                              {/* MOTM Crown (Clean Top-Left Corner) */}
+                              {n.isMotm && (
+                                <span
+                                  title="Man of the Match"
+                                  className="absolute -top-1.5 -left-1.5 mland:-top-1 mland:-left-1 w-4 h-4 mland:w-3 mland:h-3 rounded-full bg-[#facc15] border border-white flex items-center justify-center text-[9px] mland:text-[7px] leading-none shadow-sm"
+                                >
+                                  👑
+                                </span>
+                              )}
+
+                              {/* Position Tag (Always visible cleanly across 11v11, single-team & MOTM) */}
+                              {!isAll && !n.isMotm && (
+                                <span className="absolute -top-1 -left-2 mland:-left-1.5 px-1 py-0.2 rounded bg-slate-950/90 border border-white/30 text-white text-[7.5px] sm:text-[8px] mland:text-[6.5px] font-extrabold leading-none">
+                                  {n.role}
+                                </span>
+                              )}
 
                               {/* Rating Badge (Top-Right) */}
                               <span
-                                className={`absolute -top-1.5 -right-2.5 mland:-top-1 mland:-right-2 px-1 mland:px-0.5 py-0.2 rounded border text-[8.5px] sm:text-[9.5px] mland:text-[7px] font-black tabular leading-none shadow-sm ${ratingBadgeCls(
+                                className={`absolute -top-1 -right-2 mland:-right-1.5 px-1 mland:px-0.5 py-0.2 rounded-md border text-[8px] sm:text-[9px] mland:text-[6.5px] font-black tabular leading-none shadow-sm ${ratingBadgeCls(
                                   n.rt,
                                   n.isMotm
                                 )}`}
@@ -16316,44 +17724,60 @@ const MatchModal: React.FC<{
                                 {n.rt.toFixed(1)}
                               </span>
 
-                              {/* Shirt Number Badge (Bottom-Left) */}
-                              <span className="absolute -bottom-1 -left-1.5 mland:-left-1 px-1 mland:px-0.5 py-0.2 rounded bg-[#0b2018]/95 border border-white/30 text-[#ffd75e] text-[7.5px] sm:text-[8.5px] mland:text-[6.5px] font-extrabold tabular leading-none">
-                                {n.no}
-                              </span>
+                              {/* Bottom-Left: Position tag in 11v11 (or Shirt No + Role on MOTM in single-team) */}
+                              {isAll ? (
+                                <span
+                                  className={`absolute -bottom-1 -left-2 mland:-left-1.5 px-1 py-0.2 rounded bg-slate-950/92 border border-white/25 text-[6.5px] sm:text-[7.5px] mland:text-[5.5px] font-extrabold leading-none ${
+                                    n.role === 'GK'
+                                      ? 'text-amber-300'
+                                      : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(n.role)
+                                        ? 'text-sky-300'
+                                        : ['ST', 'CF', 'SS', 'LW', 'RW'].includes(n.role)
+                                          ? 'text-rose-300'
+                                          : 'text-emerald-300'
+                                  }`}
+                                >
+                                  {n.role}
+                                </span>
+                              ) : (
+                                <span className="absolute -bottom-1 -left-1.5 px-1 py-0.2 rounded bg-[#0b2018]/95 border border-white/25 text-[#ffd75e] text-[7.5px] sm:text-[8px] mland:text-[6.5px] font-extrabold tabular leading-none whitespace-nowrap">
+                                  {n.isMotm ? `#${n.no} ${n.role}` : n.no}
+                                </span>
+                              )}
 
-                              {/* Event Micro-Badges (Bottom-Right) */}
-                              {(n.goals > 0 || n.assists > 0 || n.hasRed || n.hasYellow || n.subOutEv) && (
-                                <div className="absolute -bottom-1 -right-2.5 mland:-right-2 flex items-center gap-0.5 text-[9px] mland:text-[7px] leading-none drop-shadow">
+                              {/* Compact Event Badges (Bottom-Right) */}
+                              {hasEvent && (
+                                <div className="absolute -bottom-1 -right-2 mland:-right-1.5 px-0.5 rounded-full bg-slate-950/85 border border-white/20 flex items-center gap-0.5 text-[8px] mland:text-[6.5px] leading-none shadow-xs">
                                   {n.goals > 0 && <span>{n.goals > 1 ? `⚽${n.goals}` : '⚽'}</span>}
                                   {n.assists > 0 && <span>🎯</span>}
                                   {n.hasRed && <span>🟥</span>}
                                   {n.hasYellow && <span>🟨</span>}
-                                  {n.subOutEv && <span className="px-0.5 rounded bg-black/80 text-rose-300 text-[7.5px] mland:text-[6.5px] font-bold">↓</span>}
+                                  {n.subOutEv && <span className="text-rose-300 font-bold">↓</span>}
                                 </div>
                               )}
                             </div>
 
-                            {/* Player Nameplate */}
+                            {/* Clean Unified Nameplate */}
                             <div
-                              className={`mt-0.5 mland:mt-0 px-1.5 mland:px-1 py-0.2 rounded text-[8.5px] sm:text-[10px] mland:text-[7.5px] font-bold leading-tight truncate max-w-[68px] sm:max-w-[92px] mland:max-w-[54px] shadow-xs ${
+                              className={`mt-0.5 mland:mt-0 px-1.5 mland:px-1 py-0.2 rounded-md text-[8px] sm:text-[9.5px] mland:text-[7px] font-bold leading-tight truncate max-w-[64px] sm:max-w-[88px] mland:max-w-[52px] shadow-xs ${
                                 n.isMotm
-                                  ? 'bg-[#facc15] text-[#1c1300]'
+                                  ? 'bg-gradient-to-r from-[#fde047] to-[#eab308] text-[#1c1300] font-extrabold'
                                   : n.isMe
-                                    ? 'bg-amber-400/95 text-[#1c1300]'
-                                    : 'bg-[#05120b]/88 text-white/95'
+                                    ? 'bg-amber-300 text-[#1c1300]'
+                                    : 'bg-[#05120b]/85 text-white/95'
                               }`}
                             >
-                              {ftPitchMode === 'all' ? n.shortName : n.name}
+                              {isAll ? n.shortName : n.name}
                             </div>
                           </button>
                         );
                       })}
                     </div>
 
-                    {/* Substitutes Who Played Touchline Strip (Inside Pitch Card) */}
+                    {/* Substitutes Touchline Strip (Compact Single-Row Scroll) */}
                     {fullTimeAnalysis.subs.length > 0 && (
-                      <div className="px-3 py-1.5 mland:px-2 mland:py-0.5 bg-[#082414] border-t border-white/10 flex flex-wrap mland:flex-nowrap mland:overflow-x-auto items-center gap-1.5 mland:gap-1 text-[10px] mland:text-[9px] text-white/90 shrink-0">
-                        <span className="font-bold text-white/70 shrink-0">🔄 สำรอง:</span>
+                      <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-[#082414] border-t border-white/10 flex items-center gap-1.5 overflow-x-auto text-[10px] mland:text-[8.5px] text-white/90 shrink-0">
+                        <span className="font-bold text-white/65 shrink-0">🔄 สำรอง:</span>
                         {fullTimeAnalysis.subs.map((sb, idx) => {
                           const subTeam = sb.t === homeOrig.id ? homeOrig : awayOrig;
                           const subSideKit = sb.t === homeOrig.id ? homeKit : awayKit;
@@ -16368,13 +17792,13 @@ const MatchModal: React.FC<{
                               key={idx}
                               type="button"
                               onClick={() => setFtPickedPlayer(sb.inPlayer)}
-                              className={`inline-flex items-center gap-1 px-1.5 mland:px-1 py-0.5 mland:py-0 rounded border text-[10px] mland:text-[9px] tabular cursor-pointer shrink-0 ${
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 mland:py-0 rounded-md border text-[10px] mland:text-[8.5px] tabular cursor-pointer shrink-0 ${
                                 isSubMotm ? 'bg-[#facc15] text-[#1c1300] border-white font-extrabold' : 'bg-white/10 border-white/15 hover:bg-white/20'
                               }`}
                             >
-                              <span className="w-2 h-2 rounded-full border border-white/70 shrink-0" style={{ background: subSideKit }} />
-                              <span className="font-bold">#{subNo}</span>
-                              <span className="opacity-80">{subPl?.ro || 'MF'}</span>
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: subSideKit }} />
+                              <span className="opacity-75">#{subNo}</span>
+                              {subPl?.ro && <span className="text-[8.5px] mland:text-[7.5px] font-extrabold opacity-80">{subPl.ro}</span>}
                               <span>{sb.inPlayer.split(' ')[0]}</span>
                               <span className={`px-1 rounded font-black ${isSubMotm ? 'bg-[#1c1300] text-[#facc15]' : 'bg-black/40 text-emerald-300'}`}>
                                 {subRt.toFixed(1)}
@@ -16388,39 +17812,39 @@ const MatchModal: React.FC<{
                       </div>
                     )}
 
-                    {/* Integrated MOTM Broadcast Banner Inside Pitch Frame */}
+                    {/* Sleek Compact MOTM Broadcast Card */}
                     <div
-                      className="px-3 py-2 mland:px-2 mland:py-0.5 border-t border-[#facc15]/45 flex items-center justify-between gap-2.5 mland:gap-1.5 text-white shrink-0"
-                      style={{ background: 'linear-gradient(90deg, rgba(250,204,21,0.22) 0%, rgba(10,33,20,0.96) 55%, rgba(7,22,14,0.98) 100%)' }}
+                      className="px-3 py-1.5 mland:px-2.5 mland:py-1 border-t border-[#facc15]/40 flex items-center justify-between gap-2 text-white shrink-0"
+                      style={{ background: 'linear-gradient(90deg, rgba(250,204,21,0.18) 0%, rgba(10,33,20,0.96) 50%, rgba(7,22,14,0.98) 100%)' }}
                     >
-                      <div className="flex items-center gap-2.5 mland:gap-1.5 min-w-0">
-                        <div className="shrink-0 mland:[&_svg]:w-7 mland:[&_svg]:h-7">
+                      <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+                        <div className="shrink-0 mland:[&_svg]:w-6 mland:[&_svg]:h-6">
                           <PlayerFace
                             player={motmPlayer || { n: fullTimeAnalysis.motm }}
                             team={motmTeam}
                             state={state}
                             careerProfile={motmPlayer?.me ? state.p : null}
-                            size={38}
+                            size={34}
                           />
                         </div>
                         <div className="min-w-0">
-                          <div className="text-[10px] mland:text-[8.5px] font-extrabold text-[#facc15] tracking-wide flex items-center gap-1.5 leading-tight">
+                          <div className="text-[9.5px] mland:text-[8px] font-extrabold text-[#facc15] tracking-wide flex items-center gap-1 leading-tight">
                             <span>👑 MAN OF THE MATCH</span>
-                            <span className="text-white/70 truncate">· {motmTeam.name}</span>
+                            <span className="text-white/65 font-semibold truncate">· {motmTeam.name}</span>
                           </div>
-                          <div className="text-xs sm:text-sm mland:text-[10.5px] font-bold truncate flex items-center gap-1.5 mland:gap-1 leading-tight">
-                            <span className="px-1.5 mland:px-1 py-0.2 rounded bg-white/15 text-[10px] mland:text-[8.5px] font-extrabold tabular">
+                          <div className="text-xs sm:text-sm mland:text-[10px] font-bold truncate flex items-center gap-1 leading-tight mt-0.5 mland:mt-0">
+                            <span className="px-1 py-0.2 rounded bg-white/15 text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0">
                               #{motmNo} {motmPlayer?.ro || ''}
                             </span>
                             <span className="truncate">{fullTimeAnalysis.motm}</span>
-                            {motmGoals > 0 && <span className="text-xs mland:text-[10px]">⚽{motmGoals > 1 ? motmGoals : ''}</span>}
-                            {motmAssists > 0 && <span className="text-xs mland:text-[10px]">🎯{motmAssists > 1 ? motmAssists : ''}</span>}
+                            {motmGoals > 0 && <span className="text-[11px] mland:text-[9.5px] shrink-0">⚽{motmGoals > 1 ? motmGoals : ''}</span>}
+                            {motmAssists > 0 && <span className="text-[11px] mland:text-[9.5px] shrink-0">🎯{motmAssists > 1 ? motmAssists : ''}</span>}
                           </div>
                         </div>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-[9px] mland:text-[8px] text-[#fde047] font-bold leading-none">RATING</div>
-                        <div className="text-lg sm:text-xl mland:text-sm font-black tabular text-[#facc15] leading-none">{motmRt.toFixed(1)}</div>
+                      <div className="shrink-0 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl mland:rounded-lg bg-[#facc15]/15 border border-[#facc15]/45 text-center">
+                        <div className="text-[8px] mland:text-[7px] text-[#fde047] font-bold leading-none tracking-wider">RATING</div>
+                        <div className="text-base sm:text-lg mland:text-xs font-black tabular text-[#facc15] leading-tight">{motmRt.toFixed(1)}</div>
                       </div>
                     </div>
                   </div>
@@ -16487,10 +17911,10 @@ const MatchModal: React.FC<{
                 </div>
               )}
 
-              {/* Desktop/Portrait Match Stats + Live Pitch Energy & Alerts (hidden on mobile landscape, shown in Right Stage Stats tab) */}
+              {/* Desktop/Portrait Match Stats + Live Pitch Energy & Alerts (hide energy panel after FT) */}
               <div className="space-y-2.5 mland:hidden">
                 {renderMatchStatsPanel()}
-                {renderLiveEnergyPanel()}
+                {!done && renderLiveEnergyPanel()}
               </div>
             </div>
 
@@ -16622,7 +18046,7 @@ const MatchModal: React.FC<{
                     {mlandMatchTab === 'stats' && (
                       <div className="space-y-2">
                         {renderMatchStatsPanel()}
-                        {renderLiveEnergyPanel()}
+                        {!done && renderLiveEnergyPanel()}
                       </div>
                     )}
                     {mlandMatchTab === 'tactics' && state.mode === 'm' && !done && renderLiveTacticsPanel()}
@@ -16674,12 +18098,12 @@ const MatchModal: React.FC<{
                   {paused ? '▶ เล่นต่อ' : '⏸ พักเกม'}
                 </button>
                 <div className="inline-flex items-center p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
-                  {([0.5, 1, 2, 4] as const).map((sp) => (
+                  {([0.25, 0.5, 1, 2, 4] as const).map((sp) => (
                     <button
                       key={sp}
                       type="button"
                       onClick={() => setSpeed(sp)}
-                      className={`min-h-[28px] mland:min-h-[24px] px-2 sm:px-2.5 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                      className={`min-h-[28px] mland:min-h-[24px] px-1.5 sm:px-2 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                     >
                       {sp}x
                     </button>
@@ -16691,6 +18115,20 @@ const MatchModal: React.FC<{
                   className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
                 >
                   {showRunVectors ? '↗️ เส้น: เปิด' : '↗️ เส้น: ปิด'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPositions((v) => !v)}
+                  className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${showPositions ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
+                >
+                  {showPositions ? '🏷️ ตำแหน่ง: เปิด' : '🏷️ ตำแหน่ง: ปิด'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCineSlowMo((v) => !v)}
+                  className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${cineSlowMo ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
+                >
+                  {cineSlowMo ? '🎬 สโลว์: เปิด' : '🎬 สโลว์: ปิด'}
                 </button>
               </div>
 
@@ -16839,6 +18277,55 @@ const PlayerInspectorModal: React.FC<{
               <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]"><div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ค่าตัว</div><b className="tabular">{vlu(livePlayer)}k ฿</b></div>
               <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]"><div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">สัญญา/เหนื่อย</div><b className="tabular">{con ? `${con.yr}ปี · ${con.wg}k` : `${wagOf(livePlayer)}k`}</b></div>
             </div>
+
+            {livePlayer.inj > 0 && (() => {
+              const curTurn = state.season * 40 + state.md;
+              const medLv = state.med ?? 1;
+              const physioLv = state.staff?.physio ?? 0;
+              const treatCost = Math.max(6, 14 - medLv * 2 - physioLv * 2);
+              const alreadyTreated = livePlayer.treatedMd === curTurn;
+              return (
+                <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/45 space-y-2 mland:space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">
+                      🩹 ศูนย์ฟื้นฟูอาการบาดเจ็บ (พักอีก {livePlayer.inj} นัด)
+                    </span>
+                    <span className="text-[10px] mland:text-[9px] font-bold text-[var(--mut)]">
+                      ฟิต {Math.round(livePlayer.fit ?? 70)}% · 🏥 Lv.{medLv}
+                    </span>
+                  </div>
+                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] space-y-0.5 leading-snug">
+                    <div>• พักฟื้นอัตโนมัติ <b>-1 นัด</b> หลังจบการแข่งทุกนัด (<b>-2 นัด</b> หากมีศูนย์การแพทย์ Lv.3+ หรือนักกายภาพ Lv.2+)</div>
+                    <div>• สลับซ้อมทีมเป็น <b>&ldquo;😴 พักผ่อน / ฟื้นร่าง (F)&rdquo;</b> หรือจัดกิจกรรม <b>&ldquo;🏥 คลินิกกายภาพทีม&rdquo;</b> เพื่อช่วยฟื้นตัวเร็ว</div>
+                  </div>
+                  {isMyTeam && state.mode === 'm' && (
+                    <button
+                      type="button"
+                      disabled={alreadyTreated || state.money < treatCost}
+                      onClick={() => {
+                        SFX.tap();
+                        onUpdateState((d) => {
+                          const sq = d.teams[d.me].sq;
+                          const pl = sq.find((q) => q.n === livePlayer.n);
+                          if (!pl || pl.inj <= 0 || pl.treatedMd === curTurn || d.money < treatCost) return;
+                          d.money -= treatCost;
+                          logFin(d, `กายภาพบำบัด ${pl.n}`, -treatCost);
+                          pl.inj = Math.max(0, pl.inj - 1);
+                          pl.fit = clamp((pl.fit ?? 70) + 10, 40, 100);
+                          pl.treatedMd = curTurn;
+                        });
+                        onToast(livePlayer.inj - 1 <= 0 ? `💉 รักษา ${livePlayer.n} หายเจ็บพร้อมลงสนามแล้ว!` : `💉 ทำกายภาพ ${livePlayer.n} ลดวันพักเหลือ ${livePlayer.inj - 1} นัด (+10% ฟิต)`);
+                      }}
+                      className="w-full py-2 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer disabled:opacity-45"
+                    >
+                      {alreadyTreated
+                        ? '✅ ทำกายภาพรอบนี้ไปแล้ว (รอหลังจบนัดถัดไป)'
+                        : `💉 ทำกายภาพบำบัดเร่งด่วน (-1 นัด · +10% ฟิต · ${treatCost}k ฿)`}
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             {isMyTeam && state.mode === 'm' && (
               <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
@@ -17473,8 +18960,9 @@ const SettingsModal: React.FC<{
 
             <div className="space-y-2 mland:space-y-1">
               <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)]">⚡ ความเร็วการแข่งเริ่มต้น</div>
-              <div className="grid grid-cols-4 gap-1.5 mland:gap-1">
+              <div className="grid grid-cols-5 gap-1 mland:gap-1">
                 {([
+                  [0.25, '0.25x สโลว์พิเศษ'],
                   [0.5, '0.5x ช้าละเอียด'],
                   [1, '1x มาตรฐาน'],
                   [2, '2x เร็ว'],
@@ -17484,7 +18972,7 @@ const SettingsModal: React.FC<{
                     key={sp}
                     type="button"
                     onClick={() => update({ matchSpeed: sp, quick: sp === 4 })}
-                    className={`py-2 mland:py-1 px-1 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${curMatchSpeed === sp ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                    className={`py-2 mland:py-1 px-1 rounded-xl mland:rounded-lg text-[10.5px] mland:text-[9px] font-semibold cursor-pointer ${curMatchSpeed === sp ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
                   >
                     {lbl}
                   </button>
@@ -17663,6 +19151,7 @@ export default function App() {
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
   const [navResetSeq, setNavResetSeq] = useState(0);
+  const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -17671,6 +19160,16 @@ export default function App() {
     setToast(msg);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
+  };
+
+  const navigateToTab = (tab: MainTab, sub?: string) => {
+    setNavIntent({ tab, sub, ts: Date.now() });
+    setNavResetSeq((n) => n + 1);
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+    updateState((d) => {
+      d.v = tab;
+      d.tv = 0;
+    });
   };
 
   useEffect(() => {
@@ -17772,6 +19271,22 @@ export default function App() {
         playedNames: payload.playedNames
       };
 
+      const liveInjs = payload.injuries || [];
+      const liveInjTeamIds = Array.from(new Set(liveInjs.map((x) => x.teamId)));
+      const liveInjNames = liveInjs.map((x) => x.name);
+      const applyLiveInjuries = () => {
+        liveInjs.forEach((inj) => {
+          const teamObj = d.teams[inj.teamId];
+          const pl = teamObj?.sq.find((q) => q.n === inj.name);
+          if (!teamObj || !pl) return;
+          pl.inj = Math.max(pl.inj || 0, inj.games);
+          if (pl.me && d.p) d.p.inj = pl.inj;
+          if (teamObj.id === d.me || d.p?.name === pl.n) {
+            pushFeed(d, 'บาดเจ็บในสนาม', `🩹 ${pl.n} (${teamObj.name}) บาดเจ็บระหว่างแข่ง คาดพัก ${inj.games} นัด`, 'urg');
+          }
+        });
+      };
+
       if (kind === 'cup') {
         const c = d.cup;
         const nx: number[] = [];
@@ -17810,9 +19325,14 @@ export default function App() {
             triggerConfetti();
           }
         }
+        applyLiveInjuries();
         me.sq.forEach((q) => {
           if ((q.sus || 0) > 0) q.sus = q.sus! - 1;
-          if (q.me && d.p) d.p.sus = q.sus || 0;
+          if ((q.inj || 0) > 0 && !liveInjNames.includes(q.n)) q.inj = Math.max(0, q.inj - 1);
+          if (q.me && d.p) {
+            d.p.sus = q.sus || 0;
+            d.p.inj = q.inj || 0;
+          }
         });
         applyMatchCards(d, H, A, payload.cards);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
@@ -17857,9 +19377,14 @@ export default function App() {
             triggerConfetti();
           }
         }
+        applyLiveInjuries();
         me.sq.forEach((q) => {
           if ((q.sus || 0) > 0) q.sus = q.sus! - 1;
-          if (q.me && d.p) d.p.sus = q.sus || 0;
+          if ((q.inj || 0) > 0 && !liveInjNames.includes(q.n)) q.inj = Math.max(0, q.inj - 1);
+          if (q.me && d.p) {
+            d.p.sus = q.sus || 0;
+            d.p.inj = q.inj || 0;
+          }
         });
         applyMatchCards(d, H, A, payload.cards);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
@@ -17958,7 +19483,8 @@ export default function App() {
       }
 
       d.md++;
-      afterMatchDay(d);
+      applyLiveInjuries();
+      afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames });
       if (d.mode === 'm' && payload.subs.length > 0) {
         payload.subs.forEach((sb) => {
           if (sb.t !== d.me) return;
@@ -18248,6 +19774,8 @@ export default function App() {
               onInspectTeam={(tid) => setInspectTeamId(tid)}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onUpdateState={updateState}
+              onNavigate={navigateToTab}
+              onToast={showToast}
             />
           )}
           {curTab === 'q' && (
@@ -18257,6 +19785,7 @@ export default function App() {
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onToast={showToast}
+              navIntent={navIntent}
             />
           )}
           {curTab === 'k' && state.mode === 'm' && (
@@ -18266,6 +19795,7 @@ export default function App() {
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onToast={showToast}
+              navIntent={navIntent}
             />
           )}
           {(curTab === 'f' || curTab === 'u') && state.mode === 'm' && (
@@ -18275,6 +19805,7 @@ export default function App() {
               tab={curTab}
               onUpdateState={updateState}
               onToast={showToast}
+              navIntent={navIntent}
             />
           )}
           {curTab === 'c' && <CupView key={`c-${navResetSeq}`} state={state} onInspectTeam={(tid) => setInspectTeamId(tid)} />}
