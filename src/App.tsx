@@ -3278,20 +3278,23 @@ const PlayerFace: React.FC<{
   careerProfile?: PlayerCareerProfile | null;
   size?: number;
   bare?: boolean;
-}> = ({ player, team, state, careerProfile, size = 38, bare = false }) => {
+  kitColor?: string;
+  trimColor?: string;
+}> = ({ player, team, state, careerProfile, size = 38, bare = false, kitColor, trimColor }) => {
   const q = player || {};
   const resolvedNo = q.no || (team && q.n ? getShirtNo(team, q) : undefined) || (q.me ? (careerProfile || state?.p)?.no : undefined);
   const v = visOf(resolvedNo ? { ...q, no: resolvedNo } : q, careerProfile || state?.p);
   const teamKit = team ? tc(team, state) : null;
-  const kc =
-    q.pos === 'GK'
+  const kc = kitColor
+    ? kitColor
+    : q.pos === 'GK'
       ? pickGK(teamKit || '#2f6fd6')
       : teamKit
         ? teamKit
         : q.me && (careerProfile || state?.p)
           ? (careerProfile || state?.p)!.c
           : '#2f6fd6';
-  const tr = team ? tc(team, state, true) : '#ffd75e';
+  const tr = trimColor ? trimColor : team ? tc(team, state, true) : '#ffd75e';
   const bg = bare ? 'transparent' : `color-mix(in srgb, ${kc} 18%, transparent)`;
   return (
     <svg
@@ -3309,27 +3312,46 @@ const PITCH_SVG_BASE =
   '<rect width="300" height="340" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v42H0zM0 85h300v42H0zM0 170h300v42H0zM0 255h300v42H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="328"/><path d="M6 170h288M90 6v52h120V6M90 334v-62h120v62"/><circle cx="150" cy="170" r="34"/></g>';
 
 const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }> = ({ team, state }) => {
+  const uid = React.useId().replace(/:/g, '');
   const col = tc(team, state);
+  const trCol = tc(team, state, true);
+  const gkCol = pickGK(col);
   const slots = getFormationSlots(team);
+  const starters = xi(team);
   return (
     <svg className="w-full max-w-[200px] mx-auto rounded-xl block" viewBox="0 0 300 340" role="img" aria-label={`ผังแผน ${team.form}`}>
+      <defs>
+        <clipPath id={`mfc-${uid}`}>
+          <circle cx="30" cy="31" r="27" />
+        </clipPath>
+      </defs>
       <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
       {slots.map((z, idx) => {
+        const q = starters[idx];
         const cx = 18 + z.x * 2.64;
         const cy = 24 + z.y * 2.9;
+        const kc = z.sp === 'GK' ? gkCol : col;
+        const isMe = !!(q?.me || (state?.mode === 'p' && state?.p?.name === q?.n));
+        const sc = 0.5;
         return (
           <g key={idx}>
-            <circle cx={cx} cy={cy} r={15} fill={col} stroke="#fff" strokeWidth={2.5} />
+            <circle cx={cx} cy={cy} r={16} fill={kc} stroke={isMe ? '#f5c242' : '#fff'} strokeWidth={isMe ? 2.8 : 2.2} />
+            {q && (
+              <g
+                transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
+                clipPath={`url(#mfc-${uid})`}
+                dangerouslySetInnerHTML={{ __html: faceBodySvg(visOf(q, state?.p), kc, trCol, 32, '#10281d', true, false) }}
+              />
+            )}
+            <rect x={cx - 14} y={cy + 10} width="28" height="11" rx="4" fill="#0b2018" stroke={isMe ? '#f5c242' : '#fff8'} strokeWidth="0.9" />
             <text
               x={cx}
-              y={cy + 4}
+              y={cy + 18.2}
               textAnchor="middle"
-              fontSize="10.5"
+              fontSize="8.2"
               fontWeight="700"
               fontFamily="Sarabun"
-              fill="#fff"
-              stroke="#0006"
-              strokeWidth="0.5"
+              fill={isMe ? '#fde047' : '#fff'}
             >
               {z.sp}
             </text>
@@ -7174,6 +7196,7 @@ interface LivePitchAgent {
   d: Record<string, number>;
   tr: number;
   ov: number;
+  vis: number[];
 }
 
 interface LiveBallState {
@@ -7359,9 +7382,40 @@ const buildAgentsForTeam = (
       sentOff: sentOffNames.includes(name),
       d: dt.d,
       tr: dt.tr,
-      ov: pl?.ov || 60
+      ov: pl?.ov || 60,
+      vis: pl ? visOf(pl, careerP) : [2, 0, 0, 0, 0, i + 1, 0]
     };
   });
+};
+
+const PITCH_FACE_CACHE = new Map<string, HTMLCanvasElement | 'loading'>();
+
+const getPitchFaceCanvas = (vis: number[], kit: string, trim: string): HTMLCanvasElement | null => {
+  const key = `${vis.join(',')}|${kit}|${trim}`;
+  const existing = PITCH_FACE_CACHE.get(key);
+  if (existing && existing !== 'loading') return existing;
+  if (existing === 'loading' || typeof Image === 'undefined' || typeof document === 'undefined') return null;
+
+  PITCH_FACE_CACHE.set(key, 'loading');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, false)}</svg>`;
+  const img = new Image();
+  img.onload = () => {
+    const off = document.createElement('canvas');
+    off.width = 64;
+    off.height = 68;
+    const octx = off.getContext('2d');
+    if (octx) {
+      octx.drawImage(img, 0, 0, 64, 68);
+      PITCH_FACE_CACHE.set(key, off);
+    } else {
+      PITCH_FACE_CACHE.delete(key);
+    }
+  };
+  img.onerror = () => {
+    PITCH_FACE_CACHE.delete(key);
+  };
+  img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  return null;
 };
 
 const drawLivePitchToCanvas = (
@@ -7371,7 +7425,9 @@ const drawLivePitchToCanvas = (
   awayKit: string,
   homeGkKit: string,
   awayGkKit: string,
-  showRunVectors: boolean
+  showRunVectors: boolean,
+  homeTrim = '#ffffff',
+  awayTrim = '#ffffff'
 ) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -7612,8 +7668,8 @@ const drawLivePitchToCanvas = (
     }
   }
 
-  // 5. Render 22 Players with natural running strides, orientation, GK dives, stamina, & labels
-  const playerRadius = clamp(cssW * 0.0155, 7.5, 11.5);
+  // 5. Render 22 Players with natural running strides, orientation, GK dives, stamina, portraits & labels
+  const playerRadius = clamp(cssW * 0.018, 9, 13.5);
   const sortedAgents = world.agents.slice().sort((a, b2) => a.y - b2.y);
 
   sortedAgents.forEach((ag) => {
@@ -7625,6 +7681,7 @@ const drawLivePitchToCanvas = (
     const isCarrier = b.carrierId === ag.id;
     const isTarget = b.targetId === ag.id;
     const kit = ag.pos === 'GK' ? (ag.side === 'H' ? homeGkKit : awayGkKit) : ag.side === 'H' ? homeKit : awayKit;
+    const trim = ag.pos === 'GK' ? '#ffffff' : ag.side === 'H' ? homeTrim : awayTrim;
 
     ctx.save();
     ctx.translate(cx, cy);
@@ -7688,21 +7745,58 @@ const drawLivePitchToCanvas = (
     ctx.arc(cosF * (playerRadius * 0.82), sinF * (playerRadius * 0.82), 2.1, 0, Math.PI * 2);
     ctx.fill();
 
-    // Jersey circle
+    // Jersey circle backdrop
     ctx.fillStyle = kit;
-    ctx.strokeStyle = ag.isMe ? '#fde047' : ag.intent === 'PRESS' ? '#fca5a5' : '#ffffff';
-    ctx.lineWidth = ag.isMe ? 2 : 1.5;
     ctx.beginPath();
     ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
     ctx.fill();
+
+    // Clipped player portrait inside circle
+    const faceCanvas = getPitchFaceCanvas(ag.vis, kit, trim);
+    if (faceCanvas) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, Math.max(1, playerRadius - 0.8), 0, Math.PI * 2);
+      ctx.clip();
+      const fw = playerRadius * 2.06;
+      const fh = (fw * 68) / 64;
+      ctx.drawImage(faceCanvas, -fw / 2, -fh * 0.47, fw, fh);
+      ctx.restore();
+    }
+
+    // Crisp outer ring
+    ctx.strokeStyle = ag.isMe ? '#fde047' : ag.intent === 'PRESS' ? '#fca5a5' : '#ffffff';
+    ctx.lineWidth = ag.isMe ? 2.2 : 1.6;
+    ctx.beginPath();
+    ctx.arc(0, 0, playerRadius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Shirt number
-    ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
-    ctx.font = `800 ${Math.round(playerRadius * 0.92)}px Sarabun, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(String(ag.no), 0, 0.5);
+    // Shirt number (center fallback before SVG image decodes, otherwise compact corner badge)
+    if (!faceCanvas) {
+      ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
+      ctx.font = `800 ${Math.round(playerRadius * 0.88)}px Sarabun, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(ag.no), 0, 0.5);
+    } else {
+      const noStr = String(ag.no);
+      const badgeW = Math.max(10.5, noStr.length * 5.2 + 4);
+      const badgeH = 9.5;
+      const bx0 = -playerRadius * 0.98;
+      const by0 = playerRadius * 0.25;
+      ctx.fillStyle = 'rgba(11, 32, 24, 0.92)';
+      ctx.strokeStyle = kit;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(bx0, by0, badgeW, badgeH, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffd75e';
+      ctx.font = '800 7.5px Sarabun, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(noStr, bx0 + badgeW / 2, by0 + badgeH / 2 + 0.3);
+    }
 
     // Yellow card mini indicator on shoulder
     if (ag.hasYellow) {
@@ -7915,7 +8009,7 @@ const MatchModal: React.FC<{
   const homeOrig = state.teams[homeId];
   const awayOrig = state.teams[awayId];
   const meIsHome = homeId === state.me;
-  const [homeKit, awayKit] = useMemo(() => matchKits(homeOrig, awayOrig, state), [homeOrig, awayOrig, state]);
+  const [homeKit, awayKit, homeTrim, awayTrim] = useMemo(() => matchKits(homeOrig, awayOrig, state), [homeOrig, awayOrig, state]);
   const homeGkKit = useMemo(() => pickGK(homeKit, awayKit), [homeKit, awayKit]);
   const awayGkKit = useMemo(() => pickGK(awayKit, homeKit, homeGkKit), [awayKit, homeKit, homeGkKit]);
 
@@ -10439,7 +10533,7 @@ const MatchModal: React.FC<{
             }
           }
           if (canvas) {
-            drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors);
+            drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
           }
           rafId = window.requestAnimationFrame(frame);
           return;
@@ -10603,7 +10697,7 @@ const MatchModal: React.FC<{
       }
 
       if (canvas) {
-        drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors);
+        drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
       }
       rafId = window.requestAnimationFrame(frame);
     };
@@ -10611,7 +10705,7 @@ const MatchModal: React.FC<{
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, showRunVectors, homeKit, awayKit, homeGkKit, awayGkKit]);
+  }, [paused, done, speed, showRunVectors, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
@@ -10636,7 +10730,7 @@ const MatchModal: React.FC<{
     w.minuteFloat = 90;
     w.lastTickedMin = 90;
     if (canvasRef.current) {
-      drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors);
+      drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
     }
     finalizeMatch();
   };
@@ -10736,16 +10830,6 @@ const MatchModal: React.FC<{
         ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
         : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
 
-  const srNow = simRef.current;
-  const meMatchStatusBadge = useMemo(() => {
-    if (!isPlayerMode) return null;
-    if (myInitialBanned) return { cls: 'bg-[var(--red-soft)] border-[var(--red)]/40 text-[var(--red)]', text: `🟥 ติดโทษแบน (เหลือ ${myPlayerSquadObj?.sus || state.p?.sus} นัด) — ชมจากอัฒจันทร์` };
-    if (srNow.userSentOffMin != null) return { cls: 'bg-[var(--red-soft)] border-[var(--red)]/40 text-[var(--red)]', text: `🟥 โดนใบแดงไล่ออก น.${srNow.userSentOffMin}'` };
-    if (srNow.userSubOutMin != null) return { cls: 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]', text: `🔴 ถูกเปลี่ยนตัวออก น.${srNow.userSubOutMin}' (เล่น ${srNow.userSubOutMin} นาที)` };
-    if (srNow.userSubInMin != null) return { cls: 'bg-[var(--g-soft)] border-[var(--g)]/40 text-[var(--g)]', text: `🟢 ลงสำรอง น.${srNow.userSubInMin}' — กำลังลงเล่น` };
-    if (srNow.userStarted) return { cls: 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]', text: `⭐ ตัวจริง — กำลังลงเล่นในสนาม (ฟิต ${Math.round(srNow.liveFit[myPlayerName] ?? 100)}%)` };
-    return { cls: 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]', text: '🪑 นั่งม้านั่งสำรอง — รอโค้ชเปลี่ยนตัวลง' };
-  }, [isPlayerMode, myInitialBanned, myPlayerSquadObj, state.p, srNow.userSentOffMin, srNow.userSubOutMin, srNow.userSubInMin, srNow.userStarted, srNow.liveFit, myPlayerName, minute, done]);
 
   const mySubsList = subLog.filter((s) => s.t === meTeamOrig.id);
 
@@ -10840,13 +10924,6 @@ const MatchModal: React.FC<{
 
         {/* Scrollable Game Broadcast Stage */}
         <div className="flex-1 min-h-0 overflow-y-auto p-2.5 sm:p-3.5 space-y-2.5">
-          {meMatchStatusBadge && (
-            <div className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 ${meMatchStatusBadge.cls}`}>
-              <span className="truncate">{meMatchStatusBadge.text}</span>
-              {(matchYellows[myPlayerName] || 0) > 0 && !sentOff.includes(myPlayerName) && <span className="shrink-0">🟨 ใบเหลืองในเกม</span>}
-            </div>
-          )}
-
           <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] gap-3 items-start">
             {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + MOTM + Match Stats */}
             <div className="space-y-2.5 min-w-0">
@@ -10949,9 +11026,11 @@ const MatchModal: React.FC<{
                       yPct = clamp(13 + (slot.x / 100) * 74, 13, 86);
                     }
                     const nodeKit = slot.pos === 'GK' ? gkKit : kit;
+                    const nodeTrim = slot.pos === 'GK' ? '#ffffff' : side === 'H' ? homeTrim : awayTrim;
                     return {
                       name,
                       shortName: name.split(' ')[0] || name,
+                      player: pl,
                       team,
                       side,
                       no,
@@ -10966,7 +11045,8 @@ const MatchModal: React.FC<{
                       isMe,
                       xPct,
                       yPct,
-                      kit: nodeKit
+                      kit: nodeKit,
+                      trim: nodeTrim
                     };
                   });
 
@@ -11103,8 +11183,8 @@ const MatchModal: React.FC<{
 
                       {/* 22 (or 11) Player Nodes on Pitch */}
                       {visibleNodes.map((n) => {
-                        const kitTextLight = colDist(n.kit, '#ffffff') >= 110;
-                        const sizeCls = ftPitchMode === 'all' ? 'w-7 h-7 sm:w-8 sm:h-8 text-[11px] sm:text-xs' : 'w-9 h-9 sm:w-10 sm:h-10 text-xs sm:text-sm';
+                        const sizeCls = ftPitchMode === 'all' ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-10 h-10 sm:w-11 sm:h-11';
+                        const faceSize = ftPitchMode === 'all' ? 35 : 43;
                         return (
                           <button
                             key={`${n.side}-${n.name}`}
@@ -11120,19 +11200,28 @@ const MatchModal: React.FC<{
                               </div>
                             )}
 
-                            {/* Jersey Circle + Position + Rating + Event Icons */}
+                            {/* Player Portrait Circle + Position + Rating + Number + Event Icons */}
                             <div className="relative">
                               <div
-                                className={`${sizeCls} rounded-full flex items-center justify-center font-extrabold tabular transition-transform group-hover:scale-110 ${
+                                className={`${sizeCls} rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-110 ${
                                   n.isMotm
                                     ? 'ring-2 ring-[#facc15] shadow-[0_0_16px_rgba(250,204,21,0.8)] border-2 border-white'
                                     : n.isMe
                                       ? 'ring-2 ring-amber-300 border-2 border-white shadow-md'
                                       : 'border-2 border-white/95 shadow-md'
                                 }`}
-                                style={{ backgroundColor: n.kit, color: kitTextLight ? '#ffffff' : '#111827' }}
+                                style={{ backgroundColor: n.kit }}
                               >
-                                {n.no}
+                                <PlayerFace
+                                  player={n.player || { n: n.name, no: n.no, pos: n.role === 'GK' ? 'GK' : 'MF' }}
+                                  team={n.team}
+                                  state={state}
+                                  careerProfile={state.p}
+                                  size={faceSize}
+                                  kitColor={n.kit}
+                                  trimColor={n.trim}
+                                  bare
+                                />
                               </div>
 
                               {/* Position Tag (Top-Left) */}
@@ -11148,6 +11237,11 @@ const MatchModal: React.FC<{
                                 )}`}
                               >
                                 {n.rt.toFixed(1)}
+                              </span>
+
+                              {/* Shirt Number Badge (Bottom-Left) */}
+                              <span className="absolute -bottom-1 -left-1.5 px-1 py-0.2 rounded bg-[#0b2018]/95 border border-white/30 text-[#ffd75e] text-[7.5px] sm:text-[8.5px] font-extrabold tabular leading-none">
+                                {n.no}
                               </span>
 
                               {/* Event Micro-Badges (Bottom-Right) */}
