@@ -2,12 +2,37 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
+import {fileURLToPath} from 'url';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
-  const rawBase = process.env.VITE_BASE_PATH || '/';
-  const base = rawBase.endsWith('/') ? rawBase : `${rawBase}/`;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function resolveBase(command: 'build' | 'serve'): string {
+  const raw = (process.env.VITE_BASE_PATH || '').trim();
+  if (raw === '.' || raw === './') {
+    return command === 'build' ? './' : '/';
+  }
+  if (raw) {
+    const stripped = raw.replace(/^\/+|\/+$/g, '');
+    return stripped ? `/${stripped}/` : '/';
+  }
+  if (command === 'build' && process.env.GITHUB_ACTIONS === 'true' && process.env.GITHUB_REPOSITORY) {
+    const repo = process.env.GITHUB_REPOSITORY.split('/')[1];
+    if (repo && !repo.endsWith('.github.io')) {
+      return `/${repo}/`;
+    }
+    return '/';
+  }
+  // Use relative base in production builds so deploys work both at domain root and on subpath hosts (e.g. GitHub Pages)
+  return command === 'build' ? './' : '/';
+}
+
+export default defineConfig(({command}) => {
+  const base = resolveBase(command);
+  const pwaIconSrc = base === './' ? 'icon.svg' : `${base}icon.svg`;
+  const navigateFallback = base === './' ? 'index.html' : `${base}index.html`;
+
   return {
     base,
     plugins: [
@@ -15,13 +40,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: [
-          'icon.svg',
-          'apple-touch-icon.png',
-          'pwa-192x192.png',
-          'pwa-512x512.png',
-          'pwa-maskable-512x512.png',
-        ],
+        includeAssets: ['icon.svg'],
         manifest: {
           id: base,
           name: 'ลูกหนังไทย — เกมคุมทีมและนักเตะอาชีพ',
@@ -36,21 +55,15 @@ export default defineConfig(() => {
           scope: base,
           icons: [
             {
-              src: `${base}pwa-192x192.png`,
-              sizes: '192x192',
-              type: 'image/png',
+              src: pwaIconSrc,
+              sizes: 'any',
+              type: 'image/svg+xml',
               purpose: 'any',
             },
             {
-              src: `${base}pwa-512x512.png`,
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any',
-            },
-            {
-              src: `${base}pwa-maskable-512x512.png`,
-              sizes: '512x512',
-              type: 'image/png',
+              src: pwaIconSrc,
+              sizes: 'any',
+              type: 'image/svg+xml',
               purpose: 'maskable',
             },
           ],
@@ -59,7 +72,7 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           globIgnores: ['**/assets/aistudio/**'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
-          navigateFallback: `${base}index.html`,
+          navigateFallback,
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,

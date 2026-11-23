@@ -36,12 +36,19 @@ export function registerPWA() {
   if (swRegistered || typeof window === 'undefined') return;
   swRegistered = true;
   ensureGlobalPWAListeners();
-  registerSW({
-    immediate: true,
-    onOfflineReady() {
-      // Cached assets ready for offline play
-    },
-  });
+  try {
+    registerSW({
+      immediate: true,
+      onOfflineReady() {
+        // Cached assets ready for offline play
+      },
+      onRegisterError() {
+        // Ignore service worker registration errors in unsupported/restricted environments
+      },
+    });
+  } catch {
+    // Ignore registration exceptions
+  }
 }
 
 function detectStandalone(): boolean {
