@@ -374,6 +374,9 @@ interface AppSettings {
   autoSkipMatch?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
+  subAlertEnabled?: boolean;
+  subAlertFitThreshold?: number;
+  subAlertFormThreshold?: number;
 }
 
 // ============================================================================
@@ -10618,11 +10621,12 @@ const drawLivePitchToCanvas = (
 
   if (world.goalBanner && world.goalBanner.ttl > 0) {
     const gb = world.goalBanner;
-    const prog = 1 - gb.ttl / gb.maxTtl;
-    const fadeIn = clamp(prog / 0.14, 0, 1);
-    const fadeOut = clamp(gb.ttl / 0.35, 0, 1);
-    const alpha = Math.min(fadeIn, fadeOut);
-    const slideY = (1 - fadeIn) * -10;
+    const prog = clamp(1 - gb.ttl / Math.max(0.01, gb.maxTtl), 0, 1);
+    const enterT = clamp(prog / 0.22, 0, 1);
+    const easeIn = 1 - Math.pow(1 - enterT, 3);
+    const fadeOut = clamp(gb.ttl / 0.34, 0, 1);
+    const easeExit = Math.pow(1 - fadeOut, 2);
+    const alpha = Math.min(clamp(enterT * 2.4, 0, 1), fadeOut);
     ctx.save();
     ctx.globalAlpha = alpha;
     const title = gb.isMeScorer
@@ -10634,31 +10638,39 @@ const drawLivePitchToCanvas = (
     ctx.font = '600 10px Sarabun, sans-serif';
     const w2 = ctx.measureText(sub).width;
     const cardW = clamp(Math.max(w1, w2) + 38, 180, cssW - 24);
-    const cardH = 38;
+    const cardH = 40;
+    const targetY = 12;
+    const startY = -(cardH + 12);
+    const cy = enterT < 1 ? startY + (targetY - startY) * easeIn : targetY - 22 * easeExit;
     const cx = cssW / 2;
-    const cy = 14 + slideY;
-    ctx.fillStyle = 'rgba(9, 23, 16, 0.92)';
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 4;
+    ctx.fillStyle = 'rgba(9, 23, 16, 0.94)';
     ctx.strokeStyle = gb.isMyGoal ? '#facc15' : '#4ade80';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 12);
     ctx.fill();
     ctx.stroke();
+    ctx.restore();
 
     // Team color accent strip on left
     ctx.fillStyle = gb.kit;
     ctx.beginPath();
-    ctx.roundRect(cx - cardW / 2 + 4, cy + 5, 5, cardH - 10, 3);
+    ctx.roundRect(cx - cardW / 2 + 5, cy + 5, 5, cardH - 10, 3);
     ctx.fill();
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = gb.isMyGoal ? '#fde047' : '#ffffff';
     ctx.font = '800 12.5px Sarabun, sans-serif';
-    ctx.fillText(title, cx + 3, cy + 13);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.84)';
+    ctx.fillText(title, cx + 3, cy + 14);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.86)';
     ctx.font = '600 10px Sarabun, sans-serif';
-    ctx.fillText(sub, cx + 3, cy + 28);
+    ctx.fillText(sub, cx + 3, cy + 29);
     ctx.restore();
   }
 
@@ -10815,6 +10827,14 @@ const MatchModal: React.FC<{
   const [liveFitMap, setLiveFitMap] = useState<Record<string, number>>(() =>
     Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, Math.round(q.fit ?? 100)]))
   );
+  const [liveFormMap, setLiveFormMap] = useState<Record<string, number>>(() =>
+    Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5]))
+  );
+  const [subAlertEnabled, setSubAlertEnabled] = useState<boolean>(() => settings.subAlertEnabled ?? true);
+  const [subAlertFitTh, setSubAlertFitTh] = useState<number>(() => clamp(settings.subAlertFitThreshold ?? 58, 45, 75));
+  const [subAlertFormTh, setSubAlertFormTh] = useState<number>(() => clamp(settings.subAlertFormThreshold ?? 5.8, 5.0, 6.4));
+  const [showAlertConfig, setShowAlertConfig] = useState(false);
+  const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, string>>({});
   const [matchYellows, setMatchYellows] = useState<Record<string, number>>({});
   const [matchCards, setMatchCards] = useState<MatchCardEvent[]>([]);
   const [sentOff, setSentOff] = useState<string[]>([]);
@@ -10830,6 +10850,7 @@ const MatchModal: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const triggeredRulesRef = useRef<number[]>([]);
   const lastSoundMinRef = useRef(-1);
+  const alertLoggedRef = useRef<Set<string>>(new Set());
 
   const simRef = useRef({
     homeLu: initialHomeXi.slice(),
@@ -10843,6 +10864,7 @@ const MatchModal: React.FC<{
     cards: [] as MatchCardEvent[],
     subs: [] as MatchSubEvent[],
     liveFit: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, Math.round(q.fit ?? 100)])) as Record<string, number>,
+    liveForm: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5])) as Record<string, number>,
     userStarted: myInitialStarted,
     userSubInMin: null as number | null,
     userSubOutMin: null as number | null,
@@ -10871,6 +10893,9 @@ const MatchModal: React.FC<{
     wid: liveWid,
     pass: livePass
   };
+
+  const subAlertCfgRef = useRef({ enabled: subAlertEnabled, fitTh: subAlertFitTh, formTh: subAlertFormTh });
+  subAlertCfgRef.current = { enabled: subAlertEnabled, fitTh: subAlertFitTh, formTh: subAlertFormTh };
 
   const buildInitialWorld = (): LiveMatchWorld => {
     const sr = simRef.current;
@@ -11067,6 +11092,23 @@ const MatchModal: React.FC<{
     if (w.fx.length > 8) w.fx.shift();
   };
 
+  const adjustLiveForm = (playerName: string | null | undefined, delta: number) => {
+    if (!playerName) return;
+    const sr = simRef.current;
+    const cur = sr.liveForm[playerName] ?? 6.5;
+    sr.liveForm[playerName] = clamp(Math.round((cur + delta) * 10) / 10, 4.5, 10.0);
+  };
+
+  const persistSubAlertPrefs = (enabled: boolean, fitTh: number, formTh: number) => {
+    const cur = getSettings();
+    saveSettings({
+      ...cur,
+      subAlertEnabled: enabled,
+      subAlertFitThreshold: fitTh,
+      subAlertFormThreshold: formTh
+    });
+  };
+
   const issueCard = (culprit: LivePitchAgent, curMin: number, directRedBias = 0.04, forceType?: 'Y' | 'R') => {
     const sr = simRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
@@ -11074,6 +11116,7 @@ const MatchModal: React.FC<{
     if (directRed) {
       culprit.sentOff = true;
       sr.sentOff.push(culprit.id);
+      adjustLiveForm(culprit.id, -0.7);
       sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'R' });
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
@@ -11087,6 +11130,7 @@ const MatchModal: React.FC<{
     if (sr.yellows[culprit.id] >= 2) {
       culprit.sentOff = true;
       sr.sentOff.push(culprit.id);
+      adjustLiveForm(culprit.id, -0.65);
       sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y2R' });
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
@@ -11094,6 +11138,7 @@ const MatchModal: React.FC<{
       setSentOff(sr.sentOff.slice());
       return 'Y2R' as const;
     }
+    adjustLiveForm(culprit.id, -0.35);
     const origPl = team.sq.find((q) => q.n === culprit.id);
     const totalSeasonY = (origPl?.yc || 0) + 1;
     sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y' });
@@ -12088,6 +12133,17 @@ const MatchModal: React.FC<{
     sr.evs.push(newEv);
     setEvs(sr.evs.slice());
 
+    adjustLiveForm(scorerName, 0.95);
+    if (assisterName) adjustLiveForm(assisterName, 0.55);
+    const concLu = defSide === 'H' ? sr.homeLu : sr.awayLu;
+    const concTeam = defSide === 'H' ? homeOrig : awayOrig;
+    concLu.forEach((dn) => {
+      if (sr.sentOff.includes(dn)) return;
+      const dPl = concTeam.sq.find((q) => q.n === dn);
+      if (dPl?.pos === 'GK') adjustLiveForm(dn, -0.22);
+      else if (dPl?.pos === 'DF') adjustLiveForm(dn, -0.12);
+    });
+
     pushLog(
       curMin,
       `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · แอสซิสต์ ${assisterName}` : ''}`,
@@ -12434,6 +12490,8 @@ const MatchModal: React.FC<{
         if (nearDef && Math.random() < blockChance) {
           if (defSide === 'H') w.blocksH++;
           else w.blocksA++;
+          adjustLiveForm(nearDef.id, 0.2);
+          adjustLiveForm(shooter?.id, -0.08);
           addWorldFx(w, {
             type: 'block',
             x: nearDef.x,
@@ -12502,6 +12560,7 @@ const MatchModal: React.FC<{
           ? 0.91
           : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 - Math.max(0, dist - 22) * 0.008, 0.25, 0.68);
       if (Math.random() > accuracy) {
+        adjustLiveForm(shooter?.id, -0.12);
         if (Math.random() < (b.flightType === 'penalty' ? 0.35 : 0.16)) {
           addWorldFx(w, {
             type: 'woodwork',
@@ -12587,6 +12646,8 @@ const MatchModal: React.FC<{
         // SUPER SAVE by GK!
         if (defSide === 'H') w.savesH++;
         else w.savesA++;
+        adjustLiveForm(gk?.id, 0.25);
+        adjustLiveForm(shooter?.id, -0.06);
         addWorldFx(w, {
           type: 'save',
           x: gk?.x ?? (defSide === 'H' ? 4 : 96),
@@ -12686,6 +12747,8 @@ const MatchModal: React.FC<{
       if (nearestOpp && Math.random() < interceptProb) {
         b.possessionSide = defSide;
         b.carrierId = nearestOpp.id;
+        adjustLiveForm(nearestOpp.id, 0.14);
+        adjustLiveForm(b.lastPasserId, -0.07);
         b.lastPasserId = null;
         b.targetId = null;
         b.x = nearestOpp.x;
@@ -12715,14 +12778,22 @@ const MatchModal: React.FC<{
     const sr = simRef.current;
     const w = worldRef.current!;
 
-    // Drain stamina
+    // Drain stamina & update live match form
     [...sr.homeLu, ...sr.awayLu].forEach((n) => {
       if (sr.sentOff.includes(n)) return;
+      const isH = sr.homeLu.includes(n);
       const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
       if (!pl) return;
       const D = DT(pl, state.p);
       const drain = (0.34 - (D.d.sta - 65) * 0.0022) * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
+      const curFit = sr.liveFit[n];
+      const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
+      let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
+      if (curFit < 48) formDelta -= 0.055;
+      else if (curFit < 58) formDelta -= 0.025;
+      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * 0.12;
+      if (formDelta !== 0) adjustLiveForm(n, formDelta);
     });
 
     const runAiSubForSide = (isHomeSide: boolean) => {
@@ -12846,11 +12917,19 @@ const MatchModal: React.FC<{
 
     [...sr.homeLu, ...sr.awayLu].forEach((n) => {
       if (sr.sentOff.includes(n)) return;
+      const isH = sr.homeLu.includes(n);
       const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
       if (!pl) return;
       const D = DT(pl, state.p);
       const drain = (0.34 - (D.d.sta - 65) * 0.0022) * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
+      const curFit = sr.liveFit[n];
+      const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
+      let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
+      if (curFit < 48) formDelta -= 0.055;
+      else if (curFit < 58) formDelta -= 0.025;
+      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * 0.12;
+      if (formDelta !== 0) adjustLiveForm(n, formDelta);
       const ag = w.agents.find((a) => a.id === n);
       if (ag) ag.fit = sr.liveFit[n];
     });
@@ -12950,7 +13029,45 @@ const MatchModal: React.FC<{
       });
     }
 
+    const alertCfg = subAlertCfgRef.current;
+    if (alertCfg.enabled && !sr.done) {
+      const myOnPitch = meIsHome ? sr.homeLu : sr.awayLu;
+      const mySubsUsedNow = sr.subs.filter((s) => s.t === meTeamOrig.id).length;
+      if (state.mode === 'm' && mySubsUsedNow < 5) {
+        myOnPitch.forEach((name) => {
+          if (sr.sentOff.includes(name)) return;
+          const pl = meTeamOrig.sq.find((q) => q.n === name);
+          if (!pl) return;
+          const fVal = Math.round(sr.liveFit[name] ?? pl.fit ?? 100);
+          const fmVal = Number((sr.liveForm[name] ?? 6.5).toFixed(1));
+          const lowFit = fVal <= alertCfg.fitTh;
+          const lowForm = fmVal <= alertCfg.formTh;
+          if (!lowFit && !lowForm) return;
+          const logKey = `${name}:${lowFit ? 'fit' : ''}:${lowForm ? 'form' : ''}`;
+          if (alertLoggedRef.current.has(logKey)) return;
+          alertLoggedRef.current.add(logKey);
+          const reasons: string[] = [];
+          if (lowFit) reasons.push(`พลังงานเหลือ ${fVal}% (เสี่ยงบาดเจ็บ)`);
+          if (lowForm) reasons.push(`ฟอร์มตก ${fmVal.toFixed(1)}`);
+          pushLog(curMin, `🩺 แจ้งเตือนเปลี่ยนตัว (${pl.ro} ${pl.n}): ${reasons.join(' · ')} — แนะนำพักเพื่อป้องกันบาดเจ็บ`, 'sys');
+          SFX.tap();
+          vibrate(35);
+        });
+      } else if (state.mode === 'p' && myPlayerName && myOnPitch.includes(myPlayerName) && !sr.sentOff.includes(myPlayerName)) {
+        const myF = Math.round(sr.liveFit[myPlayerName] ?? 100);
+        const myFm = Number((sr.liveForm[myPlayerName] ?? 6.5).toFixed(1));
+        if (myF <= alertCfg.fitTh && !alertLoggedRef.current.has(`${myPlayerName}:pfit`)) {
+          alertLoggedRef.current.add(`${myPlayerName}:pfit`);
+          pushLog(curMin, `🩺 คำเตือนร่างกาย: พลังงานคุณเหลือ ${myF}% เสี่ยงบาดเจ็บหากฝืนเร่งสปีดต่อเนื่อง`, 'sys');
+        } else if (myFm <= alertCfg.formTh && !alertLoggedRef.current.has(`${myPlayerName}:pform`)) {
+          alertLoggedRef.current.add(`${myPlayerName}:pform`);
+          pushLog(curMin, `📉 ฟอร์มการเล่นของคุณตกลงมาที่ ${myFm.toFixed(1)} ต้องรีบเรียกจังหวะเกมกลับมา!`, 'sys');
+        }
+      }
+    }
+
     setLiveFitMap({ ...sr.liveFit });
+    setLiveFormMap({ ...sr.liveForm });
   };
 
   const syncUiStatsFromWorld = (w: LiveMatchWorld, nextMin: number) => {
@@ -13137,6 +13254,7 @@ const MatchModal: React.FC<{
     setMatchCards(sr.cards.slice());
     setSentOff(sr.sentOff.slice());
     setLiveFitMap({ ...sr.liveFit });
+    setLiveFormMap({ ...sr.liveForm });
 
     const finalGh = sr.gh;
     const finalGa = sr.ga;
@@ -13542,6 +13660,67 @@ const MatchModal: React.FC<{
       .sort((a, b) => b.ov - a.ov);
   }, [meTeamOrig.sq, liveLu, sentOff, meIsHome]);
 
+  const subAlertItems = useMemo(() => {
+    if (state.mode !== 'm' || done || !subAlertEnabled || subsUsed.length >= 5) return [];
+    const items: {
+      name: string;
+      role: SubRole;
+      no: number;
+      fitVal: number;
+      formVal: number;
+      lowFit: boolean;
+      lowForm: boolean;
+      urgent: boolean;
+      reasonSig: string;
+      suggestedSub: Player | null;
+    }[] = [];
+
+    liveLu.forEach((name) => {
+      if (sentOff.includes(name)) return;
+      const pl = meTeamOrig.sq.find((q) => q.n === name);
+      if (!pl) return;
+      const fitVal = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
+      const formVal = Number((liveFormMap[name] ?? 6.5).toFixed(1));
+      const lowFit = fitVal <= subAlertFitTh;
+      const lowForm = formVal <= subAlertFormTh;
+      if (!lowFit && !lowForm) return;
+      const reasonSig = `${lowFit ? 'F' : ''}${lowForm ? 'R' : ''}`;
+      if (dismissedAlerts[name] === reasonSig) return;
+      const urgent = fitVal <= Math.max(35, subAlertFitTh - 8) || (lowFit && lowForm);
+      const suggestedSub =
+        benchList.find((b) => b.pos === pl.pos) ||
+        (pl.pos !== 'GK' ? benchList.find((b) => b.pos !== 'GK') || null : null);
+      items.push({
+        name,
+        role: pl.ro,
+        no: getShirtNo(meTeamOrig, pl),
+        fitVal,
+        formVal,
+        lowFit,
+        lowForm,
+        urgent,
+        reasonSig,
+        suggestedSub
+      });
+    });
+
+    return items.sort((a, b) => Number(b.urgent) - Number(a.urgent) || a.fitVal - b.fitVal || a.formVal - b.formVal);
+  }, [
+    state.mode,
+    done,
+    subAlertEnabled,
+    subsUsed.length,
+    liveLu,
+    sentOff,
+    meTeamOrig,
+    liveFitMap,
+    liveFormMap,
+    subAlertFitTh,
+    subAlertFormTh,
+    dismissedAlerts,
+    benchList
+  ]);
+
   const compTitle =
     kind === 'asia'
       ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
@@ -13647,7 +13826,6 @@ const MatchModal: React.FC<{
             {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + MOTM + Match Stats */}
             <div className="space-y-2.5 min-w-0">
               {!(done && fullTimeAnalysis) ? (
-                <>
                 <div className="relative rounded-2xl overflow-hidden border border-[var(--line)] bg-[#144d2e] shadow-inner">
                   <canvas
                     ref={canvasRef}
@@ -13719,117 +13897,6 @@ const MatchModal: React.FC<{
                     </div>
                   )}
                 </div>
-
-                {/* Live Pitch Energy / Stamina Panel */}
-                {(() => {
-                  const hNames = (meIsHome ? liveLu : liveOppLu).filter((n) => !sentOff.includes(n));
-                  const aNames = (meIsHome ? liveOppLu : liveLu).filter((n) => !sentOff.includes(n));
-                  const hAvg = Math.round(hNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, hNames.length));
-                  const aAvg = Math.round(aNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, aNames.length));
-                  const tiredCount = liveLu.filter((n) => !sentOff.includes(n) && (liveFitMap[n] ?? 100) < 65).length;
-                  const fitColor = (v: number) => (v >= 70 ? 'var(--g)' : v >= 45 ? '#f59e0b' : 'var(--red)');
-                  const fitTextCls = (v: number) => (v >= 70 ? 'text-[var(--g)]' : v >= 45 ? 'text-[#c98a00] dark:text-[var(--lamp)]' : 'text-[var(--red)]');
-
-                  if (isPlayerMode && myPlayerName) {
-                    const myFit = Math.round(liveFitMap[myPlayerName] ?? myPlayerSquadObj?.fit ?? 100);
-                    const onPitchNow = liveLu.includes(myPlayerName) && !sentOff.includes(myPlayerName);
-                    const subOutEv = subLog.find((s) => s.t === meTeamOrig.id && s.outPlayer === myPlayerName);
-                    const statusTxt = myInitialBanned
-                      ? 'ติดโทษแบน (ชมข้างสนาม)'
-                      : sentOff.includes(myPlayerName)
-                        ? 'โดนใบแดงไล่ออก'
-                        : onPitchNow
-                          ? 'กำลังลงสนาม'
-                          : subOutEv
-                            ? `ถูกเปลี่ยนออก น.${subOutEv.m}'`
-                            : 'รอโอกาสที่ม้านั่งสำรอง';
-                    return (
-                      <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                          <span className="font-bold flex items-center gap-1.5">
-                            <span>⚡ พลังงานในสนาม</span>
-                            <span className="text-[var(--mut)] font-semibold">· {statusTxt}</span>
-                          </span>
-                          <span className="text-[var(--mut)] tabular">
-                            เฉลี่ยทีม: <b className={fitTextCls(meIsHome ? hAvg : aAvg)}>{meIsHome ? hAvg : aAvg}%</b> vs คู่แข่ง <b className={fitTextCls(meIsHome ? aAvg : hAvg)}>{meIsHome ? aAvg : hAvg}%</b>
-                          </span>
-                        </div>
-                        <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold truncate">★ {myPlayerName} ({myPlayerSquadObj?.ro || state.p?.sp})</span>
-                            <span className={`font-extrabold tabular ${fitTextCls(myFit)}`}>
-                              {myFit}% · {myFit >= 70 ? 'ฟิตสมบูรณ์' : myFit >= 45 ? 'เริ่มล้า' : 'อ่อนล้ามาก'}
-                            </span>
-                          </div>
-                          <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${clamp(myFit, 0, 100)}%`, background: fitColor(myFit) }} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
-                        <span className="font-bold">⚡ พลังงาน 11 คนในสนาม ({meTeamOrig.name})</span>
-                        <div className="flex items-center gap-2 tabular text-[var(--mut)]">
-                          <span>
-                            เหย้า <b className={fitTextCls(hAvg)}>{hAvg}%</b> · เยือน <b className={fitTextCls(aAvg)}>{aAvg}%</b>
-                          </span>
-                          {tiredCount > 0 && (
-                            <span className="font-bold text-[var(--red)]">· ล้า {tiredCount} คน</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
-                        {liveLu.map((name) => {
-                          const pl = meTeamOrig.sq.find((q) => q.n === name);
-                          if (!pl) return null;
-                          const isRed = sentOff.includes(name);
-                          const fitVal = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
-                          const canSubClick = !isRed && subsUsed.length < 5;
-                          return (
-                            <button
-                              key={name}
-                              type="button"
-                              disabled={!canSubClick}
-                              onClick={() => {
-                                setSubPickOut(name);
-                                setShowTacticsDrawer(true);
-                                setPaused(true);
-                              }}
-                              title={canSubClick ? 'คลิกเพื่อเปลี่ยนตัวนักเตะคนนี้' : undefined}
-                              className={`p-1.5 rounded-xl bg-[var(--surface)] border text-left transition-colors ${
-                                isRed
-                                  ? 'opacity-45 border-[var(--red)]/40 cursor-not-allowed'
-                                  : subPickOut === name && showTacticsDrawer
-                                    ? 'border-[var(--lamp)] ring-1 ring-[var(--lamp)] cursor-pointer'
-                                    : 'border-[var(--line)] hover:border-[var(--g)] cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-1 text-[10px]">
-                                <span className="font-bold truncate">
-                                  <span className="text-[var(--mut)]">{pl.ro}</span> {pl.n.split(' ')[0]}
-                                </span>
-                                <span className={`font-extrabold tabular shrink-0 ${isRed ? 'text-[var(--red)]' : fitTextCls(fitVal)}`}>
-                                  {isRed ? '🟥' : `${fitVal}%`}
-                                </span>
-                              </div>
-                              <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-300"
-                                  style={{ width: `${isRed ? 0 : clamp(fitVal, 0, 100)}%`, background: fitColor(fitVal) }}
-                                />
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })()}
-                </>
               ) : (() => {
                 const hSlots = getFormationSlots(homeOrig);
                 const aSlots = getFormationSlots(awayOrig);
@@ -14317,6 +14384,309 @@ const MatchModal: React.FC<{
                   </div>
                 );
               })()}
+
+              {/* Live Pitch Energy / Stamina & Injury Prevention Alert Panel (below Match Stats) */}
+              {!(done && fullTimeAnalysis) && (() => {
+                const hNames = (meIsHome ? liveLu : liveOppLu).filter((n) => !sentOff.includes(n));
+                const aNames = (meIsHome ? liveOppLu : liveLu).filter((n) => !sentOff.includes(n));
+                const hAvg = Math.round(hNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, hNames.length));
+                const aAvg = Math.round(aNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, aNames.length));
+                const tiredCount = liveLu.filter((n) => !sentOff.includes(n) && (liveFitMap[n] ?? 100) <= subAlertFitTh).length;
+                const lowFormCount = liveLu.filter((n) => !sentOff.includes(n) && (liveFormMap[n] ?? 6.5) <= subAlertFormTh).length;
+                const fitColor = (v: number) => (v >= 70 ? 'var(--g)' : v >= subAlertFitTh ? '#f59e0b' : 'var(--red)');
+                const fitTextCls = (v: number) => (v >= 70 ? 'text-[var(--g)]' : v >= subAlertFitTh ? 'text-[#c98a00] dark:text-[var(--lamp)]' : 'text-[var(--red)]');
+
+                if (isPlayerMode && myPlayerName) {
+                  const myFit = Math.round(liveFitMap[myPlayerName] ?? myPlayerSquadObj?.fit ?? 100);
+                  const myForm = Number((liveFormMap[myPlayerName] ?? 6.5).toFixed(1));
+                  const onPitchNow = liveLu.includes(myPlayerName) && !sentOff.includes(myPlayerName);
+                  const subOutEv = subLog.find((s) => s.t === meTeamOrig.id && s.outPlayer === myPlayerName);
+                  const statusTxt = myInitialBanned
+                    ? 'ติดโทษแบน (ชมข้างสนาม)'
+                    : sentOff.includes(myPlayerName)
+                      ? 'โดนใบแดงไล่ออก'
+                      : onPitchNow
+                        ? 'กำลังลงสนาม'
+                        : subOutEv
+                          ? `ถูกเปลี่ยนออก น.${subOutEv.m}'`
+                          : 'รอโอกาสที่ม้านั่งสำรอง';
+                  const myWarnFit = onPitchNow && subAlertEnabled && myFit <= subAlertFitTh;
+                  const myWarnForm = onPitchNow && subAlertEnabled && myForm <= subAlertFormTh;
+                  return (
+                    <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <span className="font-bold flex items-center gap-1.5">
+                          <span>⚡ พลังงานในสนาม</span>
+                          <span className="text-[var(--mut)] font-semibold">· {statusTxt}</span>
+                        </span>
+                        <span className="text-[var(--mut)] tabular">
+                          เฉลี่ยทีม: <b className={fitTextCls(meIsHome ? hAvg : aAvg)}>{meIsHome ? hAvg : aAvg}%</b> vs คู่แข่ง <b className={fitTextCls(meIsHome ? aAvg : hAvg)}>{meIsHome ? aAvg : hAvg}%</b>
+                        </span>
+                      </div>
+                      {(myWarnFit || myWarnForm) && (
+                        <div className="px-2.5 py-2 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/50 text-[11px] flex flex-wrap items-center justify-between gap-1.5">
+                          <span className="font-bold text-[var(--red)]">
+                            🩺 {myWarnFit ? `พลังงานต่ำ ${myFit}% เสี่ยงบาดเจ็บ!` : ''}
+                            {myWarnFit && myWarnForm ? ' · ' : ''}
+                            {myWarnForm ? `ฟอร์มตกเหลือ ${myForm.toFixed(1)}` : ''}
+                          </span>
+                          <span className="text-[10px] text-[var(--mut)]">ระวังจังหวะปะทะหนัก</span>
+                        </div>
+                      )}
+                      <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
+                        <div className="flex items-center justify-between text-xs gap-2">
+                          <span className="font-bold truncate">★ {myPlayerName} ({myPlayerSquadObj?.ro || state.p?.sp})</span>
+                          <span className="flex items-center gap-2 shrink-0 tabular">
+                            <span className={`font-bold text-[11px] ${myForm <= subAlertFormTh ? 'text-[var(--red)]' : myForm >= 7.2 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                              ฟอร์ม {myForm.toFixed(1)}
+                            </span>
+                            <span className={`font-extrabold ${fitTextCls(myFit)}`}>
+                              {myFit}% · {myFit >= 70 ? 'ฟิตสมบูรณ์' : myFit >= subAlertFitTh ? 'เริ่มล้า' : 'เสี่ยงเจ็บ'}
+                            </span>
+                          </span>
+                        </div>
+                        <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                          <div className="h-full rounded-full transition-all duration-300" style={{ width: `${clamp(myFit, 0, 100)}%`, background: fitColor(myFit) }} />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {/* Injury Prevention & Low-Form Substitution Alert Banner */}
+                    {subAlertItems.length > 0 && (
+                      <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--red-soft)]/80 border border-[var(--red)]/55 space-y-2 shadow-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          <div className="flex items-center gap-1.5 font-extrabold text-[var(--red)]">
+                            <span className="animate-pulse">🩺</span>
+                            <span>แจ้งเตือนเปลี่ยนตัว ({subAlertItems.length} คน) · ป้องกันบาดเจ็บ &amp; ฟอร์มตก</span>
+                          </div>
+                          <span className="text-[10px] text-[var(--mut)] font-semibold">
+                            เกณฑ์: ฟิต ≤ {subAlertFitTh}% หรือ ฟอร์ม ≤ {subAlertFormTh.toFixed(1)}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {subAlertItems.slice(0, 3).map((al) => (
+                            <div
+                              key={al.name}
+                              className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--red)]/35 flex flex-wrap items-center justify-between gap-2 text-[11px]"
+                            >
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="px-1.5 py-0.2 rounded bg-[var(--surface-2)] text-[10px] font-bold text-[var(--mut)]">
+                                    #{al.no} {al.role}
+                                  </span>
+                                  <span className="font-bold text-[var(--ink)] truncate">{al.name}</span>
+                                  {al.lowFit && (
+                                    <span className="px-1.5 py-0.2 rounded-full bg-[var(--red-soft)] text-[var(--red)] text-[10px] font-extrabold tabular">
+                                      ⚡ ฟิต {al.fitVal}% (เสี่ยงเจ็บ)
+                                    </span>
+                                  )}
+                                  {al.lowForm && (
+                                    <span className="px-1.5 py-0.2 rounded-full bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] text-[10px] font-extrabold tabular">
+                                      📉 ฟอร์ม {al.formVal.toFixed(1)}
+                                    </span>
+                                  )}
+                                </div>
+                                {al.suggestedSub && (
+                                  <div className="text-[10px] text-[var(--mut)] truncate">
+                                    แนะนำสำรอง: <b className="text-[var(--g)]">🟢 {al.suggestedSub.n}</b> ({al.suggestedSub.ro} · OVR {al.suggestedSub.ov} · ฟิต {Math.round(al.suggestedSub.fit ?? 100)}%)
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    SFX.tap();
+                                    setSubPickOut(al.name);
+                                    setShowTacticsDrawer(true);
+                                    setPaused(true);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-[var(--g)] text-white text-[10px] font-bold cursor-pointer hover:brightness-105"
+                                >
+                                  🔄 เปลี่ยนตัว
+                                </button>
+                                <button
+                                  type="button"
+                                  title="ปิดการเตือนนักเตะคนนี้ชั่วคราว"
+                                  onClick={() => setDismissedAlerts((prev) => ({ ...prev, [al.name]: al.reasonSig }))}
+                                  className="w-6 h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                          {subAlertItems.length > 3 && (
+                            <div className="text-[10px] text-[var(--mut)] text-right font-semibold">
+                              และอีก {subAlertItems.length - 3} คนในแผงพลังงานด้านล่าง
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <span className="font-bold">⚡ พลังงาน &amp; ฟอร์ม 11 คนในสนาม ({meTeamOrig.name})</span>
+                        <div className="flex flex-wrap items-center gap-2 tabular text-[var(--mut)]">
+                          <span>
+                            เหย้า <b className={fitTextCls(hAvg)}>{hAvg}%</b> · เยือน <b className={fitTextCls(aAvg)}>{aAvg}%</b>
+                          </span>
+                          {(tiredCount > 0 || lowFormCount > 0) && (
+                            <span className="font-bold text-[var(--red)]">
+                              · เตือน {tiredCount > 0 ? `ล้า ${tiredCount}` : ''}{tiredCount > 0 && lowFormCount > 0 ? '/' : ''}{lowFormCount > 0 ? `ฟอร์มตก ${lowFormCount}` : ''}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setShowAlertConfig((v) => !v)}
+                            className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
+                              showAlertConfig || !subAlertEnabled
+                                ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                            }`}
+                          >
+                            ⚙️ เกณฑ์เตือน
+                          </button>
+                        </div>
+                      </div>
+
+                      {showAlertConfig && (
+                        <div className="p-2.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 text-[11px]">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-bold text-[var(--ink)]">🩺 ระบบแจ้งเตือนเปลี่ยนตัว (ป้องกันบาดเจ็บ/ฟอร์มตก)</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const next = !subAlertEnabled;
+                                setSubAlertEnabled(next);
+                                persistSubAlertPrefs(next, subAlertFitTh, subAlertFormTh);
+                              }}
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
+                                subAlertEnabled ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'
+                              }`}
+                            >
+                              {subAlertEnabled ? 'เปิดเตือน' : 'ปิดเตือน'}
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div className="flex items-center justify-between gap-2 bg-[var(--surface-2)] px-2.5 py-1.5 rounded-lg">
+                              <span className="text-[10px] font-semibold text-[var(--mut)]">เตือนเมื่อพลังงาน ≤</span>
+                              <div className="flex items-center gap-1">
+                                {[50, 55, 58, 65].map((v) => (
+                                  <button
+                                    key={v}
+                                    type="button"
+                                    onClick={() => {
+                                      setSubAlertFitTh(v);
+                                      setDismissedAlerts({});
+                                      persistSubAlertPrefs(subAlertEnabled, v, subAlertFormTh);
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular cursor-pointer ${
+                                      subAlertFitTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'
+                                    }`}
+                                  >
+                                    {v}%
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 bg-[var(--surface-2)] px-2.5 py-1.5 rounded-lg">
+                              <span className="text-[10px] font-semibold text-[var(--mut)]">เตือนเมื่อฟอร์ม ≤</span>
+                              <div className="flex items-center gap-1">
+                                {[5.4, 5.8, 6.0].map((v) => (
+                                  <button
+                                    key={v}
+                                    type="button"
+                                    onClick={() => {
+                                      setSubAlertFormTh(v);
+                                      setDismissedAlerts({});
+                                      persistSubAlertPrefs(subAlertEnabled, subAlertFitTh, v);
+                                    }}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular cursor-pointer ${
+                                      subAlertFormTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'
+                                    }`}
+                                  >
+                                    {v.toFixed(1)}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                        {liveLu.map((name) => {
+                          const pl = meTeamOrig.sq.find((q) => q.n === name);
+                          if (!pl) return null;
+                          const isRed = sentOff.includes(name);
+                          const fitVal = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
+                          const formVal = Number((liveFormMap[name] ?? 6.5).toFixed(1));
+                          const warnFit = !isRed && subAlertEnabled && fitVal <= subAlertFitTh;
+                          const warnForm = !isRed && subAlertEnabled && formVal <= subAlertFormTh;
+                          const canSubClick = !isRed && subsUsed.length < 5;
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              disabled={!canSubClick}
+                              onClick={() => {
+                                setSubPickOut(name);
+                                setShowTacticsDrawer(true);
+                                setPaused(true);
+                              }}
+                              title={canSubClick ? 'คลิกเพื่อเปลี่ยนตัวนักเตะคนนี้' : undefined}
+                              className={`p-1.5 rounded-xl bg-[var(--surface)] border text-left transition-colors ${
+                                isRed
+                                  ? 'opacity-45 border-[var(--red)]/40 cursor-not-allowed'
+                                  : subPickOut === name && showTacticsDrawer
+                                    ? 'border-[var(--lamp)] ring-1 ring-[var(--lamp)] cursor-pointer'
+                                    : warnFit
+                                      ? 'border-[var(--red)]/80 bg-[var(--red-soft)]/30 cursor-pointer'
+                                      : warnForm
+                                        ? 'border-[var(--lamp)]/80 bg-[var(--lamp-soft)]/30 cursor-pointer'
+                                        : 'border-[var(--line)] hover:border-[var(--g)] cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 text-[10px]">
+                                <span className="font-bold truncate">
+                                  <span className="text-[var(--mut)]">{pl.ro}</span> {pl.n.split(' ')[0]}
+                                </span>
+                                <span className={`font-extrabold tabular shrink-0 ${isRed ? 'text-[var(--red)]' : fitTextCls(fitVal)}`}>
+                                  {isRed ? '🟥' : `${fitVal}%`}
+                                </span>
+                              </div>
+                              <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-300"
+                                  style={{ width: `${isRed ? 0 : clamp(fitVal, 0, 100)}%`, background: fitColor(fitVal) }}
+                                />
+                              </div>
+                              {!isRed && (
+                                <div className="mt-1 flex items-center justify-between gap-1 text-[9px] tabular">
+                                  <span className={warnForm ? 'font-extrabold text-[#b45309] dark:text-[var(--lamp)]' : formVal >= 7.2 ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)]'}>
+                                    {warnForm ? `📉 ${formVal.toFixed(1)}` : `★ ${formVal.toFixed(1)}`}
+                                  </span>
+                                  {warnFit ? (
+                                    <span className="font-extrabold text-[var(--red)]">🩺 เสี่ยงเจ็บ</span>
+                                  ) : warnForm ? (
+                                    <span className="font-bold text-[#b45309] dark:text-[var(--lamp)]">ฟอร์มตก</span>
+                                  ) : null}
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Right Stage: Unified Match Events Feed (including Substitutions) & Career Player Form */}
@@ -14529,6 +14899,9 @@ const MatchModal: React.FC<{
                         const isRed = sentOff.includes(name);
                         const hasY = (matchYellows[name] || 0) > 0;
                         const curF = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
+                        const curForm = Number((liveFormMap[name] ?? 6.5).toFixed(1));
+                        const flagFit = !isRed && subAlertEnabled && curF <= subAlertFitTh;
+                        const flagForm = !isRed && subAlertEnabled && curForm <= subAlertFormTh;
                         const activePick = subPickOut === name;
                         return (
                           <button
@@ -14536,7 +14909,15 @@ const MatchModal: React.FC<{
                             type="button"
                             disabled={isRed}
                             onClick={() => setSubPickOut(activePick ? null : name)}
-                            className={`w-full flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-45 ${activePick ? 'bg-[var(--lamp)] text-[#261900] font-bold' : 'bg-[var(--surface)] hover:bg-[var(--surface)]/80'}`}
+                            className={`w-full flex items-center justify-between gap-1.5 px-2 py-1.5 rounded-lg text-xs cursor-pointer disabled:opacity-45 ${
+                              activePick
+                                ? 'bg-[var(--lamp)] text-[#261900] font-bold'
+                                : flagFit
+                                  ? 'bg-[var(--red-soft)]/50 border border-[var(--red)]/50 hover:bg-[var(--red-soft)]'
+                                  : flagForm
+                                    ? 'bg-[var(--lamp-soft)]/50 border border-[var(--lamp)]/50 hover:bg-[var(--lamp-soft)]'
+                                    : 'bg-[var(--surface)] hover:bg-[var(--surface)]/80'
+                            }`}
                           >
                             <span className="truncate flex items-center gap-1">
                               <span className="text-[10px] font-bold text-[var(--mut)]">#{getShirtNo(meTeamOrig, pl)}</span>
@@ -14544,9 +14925,16 @@ const MatchModal: React.FC<{
                               <span className="truncate">{pl.n}</span>
                               {isRed && <span>🟥</span>}
                               {!isRed && hasY && <span>🟨</span>}
+                              {flagFit && <span className="text-[9px] font-extrabold text-[var(--red)]">🩺</span>}
+                              {!flagFit && flagForm && <span className="text-[9px] font-extrabold text-[#b45309] dark:text-[var(--lamp)]">📉</span>}
                             </span>
                             <span className="flex items-center gap-1.5 shrink-0 tabular text-[11px]">
-                              <span className={curF < 55 ? 'text-[var(--red)] font-bold' : curF < 75 ? 'text-[#c98a00]' : 'text-[var(--g)]'}>{curF}%</span>
+                              <span className={flagForm ? 'text-[#b45309] dark:text-[var(--lamp)] font-bold' : 'text-[var(--mut)]'}>
+                                ★{curForm.toFixed(1)}
+                              </span>
+                              <span className={curF <= subAlertFitTh ? 'text-[var(--red)] font-bold' : curF < 75 ? 'text-[#c98a00]' : 'text-[var(--g)]'}>
+                                {curF}%
+                              </span>
                               <span className="font-bold">{pl.ov}</span>
                             </span>
                           </button>
@@ -15716,6 +16104,16 @@ export default function App() {
 
       d.md++;
       afterMatchDay(d);
+      if (d.mode === 'm' && payload.subs.length > 0) {
+        payload.subs.forEach((sb) => {
+          if (sb.t !== d.me) return;
+          const outPl = me.sq.find((q) => q.n === sb.outPlayer);
+          if (outPl && sb.m < 85) {
+            const restBonus = Math.round(clamp((90 - sb.m) / 8, 2, 7));
+            outPl.fit = clamp((outPl.fit ?? 100) + restBonus, 30, 100);
+          }
+        });
+      }
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
     });
   };
