@@ -6036,6 +6036,7 @@ const SquadTacticsView: React.FC<{
   const sub = state.sub ?? 0;
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
+  const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
   const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
   const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
@@ -6446,8 +6447,8 @@ const SquadTacticsView: React.FC<{
       {sub === 0 ? (
         isMgr ? (
           <div className="grid grid-cols-1 lg:grid-cols-[1.22fr_0.78fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.18fr_0.82fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
-            {/* CENTER STAGE: Pitch on Top + 🧭 เปลี่ยนแผน Directly Below Pitch */}
-            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
+            {/* CENTER STAGE: Full-Size Pitch First + Collapsed 🧭 เปลี่ยนแผน Bar at Bottom */}
+            <div className="relative p-2.5 sm:p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-1.5 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
               <div className="flex items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm mland:text-[10.5px] min-w-0">
                   <ClubCrest name={me.name} size={20} team={me} club={state.club} isMyClub={true} />
@@ -6473,7 +6474,7 @@ const SquadTacticsView: React.FC<{
                 </div>
               </div>
 
-              <div className="w-full max-w-[390px] mland:max-w-none mland:w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
+              <div className="w-full max-w-[430px] mland:max-w-none mland:w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
                 <FormationPitch
                   team={me}
                   state={state}
@@ -6486,54 +6487,78 @@ const SquadTacticsView: React.FC<{
                 />
               </div>
 
-              {/* 🧭 เปลี่ยนแผน — Underneath the Pitch */}
-              <div className="pt-2 mland:pt-1 border-t border-[var(--line)] space-y-1.5 mland:space-y-1 shrink-0">
-                <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
-                  <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน</span>
-                  <span className="text-[var(--mut)] truncate">
-                    ลากนักเตะในสนามเพื่อปรับตำแหน่ง · ลากทับเพื่อนเพื่อสลับ
+              {showFormationSheet && (
+                <div className="absolute inset-x-2 bottom-11 mland:inset-x-1.5 mland:bottom-8 z-20 p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)]/98 backdrop-blur-md border border-[var(--g)]/50 shadow-2xl space-y-2 mland:space-y-1.5">
+                  <div className="flex items-center justify-between gap-2 text-xs mland:text-[10px]">
+                    <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน & สไตล์การเล่น</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowFormationSheet(false)}
+                      className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer"
+                    >
+                      ✕ ปิด
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {Object.keys(FSD).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => {
+                            const t = d.teams[d.me];
+                            if (t.form !== f) {
+                              t.form = f;
+                              t.lu = null;
+                              t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
+                            }
+                          });
+                        }}
+                        className={`px-1 py-1.5 mland:py-1 rounded-lg text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
+                          me.form === f
+                            ? 'bg-[var(--g)] text-white shadow-xs'
+                            : 'bg-[var(--surface-2)] text-[var(--ink)] hover:border-[var(--g)]'
+                        }`}
+                      >
+                        {f}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
+                        className={`px-1 py-1.5 mland:py-1 rounded-lg text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
+                          me.tac === k ? 'bg-[var(--lamp)] text-[#261900] shadow-xs' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {AR_T[k]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Collapsed Slim Trigger Bar at Bottom */}
+              <div className="pt-1 mland:pt-0.5 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setShowFormationSheet((v) => !v);
+                  }}
+                  className="w-full flex items-center justify-between gap-2 px-2.5 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:border-[var(--g)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer transition-colors"
+                >
+                  <span className="truncate">
+                    🧭 เปลี่ยนแผน · <span className="text-[var(--g)]">{formName(me)}</span> · <span className="text-[var(--mut)]">{AR_T[me.tac]}</span>
                   </span>
-                </div>
-                <div className="grid grid-cols-5 gap-1">
-                  {Object.keys(FSD).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        onUpdateState((d) => {
-                          const t = d.teams[d.me];
-                          if (t.form !== f) {
-                            t.form = f;
-                            t.lu = null;
-                            t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
-                          }
-                        });
-                      }}
-                      className={`px-1 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer truncate transition-colors ${
-                        me.form === f
-                          ? 'bg-[var(--g)] text-white shadow-xs'
-                          : 'bg-[var(--surface-2)] text-[var(--ink)] hover:border-[var(--g)]'
-                      }`}
-                    >
-                      {f}
-                    </button>
-                  ))}
-                </div>
-                <div className="grid grid-cols-5 gap-1">
-                  {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
-                      className={`px-1 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer truncate transition-colors ${
-                        me.tac === k ? 'bg-[var(--lamp)] text-[#261900] shadow-xs' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
-                      }`}
-                    >
-                      {AR_T[k]}
-                    </button>
-                  ))}
-                </div>
+                  <span className="text-[10.5px] mland:text-[9px] text-[var(--g)] shrink-0">
+                    {showFormationSheet ? 'ซ่อน ▾' : 'เลือกแผน ▲'}
+                  </span>
+                </button>
               </div>
             </div>
 
