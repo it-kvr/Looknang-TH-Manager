@@ -62,6 +62,11 @@ interface Player {
   g?: number;
   scouted?: boolean;
   formStreak?: number;
+  listed?: number;
+  askPrice?: number;
+  offerCoolMd?: number;
+  signedSeason?: number;
+  signedMd?: number;
 }
 
 type CustomSlot = [SubRole, number, number];
@@ -100,10 +105,19 @@ interface ClubIdentity {
   std: string;
   c1: string;
   c2: string;
+  c3?: string;
   shape: number;
   pat: number;
   icon: string;
   kit: number;
+  awayKit?: number;
+  collar?: number;
+  crestBorder?: number;
+  stars?: number;
+  cuffTrim?: boolean;
+  motto?: string;
+  founded?: number;
+  managerName?: string;
 }
 
 interface PlayerCareerProfile {
@@ -246,6 +260,7 @@ interface TransferOffer {
   n: string;
   p: number;
   t: string;
+  teamId?: number;
   cnt?: number;
 }
 
@@ -259,7 +274,8 @@ interface ActiveDilemma {
 
 interface ScoutMission {
   id: string;
-  focus: 'wonderkid' | 'free' | 'striker' | 'defender' | 'midfielder';
+  focus: 'wonderkid' | 'free' | 'gk' | 'striker' | 'defender' | 'midfielder';
+  targetRole?: SubRole | '';
   label: string;
   turnsLeft: number;
   results?: Player[];
@@ -329,6 +345,7 @@ interface GameState {
   rules?: AutoRule[];
   slots?: (Record<string, unknown> | null)[];
   off?: TransferOffer | null;
+  offers?: TransferOffer[];
   res?: string[];
   news?: string;
   feed?: FeedItem[];
@@ -342,12 +359,18 @@ interface GameState {
   dilemmaCd?: number;
   schedRes?: Record<number, { h: number; a: number; gh: number; ga: number }>;
   cupLog?: { md: number; comp: 'cup' | 'asia'; r: number; h: number; a: number; gh: number; ga: number; penText?: string }[];
+  med?: number;
+  merchLv?: number;
+  staff?: { asst: number; fit: number; scout: number; physio: number };
+  sponsorDeal?: { id: string; name: string; perMatch: number; left: number } | null;
 }
 
 interface AppSettings {
   mute?: boolean;
   novib?: boolean;
   quick?: boolean;
+  matchSpeed?: 1 | 2 | 4;
+  autoSkipMatch?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
 }
@@ -435,6 +458,13 @@ const SPX: Record<Position, SubRole[]> = {
   FW: ['ST', 'CF', 'SS', 'LW', 'RW']
 };
 
+const ALL_SUB_ROLES: SubRole[] = [
+  'GK',
+  'CB', 'LB', 'RB', 'LWB', 'RWB',
+  'CDM', 'CM', 'CAM', 'LM', 'RM',
+  'ST', 'CF', 'SS', 'LW', 'RW'
+];
+
 const SPN: Record<string, string> = {
   GK: 'ผู้รักษาประตู', CB: 'กองหลังกลาง', LB: 'แบ็กซ้าย', RB: 'แบ็กขวา',
   CDM: 'กองกลางตัวรับ', CM: 'กองกลาง', CAM: 'กองกลางตัวรุก', LM: 'ปีกซ้าย(กลาง)', RM: 'ปีกขวา(กลาง)',
@@ -463,7 +493,11 @@ const KIT_P: [string, string][] = [
   ['#b45309', '#f8fafc'], ['#1d4ed8', '#fb7185'], ['#7c2d12', '#bae6fd'], ['#374151', '#fbbf24'],
   ['#9f1239', '#a7f3d0'], ['#0369a1', '#fde047'], ['#4c1d95', '#ffffff'], ['#dc2626', '#1e293b']
 ];
-const KIT_SW = ['#c0392b', '#e67e22', '#f4c63d', '#1c7a4a', '#2f6fd6', '#7c3aed', '#111111', '#ffffff', '#0e7c86', '#d6336c'];
+const KIT_SW = [
+  '#c0392b', '#991b1b', '#e67e22', '#f4c63d', '#84cc16', '#1c7a4a',
+  '#0e7c86', '#0ea5e9', '#2f6fd6', '#1e3a8a', '#7c3aed', '#d6336c',
+  '#ffffff', '#cbd5e1', '#111111'
+];
 
 const SIGL: Record<string, string> = {
   fin: 'จบสกอร์', pw: 'พลังยิง', cur: 'ยิงโค้ง', run: 'เข้าทำตำแหน่ง (วิ่งหาช่อง)',
@@ -725,6 +759,11 @@ function saveSettings(s: AppSettings) {
   } catch {
     // ignore storage errors
   }
+}
+
+function getDefaultMatchSpeed(st: AppSettings): 1 | 2 | 4 {
+  if (st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 4) return st.matchSpeed;
+  return 1;
 }
 
 function applyTheme(theme?: 'light' | 'dark' | '') {
@@ -1035,13 +1074,13 @@ function visOf(q: Partial<Player>, careerP?: PlayerCareerProfile | null): number
   ];
 }
 
-function mkPlayer(pos: Position, baseOv: number, yo?: boolean): Player {
+function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: SubRole): Player {
   const age = yo ? R(16, 18) : R(17, 34);
   const ov = yo ? clamp(baseOv + R(-6, 4), 20, 82) : clamp(baseOv + R(-9, 9), 25, 92);
   return {
     n: genPlayerName(),
     pos,
-    ro: SPW(pos),
+    ro: forceRo || SPW(pos),
     sp: 0,
     ov,
     age,
@@ -1723,7 +1762,7 @@ function logFin(s: GameState, t: string, amt: number) {
   if (!amt) return;
   s.finLog = s.finLog || [];
   s.finLog.unshift({ t, amt: Math.round(amt), m: s.md + 1, s: s.season });
-  if (s.finLog.length > 10) s.finLog.length = 10;
+  if (s.finLog.length > 40) s.finLog.length = 40;
 }
 
 function pushFeed(s: GameState, cat: string, txt: string, tone: '' | 'urg' | 'offer' | 'ok' = '') {
@@ -1796,12 +1835,104 @@ function getTransferWindowInfo(s: Pick<GameState, 'md' | 'fx'>) {
   };
 }
 
+const LEAGUE_TRANSFER_RULES = {
+  minSquad: 18,
+  maxSquad: 28,
+  maxLoans: 4,
+  minPos: { GK: 2, DF: 4, MF: 4, FW: 2 } as Record<Position, number>
+};
+
+function getStaffState(s: Pick<GameState, 'staff'>) {
+  return {
+    asst: s.staff?.asst ?? 0,
+    fit: s.staff?.fit ?? 0,
+    scout: s.staff?.scout ?? 0,
+    physio: s.staff?.physio ?? 0
+  };
+}
+
+function getStaffWage(s: Pick<GameState, 'staff'>) {
+  const st = getStaffState(s);
+  return (st.asst + st.fit + st.scout + st.physio) * 1.5;
+}
+
+function getLeagueTransferContext(s: GameState, me: Team) {
+  const tw = getTransferWindowInfo(s);
+  const loansCount = me.sq.filter((q) => !!q.loan).length;
+  const curWage = squadWage(me);
+  const baseCap = [26, 44, 70, 95][me.tier] ?? 44;
+  const infraMult = 1 + ((s.st ?? 1) - 1) * 0.1 + ((s.merchLv ?? 1) - 1) * 0.05;
+  const wageCap = Math.round(baseCap * infraMult);
+  const wagePct = Math.round((curWage / Math.max(1, wageCap)) * 100);
+  const posCounts: Record<Position, number> = {
+    GK: me.sq.filter((q) => q.pos === 'GK').length,
+    DF: me.sq.filter((q) => q.pos === 'DF').length,
+    MF: me.sq.filter((q) => q.pos === 'MF').length,
+    FW: me.sq.filter((q) => q.pos === 'FW').length
+  };
+  return {
+    tw,
+    loansCount,
+    maxLoans: LEAGUE_TRANSFER_RULES.maxLoans,
+    minSquad: LEAGUE_TRANSFER_RULES.minSquad,
+    maxSquad: LEAGUE_TRANSFER_RULES.maxSquad,
+    minPos: LEAGUE_TRANSFER_RULES.minPos,
+    posCounts,
+    curWage,
+    wageCap,
+    wagePct,
+    ffpLocked: s.money < 0
+  };
+}
+
+function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
+  const stLv = s.st ?? 1;
+  const merchLv = s.merchLv ?? 1;
+  const cap = [3500, 8000, 15000, 26000, 42000][stLv - 1] || 3500;
+  const tpIdx = s.tp ?? 1;
+  const spIdx = s.sp ?? 0;
+  const fanVal = s.fan ?? 55;
+  const attRate = clamp((0.36 + (fanVal / 100) * 0.56) * [1.15, 1.0, 0.8][tpIdx] * (s.promo === 1 ? 1.15 : 1), 0.2, 0.98);
+  const estAtt = Math.round(cap * attRate);
+  const ticketPriceMult = [0.82, 1.0, 1.24][tpIdx];
+  const estTicket = Math.round((8 + stLv * 7) * (fanVal / 60) * ticketPriceMult * (s.promo === 1 ? 1.35 : 1));
+  const estMerch = Math.round((2 + merchLv * 3) * (fanVal / 55));
+  const baseSponsor = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
+  const estSponsor = Math.round(baseSponsor * (s.promo === 2 ? 1.35 : 1));
+  const dealIncome = s.sponsorDeal ? s.sponsorDeal.perMatch : 0;
+  const wageCost = squadWage(me);
+  const staffCost = Math.round(getStaffWage(s));
+  const loanCost = s.bankLoan ? s.bankLoan.per : 0;
+  const totalOut = wageCost + staffCost + loanCost;
+  const homeIn = estTicket + estMerch + estSponsor + dealIncome;
+  const awayIn = estSponsor + dealIncome;
+  return {
+    cap,
+    estAtt,
+    attPct: Math.round(attRate * 100),
+    estTicket,
+    estMerch,
+    estSponsor,
+    dealIncome,
+    wageCost,
+    staffCost,
+    loanCost,
+    totalOut,
+    homeIn,
+    awayIn,
+    homeNet: homeIn - totalOut,
+    awayNet: awayIn - totalOut
+  };
+}
+
 function mkMarket(s: GameState) {
   const b0 = BASE[s.teams[s.me].tier];
-  s.mk = Array.from({ length: 10 }, (_, i) => {
-    const p = mkPlayer(i < 4 ? POS[i] : P(POS), b0 + R(-1, 12), i === 5 || i === 8);
+  const rolePool: Player[] = ALL_SUB_ROLES.map((role, i) => {
+    const pos = LINE[role] || 'MF';
+    const yo = role !== 'GK' && i % 5 === 3;
+    const p = mkPlayer(pos, b0 + R(-1, 12), yo, role);
     p.price = Math.round((p.ov * p.ov) / 40);
-    if (i === 0 || (i === 6 && Math.random() < 0.55) || (i === 9 && Math.random() < 0.45)) {
+    if (i === 0 || (i % 6 === 2 && Math.random() < 0.45)) {
       p.free = 1;
       p.price = 0;
     }
@@ -1810,6 +1941,22 @@ function mkMarket(s: GameState) {
     p.locked = 0;
     return p;
   });
+
+  // Guarantee free agents across all 4 core lines so every position is signable even when transfer window closes
+  const extraFreeAgents: Player[] = POS.map((pos) => {
+    const p = mkPlayer(pos, b0 + R(-2, 9), false, P(SPX[pos]));
+    p.free = 1;
+    p.price = 0;
+    p.askWg = +((p.ov * p.ov) / 3000).toFixed(1);
+    p.tries = 0;
+    p.locked = 0;
+    return p;
+  });
+
+  const posRank: Record<Position, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
+  s.mk = [...rolePool, ...extraFreeAgents].sort(
+    (a, b) => posRank[a.pos] - posRank[b.pos] || b.ov - a.ov
+  );
 }
 
 function teamStats(t: Team, s?: GameState | null) {
@@ -2342,39 +2489,57 @@ function runPlayerWeek(s: GameState) {
   syncMe(s);
 }
 
-function createScoutMission(focus: ScoutMission['focus']): ScoutMission {
+function createScoutMission(focus: ScoutMission['focus'], targetRole?: SubRole | ''): ScoutMission {
   const labels: Record<ScoutMission['focus'], string> = {
     wonderkid: 'ส่องดาวรุ่งพรสวรรค์สูง (U20)',
     free: 'ค้นหานักเตะฟรีเอเยนต์ฝีเท้าดี',
+    gk: 'เฟ้นหาผู้รักษาประตู (GK)',
     striker: 'เฟ้นหากองหน้าตัวจบสกอร์',
     midfielder: 'เฟ้นหากองกลางจอมคุมเกม',
-    defender: 'เฟ้นหากองหลัง/ผู้รักษาประตู'
+    defender: 'เฟ้นหากองหลังครบทุกตำแหน่ง'
   };
+  const roleLabel = targetRole ? `ส่องตำแหน่ง ${targetRole} (${SPN[targetRole] || targetRole})` : labels[focus];
   return {
-    id: `${focus}_${Date.now()}`,
+    id: `${focus}_${targetRole || 'any'}_${Date.now()}`,
     focus,
-    label: labels[focus],
+    targetRole: targetRole || '',
+    label: roleLabel,
     turnsLeft: 2
   };
 }
 
 function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
-  const b0 = BASE[s.teams[s.me].tier] + (s.ya ?? 1) * 2;
-  return Array.from({ length: 3 }, () => {
+  const scoutStaff = getStaffState(s).scout;
+  const b0 = BASE[s.teams[s.me].tier] + (s.ya ?? 1) * 2 + scoutStaff * 2;
+  return Array.from({ length: 3 }, (_, idx) => {
     let pos: Position = P(POS);
+    let forceRo: SubRole | undefined;
     let yo = false;
     let boost = R(2, 9);
-    if (m.focus === 'wonderkid') {
+
+    if (m.targetRole) {
+      forceRo = m.targetRole;
+      pos = LINE[m.targetRole] || 'MF';
+    } else if (m.focus === 'wonderkid') {
       yo = true;
-      boost = R(4, 10);
+      boost = R(4, 10 + scoutStaff);
+      forceRo = P(ALL_SUB_ROLES.filter((r) => r !== 'GK'));
+      pos = LINE[forceRo] || 'MF';
+    } else if (m.focus === 'gk') {
+      pos = 'GK';
+      forceRo = 'GK';
     } else if (m.focus === 'striker') {
       pos = 'FW';
+      forceRo = SPX.FW[(idx + R(0, 4)) % SPX.FW.length];
     } else if (m.focus === 'midfielder') {
       pos = 'MF';
+      forceRo = SPX.MF[(idx + R(0, 4)) % SPX.MF.length];
     } else if (m.focus === 'defender') {
-      pos = Math.random() < 0.72 ? 'DF' : 'GK';
+      pos = 'DF';
+      forceRo = SPX.DF[(idx + R(0, 4)) % SPX.DF.length];
     }
-    const p = mkPlayer(pos, b0 + boost, yo);
+
+    const p = mkPlayer(pos, b0 + boost, yo, forceRo);
     if (m.focus === 'wonderkid') p.pot = clamp(Math.max(p.pot, p.ov + R(12, 24)), p.ov, 96);
     if (m.focus === 'free') {
       p.free = 1;
@@ -2672,12 +2837,247 @@ function simulateCpuCupRound(s: GameState) {
   }
 }
 
+function getIncomingOffers(s: GameState): TransferOffer[] {
+  const me = s.teams[s.me];
+  if (!me) return [];
+  const raw: TransferOffer[] = [];
+  if (Array.isArray(s.offers)) raw.push(...s.offers);
+  if (s.off) raw.push(s.off);
+  const seen = new Set<string>();
+  const valid: TransferOffer[] = [];
+  raw.forEach((o) => {
+    if (!o || !o.n || !o.t) return;
+    if (!me.sq.some((q) => q.n === o.n)) return;
+    const key = `${o.n}__${o.teamId ?? o.t}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    valid.push(o);
+  });
+  return valid;
+}
+
+function syncOffersField(s: GameState, list: TransferOffer[]) {
+  s.offers = list;
+  s.off = list[0] || null;
+}
+
+function addIncomingOffer(s: GameState, off: TransferOffer) {
+  const list = getIncomingOffers(s).filter(
+    (x) => !(x.n === off.n && (x.teamId != null && off.teamId != null ? x.teamId === off.teamId : x.t === off.t))
+  );
+  list.unshift(off);
+  syncOffersField(s, list.slice(0, 4));
+}
+
+function removeIncomingOffer(s: GameState, playerName: string, clubName?: string) {
+  const list = getIncomingOffers(s).filter((x) => {
+    if (x.n !== playerName) return true;
+    if (!clubName) return false;
+    return x.t !== clubName;
+  });
+  syncOffersField(s, list);
+}
+
+function getPlayerSellCheck(s: GameState, me: Team, q: Player) {
+  const tx = getLeagueTransferContext(s, me);
+  const sameDayLock = q.signedSeason === s.season && q.signedMd === s.md;
+  const minRequired = tx.minPos[q.pos];
+  const samePosCount = tx.posCounts[q.pos];
+  const turnKey = s.season * 40 + s.md;
+  const pitchedThisTurn = q.offerCoolMd === turnKey;
+  let reason = '';
+  if (!tx.tw.open) reason = `ตลาดปิดอยู่! ขายได้เฉพาะช่วง ${tx.tw.rangeText} (กด 🏷️ ขึ้นบัญชีขายรอไว้ได้)`;
+  else if (q.loan) reason = 'นักเตะยืมตัวไม่สามารถขายได้';
+  else if (q.inj > 0) reason = 'นักเตะบาดเจ็บอยู่ ยังปล่อยตัวไม่ได้จนกว่าจะหาย';
+  else if (sameDayLock) reason = 'เพิ่งเซ็นสัญญานัดนี้ ขายต่อทันทีไม่ได้ตามกฎลีก';
+  else if (me.sq.length <= tx.minSquad) reason = `ขนาดทีมต้องมีอย่างน้อย ${tx.minSquad} คนตามกฎลีก`;
+  else if (samePosCount <= minRequired) reason = `ต้องเหลือนักเตะ ${q.pos} อย่างน้อย ${minRequired} คน`;
+  return {
+    twOpen: tx.tw.open,
+    sameDayLock,
+    minRequired,
+    samePosCount,
+    pitchedThisTurn,
+    canList: !q.loan,
+    canPitch:
+      tx.tw.open &&
+      !q.loan &&
+      q.inj === 0 &&
+      !sameDayLock &&
+      me.sq.length > tx.minSquad &&
+      samePosCount > minRequired,
+    reason
+  };
+}
+
+function canAcceptTransferOffer(s: GameState, off: TransferOffer): { ok: boolean; err?: string; buyerName?: string } {
+  const me = s.teams[s.me];
+  const tx = getLeagueTransferContext(s, me);
+  if (!tx.tw.open) return { ok: false, err: `ตลาดซื้อขายปิดแล้ว (${tx.tw.rangeText})` };
+  const q = me.sq.find((x) => x.n === off.n);
+  if (!q) return { ok: false, err: 'ไม่พบนักเตะคนนี้ในทีมแล้ว' };
+  if (q.loan) return { ok: false, err: 'นักเตะยืมตัวขายไม่ได้' };
+  if (me.sq.length <= tx.minSquad || tx.posCounts[q.pos] <= tx.minPos[q.pos]) {
+    return { ok: false, err: `ขายไม่ได้ ต้องเหลือขนาดทีม ≥ ${tx.minSquad} และ ${q.pos} ≥ ${tx.minPos[q.pos]}` };
+  }
+  const buyer =
+    (off.teamId != null ? s.teams.find((tm) => tm.id === off.teamId) : undefined) ||
+    s.teams.find((tm) => tm.name === off.t);
+  return { ok: true, buyerName: buyer?.name || off.t };
+}
+
+function acceptTransferOffer(d: GameState, off: TransferOffer): { ok: boolean; err?: string; buyerName?: string } {
+  const chk = canAcceptTransferOffer(d, off);
+  if (!chk.ok) return chk;
+  const me = d.teams[d.me];
+  const idx = me.sq.findIndex((q) => q.n === off.n);
+  if (idx < 0) return { ok: false, err: 'ไม่พบนักเตะคนนี้ในทีมแล้ว' };
+  const sold = me.sq.splice(idx, 1)[0];
+  me.lu = null;
+  if (me.cap === sold.n) me.cap = '';
+  if (d.focusPlayer === sold.n) d.focusPlayer = null;
+  delete sold.listed;
+  delete sold.askPrice;
+  delete sold.offerCoolMd;
+  sold.no = undefined;
+  sold.signedSeason = d.season;
+  sold.signedMd = d.md;
+
+  const buyer =
+    (off.teamId != null ? d.teams.find((tm) => tm.id === off.teamId) : undefined) ||
+    d.teams.find((tm) => tm.name === off.t);
+  if (buyer && buyer.id !== d.me && buyer.sq.length < LEAGUE_TRANSFER_RULES.maxSquad) {
+    buyer.sq.push(sold);
+    buyer.lu = null;
+    assignTeamShirtNumbers(buyer);
+  }
+
+  const buyerName = buyer?.name || off.t;
+  d.money += off.p;
+  logFin(d, `ขาย ${off.n} ให้ ${buyerName}`, off.p);
+  pushFeed(d, 'ตลาดซื้อขาย', `✅ ขาย ${off.n} ให้ ${buyerName} รับค่าตัว +${off.p}k ฿`, 'ok');
+  removeIncomingOffer(d, off.n);
+  return { ok: true, buyerName };
+}
+
+function resolveCounterOfferOutcome(s: GameState, off: TransferOffer): { accepted: boolean; newPrice?: number } {
+  const me = s.teams[s.me];
+  const q = me.sq.find((x) => x.n === off.n);
+  const fairVal = q ? vlu(q) : off.p;
+  const acceptProb = off.p < fairVal ? 0.68 : 0.56;
+  if (Math.random() < acceptProb) {
+    return { accepted: true, newPrice: Math.max(off.p + 2, Math.round(off.p * 1.15)) };
+  }
+  return { accepted: false };
+}
+
+function applyCounterOfferOutcome(d: GameState, off: TransferOffer, out: { accepted: boolean; newPrice?: number }) {
+  if (out.accepted && out.newPrice != null) {
+    const list = getIncomingOffers(d).map((item) =>
+      item.n === off.n && item.t === off.t ? { ...item, p: out.newPrice!, cnt: 1 } : item
+    );
+    syncOffersField(d, list);
+  } else {
+    removeIncomingOffer(d, off.n, off.t);
+  }
+}
+
+function resolvePitchPlayerOutcome(
+  s: GameState,
+  playerName: string,
+  askPct: number
+): { ok: boolean; askPrice: number; turnKey: number; offers: TransferOffer[]; err?: string } {
+  const me = s.teams[s.me];
+  const q = me.sq.find((x) => x.n === playerName);
+  if (!q) return { ok: false, askPrice: 0, turnKey: 0, offers: [], err: 'ไม่พบนักเตะในทีม' };
+  const chk = getPlayerSellCheck(s, me, q);
+  if (!chk.canPitch) return { ok: false, askPrice: 0, turnKey: 0, offers: [], err: chk.reason || 'ยังไม่สามารถเสนอขายได้ในตอนนี้' };
+  const turnKey = s.season * 40 + s.md;
+  if (q.offerCoolMd === turnKey) {
+    return { ok: false, askPrice: 0, turnKey, offers: [], err: 'เสนอนักเตะคนนี้ให้สโมสรอื่นไปแล้วในนัดนี้ ลองใหม่หลังจบแมตช์หน้าหรือรอข้อเสนออัตโนมัติ' };
+  }
+
+  const marketVal = Math.max(5, vlu(q));
+  const askPrice = Math.max(5, Math.round((marketVal * askPct) / 100));
+
+  const existingBuyerNames = new Set(
+    getIncomingOffers(s)
+      .filter((o) => o.n === q.n)
+      .map((o) => o.t)
+  );
+  const candidates = s.teams
+    .filter(
+      (tm) =>
+        tm.id !== s.me &&
+        tm.sq.length < LEAGUE_TRANSFER_RULES.maxSquad &&
+        !existingBuyerNames.has(tm.name) &&
+        Math.abs(tm.tier - me.tier) <= 1
+    )
+    .sort((a, b) => Math.abs(a.tier - me.tier) - Math.abs(b.tier - me.tier) || Math.random() - 0.5)
+    .slice(0, 6);
+
+  const created: TransferOffer[] = [];
+  const baseInterest = askPct <= 90 ? 0.62 : askPct <= 105 ? 0.42 : 0.24;
+  const ageBonus = q.age <= 24 ? 0.12 : q.age >= 32 ? -0.1 : 0;
+  const ovBonus = q.ov >= 70 ? 0.1 : 0;
+
+  for (const opp of candidates) {
+    if (created.length >= 2) break;
+    const posNeed = opp.sq.filter((z) => z.pos === q.pos).length <= (LEAGUE_TRANSFER_RULES.minPos[q.pos] + 2) ? 0.12 : 0;
+    const prob = clamp(baseInterest + ageBonus + ovBonus + posNeed, 0.14, 0.85);
+    if (Math.random() < prob) {
+      const bidMult =
+        askPct <= 90
+          ? 0.94 + Math.random() * 0.12
+          : askPct <= 105
+            ? 0.9 + Math.random() * 0.15
+            : 0.86 + Math.random() * 0.16;
+      const bidPrice = Math.max(5, Math.round(askPrice * bidMult));
+      created.push({ n: q.n, p: bidPrice, t: opp.name, teamId: opp.id });
+    }
+  }
+
+  return { ok: true, askPrice, turnKey, offers: created };
+}
+
+function applyPitchPlayerOutcome(
+  d: GameState,
+  playerName: string,
+  outcome: { ok: boolean; askPrice: number; turnKey: number; offers: TransferOffer[] }
+) {
+  if (!outcome.ok) return;
+  const q = d.teams[d.me]?.sq.find((x) => x.n === playerName);
+  if (!q) return;
+  q.listed = 1;
+  q.askPrice = outcome.askPrice;
+  q.offerCoolMd = outcome.turnKey;
+  outcome.offers.forEach((off) => addIncomingOffer(d, off));
+
+  if (outcome.offers.length > 0) {
+    pushFeed(
+      d,
+      'ข้อเสนอ',
+      `💼 เสนอขาย ${q.n} (${outcome.askPrice}k) — มี ${outcome.offers.length} ทีมยื่นซื้อเข้ามาแล้ว!`,
+      'offer'
+    );
+  } else {
+    pushFeed(
+      d,
+      'ตลาดซื้อขาย',
+      `🏷️ ขึ้นบัญชีขาย ${q.n} (${outcome.askPrice}k) แล้ว ยังไม่มีทีมยื่นข้อเสนอในทันที`,
+      ''
+    );
+  }
+}
+
 function afterMatchDay(s: GameState) {
   const me = s.teams[s.me];
   const mg = s.mode === 'm';
   const lv = s.tr ?? 1;
+  const medLv = s.med ?? 1;
+  const stf = getStaffState(s);
 
-  me.tacFam = clamp((me.tacFam ?? 65) + 2, 30, 100);
+  me.tacFam = clamp((me.tacFam ?? 65) + 2 + stf.asst, 30, 100);
 
   s.teams
     .filter((t) => t.tier === me.tier)
@@ -2700,17 +3100,23 @@ function afterMatchDay(s: GameState) {
             (pi
               ? -Math.round(R(7, 13) * (Dq.tr === 2 ? 0.8 : 1)) - ps * 3 + Math.round((Dq.d.sta - 70) / 8)
               : R(8, 16) + Math.round((Dq.d.rec - 70) / 8)) +
-            (mine ? lv * 2 + (s.tf === 'F' ? 8 : 0) : 0),
+            (mine ? lv * 2 + stf.fit * 2 + (s.tf === 'F' ? 8 : 0) : 0),
           30,
           100
         );
         if ((q.sus || 0) > 0) q.sus = (q.sus || 0) - 1;
         if (q.inj > 0) {
           q.inj--;
-          if (q.inj > 0 && Dq.d.rec >= 85 && Math.random() < 0.3) q.inj--;
+          if (q.inj > 0 && (Dq.d.rec >= 85 || (mine && (medLv >= 3 || stf.physio >= 2))) && Math.random() < 0.3 + (mine ? (medLv - 1) * 0.08 + stf.physio * 0.08 : 0)) {
+            q.inj--;
+          }
         } else if (
           pi &&
-          Math.random() < (q.fit < 60 ? 0.07 : 0.024) * (mine && s.tf === 'F' ? 0.5 : 1) * ((130 - Dq.d.tol) / 60)
+          Math.random() <
+            (q.fit < 60 ? 0.07 : 0.024) *
+              (mine && s.tf === 'F' ? 0.5 : 1) *
+              (mine ? Math.max(0.5, 1 - (medLv - 1) * 0.08 - stf.physio * 0.08) : 1) *
+              ((130 - Dq.d.tol) / 60)
         ) {
           q.inj = injD(q, R(1, 5), s.p);
           if (mine) {
@@ -2728,7 +3134,7 @@ function afterMatchDay(s: GameState) {
     if (g) {
       me.sq.forEach((q) => {
         const isFocus = s.focusPlayer && q.n === s.focusPlayer;
-        const chance = (0.05 + 0.03 * lv) * (isFocus ? 2.2 : 1);
+        const chance = (0.05 + 0.03 * lv + stf.asst * 0.02) * (isFocus ? 2.2 : 1);
         if ((g.includes(q.pos) || isFocus) && q.age < 31 && q.ov < (q.pot || 92) && Math.random() < chance) {
           q.ov++;
           gr.push(`${q.n} (${q.ov})`);
@@ -2739,8 +3145,21 @@ function afterMatchDay(s: GameState) {
       pushFeed(s, 'ฝึกซ้อม', `🏋️ พัฒนาจากซ้อม: ${gr.slice(0, 2).join(', ')}${gr.length > 2 ? ` +${gr.length - 2} คน` : ''}`, 'ok');
     }
     const wg = squadWage(me);
-    s.money -= wg;
+    const stfWg = Math.round(getStaffWage(s));
+    s.money -= wg + stfWg;
     logFin(s, `ค่าเหนื่อยนักเตะ (${me.sq.length} คน)`, -wg);
+    if (stfWg > 0) logFin(s, 'ค่าจ้างทีมงานสตาฟฟ์โค้ช', -stfWg);
+
+    if (s.sponsorDeal && s.sponsorDeal.left > 0) {
+      s.money += s.sponsorDeal.perMatch;
+      logFin(s, `ดีลพาร์ทเนอร์: ${s.sponsorDeal.name}`, s.sponsorDeal.perMatch);
+      s.sponsorDeal.left--;
+      if (s.sponsorDeal.left <= 0) {
+        pushFeed(s, 'การเงิน', `📄 สัญญาสปอนเซอร์ "${s.sponsorDeal.name}" ครบกำหนดแล้ว`, '');
+        s.sponsorDeal = null;
+      }
+    }
+
     if (s.bankLoan && s.bankLoan.left > 0) {
       s.money -= s.bankLoan.per;
       s.bankLoan.left--;
@@ -2782,27 +3201,61 @@ function afterMatchDay(s: GameState) {
 
     const tw = getTransferWindowInfo(s);
     if (s.md === 6) {
-      s.off = null;
+      syncOffersField(s, []);
       pushFeed(s, 'ตลาดซื้อขาย', '🔒 ตลาดซื้อขายรอบแรกปิดแล้ว (จะเปิดรอบสองอีกครั้งนัดที่ 15–20)', '');
     } else if (s.md === 14) {
       mkMarket(s);
       pushFeed(s, 'ตลาดซื้อขาย', '🟢 ตลาดซื้อขายเลกสอง (นัดที่ 15–20) เปิดทำการแล้ว!', 'ok');
     } else if (s.md === 20) {
-      s.off = null;
+      syncOffersField(s, []);
       pushFeed(s, 'ตลาดซื้อขาย', '🔒 ตลาดซื้อขายเลกสองปิดแล้ว จนถึงต้นฤดูกาลหน้า', '');
     }
 
-    if (tw.open && Math.random() < 0.22 && !s.off) {
-      const cands = me.sq
-        .slice()
-        .sort((a, b) => b.ov - a.ov)
-        .slice(0, 6)
-        .filter((x) => !x.loan && me.sq.filter((z) => z.pos === x.pos).length > (x.pos === 'GK' ? 1 : 3));
+    const activeOffers = getIncomingOffers(s);
+    const listedCands = me.sq.filter(
+      (x) =>
+        !!x.listed &&
+        !x.loan &&
+        x.inj === 0 &&
+        me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
+        me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
+        activeOffers.filter((o) => o.n === x.n).length < 2
+    );
+    const bidProb = listedCands.length ? 0.68 : 0.22;
+    if (tw.open && activeOffers.length < 3 && Math.random() < bidProb) {
+      const cands = listedCands.length
+        ? listedCands
+        : me.sq
+            .slice()
+            .sort((a, b) => b.ov - a.ov)
+            .slice(0, 6)
+            .filter(
+              (x) =>
+                !x.loan &&
+                x.inj === 0 &&
+                me.sq.length > LEAGUE_TRANSFER_RULES.minSquad &&
+                me.sq.filter((z) => z.pos === x.pos).length > LEAGUE_TRANSFER_RULES.minPos[x.pos] &&
+                !activeOffers.some((o) => o.n === x.n)
+            );
       if (cands.length) {
         const q = P(cands);
-        const opp = P(s.teams.filter((x) => x.id !== s.me));
-        s.off = { n: q.n, p: Math.round(((q.ov * q.ov) / 40) * (1.1 + Math.random() * 0.4)), t: opp.name };
-        pushFeed(s, 'ข้อเสนอ', `💼 ${s.off.t} ยื่นซื้อ ${s.off.n} (${s.off.p}k)`, 'offer');
+        const existingClubs = new Set(activeOffers.filter((o) => o.n === q.n).map((o) => o.t));
+        const oppPool = s.teams.filter(
+          (x) => x.id !== s.me && x.sq.length < LEAGUE_TRANSFER_RULES.maxSquad && !existingClubs.has(x.name)
+        );
+        if (oppPool.length) {
+          const opp = P(oppPool);
+          const baseVal = q.askPrice || Math.max(5, vlu(q));
+          const mult = q.listed ? 0.9 + Math.random() * 0.2 : 1.08 + Math.random() * 0.35;
+          const newOff: TransferOffer = {
+            n: q.n,
+            p: Math.max(5, Math.round(baseVal * mult)),
+            t: opp.name,
+            teamId: opp.id
+          };
+          addIncomingOffer(s, newOff);
+          pushFeed(s, 'ข้อเสนอ', `💼 ${newOff.t} ยื่นซื้อ ${newOff.n} (${newOff.p}k)`, 'offer');
+        }
       }
     }
   } else {
@@ -3078,15 +3531,50 @@ const exportSaveCode = (s: GameState): string => btoa(unescape(encodeURIComponen
 // ============================================================================
 // 5. SVG VISUAL COMPONENTS
 // ============================================================================
+const CREST_SHAPES: { label: string; d: string }[] = [
+  { label: 'โล่คลาสสิก', d: 'M3 2h18v11c0 5-4 8-9 10-5-2-9-5-9-10z' },
+  { label: 'วงกลม', d: 'M12 1.2a10.8 10.8 0 100 21.6 10.8 10.8 0 000-21.6z' },
+  { label: 'หกเหลี่ยม', d: 'M12 1.2l9.2 5v11.3L12 23l-9.2-5.5V6.2z' },
+  { label: 'โล่โค้งยุโรป', d: 'M3.5 3q8.5 2 17 0v9.5c0 5.2-3.7 8.4-8.5 10.5C7.2 20.9 3.5 17.7 3.5 12.5z' },
+  { label: 'เพชร', d: 'M12 1.2L22.2 12 12 22.8 1.8 12z' },
+  { label: 'โล่มงกุฎ', d: 'M4 5.2l4-3.2 4 2.2 4-2.2 4 3.2v8c0 4.8-3.5 7.9-8 9.9-4.5-2-8-5.1-8-9.9z' },
+  { label: 'วงรี', d: 'M12 1.3c5.3 0 8.7 4.8 8.7 10.7S17.3 22.7 12 22.7 3.3 17.9 3.3 12 6.7 1.3 12 1.3z' },
+  { label: 'แปดเหลี่ยม', d: 'M8 1.8h8l5.8 5.8v8.8L16 22.2H8l-5.8-5.8V7.6z' }
+];
+
+const CREST_PATTERNS = [
+  'แถบขวาง', 'ครึ่งตั้ง', 'คาดทแยง', 'สองแถบ', 'ริ้วตั้ง',
+  'ผ่าสี่ส่วน', 'เชฟรอน V', 'กากบาท', 'วงแหวน', 'ไล่เฉด'
+];
+
 const CREST_IC: Record<string, string> = {
   '⚽': '<circle cx="12" cy="12" r="8"/><path d="M12 8l3.2 2.4-1.2 3.8H10l-1.2-3.8zM12 4v4M15.2 10.4L19 9M14 14.2l2.3 3.4M10 14.2l-2.3 3.4M8.8 10.4L5 9"/>',
   '🦅': '<path d="M3 9c4-3 7-2 9 2 2-4 5-5 9-2-2 3-4 4-6 4l-3 6-3-6c-2 0-4-1-6-4zM12 6l1.5 2.5h-3z"/>',
   '🐘': '<path d="M6 17V9a5 5 0 0110 0v3c0 2 1 3 2.5 3 .8 0 1.5-.6 1.5-1.5V12M8 10c-2 0-3 1.5-3 3.5S6 17 8 17M10 17v2M14 17v2M12.5 9.5h.01"/>',
   '🐯': '<path d="M5 8l1.5-3.5L10 6.5h4L17.5 4.5 19 8a7 7 0 01-7 11A7 7 0 015 8zM9 11h.01M15 11h.01M10.5 14h3l-1.5 1.5z"/>',
+  '🦁': '<path d="M12 4l2.5 2 3-.5 1 2.8 2 1.7-1.2 2.5.7 2.5-2.5 1.5-.5 2.5-2.5-.8L12 20l-2.5-1.8-2.5.8-.5-2.5L4 15l.7-2.5L3.5 10l2-1.7 1-2.8 3 .5zM9.5 11.5h.01M14.5 11.5h.01M10.5 14.5h3"/>',
   '🐉': '<path d="M5 17c1-6 4-10 9-11l3-2-1 4 3 1-2 3c2 2 1 6-2 7-3 1-6-1-7-4M8 9l2 1"/>',
+  '🦈': '<path d="M4 14c3-5 8-7 16-6-3 3-4 5-4 8-3-1-5-1-8 1l1-2c-2 0-3.5 0-5-1zM13 8l1.5-4 2.5 3.5"/>',
+  '🐂': '<path d="M5 6c0 3 2 4 4 4h6c2 0 4-1 4-4M7 10l1 6 4 3 4-3 1-6M10 13h.01M14 13h.01"/>',
+  '🦢': '<path d="M6 17c2-2 5-2 8-1 2.5.8 4.5-.5 4.5-3 0-3-3-5-2-8 1-2 3-1 2.5 1M8 14l-3-2"/>',
   '🔥': '<path d="M12 3c1.5 4 5 5 5 10a5 5 0 01-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-.5-5 1-8.5z"/>',
-  '⭐': '<path d="M12 3l2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9z"/>'
+  '⚡': '<path d="M13 2L5 13h6l-1 9 9-12h-6z"/>',
+  '⭐': '<path d="M12 3l2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9z"/>',
+  '👑': '<path d="M3 18h18l-1.5-9-4.5 4-3-6-3 6-4.5-4zM5 20h14"/>',
+  '⚔️': '<path d="M5 19L19 5M14 5h5v5M5 5l14 14M10 5H5v5"/>',
+  '🔱': '<path d="M12 3v18M7 5v5c0 2.8 2.2 4.5 5 4.5s5-1.7 5-4.5V5M10 18h4"/>',
+  '🛡️': '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6zM12 7v10"/>',
+  '🌙': '<path d="M16 4.5A8 8 0 1019.5 16 6.5 6.5 0 0116 4.5z"/>',
+  '🏔️': '<path d="M3 18l6-10 4 6 3-4 5 8zM9 8l2 2"/>'
 };
+
+const KIT_PATTERNS = [
+  'เรียบ', 'ริ้วตั้ง', 'ริ้วขวาง', 'ครึ่งตัว', 'คาดทแยง',
+  'แถบอก', 'เชฟรอน V', 'หมากรุก', 'ผ่าสี่ส่วน', 'กากบาท',
+  'แขนทูโทน', 'ไล่เฉด', 'ลายเส้นตั้ง', 'ลายสายฟ้า'
+];
+
+const KIT_COLLARS = ['คอกลม', 'คอวี', 'คอปก', 'คอทูโทน'];
 
 const ClubCrest: React.FC<{
   name: string;
@@ -3096,19 +3584,19 @@ const ClubCrest: React.FC<{
   isMyClub?: boolean;
 }> = ({ name, size = 24, team, club, isMyClub }) => {
   const uid = React.useId().replace(/:/g, '');
-  const h = ([...(name || 'T')].reduce((a, c) => a + c.charCodeAt(0), 0) * 37) % 360;
+  const h = ([...(name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
   const k = isMyClub && club ? club : null;
   const kp = team?.kc;
-  const c1 = k ? k.c1 : kp ? kp[0] : `hsl(${h} 55% 38%)`;
-  const c2 = k ? k.c2 : kp ? kp[1] : `hsl(${h} 70% 70%)`;
-  const sh = k ? k.shape : 0;
-  const d = [
-    'M3 2h18v11c0 5-4 8-9 10-5-2-9-5-9-10z',
-    'M12 1a11 11 0 100 22 11 11 0 000-22z',
-    'M12 1l9 5v11l-9 6-9-6V6z'
-  ][sh];
-  const pat = k ? k.pat : 0;
-  const ic = k?.icon || '';
+  const c1 = k ? k.c1 : kp ? kp[0] : `hsl(${h % 360} 55% 38%)`;
+  const c2 = k ? k.c2 : kp ? kp[1] : `hsl(${h % 360} 70% 70%)`;
+  const c3 = k?.c3 || '#f4c63d';
+  const sh = (k ? k.shape : h % CREST_SHAPES.length) % CREST_SHAPES.length;
+  const d = CREST_SHAPES[sh]?.d || CREST_SHAPES[0].d;
+  const pat = (k ? k.pat : (h >> 4) % CREST_PATTERNS.length) % CREST_PATTERNS.length;
+  const ic = k?.icon ?? '';
+  const borderStyle = k?.crestBorder ?? 0;
+  const strokeCol = borderStyle === 1 ? '#f4c63d' : borderStyle === 3 ? '#0f172a' : '#ffffff';
+  const stars = clamp(k?.stars || 0, 0, 3);
 
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
@@ -3116,9 +3604,15 @@ const ClubCrest: React.FC<{
         <clipPath id={`cp-${uid}`}>
           <path d={d} />
         </clipPath>
+        {pat === 9 && (
+          <linearGradient id={`cg-${uid}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={c1} />
+            <stop offset="100%" stopColor={c2} />
+          </linearGradient>
+        )}
       </defs>
       <g clipPath={`url(#cp-${uid})`}>
-        <rect width="24" height="24" fill={c1} />
+        <rect width="24" height="24" fill={pat === 9 ? `url(#cg-${uid})` : c1} />
         {pat === 0 && <rect y="7" width="24" height="5" fill={c2} />}
         {pat === 1 && <rect x="12" width="12" height="24" fill={c2} />}
         {pat === 2 && <path d="M0 24L24 0v8L8 24z" fill={c2} />}
@@ -3128,11 +3622,33 @@ const ClubCrest: React.FC<{
             <rect y="11" width="24" height="3" fill={c2} />
           </>
         )}
+        {pat === 4 && [0, 1, 2, 3].map((i) => <rect key={i} x={i * 6 + 1.5} width="2.8" height="24" fill={c2} />)}
+        {pat === 5 && (
+          <>
+            <rect x="12" y="0" width="12" height="12" fill={c2} />
+            <rect x="0" y="12" width="12" height="12" fill={c2} />
+          </>
+        )}
+        {pat === 6 && <path d="M0 6l12 9 12-9v5l-12 9-12-9z" fill={c2} />}
+        {pat === 7 && (
+          <>
+            <rect x="9.5" y="0" width="5" height="24" fill={c2} />
+            <rect x="0" y="9.5" width="24" height="5" fill={c2} />
+          </>
+        )}
+        {pat === 8 && <circle cx="12" cy="12" r="7.5" fill="none" stroke={c2} strokeWidth="2.4" />}
+        {k?.c3 && pat !== 8 && <path d={d} fill="none" stroke={c3} strokeWidth="2.2" opacity="0.6" />}
       </g>
-      <path d={d} fill="none" stroke="#fff" strokeWidth="1.5" />
+      <path d={d} fill="none" stroke={strokeCol} strokeWidth={borderStyle === 2 ? '2' : '1.5'} />
+      {borderStyle === 2 && <path d={d} fill="none" stroke={c3} strokeWidth="0.7" opacity="0.9" />}
+      {stars > 0 &&
+        Array.from({ length: stars }).map((_, idx) => {
+          const sx = 12 + (idx - (stars - 1) / 2) * 4.5;
+          return <circle key={idx} cx={sx} cy="2.6" r="1.25" fill="#facc15" stroke="#1e293b" strokeWidth="0.35" />;
+        })}
       {ic && CREST_IC[ic] ? (
         <g
-          transform="translate(5.4 5.4) scale(.55)"
+          transform={`translate(5.4 ${stars > 0 ? 6.2 : 5.4}) scale(.55)`}
           fill="none"
           stroke="#fff"
           strokeWidth="2.4"
@@ -3143,7 +3659,7 @@ const ClubCrest: React.FC<{
       ) : (
         <text
           x="12"
-          y="16.5"
+          y={stars > 0 ? '17.2' : '16.5'}
           fontSize="10"
           fontWeight="700"
           fill="#fff"
@@ -3159,45 +3675,146 @@ const ClubCrest: React.FC<{
   );
 };
 
-const KitJersey: React.FC<{ club: ClubIdentity; away?: boolean; size?: number }> = ({
+const KitJersey: React.FC<{ club: ClubIdentity; away?: boolean; size?: number; team?: Team | null; hideNumber?: boolean }> = ({
   club,
   away = false,
-  size = 84
+  size = 84,
+  team = null,
+  hideNumber = false
 }) => {
   const uid = React.useId().replace(/:/g, '');
   const c = away ? club.c2 : club.c1;
   const d = away ? club.c1 : club.c2;
-  const p = club.kit;
+  const accent = club.c3 || (colDist(d, '#ffffff') < 100 ? '#f4c63d' : '#ffffff');
+  const p = ((away && club.awayKit != null ? club.awayKit : club.kit) || 0) % KIT_PATTERNS.length;
+  const collar = (club.collar ?? 0) % 4;
+  const cuffTrim = club.cuffTrim ?? true;
   const J = 'M30 10l-22 14 8 18 10-5v48h48V37l10 5 8-18-22-14c-4 8-10 10-20 10s-16-2-20-10z';
+  const numLightBg = colDist(c, '#ffffff') < 130 && [0, 5, 6, 10, 12, 13].includes(p);
+  const numFill = numLightBg ? '#111827' : p === 4 || p === 5 || p === 8 || p === 9 || p === 11 ? '#ffffff' : d;
+
   return (
     <svg width={size} viewBox="0 0 100 100" aria-hidden="true">
       <defs>
         <clipPath id={`kc-${uid}`}>
           <path d={J} />
         </clipPath>
+        {p === 11 && (
+          <linearGradient id={`kg-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={c} />
+            <stop offset="100%" stopColor={d} />
+          </linearGradient>
+        )}
       </defs>
       <g clipPath={`url(#kc-${uid})`}>
-        <rect width="100" height="100" fill={c} />
+        <rect width="100" height="100" fill={p === 11 ? `url(#kg-${uid})` : c} />
         {p === 1 && [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} x={i * 14} width="7" height="100" fill={d} />)}
         {p === 2 && [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} y={i * 16} width="100" height="8" fill={d} />)}
         {p === 3 && <rect x="50" width="50" height="100" fill={d} />}
-        {p === 4 && <path d="M10 100L72 0h20L30 100z" fill={d} />}
-        {p === 5 && <rect y="38" width="100" height="16" fill={d} />}
+        {p === 4 && (
+          <>
+            <path d="M8 100L70 0h22L30 100z" fill={d} />
+            <path d="M5 100L67 0h3L8 100z" fill={accent} opacity="0.85" />
+          </>
+        )}
+        {p === 5 && (
+          <>
+            <rect y="36" width="100" height="18" fill={d} />
+            <rect y="34" width="100" height="2" fill={accent} />
+            <rect y="54" width="100" height="2" fill={accent} />
+          </>
+        )}
+        {p === 6 && (
+          <>
+            <path d="M18 22l32 22 32-22v14L50 58 18 36z" fill={d} />
+            <path d="M18 36l32 22 32-22v4L50 62 18 40z" fill={accent} />
+          </>
+        )}
+        {p === 7 &&
+          [0, 1, 2, 3, 4, 5].flatMap((row) =>
+            [0, 1, 2, 3, 4, 5].map((col) =>
+              (row + col) % 2 === 0 ? (
+                <rect key={`${row}-${col}`} x={col * 17} y={row * 17} width="17" height="17" fill={d} />
+              ) : null
+            )
+          )}
+        {p === 8 && (
+          <>
+            <rect x="50" y="0" width="50" height="46" fill={d} />
+            <rect x="0" y="46" width="50" height="54" fill={d} />
+          </>
+        )}
+        {p === 9 && (
+          <>
+            <rect x="42" y="0" width="16" height="100" fill={d} />
+            <rect x="0" y="38" width="100" height="15" fill={d} />
+          </>
+        )}
+        {p === 10 && (
+          <>
+            <rect x="0" y="0" width="27" height="50" fill={d} />
+            <rect x="73" y="0" width="27" height="50" fill={d} />
+            <rect x="25" y="10" width="2.5" height="35" fill={accent} />
+            <rect x="72.5" y="10" width="2.5" height="35" fill={accent} />
+          </>
+        )}
+        {p === 12 && [0, 1, 2, 3, 4, 5, 6, 7].map((i) => <rect key={i} x={i * 12 + 4} width="2.2" height="100" fill={d} opacity="0.9" />)}
+        {p === 13 && (
+          <>
+            <path d="M0 32l24-12 20 14 22-14 34 16v13L66 33 44 47 24 33 0 45z" fill={d} opacity="0.92" />
+            <path d="M0 54l24-12 20 14 22-14 34 16v7L66 49 44 63 24 49 0 61z" fill={accent} opacity="0.8" />
+          </>
+        )}
+
+        {/* Cuff & Hem Trim */}
+        {cuffTrim && (
+          <>
+            <path d="M8 24l10 18 4-2-10-18z" fill={accent} opacity="0.92" />
+            <path d="M92 24L82 42l-4-2 10-18z" fill={accent} opacity="0.92" />
+            <rect x="24" y="81" width="52" height="5" fill={d} opacity="0.85" />
+          </>
+        )}
+
+        {/* Collar Styles */}
+        {collar === 0 && <path d="M30 10c4 9 10 11 20 11s16-2 20-11" fill="none" stroke={accent} strokeWidth="4" strokeLinecap="round" />}
+        {collar === 1 && <path d="M30 10l20 17 20-17" fill="none" stroke={accent} strokeWidth="4" strokeLinejoin="round" />}
+        {collar === 2 && (
+          <>
+            <path d="M30 10l12 12 8-4 8 4 12-12z" fill={d} stroke={accent} strokeWidth="1.5" />
+            <line x1="50" y1="18" x2="50" y2="29" stroke={accent} strokeWidth="2.5" strokeLinecap="round" />
+          </>
+        )}
+        {collar === 3 && (
+          <>
+            <path d="M30 10c4 9 10 11 20 11s16-2 20-11" fill="none" stroke={d} strokeWidth="5.5" />
+            <path d="M32 11c4 7 9 9 18 9s14-2 18-9" fill="none" stroke={accent} strokeWidth="2" />
+          </>
+        )}
       </g>
+
       <path d={J} fill="none" stroke="#0e2b1f" strokeWidth="2" />
-      <text
-        x="50"
-        y="68"
-        textAnchor="middle"
-        fontSize="24"
-        fontWeight="700"
-        fontFamily="Sarabun"
-        fill={p === 4 || p === 5 ? '#fff' : d}
-        stroke="#0007"
-        strokeWidth="1"
-      >
-        10
-      </text>
+
+      {/* Mini Club Crest on Left Chest */}
+      <g transform="translate(57, 27)">
+        <circle cx="5.5" cy="5.5" r="5" fill={club.c1} stroke="#ffffff" strokeWidth="1" />
+        <circle cx="5.5" cy="5.5" r="2.2" fill={club.c2} />
+      </g>
+
+      {!hideNumber && (
+        <text
+          x="50"
+          y="71"
+          textAnchor="middle"
+          fontSize="23"
+          fontWeight="800"
+          fontFamily="Sarabun"
+          fill={numFill}
+          stroke="#0008"
+          strokeWidth="1.1"
+        >
+          {team ? '10' : '10'}
+        </text>
+      )}
     </svg>
   );
 };
@@ -5105,6 +5722,90 @@ const CustomFormationModal: React.FC<{
   );
 };
 
+const PitchPlayerModal: React.FC<{
+  state: GameState;
+  player: Player;
+  onClose: () => void;
+  onConfirm: (askPct: number) => void;
+}> = ({ state, player, onClose, onConfirm }) => {
+  const me = state.teams[state.me];
+  const baseVal = Math.max(5, vlu(player));
+  const [askPct, setAskPct] = useState<85 | 100 | 118>(100);
+  const askAmt = Math.max(5, Math.round((baseVal * askPct) / 100));
+  const options: { pct: 85 | 100 | 118; title: string; hint: string }[] = [
+    { pct: 85, title: 'ขายด่วน (85%)', hint: 'โอกาสมีสโมสรยื่นข้อเสนอสูง รีบปล่อยตัว' },
+    { pct: 100, title: 'ราคาตลาด (100%)', hint: 'สมดุลระหว่างค่าตัวกับความสนใจของสโมสรอื่น' },
+    { pct: 118, title: 'ตั้งราคาสูง (118%)', hint: 'ได้ราคาดีหากมีทีมต้องการ แต่บางทีมอาจไม่ยื่น' }
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 overflow-hidden">
+      <div className="w-full max-w-md rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl">
+        <div className="flex items-center gap-3 p-3.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
+          <PlayerFace player={player} team={me} state={state} size={44} />
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm truncate">
+              เสนอขาย {player.n} <span className="text-xs text-[var(--g)]">({player.ro})</span>
+            </div>
+            <div className="text-[11px] text-[var(--mut)]">
+              อายุ {player.age} ปี · ประเมินตลาด {baseVal}k ฿ · ค่าเหนื่อย {ensureCon(player).wg}k/นัด
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-xl text-white font-bold text-sm tabular shrink-0" style={{ background: ovColor(player.ov) }}>
+            {player.ov}
+          </span>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-[var(--mut)] leading-relaxed">
+            ระบบจะขึ้นบัญชีขาย <b>{player.n}</b> ในตลาดและส่งโปรไฟล์ให้สโมสรในระดับใกล้เคียงพิจารณา สโมสรที่สนใจจะยื่นข้อเสนอเข้ามาให้คุณกดตอบรับหรือโก่งราคา
+          </p>
+
+          <div className="space-y-2">
+            {options.map((opt) => {
+              const price = Math.max(5, Math.round((baseVal * opt.pct) / 100));
+              const active = askPct === opt.pct;
+              return (
+                <button
+                  key={opt.pct}
+                  type="button"
+                  onClick={() => setAskPct(opt.pct)}
+                  className={`w-full text-left p-2.5 rounded-xl border transition-colors cursor-pointer flex items-center justify-between gap-2 ${
+                    active ? 'border-[var(--g)] bg-[var(--g-soft)]' : 'border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--mut)]'
+                  }`}
+                >
+                  <div>
+                    <div className="font-bold text-xs">{opt.title}</div>
+                    <div className="text-[11px] text-[var(--mut)]">{opt.hint}</div>
+                  </div>
+                  <div className="font-bold text-sm tabular shrink-0 text-[var(--g)]">{price}k ฿</div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+            >
+              ยกเลิก
+            </button>
+            <button
+              type="button"
+              onClick={() => onConfirm(askPct)}
+              className="flex-1 py-2 rounded-xl bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
+            >
+              📨 เสนอขายในราคา ~{askAmt}k ฿
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SquadTacticsView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
@@ -5116,6 +5817,9 @@ const SquadTacticsView: React.FC<{
   const sub = state.sub ?? 0;
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
+  const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
+  const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
+  const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
 
   const starters = xi(me);
   const slots = getFormationSlots(me);
@@ -5776,69 +6480,317 @@ const SquadTacticsView: React.FC<{
           )}
         </div>
       ) : (
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-xs text-[var(--mut)]">นักเตะทั้งหมด</div><div className="font-bold text-lg tabular">{me.sq.length}/28</div></div>
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-xs text-[var(--mut)]">มูลค่าทีมรวม</div><div className="font-bold text-lg tabular">{me.sq.reduce((a, q) => a + vlu(q), 0)}k ฿</div></div>
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-xs text-[var(--mut)]">พลังเฉลี่ย</div><div className="font-bold text-lg tabular">{Math.round(me.sq.reduce((a, q) => a + q.ov, 0) / me.sq.length)}</div></div>
-          </div>
-          {POS.map((pos) => {
-            const group = me.sq.filter((q) => q.pos === pos).sort((a, b) => b.ov - a.ov);
-            if (!group.length) return null;
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+          {(() => {
+            const tx = getLeagueTransferContext(state, me);
+            const posCounts: Record<Position, number> = {
+              GK: me.sq.filter((q) => q.pos === 'GK').length,
+              DF: me.sq.filter((q) => q.pos === 'DF').length,
+              MF: me.sq.filter((q) => q.pos === 'MF').length,
+              FW: me.sq.filter((q) => q.pos === 'FW').length
+            };
+            const listRows = me.sq
+              .filter((q) => squadPosFilter === 'ALL' || q.pos === squadPosFilter)
+              .slice()
+              .sort((a, b) => {
+                if (squadSort === 'ov') return b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
+                if (squadSort === 'fit') return (b.fit ?? 100) - (a.fit ?? 100) || b.ov - a.ov;
+                if (squadSort === 'age') return a.age - b.age || b.ov - a.ov;
+                if (squadSort === 'val') return vlu(b) - vlu(a) || b.ov - a.ov;
+                if (squadSort === 'goals') return (b.sg || 0) - (a.sg || 0) || (b.sa || 0) - (a.sa || 0) || b.ov - a.ov;
+                return POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
+              });
+
             return (
-              <div key={pos}>
-                <div className="text-xs font-bold text-[var(--g)] border-b border-[var(--line)] pb-1 mb-2">{GN[pos]} ({group.length})</div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {group.map((q) => {
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+                  <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] text-[var(--mut)]">ขนาดทีม (18–28)</div><div className="font-bold text-base sm:text-lg tabular">{me.sq.length}/28</div></div>
+                  <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] text-[var(--mut)]">ค่าเหนื่อย/เพดาน</div><div className={`font-bold text-base sm:text-lg tabular ${tx.wagePct > 95 ? 'text-[var(--red)]' : ''}`}>{tx.curWage}/{tx.wageCap}k</div></div>
+                  <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] text-[var(--mut)]">โควตายืมตัว</div><div className="font-bold text-base sm:text-lg tabular">{tx.loansCount}/{tx.maxLoans}</div></div>
+                  <div className="p-2.5 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] text-[var(--mut)]">ตลาดซื้อขาย</div><div className={`font-bold text-xs mt-1 ${tx.tw.open ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>{tx.tw.shortLabel}</div></div>
+                </div>
+
+                {/* List Filter & Sort Bar */}
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-[var(--line)]">
+                  <div className="flex flex-wrap gap-1">
+                    {([
+                      ['ALL', `ทั้งหมด (${me.sq.length})`],
+                      ['GK', `GK (${posCounts.GK})`],
+                      ['DF', `DF (${posCounts.DF})`],
+                      ['MF', `MF (${posCounts.MF})`],
+                      ['FW', `FW (${posCounts.FW})`]
+                    ] as const).map(([k, lbl]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setSquadPosFilter(k)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${squadPosFilter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                    <span className="text-[var(--mut)] font-semibold mr-1">เรียงตาม:</span>
+                    {([
+                      ['pos', 'ตำแหน่ง'],
+                      ['ov', 'OVR'],
+                      ['fit', 'ความฟิต'],
+                      ['age', 'อายุ'],
+                      ['val', 'มูลค่า'],
+                      ['goals', 'ฟอร์ม/ประตู']
+                    ] as const).map(([sKey, sLbl]) => (
+                      <button
+                        key={sKey}
+                        type="button"
+                        onClick={() => setSquadSort(sKey)}
+                        className={`px-2 py-1 rounded-lg font-semibold cursor-pointer ${squadSort === sKey ? 'bg-[var(--ink)] text-[var(--bg)]' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                      >
+                        {sLbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Incoming Club Bids Alert */}
+                {isMgr && (() => {
+                  const incomingOffers = getIncomingOffers(state);
+                  if (!incomingOffers.length) return null;
+                  return (
+                    <div className="p-3 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold text-xs">💼 ข้อเสนอซื้อนักเตะจากสโมสรอื่น ({incomingOffers.length})</div>
+                        <button
+                          type="button"
+                          onClick={() => onUpdateState((d) => { d.v = 'k'; })}
+                          className="text-[11px] font-bold text-[#9a6300] dark:text-[var(--lamp)] underline cursor-pointer"
+                        >
+                          ไปที่หน้าตลาด →
+                        </button>
+                      </div>
+                      <div className="space-y-1.5">
+                        {incomingOffers.map((off) => {
+                          const targetQ = me.sq.find((z) => z.n === off.n);
+                          if (!targetQ) return null;
+                          return (
+                            <div key={`${off.n}__${off.t}`} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[var(--surface)] border border-[var(--line)]">
+                              <div className="text-xs min-w-0">
+                                <b>{off.t}</b> ยื่นซื้อ <b>{off.n}</b> ({targetQ.ro} · {targetQ.ov}) ราคา <b className="text-[var(--g)] tabular">{off.p}k ฿</b>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const res = canAcceptTransferOffer(state, off);
+                                    if (!res.ok) { onToast(res.err || 'ขายไม่สำเร็จ'); return; }
+                                    onUpdateState((d) => { acceptTransferOffer(d, off); });
+                                    SFX.win();
+                                    onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${off.p}k ฿`);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-[var(--g)] text-white text-[11px] font-bold cursor-pointer"
+                                >
+                                  ✅ ตอบรับขาย
+                                </button>
+                                {!off.cnt && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const out = resolveCounterOfferOutcome(state, off);
+                                      onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
+                                      onToast(
+                                        out.accepted
+                                          ? `${off.t} ยอมเพิ่มราคาเป็น ${out.newPrice}k ฿!`
+                                          : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
+                                      );
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
+                                  >
+                                    💰 โก่ง +15%
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
+                                    onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
+                                  }}
+                                  className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Squad List Header (Desktop) */}
+                <div className="hidden md:grid grid-cols-[44px_1.7fr_90px_54px_86px_88px_100px_115px_auto] items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 rounded-xl">
+                  <div className="text-center">#</div>
+                  <div>นักเตะ</div>
+                  <div>ตำแหน่ง</div>
+                  <div className="text-center">อายุ</div>
+                  <div className="text-center">OVR / ศักย</div>
+                  <div className="text-center">ฟิต</div>
+                  <div className="text-center">ผลงาน</div>
+                  <div className="text-right">ค่าเหนื่อย / ค่าตัว</div>
+                  {isMgr && <div className="text-right min-w-[152px]">จัดการขาย</div>}
+                </div>
+
+                {/* Squad List Rows */}
+                <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-hidden bg-[var(--surface)]">
+                  {listRows.map((q) => {
                     const f = Math.round(q.fit ?? 100);
                     const isStarter = starters.includes(q);
                     const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
                     const no = getShirtNo(me, q);
+                    const chk = getPlayerSellCheck(state, me, q);
+                    const offerCount = getIncomingOffers(state).filter((o) => o.n === q.n).length;
+                    const wg = ensureCon(q).wg;
+                    const fitBarCol = f >= 75 ? 'var(--g)' : f >= 50 ? 'var(--lamp)' : 'var(--red)';
+
                     return (
-                      <div key={q.n} className={`flex items-center gap-2.5 p-2.5 rounded-xl border ${isMe ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] ring-1 ring-[var(--lamp)]/45' : 'bg-[var(--surface-2)]/60 border-[var(--line)]'}`}>
-                        <PlayerFace player={q} team={me} state={state} size={36} />
-                        <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                          <div className="font-bold text-xs truncate">
-                            {isMe && <span className="inline-block px-1.5 mr-1 rounded bg-[var(--lamp)] text-[#261900] text-[9px] font-extrabold">ฉัน</span>}
-                            <span className="text-[var(--mut)] tabular mr-1">#{no}</span>
-                            {isStarter && '⭐ '}
-                            {me.cap === q.n && <span className="text-[var(--lamp)]">[C] </span>}
-                            {q.n}
-                          </div>
-                          <div className="text-[11px] text-[var(--mut)] truncate">
-                            {q.ro} · {q.age} ปี · ฟิต {f}%{(q.sus || 0) > 0 ? ` · 🟥แบน ${q.sus}` : (q.yc || 0) > 0 ? ` · 🟨${q.yc}/3` : ''} · 💰{vlu(q)}k{q.sg ? ` · ⚽${q.sg}` : ''}{q.sa ? ` · 🎯${q.sa}` : ''}
-                          </div>
-                        </button>
-                        <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                        {isMgr && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (q.loan) { onToast('นักเตะยืมตัวขายไม่ได้'); return; }
-                              if (me.sq.filter((x) => x.pos === q.pos).length <= (q.pos === 'GK' ? 1 : 3)) { onToast('ต้องเหลือนักเตะตำแหน่งนี้ให้พอ'); return; }
-                              const sp = Math.round((q.ov * q.ov) / 60);
-                              onUpdateState((d) => {
-                                const t = d.teams[d.me];
-                                const idx = t.sq.findIndex((z) => z.n === q.n);
-                                if (idx >= 0) t.sq.splice(idx, 1);
-                                t.lu = null;
-                                d.money += sp;
-                                logFin(d, `ขาย ${q.n}`, sp);
-                              });
-                              onToast(`ขาย ${q.n} ได้รับ +${sp}k ฿`);
-                            }}
-                            className="px-2.5 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold text-[var(--red)] hover:border-[var(--red)] cursor-pointer"
-                          >
-                            ขาย {Math.round((q.ov * q.ov) / 60)}k
+                      <div
+                        key={q.n}
+                        className={`px-3 py-2 flex flex-col md:grid md:grid-cols-[44px_1.7fr_90px_54px_86px_88px_100px_115px_auto] md:items-center gap-2 transition-colors hover:bg-[var(--surface-2)]/45 ${
+                          isMe ? 'bg-[var(--lamp-soft)]/50' : q.listed ? 'bg-[var(--lamp-soft)]/25' : ''
+                        }`}
+                      >
+                        {/* Mobile Top Row / Desktop First Columns */}
+                        <div className="hidden md:flex items-center justify-center text-xs font-bold text-[var(--mut)] tabular">
+                          #{no}
+                        </div>
+
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="md:hidden text-xs font-bold text-[var(--mut)] tabular w-7 shrink-0">#{no}</span>
+                          <PlayerFace player={q} team={me} state={state} size={32} />
+                          <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                            <div className="font-bold text-xs truncate flex items-center gap-1">
+                              {isMe && <span className="px-1.5 rounded bg-[var(--lamp)] text-[#261900] text-[9px] font-extrabold shrink-0">ฉัน</span>}
+                              {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
+                              {me.cap === q.n && <span className="text-[var(--lamp)] shrink-0">[C]</span>}
+                              <span className="truncate">{q.n}</span>
+                              {q.loan ? <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
+                              {q.listed ? <span className="text-[10px] text-[#b45309] dark:text-[var(--lamp)] font-bold shrink-0">[ในตลาด {q.askPrice || vlu(q)}k]</span> : null}
+                              {offerCount > 0 ? <span className="px-1.5 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} ข้อเสนอ</span> : null}
+                            </div>
+                            <div className="text-[10px] text-[var(--mut)] truncate">
+                              {(q.sus || 0) > 0
+                                ? `🟥 ติดโทษแบน ${q.sus} นัด`
+                                : q.inj > 0
+                                  ? `🩹 บาดเจ็บ ${q.inj} นัด`
+                                  : (q.yc || 0) > 0
+                                    ? `🟨 ใบเหลือง ${q.yc}/3`
+                                    : isStarter
+                                      ? '11 ตัวจริง'
+                                      : 'ตัวสำรอง'}
+                            </div>
                           </button>
-                        )}
+                          <span className="md:hidden px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                            {q.ov}
+                          </span>
+                        </div>
+
+                        {/* Mobile compact info row / Desktop structured columns */}
+                        <div className="flex md:contents flex-wrap items-center justify-between gap-2 text-xs pl-9 md:pl-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[11px]">{q.ro}</span>
+                            <span className="text-[10px] text-[var(--mut)] hidden lg:inline truncate">{SPN[q.ro] || q.pos}</span>
+                          </div>
+
+                          <div className="text-center text-xs tabular font-semibold">
+                            <span className="md:hidden text-[var(--mut)]">อายุ </span>
+                            {q.age}
+                          </div>
+
+                          <div className="hidden md:flex items-center justify-center gap-1">
+                            <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>
+                              {q.ov}
+                            </span>
+                            <span className="text-[10px] text-[var(--mut)] tabular">/{q.pot || q.ov}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 min-w-[74px]">
+                            <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
+                            </div>
+                            <span className="text-[11px] font-bold tabular w-7 text-right">{f}%</span>
+                          </div>
+
+                          <div className="text-center text-[11px] tabular text-[var(--mut)]">
+                            {q.sg || q.sa || q.ap ? (
+                              <span>
+                                {q.ap ? `${q.ap}น` : ''}{q.sg ? ` ⚽${q.sg}` : ''}{q.sa ? ` 🎯${q.sa}` : ''}
+                              </span>
+                            ) : (
+                              <span>—</span>
+                            )}
+                          </div>
+
+                          <div className="text-right text-[11px] tabular">
+                            <span className="font-bold text-[var(--ink)]">{wg}k</span>
+                            <span className="text-[var(--mut)]"> · {vlu(q)}k</span>
+                          </div>
+
+                          {isMgr && (
+                            <div className="flex items-center justify-end gap-1 shrink-0 min-w-[152px]">
+                              {!q.loan && (
+                                <button
+                                  type="button"
+                                  title={q.listed ? 'ถอดออกจากบัญชีขาย' : 'ขึ้นบัญชีขายในตลาด (รอทีมอื่นยื่นซื้อ)'}
+                                  onClick={() => {
+                                    SFX.tap();
+                                    onUpdateState((d) => {
+                                      const target = d.teams[d.me].sq.find((z) => z.n === q.n);
+                                      if (!target) return;
+                                      if (target.listed) {
+                                        target.listed = 0;
+                                        delete target.askPrice;
+                                      } else {
+                                        target.listed = 1;
+                                        target.askPrice = Math.max(5, vlu(target));
+                                      }
+                                    });
+                                    onToast(q.listed ? `ถอด ${q.n} ออกจากบัญชีขายแล้ว` : `ขึ้นบัญชีขาย ${q.n} แล้ว ทีมอื่นสามารถยื่นข้อเสนอได้`);
+                                  }}
+                                  className={`px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${q.listed ? 'bg-[var(--lamp)] text-[#261900] border-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                                >
+                                  {q.listed ? '🏷️ ในตลาด' : '🏷️ ขึ้นตลาด'}
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้สโมสรอื่นยื่นราคา' : chk.reason}
+                                onClick={() => {
+                                  if (!chk.canPitch) { onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้'); return; }
+                                  if (chk.pitchedThisTurn) { onToast('เสนอขายนักเตะคนนี้ไปแล้วในนัดนี้ รอหลังจบแมตช์หน้าหรือรอข้อเสนอจากทีมอื่น'); return; }
+                                  SFX.tap();
+                                  setPitchTargetName(q.n);
+                                }}
+                                className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${
+                                  chk.canPitch && !chk.pitchedThisTurn
+                                    ? 'bg-[var(--surface)] border-[var(--g)] text-[var(--g)] hover:bg-[var(--g-soft)]'
+                                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] opacity-65'
+                                }`}
+                              >
+                                {!tx.tw.open ? '🔒' : chk.pitchedThisTurn ? '⏳ เสนอแล้ว' : '📨 เสนอขาย'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
+                  {!listRows.length && (
+                    <div className="p-6 text-center text-xs text-[var(--mut)]">ไม่มีนักเตะในตำแหน่งนี้</div>
+                  )}
                 </div>
-              </div>
+              </>
             );
-          })}
+          })()}
         </div>
       )}
 
@@ -5859,6 +6811,33 @@ const SquadTacticsView: React.FC<{
           }}
         />
       )}
+
+      {isMgr && pitchTargetName && (() => {
+        const pitchPlayer = me.sq.find((z) => z.n === pitchTargetName);
+        if (!pitchPlayer) return null;
+        return (
+          <PitchPlayerModal
+            state={state}
+            player={pitchPlayer}
+            onClose={() => setPitchTargetName(null)}
+            onConfirm={(askPct) => {
+              const result = resolvePitchPlayerOutcome(state, pitchPlayer.n, askPct);
+              setPitchTargetName(null);
+              if (!result.ok) {
+                onToast(result.err || 'เสนอขายไม่สำเร็จ');
+                return;
+              }
+              onUpdateState((d) => applyPitchPlayerOutcome(d, pitchPlayer.n, result));
+              if (result.offers.length > 0) {
+                SFX.win();
+                onToast(`มี ${result.offers.length} สโมสรยื่นข้อเสนอซื้อ ${pitchPlayer.n} แล้ว! ดูด้านบนหรือแท็บตลาด`);
+              } else {
+                onToast(`ขึ้นบัญชีขาย ${pitchPlayer.n} แล้ว แต่รอบนี้ยังไม่มีทีมยื่นซื้อเข้ามาทันที`);
+              }
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };
@@ -5868,8 +6847,10 @@ const SquadTacticsView: React.FC<{
 // 9. MARKET VIEW
 // ============================================================================
 interface OfferDraft {
-  source: 'mk' | 'scout';
+  source: 'mk' | 'scout' | 'club';
   idx: number;
+  clubTeamId?: number;
+  playerName?: string;
   type: 'free' | 'cash' | 'inst' | 'swap' | 'loan' | 'loanopt';
   pct: number;
   yr: number;
@@ -5935,15 +6916,52 @@ const MarketView: React.FC<{
   onToast: (msg: string) => void;
 }> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
   const me = state.teams[state.me];
+  const tx = getLeagueTransferContext(state, me);
+  const [marketSource, setMarketSource] = useState<'mk' | 'club'>('mk');
   const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
+  const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
+  const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
+  const [scoutRole, setScoutRole] = useState<SubRole | ''>('');
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
+  const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
+  const [quickListName, setQuickListName] = useState('');
   const [renewIdx, setRenewIdx] = useState<number | null>(null);
   const [renewYr, setRenewYr] = useState(3);
   const [renewRole, setRenewRole] = useState<'key' | 'rot' | 'pro'>('rot');
   const [renewWb, setRenewWb] = useState<0 | 1 | 2>(1);
   const [renewMsg, setRenewMsg] = useState('');
 
-  const marketList = (state.mk || []).map((q, i) => ({ q, i })).filter(({ q }) => filter === 'ALL' || (filter === 'FREE' ? !!q.free : q.pos === filter));
+  const availableSubRoles: SubRole[] = useMemo(() => {
+    if (filter === 'GK' || filter === 'DF' || filter === 'MF' || filter === 'FW') return SPX[filter];
+    return ALL_SUB_ROLES;
+  }, [filter]);
+
+  const marketList = useMemo(() => {
+    return (state.mk || [])
+      .map((q, i) => ({ q, i }))
+      .filter(({ q }) => {
+        const lineOk = filter === 'ALL' || (filter === 'FREE' ? !!q.free : q.pos === filter);
+        const subOk = subFilter === 'ALL' || q.ro === subFilter;
+        return lineOk && subOk;
+      });
+  }, [state.mk, filter, subFilter]);
+
+  const clubMarketList = useMemo(() => {
+    const items: { q: Player; team: Team; idx: number; price: number }[] = [];
+    state.teams.forEach((t) => {
+      if (t.id === state.me) return;
+      if (clubTierFilter === 'MY_TIER' && Math.abs(t.tier - me.tier) > 1) return;
+      t.sq.forEach((q, idx) => {
+        if (q.me || q.loan) return;
+        const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
+        const subOk = subFilter === 'ALL' || q.ro === subFilter;
+        if (!lineOk || !subOk) return;
+        items.push({ q, team: t, idx, price: Math.max(8, vlu(q)) });
+      });
+    });
+    return items.sort((a, b) => b.q.ov - a.q.ov).slice(0, 48);
+  }, [state.teams, state.me, me.tier, clubTierFilter, filter, subFilter]);
+
   const loanPlayers = me.sq.map((q, i) => ({ q, i })).filter(({ q }) => q.loan && q.loanOpt);
   const contractList = me.sq
     .map((q, i) => ({ q, i, c: ensureCon(q) }))
@@ -5951,62 +6969,160 @@ const MarketView: React.FC<{
     .sort((a, b) => a.c.yr - b.c.yr || b.q.ov - a.q.ov)
     .slice(0, 6);
 
-  const openNegotiation = (source: 'mk' | 'scout', idx: number, q: Player) => {
+  const getDraftTarget = (draft: OfferDraft, s: GameState): { q: Player | undefined; sellerTeam?: Team } => {
+    if (draft.source === 'club' && draft.clubTeamId != null) {
+      const seller = s.teams.find((t) => t.id === draft.clubTeamId);
+      if (!seller) return { q: undefined };
+      const q = seller.sq[draft.idx] || seller.sq.find((p) => p.n === draft.playerName);
+      return { q, sellerTeam: seller };
+    }
+    const list = draft.source === 'mk' ? s.mk : s.scout?.results || [];
+    const q = list[draft.idx] || list.find((p) => p.n === draft.playerName);
+    return { q };
+  };
+
+  const openNegotiation = (source: 'mk' | 'scout' | 'club', idx: number, q: Player, sellerTeam?: Team) => {
+    if (!tx.tw.open && !q.free) {
+      onToast(`ตลาดซื้อขายปิดอยู่! ช่วงนี้เซ็นได้เฉพาะฟรีเอเยนต์ (เปิดรอบหน้า: ${tx.tw.rangeText})`);
+      return;
+    }
+    if (source === 'club' && sellerTeam) {
+      if (sellerTeam.sq.length <= 16) {
+        onToast(`${sellerTeam.name} มีนักเตะเหลือขั้นต่ำ (${sellerTeam.sq.length} คน) ไม่ปล่อยขาย`);
+        return;
+      }
+      if (q.pos === 'GK' && sellerTeam.sq.filter((z) => z.pos === 'GK').length <= 2) {
+        onToast(`${sellerTeam.name} เหลือผู้รักษาประตูเพียง 2 คน ไม่ปล่อยขาย`);
+        return;
+      }
+    }
     SFX.tap();
     const swCands = me.sq
       .map((z, i) => ({ z, i }))
-      .filter(({ z }) => !z.loan && !z.me && me.sq.filter((u) => u.pos === z.pos).length > (z.pos === 'GK' ? 1 : 3))
+      .filter(({ z }) => !z.loan && !z.me && z.inj === 0 && tx.posCounts[z.pos] > tx.minPos[z.pos])
       .sort((a, b) => vlu(b.z) - vlu(a.z));
 
+    const targetWithPrice: Player = source === 'club' && !q.price ? { ...q, price: Math.max(8, vlu(q)) } : q;
     setOfferDraft({
-      source, idx, type: q.free ? 'free' : 'cash', pct: 100, yr: 3,
-      role: q.ov >= 70 ? 'key' : q.age <= 20 ? 'pro' : 'rot', wb: 1,
-      swapIdx: swCands[0] ? swCands[0].i : null, msg: '', counter: null
+      source,
+      idx,
+      clubTeamId: sellerTeam?.id,
+      playerName: q.n,
+      type: targetWithPrice.free ? 'free' : 'cash',
+      pct: 100,
+      yr: 3,
+      role: targetWithPrice.ov >= 70 ? 'key' : targetWithPrice.age <= 20 ? 'pro' : 'rot',
+      wb: 1,
+      swapIdx: swCands[0] ? swCands[0].i : null,
+      msg: '',
+      counter: null
     });
   };
 
   const submitOffer = (useCounter = false) => {
     if (!offerDraft) return;
-    const list = offerDraft.source === 'mk' ? state.mk : state.scout?.results || [];
-    const q = list[offerDraft.idx];
-    if (!q) return;
+    const { q: rawQ, sellerTeam } = getDraftTarget(offerDraft, state);
+    if (!rawQ) return;
+    const q: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, vlu(rawQ)) } : rawQ;
     const deal = useCounter && offerDraft.counter ? offerDraft.counter : evalOffer(q, offerDraft, me);
+    if (!tx.tw.open && !q.free) { onToast('ตลาดซื้อขายปิดอยู่ ไม่สามารถย้ายสังกัดสโมสรอื่นได้'); return; }
+    if (offerDraft.source === 'club' && sellerTeam && deal.type !== 'swap' && sellerTeam.sq.length <= 16) {
+      onToast(`${sellerTeam.name} มีขนาดทีมถึงขั้นต่ำแล้ว (ใช้การแลกตัวแทนได้)`);
+      return;
+    }
+    if ((deal.type === 'loan' || deal.type === 'loanopt') && tx.loansCount >= tx.maxLoans) {
+      onToast(`ครบโควตายืมตัวสูงสุด ${tx.maxLoans} คนแล้ว`);
+      return;
+    }
+    if (tx.ffpLocked && deal.cashNow > 0) { onToast('งบติดลบตามกฎ FFP ห้ามจ่ายค่าตัวจนกว่างบจะกลับมาเป็นบวก'); return; }
     if (state.money < deal.cashNow) { onToast('งบสโมสรไม่พอจ่ายทันที'); return; }
-    if (me.sq.length >= 28 && deal.type !== 'swap') { onToast('ทีมเต็ม 28 คนแล้ว'); return; }
+    if (me.sq.length >= tx.maxSquad && deal.type !== 'swap') { onToast(`ทีมเต็ม ${tx.maxSquad} คนแล้ว`); return; }
+    const freedWage = deal.type === 'swap' && deal.swapQ ? ensureCon(deal.swapQ).wg : 0;
+    if (tx.curWage - freedWage + deal.wg > tx.wageCap) {
+      onToast(`เกินเพดานค่าเหนื่อยลีก (${tx.wageCap}k/นัด) กรุณาขายหรือลดค่าเหนื่อยก่อน`);
+      return;
+    }
     const accepted = useCounter || Math.random() * 100 < deal.chance;
     if (accepted) {
       onUpdateState((d) => {
         const t = d.teams[d.me];
-        const srcList = offerDraft.source === 'mk' ? d.mk : d.scout?.results || [];
-        const target = srcList[offerDraft.idx];
-        if (!target) return;
+        let target: Player | undefined;
+        let removeFromSrc: (() => void) | null = null;
+        let sellerRef: Team | undefined;
+
+        if (offerDraft.source === 'club' && offerDraft.clubTeamId != null) {
+          sellerRef = d.teams.find((tm) => tm.id === offerDraft.clubTeamId);
+          if (sellerRef) {
+            const sIdx = sellerRef.sq.findIndex((p) => p.n === (offerDraft.playerName || q.n));
+            if (sIdx >= 0) {
+              target = sellerRef.sq[sIdx];
+              removeFromSrc = () => {
+                sellerRef!.sq.splice(sIdx, 1);
+                sellerRef!.lu = null;
+              };
+            }
+          }
+        } else {
+          const srcList = offerDraft.source === 'mk' ? d.mk : d.scout?.results || [];
+          const mIdx = srcList[offerDraft.idx] ? offerDraft.idx : srcList.findIndex((p) => p.n === (offerDraft.playerName || q.n));
+          if (mIdx >= 0) {
+            target = srcList[mIdx];
+            removeFromSrc = () => srcList.splice(mIdx, 1);
+          }
+        }
+        if (!target || !removeFromSrc) return;
+
         d.money -= deal.cashNow;
-        logFin(d, `${deal.type === 'loan' || deal.type === 'loanopt' ? 'ค่ายืมตัว ' : 'ซื้อตัว '}${target.n}`, -deal.cashNow);
+        logFin(d, `${deal.type === 'loan' || deal.type === 'loanopt' ? 'ค่ายืมตัว ' : 'ซื้อตัว '}${target.n}${sellerRef ? ` (${sellerRef.name})` : ''}`, -deal.cashNow);
         if (deal.dueLater) d.payDue = (d.payDue || 0) + deal.dueLater;
+
+        let swappedOutPlayer: Player | null = null;
         if (deal.type === 'swap' && deal.swapQ) {
           const si = t.sq.findIndex((z) => z.n === deal.swapQ!.n);
-          if (si >= 0) { t.sq.splice(si, 1); t.lu = null; }
+          if (si >= 0) {
+            swappedOutPlayer = t.sq.splice(si, 1)[0];
+            t.lu = null;
+          }
         }
+
+        removeFromSrc();
+        const incoming: Player = { ...target };
         if (deal.type === 'loan' || deal.type === 'loanopt') {
-          target.loan = 1;
-          if (deal.loanOpt) target.loanOpt = deal.loanOpt;
+          incoming.loan = 1;
+          if (deal.loanOpt) incoming.loanOpt = deal.loanOpt;
         }
-        target.con = { yr: deal.yr, wg: deal.wg, role: deal.role };
-        target.no = undefined;
-        t.sq.push(target);
+        incoming.con = { yr: deal.yr, wg: deal.wg, role: deal.role };
+        incoming.no = undefined;
+        incoming.signedSeason = d.season;
+        incoming.signedMd = d.md;
+        delete incoming.listed;
+        t.sq.push(incoming);
         assignTeamShirtNumbers(t);
-        srcList.splice(offerDraft.idx, 1);
+
+        if (sellerRef && swappedOutPlayer) {
+          swappedOutPlayer.no = undefined;
+          sellerRef.sq.push(swappedOutPlayer);
+          assignTeamShirtNumbers(sellerRef);
+        }
       });
       setOfferDraft(null);
       SFX.win();
-      onToast(`เซ็นสัญญา ${q.n} (${deal.yr} ปี · ${deal.wg}k/นัด) สำเร็จ!`);
+      onToast(`เซ็นสัญญา ${q.n} (${q.ro} · ${deal.yr} ปี · ${deal.wg}k/นัด) สำเร็จ!`);
     } else {
       onUpdateState((d) => {
-        const srcList = offerDraft.source === 'mk' ? d.mk : d.scout?.results || [];
-        const target = srcList[offerDraft.idx];
-        if (!target) return;
-        target.tries = (target.tries || 0) + 1;
-        if (target.tries >= 3 || (deal.chance < 20 && !target.free)) target.locked = 1;
+        if (offerDraft.source === 'club' && offerDraft.clubTeamId != null) {
+          const sellerRef = d.teams.find((tm) => tm.id === offerDraft.clubTeamId);
+          const target = sellerRef?.sq.find((p) => p.n === (offerDraft.playerName || q.n));
+          if (!target) return;
+          target.tries = (target.tries || 0) + 1;
+          if (target.tries >= 3 || deal.chance < 20) target.locked = 1;
+        } else {
+          const srcList = offerDraft.source === 'mk' ? d.mk : d.scout?.results || [];
+          const target = srcList[offerDraft.idx];
+          if (!target) return;
+          target.tries = (target.tries || 0) + 1;
+          if (target.tries >= 3 || (deal.chance < 20 && !target.free)) target.locked = 1;
+        }
       });
       const nextTries = (q.tries || 0) + 1;
       if (nextTries >= 3 || (deal.chance < 20 && !q.free)) {
@@ -6027,14 +7143,17 @@ const MarketView: React.FC<{
 
   const renderNegotiationModal = () => {
     if (!offerDraft) return null;
-    const list = offerDraft.source === 'mk' ? state.mk : state.scout?.results || [];
-    const q = list[offerDraft.idx];
-    if (!q) return null;
-    const swCands = me.sq.map((z, i) => ({ z, i })).filter(({ z }) => !z.loan && !z.me && me.sq.filter((u) => u.pos === z.pos).length > (z.pos === 'GK' ? 1 : 3)).sort((a, b) => vlu(b.z) - vlu(a.z));
+    const { q: rawQ, sellerTeam } = getDraftTarget(offerDraft, state);
+    if (!rawQ) return null;
+    const q: Player = offerDraft.source === 'club' && !rawQ.price ? { ...rawQ, price: Math.max(8, vlu(rawQ)) } : rawQ;
+    const swCands = me.sq.map((z, i) => ({ z, i })).filter(({ z }) => !z.loan && !z.me && z.inj === 0 && tx.posCounts[z.pos] > tx.minPos[z.pos]).sort((a, b) => vlu(b.z) - vlu(a.z));
     const E = evalOffer(q, offerDraft, me);
-    const canAfford = state.money >= E.cashNow;
+    const canAfford = state.money >= E.cashNow && !(tx.ffpLocked && E.cashNow > 0);
     const needSwapOk = offerDraft.type !== 'swap' || !!E.swapQ;
-    const fullSq = me.sq.length >= 28 && offerDraft.type !== 'swap';
+    const fullSq = me.sq.length >= tx.maxSquad && offerDraft.type !== 'swap';
+    const loanCapHit = (offerDraft.type === 'loan' || offerDraft.type === 'loanopt') && tx.loansCount >= tx.maxLoans;
+    const freedWage = offerDraft.type === 'swap' && E.swapQ ? ensureCon(E.swapQ).wg : 0;
+    const wageOverCap = tx.curWage - freedWage + E.wg > tx.wageCap;
     const types: [OfferDraft['type'], string][] = q.free
       ? [['free', '🆓 เซ็นฟรีเอเยนต์']]
       : [['cash', '💰 จ่ายสด'], ['inst', '📅 ผ่อน 2 งวด'], ['swap', '🔄 แลกตัว+เงิน'], ['loan', '🤝 ยืม 1 ซีซั่น'], ['loanopt', '🤝 ยืม+ซื้อขาด']];
@@ -6044,10 +7163,14 @@ const MarketView: React.FC<{
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden">
         <div className="w-full max-w-xl max-h-[92dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
           <div className="shrink-0 flex items-center gap-3 p-3.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
-            <PlayerFace player={q} size={48} />
+            <PlayerFace player={q} team={sellerTeam} state={state} size={48} />
             <div className="flex-1 min-w-0">
-              <div className="font-bold text-sm sm:text-base truncate">{q.n} <span className="text-xs text-[var(--g)]">({q.pos})</span></div>
-              <div className="text-[11px] sm:text-xs text-[var(--mut)] truncate">อายุ {q.age} ปี · {q.free ? <b className="text-[var(--g)]">ฟรีเอเยนต์</b> : `ค่าตัว ${q.price}k ฿`} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k</div>
+              <div className="font-bold text-sm sm:text-base truncate">
+                {q.n} <span className="text-xs text-[var(--g)]">({q.ro} · {SPN[q.ro] || q.pos})</span>
+              </div>
+              <div className="text-[11px] sm:text-xs text-[var(--mut)] truncate">
+                {sellerTeam ? `${sellerTeam.name} · ` : ''}อายุ {q.age} ปี · {q.free ? <b className="text-[var(--g)]">ฟรีเอเยนต์</b> : `ค่าตัว ${q.price}k ฿`} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k
+              </div>
             </div>
             <span className="px-2.5 py-1 rounded-xl text-white font-bold text-sm sm:text-base tabular shrink-0" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
           </div>
@@ -6056,9 +7179,15 @@ const MarketView: React.FC<{
             <div>
               <div className="text-xs font-bold text-[var(--mut)] mb-1">1) รูปแบบข้อเสนอ</div>
               <div className="flex flex-wrap gap-1.5">
-                {types.map(([k, l]) => (
-                  <button key={k} type="button" onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${offerDraft.type === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-                ))}
+                {types.map(([k, l]) => {
+                  const isLoanType = k === 'loan' || k === 'loanopt';
+                  const disabledLoan = isLoanType && tx.loansCount >= tx.maxLoans;
+                  return (
+                    <button key={k} type="button" disabled={disabledLoan} onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer disabled:opacity-40 ${offerDraft.type === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                      {l}{disabledLoan ? ' (เต็ม 4)' : ''}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -6082,7 +7211,7 @@ const MarketView: React.FC<{
                       {z.pos} {z.n.split(' ')[0]} ({z.ov} · ลด {Math.round(vlu(z) * 0.8)}k)
                     </button>
                   ))}
-                  {!swCands.length && <span className="text-xs text-[var(--red)]">ไม่มีนักเตะเกินโควตาให้แลก</span>}
+                  {!swCands.length && <span className="text-xs text-[var(--red)]">ไม่มีนักเตะเกินโควตาตำแหน่งให้แลก</span>}
                 </div>
               </div>
             )}
@@ -6110,7 +7239,7 @@ const MarketView: React.FC<{
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center p-2.5 rounded-xl bg-[var(--surface-2)]">
               <div><div className="text-[11px] text-[var(--mut)]">จ่ายทันที</div><b className={`text-sm tabular ${!canAfford ? 'text-[var(--red)]' : ''}`}>{E.cashNow}k</b></div>
-              <div><div className="text-[11px] text-[var(--mut)]">ค่าเหนื่อย</div><b className="text-sm tabular">{E.wg}k</b></div>
+              <div><div className="text-[11px] text-[var(--mut)]">ค่าเหนื่อยรวมหลังดีล</div><b className={`text-sm tabular ${wageOverCap ? 'text-[var(--red)]' : ''}`}>{Math.round(tx.curWage - freedWage + E.wg)}/{tx.wageCap}k</b></div>
               <div><div className="text-[11px] text-[var(--mut)]">{E.dueLater ? 'ผ่อนปลายปี' : E.loanOpt ? 'ซื้อขาด' : 'สัญญา'}</div><b className="text-sm tabular">{E.dueLater ? `${E.dueLater}k` : E.loanOpt ? `${E.loanOpt}k` : `${E.yr} ปี`}</b></div>
               <div><div className="text-[11px] text-[var(--mut)]">งบคงเหลือ</div><b className="text-sm tabular">{state.money}k</b></div>
             </div>
@@ -6136,8 +7265,8 @@ const MarketView: React.FC<{
 
           <div className="shrink-0 p-3 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
             <button type="button" onClick={() => setOfferDraft(null)} className="px-4 py-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-sm cursor-pointer">ปิด</button>
-            <button type="button" disabled={!canAfford || !needSwapOk || fullSq || !!q.locked} onClick={() => submitOffer(false)} className="flex-1 py-2 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm disabled:opacity-40 cursor-pointer">
-              {q.locked ? 'การเจรจาล่มแล้ว' : fullSq ? 'ทีมเต็ม 28 คน' : !canAfford ? 'งบไม่พอจ่ายทันที' : '🤝 ยื่นข้อเสนอเจรจา'}
+            <button type="button" disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || !!q.locked} onClick={() => submitOffer(false)} className="flex-1 py-2 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm disabled:opacity-40 cursor-pointer">
+              {q.locked ? 'การเจรจาล่มแล้ว' : loanCapHit ? `โควตายืมเต็ม ${tx.maxLoans} คน` : wageOverCap ? `เกินเพดานค่าเหนื่อย ${tx.wageCap}k` : fullSq ? `ทีมเต็ม ${tx.maxSquad} คน` : !canAfford ? 'งบไม่พอ / ติดกฎ FFP' : '🤝 ยื่นข้อเสนอเจรจา'}
             </button>
           </div>
         </div>
@@ -6154,6 +7283,8 @@ const MarketView: React.FC<{
     const newWg = +(wagOf(q) * wf).toFixed(1);
     const bonus = renewWb === 2 ? Math.max(5, Math.round(q.ov / 7)) : renewWb === 1 ? 2 : 0;
     const ch = clamp(Math.round(58 + (wf - 1) * 120 + (renewRole === 'key' ? 14 : renewRole === 'rot' ? 4 : -10) + (renewYr >= 3 ? 6 : 0)), 15, 98);
+    const wageDelta = newWg - con.wg;
+    const renewOverCap = tx.curWage + wageDelta > tx.wageCap;
 
     return (
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden">
@@ -6196,13 +7327,14 @@ const MarketView: React.FC<{
               <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full bg-[var(--g)]" style={{ width: `${ch}%` }} /></div>
               <b className="tabular">{ch}%</b>
             </div>
+            {renewOverCap && <p className="text-xs text-[var(--red)] font-semibold">⚠️ ค่าเหนื่อยใหม่จะทำให้ทีมเกินเพดาน {tx.wageCap}k/นัด</p>}
             {renewMsg && <p className="text-xs text-[var(--red)]">{renewMsg}</p>}
           </div>
           <div className="shrink-0 p-3 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
             <button type="button" onClick={() => setRenewIdx(null)} className="px-4 py-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer">ปิด</button>
             <button
               type="button"
-              disabled={state.money < bonus}
+              disabled={state.money < bonus || renewOverCap}
               onClick={() => {
                 if (Math.random() * 100 < ch) {
                   onUpdateState((d) => {
@@ -6218,7 +7350,7 @@ const MarketView: React.FC<{
               }}
               className="flex-1 py-2 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-xs disabled:opacity-40 cursor-pointer"
             >
-              ✅ ยืนยัน ({newWg}k/นัด{bonus ? `, โบนัส ${bonus}k` : ''})
+              {renewOverCap ? `เกินเพดาน ${tx.wageCap}k` : `✅ ยืนยัน (${newWg}k/นัด${bonus ? `, โบนัส ${bonus}k` : ''})`}
             </button>
           </div>
         </div>
@@ -6227,75 +7359,261 @@ const MarketView: React.FC<{
   };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+    <div className="space-y-4">
+      {/* League Transfer Window & FFP Rules Header */}
+      <div className={`p-3.5 sm:p-4 rounded-2xl border space-y-2.5 ${tx.tw.open ? 'bg-[var(--g-soft)] border-[var(--g)]/45' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="font-bold text-sm sm:text-base">{tx.tw.label}</div>
+            <p className="text-xs text-[var(--mut)]">
+              {tx.tw.open
+                ? `${tx.tw.subLabel} · ซื้อ-ขาย-ยืมตัวสโมสรอื่นได้เต็มรูปแบบ`
+                : `${tx.tw.subLabel} · ช่วงตลาดปิดเซ็นได้เฉพาะฟรีเอเยนต์ไร้สังกัด และเยาวชนอะคาเดมี่`}
+            </p>
+          </div>
+          <span className="text-xs font-bold tabular text-[var(--ink)]">
+            งบสโมสร {state.money}k ฿
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] text-[var(--mut)]">ลงทะเบียนทีม</div>
+            <div className="font-bold tabular">{me.sq.length}/{tx.maxSquad} คน (ขั้นต่ำ {tx.minSquad})</div>
+          </div>
+          <div className="px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] text-[var(--mut)]">โควตายืมตัว</div>
+            <div className={`font-bold tabular ${tx.loansCount >= tx.maxLoans ? 'text-[var(--red)]' : ''}`}>{tx.loansCount}/{tx.maxLoans} คน/ซีซั่น</div>
+          </div>
+          <div className="px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] text-[var(--mut)]">เพดานค่าเหนื่อยลีก</div>
+            <div className={`font-bold tabular ${tx.wagePct > 95 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>{tx.curWage}/{tx.wageCap}k ({tx.wagePct}%)</div>
+          </div>
+          <div className="px-3 py-2 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] text-[var(--mut)]">กฎการเงิน (FFP)</div>
+            <div className={`font-bold ${tx.ffpLocked ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>{tx.ffpLocked ? 'งบติดลบ · ห้ามซื้อ' : 'ผ่านเกณฑ์ปกติ'}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
       <div className="space-y-4">
         <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h3 className="font-bold text-sm">🤝 ตลาดนักเตะ · งบ {state.money}k ฿</h3>
-              <p className="text-xs text-[var(--mut)]">ขนาดทีม {me.sq.length}/28 คน · เจรจาจ่ายสด/ผ่อน/แลก/ยืม</p>
+              <h3 className="font-bold text-sm">🤝 ตลาดนักเตะทุกตำแหน่ง · งบ {state.money}k ฿</h3>
+              <p className="text-xs text-[var(--mut)]">
+                {marketSource === 'club'
+                  ? 'ยื่นซื้อ-แลกตัว-ยืมตัวตรงจากสโมสรในลีก (ครบทั้ง 16 ตำแหน่ง)'
+                  : tx.tw.open
+                    ? 'เปิดตลาด: มีนักเตะครบทุกตำแหน่ง (GK, CB, LB, RB, LWB, RWB, CDM, CM, CAM, LM, RM, ST, CF, SS, LW, RW)'
+                    : 'ตลาดปิด: เซ็นได้เฉพาะนักเตะฟรีเอเยนต์ [ฟรี] ครบทุกสาย'}
+              </p>
             </div>
-            <button
-              type="button"
-              disabled={state.money < 15}
-              onClick={() => {
-                SFX.tap();
-                onUpdateState((d) => { d.money -= 15; logFin(d, 'รีเฟรชตลาดซื้อขาย', -15); mkMarket(d); });
-                onToast('อัปเดตรายชื่อตลาดใหม่แล้ว');
-              }}
-              className="px-3 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold disabled:opacity-40 cursor-pointer"
-            >
-              🔄 หาตลาดใหม่ 15k
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {([['ALL', 'ทั้งหมด'], ['GK', 'GK'], ['DF', 'DF'], ['MF', 'MF'], ['FW', 'FW'], ['FREE', '🆓 ฟรีเอเยนต์']] as const).map(([k, l]) => (
-              <button key={k} type="button" onClick={() => setFilter(k)} className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${filter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>{l}</button>
-            ))}
-          </div>
-          <div className="space-y-2">
-            {marketList.map(({ q, i }) => (
-              <div key={`${q.n}-${i}`} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]">
-                <PlayerFace player={q} size={36} />
-                <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                  <div className="font-bold text-xs truncate">
-                    {q.pos} · {q.n}{' '}
-                    {q.free ? <span className="text-[var(--g)] font-bold">[ฟรี]</span> : q.age <= 19 ? <span className="text-[var(--lamp)] font-bold">[ดาวรุ่ง]</span> : null}
-                  </div>
-                  <div className="text-[11px] text-[var(--mut)]">อายุ {q.age} · {'★'.repeat(Math.round((q.pot || q.ov) / 20))} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k</div>
+            {marketSource === 'mk' ? (
+              <button
+                type="button"
+                disabled={state.money < 15}
+                onClick={() => {
+                  SFX.tap();
+                  onUpdateState((d) => { d.money -= 15; logFin(d, 'รีเฟรชตลาดซื้อขาย', -15); mkMarket(d); });
+                  onToast('อัปเดตรายชื่อตลาดใหม่ครบทุกตำแหน่งแล้ว');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+              >
+                🔄 {tx.tw.open ? 'หาตลาดใหม่ 15k' : 'หาฟรีเอเยนต์ 15k'}
+              </button>
+            ) : (
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setClubTierFilter('MY_TIER')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${clubTierFilter === 'MY_TIER' ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
+                >
+                  ลีกใกล้เคียง
                 </button>
-                <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                <button type="button" disabled={!!q.locked} onClick={() => openNegotiation('mk', i, q)} className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0">
-                  {q.locked ? 'ล่ม' : q.free ? 'เจรจาฟรี' : `ยื่น ${q.price}k`}
+                <button
+                  type="button"
+                  onClick={() => setClubTierFilter('ALL')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${clubTierFilter === 'ALL' ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
+                >
+                  ทุกลีก
                 </button>
               </div>
+            )}
+          </div>
+
+          {/* Market Source Tabs */}
+          <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-[var(--surface-2)]">
+            <button
+              type="button"
+              onClick={() => { setMarketSource('mk'); }}
+              className={`py-1.5 rounded-lg text-xs font-bold cursor-pointer ${marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'}`}
+            >
+              🏪 ตลาดกลาง &amp; ฟรีเอเยนต์
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMarketSource('club'); if (filter === 'FREE') setFilter('ALL'); }}
+              className={`py-1.5 rounded-lg text-xs font-bold cursor-pointer ${marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'}`}
+            >
+              🏟️ ซื้อจากสโมสรในลีก
+            </button>
+          </div>
+
+          {/* Main Line Filter */}
+          <div className="flex flex-wrap gap-1.5">
+            {([['ALL', 'ทุกสาย'], ['GK', '🧤 GK'], ['DF', '🛡️ กองหลัง'], ['MF', '🧭 กองกลาง'], ['FW', '⚽ กองหน้า'], ...(marketSource === 'mk' ? [['FREE', '🆓 ฟรีเอเยนต์'] as const] : [])] as const).map(([k, l]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => { setFilter(k); setSubFilter('ALL'); }}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${filter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
+              >
+                {l}
+              </button>
             ))}
-            {!marketList.length && <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในหมวดนี้</p>}
+          </div>
+
+          {/* Sub-role Exact Position Chips */}
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => setSubFilter('ALL')}
+              className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer ${subFilter === 'ALL' ? 'bg-[var(--ink)] text-[var(--bg)]' : 'bg-[var(--surface-2)]/80 text-[var(--mut)]'}`}
+            >
+              ทุกตำแหน่งย่อย
+            </button>
+            {availableSubRoles.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => setSubFilter(role)}
+                title={SPN[role] || role}
+                className={`px-2 py-0.5 rounded-md text-[11px] font-semibold cursor-pointer ${subFilter === role ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]/80 text-[var(--mut)] hover:text-[var(--ink)]'}`}
+              >
+                {role}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-2 max-h-[540px] overflow-y-auto pr-0.5">
+            {marketSource === 'mk' ? (
+              <>
+                {marketList.map(({ q, i }) => {
+                  const blockedByWindow = !tx.tw.open && !q.free;
+                  return (
+                    <div key={`${q.n}-${i}`} className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] ${blockedByWindow ? 'opacity-70' : ''}`}>
+                      <PlayerFace player={q} size={36} />
+                      <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs truncate">
+                          <span className="text-[var(--g)]">{q.ro}</span> · {q.n}{' '}
+                          {q.free ? <span className="text-[var(--g)] font-bold">[ฟรี]</span> : q.age <= 19 ? <span className="text-[var(--lamp)] font-bold">[ดาวรุ่ง]</span> : null}
+                        </div>
+                        <div className="text-[11px] text-[var(--mut)] truncate">
+                          {SPN[q.ro] || q.pos} · อายุ {q.age} · {'★'.repeat(Math.round((q.pot || q.ov) / 20))} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k
+                        </div>
+                      </button>
+                      <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
+                      <button
+                        type="button"
+                        disabled={!!q.locked || blockedByWindow}
+                        onClick={() => openNegotiation('mk', i, q)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}
+                      >
+                        {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เจรจาฟรี' : `ยื่น ${q.price}k`}
+                      </button>
+                    </div>
+                  );
+                })}
+                {!marketList.length && (
+                  <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในหมวดนี้ — ลองกด &quot;หาตลาดใหม่&quot; หรือสลับไป &quot;ซื้อจากสโมสรในลีก&quot;</p>
+                )}
+              </>
+            ) : (
+              <>
+                {clubMarketList.map(({ q, team, idx, price }) => {
+                  const blockedByWindow = !tx.tw.open;
+                  return (
+                    <div key={`${team.id}-${q.n}-${idx}`} className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] ${blockedByWindow ? 'opacity-70' : ''}`}>
+                      <PlayerFace player={q} team={team} state={state} size={36} />
+                      <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs truncate">
+                          <span className="text-[var(--g)]">{q.ro}</span> · {q.n}
+                        </div>
+                        <div className="text-[11px] text-[var(--mut)] truncate">
+                          {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age}
+                        </div>
+                      </button>
+                      <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
+                      <button
+                        type="button"
+                        disabled={!!q.locked || blockedByWindow}
+                        onClick={() => openNegotiation('club', idx, q, team)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}
+                      >
+                        {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${price}k`}
+                      </button>
+                    </div>
+                  );
+                })}
+                {!clubMarketList.length && <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะตำแหน่งนี้ในสโมสรอื่น</p>}
+              </>
+            )}
           </div>
         </div>
 
         <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm">🔍 ส่งแมวมองค้นหานักเตะ (20k)</h3>
-            <span className="text-xs text-[var(--mut)]">ใช้เวลา 2 นัด</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-bold text-sm">🔍 ส่งแมวมองเจาะจงตำแหน่ง (20k)</h3>
+            <span className="text-xs text-[var(--mut)]">ใช้เวลา 2 นัด · ทำได้ตลอดปี</span>
           </div>
           {!state.scout ? (
-            <div className="flex flex-wrap gap-1.5">
-              {([['wonderkid', '🌟 ดาวรุ่ง U20'], ['free', '🆓 ฟรีเอเยนต์'], ['striker', '⚽ กองหน้า'], ['midfielder', '🧭 กองกลาง'], ['defender', '🛡️ แนวรับ/โกล์']] as [ScoutMission['focus'], string][]).map(([focus, lbl]) => (
-                <button
-                  key={focus}
-                  type="button"
-                  disabled={state.money < 20}
-                  onClick={() => {
-                    SFX.tap();
-                    onUpdateState((d) => { d.money -= 20; logFin(d, 'ค่าส่งแมวมองส่องนักเตะ', -20); d.scout = createScoutMission(focus); });
-                    onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+            <div className="space-y-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-[11px] font-semibold text-[var(--mut)]">เลือกตำแหน่งเจาะจง:</label>
+                <select
+                  value={scoutRole}
+                  onChange={(e) => setScoutRole(e.target.value as SubRole | '')}
+                  className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
                 >
-                  {lbl}
-                </button>
-              ))}
+                  <option value="">ตามหมวดหมู่ที่กดด้านล่าง</option>
+                  {ALL_SUB_ROLES.map((r) => (
+                    <option key={r} value={r}>{r} — {SPN[r] || r}</option>
+                  ))}
+                </select>
+                {scoutRole && (
+                  <button
+                    type="button"
+                    disabled={state.money < 20}
+                    onClick={() => {
+                      SFX.tap();
+                      const lineFocus: ScoutMission['focus'] = LINE[scoutRole] === 'GK' ? 'gk' : LINE[scoutRole] === 'DF' ? 'defender' : LINE[scoutRole] === 'MF' ? 'midfielder' : 'striker';
+                      onUpdateState((d) => { d.money -= 20; logFin(d, `ส่งแมวมองหาตำแหน่ง ${scoutRole}`, -20); d.scout = createScoutMission(lineFocus, scoutRole); });
+                      onToast(`ส่งแมวมองหาตำแหน่ง ${scoutRole} แล้ว! รอรายงานในอีก 2 นัด`);
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
+                  >
+                    🎯 ส่งหา {scoutRole} (20k)
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {([['wonderkid', '🌟 ดาวรุ่ง U20'], ['free', '🆓 ฟรีเอเยนต์'], ['gk', '🧤 ผู้รักษาประตู'], ['defender', '🛡️ กองหลัง'], ['midfielder', '🧭 กองกลาง'], ['striker', '⚽ กองหน้า']] as [ScoutMission['focus'], string][]).map(([focus, lbl]) => (
+                  <button
+                    key={focus}
+                    type="button"
+                    disabled={state.money < 20}
+                    onClick={() => {
+                      SFX.tap();
+                      onUpdateState((d) => { d.money -= 20; logFin(d, 'ค่าส่งแมวมองส่องนักเตะ', -20); d.scout = createScoutMission(focus, scoutRole); });
+                      onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
             </div>
           ) : !state.scout.results ? (
             <div className="p-3 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/40 text-xs">
@@ -6307,78 +7625,214 @@ const MarketView: React.FC<{
                 <span className="font-semibold text-[var(--g)]">รายงานจากแมวมอง: {state.scout.label}</span>
                 <button type="button" onClick={() => onUpdateState((d) => { d.scout = null; })} className="text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer">ปิดรายงาน</button>
               </div>
-              {state.scout.results.map((q, i) => (
-                <div key={`${q.n}-${i}`} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--g)]/30">
-                  <PlayerFace player={q} size={34} />
-                  <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                    <div className="font-bold text-xs truncate">{q.pos} · {q.n}</div>
-                    <div className="text-[11px] text-[var(--mut)]">อายุ {q.age} · ศักยภาพ {q.pot} · {q.free ? 'ฟรี' : `${q.price}k`}</div>
-                  </button>
-                  <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                  <button type="button" disabled={!!q.locked} onClick={() => openNegotiation('scout', i, q)} className="px-3 py-1 rounded-lg bg-[var(--g)] text-white text-xs font-bold cursor-pointer">
-                    {q.locked ? 'ล่ม' : 'เจรจา'}
-                  </button>
-                </div>
-              ))}
+              {state.scout.results.map((q, i) => {
+                const blockedByWindow = !tx.tw.open && !q.free;
+                return (
+                  <div key={`${q.n}-${i}`} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--g)]/30">
+                    <PlayerFace player={q} size={34} />
+                    <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                      <div className="font-bold text-xs truncate"><span className="text-[var(--g)]">{q.ro}</span> · {q.n}</div>
+                      <div className="text-[11px] text-[var(--mut)]">{SPN[q.ro] || q.pos} · อายุ {q.age} · ศักยภาพ {q.pot} · {q.free ? 'ฟรี' : `${q.price}k`}</div>
+                    </button>
+                    <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
+                    <button type="button" disabled={!!q.locked || blockedByWindow} onClick={() => openNegotiation('scout', i, q)} className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}>
+                      {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
       </div>
 
       <div className="space-y-4">
-        {state.off && me.sq.find((q) => q.n === state.off!.n) && (
-          <div className="p-4 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)] space-y-2">
-            <div className="font-bold text-sm">💼 ข้อเสนอซื้อนักเตะจากทีมอื่น</div>
-            <p className="text-xs"><b>{state.off.t}</b> เสนอซื้อ <b>{state.off.n}</b> ในราคา <b>{state.off.p}k ฿</b></p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const off = state.off!;
-                  const idx = me.sq.findIndex((q) => q.n === off.n);
-                  const q = me.sq[idx];
-                  if (idx < 0 || me.sq.filter((z) => z.pos === q.pos).length <= (q.pos === 'GK' ? 1 : 3)) {
-                    onToast('ขายไม่ได้ ต้องเหลือนักเตะตำแหน่งนี้ให้พอ');
-                    return;
-                  }
-                  onUpdateState((d) => {
-                    const t = d.teams[d.me];
-                    const ii = t.sq.findIndex((z) => z.n === off.n);
-                    if (ii >= 0) t.sq.splice(ii, 1);
-                    t.lu = null;
-                    d.money += off.p;
-                    logFin(d, `ขาย ${off.n} ให้ ${off.t}`, off.p);
-                    d.off = null;
-                  });
-                  onToast(`ขาย ${off.n} รับ +${off.p}k ฿`);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
-              >
-                ✅ ขายทันที
-              </button>
-              {!state.off.cnt && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const off = state.off!;
-                    if (Math.random() < 0.65) {
-                      const newP = Math.round(off.p * 1.18);
-                      onUpdateState((d) => { if (d.off) { d.off.cnt = 1; d.off.p = newP; } });
-                      onToast(`${off.t} ยอมเพิ่มราคาเป็น ${newP}k ฿!`);
-                    } else {
-                      onUpdateState((d) => { d.off = null; });
-                      onToast(`${off.t} ถอนข้อเสนอซื้อ ${off.n}`);
-                    }
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer"
-                >
-                  💰 โก่งราคา +18%
-                </button>
-              )}
-              <button type="button" onClick={() => onUpdateState((d) => { d.off = null; })} className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold cursor-pointer">✕ ปฏิเสธ</button>
+        {(() => {
+          const incomingOffers = getIncomingOffers(state);
+          if (!incomingOffers.length) return null;
+          return (
+            <div className="p-4 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)] space-y-2.5">
+              <div className="font-bold text-sm">💼 ข้อเสนอซื้อนักเตะจากทีมอื่น ({incomingOffers.length})</div>
+              <div className="space-y-2">
+                {incomingOffers.map((off) => {
+                  const targetQ = me.sq.find((q) => q.n === off.n);
+                  if (!targetQ) return null;
+                  const marketVal = vlu(targetQ);
+                  const buyerTeam =
+                    (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
+                    state.teams.find((t) => t.name === off.t);
+                  return (
+                    <div key={`${off.n}__${off.t}`} className="p-2.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+                      <div className="flex items-center gap-2.5">
+                        <PlayerFace player={targetQ} team={me} state={state} size={34} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-bold truncate">
+                            {off.t}{buyerTeam ? ` (${TN[buyerTeam.tier] || ''})` : ''}
+                          </div>
+                          <div className="text-[11px] text-[var(--mut)]">
+                            ขอซื้อ <b>{off.n}</b> ({targetQ.ro} · {targetQ.ov}) ราคา <b className="text-[var(--g)]">{off.p}k ฿</b> (ประเมิน {marketVal}k)
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const res = canAcceptTransferOffer(state, off);
+                            if (!res.ok) { onToast(res.err || 'ขายไม่สำเร็จ'); return; }
+                            onUpdateState((d) => { acceptTransferOffer(d, off); });
+                            SFX.win();
+                            onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${off.p}k ฿`);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
+                        >
+                          ✅ ตอบรับขาย
+                        </button>
+                        {!off.cnt && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const out = resolveCounterOfferOutcome(state, off);
+                              onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
+                              onToast(
+                                out.accepted
+                                  ? `${off.t} ยอมเพิ่มราคาเป็น ${out.newPrice}k ฿!`
+                                  : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
+                              );
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-bold cursor-pointer"
+                          >
+                            💰 โก่งราคา +15%
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
+                            onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+                        >
+                          ✕ ปฏิเสธ
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {(() => {
+          const listedPlayers = me.sq.filter((q) => q.listed && !q.loan);
+          const unlistedEligible = me.sq
+            .filter((q) => !q.listed && !q.loan)
+            .slice()
+            .sort((a, b) => b.ov - a.ov);
+          return (
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-bold text-sm">🏷️ นักเตะที่ขึ้นบัญชีขายของทีมเรา ({listedPlayers.length})</h3>
+                <span className="text-[11px] text-[var(--mut)]">{tx.tw.open ? 'ยื่นเสนอทีมอื่นได้' : 'รอตลาดเปิด'}</span>
+              </div>
+              {listedPlayers.length > 0 ? (
+                <div className="space-y-2">
+                  {listedPlayers.map((q) => {
+                    const chk = getPlayerSellCheck(state, me, q);
+                    const ask = q.askPrice || vlu(q);
+                    return (
+                      <div key={q.n} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)]">
+                        <PlayerFace player={q} team={me} state={state} size={34} />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-xs truncate">{q.ro} · {q.n} ({q.ov})</div>
+                          <div className="text-[11px] text-[var(--mut)]">
+                            ตั้งขาย {ask}k ฿ · ประเมิน {vlu(q)}k
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้ทีมอื่น' : chk.reason}
+                          onClick={() => {
+                            if (!chk.canPitch) { onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้'); return; }
+                            if (chk.pitchedThisTurn) { onToast('เสนอขายคนนี้ไปแล้วในนัดนี้'); return; }
+                            SFX.tap();
+                            setPitchTargetName(q.n);
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer ${
+                            chk.canPitch && !chk.pitchedThisTurn
+                              ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-65'
+                          }`}
+                        >
+                          {!tx.tw.open ? '🔒' : chk.pitchedThisTurn ? '⏳ รอนัดหน้า' : '📨 เสนอขาย'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdateState((d) => {
+                              const t = d.teams[d.me].sq.find((z) => z.n === q.n);
+                              if (t) {
+                                t.listed = 0;
+                                delete t.askPrice;
+                              }
+                            });
+                            onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
+                          }}
+                          className="px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
+                        >
+                          ถอด
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--mut)]">
+                  ยังไม่มีนักเตะในบัญชีขาย เลือกด้านล่างหรือกด 🏷️ ที่หน้า &quot;ทีม &amp; แผน → ทั้งทีม&quot; เพื่อขึ้นตลาดให้สโมสรอื่นยื่นข้อเสนอ
+                </p>
+              )}
+
+              {unlistedEligible.length > 0 && (
+                <div className="flex gap-1.5 pt-1">
+                  <select
+                    value={quickListName}
+                    onChange={(e) => setQuickListName(e.target.value)}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
+                  >
+                    <option value="">+ เลือกนักเตะขึ้นบัญชีขาย...</option>
+                    {unlistedEligible.map((q) => (
+                      <option key={q.n} value={q.n}>
+                        {q.ro} · {q.n} (OVR {q.ov} · {vlu(q)}k)
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!quickListName}
+                    onClick={() => {
+                      const targetName = quickListName;
+                      if (!targetName) return;
+                      SFX.tap();
+                      onUpdateState((d) => {
+                        const target = d.teams[d.me].sq.find((z) => z.n === targetName);
+                        if (target) {
+                          target.listed = 1;
+                          target.askPrice = Math.max(5, vlu(target));
+                        }
+                      });
+                      setQuickListName('');
+                      onToast(`ขึ้นบัญชีขาย ${targetName} แล้ว`);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-xs font-bold cursor-pointer disabled:opacity-40 shrink-0"
+                  >
+                    🏷️ ขึ้นตลาด
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {loanPlayers.length > 0 && (
           <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
@@ -6392,7 +7846,7 @@ const MarketView: React.FC<{
                 </div>
                 <button
                   type="button"
-                  disabled={state.money < (q.loanOpt || 0)}
+                  disabled={!tx.tw.open || state.money < (q.loanOpt || 0)}
                   onClick={() => {
                     const cost = q.loanOpt || 0;
                     onUpdateState((d) => {
@@ -6401,13 +7855,15 @@ const MarketView: React.FC<{
                       const target = d.teams[d.me].sq[i];
                       delete target.loan;
                       delete target.loanOpt;
+                      target.signedSeason = d.season;
+                      target.signedMd = d.md;
                       target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
                     });
                     onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
                   }}
                   className="px-3 py-1.5 rounded-lg bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
                 >
-                  ซื้อขาด {q.loanOpt}k
+                  {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${q.loanOpt}k`}
                 </button>
               </div>
             ))}
@@ -6415,7 +7871,7 @@ const MarketView: React.FC<{
         )}
 
         <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-          <h3 className="font-bold text-sm">📋 สัญญานักเตะ & ต่อสัญญา</h3>
+          <h3 className="font-bold text-sm">📋 สัญญานักเตะ &amp; ต่อสัญญา</h3>
           <p className="text-xs text-[var(--mut)]">นักเตะเหลือสัญญา ≤ 1 ปี ควรรีบต่อสัญญา ก่อนค่าเหนื่อยจะพุ่งขึ้น +25%</p>
           <div className="space-y-1.5">
             {contractList.map(({ q, i, c }) => (
@@ -6442,7 +7898,7 @@ const MarketView: React.FC<{
         </div>
 
         <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-          <h3 className="font-bold text-sm">🌱 เด็กเยาวชนอะคาเดมี่ (เซ็นฟรี)</h3>
+          <h3 className="font-bold text-sm">🌱 เด็กเยาวชนอะคาเดมี่ (เซ็นฟรี · ลงทะเบียนได้ตลอดปี)</h3>
           <p className="text-xs text-[var(--mut)]">อัปเกรดอะคาเดมี่เพื่อรับเยาวชนฝีเท้าดีขึ้นทุกต้นฤดูกาล</p>
           {(state.yth || []).length ? (
             <div className="space-y-1.5">
@@ -6456,21 +7912,23 @@ const MarketView: React.FC<{
                   <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
                   <button
                     type="button"
-                    disabled={me.sq.length >= 28}
+                    disabled={me.sq.length >= tx.maxSquad || tx.curWage + wagOf(q) > tx.wageCap}
                     onClick={() => {
                       onUpdateState((d) => {
                         const t = d.teams[d.me];
                         const y = d.yth[i];
-                        if (!y || t.sq.length >= 28) return;
+                        if (!y || t.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) return;
                         y.con = { yr: 3, wg: wagOf(y), role: 'pro' };
                         y.no = undefined;
+                        y.signedSeason = d.season;
+                        y.signedMd = d.md;
                         t.sq.push(y);
                         assignTeamShirtNumbers(t);
                         d.yth.splice(i, 1);
                       });
                       onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs font-bold cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs font-bold cursor-pointer disabled:opacity-40"
                   >
                     เซ็น 3 ปี
                   </button>
@@ -6482,9 +7940,36 @@ const MarketView: React.FC<{
           )}
         </div>
       </div>
+      </div>
 
       {renderNegotiationModal()}
       {renderRenewModal()}
+      {pitchTargetName && (() => {
+        const pitchPlayer = me.sq.find((z) => z.n === pitchTargetName);
+        if (!pitchPlayer) return null;
+        return (
+          <PitchPlayerModal
+            state={state}
+            player={pitchPlayer}
+            onClose={() => setPitchTargetName(null)}
+            onConfirm={(askPct) => {
+              const result = resolvePitchPlayerOutcome(state, pitchPlayer.n, askPct);
+              setPitchTargetName(null);
+              if (!result.ok) {
+                onToast(result.err || 'เสนอขายไม่สำเร็จ');
+                return;
+              }
+              onUpdateState((d) => applyPitchPlayerOutcome(d, pitchPlayer.n, result));
+              if (result.offers.length > 0) {
+                SFX.win();
+                onToast(`มี ${result.offers.length} สโมสรยื่นข้อเสนอซื้อ ${pitchPlayer.n} แล้ว!`);
+              } else {
+                onToast(`ขึ้นบัญชีขาย ${pitchPlayer.n} แล้ว แต่รอบนี้ยังไม่มีทีมยื่นซื้อเข้ามาทันที`);
+              }
+            }}
+          />
+        );
+      })()}
     </div>
   );
 };
@@ -6499,151 +7984,521 @@ const FinanceClubView: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
 }> = ({ tab, state, onUpdateState, onToast }) => {
+  const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'infra' | 'ledger'>('overview');
+  const [clubTab, setClubTab] = useState<'info' | 'identity' | 'activities' | 'legacy'>('info');
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
+
   const me = state.teams[state.me];
 
   if (tab === 'f') {
-    const w = squadWage(me);
-    const estTk = Math.round(
-      (state.st ?? 1) * (8 + 10 * me.tier) * (0.7 + (0.6 * (state.fan ?? 50)) / 100) * [1.2, 1, 0.78][state.tp ?? 1] * [0.8, 1, 1.3][state.tp ?? 1]
-    );
-    const estSp = (state.sp ?? 0) === 2 ? 5 + 6 * me.tier : (state.sp ?? 0) === 1 ? 4 + 7 * me.tier : 5 + 8 * me.tier;
-    const loanPay = state.bankLoan ? state.bankLoan.per : 0;
-    const estNet = estTk + estSp - w - loanPay;
+    const est = calcMatchdayFinanceEstimate(state, me);
+    const tx = getLeagueTransferContext(state, me);
+    const stf = getStaffState(state);
     const bd = clamp(state.bd ?? 50, 0, 100);
+    const rep = state.mgrRep ?? 50;
+    const repRank =
+      rep >= 180 ? 'ตำนานลูกหนังไทย' : rep >= 130 ? 'ยอดกุนซือระดับทวีป' : rep >= 90 ? 'กุนซือมือทอง' : rep >= 65 ? 'โค้ชฝีมือดี' : 'กุนซือหน้าใหม่';
+    const tierTbl = sortTable(state.teams.filter((t) => t.tier === me.tier));
+    const curRank = Math.max(1, tierTbl.findIndex((t) => t.id === me.id) + 1);
+    const targetRank = state.obj || 8;
+    const bankRemain = state.bankLoan ? state.bankLoan.left * state.bankLoan.per : 0;
+    const totalDebt = bankRemain + (state.payDue || 0);
+    const tierMult = 1 + me.tier * 0.45;
 
-    const upgradeFac = (key: 'st' | 'tr' | 'ya', title: string, baseCost: number) => {
+    const upgradeFac = (key: 'st' | 'tr' | 'ya' | 'med' | 'merchLv', title: string, baseCost: number) => {
       const lv = state[key] ?? 1;
       const cost = lv * baseCost;
-      if (lv >= 5 || state.money < cost) { onToast(lv >= 5 ? 'ระดับสูงสุดแล้ว' : 'งบไม่พอ'); return; }
+      if (lv >= 5 || state.money < cost) {
+        onToast(lv >= 5 ? 'ระดับสูงสุดแล้ว' : 'งบสโมสรไม่พอ');
+        return;
+      }
       SFX.tap();
-      onUpdateState((d) => { d.money -= cost; d[key] = (d[key] ?? 1) + 1; logFin(d, `อัปเกรด${title} Lv.${d[key]}`, -cost); });
-      onToast(`อัปเกรด${title}สำเร็จ!`);
+      onUpdateState((d) => {
+        d.money -= cost;
+        d[key] = (d[key] ?? 1) + 1;
+        logFin(d, `อัปเกรด${title} Lv.${d[key]}`, -cost);
+      });
+      onToast(`อัปเกรด${title}เป็น Lv.${lv + 1} สำเร็จ!`);
     };
+
+    const hireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
+      const cur = stf[role];
+      if (cur >= 3) {
+        onToast(`${title} ระดับสูงสุดแล้ว`);
+        return;
+      }
+      const cost = [45, 75, 110][cur];
+      if (state.money < cost) {
+        onToast(`งบไม่พอ (ต้องการ ${cost}k ฿)`);
+        return;
+      }
+      SFX.tap();
+      onUpdateState((d) => {
+        d.money -= cost;
+        d.staff = { ...getStaffState(d), [role]: cur + 1 };
+        logFin(d, `จ้าง/อัปเกรด${title} Lv.${cur + 1}`, -cost);
+      });
+      onToast(`จ้าง${title} Lv.${cur + 1} เรียบร้อย`);
+    };
+
+    const fireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
+      const cur = stf[role];
+      if (cur <= 0) return;
+      SFX.tap();
+      onUpdateState((d) => {
+        d.staff = { ...getStaffState(d), [role]: cur - 1 };
+      });
+      onToast(`ลดระดับ${title}เหลือ Lv.${cur - 1} (ประหยัดค่าจ้าง 1.5k/นัด)`);
+    };
+
+    const partnerDeals = [
+      {
+        id: 'drink',
+        name: 'เครื่องดื่มเกลือแร่สปอร์ต',
+        perMatch: Math.round(5 * tierMult),
+        matches: 8,
+        signBonus: Math.round(12 * tierMult),
+        reqOk: true,
+        reqText: 'พร้อมเซ็นสัญญาได้ทันที'
+      },
+      {
+        id: 'apparel',
+        name: 'แบรนด์ชุดกีฬาลูกหนังไทย',
+        perMatch: Math.round(7 * tierMult),
+        matches: 10,
+        signBonus: Math.round(15 * tierMult),
+        reqOk: (state.fan ?? 55) >= 45,
+        reqText: 'ต้องการขวัญแฟนบอล ≥ 45%'
+      },
+      {
+        id: 'telecom',
+        name: 'เครือข่ายมือถือ & ถ่ายทอดสด',
+        perMatch: Math.round(10 * tierMult),
+        matches: 12,
+        signBonus: Math.round(22 * tierMult),
+        reqOk: me.tier >= 1 || (state.fan ?? 55) >= 65,
+        reqText: 'ต้องการอยู่ระดับ D2 ขึ้นไป หรือแฟนบอล ≥ 65%'
+      }
+    ];
+
+    const loanPackages = [
+      { id: 'short', title: 'สินเชื่อหมุนเวียนระยะสั้น', amount: 80, per: 9, left: 10, desc: 'ดอกเบี้ยต่ำ เหมาะอุดงบขาดมือชั่วคราว' },
+      { id: 'std', title: 'สินเชื่อมาตรฐานสโมสร', amount: 150, per: 18, left: 10, desc: 'วงเงินสมดุลสำหรับเสริมทัพหรืออัปสิ่งก่อสร้าง' },
+      { id: 'big', title: 'สินเชื่อลงทุนโครงสร้างใหญ่', amount: 300, per: 30, left: 12, desc: 'ทุนก้อนโตสำหรับขยายสนามและทีมงาน' }
+    ];
+
+    const finEntries = state.finLog || [];
+    const totalLogIn = finEntries.filter((x) => x.amt > 0).reduce((a, x) => a + x.amt, 0);
+    const totalLogOut = finEntries.filter((x) => x.amt < 0).reduce((a, x) => a + Math.abs(x.amt), 0);
+    const filteredEntries = finEntries.filter((x) => (ledgerFilter === 'in' ? x.amt > 0 : ledgerFilter === 'out' ? x.amt < 0 : true));
+
+    const posWageMap: Record<Position, number> = {
+      GK: me.sq.filter((q) => q.pos === 'GK').reduce((a, q) => a + wagOf(q), 0),
+      DF: me.sq.filter((q) => q.pos === 'DF').reduce((a, q) => a + wagOf(q), 0),
+      MF: me.sq.filter((q) => q.pos === 'MF').reduce((a, q) => a + wagOf(q), 0),
+      FW: me.sq.filter((q) => q.pos === 'FW').reduce((a, q) => a + wagOf(q), 0)
+    };
+    const topEarners = me.sq.slice().sort((a, b) => wagOf(b) - wagOf(a)).slice(0, 3);
 
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-          <div className="p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)]"><div className="text-xs text-[var(--mut)]">งบสโมสร</div><div className={`font-bold text-xl tabular ${state.money < 0 ? 'text-[var(--red)]' : ''}`}>{state.money}k ฿</div></div>
-          <div className="p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)]"><div className="text-xs text-[var(--mut)]">คาดการณ์/นัดเหย้า</div><div className={`font-bold text-xl tabular ${estNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{estNet >= 0 ? `+${estNet}k` : `${estNet}k`}</div></div>
-          <div className="p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)]"><div className="text-xs text-[var(--mut)]">ค่าเหนื่อย/นัด</div><div className="font-bold text-xl tabular">-{w}k</div></div>
-          <div className="p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)]"><div className="text-xs text-[var(--mut)]">ค้างผ่อนค่าตัวปลายปี</div><div className="font-bold text-xl tabular">{state.payDue || 0}k</div></div>
+        {/* Top 4 Financial KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] font-semibold text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
+            <div className={`font-bold text-xl sm:text-2xl tabular mt-0.5 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+              {state.money.toLocaleString()}k ฿
+            </div>
+            <div className={`text-[11px] mt-0.5 ${state.money < 0 ? 'text-[var(--red)] font-bold' : 'text-[var(--mut)]'}`}>
+              {state.money < 0 ? '⚠️ ติดลบ (ล็อก FFP ซื้อตัว)' : 'สถานะการเงินพร้อมดำเนินการ'}
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] font-semibold text-[var(--mut)]">คาดการณ์สุทธิ / นัดเหย้า</div>
+            <div className={`font-bold text-xl sm:text-2xl tabular mt-0.5 ${est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+              {est.homeNet >= 0 ? `+${est.homeNet}k` : `${est.homeNet}k`}
+            </div>
+            <div className="text-[11px] text-[var(--mut)] tabular mt-0.5">
+              เกมเยือน: <b className={est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{est.awayNet >= 0 ? `+${est.awayNet}k` : `${est.awayNet}k`}</b>
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] font-semibold text-[var(--mut)]">ค่าเหนื่อยนักเตะ / เพดาน</div>
+            <div className={`font-bold text-xl sm:text-2xl tabular mt-0.5 ${tx.wagePct >= 95 ? 'text-[var(--red)]' : ''}`}>
+              {tx.curWage}k <span className="text-xs font-semibold text-[var(--mut)]">/ {tx.wageCap}k</span>
+            </div>
+            <div className="text-[11px] text-[var(--mut)] tabular mt-0.5">
+              ใช้ไป {tx.wagePct}% · สตาฟฟ์ -{est.staffCost}k/นัด
+            </div>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] font-semibold text-[var(--mut)]">ภาระหนี้คงค้างรวม</div>
+            <div className={`font-bold text-xl sm:text-2xl tabular mt-0.5 ${totalDebt > 0 ? 'text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+              {totalDebt.toLocaleString()}k ฿
+            </div>
+            <div className="text-[11px] text-[var(--mut)] tabular mt-0.5">
+              ธนาคาร {bankRemain}k · ค่าตัวปลายปี {state.payDue || 0}k
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm">👔 บอร์ดบริหาร & ชื่อเสียงกุนซือ</h3>
-                <span className="text-xs font-bold text-[var(--lamp)]">ชื่อเสียง {state.mgrRep ?? 50}</span>
-              </div>
-              <p className="text-xs text-[var(--mut)]">เป้าหมายซีซั่นนี้: จบอันดับ <b>{state.obj || 8}</b> ขึ้นไป</p>
-              <div className="h-2.5 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${bd}%`, background: bd < 30 ? 'var(--red)' : 'var(--g)' }} /></div>
-              <div className="text-xs text-[var(--mut)]">ความเชื่อมั่น {bd}% {bd < 30 && <span className="text-[var(--red)] font-bold">· ระวังโดนปลด!</span>}</div>
-            </div>
+        {/* Finance Sub-navigation */}
+        <div className="flex flex-wrap gap-1.5 p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
+          {(
+            [
+              ['overview', '📊 ภาพรวม & บอร์ด'],
+              ['commercial', '💼 สปอนเซอร์ & ตั๋ว'],
+              ['infra', '🏟️ สนาม & ทีมงาน'],
+              ['ledger', '📒 บัญชี & สินเชื่อ']
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setFinTab(id)}
+              className={`flex-1 min-w-[125px] px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+                finTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-              <h3 className="font-bold text-sm">💰 กระแสเงินสดล่าสุด</h3>
-              {state.money < 0 && <p className="text-xs text-[var(--red)] font-semibold">⚠️ งบติดลบ ซื้อนักเตะไม่ได้ และบอร์ดจะลดความเชื่อมั่น</p>}
-              <div className="flex justify-between text-xs py-1 border-b border-[var(--line)]/60"><span>รายรับเหย้าประมาณการ (ตั๋ว {estTk}k + สปอนเซอร์ {estSp}k)</span><b className="text-[var(--g)] tabular">+{estTk + estSp}k</b></div>
-              <div className="flex justify-between text-xs py-1 border-b border-[var(--line)]/60"><span>รายจ่ายประจำ (ค่าเหนื่อย {w}k{loanPay ? ` + หนี้ ${loanPay}k` : ''})</span><b className="text-[var(--red)] tabular">-{w + loanPay}k</b></div>
-              <div className="pt-1 space-y-1 max-h-40 overflow-y-auto">
-                {(state.finLog || []).slice(0, 6).map((e, i) => (
-                  <div key={i} className="flex justify-between text-xs py-0.5">
-                    <span className="text-[var(--mut)] truncate">{e.t} (S{e.s} นัด {e.m})</span>
-                    <b className={`tabular ${e.amt >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{e.amt >= 0 ? `+${e.amt}k` : `${e.amt}k`}</b>
-                  </div>
-                ))}
+        {/* Sub-tab 1: Overview & Board */}
+        {finTab === 'overview' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-sm">👔 บอร์ดบริหาร &amp; เครดิตกุนซือ</h3>
+                  <p className="text-xs text-[var(--mut)]">
+                    อันดับปัจจุบัน: <b className="text-[var(--ink)] tabular">#{curRank}/{tierTbl.length}</b> · เป้าหมายบอร์ด: <b className="text-[var(--g)] tabular">อันดับ {targetRank} ขึ้นไป</b>
+                  </p>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-bold text-[var(--lamp)] tabular">ชื่อเสียง {rep}</div>
+                  <div className="text-[11px] text-[var(--mut)]">{repRank}</div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-xs">
+                  <span className="text-[var(--mut)]">ความเชื่อมั่นบอร์ดบริหาร</span>
+                  <b className={`tabular ${bd < 30 ? 'text-[var(--red)]' : bd >= 70 ? 'text-[var(--g)]' : ''}`}>{bd}%</b>
+                </div>
+                <div className="h-2.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${bd}%`, background: bd < 30 ? 'var(--red)' : bd < 55 ? 'var(--lamp)' : 'var(--g)' }}
+                  />
+                </div>
+                <div className="text-[11px] text-[var(--mut)]">
+                  {bd < 30
+                    ? '⚠️ ความเชื่อมั่นวิกฤติ! ต้องรีบทำผลงานและคุมงบไม่ให้ติดลบ มิฉะนั้นอาจถูกปลดกลางคัน'
+                    : curRank <= targetRank
+                      ? '✅ ผลงานเป็นไปตามเป้าหมายบอร์ดบริหาร'
+                      : '📌 อันดับยังต่ำกว่าเป้าหมายบอร์ด — เร่งเก็บแต้มในลีก'}
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-[var(--line)]/60 grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">ขวัญแฟนบอล</div>
+                  <div className="font-bold text-sm tabular">{state.fan ?? 55}%</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">ขวัญห้องแต่งตัว</div>
+                  <div className="font-bold text-sm tabular">{state.mor ?? 55}%</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">ความจุสนาม</div>
+                  <div className="font-bold text-sm tabular">{est.cap.toLocaleString()}</div>
+                </div>
               </div>
             </div>
 
             <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-              <h3 className="font-bold text-sm">🏦 โบนัสอัดฉีด & สินเชื่อฉุกเฉิน</h3>
-              <div>
-                <div className="text-xs text-[var(--mut)] mb-1.5">โบนัสเมื่อชนะ (เพิ่มขวัญกำลังใจในเกม)</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[[0, 'ไม่มีโบนัส'], [10, '10k (ขวัญ+)'], [25, '25k (ขวัญ++)']].map(([v, l]) => (
-                    <button key={v} type="button" onClick={() => onUpdateState((d) => { d.winBonus = Number(v); })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(state.winBonus || 0) === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-                  ))}
+              <h3 className="font-bold text-sm">💰 ประมาณการกระแสเงินสดต่อแมตช์</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
+                  <div className="font-bold text-[var(--g)] flex justify-between">
+                    <span>🏠 เกมเหย้า</span>
+                    <span className="tabular">{est.homeNet >= 0 ? `+${est.homeNet}k` : `${est.homeNet}k`}</span>
+                  </div>
+                  <div className="flex justify-between text-[var(--mut)]"><span>ค่าตั๋วเข้าชม (~{est.estAtt.toLocaleString()} คน)</span><b className="text-[var(--g)] tabular">+{est.estTicket}k</b></div>
+                  <div className="flex justify-between text-[var(--mut)]"><span>ขายของที่ระลึก (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{est.estMerch}k</b></div>
+                  <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{est.estSponsor + est.dealIncome}k</b></div>
+                  <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>รายจ่ายรวม/นัด</span><b className="text-[var(--red)] tabular">-{est.totalOut}k</b></div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
+                  <div className="font-bold flex justify-between">
+                    <span>✈️ เกมเยือน</span>
+                    <span className={`tabular ${est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{est.awayNet >= 0 ? `+${est.awayNet}k` : `${est.awayNet}k`}</span>
+                  </div>
+                  <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก</span><b className="text-[var(--g)] tabular">+{est.estSponsor}k</b></div>
+                  <div className="flex justify-between text-[var(--mut)]"><span>ดีลพาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{est.dealIncome}k</b></div>
+                  <div className="flex justify-between text-[var(--mut)]"><span>ค่าเหนื่อยนักเตะ + สตาฟฟ์</span><b className="text-[var(--red)] tabular">-{est.wageCost + est.staffCost}k</b></div>
+                  <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>ผ่อนเงินกู้ธนาคาร</span><b className="text-[var(--red)] tabular">-{est.loanCost}k</b></div>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5">
-                  <div className="font-bold text-xs">📣 แคมเปญวันแข่ง</div>
+            </div>
+
+            <div className="lg:col-span-2 p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-bold text-sm">⚡ มาตรการกระตุ้นนัดถัดไป</h3>
+                <span className="text-[11px] text-[var(--mut)]">มีผลทันทีในแมตช์ที่กำลังจะลงแข่ง</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-2">
+                  <div className="font-bold text-xs">🏆 โบนัสอัดฉีดชัยชนะ (จ่ายเฉพาะเมื่อชนะ)</div>
+                  <div className="text-[11px] text-[var(--mut)]">เพิ่มความมุ่งมั่นและโอกาสทำผลงานดีในนัดสำคัญ</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      [0, 'ไม่มีโบนัส'],
+                      [10, '10k (ขวัญ +)'],
+                      [25, '25k (ขวัญ ++)']
+                    ] as const).map(([v, l]) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { d.winBonus = v; })}
+                        className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold cursor-pointer ${
+                          (state.winBonus || 0) === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)]'
+                        }`}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-2">
+                  <div className="font-bold text-xs">📣 แคมเปญโปรโมตวันแข่ง</div>
                   <div className="text-[11px] text-[var(--mut)]">
-                    {state.promo === 1 ? 'ใช้งานอยู่: ตั๋วนัดหน้า +20% (+15k)' : state.promo === 2 ? 'ใช้งานอยู่: สปอนเซอร์ +35% (+20k)' : 'บูสต์รายได้นัดถัดไป 1 นัด'}
+                    {state.promo === 1
+                      ? '✅ กำลังใช้งาน: แคมเปญดึงดูดผู้ชม (ตั๋วนัดหน้า +35% และแฟนเข้าชม +15%)'
+                      : state.promo === 2
+                        ? '✅ กำลังใช้งาน: บูสต์สปอนเซอร์วันแข่ง (+35% รายได้สปอนเซอร์)'
+                        : 'เลือกลงทุนโปรโมต 1 นัด เพื่อดันรายได้วันแข่งขัน'}
                   </div>
                   {!state.promo && (
-                    <div className="flex flex-wrap gap-1">
-                      <button type="button" disabled={state.money < 15} onClick={() => { onUpdateState((d) => { d.money -= 15; d.promo = 1; logFin(d, 'โปรโมตตั๋ววันแข่ง', -15); }); onToast('เปิดแคมเปญโปรโมตตั๋วแล้ว'); }} className="px-2.5 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold disabled:opacity-40 cursor-pointer">ตั๋ว 15k</button>
-                      <button type="button" disabled={state.money < 25} onClick={() => { onUpdateState((d) => { d.money -= 25; d.promo = 2; logFin(d, 'บูสต์สปอนเซอร์วันแข่ง', -25); }); onToast('เปิดแคมเปญสปอนเซอร์แล้ว'); }} className="px-2.5 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold disabled:opacity-40 cursor-pointer">สปอนฯ 25k</button>
-                    </div>
-                  )}
-                </div>
-                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5">
-                  <div className="font-bold text-xs">🏦 เงินกู้ธนาคาร</div>
-                  {state.bankLoan ? (
-                    <>
-                      <div className="text-[11px] text-[var(--mut)]">ค้าง {state.bankLoan.left} งวด ({state.bankLoan.left * state.bankLoan.per}k ฿)</div>
+                    <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
-                        disabled={state.money < state.bankLoan.left * state.bankLoan.per}
+                        disabled={state.money < 15}
                         onClick={() => {
-                          const tot = state.bankLoan!.left * state.bankLoan!.per;
-                          onUpdateState((d) => { d.money -= tot; logFin(d, 'โปะปิดเงินกู้ธนาคาร', -tot); d.bankLoan = null; });
-                          onToast('ปิดยอดหนี้ทั้งหมดแล้ว');
+                          onUpdateState((d) => {
+                            d.money -= 15;
+                            d.promo = 1;
+                            logFin(d, 'โปรโมตตั๋ววันแข่ง', -15);
+                          });
+                          onToast('เปิดแคมเปญโปรโมตตั๋ววันแข่งแล้ว');
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer hover:border-[var(--g)]"
                       >
-                        โปะปิดหนี้ {state.bankLoan.left * state.bankLoan.per}k
+                        โปรโมตตั๋ว (15k)
                       </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="text-[11px] text-[var(--mut)]">กู้ด่วน 150k (ผ่อน 18k × 10 นัด)</div>
-                      <button type="button" onClick={() => { onUpdateState((d) => { d.money += 150; d.bankLoan = { left: 10, per: 18 }; logFin(d, 'กู้เงินฉุกเฉินธนาคาร', 150); }); onToast('รับเงินกู้ +150k ฿ แล้ว'); }} className="px-2.5 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold cursor-pointer">กู้เงิน 150k</button>
-                    </>
+                      <button
+                        type="button"
+                        disabled={state.money < 25}
+                        onClick={() => {
+                          onUpdateState((d) => {
+                            d.money -= 25;
+                            d.promo = 2;
+                            logFin(d, 'บูสต์สปอนเซอร์วันแข่ง', -25);
+                          });
+                          onToast('เปิดแคมเปญบูสต์สปอนเซอร์แล้ว');
+                        }}
+                        className="flex-1 py-1.5 px-3 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer hover:border-[var(--g)]"
+                      >
+                        บูสต์สปอนฯ (25k)
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
             </div>
           </div>
+        )}
 
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-              <h3 className="font-bold text-sm">🎫 ราคาตั๋ว & สปอนเซอร์หลัก</h3>
-              <div>
-                <div className="text-xs text-[var(--mut)] mb-1">ราคาตั๋ว (ขวัญแฟนบอล {state.fan ?? 50}%)</div>
-                <div className="flex gap-1.5">
-                  {['ถูก', 'กลาง', 'แพง'].map((l, i) => (
-                    <button key={l} type="button" onClick={() => onUpdateState((d) => { d.tp = i; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(state.tp ?? 1) === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>ตั๋ว{l}</button>
-                  ))}
+        {/* Sub-tab 2: Sponsors, Partner Deals, Tickets & Merch */}
+        {finTab === 'commercial' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                <h3 className="font-bold text-sm">🤝 สปอนเซอร์หลักคาดอกเสื้อ</h3>
+                <div className="space-y-2">
+                  {[
+                    { idx: 0, title: 'แพ็กเกจมั่นคงสม่ำเสมอ', base: `${8 + me.tier * 6}k / นัด`, note: 'รับรายได้คงที่ทุกแมตช์ทั้งเหย้าและเยือน' },
+                    { idx: 1, title: 'แพ็กเกจโบนัสชัยชนะ', base: `${4 + me.tier * 4}k + โบนัสชนะ ${10 + me.tier * 6}k`, note: 'พื้นฐานต่ำกว่า แต่ถ้าชนะรับเงินก้อนโต' },
+                    { idx: 2, title: 'แพ็กเกจบิ๊กแมตช์ & ดาร์บี้', base: `${5 + me.tier * 5}k + ดาร์บี้ ${18 + me.tier * 8}k`, note: 'จ่ายหนักพิเศษเมื่อลงเล่นเกมดาร์บี้แมตช์' }
+                  ].map((opt) => {
+                    const active = (state.sp ?? 0) === opt.idx;
+                    return (
+                      <button
+                        key={opt.idx}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { d.sp = opt.idx; })}
+                        className={`w-full p-3 rounded-xl border text-left cursor-pointer transition-colors ${
+                          active ? 'bg-[var(--g-soft)] border-[var(--g)]' : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--line)]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                          <span>{opt.title}</span>
+                          <span className="text-[var(--g)] tabular">{opt.base}</span>
+                        </div>
+                        <div className="text-[11px] text-[var(--mut)] mt-0.5">{opt.note}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <div>
-                <div className="text-xs text-[var(--mut)] mb-1">รูปแบบสปอนเซอร์</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {['มั่นคง', 'โบนัสชัยชนะ', 'โบนัสดาร์บี้'].map((l, i) => (
-                    <button key={l} type="button" onClick={() => onUpdateState((d) => { d.sp = i; })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(state.sp ?? 0) === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-                  ))}
+
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm">📄 ดีลพาร์ทเนอร์ระยะสั้น</h3>
+                  <span className="text-[11px] text-[var(--mut)]">{state.sponsorDeal ? 'มีสัญญาใช้งานอยู่' : 'เลือกเซ็นสัญญาเพิ่มรายได้'}</span>
                 </div>
+                {state.sponsorDeal ? (
+                  <div className="p-3.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/50 space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span>{state.sponsorDeal.name}</span>
+                      <span className="text-[var(--g)] tabular">+{state.sponsorDeal.perMatch}k / นัด</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--mut)] tabular">
+                      เหลืออายุสัญญาอีก {state.sponsorDeal.left} นัด (คาดการณ์รับเพิ่ม {state.sponsorDeal.left * state.sponsorDeal.perMatch}k ฿)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {partnerDeals.map((deal) => (
+                      <div key={deal.id} className="p-3 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs truncate">{deal.name}</div>
+                          <div className="text-[11px] text-[var(--mut)] tabular">
+                            +{deal.perMatch}k/นัด · {deal.matches} นัด · โบนัสเซ็น +{deal.signBonus}k
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${deal.reqOk ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{deal.reqText}</div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!deal.reqOk}
+                          onClick={() => {
+                            SFX.tap();
+                            onUpdateState((d) => {
+                              d.sponsorDeal = { id: deal.id, name: deal.name, perMatch: deal.perMatch, left: deal.matches };
+                              d.money += deal.signBonus;
+                              logFin(d, `โบนัสเซ็นสัญญา: ${deal.name}`, deal.signBonus);
+                            });
+                            onToast(`เซ็นสัญญากับ ${deal.name} สำเร็จ (+${deal.signBonus}k ฿)`);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                        >
+                          เซ็นสัญญา
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm">🎫 นโยบายราคาตั๋วเข้าชม</h3>
+                  <span className="text-xs font-bold text-[var(--g)] tabular">~{est.estAtt.toLocaleString()} / {est.cap.toLocaleString()} ({est.attPct}%)</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { idx: 0, label: 'ตั๋วถูก', desc: 'คนดูเยอะ +ขวัญแฟน' },
+                    { idx: 1, label: 'ตั๋วกลาง', desc: 'สมดุลคนดู & รายรับ' },
+                    { idx: 2, label: 'ตั๋วแพง', desc: 'ทำเงินสูง / คนดูลด' }
+                  ].map((opt) => (
+                    <button
+                      key={opt.idx}
+                      type="button"
+                      onClick={() => onUpdateState((d) => { d.tp = opt.idx; })}
+                      className={`p-2.5 rounded-xl text-left border cursor-pointer ${
+                        (state.tp ?? 1) === opt.idx ? 'bg-[var(--g)] text-white border-[var(--g)]' : 'bg-[var(--surface-2)] border-transparent'
+                      }`}
+                    >
+                      <div className="font-bold text-xs">{opt.label}</div>
+                      <div className={`text-[10px] mt-0.5 ${(state.tp ?? 1) === opt.idx ? 'text-white/85' : 'text-[var(--mut)]'}`}>{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--surface-2)] flex items-center justify-between text-xs">
+                  <span className="text-[var(--mut)]">รายได้ค่าตั๋วเหย้าโดยประมาณ</span>
+                  <b className="text-[var(--g)] tabular">+{est.estTicket}k ฿ / นัดเหย้า</b>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm">🛍️ ร้านค้าของที่ระลึกสโมสร</h3>
+                  <span className="text-xs font-bold tabular">Lv.{state.merchLv ?? 1}/5</span>
+                </div>
+                <p className="text-xs text-[var(--mut)]">
+                  สร้างรายได้เสริมทุกนัดเหย้า ({est.estMerch}k ฿/นัด) และช่วยขยายเพดานค่าเหนื่อยลีก +5% ต่อเลเวล
+                </p>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div className="flex gap-1.5">
+                    {[1, 2, 3, 4, 5].map((lv) => (
+                      <span key={lv} className={`h-2 w-7 rounded-full ${lv <= (state.merchLv ?? 1) ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={(state.merchLv ?? 1) >= 5 || state.money < (state.merchLv ?? 1) * 75}
+                    onClick={() => upgradeFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
+                    className="px-3.5 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                  >
+                    {(state.merchLv ?? 1) >= 5 ? 'เต็มแล้ว' : `ขยายร้าน ${(state.merchLv ?? 1) * 75}k`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sub-tab 3: Facilities, Backroom Staff & Training Focus */}
+        {finTab === 'infra' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-              <h3 className="font-bold text-sm">🏟️ สิ่งอำนวยความสะดวก (สูงสุด Lv.5)</h3>
-              {([['st', 'สนามกีฬา', 'เพิ่มความจุและรายได้ตั๋วเหย้า', 100], ['tr', 'ศูนย์ฝึกซ้อม', 'พัฒนานักเตะไว & ฟื้นฟิตเร็ว', 80], ['ya', 'อะคาเดมี่เยาวชน', 'ดึงเยาวชนเก่งขึ้น & แมวมองดีขึ้น', 80]] as const).map(([k, title, desc, baseCost]) => {
+              <h3 className="font-bold text-sm">🏟️ สิ่งอำนวยความสะดวกสโมสร (สูงสุด Lv.5)</h3>
+              {(
+                [
+                  ['st', 'สนามกีฬา', `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มตั๋ว & เพดานค่าจ้าง +10%/Lv`, 100],
+                  ['tr', 'ศูนย์ฝึกซ้อม', 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นความฟิต +2%/Lv', 80],
+                  ['ya', 'อะคาเดมี่เยาวชน', 'สร้างเยาวชน OVR สูงขึ้น & เพิ่มคุณภาพแมวมอง', 80],
+                  ['med', 'ศูนย์การแพทย์ & ฟื้นฟู', 'ลดโอกาสบาดเจ็บ -8%/Lv และเร่งฟื้นฟูอาการเจ็บ', 75]
+                ] as const
+              ).map(([k, title, desc, baseCost]) => {
                 const lv = state[k] ?? 1;
                 const cost = lv * baseCost;
                 return (
-                  <div key={k} className="flex items-center justify-between gap-3 py-1.5 border-b border-[var(--line)]/60 last:border-0">
+                  <div key={k} className="flex items-center justify-between gap-3 py-2 border-b border-[var(--line)]/60 last:border-0">
                     <div className="min-w-0">
-                      <div className="font-bold text-xs">{title} (Lv.{lv}/5)</div>
+                      <div className="font-bold text-xs">{title} · Lv.{lv}/5</div>
                       <div className="text-[11px] text-[var(--mut)]">{desc}</div>
-                      <div className="flex gap-1 mt-1">
-                        {[1, 2, 3, 4, 5].map((x) => <span key={x} className={`h-1.5 w-4 rounded-full ${x <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />)}
+                      <div className="flex gap-1 mt-1.5">
+                        {[1, 2, 3, 4, 5].map((x) => (
+                          <span key={x} className={`h-1.5 w-5 rounded-full ${x <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
+                        ))}
                       </div>
                     </div>
-                    <button type="button" disabled={lv >= 5 || state.money < cost} onClick={() => upgradeFac(k, title, baseCost)} className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0">
+                    <button
+                      type="button"
+                      disabled={lv >= 5 || state.money < cost}
+                      onClick={() => upgradeFac(k, title, baseCost)}
+                      className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                    >
                       {lv >= 5 ? 'เต็มแล้ว' : `อัป ${cost}k`}
                     </button>
                   </div>
@@ -6651,188 +8506,1043 @@ const FinanceClubView: React.FC<{
               })}
             </div>
 
-            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-              <h3 className="font-bold text-sm">🏋️ โปรแกรมฝึกซ้อมทีม</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['F', 'ฟื้นร่าง']] as const).map(([k, l]) => (
-                  <button key={k} type="button" onClick={() => onUpdateState((d) => { d.tf = k; })} className={`py-2 rounded-lg text-xs font-semibold cursor-pointer ${state.tf === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-                ))}
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช (สูงสุด Lv.3)</h3>
+                  <span className="text-xs font-bold text-[var(--red)] tabular">ค่าจ้างรวม -{est.staffCost}k/นัด</span>
+                </div>
+                {(
+                  [
+                    ['asst', 'ผู้ช่วยโค้ช', 'เพิ่มความคุ้นเคยแท็กติก & โอกาสซ้อมพัฒนา +2%/Lv'],
+                    ['fit', 'โค้ชฟิตเนส', 'ฟื้นฟูความฟิตทั้งทีมหลังจบแมตช์ +2%/Lv'],
+                    ['scout', 'หัวหน้าแมวมอง', 'เพิ่มคุณภาพ & จำนวนนักเตะจากภารกิจแมวมอง'],
+                    ['physio', 'นักกายภาพบำบัด', 'ลดความเสี่ยงบาดเจ็บ -8%/Lv & หายเจ็บไวขึ้น']
+                  ] as const
+                ).map(([role, title, desc]) => {
+                  const lv = stf[role];
+                  const nextCost = [45, 75, 110][lv] ?? 0;
+                  return (
+                    <div key={role} className="flex items-center justify-between gap-2 py-2 border-b border-[var(--line)]/60 last:border-0">
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs">{title} · Lv.{lv}/3</div>
+                        <div className="text-[11px] text-[var(--mut)]">{desc}</div>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {lv > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => fireStaff(role, title)}
+                            className="px-2 py-1.5 rounded-lg bg-[var(--surface-2)] text-[11px] font-semibold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
+                          >
+                            ลด
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          disabled={lv >= 3 || state.money < nextCost}
+                          onClick={() => hireStaff(role, title)}
+                          className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
+                        >
+                          {lv >= 3 ? 'เต็ม' : `จ้าง ${nextCost}k`}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-xs text-[var(--mut)]">นักเตะสายที่เลือกมีโอกาสเพิ่มค่าพลังหลังจบแมตช์ (ฟื้นร่างช่วยฟื้นความฟิตไว + ลดเจ็บ)</p>
+
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+                <h3 className="font-bold text-sm">🏋️ โฟกัสโปรแกรมซ้อมประจำสัปดาห์</h3>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['F', 'ฟื้นร่าง']] as const).map(([k, l]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => onUpdateState((d) => { d.tf = k; })}
+                      className={`py-2 rounded-lg text-xs font-bold cursor-pointer ${state.tf === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[11px] text-[var(--mut)]">นักเตะตำแหน่งที่เลือกมีโอกาสอัป OVR หลังแข่ง (ฟื้นร่างช่วยเร่งฟิตและลดเจ็บ)</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Sub-tab 4: Bank Loans, Wage Structure & Filterable Ledger */}
+        {finTab === 'ledger' && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            <div className="space-y-4">
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                <h3 className="font-bold text-sm">🏦 ธนาคาร &amp; จัดการหนี้สิน</h3>
+                {state.bankLoan ? (
+                  <div className="p-3.5 rounded-xl bg-[var(--surface-2)] space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span>เงินกู้ธนาคารคงค้าง</span>
+                      <span className="text-[var(--red)] tabular">{bankRemain.toLocaleString()}k ฿ ({state.bankLoan.left} งวด)</span>
+                    </div>
+                    <div className="text-[11px] text-[var(--mut)] tabular">ผ่อนชำระงวดละ {state.bankLoan.per}k ฿ ทุกแมตช์</div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={state.money < state.bankLoan.per}
+                        onClick={() => {
+                          const per = state.bankLoan!.per;
+                          onUpdateState((d) => {
+                            if (!d.bankLoan) return;
+                            d.money -= per;
+                            d.bankLoan.left--;
+                            logFin(d, 'ชำระล่วงหน้าเงินกู้ 1 งวด', -per);
+                            if (d.bankLoan.left <= 0) d.bankLoan = null;
+                          });
+                          onToast('ชำระเงินกู้ล่วงหน้า 1 งวดแล้ว');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer"
+                      >
+                        จ่าย 1 งวด ({state.bankLoan.per}k)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={state.money < bankRemain}
+                        onClick={() => {
+                          onUpdateState((d) => {
+                            d.money -= bankRemain;
+                            logFin(d, 'โปะปิดเงินกู้ธนาคาร', -bankRemain);
+                            d.bankLoan = null;
+                          });
+                          onToast('ปิดยอดหนี้ธนาคารทั้งหมดแล้ว');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
+                      >
+                        โปะปิดทั้งหมด ({bankRemain}k)
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {loanPackages.map((lp) => (
+                      <div key={lp.id} className="p-3 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs">{lp.title} (+{lp.amount}k ฿)</div>
+                          <div className="text-[11px] text-[var(--mut)] tabular">ผ่อน {lp.per}k × {lp.left} นัด · {lp.desc}</div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            onUpdateState((d) => {
+                              d.money += lp.amount;
+                              d.bankLoan = { left: lp.left, per: lp.per };
+                              logFin(d, `กู้${lp.title}`, lp.amount);
+                            });
+                            onToast(`รับเงินกู้ +${lp.amount}k ฿ เข้าคลังสโมสรแล้ว`);
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs font-bold cursor-pointer shrink-0"
+                        >
+                          กู้ +{lp.amount}k
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {(state.payDue || 0) > 0 && (
+                  <div className="p-3 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/40 flex items-center justify-between gap-2">
+                    <div className="text-xs">
+                      <div className="font-bold">ค้างผ่อนค่าตัวนักเตะปลายปี</div>
+                      <div className="text-[11px] text-[var(--mut)] tabular">ยอดคงเหลือ {state.payDue}k ฿ (หักอัตโนมัติเมื่อจบซีซั่น)</div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={state.money < (state.payDue || 0)}
+                      onClick={() => {
+                        const amt = state.payDue || 0;
+                        onUpdateState((d) => {
+                          d.money -= amt;
+                          d.payDue = 0;
+                          logFin(d, 'ชำระยอดผ่อนค่าตัวล่วงหน้า', -amt);
+                        });
+                        onToast('ชำระยอดค้างผ่อนค่าตัวครบแล้ว');
+                      }}
+                      className="px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                    >
+                      ปิดยอด {state.payDue}k
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+                <h3 className="font-bold text-sm">📊 โครงสร้างค่าเหนื่อยรายตำแหน่ง</h3>
+                <div className="grid grid-cols-4 gap-2 text-center">
+                  {(['GK', 'DF', 'MF', 'FW'] as Position[]).map((pos) => (
+                    <div key={pos} className="p-2 rounded-xl bg-[var(--surface-2)]">
+                      <div className="text-[10px] font-bold text-[var(--mut)]">{pos}</div>
+                      <div className="font-bold text-xs tabular mt-0.5">{posWageMap[pos].toFixed(1)}k</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-1 space-y-1">
+                  <div className="text-[11px] font-bold text-[var(--mut)]">นักเตะค่าเหนื่อยสูงสุด 3 อันดับ</div>
+                  {topEarners.map((q) => (
+                    <div key={q.n} className="flex justify-between text-xs py-1 border-b border-[var(--line)]/50 last:border-0">
+                      <span className="truncate">{q.ro} · {q.n}</span>
+                      <b className="tabular text-[var(--mut)]">{wagOf(q).toFixed(1)}k/นัด</b>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-bold text-sm">📒 สมุดบัญชีรายรับ-รายจ่าย</h3>
+                <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--surface-2)] text-[11px]">
+                  {([['all', 'ทั้งหมด'], ['in', 'รายรับ'], ['out', 'รายจ่าย']] as const).map(([fId, fLbl]) => (
+                    <button
+                      key={fId}
+                      type="button"
+                      onClick={() => setLedgerFilter(fId)}
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer ${ledgerFilter === fId ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+                    >
+                      {fLbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">รายรับ (บันทึก)</div>
+                  <div className="font-bold text-[var(--g)] tabular">+{totalLogIn.toLocaleString()}k</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">รายจ่าย (บันทึก)</div>
+                  <div className="font-bold text-[var(--red)] tabular">-{totalLogOut.toLocaleString()}k</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">ดุลสุทธิ</div>
+                  <div className={`font-bold tabular ${totalLogIn - totalLogOut >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                    {totalLogIn - totalLogOut >= 0 ? `+${(totalLogIn - totalLogOut).toLocaleString()}k` : `${(totalLogIn - totalLogOut).toLocaleString()}k`}
+                  </div>
+                </div>
+              </div>
+              <div className="max-h-80 overflow-y-auto space-y-1 pr-1">
+                {filteredEntries.length === 0 ? (
+                  <div className="text-xs text-[var(--mut)] py-8 text-center">ยังไม่มีรายการบัญชีในหมวดนี้</div>
+                ) : (
+                  filteredEntries.map((e, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-xs py-1.5 border-b border-[var(--line)]/50 last:border-0">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{e.t}</div>
+                        <div className="text-[10px] text-[var(--mut)] tabular">ซีซั่น {e.s} · นัดที่ {e.m}</div>
+                      </div>
+                      <b className={`tabular shrink-0 ${e.amt >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                        {e.amt >= 0 ? `+${e.amt}k` : `${e.amt}k`}
+                      </b>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
+  // Club Identity & Legacy View (tab === 'u')
   const k = ensureClubIdentity(state);
   const ts = teamStats(me, state);
   const cap = [3500, 8000, 15000, 26000, 42000][(state.st ?? 1) - 1] || 3500;
   const totV = me.sq.reduce((a, q) => a + Math.round((q.ov * q.ov) / 40), 0);
+  const avgAge = (me.sq.reduce((a, q) => a + q.age, 0) / Math.max(1, me.sq.length)).toFixed(1);
   const trophies = state.trophies || [];
   const bs = me.sq.slice().sort((a, b) => (b.sg || 0) - (a.sg || 0))[0];
   const ba = me.sq.slice().sort((a, b) => (b.sa || 0) - (a.sa || 0))[0];
+  const bm = me.sq.slice().sort((a, b) => (b.ap || 0) - (a.ap || 0))[0];
   const topO = me.sq.slice().sort((a, b) => b.ov - a.ov)[0];
   const curTurn = state.season * 40 + state.md;
   const actCool = state.clubActMd != null && curTurn - state.clubActMd < 3;
   const remCd = state.clubActMd != null ? Math.max(0, 3 - (curTurn - state.clubActMd)) : 0;
 
+  const clubPresets: { label: string; c1: string; c2: string; c3?: string }[] = [
+    { label: 'แดง-ทอง', c1: '#c0392b', c2: '#f4c63d', c3: '#ffffff' },
+    { label: 'น้ำเงิน-ขาว', c1: '#2f6fd6', c2: '#ffffff', c3: '#f4c63d' },
+    { label: 'เขียว-ขาว', c1: '#1c7a4a', c2: '#ffffff', c3: '#f4c63d' },
+    { label: 'กรมท่า-ทอง', c1: '#1b263b', c2: '#f4c63d', c3: '#0ea5e9' },
+    { label: 'ส้ม-ดำ', c1: '#e67e22', c2: '#111111', c3: '#ffffff' },
+    { label: 'ม่วง-ทอง', c1: '#7c3aed', c2: '#f4c63d', c3: '#ffffff' },
+    { label: 'ฟ้า-ขาว', c1: '#0ea5e9', c2: '#ffffff', c3: '#1b263b' },
+    { label: 'ชมพู-กรมท่า', c1: '#d6336c', c2: '#1b263b', c3: '#ffffff' },
+    { label: 'เลือดหมู-ฟ้า', c1: '#881337', c2: '#0ea5e9', c3: '#f4c63d' },
+    { label: 'เหลือง-ดำ', c1: '#facc15', c2: '#111111', c3: '#ffffff' }
+  ];
+
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-      <div className="space-y-4">
-        <div className="p-4 rounded-2xl border border-[var(--line)] text-center space-y-3" style={{ background: `linear-gradient(155deg, color-mix(in srgb, ${k.c1} 16%, var(--surface)), var(--surface) 60%)` }}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm">🏛️ อัตลักษณ์สโมสร</h3>
+    <div className="space-y-4">
+      {/* Club Hero Identity Banner */}
+      <div
+        className="p-4 sm:p-5 rounded-3xl border border-[var(--line)] space-y-4"
+        style={{ background: `linear-gradient(155deg, color-mix(in srgb, ${k.c1} 18%, var(--surface)), var(--surface) 58%)` }}
+      >
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+            <div className="flex items-end gap-3 shrink-0">
+              <div className="text-center">
+                <ClubCrest name={me.name} size={74} team={me} club={k} isMyClub />
+                <div className="text-[10px] text-[var(--mut)] font-semibold mt-0.5">ตราสโมสร</div>
+              </div>
+              <div className="text-center">
+                <KitJersey club={k} away={false} size={64} />
+                <div className="text-[10px] text-[var(--mut)] font-semibold mt-0.5">เหย้า</div>
+              </div>
+              <div className="text-center">
+                <KitJersey club={k} away={true} size={64} />
+                <div className="text-[10px] text-[var(--mut)] font-semibold mt-0.5">เยือน</div>
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="text-[11px] font-bold text-[var(--g)]">
+                {TN[me.tier]} · ก่อตั้งปี {k.founded || 2568}
+              </div>
+              <h2 className="font-bold text-2xl font-display leading-tight">
+                {me.name} {k.nick ? <span className="text-base font-semibold text-[var(--mut)]">«{k.nick}»</span> : null}
+              </h2>
+              <p className="text-xs text-[var(--mut)]">
+                🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}) · 👔 กุนซือ: {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+              </p>
+              {k.motto && <p className="text-xs italic text-[var(--ink)]/85">&ldquo;{k.motto}&rdquo;</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2 w-full md:w-auto text-center shrink-0">
+            <div className="p-2.5 rounded-xl bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="text-[10px] text-[var(--mut)]">พลัง XI / ทีม</div>
+              <b className="text-sm tabular">{ts.ovXi} / {ts.ovSq}</b>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="text-[10px] text-[var(--mut)]">แฟนบอล</div>
+              <b className="text-sm tabular">{state.fan ?? 50}%</b>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="text-[10px] text-[var(--mut)]">บอร์ด</div>
+              <b className="text-sm tabular">{state.bd ?? 50}%</b>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="text-[10px] text-[var(--mut)]">มูลค่าทีม</div>
+              <b className="text-sm tabular">{totV}k</b>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Club Sub-navigation */}
+      <div className="flex flex-wrap gap-1.5 p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
+        {(
+          [
+            ['info', '🏛️ ข้อมูล & ทีม'],
+            ['identity', '🎨 ตรา & ชุดแข่ง'],
+            ['activities', '🤝 กิจกรรมสโมสร'],
+            ['legacy', '🏆 เกียรติยศ & ประวัติ']
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setClubTab(id)}
+            className={`flex-1 min-w-[125px] px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
+              clubTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Club Tab 1: Basic Info & Squad Key Stats */}
+      {clubTab === 'info' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+            <h3 className="font-bold text-sm">✏️ แก้ไขข้อมูลพื้นฐานสโมสร</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="text-[11px] text-[var(--mut)] block mb-1">ชื่อสโมสร</label>
+                <input
+                  value={k.name}
+                  maxLength={20}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/["'<>`]/g, '');
+                    onUpdateState((d) => {
+                      const cl = ensureClubIdentity(d);
+                      cl.name = val;
+                      d.teams[d.me].name = val.trim() || 'ทีมของฉัน';
+                    });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[var(--mut)] block mb-1">ฉายาสโมสร</label>
+                <input
+                  value={k.nick}
+                  maxLength={20}
+                  placeholder="เช่น เสือล้านนา"
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/["'<>`]/g, '');
+                    onUpdateState((d) => { ensureClubIdentity(d).nick = val; });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[var(--mut)] block mb-1">ชื่อสนามเหย้า</label>
+                <input
+                  value={k.std}
+                  maxLength={24}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/["'<>`]/g, '');
+                    onUpdateState((d) => { ensureClubIdentity(d).std = val; });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-[var(--mut)] block mb-1">ชื่อผู้จัดการทีม</label>
+                <input
+                  value={k.managerName || ''}
+                  maxLength={22}
+                  placeholder="เช่น โค้ชต้น"
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/["'<>`]/g, '');
+                    onUpdateState((d) => { ensureClubIdentity(d).managerName = val; });
+                  }}
+                  className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                />
+              </div>
+              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] text-[var(--mut)] block mb-1">คำขวัญสโมสร</label>
+                  <input
+                    value={k.motto || ''}
+                    maxLength={40}
+                    placeholder="เช่น สู้สุดใจเพื่อชัยชนะ"
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/["'<>`]/g, '');
+                      onUpdateState((d) => { ensureClubIdentity(d).motto = val; });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-[var(--mut)] block mb-1">ปีก่อตั้ง (พ.ศ.)</label>
+                  <input
+                    type="number"
+                    min={2450}
+                    max={2600}
+                    value={k.founded || 2568}
+                    onChange={(e) => {
+                      const yr = clamp(Number(e.target.value) || 2568, 2450, 2600);
+                      onUpdateState((d) => { ensureClubIdentity(d).founded = yr; });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold tabular"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+            <h3 className="font-bold text-sm">📊 บรรยากาศห้องแต่งตัว &amp; แกนหลักทีม</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
+                <div className="text-[10px] text-[var(--mut)]">ขวัญทีม</div>
+                <div className="font-bold text-sm tabular">{state.mor ?? 55}%</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
+                <div className="text-[10px] text-[var(--mut)]">คุ้นเคยแผน</div>
+                <div className="font-bold text-sm tabular">{me.tacFam ?? 65}%</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
+                <div className="text-[10px] text-[var(--mut)]">อายุเฉลี่ย</div>
+                <div className="font-bold text-sm tabular">{avgAge} ปี</div>
+              </div>
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
+                <div className="text-[10px] text-[var(--mut)]">จำนวนนักเตะ</div>
+                <div className="font-bold text-sm tabular">{me.sq.length} คน</div>
+              </div>
+            </div>
+            <div className="space-y-1 text-xs pt-1">
+              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                <span className="text-[var(--mut)]">กัปตันทีม</span>
+                <b>{me.cap || topO?.n || '-'}</b>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                <span className="text-[var(--mut)]">ดาวเด่นพลังสูงสุด</span>
+                <b>{topO ? `${topO.n} (${topO.ro} · OVR ${topO.ov})` : '-'}</b>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                <span className="text-[var(--mut)]">ดาวซัลโวซีซั่นนี้</span>
+                <b>{bs && bs.sg ? `${bs.n} (${bs.sg} ประตู)` : 'ยังไม่มีประตู'}</b>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                <span className="text-[var(--mut)]">จอมแอสซิสต์ซีซั่นนี้</span>
+                <b>{ba && ba.sa ? `${ba.n} (${ba.sa} ครั้ง)` : 'ยังไม่มีข้อมูล'}</b>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-[var(--mut)]">ลงสนามมากที่สุด</span>
+                <b>{bm && bm.ap ? `${bm.n} (${bm.ap} นัด)` : 'ยังไม่มีข้อมูล'}</b>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Club Tab 2: Crest & Jersey Studio */}
+      {clubTab === 'identity' && (
+        <div className="space-y-4">
+          {/* Sticky Live Preview Bar */}
+          <div className="sticky top-0 z-20 p-3 sm:p-4 rounded-2xl bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--g)]/35 shadow-md flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex flex-col items-center">
+                <ClubCrest name={me.name} size={60} team={me} club={k} isMyClub />
+                <span className="text-[10px] font-bold text-[var(--mut)] mt-0.5">ตรา</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <KitJersey club={k} away={false} size={56} />
+                <span className="text-[10px] font-bold text-[var(--mut)] mt-0.5">ชุดเหย้า</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <KitJersey club={k} away={true} size={56} />
+                <span className="text-[10px] font-bold text-[var(--mut)] mt-0.5">ชุดเยือน</span>
+              </div>
+              <div className="hidden sm:block pl-2 border-l border-[var(--line)] space-y-0.5 text-[11px]">
+                <div className="font-bold text-xs text-[var(--ink)]">ตัวอย่างแบบเรียลไทม์ · {me.name}</div>
+                <div className="text-[var(--mut)]">
+                  ตรา: <b>{CREST_SHAPES[k.shape]?.label || 'โล่คลาสสิก'}</b> · <b>{CREST_PATTERNS[k.pat] || 'แถบขวาง'}</b>
+                </div>
+                <div className="text-[var(--mut)]">
+                  เสื้อ: <b>{KIT_PATTERNS[k.kit || 0]}</b> / เยือน <b>{KIT_PATTERNS[(k.awayKit ?? k.kit) || 0]}</b> · <b>{KIT_COLLARS[(k.collar ?? 0) % 4]}</b>
+                </div>
+              </div>
+            </div>
             <button
               type="button"
               onClick={() => {
                 const kp = P(KIT_P);
+                const icons = ['', ...Object.keys(CREST_IC)];
                 onUpdateState((d) => {
                   const cl = ensureClubIdentity(d);
-                  cl.c1 = kp[0]; cl.c2 = kp[1]; cl.shape = R(0, 2); cl.pat = R(0, 3); cl.kit = R(0, 5);
-                  cl.icon = P(['', '⚽', '🦅', '🐘', '🐯', '🐉', '🔥', '⭐']);
+                  cl.c1 = kp[0];
+                  cl.c2 = kp[1];
+                  cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
+                  cl.shape = R(0, CREST_SHAPES.length - 1);
+                  cl.pat = R(0, CREST_PATTERNS.length - 1);
+                  cl.crestBorder = R(0, 3);
+                  cl.kit = R(0, KIT_PATTERNS.length - 1);
+                  cl.awayKit = Math.random() < 0.5 ? R(0, KIT_PATTERNS.length - 1) : undefined;
+                  cl.collar = R(0, KIT_COLLARS.length - 1);
+                  cl.cuffTrim = Math.random() < 0.75;
+                  cl.icon = P(icons);
                   d.teams[d.me].kc = [cl.c1, cl.c2];
                 });
-                onToast('สุ่มชุดแข่งและตราใหม่แล้ว');
+                onToast('สุ่มตราสโมสรและชุดแข่งใหม่แล้ว!');
               }}
-              className="px-3 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs font-bold cursor-pointer shadow-xs shrink-0"
             >
-              🎲 สุ่มชุด & ตรา
+              🎲 สุ่มดีไซน์ทั้งหมด
             </button>
           </div>
-          <div className="flex items-end justify-center gap-5">
-            <div className="flex flex-col items-center gap-1"><ClubCrest name={me.name} size={70} team={me} club={k} isMyClub /><span className="text-[11px] font-semibold text-[var(--mut)]">ตราสโมสร</span></div>
-            <div className="flex flex-col items-center gap-1"><KitJersey club={k} away={false} size={78} /><span className="text-[11px] font-semibold text-[var(--mut)]">ชุดเหย้า</span></div>
-            <div className="flex flex-col items-center gap-1"><KitJersey club={k} away={true} size={78} /><span className="text-[11px] font-semibold text-[var(--mut)]">ชุดเยือน</span></div>
-          </div>
-          <div>
-            <h2 className="font-bold text-xl font-display">{me.name}</h2>
-            <p className="text-xs text-[var(--mut)]">{k.nick ? `«${k.nick}» · ` : ''}🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1})</p>
-          </div>
-          <div className="grid grid-cols-4 gap-2 text-center">
-            <div className="p-2 rounded-xl bg-[var(--surface)]/80"><div className="text-[11px] text-[var(--mut)]">เฉลี่ย</div><b className="text-sm tabular">{ts.ovSq} ({ts.ovXi})</b></div>
-            <div className="p-2 rounded-xl bg-[var(--surface)]/80"><div className="text-[11px] text-[var(--mut)]">แฟนบอล</div><b className="text-sm tabular">{state.fan ?? 50}%</b></div>
-            <div className="p-2 rounded-xl bg-[var(--surface)]/80"><div className="text-[11px] text-[var(--mut)]">บอร์ด</div><b className="text-sm tabular">{state.bd ?? 50}%</b></div>
-            <div className="p-2 rounded-xl bg-[var(--surface)]/80"><div className="text-[11px] text-[var(--mut)]">มูลค่า</div><b className="text-sm tabular">{totV}k</b></div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            {/* Crest Studio */}
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm">🛡️ สตูดิโอออกแบบตราสโมสร</h3>
+                <span className="text-[11px] font-semibold text-[var(--g)]">
+                  {CREST_SHAPES[k.shape]?.label} · {CREST_PATTERNS[k.pat]}
+                </span>
+              </div>
+
+              <div>
+                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">รูปทรงตรา ({CREST_SHAPES.length} แบบ)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {CREST_SHAPES.map((sh, i) => (
+                    <button
+                      key={sh.label}
+                      type="button"
+                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).shape = i; })}
+                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold cursor-pointer truncate ${k.shape === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] hover:text-[var(--ink)]'}`}
+                    >
+                      {sh.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลวดลายพื้นหลังตรา ({CREST_PATTERNS.length} แบบ)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {CREST_PATTERNS.map((l, i) => (
+                    <button
+                      key={l}
+                      type="button"
+                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).pat = i; })}
+                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold cursor-pointer truncate ${k.pat === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">สไตล์ขอบตรา</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {(['ขาว', 'ทอง', 'ขอบคู่', 'ดำเข้ม'] as const).map((lbl, i) => (
+                      <button
+                        key={lbl}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).crestBorder = i; })}
+                        className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer ${(k.crestBorder ?? 0) === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ดาวเกียรติยศบนตรา</div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[0, 1, 2, 3].map((stCnt) => (
+                      <button
+                        key={stCnt}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).stars = stCnt; })}
+                        className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer ${(k.stars ?? 0) === stCnt ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                      >
+                        {stCnt === 0 ? 'ไม่มี' : '⭐'.repeat(stCnt)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">สัญลักษณ์กลางตรา ({Object.keys(CREST_IC).length} แบบ + ตัวอักษร)</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {['', ...Object.keys(CREST_IC)].map((ic) => (
+                    <button
+                      key={ic || 'txt'}
+                      type="button"
+                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).icon = ic; })}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${k.icon === ic ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                    >
+                      {ic || 'อักษรแรก'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Jersey Studio */}
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm">🎽 สตูดิโอสีชุดแข่ง &amp; ลายเสื้อ</h3>
+                <span className="text-[11px] font-semibold text-[var(--g)]">
+                  เหย้า: {KIT_PATTERNS[k.kit || 0]}
+                </span>
+              </div>
+
+              <div>
+                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ชุดสีสโมสรยอดนิยม</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {clubPresets.map((pr) => {
+                    const active = k.c1.toLowerCase() === pr.c1.toLowerCase() && k.c2.toLowerCase() === pr.c2.toLowerCase();
+                    return (
+                      <button
+                        key={pr.label}
+                        type="button"
+                        onClick={() => {
+                          onUpdateState((d) => {
+                            const cl = ensureClubIdentity(d);
+                            cl.c1 = pr.c1;
+                            cl.c2 = pr.c2;
+                            cl.c3 = pr.c3 || '';
+                            d.teams[d.me].kc = [pr.c1, pr.c2];
+                          });
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer border ${
+                          active ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)]' : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--g)]'
+                        }`}
+                      >
+                        <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: pr.c1 }} />
+                        <span className="w-3 h-3 rounded-full border border-black/20" style={{ background: pr.c2 }} />
+                        {pr.c3 && <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: pr.c3 }} />}
+                        <span>{pr.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <div>
+                  <div className="text-xs text-[var(--mut)] font-semibold mb-1">สีหลัก · ชุดเหย้า</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {KIT_SW.map((col) => (
+                      <button
+                        key={col}
+                        type="button"
+                        disabled={colDist(col, k.c2) < 150}
+                        onClick={() => onUpdateState((d) => {
+                          const cl = ensureClubIdentity(d);
+                          cl.c1 = col;
+                          d.teams[d.me].kc = [cl.c1, cl.c2];
+                        })}
+                        className={`w-6 h-6 rounded-full border-2 border-white disabled:opacity-25 cursor-pointer ${k.c1 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
+                        style={{ background: col }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-[var(--mut)] font-semibold mb-1">สีหลัก · ชุดเยือน / ลายรอง</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {KIT_SW.map((col) => (
+                      <button
+                        key={col}
+                        type="button"
+                        disabled={colDist(col, k.c1) < 150}
+                        onClick={() => onUpdateState((d) => {
+                          const cl = ensureClubIdentity(d);
+                          cl.c2 = col;
+                          d.teams[d.me].kc = [cl.c1, cl.c2];
+                        })}
+                        className={`w-6 h-6 rounded-full border-2 border-white disabled:opacity-25 cursor-pointer ${k.c2 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
+                        style={{ background: col }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs text-[var(--mut)] font-semibold">สีขลิบ &amp; เส้นตัด (Accent)</span>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).c3 = ''; })}
+                      className={`text-[11px] font-semibold cursor-pointer ${!k.c3 ? 'text-[var(--g)] underline' : 'text-[var(--mut)]'}`}
+                    >
+                      อัตโนมัติ
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {KIT_SW.map((col) => (
+                      <button
+                        key={col}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).c3 = col; })}
+                        className={`w-6 h-6 rounded-full border-2 border-white cursor-pointer ${k.c3 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
+                        style={{ background: col }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลายเสื้อชุดเหย้า ({KIT_PATTERNS.length} ลาย)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {KIT_PATTERNS.map((l, i) => (
+                    <button
+                      key={l}
+                      type="button"
+                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).kit = i; })}
+                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold cursor-pointer truncate ${k.kit === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลายเสื้อชุดเยือน (แยกได้)</div>
+                  <select
+                    value={k.awayKit != null ? String(k.awayKit) : 'same'}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      onUpdateState((d) => {
+                        ensureClubIdentity(d).awayKit = v === 'same' ? undefined : Number(v);
+                      });
+                    }}
+                    className="w-full px-2.5 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
+                  >
+                    <option value="same">ใช้ลายเดียวกับชุดเหย้า</option>
+                    {KIT_PATTERNS.map((l, i) => (
+                      <option key={l} value={i}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ทรงคอเสื้อ ({KIT_COLLARS.length} แบบ)</div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {KIT_COLLARS.map((clbl, ci) => (
+                      <button
+                        key={clbl}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).collar = ci; })}
+                        className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer ${(k.collar ?? 0) === ci ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                      >
+                        {clbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onUpdateState((d) => {
+                  const cl = ensureClubIdentity(d);
+                  cl.cuffTrim = !(cl.cuffTrim ?? true);
+                })}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
+              >
+                <span>แถบขลิบปลายแขนเสื้อ &amp; ชายเสื้อ</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${(k.cuffTrim ?? true) ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                  {(k.cuffTrim ?? true) ? 'เปิด' : 'ปิด'}
+                </span>
+              </button>
+            </div>
           </div>
         </div>
+      )}
 
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
-          <h3 className="font-bold text-sm">✏️ ข้อมูลพื้นฐานสโมสร</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <div>
-              <label className="text-[11px] text-[var(--mut)] block mb-1">ชื่อสโมสร</label>
-              <input value={k.name} maxLength={20} onChange={(e) => { const val = e.target.value.replace(/["'<>`]/g, ''); onUpdateState((d) => { const cl = ensureClubIdentity(d); cl.name = val; d.teams[d.me].name = val.trim() || 'ทีมของฉัน'; }); }} className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold" />
-            </div>
-            <div>
-              <label className="text-[11px] text-[var(--mut)] block mb-1">ฉายา</label>
-              <input value={k.nick} maxLength={20} placeholder="เช่น เสือเหนือ" onChange={(e) => { const val = e.target.value.replace(/["'<>`]/g, ''); onUpdateState((d) => { ensureClubIdentity(d).nick = val; }); }} className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold" />
-            </div>
-            <div>
-              <label className="text-[11px] text-[var(--mut)] block mb-1">ชื่อสนาม</label>
-              <input value={k.std} maxLength={24} onChange={(e) => { const val = e.target.value.replace(/["'<>`]/g, ''); onUpdateState((d) => { ensureClubIdentity(d).std = val; }); }} className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold" />
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-          <h3 className="font-bold text-sm">🏅 ตู้โชว์ถ้วยรางวัล & สถิติสโมสร</h3>
-          <div className="space-y-1 text-xs">
-            <div className="flex justify-between py-1 border-b border-[var(--line)]/60"><span className="text-[var(--mut)]">ระดับลีกปัจจุบัน</span><b>{TN[me.tier]}</b></div>
-            <div className="flex justify-between py-1 border-b border-[var(--line)]/60"><span className="text-[var(--mut)]">ดาวเด่นพลังสูงสุด</span><b>{topO ? `${topO.n} (${topO.ov})` : '-'}</b></div>
-            <div className="flex justify-between py-1 border-b border-[var(--line)]/60"><span className="text-[var(--mut)]">ดาวซัลโวซีซั่นนี้</span><b>{bs && bs.sg ? `${bs.n} (${bs.sg} ประตู)` : 'ยังไม่มีประตู'}</b></div>
-            <div className="flex justify-between py-1 border-b border-[var(--line)]/60"><span className="text-[var(--mut)]">จอมแอสซิสต์ซีซั่นนี้</span><b>{ba && ba.sa ? `${ba.n} (${ba.sa} ครั้ง)` : 'ยังไม่มีข้อมูล'}</b></div>
-            {state.records?.mostPoints && <div className="flex justify-between py-1 border-b border-[var(--line)]/60"><span className="text-[var(--mut)]">สถิติแต้มสูงสุดตลอดกาล</span><b>{state.records.mostPoints.pts} แต้ม (ซีซั่น {state.records.mostPoints.s})</b></div>}
-          </div>
-          {trophies.length > 0 ? (
-            <div className="flex flex-wrap gap-1.5 pt-2">
-              {trophies.map((tr, i) => <span key={i} className="px-2.5 py-1 rounded-lg bg-[var(--lamp-soft)] text-xs font-bold">🏆 {tr.title} (S{tr.season})</span>)}
-            </div>
-          ) : (
-            <p className="text-xs text-[var(--mut)]">ยังไม่มีถ้วยรางวัลในตู้โชว์</p>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-4">
+      {/* Club Tab 3: Club Activities */}
+      {clubTab === 'activities' && (
         <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-          <h3 className="font-bold text-sm">🎨 ออกแบบตราสโมสร</h3>
-          <div>
-            <div className="text-xs text-[var(--mut)] mb-1">รูปทรง</div>
-            <div className="flex gap-1.5">
-              {['โล่', 'วงกลม', 'หกเหลี่ยม'].map((l, i) => (
-                <button key={l} type="button" onClick={() => onUpdateState((d) => { ensureClubIdentity(d).shape = i; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${k.shape === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-              ))}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-sm">🤝 กิจกรรมสโมสร &amp; มวลชนสัมพันธ์</h3>
+              <p className="text-xs text-[var(--mut)]">จัดกิจกรรมเพื่อปลุกขวัญนักเตะ ดึงดูดแฟนบอล และเสริมความเชื่อมั่นบอร์ด (คูลดาวน์ 3 นัดต่อครั้ง)</p>
             </div>
+            <span className={`text-xs font-bold ${actCool ? 'text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+              {actCool ? `⏳ รออีก ${remCd} นัด` : '✅ พร้อมจัดกิจกรรม'}
+            </span>
           </div>
-          <div>
-            <div className="text-xs text-[var(--mut)] mb-1">ลวดลาย</div>
-            <div className="flex gap-1.5">
-              {['แถบ', 'ครึ่ง', 'ทแยง', 'สองแถบ'].map((l, i) => (
-                <button key={l} type="button" onClick={() => onUpdateState((d) => { ensureClubIdentity(d).pat = i; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${k.pat === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-[var(--mut)] mb-1">สัญลักษณ์กลางตรา</div>
-            <div className="flex flex-wrap gap-1.5">
-              {['', '⚽', '🦅', '🐘', '🐯', '🐉', '🔥', '⭐'].map((ic) => (
-                <button key={ic || 'txt'} type="button" onClick={() => onUpdateState((d) => { ensureClubIdentity(d).icon = ic; })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${k.icon === ic ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{ic || 'อักษรแรก'}</button>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-          <h3 className="font-bold text-sm">🎽 สีชุดแข่ง & ลายเสื้อ</h3>
-          <div>
-            <div className="text-xs text-[var(--mut)] mb-1.5">สีหลัก · ชุดเหย้า</div>
-            <div className="flex flex-wrap gap-2">
-              {KIT_SW.map((col) => (
-                <button key={col} type="button" disabled={colDist(col, k.c2) < 150} onClick={() => onUpdateState((d) => { const cl = ensureClubIdentity(d); cl.c1 = col; d.teams[d.me].kc = [cl.c1, cl.c2]; })} className={`w-7 h-7 rounded-full border-2 border-white disabled:opacity-25 cursor-pointer ${k.c1 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`} style={{ background: col }} />
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-[var(--mut)] mb-1.5">สีหลัก · ชุดเยือน</div>
-            <div className="flex flex-wrap gap-2">
-              {KIT_SW.map((col) => (
-                <button key={col} type="button" disabled={colDist(col, k.c1) < 150} onClick={() => onUpdateState((d) => { const cl = ensureClubIdentity(d); cl.c2 = col; d.teams[d.me].kc = [cl.c1, cl.c2]; })} className={`w-7 h-7 rounded-full border-2 border-white disabled:opacity-25 cursor-pointer ${k.c2 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`} style={{ background: col }} />
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-[var(--mut)] mb-1">ลายเสื้อ</div>
-            <div className="flex flex-wrap gap-1.5">
-              {['เรียบ', 'ริ้วตั้ง', 'ริ้วขวาง', 'ครึ่งตัว', 'คาดทแยง', 'แถบกลาง'].map((l, i) => (
-                <button key={l} type="button" onClick={() => onUpdateState((d) => { ensureClubIdentity(d).kit = i; })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${k.kit === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-sm">🤝 กิจกรรมสโมสร</h3>
-            <span className="text-xs text-[var(--mut)]">{actCool ? `รออีก ${remCd} นัด` : 'พร้อมจัดกิจกรรม'}</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <button type="button" disabled={actCool} onClick={() => { onUpdateState((d) => { d.fan = clamp((d.fan ?? 50) + 6, 5, 100); d.clubActMd = curTurn; }); onToast('แฟนบอลประทับใจ! ขวัญแฟนบอล +6%'); }} className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer">
-              <div className="font-bold text-xs">📣 พบปะแฟนบอล (ฟรี)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <button
+              type="button"
+              disabled={actCool}
+              onClick={() => {
+                onUpdateState((d) => {
+                  d.fan = clamp((d.fan ?? 50) + 6, 5, 100);
+                  d.clubActMd = curTurn;
+                });
+                onToast('แฟนบอลประทับใจ! ขวัญแฟนบอล +6%');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>📣 พบปะแฟนบอล</span>
+                <span className="text-[var(--g)]">ฟรี</span>
+              </div>
               <div className="text-[11px] text-[var(--mut)]">ขวัญแฟนบอล +6%</div>
             </button>
-            <button type="button" disabled={actCool || state.money < 20} onClick={() => { onUpdateState((d) => { d.money -= 20; logFin(d, 'จัดงาน Open House สโมสร', -20); d.fan = clamp((d.fan ?? 50) + 8, 5, 100); d.mor = clamp((d.mor ?? 50) + 5, 0, 100); d.bd = clamp((d.bd ?? 50) + 3, 0, 100); d.clubActMd = curTurn; }); onToast('Open House สำเร็จ! แฟน +8% ขวัญ +5% บอร์ด +3%'); }} className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer">
-              <div className="font-bold text-xs">🎉 Open House (20k)</div>
+
+            <button
+              type="button"
+              disabled={actCool || state.money < 20}
+              onClick={() => {
+                onUpdateState((d) => {
+                  d.money -= 20;
+                  logFin(d, 'จัดงาน Open House สโมสร', -20);
+                  d.fan = clamp((d.fan ?? 50) + 8, 5, 100);
+                  d.mor = clamp((d.mor ?? 50) + 5, 0, 100);
+                  d.bd = clamp((d.bd ?? 50) + 3, 0, 100);
+                  d.clubActMd = curTurn;
+                });
+                onToast('Open House สำเร็จ! แฟน +8% ขวัญ +5% บอร์ด +3%');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>🎉 Open House สโมสร</span>
+                <span className="tabular">20k</span>
+              </div>
               <div className="text-[11px] text-[var(--mut)]">แฟน +8% · ขวัญ +5% · บอร์ด +3%</div>
             </button>
-            <button type="button" disabled={actCool || state.money < 25} onClick={() => { onUpdateState((d) => { d.money -= 25; logFin(d, 'แคมป์กระชับความสัมพันธ์ทีม', -25); d.mor = clamp((d.mor ?? 50) + 8, 0, 100); d.teams[d.me].sq.forEach((q) => { q.fit = clamp((q.fit ?? 100) + 6, 30, 100); }); d.clubActMd = curTurn; }); onToast('เข้าแคมป์สำเร็จ! ขวัญทีม +8% ความฟิต +6%'); }} className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer">
-              <div className="font-bold text-xs">🏃 แคมป์ทีม (25k)</div>
-              <div className="text-[11px] text-[var(--mut)]">ขวัญทีม +8% · ฟิต +6%</div>
+
+            <button
+              type="button"
+              disabled={actCool || state.money < 25}
+              onClick={() => {
+                onUpdateState((d) => {
+                  d.money -= 25;
+                  logFin(d, 'แคมป์กระชับความสัมพันธ์ทีม', -25);
+                  d.mor = clamp((d.mor ?? 50) + 8, 0, 100);
+                  d.teams[d.me].sq.forEach((q) => {
+                    q.fit = clamp((q.fit ?? 100) + 6, 30, 100);
+                  });
+                  d.clubActMd = curTurn;
+                });
+                onToast('เข้าแคมป์สำเร็จ! ขวัญทีม +8% ความฟิต +6%');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>🏃 แคมป์กระชับทีม</span>
+                <span className="tabular">25k</span>
+              </div>
+              <div className="text-[11px] text-[var(--mut)]">ขวัญทีม +8% · ฟิตทั้งทีม +6%</div>
+            </button>
+
+            <button
+              type="button"
+              disabled={actCool || state.money < 15}
+              onClick={() => {
+                onUpdateState((d) => {
+                  d.money -= 15;
+                  logFin(d, 'ติวเข้มแท็กติกทีม', -15);
+                  d.teams[d.me].tacFam = clamp((d.teams[d.me].tacFam ?? 65) + 10, 30, 100);
+                  d.mor = clamp((d.mor ?? 50) + 3, 0, 100);
+                  d.clubActMd = curTurn;
+                });
+                onToast('ติวเข้มแท็กติกสำเร็จ! ความคุ้นเคยแผน +10% · ขวัญ +3%');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>🎯 ติวเข้มแท็กติก</span>
+                <span className="tabular">15k</span>
+              </div>
+              <div className="text-[11px] text-[var(--mut)]">ความคุ้นเคยแผน +10% · ขวัญ +3%</div>
+            </button>
+
+            <button
+              type="button"
+              disabled={actCool || state.money < 10}
+              onClick={() => {
+                onUpdateState((d) => {
+                  d.money -= 10;
+                  logFin(d, 'จัดแมตช์การกุศลสโมสร', -10);
+                  d.fan = clamp((d.fan ?? 50) + 10, 5, 100);
+                  d.mgrRep = (d.mgrRep ?? 50) + 4;
+                  d.bd = clamp((d.bd ?? 50) + 2, 0, 100);
+                  d.clubActMd = curTurn;
+                });
+                onToast('แมตช์การกุศลสุดประทับใจ! แฟน +10% · ชื่อเสียง +4');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>⚽ แมตช์การกุศล</span>
+                <span className="tabular">10k</span>
+              </div>
+              <div className="text-[11px] text-[var(--mut)]">แฟน +10% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%</div>
+            </button>
+
+            <button
+              type="button"
+              disabled={actCool || state.money < 12}
+              onClick={() => {
+                let boostedName = '';
+                onUpdateState((d) => {
+                  d.money -= 12;
+                  logFin(d, 'แคมเปญโซเชียลสโมสร', -12);
+                  d.fan = clamp((d.fan ?? 50) + 7, 5, 100);
+                  const yPool = d.teams[d.me].sq.filter((q) => q.age <= 22 && q.ov < (q.pot || 90));
+                  if (yPool.length) {
+                    const pick = P(yPool);
+                    pick.ov++;
+                    boostedName = pick.n;
+                  }
+                  d.clubActMd = curTurn;
+                });
+                onToast(boostedName ? `แฟน +7% และ ${boostedName} มีกำลังใจพัฒนา +1 OVR!` : 'แคมเปญโซเชียลปังมาก! ขวัญแฟนบอล +7%');
+              }}
+              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+            >
+              <div className="flex justify-between font-bold text-xs">
+                <span>📱 แคมเปญโซเชียล</span>
+                <span className="tabular">12k</span>
+              </div>
+              <div className="text-[11px] text-[var(--mut)]">แฟน +7% · กระตุ้นดาวรุ่งในทีม</div>
             </button>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Club Tab 4: Hall of Fame & Season History */}
+      {clubTab === 'legacy' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+              <h3 className="font-bold text-sm">🏆 ตู้โชว์ถ้วยรางวัล ({trophies.length})</h3>
+              {trophies.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {trophies.map((tr, i) => (
+                    <div key={i} className="p-2.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/40 text-xs font-bold flex items-center justify-between gap-2">
+                      <span className="truncate">🏆 {tr.title}</span>
+                      <span className="text-[11px] text-[var(--mut)] shrink-0 tabular">S{tr.season}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีถ้วยรางวัลในตู้โชว์</p>
+              )}
+            </div>
+
+            <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+              <h3 className="font-bold text-sm">📈 สถิติสโมสรตลอดกาล</h3>
+              <div className="space-y-1 text-xs">
+                <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">ชัยชนะขาดลอยที่สุด</span>
+                  <b>{state.records?.bestWin?.txt || 'ยังไม่มีบันทึก'}</b>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">สถิติชนะรวดสูงสุด</span>
+                  <b className="tabular">{state.records?.winStreak || 0} นัด</b>
+                </div>
+                <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">แต้มสูงสุดต่อฤดูกาล</span>
+                  <b className="tabular">{state.records?.mostPoints ? `${state.records.mostPoints.pts} แต้ม (S${state.records.mostPoints.s})` : 'ยังไม่มีบันทึก'}</b>
+                </div>
+                <div className="flex justify-between py-1.5">
+                  <span className="text-[var(--mut)]">ดาวซัลโวตลอดกาลต่อซีซั่น</span>
+                  <b className="tabular">{state.records?.topSeasonScorer ? `${state.records.topSeasonScorer.n} (${state.records.topSeasonScorer.g} ลูก · S${state.records.topSeasonScorer.s})` : 'ยังไม่มีบันทึก'}</b>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+            <h3 className="font-bold text-sm">📜 ประวัติศาสตร์สโมสรรายฤดูกาล</h3>
+            {state.hist && state.hist.length > 0 ? (
+              <div className="max-h-80 overflow-y-auto space-y-1.5 pr-1">
+                {state.hist
+                  .slice()
+                  .reverse()
+                  .map((h, i) => (
+                    <div key={i} className="p-2.5 rounded-xl bg-[var(--surface-2)] text-xs leading-relaxed">
+                      {h}
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[var(--mut)] py-6 text-center">ยังไม่มีบันทึกประวัติศาสตร์ — จบฤดูกาลแรกเพื่อเริ่มบันทึกตำนาน</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -7807,21 +10517,23 @@ const drawLivePitchToCanvas = (
       ctx.strokeRect(playerRadius * 0.55, -playerRadius * 1.05, 4.5, 6.2);
     }
 
-    // Stamina dot/arc when tired (<65%)
-    if (ag.fit < 65) {
-      ctx.fillStyle = ag.fit < 45 ? '#ef4444' : '#f59e0b';
-      ctx.beginPath();
-      ctx.arc(-playerRadius * 0.72, -playerRadius * 0.72, 2.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // Live stamina micro-bar under every player on the pitch
+    const stamPct = clamp(ag.fit, 0, 100) / 100;
+    const barW = playerRadius * 1.9;
+    const barH = 2.6;
+    const barY = playerRadius + 1.5;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+    ctx.fillRect(-barW / 2 - 0.5, barY - 0.5, barW + 1, barH + 1);
+    ctx.fillStyle = ag.fit >= 70 ? '#22c55e' : ag.fit >= 45 ? '#f59e0b' : '#ef4444';
+    ctx.fillRect(-barW / 2, barY, barW * stamPct, barH);
 
     // Compact label for carrier, target, shooter, or "★ ฉัน"
     if (isCarrier || isTarget || ag.isMe || ag.intent === 'CELEBRATE' || ag.intent === 'MAKE_RUN') {
-      const label = ag.isMe ? `★ ${ag.shortName}` : ag.shortName;
+      const label = ag.isMe ? `★ ${ag.shortName} ${Math.round(ag.fit)}%` : ag.shortName;
       ctx.font = `700 ${Math.max(9, Math.round(playerRadius * 0.86))}px Sarabun, sans-serif`;
       const tw = ctx.measureText(label).width;
       const bw = tw + 8;
-      const by = playerRadius + 8;
+      const by = playerRadius + 11.5;
       ctx.fillStyle = ag.isMe ? 'rgba(250, 204, 21, 0.92)' : 'rgba(8, 22, 15, 0.78)';
       ctx.beginPath();
       ctx.roundRect(-bw / 2, by - 6.5, bw, 13, 4);
@@ -8032,7 +10744,7 @@ const MatchModal: React.FC<{
   const [halftimeTalkUsed, setHalftimeTalkUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
-  const [speed, setSpeed] = useState<1 | 2 | 4>(settings.quick ? 4 : 2);
+  const [speed, setSpeed] = useState<1 | 2 | 4>(() => getDefaultMatchSpeed(settings));
   const [showRunVectors, setShowRunVectors] = useState(true);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
@@ -8094,6 +10806,7 @@ const MatchModal: React.FC<{
   const [livePass, setLivePass] = useState<number>(meTeamOrig.pass ?? 1);
 
   const [liveLu, setLiveLu] = useState<string[]>(() => initialMeXi);
+  const [liveOppLu, setLiveOppLu] = useState<string[]>(() => (meIsHome ? initialAwayXi : initialHomeXi));
   const [subsUsed, setSubsUsed] = useState<string[]>([]);
   const [subLog, setSubLog] = useState<MatchSubEvent[]>([]);
   const [liveFitMap, setLiveFitMap] = useState<Record<string, number>>(() =>
@@ -10206,6 +12919,7 @@ const MatchModal: React.FC<{
       const isMeOut = isPlayerMode && outPlayer.n === myPlayerName;
       pushLog(curMin, `🔄 เปลี่ยนตัว (${sideOrig.name}): 🟢 ${inPlayer.n}${isMeIn ? ' (คุณ!)' : ''} เข้าแทน 🔴 ${outPlayer.n}${isMeOut ? ' (คุณ)' : ''}`, 'sub');
       setLiveLu((meIsHome ? sr.homeLu : sr.awayLu).slice());
+      setLiveOppLu((meIsHome ? sr.awayLu : sr.homeLu).slice());
       setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
       setSubLog(sr.subs.slice());
     };
@@ -10233,7 +12947,7 @@ const MatchModal: React.FC<{
       });
     }
 
-    if (curMin % 4 === 0) setLiveFitMap({ ...sr.liveFit });
+    setLiveFitMap({ ...sr.liveFit });
   };
 
   const syncUiStatsFromWorld = (w: LiveMatchWorld, nextMin: number) => {
@@ -10413,6 +13127,7 @@ const MatchModal: React.FC<{
     setCrowdAudio(false);
 
     setLiveLu((meIsHome ? sr.homeLu : sr.awayLu).slice());
+    setLiveOppLu((meIsHome ? sr.awayLu : sr.homeLu).slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
     setSubLog(sr.subs.slice());
     setMatchYellows({ ...sr.yellows });
@@ -10729,6 +13444,7 @@ const MatchModal: React.FC<{
     }
     w.minuteFloat = 90;
     w.lastTickedMin = 90;
+    setLiveFitMap({ ...simRef.current.liveFit });
     if (canvasRef.current) {
       drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
     }
@@ -10928,6 +13644,7 @@ const MatchModal: React.FC<{
             {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + MOTM + Match Stats */}
             <div className="space-y-2.5 min-w-0">
               {!(done && fullTimeAnalysis) ? (
+                <>
                 <div className="relative rounded-2xl overflow-hidden border border-[var(--line)] bg-[#144d2e] shadow-inner">
                   <canvas
                     ref={canvasRef}
@@ -10999,6 +13716,117 @@ const MatchModal: React.FC<{
                     </div>
                   )}
                 </div>
+
+                {/* Live Pitch Energy / Stamina Panel */}
+                {(() => {
+                  const hNames = (meIsHome ? liveLu : liveOppLu).filter((n) => !sentOff.includes(n));
+                  const aNames = (meIsHome ? liveOppLu : liveLu).filter((n) => !sentOff.includes(n));
+                  const hAvg = Math.round(hNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, hNames.length));
+                  const aAvg = Math.round(aNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, aNames.length));
+                  const tiredCount = liveLu.filter((n) => !sentOff.includes(n) && (liveFitMap[n] ?? 100) < 65).length;
+                  const fitColor = (v: number) => (v >= 70 ? 'var(--g)' : v >= 45 ? '#f59e0b' : 'var(--red)');
+                  const fitTextCls = (v: number) => (v >= 70 ? 'text-[var(--g)]' : v >= 45 ? 'text-[#c98a00] dark:text-[var(--lamp)]' : 'text-[var(--red)]');
+
+                  if (isPlayerMode && myPlayerName) {
+                    const myFit = Math.round(liveFitMap[myPlayerName] ?? myPlayerSquadObj?.fit ?? 100);
+                    const onPitchNow = liveLu.includes(myPlayerName) && !sentOff.includes(myPlayerName);
+                    const subOutEv = subLog.find((s) => s.t === meTeamOrig.id && s.outPlayer === myPlayerName);
+                    const statusTxt = myInitialBanned
+                      ? 'ติดโทษแบน (ชมข้างสนาม)'
+                      : sentOff.includes(myPlayerName)
+                        ? 'โดนใบแดงไล่ออก'
+                        : onPitchNow
+                          ? 'กำลังลงสนาม'
+                          : subOutEv
+                            ? `ถูกเปลี่ยนออก น.${subOutEv.m}'`
+                            : 'รอโอกาสที่ม้านั่งสำรอง';
+                    return (
+                      <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                          <span className="font-bold flex items-center gap-1.5">
+                            <span>⚡ พลังงานในสนาม</span>
+                            <span className="text-[var(--mut)] font-semibold">· {statusTxt}</span>
+                          </span>
+                          <span className="text-[var(--mut)] tabular">
+                            เฉลี่ยทีม: <b className={fitTextCls(meIsHome ? hAvg : aAvg)}>{meIsHome ? hAvg : aAvg}%</b> vs คู่แข่ง <b className={fitTextCls(meIsHome ? aAvg : hAvg)}>{meIsHome ? aAvg : hAvg}%</b>
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-bold truncate">★ {myPlayerName} ({myPlayerSquadObj?.ro || state.p?.sp})</span>
+                            <span className={`font-extrabold tabular ${fitTextCls(myFit)}`}>
+                              {myFit}% · {myFit >= 70 ? 'ฟิตสมบูรณ์' : myFit >= 45 ? 'เริ่มล้า' : 'อ่อนล้ามาก'}
+                            </span>
+                          </div>
+                          <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${clamp(myFit, 0, 100)}%`, background: fitColor(myFit) }} />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                        <span className="font-bold">⚡ พลังงาน 11 คนในสนาม ({meTeamOrig.name})</span>
+                        <div className="flex items-center gap-2 tabular text-[var(--mut)]">
+                          <span>
+                            เหย้า <b className={fitTextCls(hAvg)}>{hAvg}%</b> · เยือน <b className={fitTextCls(aAvg)}>{aAvg}%</b>
+                          </span>
+                          {tiredCount > 0 && (
+                            <span className="font-bold text-[var(--red)]">· ล้า {tiredCount} คน</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                        {liveLu.map((name) => {
+                          const pl = meTeamOrig.sq.find((q) => q.n === name);
+                          if (!pl) return null;
+                          const isRed = sentOff.includes(name);
+                          const fitVal = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
+                          const canSubClick = !isRed && subsUsed.length < 5;
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              disabled={!canSubClick}
+                              onClick={() => {
+                                setSubPickOut(name);
+                                setShowTacticsDrawer(true);
+                                setPaused(true);
+                              }}
+                              title={canSubClick ? 'คลิกเพื่อเปลี่ยนตัวนักเตะคนนี้' : undefined}
+                              className={`p-1.5 rounded-xl bg-[var(--surface)] border text-left transition-colors ${
+                                isRed
+                                  ? 'opacity-45 border-[var(--red)]/40 cursor-not-allowed'
+                                  : subPickOut === name && showTacticsDrawer
+                                    ? 'border-[var(--lamp)] ring-1 ring-[var(--lamp)] cursor-pointer'
+                                    : 'border-[var(--line)] hover:border-[var(--g)] cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1 text-[10px]">
+                                <span className="font-bold truncate">
+                                  <span className="text-[var(--mut)]">{pl.ro}</span> {pl.n.split(' ')[0]}
+                                </span>
+                                <span className={`font-extrabold tabular shrink-0 ${isRed ? 'text-[var(--red)]' : fitTextCls(fitVal)}`}>
+                                  {isRed ? '🟥' : `${fitVal}%`}
+                                </span>
+                              </div>
+                              <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                                <div
+                                  className="h-full rounded-full transition-all duration-300"
+                                  style={{ width: `${isRed ? 0 : clamp(fitVal, 0, 100)}%`, background: fitColor(fitVal) }}
+                                />
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+                </>
               ) : (() => {
                 const hSlots = getFormationSlots(homeOrig);
                 const aSlots = getFormationSlots(awayOrig);
@@ -12365,7 +15193,8 @@ const SettingsModal: React.FC<{
   onClose: () => void;
   onExitToMenu: () => void;
   onToast: (msg: string) => void;
-}> = ({ state, onClose, onExitToMenu, onToast }) => {
+  onSettingsChange?: (next: AppSettings) => void;
+}> = ({ state, onClose, onExitToMenu, onToast, onSettingsChange }) => {
   const [st, setSt] = useState<AppSettings>(() => getSettings());
   const [saveCode, setSaveCode] = useState('');
 
@@ -12374,7 +15203,10 @@ const SettingsModal: React.FC<{
     setSt(next);
     saveSettings(next);
     if ('theme' in patch) applyTheme(next.theme);
+    onSettingsChange?.(next);
   };
+
+  const curMatchSpeed = getDefaultMatchSpeed(st);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-hidden">
@@ -12402,12 +15234,47 @@ const SettingsModal: React.FC<{
           </div>
 
           <div className="space-y-2">
+            <div className="text-xs font-bold text-[var(--mut)]">⚡ ความเร็วการแข่งเริ่มต้น</div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {([
+                [1, '1x (มาตรฐาน)'],
+                [2, '2x (เร็ว)'],
+                [4, '4x (สูงสุด)']
+              ] as const).map(([sp, lbl]) => (
+                <button
+                  key={sp}
+                  type="button"
+                  onClick={() => update({ matchSpeed: sp, quick: sp === 4 })}
+                  className={`py-2 rounded-xl text-xs font-semibold cursor-pointer ${curMatchSpeed === sp ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => update({ autoSkipMatch: !st.autoSkipMatch })}
+              className={`w-full flex items-center justify-between gap-3 p-3 rounded-xl border text-left cursor-pointer ${
+                st.autoSkipMatch ? 'bg-[var(--g-soft)] border-[var(--g)]/50' : 'bg-[var(--surface-2)] border-transparent'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="text-xs font-bold">⏭️ ข้ามแข่งอัตโนมัติ</div>
+                <div className="text-[11px] text-[var(--mut)]">กดปุ่มแข่งแล้วจำลองผลทันที โดยไม่เปิดหน้าสนาม 2D</div>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${st.autoSkipMatch ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                {st.autoSkipMatch ? 'เปิด' : 'ปิด'}
+              </span>
+            </button>
+
             {(
               [
                 ['mute', '🔇 ปิดเสียงเอฟเฟกต์ทั้งหมด', !!st.mute],
                 ['nocrowd', '🏟️ ปิดเสียงเชียร์ในสนามแข่ง', !!st.nocrowd],
-                ['novib', '📳 ปิดการสั่นแจ้งเตือน', !!st.novib],
-                ['quick', '⏩ เริ่มแข่งด้วยความเร็วสูงสุด (4x)', !!st.quick]
+                ['novib', '📳 ปิดการสั่นแจ้งเตือน', !!st.novib]
               ] as [keyof AppSettings, string, boolean][]
             ).map(([key, label, active]) => (
               <button
@@ -12475,6 +15342,71 @@ const SettingsModal: React.FC<{
 // ============================================================================
 // 14. ROOT APPLICATION
 // ============================================================================
+function simulateInstantMatchPayload(
+  s: GameState,
+  kind: 'league' | 'cup' | 'asia',
+  homeId: number,
+  awayId: number
+): FinishedMatchPayload {
+  const H = s.teams[homeId];
+  const A = s.teams[awayId];
+  const meTeam = s.teams[s.me];
+  const r = simMatch(H, A, s);
+  const { ratings, motm } = computePlayerRatings(H, A, r, s.p);
+
+  let pen = false;
+  let penText: string | undefined;
+  if (kind !== 'league' && r.gh === r.ga) {
+    pen = true;
+    const hWin = Math.random() < 0.5;
+    const wPen = R(4, 5);
+    const lPen = R(2, wPen - 1);
+    penText = `ดวลจุดโทษ ${hWin ? `${wPen}-${lPen}` : `${lPen}-${wPen}`}`;
+  }
+
+  let pf: PlayerPerfResult | undefined;
+  if (s.mode === 'p' && s.p) {
+    const pName = s.p.name;
+    const mySquadObj = meTeam.sq.find((q) => q.me || q.n === pName);
+    const isBanned = ((mySquadObj?.sus || s.p.sus || 0) > 0);
+    const starterNames = xi(meTeam).map((q) => q.n);
+    const started = !isBanned && starterNames.includes(pName);
+    const subInEv = r.subs?.find((sb) => sb.t === s.me && sb.inPlayer === pName);
+    const subOutEv = r.subs?.find((sb) => sb.t === s.me && sb.outPlayer === pName);
+    const played = !isBanned && (started || !!subInEv);
+    const mins = !played ? 0 : started ? (subOutEv ? subOutEv.m : 90) : (90 - (subInEv?.m || 72));
+    const myCards = (r.cards || []).filter((c) => c.t === s.me && c.who === pName);
+    const yc = myCards.filter((c) => c.type === 'Y' || c.type === 'Y2R').length;
+    const rc = myCards.some((c) => c.type === 'R' || c.type === 'Y2R') ? 1 : 0;
+    pf = calcPlayerPerf(s, r, H, A, ratings, {
+      played,
+      mins,
+      subIn: !!subInEv,
+      subOut: !!subOutEv,
+      yc,
+      rc
+    });
+  }
+
+  return {
+    gh: r.gh,
+    ga: r.ga,
+    evs: r.evs,
+    xgH: r.xgH || 1.1,
+    xgA: r.xgA || 1.0,
+    pen,
+    penText,
+    ratings,
+    motm,
+    pf,
+    finalTac: meTeam.tac,
+    finalLu: xi(meTeam).map((q) => q.n),
+    cards: r.cards || [],
+    subs: r.subs || [],
+    playedNames: r.playedNames || {}
+  };
+}
+
 export default function App() {
   const [state, setState] = useState<GameState | null>(null);
   const [slot, setSlot] = useState<number>(1);
@@ -12484,6 +15416,7 @@ export default function App() {
   const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
 
   const toastTimerRef = useRef<number | null>(null);
   const showToast = (msg: string) => {
@@ -12562,28 +15495,11 @@ export default function App() {
     return null;
   }, [state]);
 
-  const handleTriggerNextStep = () => {
-    if (!state) return;
-    SFX.tap();
-    if (nextMatchInfo) {
-      if (nextMatchInfo.isDerby) {
-        updateState((d) => { d.derby = 1; });
-      }
-      setActiveMatch(nextMatchInfo);
-      return;
-    }
-    if (state.md >= state.fx.length) {
-      const clone: GameState = JSON.parse(JSON.stringify(state));
-      const summary = finishSeasonComputation(clone);
-      setState(clone);
-      setSeasonSummary(summary);
-    }
-  };
-
-  const handleMatchFinish = (payload: FinishedMatchPayload) => {
-    if (!state || !activeMatch) return;
-    const { kind, homeId, awayId, isDerby } = activeMatch;
-    setActiveMatch(null);
+  const commitFinishedMatch = (
+    matchInfo: { kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean },
+    payload: FinishedMatchPayload
+  ) => {
+    const { kind, homeId, awayId, isDerby } = matchInfo;
 
     updateState((d) => {
       const me = d.teams[d.me];
@@ -12757,21 +15673,37 @@ export default function App() {
 
       if (d.mode === 'm') {
         const isHomeMatch = homeId === d.me;
-        const ticket = isHomeMatch ? Math.round((8 + (d.st ?? 1) * 7) * ((d.fan ?? 55) / 60) * (d.promo ? 1.5 : 1)) : 0;
-        const sponsor = 6 + (d.sp ?? 1) * 4;
+        const tpIdx = d.tp ?? 1;
+        const spIdx = d.sp ?? 0;
+        const ticketMult = [0.82, 1.0, 1.24][tpIdx];
+        const ticket = isHomeMatch
+          ? Math.round((8 + (d.st ?? 1) * 7) * ((d.fan ?? 55) / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1))
+          : 0;
+        const merch = isHomeMatch
+          ? Math.round((2 + (d.merchLv ?? 1) * 3) * ((d.fan ?? 55) / 55))
+          : 0;
+        const baseSp = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
+        const winSpBonus = spIdx === 1 && diff > 0 ? 10 + me.tier * 6 : 0;
+        const derbySpBonus = spIdx === 2 && isDerby ? 18 + me.tier * 8 : 0;
+        const sponsor = Math.round((baseSp + winSpBonus + derbySpBonus) * (d.promo === 2 ? 1.35 : 1));
         if (ticket) {
           d.money += ticket;
-          logFin(d, `ค่าตั๋วเข้าชมเกมเหย้า (${d.promo ? 'โปรโมชั่น' : 'ปกติ'})`, ticket);
+          logFin(d, `ค่าตั๋วเข้าชมเกมเหย้า (${d.promo === 1 ? 'โปรโมชั่น' : ['ราคาถูก', 'ราคากลาง', 'ราคาแพง'][tpIdx]})`, ticket);
+        }
+        if (merch) {
+          d.money += merch;
+          logFin(d, 'ขายของที่ระลึกวันแข่งเหย้า', merch);
         }
         d.money += sponsor;
-        logFin(d, 'รายได้สปอนเซอร์ประจำนัด', sponsor);
+        logFin(d, `สปอนเซอร์หลัก${winSpBonus ? ' + โบนัสชนะ' : derbySpBonus ? ' + โบนัสดาร์บี้' : ''}`, sponsor);
         if (d.winBonus && diff > 0) {
           d.money -= d.winBonus;
           logFin(d, 'จ่ายโบนัสอัดฉีดชัยชนะ', -d.winBonus);
         }
+        const ticketFanAdj = isHomeMatch ? (tpIdx === 0 ? 1 : tpIdx === 2 && diff <= 0 ? -1 : 0) : 0;
         d.promo = 0;
         d.winBonus = 0;
-        d.fan = clamp((d.fan ?? 55) + (diff > 0 ? 3 : diff < 0 ? -3 : 0), 5, 100);
+        d.fan = clamp((d.fan ?? 55) + (diff > 0 ? 3 : diff < 0 ? -3 : 0) + ticketFanAdj, 5, 100);
         d.mor = clamp((d.mor ?? 55) + (diff > 0 ? 5 : diff < 0 ? -5 : 1), 0, 100);
       } else if (payload.pf) {
         creditPlayerPerf(d, payload.pf);
@@ -12781,6 +15713,44 @@ export default function App() {
       afterMatchDay(d);
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
     });
+  };
+
+  const handleMatchFinish = (payload: FinishedMatchPayload) => {
+    if (!state || !activeMatch) return;
+    const finished = activeMatch;
+    setActiveMatch(null);
+    commitFinishedMatch(finished, payload);
+  };
+
+  const handleTriggerNextStep = () => {
+    if (!state) return;
+    SFX.tap();
+    if (nextMatchInfo) {
+      if (appSettings.autoSkipMatch) {
+        const simState: GameState = JSON.parse(JSON.stringify(state));
+        if (nextMatchInfo.isDerby) simState.derby = 1;
+        const payload = simulateInstantMatchPayload(simState, nextMatchInfo.kind, nextMatchInfo.homeId, nextMatchInfo.awayId);
+        commitFinishedMatch(nextMatchInfo, payload);
+        const H = state.teams[nextMatchInfo.homeId];
+        const A = state.teams[nextMatchInfo.awayId];
+        const myGf = nextMatchInfo.homeId === state.me ? payload.gh : payload.ga;
+        const myGa = nextMatchInfo.homeId === state.me ? payload.ga : payload.gh;
+        if (myGf > myGa) SFX.win();
+        showToast(`⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`);
+        return;
+      }
+      if (nextMatchInfo.isDerby) {
+        updateState((d) => { d.derby = 1; });
+      }
+      setActiveMatch(nextMatchInfo);
+      return;
+    }
+    if (state.md >= state.fx.length) {
+      const clone: GameState = JSON.parse(JSON.stringify(state));
+      const summary = finishSeasonComputation(clone);
+      setState(clone);
+      setSeasonSummary(summary);
+    }
   };
 
   const handleStartNextSeason = (transferToTeamId?: number) => {
@@ -12885,11 +15855,17 @@ export default function App() {
               className="px-3 sm:px-4 py-2 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-xs sm:text-sm hover:brightness-105 transition-all cursor-pointer shadow-sm whitespace-nowrap"
             >
               {nextMatchInfo
-                ? nextMatchInfo.kind === 'asia'
-                  ? '🌏 แข่งถ้วยทวีป'
-                  : nextMatchInfo.kind === 'cup'
-                    ? '🏆 แข่งถ้วยปชช.'
-                    : `▶ แข่งนัดที่ ${state.md + 1}`
+                ? appSettings.autoSkipMatch
+                  ? nextMatchInfo.kind === 'asia'
+                    ? '⏭️ ข้ามถ้วยทวีป'
+                    : nextMatchInfo.kind === 'cup'
+                      ? '⏭️ ข้ามถ้วยปชช.'
+                      : `⏭️ ข้ามนัดที่ ${state.md + 1}`
+                  : nextMatchInfo.kind === 'asia'
+                    ? '🌏 แข่งถ้วยทวีป'
+                    : nextMatchInfo.kind === 'cup'
+                      ? '🏆 แข่งถ้วยปชช.'
+                      : `▶ แข่งนัดที่ ${state.md + 1}`
                 : '🏁 สรุปจบฤดูกาล'}
             </button>
             <button
@@ -12907,60 +15883,62 @@ export default function App() {
       {/* Center Scrollable Game Stage */}
       <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         <div className="max-w-6xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3 sm:space-y-4">
-          {/* Next match + latest news compact bar */}
-          <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-2.5 sm:gap-3">
-            {nextMatchInfo ? (
-              <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  <ClubCrest
-                    name={state.teams[nextMatchInfo.homeId].name}
-                    size={26}
-                    team={state.teams[nextMatchInfo.homeId]}
-                    club={state.club}
-                    isMyClub={nextMatchInfo.homeId === state.me && state.mode === 'm'}
-                  />
-                  <div className="min-w-0">
-                    <div className="text-[11px] text-[var(--mut)] font-semibold truncate">
-                      {nextMatchInfo.kind === 'asia' ? '🌏 นัดถัดไป · ถ้วยทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 นัดถัดไป · ถ้วยประชาชน' : `⚽ นัดถัดไป · ${TN[me.tier]}`}
-                      {nextMatchInfo.isDerby && <span className="ml-1.5 text-[var(--red)] font-bold">🔥 ดาร์บี้</span>}
+          {/* Next match + latest news compact bar (shown on overview tab only) */}
+          {(state.mode === 'p' ? curTab === 'p' : curTab === 't') && (
+            <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-2.5 sm:gap-3">
+              {nextMatchInfo ? (
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ClubCrest
+                      name={state.teams[nextMatchInfo.homeId].name}
+                      size={26}
+                      team={state.teams[nextMatchInfo.homeId]}
+                      club={state.club}
+                      isMyClub={nextMatchInfo.homeId === state.me && state.mode === 'm'}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[var(--mut)] font-semibold truncate">
+                        {nextMatchInfo.kind === 'asia' ? '🌏 นัดถัดไป · ถ้วยทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 นัดถัดไป · ถ้วยประชาชน' : `⚽ นัดถัดไป · ${TN[me.tier]}`}
+                        {nextMatchInfo.isDerby && <span className="ml-1.5 text-[var(--red)] font-bold">🔥 ดาร์บี้</span>}
+                      </div>
+                      <div className="font-bold text-xs sm:text-sm truncate">
+                        {state.teams[nextMatchInfo.homeId].name} <span className="text-[var(--mut)]">vs</span> {state.teams[nextMatchInfo.awayId].name}
+                      </div>
                     </div>
-                    <div className="font-bold text-xs sm:text-sm truncate">
-                      {state.teams[nextMatchInfo.homeId].name} <span className="text-[var(--mut)]">vs</span> {state.teams[nextMatchInfo.awayId].name}
-                    </div>
+                    <ClubCrest
+                      name={state.teams[nextMatchInfo.awayId].name}
+                      size={26}
+                      team={state.teams[nextMatchInfo.awayId]}
+                      club={state.club}
+                      isMyClub={nextMatchInfo.awayId === state.me && state.mode === 'm'}
+                    />
                   </div>
-                  <ClubCrest
-                    name={state.teams[nextMatchInfo.awayId].name}
-                    size={26}
-                    team={state.teams[nextMatchInfo.awayId]}
-                    club={state.club}
-                    isMyClub={nextMatchInfo.awayId === state.me && state.mode === 'm'}
-                  />
+                  <button
+                    type="button"
+                    onClick={() => setInspectTeamId(nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId)}
+                    className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] text-xs font-semibold shrink-0 cursor-pointer"
+                  >
+                    ส่องคู่แข่ง
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setInspectTeamId(nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId)}
-                  className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] text-xs font-semibold shrink-0 cursor-pointer"
-                >
-                  ส่องคู่แข่ง
-                </button>
-              </div>
-            ) : (
-              <div className="p-3 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 flex items-center justify-between">
-                <span className="text-xs font-bold">🏁 แข่งครบโปรแกรมลีกฤดูกาลนี้แล้ว กดปุ่มสรุปจบฤดูกาลเพื่อเลื่อนชั้น/ตกชั้น</span>
-              </div>
-            )}
+              ) : (
+                <div className="p-3 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 flex items-center justify-between">
+                  <span className="text-xs font-bold">🏁 แข่งครบโปรแกรมลีกฤดูกาลนี้แล้ว กดปุ่มสรุปจบฤดูกาลเพื่อเลื่อนชั้น/ตกชั้น</span>
+                </div>
+              )}
 
-            <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-2.5">
-              <div className="min-w-0">
-                <div className="text-[11px] text-[var(--mut)] font-semibold">📰 ข่าวสารสโมสร</div>
-                <div className="text-xs font-semibold truncate">{state.feed?.[0]?.txt || state.news || 'พร้อมลุยศึกฤดูกาลนี้!'}</div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0 text-[11px] text-[var(--mut)]">
-                <span>❤️ <b>{state.fan ?? 55}%</b></span>
-                {state.mode === 'm' && <span>👔 <b>{state.bd ?? 55}%</b></span>}
+              <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                <div className="min-w-0">
+                  <div className="text-[11px] text-[var(--mut)] font-semibold">📰 ข่าวสารสโมสร</div>
+                  <div className="text-xs font-semibold truncate">{state.feed?.[0]?.txt || state.news || 'พร้อมลุยศึกฤดูกาลนี้!'}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 text-[11px] text-[var(--mut)]">
+                  <span>❤️ <b>{state.fan ?? 55}%</b></span>
+                  {state.mode === 'm' && <span>👔 <b>{state.bd ?? 55}%</b></span>}
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {curTab === 't' && (
             <LeagueView
@@ -13093,6 +16071,7 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => setState(null)}
           onToast={showToast}
+          onSettingsChange={setAppSettings}
         />
       )}
 
