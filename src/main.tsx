@@ -6,6 +6,30 @@ import {registerPWA} from './pwa.tsx';
 
 registerPWA();
 
+if (typeof document !== 'undefined') {
+  const blockMultiTouch = (e: TouchEvent) => {
+    if (e.touches.length > 1) e.preventDefault();
+  };
+  document.addEventListener('touchstart', blockMultiTouch, {passive: false});
+  document.addEventListener('touchmove', blockMultiTouch, {passive: false});
+  const blockGesture = (e: Event) => e.preventDefault();
+  document.addEventListener('gesturestart', blockGesture, {passive: false});
+  document.addEventListener('gesturechange', blockGesture, {passive: false});
+  document.addEventListener('gestureend', blockGesture, {passive: false});
+  window.addEventListener(
+    'wheel',
+    (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) e.preventDefault();
+    },
+    {passive: false}
+  );
+  window.addEventListener('keydown', (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0', '_'].includes(e.key)) {
+      e.preventDefault();
+    }
+  });
+}
+
 class RootErrorBoundary extends React.Component<
   {children: React.ReactNode},
   {error: Error | null}
