@@ -40,6 +40,7 @@ body {
   font-family: 'Sarabun', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
+  -webkit-touch-callout: none;
   overscroll-behavior: none;
   touch-action: pan-x pan-y;
 }
@@ -51,10 +52,22 @@ body {
 button,
 a,
 select,
+svg,
+canvas,
+[data-drop-player],
+[data-drag-grip] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+select,
 input,
 textarea {
   touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
 }
 
 button:focus-visible,
@@ -97,7 +110,7 @@ button:not(:disabled):active {
 
 @media (orientation: landscape) and (max-height: 540px) {
   html {
-    font-size: clamp(12px, 3.25dvh, 14px);
+    font-size: clamp(11.5px, 3.05dvh, 13.5px);
   }
   #root {
     padding-top: env(safe-area-inset-top);
@@ -118,11 +131,18 @@ button:not(:disabled):active {
 .game-card {
   background-color: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: 0 1px 2px rgba(8, 25, 16, 0.05);
+  border-radius: 1rem;
+  box-shadow: 0 1px 3px rgba(8, 25, 16, 0.05);
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .game-card {
+    border-radius: 0.75rem;
+  }
 }
 
 .dark .game-card {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
 }
 
 @keyframes confetti-fall {

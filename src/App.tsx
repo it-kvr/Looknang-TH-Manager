@@ -110,6 +110,7 @@ interface ClubIdentity {
   shape: number;
   pat: number;
   icon: string;
+  iconColor?: string;
   kit: number;
   awayKit?: number;
   collar?: number;
@@ -370,7 +371,7 @@ interface AppSettings {
   mute?: boolean;
   novib?: boolean;
   quick?: boolean;
-  matchSpeed?: 1 | 2 | 4;
+  matchSpeed?: 0.5 | 1 | 2 | 4;
   autoSkipMatch?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
@@ -765,8 +766,8 @@ function saveSettings(s: AppSettings) {
   }
 }
 
-function getDefaultMatchSpeed(st: AppSettings): 1 | 2 | 4 {
-  if (st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 4) return st.matchSpeed;
+function getDefaultMatchSpeed(st: AppSettings): 0.5 | 1 | 2 | 4 {
+  if (st.matchSpeed === 0.5 || st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 4) return st.matchSpeed;
   return 1;
 }
 
@@ -1984,7 +1985,32 @@ const colRgb = (c: string): [number, number, number] => {
     const hex = s.length === 4 ? s.slice(1).replace(/./g, (x) => x + x) : s.slice(1);
     return [parseInt(hex.slice(0, 2), 16) || 0, parseInt(hex.slice(2, 4), 16) || 0, parseInt(hex.slice(4, 6), 16) || 0];
   }
+  const hslM = s.match(/hsl\(\s*([\d.]+)[\s,]+([\d.]+)%[\s,]+([\d.]+)%/i);
+  if (hslM) {
+    const h = (parseFloat(hslM[1]) % 360) / 360;
+    const sat = parseFloat(hslM[2]) / 100;
+    const l = parseFloat(hslM[3]) / 100;
+    if (sat === 0) {
+      const v = Math.round(l * 255);
+      return [v, v, v];
+    }
+    const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+    const p = 2 * l - q;
+    const hue2rgb = (t: number) => {
+      const tt = t < 0 ? t + 1 : t > 1 ? t - 1 : t;
+      if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+      if (tt < 1 / 2) return q;
+      if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+      return p;
+    };
+    return [Math.round(hue2rgb(h + 1 / 3) * 255), Math.round(hue2rgb(h) * 255), Math.round(hue2rgb(h - 1 / 3) * 255)];
+  }
   return [128, 128, 128];
+};
+
+const colLum = (c: string) => {
+  const [r, g, b] = colRgb(c);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 };
 
 const colDist = (a: string, b: string) => {
@@ -2041,16 +2067,20 @@ function pickGK(c1: string, c2 = '', c3 = '') {
 function ensureClubIdentity(s: GameState): ClubIdentity {
   if (!s.club) {
     const t = s.teams[s.me];
+    const h = ([...(t.name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
+    const icKeys = Object.keys(CREST_IC);
     s.club = {
       name: t.name,
       nick: '',
       std: 'สนาม' + t.name,
       c1: t.kc?.[0] || '#c0392b',
       c2: t.kc?.[1] || '#f4c63d',
-      shape: 0,
-      pat: 0,
-      icon: '',
-      kit: 0
+      shape: h % CREST_SHAPES.length,
+      pat: (h >> 4) % CREST_PATTERNS.length,
+      icon: icKeys[h % icKeys.length] || '⚽',
+      iconColor: '',
+      crestBorder: (h >> 6) % 4,
+      kit: (h >> 3) % KIT_PATTERNS.length
     };
   }
   return s.club;
@@ -3561,6 +3591,16 @@ const CREST_IC: Record<string, string> = {
   '🦈': '<path d="M4 14c3-5 8-7 16-6-3 3-4 5-4 8-3-1-5-1-8 1l1-2c-2 0-3.5 0-5-1zM13 8l1.5-4 2.5 3.5"/>',
   '🐂': '<path d="M5 6c0 3 2 4 4 4h6c2 0 4-1 4-4M7 10l1 6 4 3 4-3 1-6M10 13h.01M14 13h.01"/>',
   '🦢': '<path d="M6 17c2-2 5-2 8-1 2.5.8 4.5-.5 4.5-3 0-3-3-5-2-8 1-2 3-1 2.5 1M8 14l-3-2"/>',
+  '🐺': '<path d="M5 8l2.5-4.5L10 6.5h4l2.5-3L19 8l-1.5 5L12 20l-5.5-7zM9.5 11.5h.01M14.5 11.5h.01M10.5 15l1.5 1.2 1.5-1.2"/>',
+  '🦉': '<path d="M7 5l2.5 2h5L17 5v5a6 6 0 01-5 9 6 6 0 01-5-9zM9.5 10.5a1 1 0 100 .01M14.5 10.5a1 1 0 100 .01M11 13l1 1.8 1-1.8"/>',
+  '🐴': '<path d="M7 19c0-4 1-7 3-10l2-5 4 2 2 4-3 2v3c0 2-1.5 4-4 4zM13.5 8.5h.01M15 11l3 1"/>',
+  '🐗': '<path d="M6 13a6 5 0 0112 0c0 3-2.5 5-6 5s-6-2-6-5zM5 12c-1.5-1-2-2.5-1.5-4M19 12c1.5-1 2-2.5 1.5-4M10 13.5h4M9.5 10h.01M14.5 10h.01"/>',
+  '🐊': '<path d="M3 14c3-2 7-2 11 0l6-2-2 4-5 2c-4 1-7 0-10-4zM8 11l2-2 2 2 2-2"/>',
+  '🐍': '<path d="M6 18c4 0 6-2 6-4.5S9 11 9 8.5C9 6 11 4.5 14 5c2.5.4 4 2 4 4M15.5 8.5h.01M18 9l2-1"/>',
+  '🦚': '<path d="M12 19v-7M12 12c-3-1-5-3.5-5-6.5M12 12c3-1 5-3.5 5-6.5M12 12V4.5M8.5 16.5c1.5-1 5.5-1 7 0"/>',
+  '🐝': '<ellipse cx="12" cy="13" rx="4" ry="5"/><path d="M9 12h6M9.5 15h5M9 9C6 6 4 8 6.5 10.5M15 9c3-3 5-1 2.5 1.5M10.5 7L9 4.5M13.5 7L15 4.5"/>',
+  '🦂': '<path d="M12 10v7M9 12h6M9 15h6M8 10C6 8 6 5 9 4M16 10c2-2 2-5-1-6M12 17c3 0 5-2 5-5s-2-4-4-4"/>',
+  '🦀': '<path d="M7 13c0-2.5 2.2-4 5-4s5 1.5 5 4-2.2 4-5 4-5-1.5-5-4zM6 9C4 7 4 4.5 7 4M18 9c2-2 2-4.5-1-5M5 13l-2 2M5.5 16l-2 2M19 13l2 2M18.5 16l2 2"/>',
   '🔥': '<path d="M12 3c1.5 4 5 5 5 10a5 5 0 01-10 0c0-2 1-3.5 2-4.5 0 2 1 3 2 3 0-3-.5-5 1-8.5z"/>',
   '⚡': '<path d="M13 2L5 13h6l-1 9 9-12h-6z"/>',
   '⭐': '<path d="M12 3l2.6 5.4 5.9.9-4.3 4.2 1 5.9-5.2-2.8-5.2 2.8 1-5.9-4.3-4.2 5.9-.9z"/>',
@@ -3568,8 +3608,55 @@ const CREST_IC: Record<string, string> = {
   '⚔️': '<path d="M5 19L19 5M14 5h5v5M5 5l14 14M10 5H5v5"/>',
   '🔱': '<path d="M12 3v18M7 5v5c0 2.8 2.2 4.5 5 4.5s5-1.7 5-4.5V5M10 18h4"/>',
   '🛡️': '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6zM12 7v10"/>',
+  '🏹': '<path d="M5 19L19 5M14 5h5v5M6 10c2 2.5 5.5 6 8 8M6 10l4-4 8 8-4 4"/>',
+  '🪓': '<path d="M8 20L17 5M13 7c3 0 5.5 1.5 6 4.5-2.5 1-5 1-7-1z"/>',
   '🌙': '<path d="M16 4.5A8 8 0 1019.5 16 6.5 6.5 0 0116 4.5z"/>',
-  '🏔️': '<path d="M3 18l6-10 4 6 3-4 5 8zM9 8l2 2"/>'
+  '☀️': '<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6L17 7M7 17l-1.4 1.4"/>',
+  '🏔️': '<path d="M3 18l6-10 4 6 3-4 5 8zM9 8l2 2"/>',
+  '🌊': '<path d="M3 11c2.5-2.5 5-2.5 7.5 0s5 2.5 7.5 0c1-.9 2-1.4 3-1.4M3 16c2.5-2.5 5-2.5 7.5 0s5 2.5 7.5 0c1-.9 2-1.4 3-1.4"/>',
+  '💎': '<path d="M6 5h12l3 5-9 10L3 10zM3 10h18M9 5l3 5 3-5"/>',
+  '⚓': '<circle cx="12" cy="6" r="2"/><path d="M12 8v12M8 11h8M5 14a7 7 0 0014 0"/>',
+  '🏆': '<path d="M8 4h8v5a4 4 0 01-8 0zM8 6H5v2a3 3 0 003 3M16 6h3v2a3 3 0 01-3 3M12 13v5M8 20h8"/>',
+  '🏯': '<path d="M6 19v-7h12v7M4 12l8-4 8 4M7 8l5-4 5 4M10 19v-4h4v4"/>'
+};
+
+const CREST_IC_NAMES: Record<string, string> = {
+  '⚽': 'ฟุตบอล',
+  '🦅': 'อินทรี',
+  '🐘': 'ช้างศึก',
+  '🐯': 'พยัคฆ์',
+  '🦁': 'สิงโต',
+  '🐉': 'มังกร',
+  '🦈': 'ฉลาม',
+  '🐂': 'กระทิง',
+  '🦢': 'หงส์',
+  '🐺': 'หมาป่า',
+  '🦉': 'นกฮูก',
+  '🐴': 'อาชา',
+  '🐗': 'หมูป่า',
+  '🐊': 'จระเข้',
+  '🐍': 'พญานาค',
+  '🦚': 'ไก่ฟ้า',
+  '🐝': 'ต่อแตน',
+  '🦂': 'แมงป่อง',
+  '🦀': 'ปูนักรบ',
+  '🔥': 'เปลวไฟ',
+  '⚡': 'สายฟ้า',
+  '⭐': 'ดาวทอง',
+  '👑': 'มงกุฎ',
+  '⚔️': 'ดาบไขว้',
+  '🔱': 'ตรีศูล',
+  '🛡️': 'โล่แกร่ง',
+  '🏹': 'ธนูศึก',
+  '🪓': 'ขวานศึก',
+  '🌙': 'จันทร์เสี้ยว',
+  '☀️': 'สุริยัน',
+  '🏔️': 'ขุนเขา',
+  '🌊': 'คลื่นสมุทร',
+  '💎': 'เพชร',
+  '⚓': 'สมอเรือ',
+  '🏆': 'ถ้วยแชมป์',
+  '🏯': 'ปราสาท'
 };
 
 const KIT_PATTERNS = [
@@ -3597,10 +3684,16 @@ const ClubCrest: React.FC<{
   const sh = (k ? k.shape : h % CREST_SHAPES.length) % CREST_SHAPES.length;
   const d = CREST_SHAPES[sh]?.d || CREST_SHAPES[0].d;
   const pat = (k ? k.pat : (h >> 4) % CREST_PATTERNS.length) % CREST_PATTERNS.length;
-  const ic = k?.icon ?? '';
+  const icKeys = Object.keys(CREST_IC);
+  const ic = k?.icon && CREST_IC[k.icon] ? k.icon : icKeys[h % icKeys.length];
   const borderStyle = k?.crestBorder ?? 0;
   const strokeCol = borderStyle === 1 ? '#f4c63d' : borderStyle === 3 ? '#0f172a' : '#ffffff';
   const stars = clamp(k?.stars || 0, 0, 3);
+
+  const centerLum = [0, 1, 2, 3, 4, 5, 6, 7, 9].includes(pat) ? colLum(c1) * 0.52 + colLum(c2) * 0.48 : colLum(c1);
+  const icCol = k?.iconColor ? k.iconColor : centerLum > 0.54 ? '#0f172a' : '#ffffff';
+  const haloCol = colLum(icCol) > 0.52 ? 'rgba(9, 20, 15, 0.82)' : 'rgba(255, 255, 255, 0.92)';
+  const icTransform = `translate(5.2 ${stars > 0 ? 6.0 : 5.2}) scale(.57)`;
 
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
@@ -3650,31 +3743,24 @@ const ClubCrest: React.FC<{
           const sx = 12 + (idx - (stars - 1) / 2) * 4.5;
           return <circle key={idx} cx={sx} cy="2.6" r="1.25" fill="#facc15" stroke="#1e293b" strokeWidth="0.35" />;
         })}
-      {ic && CREST_IC[ic] ? (
-        <g
-          transform={`translate(5.4 ${stars > 0 ? 6.2 : 5.4}) scale(.55)`}
-          fill="none"
-          stroke="#fff"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
-        />
-      ) : (
-        <text
-          x="12"
-          y={stars > 0 ? '17.2' : '16.5'}
-          fontSize="10"
-          fontWeight="700"
-          fill="#fff"
-          stroke="#0006"
-          strokeWidth="0.4"
-          textAnchor="middle"
-          fontFamily="Sarabun"
-        >
-          {ic || name?.[0] || 'ส'}
-        </text>
-      )}
+      <g
+        transform={icTransform}
+        fill="none"
+        stroke={haloCol}
+        strokeWidth="4.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+      />
+      <g
+        transform={icTransform}
+        fill="none"
+        stroke={icCol}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+      />
     </svg>
   );
 };
@@ -4068,6 +4154,8 @@ const FormationPitch: React.FC<{
   return (
     <svg
       ref={svgRef}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
       className="w-full max-w-[440px] mland:h-full mland:max-h-full mland:w-auto mland:max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none"
       viewBox="0 0 300 340"
     >
@@ -4147,10 +4235,17 @@ const FormationPitch: React.FC<{
             data-drop-player={q.n}
             data-drop-slot={z.sp}
             onPointerDown={(e) => onPlayerPointerDown(e, q, z.sp, i)}
-            style={{ touchAction: 'none', opacity: isMovingSelf ? 0.24 : isSource ? 0.45 : 1 }}
+            onContextMenu={(e) => e.preventDefault()}
+            style={{
+              touchAction: 'none',
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              userSelect: 'none',
+              opacity: isMovingSelf ? 0.24 : isSource ? 0.45 : 1
+            }}
             className={dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}
           >
-            <circle cx={cx} cy={cy} r={22} fill="transparent" />
+            <circle cx={cx} cy={cy} r={24} fill="transparent" />
             {isMe && !isTarget && (
               <circle cx={cx} cy={cy} r={22.5} fill="#f5c2422e" stroke="#fde047" strokeWidth="2.2" />
             )}
@@ -4560,23 +4655,32 @@ const MainMenu: React.FC<{
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-          <div className="max-w-5xl mland:max-w-none mx-auto p-3 sm:p-5 mland:p-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2.5 mland:gap-1 mland:min-h-full mland:auto-rows-fr">
+          <div className="max-w-5xl mland:max-w-none mx-auto p-3 sm:p-5 mland:p-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2.5 mland:gap-1.5 mland:min-h-full mland:auto-rows-fr">
             {previewClubs.t0.map((t, idx) => {
               const avg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length);
               const tierTag = avg >= 42 ? 'เต็งลีก' : avg >= 39 ? 'กลางตาราง' : 'ท้าทาย';
+              const accent = t.kc?.[0] || '#158049';
               return (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onStartManager(targetSlot, previewClubs.names, previewClubs.t0, idx, diff); }}
-                  className="flex items-center gap-3 mland:gap-1.5 p-3 mland:p-1.5 rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)] active:scale-[0.99] text-left transition-all cursor-pointer shadow-xs min-w-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6 mland:[&>svg]:shrink-0"
+                  style={{ borderLeftColor: accent }}
+                  className="group flex items-center gap-3 mland:gap-2 p-3 mland:p-1.5 rounded-2xl mland:rounded-xl border border-[var(--line)] border-l-4 bg-[var(--surface)] hover:border-[var(--g)] hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] text-left transition-all cursor-pointer shadow-xs min-w-0"
                 >
-                  <ClubCrest name={t.name} size={34} team={t} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm mland:text-[10.5px] truncate leading-tight">{t.name}</div>
-                    <div className="text-xs mland:text-[9px] text-[var(--mut)] truncate leading-tight">{tierTag} · {t.sq.length} คน</div>
+                  <div className="p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/60 shrink-0 mland:[&_svg]:w-6 mland:[&_svg]:h-6 group-hover:scale-105 transition-transform">
+                    <ClubCrest name={t.name} size={36} team={t} />
                   </div>
-                  <span className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0" style={{ background: ovColor(avg) }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">{t.name}</div>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <span className={`px-1.5 py-0.2 rounded text-[9.5px] mland:text-[8.5px] font-bold ${avg >= 42 ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]' : avg >= 39 ? 'bg-[var(--g-soft)] text-[var(--g)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                        {tierTag}
+                      </span>
+                      <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">{t.sq.length} คน</span>
+                    </div>
+                  </div>
+                  <span className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0 shadow-xs" style={{ background: ovColor(avg) }}>
                     {avg}
                   </span>
                 </button>
@@ -5055,10 +5159,10 @@ const MainMenu: React.FC<{
 
   return (
     <div className="h-[100dvh] w-full overflow-y-auto mland:overflow-hidden overflow-x-hidden flex flex-col bg-[var(--bg)]">
-      <div className="w-full max-w-5xl mland:max-w-none m-auto mland:m-0 mland:h-full p-3 sm:p-5 mland:p-2.5 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] mland:grid-cols-[0.76fr_1.24fr] gap-4 lg:gap-6 mland:gap-3 items-center mland:items-stretch">
-        <div className="text-center lg:text-left mland:text-left mland:flex mland:flex-col mland:justify-between mland:h-full mland:min-h-0 mland:game-card mland:p-2.5">
+      <div className="w-full max-w-5xl mland:max-w-none m-auto mland:m-0 mland:h-full p-3 sm:p-5 mland:p-2 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] mland:grid-cols-[0.74fr_1.26fr] gap-4 lg:gap-6 mland:gap-2.5 items-center mland:items-stretch">
+        <div className="text-center lg:text-left mland:text-left mland:flex mland:flex-col mland:justify-between mland:h-full mland:min-h-0 mland:game-card mland:p-2.5 mland:rounded-xl">
           <div>
-            <svg viewBox="0 0 320 155" className="w-full max-w-[380px] mland:max-w-full mland:max-h-[86px] mx-auto lg:mx-0 mland:mx-0 rounded-3xl mland:rounded-xl border border-[var(--line)] mb-4 mland:mb-1.5 shadow-xs">
+            <svg viewBox="0 0 320 155" className="w-full max-w-[380px] mland:max-w-full mland:max-h-[84px] mx-auto lg:mx-0 mland:mx-0 rounded-3xl mland:rounded-xl border border-[var(--line)] mb-4 mland:mb-1.5 shadow-xs">
               <defs>
                 <linearGradient id="sk_hero" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor="#0b2018" />
@@ -5098,7 +5202,7 @@ const MainMenu: React.FC<{
             <button
               type="button"
               onClick={() => openManagerSetup(firstEmptySlot('m'))}
-              className="group relative overflow-hidden p-4 mland:p-2.5 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
+              className="group relative overflow-hidden p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
             >
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-black/10 flex items-center justify-center text-xl mland:text-base shrink-0">📋</span>
@@ -5112,7 +5216,7 @@ const MainMenu: React.FC<{
             <button
               type="button"
               onClick={() => openPlayerSetup(firstEmptySlot('p'))}
-              className="group relative overflow-hidden p-4 mland:p-2.5 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
+              className="group relative overflow-hidden p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
             >
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-white/15 flex items-center justify-center text-xl mland:text-base shrink-0">⚽</span>
@@ -5126,15 +5230,15 @@ const MainMenu: React.FC<{
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0">
-            <div className="p-3.5 mland:p-2.5 game-card mland:flex mland:flex-col mland:min-h-0">
-              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1.5 shrink-0 flex items-center justify-between text-[var(--ink)]">
+            <div className="p-3.5 mland:p-2 game-card rounded-2xl mland:rounded-xl mland:flex mland:flex-col mland:min-h-0">
+              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
                 <span>เซฟโหมดผู้จัดการ</span>
                 <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
               </div>
               <div className="mland:flex-1 mland:min-h-0 mland:overflow-y-auto pr-0.5">{renderSlotList('m')}</div>
             </div>
-            <div className="p-3.5 mland:p-2.5 game-card mland:flex mland:flex-col mland:min-h-0">
-              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1.5 shrink-0 flex items-center justify-between text-[var(--ink)]">
+            <div className="p-3.5 mland:p-2 game-card rounded-2xl mland:rounded-xl mland:flex mland:flex-col mland:min-h-0">
+              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
                 <span>เซฟโหมดนักเตะ</span>
                 <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
               </div>
@@ -5185,6 +5289,7 @@ const LeagueView: React.FC<{
   const vt = state.lg ?? me.tier;
   const sub = state.tv ?? 0;
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
+  const [sideStatTab, setSideStatTab] = useState<'sg' | 'sa' | 'cs' | 'ov'>('sg');
 
   const tb = sortTable(state.teams.filter((t) => t.tier === vt));
   const myTierTable = vt === me.tier ? tb : sortTable(state.teams.filter((t) => t.tier === me.tier));
@@ -5196,6 +5301,23 @@ const LeagueView: React.FC<{
     .map((t) => ({ t, st: teamStats(t, state) }))
     .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
 
+  const renderFormDots = (fm?: string) => {
+    const chars = (fm || '').slice(-5).split('');
+    if (!chars.length) return <span className="text-[10px] text-[var(--mut)]">—</span>;
+    return (
+      <div className="flex items-center justify-center gap-0.5" title={`ฟอร์ม 5 นัดหลัง: ${chars.join('')}`}>
+        {chars.map((c, idx) => (
+          <span
+            key={idx}
+            className={`w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full shrink-0 ${
+              c === 'W' ? 'bg-emerald-500' : c === 'D' ? 'bg-amber-400' : 'bg-rose-500'
+            }`}
+          />
+        ))}
+      </div>
+    );
+  };
+
   const renderMySummaryBanner = () => {
     const myRankPow =
       state.teams
@@ -5204,147 +5326,297 @@ const LeagueView: React.FC<{
         .sort((a, b) => b.st.ovSq - a.st.ovSq)
         .findIndex((x) => x.t.id === state.me) + 1;
     const nTeams = myTierTable.length;
+    const myGd = me.gf - me.ga;
     const avgOf = (k: 'ovSq' | 'ovXi' | 'at' | 'df') => {
       const same = state.teams.filter((t) => t.tier === me.tier).map((t) => teamStats(t, state));
       return Math.round(same.reduce((sum, x) => sum + x[k], 0) / (same.length || 1));
     };
 
     return (
-      <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-wrap items-center justify-between gap-3 mland:gap-1.5">
-        <div className="flex items-center gap-2.5 mland:gap-1.5 min-w-0">
+      <div className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
+        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
           <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-            <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
+            <ClubCrest name={me.name} size={28} team={me} club={state.club} isMyClub={state.mode === 'm'} />
           </div>
           <div className="min-w-0">
-            <div className="font-bold text-sm mland:text-[11px] truncate flex items-center gap-1.5">
+            <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate flex items-center gap-1">
               <span className="truncate">{me.name}</span>
-              <span className="text-[10px] mland:text-[9px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] shrink-0">★ ทีมฉัน</span>
+              <span className="px-1.5 py-0.2 rounded-md bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8.5px] font-bold shrink-0">ทีมฉัน</span>
             </div>
-            <div className="text-xs mland:text-[9.5px] text-[var(--mut)] tabular">{TN[me.tier]} · อันดับ {myRank}/{nTeams} · {me.pts} แต้ม</div>
+            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate">
+              {TN[me.tier]} · อันดับ <b className="text-[var(--ink)]">{myRank}/{nTeams}</b> · <b className="text-[var(--g)]">{me.pts}</b> แต้ม ({myGd > 0 ? `+${myGd}` : myGd})
+            </div>
           </div>
         </div>
-        <div className="flex items-center divide-x divide-[var(--line)] rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70 border border-[var(--line)]/80 ml-auto overflow-hidden">
-          {(
-            [
-              ['พลัง', `#${myRankPow}/${nTeams}`, null],
-              ['เฉลี่ย', ms.ovSq, ms.ovSq - avgOf('ovSq')],
-              ['ตัวจริง', ms.ovXi, ms.ovXi - avgOf('ovXi')],
-              ['บุก', ms.at, ms.at - avgOf('at')],
-              ['รับ', ms.df, ms.df - avgOf('df')]
-            ] as const
-          ).map(([lbl, val, diff]) => (
-            <div key={lbl} className="px-2.5 mland:px-1.5 py-1 mland:py-0.5 text-center min-w-[44px] mland:min-w-[34px]">
-              <div className="text-[10px] mland:text-[8px] text-[var(--mut)] leading-tight">{lbl}</div>
-              <div className="font-bold text-xs mland:text-[9.5px] tabular leading-tight">
-                {val}
-                {diff !== null && (
-                  <span className={`ml-0.5 text-[9.5px] mland:text-[8px] ${diff > 0 ? 'text-[var(--g)]' : diff < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
-                    {diff > 0 ? `+${diff}` : diff}
-                  </span>
-                )}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <div className="flex items-center divide-x divide-[var(--line)] rounded-xl mland:rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)]/80 overflow-hidden">
+            {(
+              [
+                ['อันดับพลัง', `#${myRankPow}`, null],
+                ['เฉลี่ย', ms.ovSq, ms.ovSq - avgOf('ovSq')],
+                ['ตัวจริง', ms.ovXi, ms.ovXi - avgOf('ovXi')],
+                ['บุก', ms.at, ms.at - avgOf('at')],
+                ['รับ', ms.df, ms.df - avgOf('df')]
+              ] as const
+            ).map(([lbl, val, diff]) => (
+              <div key={lbl} className="px-2 mland:px-1.5 py-1 mland:py-0.5 text-center min-w-[38px] mland:min-w-[31px]">
+                <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-tight whitespace-nowrap">{lbl}</div>
+                <div className="font-bold text-[11px] mland:text-[9.5px] tabular leading-tight whitespace-nowrap">
+                  {val}
+                  {diff !== null && (
+                    <span className={`ml-0.5 text-[9px] mland:text-[7.5px] ${diff > 0 ? 'text-[var(--g)]' : diff < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
+                      {diff > 0 ? `+${diff}` : diff}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          {vt !== me.tier && (
+            <button
+              type="button"
+              onClick={() => onUpdateState((d) => { d.lg = me.tier; })}
+              className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer shrink-0 shadow-xs hover:brightness-105"
+            >
+              ลีกฉัน
+            </button>
+          )}
         </div>
-        {vt !== me.tier && (
-          <button type="button" onClick={() => onUpdateState((d) => { d.lg = me.tier; })} className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-xs mland:text-[9.5px] font-bold cursor-pointer shrink-0">
-            ดูลีกฉัน
-          </button>
+      </div>
+    );
+  };
+
+  const renderSideLeagueStats = () => {
+    const tierTeams = state.teams.filter((t) => t.tier === vt);
+    const tierPlayers = tierTeams.flatMap((t) => t.sq.map((q) => ({ q, t })));
+    const topBy = (fn: (q: Player) => number, filterFn?: (q: Player) => boolean) =>
+      tierPlayers
+        .filter((x) => (!filterFn || filterFn(x.q)) && fn(x.q) > 0)
+        .sort((a, b) => fn(b.q) - fn(a.q) || b.q.ov - a.q.ov);
+
+    const cfg: Record<typeof sideStatTab, { label: string; fn: (q: Player) => number; fmt: (q: Player) => string; filter?: (q: Player) => boolean }> = {
+      sg: { label: '⚽ ยิง', fn: (q) => q.sg || 0, fmt: (q) => `${q.sg} ลูก` },
+      sa: { label: '🎯 จ่าย', fn: (q) => q.sa || 0, fmt: (q) => `${q.sa} ครั้ง` },
+      cs: { label: '🧤 คลีนชีต', fn: (q) => q.cs || 0, fmt: (q) => `${q.cs} นัด`, filter: (q) => q.pos === 'GK' },
+      ov: { label: '⭐ OVR', fn: (q) => q.ov, fmt: (q) => `${q.ov}` }
+    };
+    const active = cfg[sideStatTab];
+    const list = topBy(active.fn, active.filter).slice(0, 5);
+    const topScorer = topBy((q) => q.sg || 0)[0];
+    const topAssist = topBy((q) => q.sa || 0)[0];
+
+    return (
+      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="font-bold text-xs sm:text-sm mland:text-[11px] flex items-center gap-1">
+            <span>⭐ สถิติลีก</span>
+            <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">· {TN[vt]}</span>
+          </div>
+          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70">
+            {(['sg', 'sa', 'cs', 'ov'] as const).map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => { SFX.tap(); setSideStatTab(k); }}
+                className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors ${
+                  sideStatTab === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
+              >
+                {cfg[k].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {(topScorer || topAssist) && (
+          <div className="grid grid-cols-2 gap-1 text-[10px] mland:text-[9px]">
+            <div className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 truncate">
+              <span className="text-[var(--mut)]">⚽ ดาวซัลโว: </span>
+              <b className="text-[var(--ink)]">{topScorer ? `${topScorer.q.n} (${topScorer.q.sg})` : '—'}</b>
+            </div>
+            <div className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 truncate">
+              <span className="text-[var(--mut)]">🎯 แอสซิสต์: </span>
+              <b className="text-[var(--ink)]">{topAssist ? `${topAssist.q.n} (${topAssist.q.sa})` : '—'}</b>
+            </div>
+          </div>
+        )}
+
+        {list.length ? (
+          <div className="space-y-1 mland:space-y-0.5">
+            {list.map((x, idx) => (
+              <button
+                key={`${x.t.id}-${x.q.n}`}
+                type="button"
+                onClick={() => onInspectPlayer(x.q, x.t)}
+                className={`w-full flex items-center gap-2 mland:gap-1.5 px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-left cursor-pointer transition-colors ${
+                  x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]/80'
+                }`}
+              >
+                <span className={`w-3.5 text-[10.5px] mland:text-[9px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>
+                  {idx + 1}
+                </span>
+                <PlayerFace player={x.q} team={x.t} state={state} size={22} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-[11px] mland:text-[9.5px] truncate leading-tight">{x.q.n}</div>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate leading-tight">{x.t.name} · {x.q.pos}</div>
+                </div>
+                <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold tabular shrink-0">
+                  {active.fmt(x.q)}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-1">ยังไม่มีข้อมูลสถิติในหมวดนี้</p>
         )}
       </div>
     );
   };
 
   const renderStandings = () => (
-    <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:grid mland:grid-cols-[1.42fr_0.85fr] mland:gap-2 mland:overflow-hidden">
-      <div className="space-y-2.5 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="mland:hidden">{renderMySummaryBanner()}</div>
-        <div className="rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
-          <div className="shrink-0 grid grid-cols-[24px_22px_minmax(0,1fr)_22px_22px_22px_22px_30px_34px] sm:grid-cols-[26px_28px_1fr_28px_28px_28px_28px_36px_42px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 py-2 mland:py-0.5 text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] border-b border-[var(--line)] font-semibold">
+    <div className="space-y-2.5 lg:space-y-0 mland:space-y-0 lg:flex-1 lg:min-h-0 mland:flex-1 mland:min-h-0 lg:grid lg:grid-cols-[1.36fr_0.94fr] lg:gap-3 mland:grid mland:grid-cols-[1.35fr_0.95fr] mland:gap-2 mland:overflow-hidden">
+      <div className="space-y-2 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
+        <div className="lg:hidden mland:hidden">{renderMySummaryBanner()}</div>
+        <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
+          {/* Table Header */}
+          <div className="shrink-0 grid grid-cols-[24px_20px_minmax(0,1fr)_22px_22px_22px_22px_30px_36px] sm:grid-cols-[26px_24px_minmax(0,1fr)_44px_24px_24px_24px_24px_34px_40px] items-center gap-0.5 sm:gap-1 px-2.5 sm:px-3 py-1.5 mland:py-1 bg-[var(--surface-2)]/90 text-[10.5px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
             <span className="text-center">#</span>
             <span />
-            <span className="truncate">{TN[vt]}</span>
-            <span className="text-center">ล</span>
-            <span className="text-center">ช</span>
-            <span className="text-center">ส</span>
-            <span className="text-center">พ</span>
-            <span className="text-center">+/-</span>
-            <span className="text-center">แต้ม</span>
+            <span className="truncate text-[var(--ink)]">{TN[vt]}</span>
+            <span className="hidden sm:block text-center">ฟอร์ม</span>
+            <span className="text-center" title="แข่ง">ล</span>
+            <span className="text-center" title="ชนะ">ช</span>
+            <span className="text-center" title="เสมอ">ส</span>
+            <span className="text-center" title="แพ้">พ</span>
+            <span className="text-center" title="ประตูได้-เสีย">+/-</span>
+            <span className="text-center text-[var(--ink)]">แต้ม</span>
           </div>
-          <div className="divide-y divide-[var(--line)]/60 mland:flex-1 mland:min-h-0 mland:overflow-y-auto">
+
+          {/* Table Body */}
+          <div className="divide-y divide-[var(--line)]/50 mland:flex-1 mland:min-h-0 mland:overflow-y-auto">
             {tb.map((t, i) => {
               const isPromo = i < 3 && vt < 2;
               const isRel = i >= tb.length - 3 && vt > 0;
               const isMe = t.id === state.me;
               const gd = t.gf - t.ga;
+              const zoneBorder = isMe
+                ? 'border-l-[var(--lamp)] bg-[var(--lamp-soft)]/85 font-semibold'
+                : isPromo
+                  ? 'border-l-[var(--g)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--g-soft)]/60'
+                  : isRel
+                    ? 'border-l-[var(--red)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--red-soft)]/60'
+                    : 'border-l-transparent even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75';
+              const rankBadge = isPromo
+                ? 'bg-[var(--g-soft)] text-[var(--g)]'
+                : isRel
+                  ? 'bg-[var(--red-soft)] text-[var(--red)]'
+                  : isMe
+                    ? 'bg-[var(--lamp)] text-[#261900]'
+                    : 'text-[var(--mut)]';
+
               return (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
-                  className={`w-full grid grid-cols-[24px_22px_minmax(0,1fr)_22px_22px_22px_22px_30px_34px] sm:grid-cols-[26px_28px_1fr_28px_28px_28px_28px_36px_42px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 py-2 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${
-                    isMe ? 'bg-[var(--lamp-soft)] font-semibold' : isPromo ? 'bg-[var(--g-soft)] hover:bg-[var(--surface-2)]' : isRel ? 'bg-[var(--red-soft)] hover:bg-[var(--surface-2)]' : 'hover:bg-[var(--surface-2)]'
-                  }`}
+                  className={`w-full grid grid-cols-[24px_20px_minmax(0,1fr)_22px_22px_22px_22px_30px_36px] sm:grid-cols-[26px_24px_minmax(0,1fr)_44px_24px_24px_24px_24px_34px_40px] items-center gap-0.5 sm:gap-1 px-2.5 sm:px-3 py-1.5 mland:py-0.5 border-l-[3px] text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${zoneBorder}`}
                 >
-                  <span className="text-center tabular font-bold">
+                  <span className={`text-center tabular font-bold text-[10.5px] mland:text-[9px] rounded-md py-0.5 leading-none ${rankBadge}`}>
                     {i + 1}
-                    {isPromo && <span className="text-[var(--g)]">▲</span>}
-                    {isRel && <span className="text-[var(--red)]">▼</span>}
                   </span>
-                  <ClubCrest name={t.name} size={20} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
-                  <div className="min-w-0">
-                    <div className="truncate text-xs sm:text-[13px] mland:text-[10.5px]">
-                      {t.name}
-                      {isMe && <span className="ml-1 text-[10px] font-bold text-[var(--lamp)]">★</span>}
-                    </div>
-                    <div className="flex items-center gap-1 mt-0.5 mland:hidden text-[10px] font-mono text-[var(--mut)]">
-                      {(t.fm || '').slice(-5) || '—'}
-                    </div>
+                  <div className="flex items-center justify-center mland:[&>svg]:w-4 mland:[&>svg]:h-4">
+                    <ClubCrest name={t.name} size={18} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                   </div>
-                  <span className="text-center tabular">{t.p}</span>
+                  <div className="min-w-0 flex items-center gap-1">
+                    <span className="truncate text-[11.5px] sm:text-[12.5px] mland:text-[10.5px] leading-tight">
+                      {t.name}
+                    </span>
+                    {isMe && <span className="text-[10px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] shrink-0">★</span>}
+                  </div>
+                  <div className="hidden sm:flex items-center justify-center">
+                    {renderFormDots(t.fm)}
+                  </div>
+                  <span className="text-center tabular text-[var(--mut)]">{t.p}</span>
                   <span className="text-center tabular">{t.w}</span>
-                  <span className="text-center tabular">{t.d}</span>
-                  <span className="text-center tabular">{t.l}</span>
-                  <span className="text-center tabular">{gd > 0 ? `+${gd}` : gd}</span>
-                  <span className="text-center tabular font-bold text-xs sm:text-sm mland:text-[10.5px]">{t.pts}</span>
+                  <span className="text-center tabular text-[var(--mut)]">{t.d}</span>
+                  <span className="text-center tabular text-[var(--mut)]">{t.l}</span>
+                  <span className={`text-center tabular font-semibold ${gd > 0 ? 'text-[var(--g)]' : gd < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
+                    {gd > 0 ? `+${gd}` : gd}
+                  </span>
+                  <span className={`text-center tabular font-extrabold text-[11.5px] sm:text-xs mland:text-[10.5px] rounded-md py-0.5 leading-none ${isMe ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface-2)]/85 text-[var(--ink)]'}`}>
+                    {t.pts}
+                  </span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs mland:text-[10px] text-[var(--mut)] px-1 shrink-0">
-          <span>แตะชื่อทีมเพื่อส่องขุมกำลัง</span>
-          {vt < 2 && <span><b className="text-[var(--g)]">▲</b> อันดับ 1-3 เลื่อนชั้น</span>}
-          {vt > 0 ? <span><b className="text-[var(--red)]">▼</b> 3 อันดับท้ายตกชั้น</span> : <span>ลีกระดับจังหวัดไม่มีการตกชั้น</span>}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] mland:text-[9.5px] text-[var(--mut)] px-1 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            {vt < 2 && (
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
+                <span>อันดับ 1-3 เลื่อนชั้น</span>
+              </span>
+            )}
+            {vt > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
+                <span>3 อันดับท้ายตกชั้น</span>
+              </span>
+            ) : (
+              <span>ลีกระดับจังหวัดไม่มีตกชั้น</span>
+            )}
+          </div>
+          <span className="opacity-80">แตะชื่อทีมเพื่อส่องข้อมูล</span>
         </div>
       </div>
 
-      <div className="space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
-        <div className="hidden mland:block">{renderMySummaryBanner()}</div>
-        <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-1 gap-3 mland:gap-2">
-          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="font-bold text-sm mland:text-xs mb-2 mland:mb-1.5">ผลล่าสุดของคุณ</div>
+      {/* Right Column: Summary + Live League Stats + Recent Results + History */}
+      <div className="space-y-2.5 mland:space-y-1.5 mland:h-full mland:overflow-y-auto mland:pr-0.5">
+        <div className="hidden lg:block mland:block">{renderMySummaryBanner()}</div>
+        {renderSideLeagueStats()}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 mland:grid-cols-1 gap-2.5 mland:gap-1.5">
+          <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
+            <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center justify-between">
+              <span>📋 ผลล่าสุดของคุณ</span>
+              {me.fm && <div className="flex items-center gap-1">{renderFormDots(me.fm)}</div>}
+            </div>
             {(state.res || []).length ? (
-              <div className="space-y-1.5 mland:space-y-1">
-                {state.res!.map((r, i) => (
-                  <div key={i} className="text-xs mland:text-[11px] py-1 mland:py-0.5 border-b border-[var(--line)]/60 last:border-0">{r}</div>
-                ))}
+              <div className="space-y-1">
+                {state.res!.map((r, i) => {
+                  const isWin = r.includes('ชนะ') || r.startsWith('W');
+                  const isDraw = r.includes('เสมอ') || r.startsWith('D');
+                  const toneCls = isWin
+                    ? 'border-l-emerald-500 bg-emerald-500/8'
+                    : isDraw
+                      ? 'border-l-amber-400 bg-amber-400/8'
+                      : 'border-l-rose-500 bg-rose-500/8';
+                  return (
+                    <div key={i} className={`text-[11px] mland:text-[10px] px-2 py-1 mland:py-0.5 rounded-lg border-l-2 leading-snug ${toneCls}`}>
+                      {r}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-xs text-[var(--mut)]">ยังไม่มีการแข่งขัน</p>
+              <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ยังไม่มีการแข่งขัน</p>
             )}
           </div>
-          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="font-bold text-sm mland:text-xs mb-2 mland:mb-1.5">ประวัติสโมสร/อาชีพ</div>
+
+          <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
+            <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1">🏅 ประวัติสโมสร/อาชีพ</div>
             {state.hist.length ? (
-              <div className="space-y-1 max-h-36 mland:max-h-28 overflow-y-auto">
+              <div className="space-y-1 max-h-36 mland:max-h-28 overflow-y-auto pr-0.5">
                 {state.hist.slice().reverse().map((h, i) => (
-                  <div key={i} className="text-xs mland:text-[11px] text-[var(--mut)] py-0.5">{h}</div>
+                  <div key={i} className="text-[11px] mland:text-[10px] text-[var(--mut)] pl-2 border-l-2 border-[var(--g)]/40 py-0.5 leading-snug">
+                    {h}
+                  </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[var(--mut)]">ยังไม่มีประวัติจบซีซั่น</p>
+              <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ยังไม่มีประวัติจบซีซั่น</p>
             )}
           </div>
         </div>
@@ -5357,12 +5629,12 @@ const LeagueView: React.FC<{
     const maxV = Math.max(...leagueRows.map((x) => x.st[cmpSort]), minV + 8);
     const sortLabels: Record<'ovSq' | 'ovXi' | 'at' | 'df', string> = { ovSq: 'เฉลี่ยทีม', ovXi: '11 ตัวจริง', at: 'พลังบุก', df: 'พลังรับ' };
     return (
-      <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 mland:mb-2 shrink-0">
-          <h3 className="font-bold text-sm mland:text-xs">📊 เทียบพลังทีม · {TN[vt]}</h3>
+      <div className="p-3 sm:p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 mland:mb-1.5 shrink-0">
+          <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📊 เทียบพลังทีม · {TN[vt]}</h3>
           <div className="flex flex-wrap gap-1">
             {(['ovSq', 'ovXi', 'at', 'df'] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setCmpSort(k)} className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${cmpSort === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+              <button key={k} type="button" onClick={() => setCmpSort(k)} className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${cmpSort === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
                 {sortLabels[k]}
               </button>
             ))}
@@ -5379,29 +5651,29 @@ const LeagueView: React.FC<{
                 key={t.id}
                 type="button"
                 onClick={() => onInspectTeam(t.id)}
-                className={`w-full grid grid-cols-[24px_24px_minmax(0,1fr)_auto] sm:grid-cols-[24px_24px_minmax(0,1fr)_90px_auto] mland:grid-cols-[20px_22px_minmax(0,1fr)_auto] items-center gap-2 mland:gap-1.5 p-2 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-colors ${
-                  isMe ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/60 border-[var(--line)] hover:border-[var(--g)]'
+                className={`w-full grid grid-cols-[22px_22px_minmax(0,1fr)_auto] sm:grid-cols-[24px_24px_minmax(0,1fr)_90px_auto] mland:grid-cols-[20px_20px_minmax(0,1fr)_auto] items-center gap-2 mland:gap-1.5 p-2 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-colors ${
+                  isMe ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/55 border-[var(--line)] hover:border-[var(--g)]'
                 }`}
               >
-                <span className="text-xs font-bold text-center text-[var(--mut)] tabular">{idx + 1}</span>
-                <ClubCrest name={t.name} size={22} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
+                <span className="text-xs mland:text-[10px] font-bold text-center text-[var(--mut)] tabular">{idx + 1}</span>
+                <ClubCrest name={t.name} size={20} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                 <div className="min-w-0">
-                  <div className="font-bold text-xs truncate">{t.name} {isMe && <span className="text-[var(--lamp)]">★</span>}</div>
-                  <div className="text-[11px] mland:text-[10px] text-[var(--mut)] truncate">ตัวจริง {st.ovXi} · หน้า {st.f} กลาง {st.m} หลัง {st.d} โกล์ {st.gk}</div>
+                  <div className="font-bold text-xs mland:text-[10.5px] truncate">{t.name} {isMe && <span className="text-[var(--lamp)]">★</span>}</div>
+                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">ตัวจริง {st.ovXi} · หน้า {st.f} กลาง {st.m} หลัง {st.d} โกล์ {st.gk}</div>
                 </div>
                 <div className="hidden sm:block mland:hidden">
-                  <div className="flex justify-between text-[11px] font-bold mb-0.5">
+                  <div className="flex justify-between text-[10.5px] font-bold mb-0.5">
                     <span className="text-[var(--mut)]">{sortLabels[cmpSort]}</span>
                     <span className="tabular">{val}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                     <div className="h-full rounded-full" style={{ width: `${pct}%`, background: ovColor(st.ovXi) }} />
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(st.ovSq) }}>{st.ovSq}</span>
+                <div className="flex items-center gap-1">
+                  <span className="px-2 py-0.5 rounded-lg text-white text-[11px] mland:text-[10px] font-bold tabular" style={{ background: ovColor(st.ovSq) }}>{st.ovSq}</span>
                   {!isMe && (
-                    <span className={`text-[11px] font-bold tabular ${df > 0 ? 'text-[var(--red)]' : df < 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                    <span className={`text-[10.5px] mland:text-[9.5px] font-bold tabular ${df > 0 ? 'text-[var(--red)]' : df < 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                       {df > 0 ? `+${df}` : df}
                     </span>
                   )}
@@ -5420,35 +5692,35 @@ const LeagueView: React.FC<{
     const board = (ic: string, title: string, valFn: (q: Player) => number, fmt: (q: Player) => string, filterFn?: (q: Player) => boolean) => {
       const list = ps.filter((x) => (!filterFn || filterFn(x.q)) && valFn(x.q) > 0).sort((a, b) => valFn(b.q) - valFn(a.q) || b.q.ov - a.q.ov).slice(0, 5);
       return (
-        <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)]">
-          <h4 className="font-bold text-sm mland:text-xs mb-2 mland:mb-1.5">{ic} {title}</h4>
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
+          <h4 className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1">{ic} {title}</h4>
           {list.length ? (
-            <div className="space-y-1.5 mland:space-y-1">
+            <div className="space-y-1">
               {list.map((x, idx) => (
                 <button
                   key={`${x.t.id}-${x.q.n}`}
                   type="button"
                   onClick={() => onInspectPlayer(x.q, x.t)}
-                  className={`w-full flex items-center gap-2.5 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
+                  className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
                 >
-                  <span className="w-4 text-xs font-bold text-[var(--mut)] text-center tabular">{idx + 1}</span>
-                  <PlayerFace player={x.q} team={x.t} state={state} size={28} />
+                  <span className={`w-4 text-[11px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
+                  <PlayerFace player={x.q} team={x.t} state={state} size={26} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-xs truncate">{x.q.n}</div>
-                    <div className="text-[11px] mland:text-[10px] text-[var(--mut)] truncate">{x.t.name} · {x.q.pos}</div>
+                    <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">{x.t.name} · {x.q.pos}</div>
                   </div>
-                  <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-xs font-bold tabular">{fmt(x.q)}</span>
+                  <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular">{fmt(x.q)}</span>
                 </button>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-[var(--mut)]">ยังไม่มีข้อมูล</p>
+            <p className="text-[11px] text-[var(--mut)]">ยังไม่มีข้อมูล</p>
           )}
         </div>
       );
     };
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-3 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-3 gap-2.5 mland:gap-1.5 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
         {board('⚽', 'ดาวซัลโว', (q) => q.sg || 0, (q) => `${q.sg}`)}
         {board('🎯', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa}`)}
         {board('✨', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
@@ -5460,19 +5732,30 @@ const LeagueView: React.FC<{
   };
 
   return (
-    <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      <div className="flex items-center justify-between gap-2 mland:gap-1.5 flex-nowrap overflow-x-auto shrink-0 pb-0.5">
-        <div className="flex items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+    <div className="space-y-2.5 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mland:flex-row mland:items-center mland:justify-between gap-1.5 shrink-0">
+        <div className="w-full sm:w-auto mland:w-auto grid grid-cols-3 sm:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
           {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => (
-            <button key={lbl} type="button" onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${vt === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
-              {lbl}{idx === me.tier ? ' ⭐' : ''}
+            <button
+              key={lbl}
+              type="button"
+              onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
+              className={`flex items-center justify-center gap-1 px-2 sm:px-3 mland:px-2.5 py-1.5 sm:py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${vt === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
+            >
+              <span className="truncate">{lbl}</span>
+              {idx === me.tier && <span className="shrink-0">★</span>}
             </button>
           ))}
         </div>
-        <div className="flex items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-          {['ตารางคะแนน', 'เทียบพลังทีม', 'สถิติผู้เล่น', 'ปฏิทินแข่ง'].map((lbl, idx) => (
-            <button key={lbl} type="button" onClick={() => { SFX.tap(); onUpdateState((d) => { d.tv = idx; }); }} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
-              {lbl}
+        <div className="w-full sm:w-auto mland:w-auto grid grid-cols-4 sm:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
+          {['🏆 ตาราง', '📊 พลังทีม', '⭐ สถิติ', '📅 ปฏิทิน'].map((lbl, idx) => (
+            <button
+              key={lbl}
+              type="button"
+              onClick={() => { SFX.tap(); onUpdateState((d) => { d.tv = idx; }); }}
+              className={`flex items-center justify-center px-1.5 sm:px-3 mland:px-2.5 py-1.5 sm:py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
+            >
+              <span className="truncate">{lbl}</span>
             </button>
           ))}
         </div>
@@ -6061,6 +6344,8 @@ const SquadTacticsView: React.FC<{
     x: number;
     y: number;
     active: boolean;
+    immediate: boolean;
+    holdTimer?: number;
   } | null>(null);
   const [dragUi, setDragUi] = useState<{ player: Player; fromSlot?: SubRole; x: number; y: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ name: string; slot?: string } | null>(null);
@@ -6116,18 +6401,6 @@ const SquadTacticsView: React.FC<{
     onToast(`📍 ย้าย ${playerName.split(' ')[0]} → ${newRole} (${zoneLabel})`);
   };
 
-  const findDropAt = (x: number, y: number): { name: string; slot?: string } | null => {
-    const els = document.elementsFromPoint(x, y);
-    for (const el of els) {
-      const hit = (el as Element).closest?.('[data-drop-player]');
-      if (hit) {
-        const name = hit.getAttribute('data-drop-player');
-        if (name) return { name, slot: hit.getAttribute('data-drop-slot') || undefined };
-      }
-    }
-    return null;
-  };
-
   const clientToPitchCoords = (clientX: number, clientY: number): { px: number; py: number; inside: boolean } | null => {
     const svg = pitchSvgRef.current;
     if (!svg) return null;
@@ -6148,8 +6421,64 @@ const SquadTacticsView: React.FC<{
     };
   };
 
+  const findNearestPitchStarter = (clientX: number, clientY: number, excludeName?: string): { name: string; slot?: string } | null => {
+    const pitchPt = clientToPitchCoords(clientX, clientY);
+    if (!pitchPt?.inside) return null;
+    const { starters: curStarters, slots: curSlots } = dragActionsRef.current;
+    let best: { name: string; slot?: string; dist: number } | null = null;
+    curStarters.forEach((other, idx) => {
+      if (other.n === excludeName) return;
+      const oz = curSlots[idx];
+      if (!oz) return;
+      const ox = 18 + oz.x * 2.64;
+      const oy = 24 + oz.y * 2.9;
+      const d = Math.hypot(pitchPt.px - ox, pitchPt.py - oy);
+      if (d <= 24 && (!best || d < best.dist)) {
+        best = { name: other.n, slot: oz.sp, dist: d };
+      }
+    });
+    return best ? { name: (best as { name: string }).name, slot: (best as { slot?: string }).slot } : null;
+  };
+
+  const findDropAt = (x: number, y: number, excludeName?: string): { name: string; slot?: string } | null => {
+    const els = document.elementsFromPoint(x, y);
+    for (const el of els) {
+      const hit = (el as Element).closest?.('[data-drop-player]');
+      if (hit) {
+        const name = hit.getAttribute('data-drop-player');
+        if (name && name !== excludeName) return { name, slot: hit.getAttribute('data-drop-slot') || undefined };
+      }
+    }
+    return findNearestPitchStarter(x, y, excludeName);
+  };
+
   const handlePlayerPointerDown = (e: React.PointerEvent, q: Player, slotSp?: SubRole, slotIdx?: number) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (dragRef.current?.holdTimer) {
+      window.clearTimeout(dragRef.current.holdTimer);
+    }
+    const targetEl = e.target as HTMLElement | null;
+    const immediate = slotIdx !== undefined || Boolean(targetEl?.closest?.('[data-drag-grip="1"]'));
+    if (immediate && isMgr) {
+      try {
+        (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      } catch {
+        // Ignore capture errors on synthetic events
+      }
+    }
+    let holdTimer: number | undefined;
+    if (!immediate && isMgr) {
+      holdTimer = window.setTimeout(() => {
+        const cur = dragRef.current;
+        if (!cur || cur.pointerId !== e.pointerId || cur.active) return;
+        cur.active = true;
+        cur.immediate = true;
+        vibrate(14);
+        setDragUi({ player: cur.player, fromSlot: cur.fromSlot, x: cur.x, y: cur.y });
+        const hit = findDropAt(cur.x, cur.y, cur.player.n);
+        setDropTarget(hit);
+      }, 190);
+    }
     dragRef.current = {
       player: q,
       fromSlot: slotSp,
@@ -6159,7 +6488,9 @@ const SquadTacticsView: React.FC<{
       startY: e.clientY,
       x: e.clientX,
       y: e.clientY,
-      active: false
+      active: false,
+      immediate,
+      holdTimer
     };
   };
 
@@ -6184,6 +6515,9 @@ const SquadTacticsView: React.FC<{
 
   useEffect(() => {
     const clearDrag = () => {
+      if (dragRef.current?.holdTimer) {
+        window.clearTimeout(dragRef.current.holdTimer);
+      }
       dragRef.current = null;
       pitchDragPreviewRef.current = null;
       setDragUi(null);
@@ -6195,9 +6529,25 @@ const SquadTacticsView: React.FC<{
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
       if (!dragActionsRef.current.isMgr) return;
-      const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
-      if (!d.active && dist > 6) {
-        d.active = true;
+      const dx = e.clientX - d.startX;
+      const dy = e.clientY - d.startY;
+      const dist = Math.hypot(dx, dy);
+
+      if (!d.active) {
+        if (!d.immediate) {
+          // If touching non-grip part of row and swiping vertically to scroll, cancel drag cleanly
+          if (Math.abs(dy) > 9 && Math.abs(dy) > Math.abs(dx) * 1.15) {
+            clearDrag();
+            return;
+          }
+          if (dist > 10 && Math.abs(dx) >= Math.abs(dy)) {
+            if (d.holdTimer) window.clearTimeout(d.holdTimer);
+            d.active = true;
+            d.immediate = true;
+          }
+        } else if (dist > 6) {
+          d.active = true;
+        }
       }
       if (!d.active) return;
 
@@ -6215,7 +6565,7 @@ const SquadTacticsView: React.FC<{
           const ox = 18 + oz.x * 2.64;
           const oy = 24 + oz.y * 2.9;
           const sDist = Math.hypot(pitchPt.px - ox, pitchPt.py - oy);
-          if (sDist < 13 && (!closestSwap || sDist < closestSwap.dist)) {
+          if (sDist < 15.5 && (!closestSwap || sDist < closestSwap.dist)) {
             closestSwap = { name: other.n, slot: oz.sp, dist: sDist };
           }
         });
@@ -6255,8 +6605,15 @@ const SquadTacticsView: React.FC<{
       pitchDragPreviewRef.current = null;
       setPitchDragPreview(null);
       setDragUi({ player: d.player, fromSlot: d.fromSlot, x: e.clientX, y: e.clientY });
-      const hit = findDropAt(e.clientX, e.clientY);
-      setDropTarget(hit && hit.name !== d.player.n ? hit : null);
+      const hit = findDropAt(e.clientX, e.clientY, d.player.n);
+      setDropTarget(hit);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      const d = dragRef.current;
+      if (d && (d.active || d.immediate) && dragActionsRef.current.isMgr) {
+        if (e.cancelable) e.preventDefault();
+      }
     };
 
     const onUp = (e: PointerEvent) => {
@@ -6282,7 +6639,7 @@ const SquadTacticsView: React.FC<{
         );
         return;
       }
-      const hit = findDropAt(e.clientX, e.clientY);
+      const hit = findDropAt(e.clientX, e.clientY, d.player.n);
       if (hit && hit.name !== d.player.n) {
         dragActionsRef.current.swapAnyPlayers(d.player.n, hit.name);
       }
@@ -6291,14 +6648,17 @@ const SquadTacticsView: React.FC<{
     const onCancel = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
+      // On some mobile browsers pointercancel can happen near edges; clear cleanly
       clearDrag();
     };
 
     window.addEventListener('pointermove', onMove);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
     return () => {
       window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
     };
@@ -6344,6 +6704,8 @@ const SquadTacticsView: React.FC<{
         data-drop-player={q.n}
         data-drop-slot={slotSp || ''}
         onPointerDown={(e) => handlePlayerPointerDown(e, q, slotSp)}
+        onContextMenu={(e) => e.preventDefault()}
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
@@ -6363,15 +6725,20 @@ const SquadTacticsView: React.FC<{
       >
         <span
           data-drag-grip={isMgr ? '1' : undefined}
-          style={isMgr ? { touchAction: 'none' } : undefined}
+          onContextMenu={(e) => e.preventDefault()}
+          style={
+            isMgr
+              ? { touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
+              : { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
+          }
           title={isMgr ? 'ลากเพื่อเปลี่ยนหรือสลับตำแหน่ง' : 'กด 1 ครั้งเพื่อดูข้อมูล'}
-          className={`flex items-center shrink-0 [&_svg]:w-4 [&_svg]:h-4 ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+          className={`flex items-center gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4 ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
         >
           <PlayerFace player={q} team={me} state={state} size={20} />
-        </span>
-        <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">#{no}</span>
-        <span className={`px-1 py-0.2 rounded text-[9px] font-bold text-white shrink-0 ${(slotSp ? LINE[slotSp] : q.pos) === 'DF' ? 'bg-blue-600' : (slotSp ? LINE[slotSp] : q.pos) === 'MF' ? 'bg-amber-600' : (slotSp ? LINE[slotSp] : q.pos) === 'GK' ? 'bg-purple-600' : 'bg-[var(--g)]'}`}>
-          {slotSp || q.ro}
+          <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">#{no}</span>
+          <span className={`px-1 py-0.2 rounded text-[9px] font-bold text-white shrink-0 ${(slotSp ? LINE[slotSp] : q.pos) === 'DF' ? 'bg-blue-600' : (slotSp ? LINE[slotSp] : q.pos) === 'MF' ? 'bg-amber-600' : (slotSp ? LINE[slotSp] : q.pos) === 'GK' ? 'bg-purple-600' : 'bg-[var(--g)]'}`}>
+            {slotSp || q.ro}
+          </span>
         </span>
         <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">
           {isMe && <span className="inline-block px-1 mr-1 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold">ฉัน</span>}
@@ -7370,6 +7737,7 @@ const MarketView: React.FC<{
   const [marketSource, setMarketSource] = useState<'mk' | 'club'>('mk');
   const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
   const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
+  const [sortBy, setSortBy] = useState<'default' | 'ov_desc' | 'price_asc' | 'age_asc'>('default');
   const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
   const [scoutRole, setScoutRole] = useState<SubRole | ''>('');
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
@@ -7380,7 +7748,7 @@ const MarketView: React.FC<{
   const [renewRole, setRenewRole] = useState<'key' | 'rot' | 'pro'>('rot');
   const [renewWb, setRenewWb] = useState<0 | 1 | 2>(1);
   const [renewMsg, setRenewMsg] = useState('');
-  const [mktMobTab, setMktMobTab] = useState<'sell' | 'scout' | 'con'>('sell');
+  const [rightTab, setRightTab] = useState<'sell' | 'scout' | 'con'>('sell');
 
   const availableSubRoles: SubRole[] = useMemo(() => {
     if (filter === 'GK' || filter === 'DF' || filter === 'MF' || filter === 'FW') return SPX[filter];
@@ -7388,14 +7756,18 @@ const MarketView: React.FC<{
   }, [filter]);
 
   const marketList = useMemo(() => {
-    return (state.mk || [])
+    const base = (state.mk || [])
       .map((q, i) => ({ q, i }))
       .filter(({ q }) => {
         const lineOk = filter === 'ALL' || (filter === 'FREE' ? !!q.free : q.pos === filter);
         const subOk = subFilter === 'ALL' || q.ro === subFilter;
         return lineOk && subOk;
       });
-  }, [state.mk, filter, subFilter]);
+    if (sortBy === 'ov_desc') return [...base].sort((a, b) => b.q.ov - a.q.ov);
+    if (sortBy === 'price_asc') return [...base].sort((a, b) => (a.q.free ? 0 : a.q.price || vlu(a.q)) - (b.q.free ? 0 : b.q.price || vlu(b.q)));
+    if (sortBy === 'age_asc') return [...base].sort((a, b) => a.q.age - b.q.age || b.q.ov - a.q.ov);
+    return base;
+  }, [state.mk, filter, subFilter, sortBy]);
 
   const clubMarketList = useMemo(() => {
     const items: { q: Player; team: Team; idx: number; price: number }[] = [];
@@ -7410,15 +7782,29 @@ const MarketView: React.FC<{
         items.push({ q, team: t, idx, price: Math.max(8, vlu(q)) });
       });
     });
-    return items.sort((a, b) => b.q.ov - a.q.ov).slice(0, 48);
-  }, [state.teams, state.me, me.tier, clubTierFilter, filter, subFilter]);
+    const sorted = items.sort((a, b) => {
+      if (sortBy === 'price_asc') return a.price - b.price || b.q.ov - a.q.ov;
+      if (sortBy === 'age_asc') return a.q.age - b.q.age || b.q.ov - a.q.ov;
+      return b.q.ov - a.q.ov;
+    });
+    return sorted.slice(0, 48);
+  }, [state.teams, state.me, me.tier, clubTierFilter, filter, subFilter, sortBy]);
 
   const loanPlayers = me.sq.map((q, i) => ({ q, i })).filter(({ q }) => q.loan && q.loanOpt);
   const contractList = me.sq
     .map((q, i) => ({ q, i, c: ensureCon(q) }))
     .filter(({ q }) => !q.loan)
     .sort((a, b) => a.c.yr - b.c.yr || b.q.ov - a.q.ov)
-    .slice(0, 6);
+    .slice(0, 8);
+
+  const incomingOffers = getIncomingOffers(state);
+  const listedPlayers = me.sq.filter((q) => q.listed && !q.loan);
+  const unlistedEligible = me.sq
+    .filter((q) => !q.listed && !q.loan)
+    .slice()
+    .sort((a, b) => b.ov - a.ov);
+  const expiringCount = me.sq.filter((q) => !q.loan && ensureCon(q).yr <= 1).length;
+  const activeCount = marketSource === 'mk' ? marketList.length : clubMarketList.length;
 
   const getDraftTarget = (draft: OfferDraft, s: GameState): { q: Player | undefined; sellerTeam?: Team } => {
     if (draft.source === 'club' && draft.clubTeamId != null) {
@@ -7613,29 +7999,29 @@ const MarketView: React.FC<{
     return (
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
         <div className="w-full max-w-xl mland:max-w-3xl max-h-[92dvh] mland:max-h-[95dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-          <div className="shrink-0 flex items-center gap-3 mland:gap-2 p-3.5 mland:px-3 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
-            <PlayerFace player={q} team={sellerTeam} state={state} size={48} />
+          <div className="shrink-0 flex items-center gap-3 mland:gap-2 p-3.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+            <PlayerFace player={q} team={sellerTeam} state={state} size={46} />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm sm:text-base mland:text-xs truncate">
                 {q.n} <span className="text-xs mland:text-[10px] text-[var(--g)]">({q.ro} · {SPN[q.ro] || q.pos})</span>
               </div>
-              <div className="text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] truncate">
+              <div className="text-[11px] sm:text-xs mland:text-[10px] text-[var(--mut)] truncate tabular">
                 {sellerTeam ? `${sellerTeam.name} · ` : ''}อายุ {q.age} ปี · {q.free ? <b className="text-[var(--g)]">ฟรีเอเยนต์</b> : `ค่าตัว ${q.price}k ฿`} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k
               </div>
             </div>
             <span className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl text-white font-bold text-sm sm:text-base mland:text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2 space-y-3 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-2.5 mland:items-start">
-            <div className="space-y-3 mland:space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-3 mland:items-start">
+            <div className="space-y-3 mland:space-y-2">
               <div>
-                <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)] mb-1">1) รูปแบบข้อเสนอ</div>
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">1) รูปแบบข้อเสนอ</div>
                 <div className="flex flex-wrap gap-1.5 mland:gap-1">
                   {types.map(([k, l]) => {
                     const isLoanType = k === 'loan' || k === 'loanopt';
                     const disabledLoan = isLoanType && tx.loansCount >= tx.maxLoans;
                     return (
-                      <button key={k} type="button" disabled={disabledLoan} onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })} className={`px-3 py-1.5 mland:px-2 mland:py-1 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer disabled:opacity-40 ${offerDraft.type === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                      <button key={k} type="button" disabled={disabledLoan} onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })} className={`px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer disabled:opacity-40 transition-colors ${offerDraft.type === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] hover:bg-[var(--line)]/50'}`}>
                         {l}{disabledLoan ? ' (เต็ม 4)' : ''}
                       </button>
                     );
@@ -7645,10 +8031,10 @@ const MarketView: React.FC<{
 
               {['cash', 'inst', 'swap'].includes(offerDraft.type) && (
                 <div>
-                  <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)] mb-1">ระดับค่าตัวเทียบตลาด ({offerDraft.pct}%)</div>
+                  <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1 tabular">ระดับค่าตัวเทียบตลาด ({offerDraft.pct}%)</div>
                   <div className="flex flex-wrap gap-1.5 mland:gap-1">
                     {[85, 95, 100, 115].map((p) => (
-                      <button key={p} type="button" onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${offerDraft.pct === p ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{p}%</button>
+                      <button key={p} type="button" onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2.5 mland:py-0.5 rounded-lg text-xs mland:text-[10.5px] font-semibold tabular whitespace-nowrap cursor-pointer transition-colors ${offerDraft.pct === p ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] hover:bg-[var(--line)]/50'}`}>{p}%</button>
                     ))}
                   </div>
                 </div>
@@ -7656,11 +8042,11 @@ const MarketView: React.FC<{
 
               {offerDraft.type === 'swap' && (
                 <div>
-                  <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)] mb-1">เลือกนักเตะที่ใช้แลก (ลด 80% ของค่าตัว)</div>
+                  <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">เลือกนักเตะที่ใช้แลก (ลด 80% ของค่าตัว)</div>
                   <div className="flex flex-wrap gap-1.5 mland:gap-1">
                     {swCands.slice(0, 5).map(({ z, i }) => (
-                      <button key={z.n} type="button" onClick={() => setOfferDraft({ ...offerDraft, swapIdx: i, counter: null, msg: '' })} className={`px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${offerDraft.swapIdx === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
-                        {z.pos} {z.n.split(' ')[0]} ({z.ov} · ลด {Math.round(vlu(z) * 0.8)}k)
+                      <button key={z.n} type="button" onClick={() => setOfferDraft({ ...offerDraft, swapIdx: i, counter: null, msg: '' })} className={`px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap cursor-pointer ${offerDraft.swapIdx === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                        {z.pos} {z.n.split(' ')[0]} ({z.ov} · -{Math.round(vlu(z) * 0.8)}k)
                       </button>
                     ))}
                     {!swCands.length && <span className="text-xs text-[var(--red)]">ไม่มีนักเตะเกินโควตาตำแหน่งให้แลก</span>}
@@ -7669,47 +8055,47 @@ const MarketView: React.FC<{
               )}
 
               <div>
-                <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)] mb-1">2) เงื่อนไขสัญญา</div>
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">2) เงื่อนไขสัญญา</div>
                 {!['loan', 'loanopt'].includes(offerDraft.type) && (
                   <div className="flex flex-wrap gap-1.5 mland:gap-1 mb-1.5 mland:mb-1">
                     {[1, 2, 3, 5].map((y) => (
-                      <button key={y} type="button" onClick={() => setOfferDraft({ ...offerDraft, yr: y, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${offerDraft.yr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>สัญญา {y} ปี</button>
+                      <button key={y} type="button" onClick={() => setOfferDraft({ ...offerDraft, yr: y, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${offerDraft.yr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{y} ปี</button>
                     ))}
                   </div>
                 )}
                 <div className="flex flex-wrap gap-1.5 mland:gap-1 mb-1.5 mland:mb-1">
                   {([['key', '⭐ ตัวหลัก'], ['rot', '🔄 หมุนเวียน'], ['pro', '🌱 ดาวรุ่ง/สำรอง']] as const).map(([k, l]) => (
-                    <button key={k} type="button" onClick={() => setOfferDraft({ ...offerDraft, role: k, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${offerDraft.role === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                    <button key={k} type="button" onClick={() => setOfferDraft({ ...offerDraft, role: k, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${offerDraft.role === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mland:gap-1">
                   {([['ประหยัด (-15%)', 0], ['มาตรฐาน', 1], ['จัดเต็ม (+20%+โบนัส)', 2]] as const).map(([l, k]) => (
-                    <button key={k} type="button" onClick={() => setOfferDraft({ ...offerDraft, wb: k, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${offerDraft.wb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                    <button key={k} type="button" onClick={() => setOfferDraft({ ...offerDraft, wb: k, counter: null, msg: '' })} className={`px-3 py-1 mland:px-2 mland:py-0.5 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${offerDraft.wb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
                   ))}
                 </div>
               </div>
             </div>
 
             <div className="space-y-3 mland:space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-2 gap-2 mland:gap-1.5 text-center p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]">
+              <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-2 gap-2 mland:gap-1.5 text-center p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]">
                 <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">จ่ายทันที</div><b className={`text-sm mland:text-xs tabular ${!canAfford ? 'text-[var(--red)]' : ''}`}>{E.cashNow}k</b></div>
-                <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">ค่าเหนื่อยรวมหลังดีล</div><b className={`text-sm mland:text-xs tabular ${wageOverCap ? 'text-[var(--red)]' : ''}`}>{Math.round(tx.curWage - freedWage + E.wg)}/{tx.wageCap}k</b></div>
+                <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">เพดานค่าเหนื่อยหลังดีล</div><b className={`text-sm mland:text-xs tabular ${wageOverCap ? 'text-[var(--red)]' : ''}`}>{Math.round(tx.curWage - freedWage + E.wg)}/{tx.wageCap}k</b></div>
                 <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">{E.dueLater ? 'ผ่อนปลายปี' : E.loanOpt ? 'ซื้อขาด' : 'สัญญา'}</div><b className="text-sm mland:text-xs tabular">{E.dueLater ? `${E.dueLater}k` : E.loanOpt ? `${E.loanOpt}k` : `${E.yr} ปี`}</b></div>
                 <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">งบคงเหลือ</div><b className="text-sm mland:text-xs tabular">{state.money}k</b></div>
               </div>
 
               <div className="flex items-center gap-2 text-xs mland:text-[10.5px]">
-                <span>โอกาสตอบรับ</span>
-                <div className="flex-1 h-2.5 mland:h-2 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full" style={{ width: `${E.chance}%`, background: chCol }} /></div>
-                <b className="tabular" style={{ color: chCol }}>{E.chance}%</b>
+                <span className="whitespace-nowrap">โอกาสตอบรับ</span>
+                <div className="flex-1 h-2.5 mland:h-2 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${E.chance}%`, background: chCol }} /></div>
+                <b className="tabular shrink-0" style={{ color: chCol }}>{E.chance}%</b>
               </div>
 
               {offerDraft.msg && (
-                <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] text-xs mland:text-[10.5px] space-y-2 mland:space-y-1">
+                <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] text-xs mland:text-[10.5px] space-y-2 mland:space-y-1.5">
                   <div className="font-bold">💬 ผลการเจรจา ({q.tries || 0}/3)</div>
                   <p>{offerDraft.msg}</p>
                   {offerDraft.counter && (
-                    <button type="button" onClick={() => submitOffer(true)} className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white font-bold cursor-pointer">
+                    <button type="button" onClick={() => submitOffer(true)} className="w-full px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white font-bold cursor-pointer">
                       ✅ ตกลงตามข้อเสนอสวน (จ่ายทันที {offerDraft.counter.cashNow}k · ค่าเหนื่อย {offerDraft.counter.wg}k)
                     </button>
                   )}
@@ -7718,9 +8104,9 @@ const MarketView: React.FC<{
             </div>
           </div>
 
-          <div className="shrink-0 p-3 mland:p-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
-            <button type="button" onClick={() => setOfferDraft(null)} className="px-4 py-2 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-sm mland:text-xs cursor-pointer">ปิด</button>
-            <button type="button" disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || !!q.locked} onClick={() => submitOffer(false)} className="flex-1 py-2 mland:py-1 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm mland:text-xs disabled:opacity-40 cursor-pointer">
+          <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
+            <button type="button" onClick={() => setOfferDraft(null)} className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-sm mland:text-xs cursor-pointer whitespace-nowrap">ปิด</button>
+            <button type="button" disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || !!q.locked} onClick={() => submitOffer(false)} className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm mland:text-xs disabled:opacity-40 cursor-pointer">
               {q.locked ? 'การเจรจาล่มแล้ว' : loanCapHit ? `โควตายืมเต็ม ${tx.maxLoans} คน` : wageOverCap ? `เกินเพดานค่าเหนื่อย ${tx.wageCap}k` : fullSq ? `ทีมเต็ม ${tx.maxSquad} คน` : !canAfford ? 'งบไม่พอ / ติดกฎ FFP' : '🤝 ยื่นข้อเสนอเจรจา'}
             </button>
           </div>
@@ -7744,49 +8130,49 @@ const MarketView: React.FC<{
     return (
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
         <div className="w-full max-w-md mland:max-w-lg max-h-[92dvh] mland:max-h-[96dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-          <div className="shrink-0 flex items-center gap-3 p-3.5 mland:p-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+          <div className="shrink-0 flex items-center gap-3 p-3.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
             <PlayerFace player={q} team={me} state={state} size={46} />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm mland:text-xs truncate">📋 ต่อสัญญา · {q.n}</div>
-              <div className="text-xs mland:text-[11px] text-[var(--mut)]">เหลือสัญญา <b>{con.yr} ปี</b> · ค่าเหนื่อยเดิม {con.wg}k</div>
+              <div className="text-xs mland:text-[10.5px] text-[var(--mut)] tabular">เหลือสัญญา <b>{con.yr} ปี</b> · ค่าเหนื่อยเดิม {con.wg}k</div>
             </div>
-            <span className="px-2 py-0.5 rounded-lg text-white font-bold text-xs shrink-0" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
+            <span className="px-2 py-0.5 rounded-lg text-white font-bold text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2 space-y-3 mland:space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-2">
             <div>
-              <div className="text-xs mland:text-[10px] font-bold mb-1">ระยะเวลาสัญญาใหม่</div>
+              <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ระยะเวลาสัญญาใหม่</div>
               <div className="flex gap-1.5 mland:gap-1">
                 {[2, 3, 4, 5].map((y) => (
-                  <button key={y} type="button" onClick={() => setRenewYr(y)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${renewYr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{y} ปี</button>
+                  <button key={y} type="button" onClick={() => setRenewYr(y)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewYr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{y} ปี</button>
                 ))}
               </div>
             </div>
             <div>
-              <div className="text-xs mland:text-[10px] font-bold mb-1">บทบาท</div>
+              <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">บทบาท</div>
               <div className="flex gap-1.5 mland:gap-1">
                 {([['key', '⭐ ตัวหลัก'], ['rot', '🔄 หมุนเวียน'], ['pro', '🌱 ดาวรุ่ง']] as const).map(([k, l]) => (
-                  <button key={k} type="button" onClick={() => setRenewRole(k)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${renewRole === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                  <button key={k} type="button" onClick={() => setRenewRole(k)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewRole === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
                 ))}
               </div>
             </div>
             <div>
-              <div className="text-xs mland:text-[10px] font-bold mb-1">ค่าเหนื่อยที่เสนอ</div>
+              <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ค่าเหนื่อยที่เสนอ</div>
               <div className="flex flex-wrap gap-1.5 mland:gap-1">
                 {([['รัดเข็มขัด (-10%)', 0], ['เพิ่มเล็กน้อย (+5%)', 1], ['จัดเต็ม (+25% +โบนัส)', 2]] as const).map(([l, k]) => (
-                  <button key={k} type="button" onClick={() => setRenewWb(k)} className={`px-3 py-1.5 mland:px-2 mland:py-1 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${renewWb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                  <button key={k} type="button" onClick={() => setRenewWb(k)} className={`px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewWb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
                 ))}
               </div>
             </div>
             <div className="flex items-center gap-2 text-xs mland:text-[10.5px]">
-              <span>โอกาสตกลง</span>
-              <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full bg-[var(--g)]" style={{ width: `${ch}%` }} /></div>
+              <span className="whitespace-nowrap">โอกาสตกลง</span>
+              <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full bg-[var(--g)] transition-all" style={{ width: `${ch}%` }} /></div>
               <b className="tabular">{ch}%</b>
             </div>
-            {renewOverCap && <p className="text-xs mland:text-[10px] text-[var(--red)] font-semibold">⚠️ ค่าเหนื่อยใหม่จะทำให้ทีมเกินเพดาน {tx.wageCap}k/นัด</p>}
-            {renewMsg && <p className="text-xs mland:text-[10px] text-[var(--red)]">{renewMsg}</p>}
+            {renewOverCap && <p className="text-xs mland:text-[10.5px] text-[var(--red)] font-semibold">⚠️ ค่าเหนื่อยใหม่จะทำให้ทีมเกินเพดาน {tx.wageCap}k/นัด</p>}
+            {renewMsg && <p className="text-xs mland:text-[10.5px] text-[var(--red)]">{renewMsg}</p>}
           </div>
-          <div className="shrink-0 p-3 mland:p-2 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
-            <button type="button" onClick={() => setRenewIdx(null)} className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer">ปิด</button>
+          <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
+            <button type="button" onClick={() => setRenewIdx(null)} className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer whitespace-nowrap">ปิด</button>
             <button
               type="button"
               disabled={state.money < bonus || renewOverCap}
@@ -7813,619 +8199,696 @@ const MarketView: React.FC<{
     );
   };
 
-  const renderScoutCard = (extraClass = '') => (
-    <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${extraClass}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="font-bold text-sm mland:text-xs">🔍 ส่งแมวมองเจาะจงตำแหน่ง (20k)</h3>
-        <span className="text-xs mland:text-[10px] text-[var(--mut)]">ใช้เวลา 2 นัด · ทำได้ตลอดปี</span>
-      </div>
-      {!state.scout ? (
-        <div className="space-y-2.5 mland:space-y-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[11px] font-semibold text-[var(--mut)]">เลือกตำแหน่งเจาะจง:</label>
-            <select
-              value={scoutRole}
-              onChange={(e) => setScoutRole(e.target.value as SubRole | '')}
-              className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
-            >
-              <option value="">ตามหมวดหมู่ที่กดด้านล่าง</option>
-              {ALL_SUB_ROLES.map((r) => (
-                <option key={r} value={r}>{r} — {SPN[r] || r}</option>
-              ))}
-            </select>
-            {scoutRole && (
-              <button
-                type="button"
-                disabled={state.money < 20}
-                onClick={() => {
-                  SFX.tap();
-                  const lineFocus: ScoutMission['focus'] = LINE[scoutRole] === 'GK' ? 'gk' : LINE[scoutRole] === 'DF' ? 'defender' : LINE[scoutRole] === 'MF' ? 'midfielder' : 'striker';
-                  onUpdateState((d) => { d.money -= 20; logFin(d, `ส่งแมวมองหาตำแหน่ง ${scoutRole}`, -20); d.scout = createScoutMission(lineFocus, scoutRole); });
-                  onToast(`ส่งแมวมองหาตำแหน่ง ${scoutRole} แล้ว! รอรายงานในอีก 2 นัด`);
-                }}
-                className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
-              >
-                🎯 ส่งหา {scoutRole} (20k)
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {([['wonderkid', '🌟 ดาวรุ่ง U20'], ['free', '🆓 ฟรีเอเยนต์'], ['gk', '🧤 ผู้รักษาประตู'], ['defender', '🛡️ กองหลัง'], ['midfielder', '🧭 กองกลาง'], ['striker', '⚽ กองหน้า']] as [ScoutMission['focus'], string][]).map(([focus, lbl]) => (
-              <button
-                key={focus}
-                type="button"
-                disabled={state.money < 20}
-                onClick={() => {
-                  SFX.tap();
-                  onUpdateState((d) => { d.money -= 20; logFin(d, 'ค่าส่งแมวมองส่องนักเตะ', -20); d.scout = createScoutMission(focus, scoutRole); });
-                  onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
-                }}
-                className="px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[11px] font-semibold disabled:opacity-40 cursor-pointer"
-              >
-                {lbl}
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : !state.scout.results ? (
-        <div className="p-3 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/40 text-xs">
-          กำลังปฏิบัติภารกิจ: <b>{state.scout.label}</b> · จะกลับมารายงานผลในอีก <b>{state.scout.turnsLeft} นัด</b>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs">
-            <span className="font-semibold text-[var(--g)]">รายงานจากแมวมอง: {state.scout.label}</span>
-            <button type="button" onClick={() => onUpdateState((d) => { d.scout = null; })} className="text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer">ปิดรายงาน</button>
-          </div>
-          {state.scout.results.map((q, i) => {
-            const blockedByWindow = !tx.tw.open && !q.free;
-            return (
-              <div key={`${q.n}-${i}`} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--g)]/30">
-                <PlayerFace player={q} size={34} />
-                <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                  <div className="font-bold text-xs truncate"><span className="text-[var(--g)]">{q.ro}</span> · {q.n}</div>
-                  <div className="text-[11px] text-[var(--mut)]">{SPN[q.ro] || q.pos} · อายุ {q.age} · ศักยภาพ {q.pot} · {q.free ? 'ฟรี' : `${q.price}k`}</div>
-                </button>
-                <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                <button type="button" disabled={!!q.locked || blockedByWindow} onClick={() => openNegotiation('scout', i, q)} className={`px-3 py-1 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}>
-                  {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-
   return (
-    <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      {/* League Transfer Window & FFP Rules Header */}
-      <div className={`p-3.5 sm:p-4 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border space-y-2.5 mland:space-y-1 shrink-0 ${tx.tw.open ? 'bg-[var(--g-soft)] border-[var(--g)]/45' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1">
-          <div className="min-w-0 flex-1">
-            <div className="font-bold text-sm sm:text-base mland:text-[11px] truncate">{tx.tw.label}</div>
-            <p className="text-xs mland:hidden text-[var(--mut)]">
-              {tx.tw.open
-                ? `${tx.tw.subLabel} · ซื้อ-ขาย-ยืมตัวสโมสรอื่นได้เต็มรูปแบบ`
-                : `${tx.tw.subLabel} · ช่วงตลาดปิดเซ็นได้เฉพาะฟรีเอเยนต์ไร้สังกัด และเยาวชนอะคาเดมี่`}
-            </p>
-          </div>
-          <span className="text-xs mland:text-[10.5px] font-bold tabular text-[var(--ink)] shrink-0">
-            งบสโมสร {state.money}k ฿
+    <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+      {/* Compact Single-Strip Transfer Window & FFP Rules Header */}
+      <div className={`px-3.5 py-2.5 mland:px-3 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 ${tx.tw.open ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+        <div className="min-w-0 flex items-baseline gap-2">
+          <span className="font-bold text-sm mland:text-[11px] truncate">{tx.tw.label}</span>
+          <span className="hidden md:inline mland:hidden text-xs text-[var(--mut)] truncate">
+            · {tx.tw.subLabel} {tx.tw.open ? '· ซื้อ-ขาย-ยืมตัวสโมสรอื่นได้เต็มรูปแบบ' : '· เซ็นได้เฉพาะฟรีเอเยนต์และเยาวชน'}
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1 text-xs mland:text-[9.5px]">
-          <div className="px-3 py-2 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)]">ลงทะเบียนทีม</div>
-            <div className="font-bold tabular">{me.sq.length}/{tx.maxSquad} คน (ขั้นต่ำ {tx.minSquad})</div>
-          </div>
-          <div className="px-3 py-2 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)]">โควตายืมตัว</div>
-            <div className={`font-bold tabular ${tx.loansCount >= tx.maxLoans ? 'text-[var(--red)]' : ''}`}>{tx.loansCount}/{tx.maxLoans} คน/ซีซั่น</div>
-          </div>
-          <div className="px-3 py-2 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)]">เพดานค่าเหนื่อยลีก</div>
-            <div className={`font-bold tabular ${tx.wagePct > 95 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>{tx.curWage}/{tx.wageCap}k ({tx.wagePct}%)</div>
-          </div>
-          <div className="px-3 py-2 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)]">กฎการเงิน (FFP)</div>
-            <div className={`font-bold ${tx.ffpLocked ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>{tx.ffpLocked ? 'งบติดลบ · ห้ามซื้อ' : 'ผ่านเกณฑ์ปกติ'}</div>
-          </div>
+
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs mland:text-[10px] text-[var(--mut)] tabular">
+          <span>
+            ทีม <b className="text-[var(--ink)]">{me.sq.length}/{tx.maxSquad}</b>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            ยืม <b className={tx.loansCount >= tx.maxLoans ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>{tx.loansCount}/{tx.maxLoans}</b>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>
+            ค่าเหนื่อย <b className={tx.wagePct > 95 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>{tx.curWage}/{tx.wageCap}k ({tx.wagePct}%)</b>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className={tx.ffpLocked ? 'text-[var(--red)] font-bold' : 'text-[var(--g)] font-semibold'}>
+            {tx.ffpLocked ? 'FFP งบติดลบ' : 'FFP ปกติ'}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span className={`font-bold ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+            งบ {state.money.toLocaleString()}k ฿
+          </span>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 mland:flex-1 mland:min-h-0 mland:grid-cols-[1.18fr_0.82fr] gap-4 mland:gap-2 items-start mland:items-stretch mland:overflow-hidden">
-      <div className="space-y-4 mland:space-y-0 mland:h-full mland:min-h-0 mland:flex mland:flex-col">
-        <div className="p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1 shrink-0">
-            <div>
-              <h3 className="font-bold text-sm mland:text-[11px]">🤝 ตลาดนักเตะทุกตำแหน่ง · งบ {state.money}k ฿</h3>
-              <p className="text-xs text-[var(--mut)] mland:hidden">
-                {marketSource === 'club'
-                  ? 'ยื่นซื้อ-แลกตัว-ยืมตัวตรงจากสโมสรในลีก (ครบทั้ง 16 ตำแหน่ง)'
-                  : tx.tw.open
-                    ? 'เปิดตลาด: มีนักเตะครบทุกตำแหน่ง (GK, CB, LB, RB, LWB, RWB, CDM, CM, CAM, LM, RM, ST, CF, SS, LW, RW)'
-                    : 'ตลาดปิด: เซ็นได้เฉพาะนักเตะฟรีเอเยนต์ [ฟรี] ครบทุกสาย'}
-              </p>
-            </div>
-            {marketSource === 'mk' ? (
-              <button
-                type="button"
-                disabled={state.money < 15}
-                onClick={() => {
-                  SFX.tap();
-                  onUpdateState((d) => { d.money -= 15; logFin(d, 'รีเฟรชตลาดซื้อขาย', -15); mkMarket(d); });
-                  onToast('อัปเดตรายชื่อตลาดใหม่ครบทุกตำแหน่งแล้ว');
-                }}
-                className="px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold disabled:opacity-40 cursor-pointer"
-              >
-                🔄 {tx.tw.open ? 'หาตลาดใหม่ 15k' : 'หาฟรีเอเยนต์ 15k'}
-              </button>
-            ) : (
-              <div className="flex gap-1">
+      {/* Main Two-Column Transfer Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.18fr_0.82fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
+        {/* LEFT PANE: Market & League Clubs Browser */}
+        <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+          {/* Source Segmented Control + Action */}
+          <div className="shrink-0 p-3 mland:p-2 border-b border-[var(--line)] space-y-2 mland:space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
+              <div className="grid grid-cols-2 p-0.5 rounded-xl bg-[var(--surface-2)] flex-1 min-w-[230px]">
                 <button
                   type="button"
-                  onClick={() => setClubTierFilter('MY_TIER')}
-                  className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer ${clubTierFilter === 'MY_TIER' ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
+                  onClick={() => setMarketSource('mk')}
+                  className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                 >
-                  ลีกใกล้เคียง
+                  🏪 ตลาดกลาง &amp; ฟรีเอเยนต์
                 </button>
                 <button
                   type="button"
-                  onClick={() => setClubTierFilter('ALL')}
-                  className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer ${clubTierFilter === 'ALL' ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
+                  onClick={() => { setMarketSource('club'); if (filter === 'FREE') setFilter('ALL'); }}
+                  className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                 >
-                  ทุกลีก
+                  🏟️ สโมสรในลีก
                 </button>
               </div>
-            )}
+
+              {marketSource === 'mk' ? (
+                <button
+                  type="button"
+                  disabled={state.money < 15}
+                  onClick={() => {
+                    SFX.tap();
+                    onUpdateState((d) => { d.money -= 15; logFin(d, 'รีเฟรชตลาดซื้อขาย', -15); mkMarket(d); });
+                    onToast('อัปเดตรายชื่อตลาดใหม่ครบทุกตำแหน่งแล้ว');
+                  }}
+                  className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10.5px] font-semibold whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
+                >
+                  🔄 {tx.tw.open ? 'หาตลาดใหม่ 15k' : 'หาฟรีเอเยนต์ 15k'}
+                </button>
+              ) : (
+                <div className="flex p-0.5 rounded-xl bg-[var(--surface-2)] shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setClubTierFilter('MY_TIER')}
+                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold whitespace-nowrap cursor-pointer ${clubTierFilter === 'MY_TIER' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+                  >
+                    ลีกใกล้เคียง
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClubTierFilter('ALL')}
+                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold whitespace-nowrap cursor-pointer ${clubTierFilter === 'ALL' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+                  >
+                    ทุกลีก
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Unified Filter Row: Line Chips + SubRole Select + Sort Select */}
+            <div className="flex flex-wrap mland:flex-nowrap items-center justify-between gap-1.5">
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 mland:pb-0 min-w-0 flex-1">
+                {([['ALL', 'ทั้งหมด'], ['GK', 'GK'], ['DF', 'กองหลัง'], ['MF', 'กองกลาง'], ['FW', 'กองหน้า'], ...(marketSource === 'mk' ? [['FREE', 'ฟรีเอเยนต์'] as const] : [])] as const).map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => { setFilter(k); setSubFilter('ALL'); }}
+                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${filter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                <select
+                  aria-label="กรองตำแหน่งย่อย"
+                  value={subFilter}
+                  onChange={(e) => setSubFilter(e.target.value as 'ALL' | SubRole)}
+                  className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[10px] font-semibold cursor-pointer"
+                >
+                  <option value="ALL">ตำแหน่ง: ทั้งหมด</option>
+                  {availableSubRoles.map((role) => (
+                    <option key={role} value={role}>{role} · {SPN[role] || role}</option>
+                  ))}
+                </select>
+
+                <select
+                  aria-label="เรียงลำดับนักเตะ"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'default' | 'ov_desc' | 'price_asc' | 'age_asc')}
+                  className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[10px] font-semibold cursor-pointer"
+                >
+                  <option value="default">เรียง: แนะนำ</option>
+                  <option value="ov_desc">OVR สูงสุด</option>
+                  <option value="price_asc">ค่าตัวถูกสุด</option>
+                  <option value="age_asc">อายุน้อยสุด</option>
+                </select>
+
+                <span className="text-[11px] mland:text-[10px] text-[var(--mut)] tabular whitespace-nowrap hidden sm:inline">
+                  {activeCount} คน
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* Market Source Tabs */}
-          <div className="grid grid-cols-2 gap-1.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface-2)] shrink-0">
-            <button
-              type="button"
-              onClick={() => { setMarketSource('mk'); }}
-              className={`py-1.5 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer ${marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'}`}
-            >
-              🏪 ตลาดกลาง &amp; ฟรีเอเยนต์
-            </button>
-            <button
-              type="button"
-              onClick={() => { setMarketSource('club'); if (filter === 'FREE') setFilter('ALL'); }}
-              className={`py-1.5 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer ${marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'}`}
-            >
-              🏟️ ซื้อจากสโมสรในลีก
-            </button>
-          </div>
-
-          {/* Main Line Filter */}
-          <div className="flex flex-wrap mland:flex-nowrap mland:overflow-x-auto gap-1.5 mland:gap-1 shrink-0 pb-0.5">
-            {([['ALL', 'ทุกสาย'], ['GK', '🧤 GK'], ['DF', '🛡️ กองหลัง'], ['MF', '🧭 กองกลาง'], ['FW', '⚽ กองหน้า'], ...(marketSource === 'mk' ? [['FREE', '🆓 ฟรีเอเยนต์'] as const] : [])] as const).map(([k, l]) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => { setFilter(k); setSubFilter('ALL'); }}
-                className={`px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap shrink-0 cursor-pointer ${filter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
-              >
-                {l}
-              </button>
-            ))}
-          </div>
-
-          {/* Sub-role Exact Position Chips */}
-          <div className="flex flex-wrap mland:flex-nowrap mland:overflow-x-auto gap-1 shrink-0 pb-0.5">
-            <button
-              type="button"
-              onClick={() => setSubFilter('ALL')}
-              className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap shrink-0 cursor-pointer ${subFilter === 'ALL' ? 'bg-[var(--ink)] text-[var(--bg)]' : 'bg-[var(--surface-2)]/80 text-[var(--mut)]'}`}
-            >
-              ทุกตำแหน่งย่อย
-            </button>
-            {availableSubRoles.map((role) => (
-              <button
-                key={role}
-                type="button"
-                onClick={() => setSubFilter(role)}
-                title={SPN[role] || role}
-                className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap shrink-0 cursor-pointer ${subFilter === role ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]/80 text-[var(--mut)] hover:text-[var(--ink)]'}`}
-              >
-                {role}
-              </button>
-            ))}
-          </div>
-
-          <div className="space-y-2 mland:space-y-1 max-h-[540px] mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto pr-0.5">
+          {/* Scrollable Player List (Clean Hairline Rows) */}
+          <div className="flex-1 min-h-0 max-h-[540px] mland:max-h-none overflow-y-auto divide-y divide-[var(--line)]/60">
             {marketSource === 'mk' ? (
-              <>
-                {marketList.map(({ q, i }) => {
+              marketList.length > 0 ? (
+                marketList.map(({ q, i }) => {
                   const blockedByWindow = !tx.tw.open && !q.free;
                   return (
-                    <div key={`${q.n}-${i}`} className={`flex items-center gap-2.5 mland:gap-1.5 p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] ${blockedByWindow ? 'opacity-70' : ''}`}>
+                    <div
+                      key={`${q.n}-${i}`}
+                      className={`flex items-center gap-2.5 mland:gap-2 px-3 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
+                    >
                       <PlayerFace player={q} size={36} />
                       <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs mland:text-[10.5px] truncate">
-                          <span className="text-[var(--g)]">{q.ro}</span> · {q.n}{' '}
-                          {q.free ? <span className="text-[var(--g)] font-bold">[ฟรี]</span> : q.age <= 19 ? <span className="text-[var(--lamp)] font-bold">[ดาวรุ่ง]</span> : null}
+                        <div className="font-bold text-xs mland:text-[11px] truncate">
+                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                          {q.n}
+                          {q.free ? (
+                            <span className="ml-1.5 text-[11px] mland:text-[10px] text-[var(--g)] font-bold">· ฟรี</span>
+                          ) : q.age <= 19 ? (
+                            <span className="ml-1.5 text-[11px] mland:text-[10px] text-[var(--lamp)] font-bold">· ดาวรุ่ง</span>
+                          ) : null}
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
-                          {SPN[q.ro] || q.pos} · อายุ {q.age} · {'★'.repeat(Math.round((q.pot || q.ov) / 20))} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular">
+                          {SPN[q.ro] || q.pos} · อายุ {q.age} · ศักยภาพ {q.pot || q.ov} · ค่าเหนื่อย ~{q.askWg || wagOf(q)}k
                         </div>
                       </button>
-                      <span className="px-2 py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
+                      <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                        {q.ov}
+                      </span>
                       <button
                         type="button"
                         disabled={!!q.locked || blockedByWindow}
                         onClick={() => openNegotiation('mk', i, q)}
-                        className={`px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold shrink-0 cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}
+                        className={`min-w-[82px] mland:min-w-[70px] px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'}`}
                       >
-                        {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เจรจาฟรี' : `ยื่น ${q.price}k`}
+                        {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เซ็นฟรี' : `ยื่น ${q.price}k`}
                       </button>
                     </div>
                   );
-                })}
-                {!marketList.length && (
-                  <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในหมวดนี้ — ลองกด &quot;หาตลาดใหม่&quot; หรือสลับไป &quot;ซื้อจากสโมสรในลีก&quot;</p>
-                )}
-              </>
+                })
+              ) : (
+                <div className="p-6 text-center space-y-2">
+                  <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะตามเงื่อนไขที่เลือก</p>
+                  <button
+                    type="button"
+                    onClick={() => { setFilter('ALL'); setSubFilter('ALL'); setSortBy('default'); }}
+                    className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
+                  >
+                    ล้างตัวกรอง
+                  </button>
+                </div>
+              )
+            ) : clubMarketList.length > 0 ? (
+              clubMarketList.map(({ q, team, idx, price }) => {
+                const blockedByWindow = !tx.tw.open;
+                return (
+                  <div
+                    key={`${team.id}-${q.n}-${idx}`}
+                    className={`flex items-center gap-2.5 mland:gap-2 px-3 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
+                  >
+                    <PlayerFace player={q} team={team} state={state} size={36} />
+                    <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
+                      <div className="font-bold text-xs mland:text-[11px] truncate">
+                        <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                        {q.n}
+                      </div>
+                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular">
+                        {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age}
+                      </div>
+                    </button>
+                    <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                      {q.ov}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={!!q.locked || blockedByWindow}
+                      onClick={() => openNegotiation('club', idx, q, team)}
+                      className={`min-w-[82px] mland:min-w-[70px] px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'}`}
+                    >
+                      {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${price}k`}
+                    </button>
+                  </div>
+                );
+              })
             ) : (
-              <>
-                {clubMarketList.map(({ q, team, idx, price }) => {
-                  const blockedByWindow = !tx.tw.open;
-                  return (
-                    <div key={`${team.id}-${q.n}-${idx}`} className={`flex items-center gap-2.5 p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] ${blockedByWindow ? 'opacity-70' : ''}`}>
-                      <PlayerFace player={q} team={team} state={state} size={36} />
-                      <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs truncate">
-                          <span className="text-[var(--g)]">{q.ro}</span> · {q.n}
-                        </div>
-                        <div className="text-[11px] text-[var(--mut)] truncate">
-                          {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age}
-                        </div>
-                      </button>
-                      <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                      <button
-                        type="button"
-                        disabled={!!q.locked || blockedByWindow}
-                        onClick={() => openNegotiation('club', idx, q, team)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}
-                      >
-                        {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${price}k`}
-                      </button>
-                    </div>
-                  );
-                })}
-                {!clubMarketList.length && <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะตำแหน่งนี้ในสโมสรอื่น</p>}
-              </>
+              <div className="p-6 text-center space-y-2">
+                <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะตำแหน่งนี้ในสโมสรอื่น</p>
+                <button
+                  type="button"
+                  onClick={() => { setFilter('ALL'); setSubFilter('ALL'); setClubTierFilter('ALL'); }}
+                  className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
+                >
+                  ดูทุกลีกทั้งหมด
+                </button>
+              </div>
             )}
           </div>
-        </div>
+        </section>
 
-        {renderScoutCard('mland:hidden')}
-      </div>
-
-      <div className="space-y-4 mland:space-y-1.5 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="hidden mland:grid grid-cols-3 gap-1 p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-          {([
-            ['sell', `🏷️ ขาย/ดีล (${getIncomingOffers(state).length})`],
-            ['scout', '🔍 แมวมอง'],
-            ['con', '📋 สัญญา/เด็ก']
-          ] as const).map(([k, lbl]) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setMktMobTab(k)}
-              className={`py-1 rounded-lg text-[10px] font-bold cursor-pointer ${mktMobTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
-            >
-              {lbl}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-4 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
-        <div className={mktMobTab === 'sell' ? '' : 'mland:hidden'}>
-        {(() => {
-          const incomingOffers = getIncomingOffers(state);
-          if (!incomingOffers.length) return null;
-          return (
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)] space-y-2.5 mland:space-y-1.5">
-              <div className="font-bold text-sm">💼 ข้อเสนอซื้อนักเตะจากทีมอื่น ({incomingOffers.length})</div>
-              <div className="space-y-2">
-                {incomingOffers.map((off) => {
-                  const targetQ = me.sq.find((q) => q.n === off.n);
-                  if (!targetQ) return null;
-                  const marketVal = vlu(targetQ);
-                  const buyerTeam =
-                    (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
-                    state.teams.find((t) => t.name === off.t);
-                  return (
-                    <div key={`${off.n}__${off.t}`} className="p-2.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-                      <div className="flex items-center gap-2.5">
-                        <PlayerFace player={targetQ} team={me} state={state} size={34} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-bold truncate">
-                            {off.t}{buyerTeam ? ` (${TN[buyerTeam.tier] || ''})` : ''}
-                          </div>
-                          <div className="text-[11px] text-[var(--mut)]">
-                            ขอซื้อ <b>{off.n}</b> ({targetQ.ro} · {targetQ.ov}) ราคา <b className="text-[var(--g)]">{off.p}k ฿</b> (ประเมิน {marketVal}k)
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const res = canAcceptTransferOffer(state, off);
-                            if (!res.ok) { onToast(res.err || 'ขายไม่สำเร็จ'); return; }
-                            onUpdateState((d) => { acceptTransferOffer(d, off); });
-                            SFX.win();
-                            onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${off.p}k ฿`);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
-                        >
-                          ✅ ตอบรับขาย
-                        </button>
-                        {!off.cnt && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const out = resolveCounterOfferOutcome(state, off);
-                              onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
-                              onToast(
-                                out.accepted
-                                  ? `${off.t} ยอมเพิ่มราคาเป็น ${out.newPrice}k ฿!`
-                                  : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
-                              );
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-bold cursor-pointer"
-                          >
-                            💰 โก่งราคา +15%
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
-                            onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
-                        >
-                          ✕ ปฏิเสธ
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
-        </div>
-
-        <div className={mktMobTab === 'sell' ? '' : 'mland:hidden'}>
-        {(() => {
-          const listedPlayers = me.sq.filter((q) => q.listed && !q.loan);
-          const unlistedEligible = me.sq
-            .filter((q) => !q.listed && !q.loan)
-            .slice()
-            .sort((a, b) => b.ov - a.ov);
-          return (
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-bold text-sm">🏷️ นักเตะที่ขึ้นบัญชีขายของทีมเรา ({listedPlayers.length})</h3>
-                <span className="text-[11px] text-[var(--mut)]">{tx.tw.open ? 'ยื่นเสนอทีมอื่นได้' : 'รอตลาดเปิด'}</span>
-              </div>
-              {listedPlayers.length > 0 ? (
-                <div className="space-y-2">
-                  {listedPlayers.map((q) => {
-                    const chk = getPlayerSellCheck(state, me, q);
-                    const ask = q.askPrice || vlu(q);
-                    return (
-                      <div key={q.n} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)]">
-                        <PlayerFace player={q} team={me} state={state} size={34} />
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-xs truncate">{q.ro} · {q.n} ({q.ov})</div>
-                          <div className="text-[11px] text-[var(--mut)]">
-                            ตั้งขาย {ask}k ฿ · ประเมิน {vlu(q)}k
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้ทีมอื่น' : chk.reason}
-                          onClick={() => {
-                            if (!chk.canPitch) { onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้'); return; }
-                            if (chk.pitchedThisTurn) { onToast('เสนอขายคนนี้ไปแล้วในนัดนี้'); return; }
-                            SFX.tap();
-                            setPitchTargetName(q.n);
-                          }}
-                          className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer ${
-                            chk.canPitch && !chk.pitchedThisTurn
-                              ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-65'
-                          }`}
-                        >
-                          {!tx.tw.open ? '🔒' : chk.pitchedThisTurn ? '⏳ รอนัดหน้า' : '📨 เสนอขาย'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onUpdateState((d) => {
-                              const t = d.teams[d.me].sq.find((z) => z.n === q.n);
-                              if (t) {
-                                t.listed = 0;
-                                delete t.askPrice;
-                              }
-                            });
-                            onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
-                          }}
-                          className="px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
-                        >
-                          ถอด
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-xs text-[var(--mut)]">
-                  ยังไม่มีนักเตะในบัญชีขาย เลือกด้านล่างหรือกด 🏷️ ที่หน้า &quot;ทีม &amp; แผน → ทั้งทีม&quot; เพื่อขึ้นตลาดให้สโมสรอื่นยื่นข้อเสนอ
-                </p>
-              )}
-
-              {unlistedEligible.length > 0 && (
-                <div className="flex gap-1.5 pt-1">
-                  <select
-                    value={quickListName}
-                    onChange={(e) => setQuickListName(e.target.value)}
-                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
-                  >
-                    <option value="">+ เลือกนักเตะขึ้นบัญชีขาย...</option>
-                    {unlistedEligible.map((q) => (
-                      <option key={q.n} value={q.n}>
-                        {q.ro} · {q.n} (OVR {q.ov} · {vlu(q)}k)
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={!quickListName}
-                    onClick={() => {
-                      const targetName = quickListName;
-                      if (!targetName) return;
-                      SFX.tap();
-                      onUpdateState((d) => {
-                        const target = d.teams[d.me].sq.find((z) => z.n === targetName);
-                        if (target) {
-                          target.listed = 1;
-                          target.askPrice = Math.max(5, vlu(target));
-                        }
-                      });
-                      setQuickListName('');
-                      onToast(`ขึ้นบัญชีขาย ${targetName} แล้ว`);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-xs font-bold cursor-pointer disabled:opacity-40 shrink-0"
-                  >
-                    🏷️ ขึ้นตลาด
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-        </div>
-
-        {mktMobTab === 'scout' && renderScoutCard('hidden mland:block')}
-
-        <div className={`space-y-4 mland:space-y-2 ${mktMobTab === 'con' ? '' : 'mland:hidden'}`}>
-        {loanPlayers.length > 0 && (
-          <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-            <h3 className="font-bold text-sm">📌 นักเตะยืมตัวที่มีออปชันซื้อขาด</h3>
-            {loanPlayers.map(({ q, i }) => (
-              <div key={q.n} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)]">
-                <PlayerFace player={q} team={me} state={state} size={34} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-xs truncate">{q.pos} · {q.n}</div>
-                  <div className="text-[11px] text-[var(--mut)]">ออปชันซื้อขาด {q.loanOpt}k ฿</div>
-                </div>
+        {/* RIGHT PANE: Unified Tabbed Club Deals, Scouting & Contracts */}
+        <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+          <div className="shrink-0 p-2 mland:p-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/40">
+            <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)]">
+              {([
+                ['sell', `🏷️ ขาย/ข้อเสนอ${incomingOffers.length ? ` (${incomingOffers.length})` : ''}`],
+                ['scout', `🔍 แมวมอง${state.scout?.results ? ' (พร้อม)' : state.scout ? ' (...)' : ''}`],
+                ['con', `📋 สัญญา/เด็ก${expiringCount + loanPlayers.length ? ` (${expiringCount + loanPlayers.length})` : ''}`]
+              ] as const).map(([k, lbl]) => (
                 <button
+                  key={k}
                   type="button"
-                  disabled={!tx.tw.open || state.money < (q.loanOpt || 0)}
-                  onClick={() => {
-                    const cost = q.loanOpt || 0;
-                    onUpdateState((d) => {
-                      d.money -= cost;
-                      logFin(d, `ใช้ออปชันซื้อขาด ${q.n}`, -cost);
-                      const target = d.teams[d.me].sq[i];
-                      delete target.loan;
-                      delete target.loanOpt;
-                      target.signedSeason = d.season;
-                      target.signedMd = d.md;
-                      target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
-                    });
-                    onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
+                  onClick={() => setRightTab(k)}
+                  className={`py-1.5 mland:py-1 px-1.5 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap truncate cursor-pointer transition-colors ${
+                    rightTab === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
                 >
-                  {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${q.loanOpt}k`}
+                  {lbl}
                 </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-          <h3 className="font-bold text-sm">📋 สัญญานักเตะ &amp; ต่อสัญญา</h3>
-          <p className="text-xs text-[var(--mut)]">นักเตะเหลือสัญญา ≤ 1 ปี ควรรีบต่อสัญญา ก่อนค่าเหนื่อยจะพุ่งขึ้น +25%</p>
-          <div className="space-y-1.5">
-            {contractList.map(({ q, i, c }) => (
-              <div key={q.n} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]">
-                <PlayerFace player={q} team={me} state={state} size={34} />
-                <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                  <div className="font-bold text-xs truncate">
-                    {q.pos} · {q.n}{' '}
-                    <span className={c.yr <= 1 ? 'text-[var(--red)]' : 'text-[var(--lamp)]'}>({c.yr <= 0 ? 'หมดสัญญา!' : `เหลือ ${c.yr} ปี`})</span>
-                  </div>
-                  <div className="text-[11px] text-[var(--mut)]">{ROLE_L[c.role]} · ค่าเหนื่อย {c.wg}k/นัด</div>
-                </button>
-                <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                <button
-                  type="button"
-                  onClick={() => { setRenewIdx(i); setRenewYr(Math.max(2, c.yr + 2 > 5 ? 3 : c.yr + 2)); setRenewRole(c.role); setRenewWb(1); setRenewMsg(''); }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${c.yr <= 1 ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)]'}`}
-                >
-                  ต่อสัญญา
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-          <h3 className="font-bold text-sm">🌱 เด็กเยาวชนอะคาเดมี่ (เซ็นฟรี · ลงทะเบียนได้ตลอดปี)</h3>
-          <p className="text-xs text-[var(--mut)]">อัปเกรดอะคาเดมี่เพื่อรับเยาวชนฝีเท้าดีขึ้นทุกต้นฤดูกาล</p>
-          {(state.yth || []).length ? (
-            <div className="space-y-1.5">
-              {state.yth.map((q, i) => (
-                <div key={q.n} className="flex items-center gap-2.5 p-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]">
-                  <PlayerFace player={q} team={me} state={state} size={34} />
-                  <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                    <div className="font-bold text-xs truncate">{q.pos} · {q.n}</div>
-                    <div className="text-[11px] text-[var(--mut)]">อายุ {q.age} ปี · {'★'.repeat(Math.round(q.pot / 20))}</div>
-                  </button>
-                  <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                  <button
-                    type="button"
-                    disabled={me.sq.length >= tx.maxSquad || tx.curWage + wagOf(q) > tx.wageCap}
-                    onClick={() => {
-                      onUpdateState((d) => {
-                        const t = d.teams[d.me];
-                        const y = d.yth[i];
-                        if (!y || t.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) return;
-                        y.con = { yr: 3, wg: wagOf(y), role: 'pro' };
-                        y.no = undefined;
-                        y.signedSeason = d.season;
-                        y.signedMd = d.md;
-                        t.sq.push(y);
-                        assignTeamShirtNumbers(t);
-                        d.yth.splice(i, 1);
-                      });
-                      onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs font-bold cursor-pointer disabled:opacity-40"
-                  >
-                    เซ็น 3 ปี
-                  </button>
-                </div>
               ))}
             </div>
-          ) : (
-            <p className="text-xs text-[var(--mut)]">ปลายซีซั่นจะมีเด็กเยาวชนชุดใหม่เข้ามา</p>
-          )}
-        </div>
-        </div>
-      </div>
-      </div>
+          </div>
+
+          <div className="flex-1 min-h-0 max-h-[540px] mland:max-h-none overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
+            {/* TAB 1: INCOMING OFFERS & TRANSFER LISTING */}
+            {rightTab === 'sell' && (
+              <>
+                {incomingOffers.length > 0 && (
+                  <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 space-y-2 mland:space-y-1.5">
+                    <div className="font-bold text-xs sm:text-sm mland:text-[11px] flex items-center justify-between">
+                      <span>💼 ข้อเสนอซื้อนักเตะเข้าทีม</span>
+                      <span className="tabular">{incomingOffers.length} รายการ</span>
+                    </div>
+                    <div className="space-y-2 mland:space-y-1.5">
+                      {incomingOffers.map((off) => {
+                        const targetQ = me.sq.find((q) => q.n === off.n);
+                        if (!targetQ) return null;
+                        const marketVal = vlu(targetQ);
+                        const buyerTeam =
+                          (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
+                          state.teams.find((t) => t.name === off.t);
+                        return (
+                          <div key={`${off.n}__${off.t}`} className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                            <div className="flex items-center gap-2.5 mland:gap-2">
+                              <PlayerFace player={targetQ} team={me} state={state} size={34} />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs mland:text-[11px] font-bold truncate">
+                                  {off.t}{buyerTeam ? ` (${TN[buyerTeam.tier] || ''})` : ''}
+                                </div>
+                                <div className="text-[11px] mland:text-[10px] text-[var(--mut)] tabular">
+                                  ขอซื้อ <b className="text-[var(--ink)]">{off.n}</b> ({targetQ.ro} · {targetQ.ov}) · ยื่น <b className="text-[var(--g)]">{off.p}k ฿</b> (ประเมิน {marketVal}k)
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const res = canAcceptTransferOffer(state, off);
+                                  if (!res.ok) { onToast(res.err || 'ขายไม่สำเร็จ'); return; }
+                                  onUpdateState((d) => { acceptTransferOffer(d, off); });
+                                  SFX.win();
+                                  onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${off.p}k ฿`);
+                                }}
+                                className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10.5px] font-bold whitespace-nowrap cursor-pointer"
+                              >
+                                ✅ ตอบรับขาย
+                              </button>
+                              {!off.cnt && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const out = resolveCounterOfferOutcome(state, off);
+                                    onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
+                                    onToast(
+                                      out.accepted
+                                        ? `${off.t} ยอมเพิ่มราคาเป็น ${out.newPrice}k ฿!`
+                                        : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
+                                    );
+                                  }}
+                                  className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold whitespace-nowrap cursor-pointer"
+                                >
+                                  💰 โก่ง +15%
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
+                                  onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
+                                }}
+                                className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer"
+                              >
+                                ✕ ปฏิเสธ
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-2.5 mland:space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">
+                      🏷️ บัญชีขายของทีม ({listedPlayers.length})
+                    </h3>
+                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] whitespace-nowrap">
+                      {tx.tw.open ? 'ยื่นเสนอขายทีมอื่นได้' : 'รอตลาดเปิด'}
+                    </span>
+                  </div>
+
+                  {unlistedEligible.length > 0 && (
+                    <div className="flex gap-1.5">
+                      <select
+                        value={quickListName}
+                        onChange={(e) => setQuickListName(e.target.value)}
+                        className="flex-1 min-w-0 px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold"
+                      >
+                        <option value="">+ เลือกนักเตะขึ้นบัญชีขาย...</option>
+                        {unlistedEligible.map((q) => (
+                          <option key={q.n} value={q.n}>
+                            {q.ro} · {q.n} (OVR {q.ov} · {vlu(q)}k)
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!quickListName}
+                        onClick={() => {
+                          const targetName = quickListName;
+                          if (!targetName) return;
+                          SFX.tap();
+                          onUpdateState((d) => {
+                            const target = d.teams[d.me].sq.find((z) => z.n === targetName);
+                            if (target) {
+                              target.listed = 1;
+                              target.askPrice = Math.max(5, vlu(target));
+                            }
+                          });
+                          setQuickListName('');
+                          onToast(`ขึ้นบัญชีขาย ${targetName} แล้ว`);
+                        }}
+                        className="px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-40 shrink-0"
+                      >
+                        ขึ้นตลาด
+                      </button>
+                    </div>
+                  )}
+
+                  {listedPlayers.length > 0 ? (
+                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
+                      {listedPlayers.map((q) => {
+                        const chk = getPlayerSellCheck(state, me, q);
+                        const ask = q.askPrice || vlu(q);
+                        return (
+                          <div key={q.n} className="flex items-center gap-2.5 mland:gap-2 p-2.5 mland:p-2 bg-[var(--surface-2)]/35">
+                            <PlayerFace player={q} team={me} state={state} size={34} />
+                            <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                              <div className="font-bold text-xs mland:text-[11px] truncate">
+                                <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                                {q.n} <span className="text-[var(--mut)] tabular">({q.ov})</span>
+                              </div>
+                              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
+                                ตั้งขาย {ask}k ฿ · ประเมิน {vlu(q)}k
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้ทีมอื่น' : chk.reason}
+                              onClick={() => {
+                                if (!chk.canPitch) { onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้'); return; }
+                                if (chk.pitchedThisTurn) { onToast('เสนอขายคนนี้ไปแล้วในนัดนี้'); return; }
+                                SFX.tap();
+                                setPitchTargetName(q.n);
+                              }}
+                              className={`px-2.5 py-1.5 mland:py-1 rounded-lg border text-[11px] mland:text-[10px] font-bold whitespace-nowrap cursor-pointer ${
+                                chk.canPitch && !chk.pitchedThisTurn
+                                  ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                                  : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-65'
+                              }`}
+                            >
+                              {!tx.tw.open ? '🔒' : chk.pitchedThisTurn ? 'รอนัดหน้า' : '📨 เสนอขาย'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateState((d) => {
+                                  const t = d.teams[d.me].sq.find((z) => z.n === q.n);
+                                  if (t) {
+                                    t.listed = 0;
+                                    delete t.askPrice;
+                                  }
+                                });
+                                onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
+                              }}
+                              className="px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[10px] font-semibold whitespace-nowrap cursor-pointer"
+                            >
+                              ถอด
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs mland:text-[11px] text-[var(--mut)] py-2">
+                      ยังไม่มีนักเตะในบัญชีขาย เลือกนักเตะด้านบนเพื่อขึ้นตลาดและกดเสนอขายให้สโมสรอื่นยื่นข้อเสนอ
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* TAB 2: SCOUTING HUB */}
+            {rightTab === 'scout' && (
+              <div className="space-y-3 mland:space-y-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">🔍 ส่งแมวมองเจาะจงตำแหน่ง</h3>
+                  <span className="text-[11px] mland:text-[10px] text-[var(--mut)] tabular">ค่าใช้จ่าย 20k · รอ 2 นัด · ทำได้ตลอดปี</span>
+                </div>
+
+                {!state.scout ? (
+                  <div className="space-y-2.5 mland:space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <select
+                        aria-label="เลือกตำแหน่งเจาะจงให้แมวมอง"
+                        value={scoutRole}
+                        onChange={(e) => setScoutRole(e.target.value as SubRole | '')}
+                        className="flex-1 min-w-[160px] px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold"
+                      >
+                        <option value="">ระบุตำแหน่งเจาะจง (หรือเลือกหมวดด้านล่าง)</option>
+                        {ALL_SUB_ROLES.map((r) => (
+                          <option key={r} value={r}>{r} — {SPN[r] || r}</option>
+                        ))}
+                      </select>
+                      {scoutRole && (
+                        <button
+                          type="button"
+                          disabled={state.money < 20}
+                          onClick={() => {
+                            SFX.tap();
+                            const lineFocus: ScoutMission['focus'] = LINE[scoutRole] === 'GK' ? 'gk' : LINE[scoutRole] === 'DF' ? 'defender' : LINE[scoutRole] === 'MF' ? 'midfielder' : 'striker';
+                            onUpdateState((d) => { d.money -= 20; logFin(d, `ส่งแมวมองหาตำแหน่ง ${scoutRole}`, -20); d.scout = createScoutMission(lineFocus, scoutRole); });
+                            onToast(`ส่งแมวมองหาตำแหน่ง ${scoutRole} แล้ว! รอรายงานในอีก 2 นัด`);
+                          }}
+                          className="px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[10.5px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer"
+                        >
+                          ส่งหา {scoutRole} (20k)
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 mland:grid-cols-2 gap-1.5">
+                      {([['wonderkid', '🌟 ดาวรุ่ง U20'], ['free', '🆓 ฟรีเอเยนต์'], ['gk', '🧤 ผู้รักษาประตู'], ['defender', '🛡️ กองหลัง'], ['midfielder', '🧭 กองกลาง'], ['striker', '⚽ กองหน้า']] as [ScoutMission['focus'], string][]).map(([focus, lbl]) => (
+                        <button
+                          key={focus}
+                          type="button"
+                          disabled={state.money < 20}
+                          onClick={() => {
+                            SFX.tap();
+                            onUpdateState((d) => { d.money -= 20; logFin(d, 'ค่าส่งแมวมองส่องนักเตะ', -20); d.scout = createScoutMission(focus, scoutRole); });
+                            onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
+                          }}
+                          className="px-2.5 py-2 mland:py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10.5px] font-semibold text-left whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
+                        >
+                          {lbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : !state.scout.results ? (
+                  <div className="p-3 mland:p-2.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-xs mland:text-[11px] space-y-1">
+                    <div className="font-bold">⏳ แมวมองกำลังปฏิบัติภารกิจ</div>
+                    <p className="text-[var(--mut)]">
+                      เป้าหมาย: <b className="text-[var(--ink)]">{state.scout.label}</b> · จะกลับมารายงานผลในอีก <b className="text-[var(--ink)] tabular">{state.scout.turnsLeft} นัด</b>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs mland:text-[11px]">
+                      <span className="font-bold text-[var(--g)] truncate">รายงาน: {state.scout.label}</span>
+                      <button type="button" onClick={() => onUpdateState((d) => { d.scout = null; })} className="text-[var(--mut)] hover:text-[var(--ink)] whitespace-nowrap cursor-pointer">
+                        ปิดรายงาน
+                      </button>
+                    </div>
+                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--g)]/35 overflow-hidden">
+                      {state.scout.results.map((q, i) => {
+                        const blockedByWindow = !tx.tw.open && !q.free;
+                        return (
+                          <div key={`${q.n}-${i}`} className="flex items-center gap-2.5 p-2.5 mland:p-2 bg-[var(--surface-2)]/40">
+                            <PlayerFace player={q} size={34} />
+                            <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                              <div className="font-bold text-xs mland:text-[11px] truncate">
+                                <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                                {q.n}
+                              </div>
+                              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate">
+                                {SPN[q.ro] || q.pos} · อายุ {q.age} · ศักยภาพ {q.pot} · {q.free ? 'ฟรี' : `${q.price}k`}
+                              </div>
+                            </button>
+                            <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                              {q.ov}
+                            </span>
+                            <button
+                              type="button"
+                              disabled={!!q.locked || blockedByWindow}
+                              onClick={() => openNegotiation('scout', i, q)}
+                              className={`px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 ${blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'}`}
+                            >
+                              {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 3: CONTRACTS, LOAN BUYOUTS & YOUTH ACADEMY */}
+            {rightTab === 'con' && (
+              <div className="space-y-3.5 mland:space-y-2.5">
+                {loanPlayers.length > 0 && (
+                  <div className="space-y-1.5">
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📌 ออปชันซื้อขาดนักเตะยืมตัว</h3>
+                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
+                      {loanPlayers.map(({ q, i }) => (
+                        <div key={q.n} className="flex items-center gap-2.5 p-2.5 mland:p-2 bg-[var(--surface-2)]/35">
+                          <PlayerFace player={q} team={me} state={state} size={34} />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-xs mland:text-[11px] truncate">{q.pos} · {q.n}</div>
+                            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">ค่าฉีกออปชันซื้อขาด {q.loanOpt}k ฿</div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!tx.tw.open || state.money < (q.loanOpt || 0)}
+                            onClick={() => {
+                              const cost = q.loanOpt || 0;
+                              onUpdateState((d) => {
+                                d.money -= cost;
+                                logFin(d, `ใช้ออปชันซื้อขาด ${q.n}`, -cost);
+                                const target = d.teams[d.me].sq[i];
+                                delete target.loan;
+                                delete target.loanOpt;
+                                target.signedSeason = d.season;
+                                target.signedMd = d.md;
+                                target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
+                              });
+                              onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
+                            }}
+                            className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer"
+                          >
+                            {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${q.loanOpt}k`}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-1">
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📋 สัญญานักเตะ &amp; ต่อสัญญา</h3>
+                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">≤ 1 ปี รีบต่อก่อนค่าเหนื่อยพุ่ง +25%</span>
+                  </div>
+                  <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
+                    {contractList.map(({ q, i, c }) => (
+                      <div key={q.n} className="flex items-center gap-2.5 mland:gap-2 p-2.5 mland:p-2 bg-[var(--surface-2)]/30">
+                        <PlayerFace player={q} team={me} state={state} size={34} />
+                        <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                          <div className="font-bold text-xs mland:text-[11px] truncate">
+                            <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                            {q.n}{' '}
+                            <span className={c.yr <= 1 ? 'text-[var(--red)] font-bold' : 'text-[var(--lamp)]'}>
+                              ({c.yr <= 0 ? 'หมดสัญญา!' : `เหลือ ${c.yr} ปี`})
+                            </span>
+                          </div>
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
+                            {ROLE_L[c.role]} · ค่าเหนื่อย {c.wg}k/นัด
+                          </div>
+                        </button>
+                        <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                          {q.ov}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setRenewIdx(i); setRenewYr(Math.max(2, c.yr + 2 > 5 ? 3 : c.yr + 2)); setRenewRole(c.role); setRenewWb(1); setRenewMsg(''); }}
+                          className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${c.yr <= 1 ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)]'}`}
+                        >
+                          ต่อสัญญา
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-baseline justify-between gap-1">
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">🌱 เด็กเยาวชนอะคาเดมี่ ({state.yth?.length || 0})</h3>
+                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">เซ็นฟรี · ลงทะเบียนได้ตลอดปี</span>
+                  </div>
+                  {(state.yth || []).length ? (
+                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
+                      {state.yth.map((q, i) => (
+                        <div key={q.n} className="flex items-center gap-2.5 mland:gap-2 p-2.5 mland:p-2 bg-[var(--surface-2)]/30">
+                          <PlayerFace player={q} team={me} state={state} size={34} />
+                          <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                            <div className="font-bold text-xs mland:text-[11px] truncate">
+                              <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                              {q.n}
+                            </div>
+                            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
+                              อายุ {q.age} ปี · ศักยภาพ {q.pot}
+                            </div>
+                          </button>
+                          <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                            {q.ov}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={me.sq.length >= tx.maxSquad || tx.curWage + wagOf(q) > tx.wageCap}
+                            onClick={() => {
+                              onUpdateState((d) => {
+                                const t = d.teams[d.me];
+                                const y = d.yth[i];
+                                if (!y || t.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) return;
+                                y.con = { yr: 3, wg: wagOf(y), role: 'pro' };
+                                y.no = undefined;
+                                y.signedSeason = d.season;
+                                y.signedMd = d.md;
+                                t.sq.push(y);
+                                assignTeamShirtNumbers(t);
+                                d.yth.splice(i, 1);
+                              });
+                              onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
+                            }}
+                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
+                          >
+                            เซ็น 3 ปี
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs mland:text-[11px] text-[var(--mut)]">ปลายซีซั่นจะมีเด็กเยาวชนชุดใหม่เข้ามา (อัปเกรดอะคาเดมี่เพื่อรับเด็กฝีเท้าดีขึ้น)</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
       </div>
 
       {renderNegotiationModal()}
@@ -8590,49 +9053,49 @@ const FinanceClubView: React.FC<{
       <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
         {/* Top 4 Financial KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2.5 mland:gap-1.5 shrink-0">
-          <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[10px] font-semibold text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-sm tabular mt-0.5 mland:mt-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
+            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
               {state.money.toLocaleString()}k ฿
             </div>
-            <div className={`text-[11px] mland:text-[9px] mt-0.5 mland:mt-0 truncate ${state.money < 0 ? 'text-[var(--red)] font-bold' : 'text-[var(--mut)]'}`}>
+            <div className={`text-[11px] mland:text-[8.5px] mt-0.5 mland:mt-0 truncate ${state.money < 0 ? 'text-[var(--red)] font-bold' : 'text-[var(--mut)]'}`}>
               {state.money < 0 ? '⚠️ ติดลบ (ล็อก FFP ซื้อตัว)' : 'สถานะการเงินพร้อมดำเนินการ'}
             </div>
           </div>
 
-          <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[10px] font-semibold text-[var(--mut)]">คาดการณ์สุทธิ / นัดเหย้า</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-sm tabular mt-0.5 mland:mt-0 ${est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">คาดการณ์สุทธิ / นัดเหย้า</div>
+            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
               {est.homeNet >= 0 ? `+${est.homeNet}k` : `${est.homeNet}k`}
             </div>
-            <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
+            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
               เกมเยือน: <b className={est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{est.awayNet >= 0 ? `+${est.awayNet}k` : `${est.awayNet}k`}</b>
             </div>
           </div>
 
-          <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[10px] font-semibold text-[var(--mut)]">ค่าเหนื่อยนักเตะ / เพดาน</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-sm tabular mt-0.5 mland:mt-0 ${tx.wagePct >= 95 ? 'text-[var(--red)]' : ''}`}>
-              {tx.curWage}k <span className="text-xs mland:text-[10px] font-semibold text-[var(--mut)]">/ {tx.wageCap}k</span>
+          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ค่าเหนื่อยนักเตะ / เพดาน</div>
+            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${tx.wagePct >= 95 ? 'text-[var(--red)]' : ''}`}>
+              {tx.curWage}k <span className="text-xs mland:text-[9.5px] font-semibold text-[var(--mut)]">/ {tx.wageCap}k</span>
             </div>
-            <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
+            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
               ใช้ไป {tx.wagePct}% · สตาฟฟ์ -{est.staffCost}k/นัด
             </div>
           </div>
 
-          <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[10px] font-semibold text-[var(--mut)]">ภาระหนี้คงค้างรวม</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-sm tabular mt-0.5 mland:mt-0 ${totalDebt > 0 ? 'text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ภาระหนี้คงค้างรวม</div>
+            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${totalDebt > 0 ? 'text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
               {totalDebt.toLocaleString()}k ฿
             </div>
-            <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
+            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
               ธนาคาร {bankRemain}k · ค่าตัวปลายปี {state.payDue || 0}k
             </div>
           </div>
         </div>
 
         {/* Finance Sub-navigation */}
-        <div className="flex flex-wrap mland:flex-nowrap gap-1.5 mland:gap-1 p-1.5 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0 overflow-x-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {(
             [
               ['overview', '📊 ภาพรวม & บอร์ด'],
@@ -8645,7 +9108,7 @@ const FinanceClubView: React.FC<{
               key={id}
               type="button"
               onClick={() => setFinTab(id)}
-              className={`flex-1 min-w-[125px] mland:min-w-0 px-3 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+              className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors ${
                 finTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
               }`}
             >
@@ -9271,9 +9734,11 @@ const FinanceClubView: React.FC<{
 
   return (
     <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      {/* Club Hero Identity Banner */}
+      {/* Club Hero Identity Banner (unifies live preview when on identity tab so crests/kits never duplicate) */}
       <div
-        className="p-4 sm:p-5 mland:p-2 rounded-3xl mland:rounded-2xl border border-[var(--line)] space-y-4 mland:space-y-0 shrink-0"
+        className={`p-4 sm:p-5 mland:p-2 rounded-3xl mland:rounded-2xl border border-[var(--line)] space-y-4 mland:space-y-0 shrink-0 ${
+          clubTab === 'identity' ? 'sticky top-0 z-20 mland:static border-[var(--g)]/35 shadow-md backdrop-blur-md' : ''
+        }`}
         style={{ background: `linear-gradient(155deg, color-mix(in srgb, ${k.c1} 18%, var(--surface)), var(--surface) 58%)` }}
       >
         <div className="flex flex-col md:flex-row mland:flex-row items-center justify-between gap-4 mland:gap-2">
@@ -9294,41 +9759,79 @@ const FinanceClubView: React.FC<{
             </div>
             <div className="space-y-1 mland:space-y-0 min-w-0">
               <div className="text-[11px] mland:text-[10px] font-bold text-[var(--g)]">
-                {TN[me.tier]} · ก่อตั้งปี {k.founded || 2568}
+                {clubTab === 'identity' ? 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์' : `${TN[me.tier]} · ก่อตั้งปี ${k.founded || 2568}`}
               </div>
               <h2 className="font-bold text-2xl mland:text-base font-display leading-tight truncate">
                 {me.name} {k.nick ? <span className="text-base mland:text-xs font-semibold text-[var(--mut)]">«{k.nick}»</span> : null}
               </h2>
-              <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate">
-                🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}) · 👔 กุนซือ: {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
-              </p>
-              {k.motto && <p className="text-xs italic text-[var(--ink)]/85 mland:hidden">&ldquo;{k.motto}&rdquo;</p>}
+              {clubTab === 'identity' ? (
+                <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate">
+                  ตรา: <b>{CREST_SHAPES[k.shape]?.label || 'โล่คลาสสิก'}</b> · <b>{CREST_PATTERNS[k.pat] || 'แถบขวาง'}</b> · เสื้อ: <b>{KIT_PATTERNS[k.kit || 0]}</b> / เยือน <b>{KIT_PATTERNS[(k.awayKit ?? k.kit) || 0]}</b> · <b>{KIT_COLLARS[(k.collar ?? 0) % 4]}</b>
+                </p>
+              ) : (
+                <>
+                  <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate">
+                    🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}) · 👔 กุนซือ: {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+                  </p>
+                  {k.motto && <p className="text-xs italic text-[var(--ink)]/85 mland:hidden">&ldquo;{k.motto}&rdquo;</p>}
+                </>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-2 mland:gap-1 w-full md:w-auto mland:w-auto text-center shrink-0">
-            <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">พลัง XI / ทีม</div>
-              <b className="text-sm mland:text-[10.5px] tabular">{ts.ovXi} / {ts.ovSq}</b>
+          {clubTab === 'identity' ? (
+            <button
+              type="button"
+              onClick={() => {
+                const kp = P(KIT_P);
+                const icons = Object.keys(CREST_IC);
+                onUpdateState((d) => {
+                  const cl = ensureClubIdentity(d);
+                  cl.c1 = kp[0];
+                  cl.c2 = kp[1];
+                  cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
+                  cl.shape = R(0, CREST_SHAPES.length - 1);
+                  cl.pat = R(0, CREST_PATTERNS.length - 1);
+                  cl.crestBorder = R(0, 3);
+                  cl.kit = R(0, KIT_PATTERNS.length - 1);
+                  cl.awayKit = Math.random() < 0.5 ? R(0, KIT_PATTERNS.length - 1) : undefined;
+                  cl.collar = R(0, KIT_COLLARS.length - 1);
+                  cl.cuffTrim = Math.random() < 0.75;
+                  cl.icon = P(icons);
+                  cl.iconColor = '';
+                  d.teams[d.me].kc = [cl.c1, cl.c2];
+                });
+                onToast('สุ่มตราสโมสรและชุดแข่งใหม่แล้ว!');
+              }}
+              className="px-3.5 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs mland:text-[11px] font-bold cursor-pointer shadow-xs shrink-0 hover:brightness-105"
+            >
+              🎲 สุ่มดีไซน์ทั้งหมด
+            </button>
+          ) : (
+            <div className="grid grid-cols-4 gap-2 mland:gap-1 w-full md:w-auto mland:w-auto text-center shrink-0">
+              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">พลัง XI / ทีม</div>
+                <b className="text-sm mland:text-[10.5px] tabular">{ts.ovXi} / {ts.ovSq}</b>
+              </div>
+              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แฟนบอล</div>
+                <b className="text-sm mland:text-[10.5px] tabular">{state.fan ?? 50}%</b>
+              </div>
+              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">บอร์ด</div>
+                <b className="text-sm mland:text-[10.5px] tabular">{state.bd ?? 50}%</b>
+              </div>
+              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">มูลค่าทีม</div>
+                <b className="text-sm mland:text-[10.5px] tabular">{totV}k</b>
+              </div>
             </div>
-            <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แฟนบอล</div>
-              <b className="text-sm mland:text-[10.5px] tabular">{state.fan ?? 50}%</b>
-            </div>
-            <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">บอร์ด</div>
-              <b className="text-sm mland:text-[10.5px] tabular">{state.bd ?? 50}%</b>
-            </div>
-            <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">มูลค่าทีม</div>
-              <b className="text-sm mland:text-[10.5px] tabular">{totV}k</b>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
       {/* Club Sub-navigation */}
-      <div className="flex flex-wrap mland:flex-nowrap gap-1.5 mland:gap-1 p-1.5 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0 overflow-x-auto">
+      <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
         {(
           [
             ['info', '🏛️ ข้อมูล & ทีม'],
@@ -9341,7 +9844,7 @@ const FinanceClubView: React.FC<{
             key={id}
             type="button"
             onClick={() => setClubTab(id)}
-            className={`flex-1 min-w-[125px] mland:min-w-0 px-3 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+            className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors ${
               clubTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
             }`}
           >
@@ -9491,111 +9994,75 @@ const FinanceClubView: React.FC<{
       {/* Club Tab 2: Crest & Jersey Studio */}
       {clubTab === 'identity' && (
         <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5 mland:overflow-hidden">
-          {/* Sticky Live Preview Bar */}
-          <div className="sticky top-0 z-20 mland:static p-3 sm:p-4 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--g)]/35 shadow-md flex flex-wrap items-center justify-between gap-3 mland:gap-2 shrink-0">
-            <div className="flex items-center gap-3 sm:gap-4 mland:gap-2 mland:[&_svg]:w-9 mland:[&_svg]:h-9">
-              <div className="flex flex-col items-center">
-                <ClubCrest name={me.name} size={60} team={me} club={k} isMyClub />
-                <span className="text-[10px] font-bold text-[var(--mut)] mt-0.5 mland:hidden">ตรา</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <KitJersey club={k} away={false} size={56} />
-                <span className="text-[10px] font-bold text-[var(--mut)] mt-0.5 mland:hidden">ชุดเหย้า</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <KitJersey club={k} away={true} size={56} />
-                <span className="text-[10px] font-bold text-[var(--mut)] mt-0.5 mland:hidden">ชุดเยือน</span>
-              </div>
-              <div className="hidden sm:block pl-2 border-l border-[var(--line)] space-y-0.5 text-[11px] mland:text-[10px]">
-                <div className="font-bold text-xs mland:text-[11px] text-[var(--ink)]">ตัวอย่างแบบเรียลไทม์ · {me.name}</div>
-                <div className="text-[var(--mut)]">
-                  ตรา: <b>{CREST_SHAPES[k.shape]?.label || 'โล่คลาสสิก'}</b> · <b>{CREST_PATTERNS[k.pat] || 'แถบขวาง'}</b>
-                </div>
-                <div className="text-[var(--mut)]">
-                  เสื้อ: <b>{KIT_PATTERNS[k.kit || 0]}</b> / เยือน <b>{KIT_PATTERNS[(k.awayKit ?? k.kit) || 0]}</b> · <b>{KIT_COLLARS[(k.collar ?? 0) % 4]}</b>
-                </div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                const kp = P(KIT_P);
-                const icons = ['', ...Object.keys(CREST_IC)];
-                onUpdateState((d) => {
-                  const cl = ensureClubIdentity(d);
-                  cl.c1 = kp[0];
-                  cl.c2 = kp[1];
-                  cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
-                  cl.shape = R(0, CREST_SHAPES.length - 1);
-                  cl.pat = R(0, CREST_PATTERNS.length - 1);
-                  cl.crestBorder = R(0, 3);
-                  cl.kit = R(0, KIT_PATTERNS.length - 1);
-                  cl.awayKit = Math.random() < 0.5 ? R(0, KIT_PATTERNS.length - 1) : undefined;
-                  cl.collar = R(0, KIT_COLLARS.length - 1);
-                  cl.cuffTrim = Math.random() < 0.75;
-                  cl.icon = P(icons);
-                  d.teams[d.me].kc = [cl.c1, cl.c2];
-                });
-                onToast('สุ่มตราสโมสรและชุดแข่งใหม่แล้ว!');
-              }}
-              className="px-3.5 py-2 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs mland:text-[11px] font-bold cursor-pointer shadow-xs shrink-0"
-            >
-              🎲 สุ่มดีไซน์ทั้งหมด
-            </button>
-          </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
             {/* Crest Studio */}
             <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3.5 mland:space-y-2 mland:h-full mland:overflow-y-auto">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <h3 className="font-bold text-sm mland:text-xs">🛡️ สตูดิโอออกแบบตราสโมสร</h3>
-                <span className="text-[11px] font-semibold text-[var(--g)]">
+                <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
                   {CREST_SHAPES[k.shape]?.label} · {CREST_PATTERNS[k.pat]}
                 </span>
               </div>
 
               <div>
-                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">รูปทรงตรา ({CREST_SHAPES.length} แบบ)</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  {CREST_SHAPES.map((sh, i) => (
-                    <button
-                      key={sh.label}
-                      type="button"
-                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).shape = i; })}
-                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold cursor-pointer truncate ${k.shape === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] hover:text-[var(--ink)]'}`}
-                    >
-                      {sh.label}
-                    </button>
-                  ))}
+                <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">รูปทรงตรา ({CREST_SHAPES.length} แบบ)</div>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {CREST_SHAPES.map((sh, i) => {
+                    const active = k.shape === i;
+                    return (
+                      <button
+                        key={sh.label}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).shape = i; })}
+                        className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-xl text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer border transition-all ${
+                          active
+                            ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)] shadow-xs'
+                            : 'bg-[var(--surface-2)]/70 border-transparent text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                        }`}
+                      >
+                        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+                          <path d={sh.d} fill={k.c1} stroke={active ? 'var(--g)' : 'var(--line)'} strokeWidth="1.6" />
+                        </svg>
+                        <span className="truncate max-w-full leading-tight">{sh.label}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               <div>
-                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลวดลายพื้นหลังตรา ({CREST_PATTERNS.length} แบบ)</div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
-                  {CREST_PATTERNS.map((l, i) => (
-                    <button
-                      key={l}
-                      type="button"
-                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).pat = i; })}
-                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold cursor-pointer truncate ${k.pat === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
-                    >
-                      {l}
-                    </button>
-                  ))}
+                <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">ลวดลายพื้นหลังตรา ({CREST_PATTERNS.length} แบบ)</div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 mland:grid-cols-5 gap-1.5">
+                  {CREST_PATTERNS.map((l, i) => {
+                    const active = k.pat === i;
+                    return (
+                      <button
+                        key={l}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).pat = i; })}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer truncate border transition-colors ${
+                          active
+                            ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
+                            : 'bg-[var(--surface-2)]/70 border-transparent text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                        }`}
+                      >
+                        {l}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mland:gap-2">
                 <div>
-                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">สไตล์ขอบตรา</div>
+                  <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">สไตล์ขอบตรา</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {(['ขาว', 'ทอง', 'ขอบคู่', 'ดำเข้ม'] as const).map((lbl, i) => (
                       <button
                         key={lbl}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).crestBorder = i; })}
-                        className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer ${(k.crestBorder ?? 0) === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                        className={`py-1.5 rounded-xl text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${(k.crestBorder ?? 0) === i ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]/70 text-[var(--mut)] hover:text-[var(--ink)]'}`}
                       >
                         {lbl}
                       </button>
@@ -9603,14 +10070,14 @@ const FinanceClubView: React.FC<{
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ดาวเกียรติยศบนตรา</div>
+                  <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">ดาวเกียรติยศบนตรา</div>
                   <div className="grid grid-cols-4 gap-1.5">
                     {[0, 1, 2, 3].map((stCnt) => (
                       <button
                         key={stCnt}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).stars = stCnt; })}
-                        className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer ${(k.stars ?? 0) === stCnt ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                        className={`py-1.5 rounded-xl text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${(k.stars ?? 0) === stCnt ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]/70 text-[var(--mut)] hover:text-[var(--ink)]'}`}
                       >
                         {stCnt === 0 ? 'ไม่มี' : '⭐'.repeat(stCnt)}
                       </button>
@@ -9619,19 +10086,87 @@ const FinanceClubView: React.FC<{
                 </div>
               </div>
 
-              <div>
-                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">สัญลักษณ์กลางตรา ({Object.keys(CREST_IC).length} แบบ + ตัวอักษร)</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {['', ...Object.keys(CREST_IC)].map((ic) => (
-                    <button
-                      key={ic || 'txt'}
-                      type="button"
-                      onClick={() => onUpdateState((d) => { ensureClubIdentity(d).icon = ic; })}
-                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${k.icon === ic ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
-                    >
-                      {ic || 'อักษรแรก'}
-                    </button>
-                  ))}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold">
+                    สัญลักษณ์กลางตรา ({Object.keys(CREST_IC).length} แบบ)
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const icKeys = Object.keys(CREST_IC);
+                      const picked = P(icKeys);
+                      onUpdateState((d) => { ensureClubIdentity(d).icon = picked; });
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer border border-[var(--line)]/80"
+                  >
+                    🎲 สุ่มสัญลักษณ์
+                  </button>
+                </div>
+
+                {/* Emblem contrast color selector */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mr-1">สีสัญลักษณ์:</span>
+                  {(
+                    [
+                      ['', 'อัตโนมัติ'],
+                      ['#ffffff', 'ขาว'],
+                      ['#0f172a', 'ดำเข้ม'],
+                      ['#facc15', 'ทอง'],
+                      ['#38bdf8', 'ฟ้า'],
+                      ['#ef4444', 'แดง']
+                    ] as const
+                  ).map(([colVal, lbl]) => {
+                    const active = (k.iconColor || '') === colVal;
+                    return (
+                      <button
+                        key={lbl}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).iconColor = colVal; })}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] mland:text-[9px] font-bold border cursor-pointer transition-colors ${
+                          active
+                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                            : 'bg-[var(--surface-2)]/75 text-[var(--mut)] border-[var(--line)]/70 hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {colVal && <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: colVal }} />}
+                        <span>{lbl}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Visual Vector Emblem Grid */}
+                <div className="grid grid-cols-4 sm:grid-cols-6 mland:grid-cols-6 gap-1.5">
+                  {Object.keys(CREST_IC).map((ic) => {
+                    const active = k.icon === ic;
+                    return (
+                      <button
+                        key={ic}
+                        type="button"
+                        onClick={() => onUpdateState((d) => { ensureClubIdentity(d).icon = ic; })}
+                        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl cursor-pointer border transition-all ${
+                          active
+                            ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] ring-1 ring-[var(--g)] shadow-xs'
+                            : 'bg-[var(--surface-2)]/65 border-transparent text-[var(--ink)] hover:border-[var(--line)] hover:bg-[var(--surface-2)]'
+                        }`}
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                          <g
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.1"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+                          />
+                        </svg>
+                        <span className="text-[9.5px] mland:text-[8.5px] font-semibold truncate max-w-full leading-tight">
+                          {CREST_IC_NAMES[ic] || ic}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -10120,11 +10655,11 @@ const CupView: React.FC<{ state: GameState; onInspectTeam: (id: number) => void 
 
   return (
     <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      <div className="flex flex-wrap items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] w-fit max-w-full shrink-0">
-        <button type="button" onClick={() => setCupTab('fa')} className={`px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[11px] font-semibold cursor-pointer ${cupTab === 'fa' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>
+      <div className="grid grid-cols-2 sm:inline-flex mland:inline-flex gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] sm:w-fit mland:w-fit max-w-full shrink-0">
+        <button type="button" onClick={() => setCupTab('fa')} className={`px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'fa' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
           🏆 ถ้วยประชาชน
         </button>
-        <button type="button" onClick={() => setCupTab('asia')} className={`px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[11px] font-semibold cursor-pointer ${cupTab === 'asia' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>
+        <button type="button" onClick={() => setCupTab('asia')} className={`px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'asia' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
           🌏 บอลถ้วยทวีป
         </button>
       </div>
@@ -10376,6 +10911,7 @@ type BallFlightType =
   | 'carry'
   | 'pass'
   | 'through'
+  | 'lofted'
   | 'cross'
   | 'shot'
   | 'freekick'
@@ -10408,12 +10944,17 @@ interface LivePitchAgent {
   intentTimer: number;
   diveDir: number;
   diveProgress: number;
+  diveTargetY?: number;
+  acrobatTimer?: number;
+  acrobatType?: 'bicycle' | 'volley' | 'skill';
+  skillSpinDir?: number;
   runToX?: number;
   runToY?: number;
   fit: number;
   hasYellow: boolean;
   sentOff: boolean;
   d: Record<string, number>;
+  sig: string;
   tr: number;
   ov: number;
   vis: number[];
@@ -10432,6 +10973,7 @@ interface LiveBallState {
   progress: number;
   duration: number;
   flightType: BallFlightType;
+  shotStyle?: 'normal' | 'bicycle' | 'volley' | 'curler' | 'header' | 'screamer' | 'chip' | 'panenka';
   carrierId: string | null;
   targetId: string | null;
   shooterId: string | null;
@@ -10442,7 +10984,7 @@ interface LiveBallState {
 
 interface LivePitchFx {
   id: number;
-  type: 'offside' | 'foul' | 'save' | 'block' | 'woodwork' | 'goal' | 'freekick' | 'corner' | 'card' | 'var' | 'penalty';
+  type: 'offside' | 'foul' | 'save' | 'block' | 'woodwork' | 'goal' | 'freekick' | 'corner' | 'card' | 'var' | 'penalty' | 'skill';
   x: number;
   y: number;
   offsideX?: number;
@@ -10505,6 +11047,7 @@ interface LiveMatchWorld {
   fx: LivePitchFx[];
   nextFxId: number;
   pendingSetPiece: PendingSetPiece | null;
+  secondHalf: boolean;
   phase: 'play1' | 'stop1' | 'halftime' | 'play2' | 'stop2' | 'shootout' | 'ft';
   added1: number;
   added2: number;
@@ -10518,8 +11061,8 @@ interface LiveMatchWorld {
   lastTickedMin: number;
   possTicksH: number;
   possTicksTotal: number;
-  goalNetRippleH: number;
-  goalNetRippleA: number;
+  goalNetRippleLeft: number;
+  goalNetRippleRight: number;
   celebrateTimer: number;
   dramaSlowSec: number;
   dramaLabel: string | null;
@@ -10574,17 +11117,21 @@ const buildAgentsForTeam = (
   yellowsMap: Record<string, number>,
   fitMap: Record<string, number>,
   careerP?: PlayerCareerProfile | null,
-  myPlayerName?: string
+  myPlayerName?: string,
+  secondHalf = false
 ): LivePitchAgent[] => {
   const slots = getFormationSlots(team);
+  const attRight = (side === 'H') !== secondHalf;
   return luNames.map((name, i) => {
     const pl = team.sq.find((q) => q.n === name) || team.sq[i] || team.sq[0];
     const slot = slots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
     const homeBaseX = clamp(100 - slot.y, 4.5, 95.5);
-    const baseX = side === 'H' ? homeBaseX : 100 - homeBaseX;
-    const baseY = side === 'H' ? clamp(slot.x, 6, 94) : clamp(100 - slot.x, 6, 94);
-    const kickoffX = side === 'H' ? Math.min(baseX, 47) : Math.max(baseX, 53);
-    const dt = pl ? DT(pl, careerP) : { d: { spd: 60, fin: 60, pw: 60, cur: 60, crs: 60, run: 60, rd: 60, pos: 60, mrk: 60, blk: 60, hd: 60, sv: 60, cl: 60, dist: 60, sta: 65 }, tr: 3 };
+    const baseX = attRight ? homeBaseX : 100 - homeBaseX;
+    const baseY = attRight ? clamp(slot.x, 6, 94) : clamp(100 - slot.x, 6, 94);
+    const kickoffX = attRight ? Math.min(baseX, 47) : Math.max(baseX, 53);
+    const dt = pl
+      ? DT(pl, careerP)
+      : { d: { spd: 60, fin: 60, pw: 60, cur: 60, crs: 60, run: 60, rd: 60, pos: 60, mrk: 60, blk: 60, hd: 60, sv: 60, cl: 60, dist: 60, sta: 65, comp: 60, str: 60 }, sig: 'comp', tr: 3 };
     return {
       id: name,
       shortName: name.split(' ')[0] || name,
@@ -10602,16 +11149,18 @@ const buildAgentsForTeam = (
       vy: 0,
       tx: kickoffX,
       ty: baseY,
-      facing: side === 'H' ? 0 : Math.PI,
+      facing: attRight ? 0 : Math.PI,
       stride: Math.random() * Math.PI * 2,
       intent: 'SUPPORT',
       intentTimer: 0,
       diveDir: 0,
       diveProgress: 0,
+      acrobatTimer: 0,
       fit: fitMap[name] ?? pl?.fit ?? 100,
       hasYellow: (yellowsMap[name] || 0) > 0,
       sentOff: sentOffNames.includes(name),
       d: dt.d,
+      sig: dt.sig,
       tr: dt.tr,
       ov: pl?.ov || 60,
       vis: pl ? visOf(pl, careerP) : [2, 0, 0, 0, 0, i + 1, 0]
@@ -10783,8 +11332,8 @@ const drawLivePitchToCanvas = (
     ctx.stroke();
     ctx.restore();
   };
-  drawGoal(true, world.goalNetRippleA);
-  drawGoal(false, world.goalNetRippleH);
+  drawGoal(true, world.goalNetRippleLeft);
+  drawGoal(false, world.goalNetRippleRight);
 
   // 3. Visual FX under players (Offside line, Foul ring, Free kick wall spray & barrier)
   if (world.pendingSetPiece?.type === 'freekick' && world.pendingSetPiece.wallPlayers?.length) {
@@ -10812,12 +11361,13 @@ const drawLivePitchToCanvas = (
       ctx.stroke();
       ctx.restore();
     }
-    if (fx.type === 'foul' || fx.type === 'save' || fx.type === 'block' || fx.type === 'woodwork' || fx.type === 'goal') {
-      const expand = (1 - alpha) * (fx.type === 'goal' ? 32 : 18) + 6;
+    if (fx.type === 'foul' || fx.type === 'save' || fx.type === 'block' || fx.type === 'woodwork' || fx.type === 'goal' || fx.type === 'skill' || fx.type === 'penalty') {
+      const expand = (1 - alpha) * (fx.type === 'goal' ? 32 : fx.type === 'skill' ? 22 : 18) + 6;
       ctx.save();
       ctx.strokeStyle = fx.color;
       ctx.globalAlpha = alpha * 0.85;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = fx.type === 'skill' ? 2.5 : 2.2;
+      if (fx.type === 'skill') ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.arc(px(fx.x), py(fx.y), expand, 0, Math.PI * 2);
       ctx.stroke();
@@ -10867,16 +11417,21 @@ const drawLivePitchToCanvas = (
     const endPy = py(b.toY);
     const midX = (startPx + endPx) * 0.5;
     const midY = (startPy + endPy) * 0.5 + b.curve * (ph / 100);
+    const isSpecialShot = b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'curler' || b.shotStyle === 'screamer';
     ctx.save();
     ctx.strokeStyle =
       b.flightType === 'shot' || b.flightType === 'freekick'
-        ? 'rgba(248, 113, 113, 0.52)'
+        ? b.shotStyle === 'curler'
+          ? 'rgba(56, 189, 248, 0.7)'
+          : isSpecialShot
+            ? 'rgba(251, 191, 36, 0.75)'
+            : 'rgba(248, 113, 113, 0.55)'
         : b.flightType === 'through'
-          ? 'rgba(250, 204, 21, 0.55)'
-          : b.flightType === 'cross' || b.flightType === 'corner'
-            ? 'rgba(96, 165, 250, 0.55)'
-            : 'rgba(255, 255, 255, 0.32)';
-    ctx.lineWidth = b.flightType === 'shot' ? 2 : 1.4;
+          ? 'rgba(250, 204, 21, 0.58)'
+          : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+            ? 'rgba(96, 165, 250, 0.62)'
+            : 'rgba(255, 255, 255, 0.34)';
+    ctx.lineWidth = isSpecialShot ? 2.4 : b.flightType === 'shot' ? 2 : 1.4;
     ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(startPx, startPy);
@@ -10889,12 +11444,21 @@ const drawLivePitchToCanvas = (
     for (let i = 1; i < b.trail.length; i++) {
       const p0 = b.trail[i - 1];
       const p1 = b.trail[i];
-      const a = (i / b.trail.length) * 0.55;
-      ctx.strokeStyle = b.flightType === 'shot' ? `rgba(254, 240, 138, ${a})` : `rgba(255, 255, 255, ${a * 0.7})`;
-      ctx.lineWidth = 1.5 + (i / b.trail.length) * 2;
+      const a = (i / b.trail.length) * 0.65;
+      ctx.strokeStyle =
+        b.shotStyle === 'curler'
+          ? `rgba(56, 189, 248, ${a})`
+          : b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer'
+            ? `rgba(251, 191, 36, ${a})`
+            : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+              ? `rgba(147, 197, 253, ${a * 0.82})`
+              : b.flightType === 'shot'
+                ? `rgba(254, 240, 138, ${a})`
+                : `rgba(255, 255, 255, ${a * 0.7})`;
+      ctx.lineWidth = 1.6 + (i / b.trail.length) * (b.flightType === 'shot' ? 2.8 : 2.0);
       ctx.beginPath();
-      ctx.moveTo(px(p0.x), py(p0.y) - p0.z * 0.65);
-      ctx.lineTo(px(p1.x), py(p1.y) - p1.z * 0.65);
+      ctx.moveTo(px(p0.x), py(p0.y) - p0.z * 0.78);
+      ctx.lineTo(px(p1.x), py(p1.y) - p1.z * 0.78);
       ctx.stroke();
     }
   }
@@ -10946,11 +11510,50 @@ const drawLivePitchToCanvas = (
     ctx.ellipse(0, playerRadius * 0.82, playerRadius * 0.92, playerRadius * 0.36, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // GK diving stretch offset
+    // GK diving stretch offset & extended gloves
     if (ag.intent === 'DIVE' && ag.diveProgress > 0) {
-      const diveShiftY = ag.diveDir * Math.sin(ag.diveProgress * Math.PI) * playerRadius * 1.15;
+      const diveSin = Math.sin(ag.diveProgress * Math.PI);
+      const diveShiftY = ag.diveDir * diveSin * playerRadius * 1.45;
       ctx.translate(0, diveShiftY);
-      ctx.rotate(ag.diveDir * Math.sin(ag.diveProgress * Math.PI) * 0.55);
+      ctx.rotate(ag.diveDir * diveSin * 0.72);
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(0, ag.diveDir * (playerRadius * 1.15), playerRadius * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Acrobatics / Skill move visual flair (bicycle kick, volley, skill spin)
+    if (ag.acrobatTimer && ag.acrobatTimer > 0) {
+      const acAlpha = clamp(ag.acrobatTimer / 0.65, 0, 1);
+      if (ag.acrobatType === 'bicycle') {
+        ctx.translate(0, -playerRadius * 0.55 * Math.sin(acAlpha * Math.PI));
+        ctx.rotate(-0.85 * acAlpha);
+        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.9})`;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5, -Math.PI * 0.8, Math.PI * 0.25);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'volley') {
+        ctx.rotate(0.45 * acAlpha);
+        ctx.strokeStyle = `rgba(251, 146, 60, ${acAlpha * 0.85})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'skill') {
+        const spinDir = ag.skillSpinDir || 1;
+        ctx.rotate(spinDir * (1 - acAlpha) * Math.PI * 2);
+        ctx.strokeStyle = `rgba(192, 132, 252, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
     // Animated running feet / boots oriented along facing direction
@@ -11066,34 +11669,114 @@ const drawLivePitchToCanvas = (
     ctx.restore();
   });
 
-  // 6. Ball with 3D ground shadow + elevation scale
+  // 6. Ball with 3D ground shadow, spinning pentagon panels, spherical shading & shot aura
   const bx = px(b.x);
   const by = py(b.y);
-  const ballScale = 1 + clamp(b.z / 28, 0, 0.55);
-  const ballR = clamp(cssW * 0.0085, 4.4, 6.2) * ballScale;
+  const ballScale = 1 + clamp(b.z / 24, 0, 0.72);
+  const ballR = clamp(cssW * 0.0092, 4.8, 6.8) * ballScale;
 
   // Ground shadow
-  ctx.fillStyle = `rgba(0, 0, 0, ${clamp(0.38 - b.z * 0.012, 0.14, 0.38)})`;
+  ctx.fillStyle = `rgba(0, 0, 0, ${clamp(0.42 - b.z * 0.012, 0.12, 0.42)})`;
   ctx.beginPath();
-  ctx.ellipse(bx + b.z * 0.18, by + 3 + b.z * 0.25, ballR * 0.85, ballR * 0.45, 0, 0, Math.PI * 2);
+  ctx.ellipse(bx + b.z * 0.22, by + 3.2 + b.z * 0.28, ballR * 0.94, ballR * 0.46, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Elevated ball
-  const drawBy = by - b.z * 0.65;
+  // Elevated 3D match ball
+  const drawBy = by - b.z * 0.78;
+  const isSpecialBall = b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer';
+  const isCurlBall = b.shotStyle === 'curler';
+  const isPowerShot = b.flightType === 'shot' || b.flightType === 'freekick' || b.flightType === 'penalty' || b.flightType === 'shootout_kick';
   ctx.save();
   ctx.translate(bx, drawBy);
-  ctx.fillStyle = '#ffffff';
-  ctx.strokeStyle = '#111827';
-  ctx.lineWidth = 1.3;
+
+  // Subtle motion/shot glow behind the ball
+  if (isCurlBall || isSpecialBall || isPowerShot) {
+    ctx.save();
+    ctx.fillStyle = isCurlBall
+      ? 'rgba(56, 189, 248, 0.34)'
+      : isSpecialBall
+        ? 'rgba(251, 191, 36, 0.38)'
+        : 'rgba(254, 240, 138, 0.24)';
+    ctx.beginPath();
+    ctx.arc(0, 0, ballR * 1.48, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Spherical 3D shading + clipped spinning pentagon seams
+  ctx.save();
   ctx.beginPath();
   ctx.arc(0, 0, ballR, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  // Pentagon pattern detail
-  ctx.fillStyle = '#1f2937';
+  ctx.clip();
+
+  const sphGrad = ctx.createRadialGradient(-ballR * 0.32, -ballR * 0.34, ballR * 0.1, 0, 0, ballR * 1.05);
+  sphGrad.addColorStop(0, '#ffffff');
+  sphGrad.addColorStop(0.55, '#f1f5f9');
+  sphGrad.addColorStop(1, '#94a3b8');
+  ctx.fillStyle = sphGrad;
+  ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+
+  // Dynamic roll & spin based on field coordinates and flight progress
+  const spinAng = (b.x * 0.38 + b.y * 0.27 + (b.progress || 0) * 10.5) * (isCurlBall ? 1.6 : 1);
+  const coreOffX = Math.cos(spinAng * 0.65) * ballR * 0.14;
+  const coreOffY = Math.sin(spinAng * 0.55) * ballR * 0.14;
+  const pentR = ballR * 0.37;
+
+  ctx.save();
+  ctx.translate(coreOffX, coreOffY);
+  ctx.rotate(spinAng);
+
+  // Seams radiating from center pentagon to outer panels
+  ctx.strokeStyle = 'rgba(30, 41, 59, 0.65)';
+  ctx.lineWidth = Math.max(0.7, ballR * 0.11);
+  for (let i = 0; i < 5; i++) {
+    const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+    const vx = Math.cos(a) * pentR;
+    const vy = Math.sin(a) * pentR;
+    const ox = Math.cos(a) * (ballR * 1.05);
+    const oy = Math.sin(a) * (ballR * 1.05);
+    ctx.beginPath();
+    ctx.moveTo(vx, vy);
+    ctx.lineTo(ox, oy);
+    ctx.stroke();
+
+    // Peripheral dark edge panels
+    const pxOut = Math.cos(a) * (ballR * 0.96);
+    const pyOut = Math.sin(a) * (ballR * 0.96);
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.arc(pxOut, pyOut, ballR * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Center pentagon
+  ctx.fillStyle = '#0f172a';
   ctx.beginPath();
-  ctx.arc(0, 0, ballR * 0.34, 0, Math.PI * 2);
+  for (let i = 0; i < 5; i++) {
+    const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+    const pxV = Math.cos(a) * pentR;
+    const pyV = Math.sin(a) * pentR;
+    if (i === 0) ctx.moveTo(pxV, pyV);
+    else ctx.lineTo(pxV, pyV);
+  }
+  ctx.closePath();
   ctx.fill();
+  ctx.restore();
+
+  // Top-left glossy specular highlight
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+  ctx.beginPath();
+  ctx.ellipse(-ballR * 0.34, -ballR * 0.36, ballR * 0.24, ballR * 0.14, -0.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // Crisp outer rim
+  ctx.strokeStyle = '#0f172a';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.arc(0, 0, ballR, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 
   // 7. Floating event callouts (Offside flag, Foul, Save, Woodwork, Goal!)
@@ -11353,7 +12036,7 @@ const MatchModal: React.FC<{
   const [halftimeTalkUsed, setHalftimeTalkUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
-  const [speed, setSpeed] = useState<1 | 2 | 4>(() => getDefaultMatchSpeed(settings));
+  const [speed, setSpeed] = useState<0.5 | 1 | 2 | 4>(() => getDefaultMatchSpeed(settings));
   const [showRunVectors, setShowRunVectors] = useState(true);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
@@ -11527,6 +12210,7 @@ const MatchModal: React.FC<{
       fx: [],
       nextFxId: 1,
       pendingSetPiece: { type: 'kickoff', side: 'H', x: 50, y: 50, waitSec: 0.3 },
+      secondHalf: false,
       phase: 'play1',
       added1: 0,
       added2: 0,
@@ -11540,8 +12224,8 @@ const MatchModal: React.FC<{
       lastTickedMin: 0,
       possTicksH: 5,
       possTicksTotal: 10,
-      goalNetRippleH: 0,
-      goalNetRippleA: 0,
+      goalNetRippleLeft: 0,
+      goalNetRippleRight: 0,
       celebrateTimer: 0,
       dramaSlowSec: 0,
       dramaLabel: null,
@@ -11768,6 +12452,9 @@ const MatchModal: React.FC<{
     return 'Y' as const;
   };
 
+  const isAttackRight = (w: LiveMatchWorld, side: 'H' | 'A') => (side === 'H') !== w.secondHalf;
+  const attackDirOf = (w: LiveMatchWorld, side: 'H' | 'A') => (isAttackRight(w, side) ? 1 : -1);
+
   // Update all 22 AI agents' tactical targets & off-ball runs ("ทำทาง") smoothly
   const updateAgentTargets = (w: LiveMatchWorld, curMin: number) => {
     const b = w.ball;
@@ -11779,9 +12466,10 @@ const MatchModal: React.FC<{
     const aOut = activeAgents.filter((a) => a.side === 'A' && a.pos !== 'GK');
 
     const oppSecondLastX = (defSide: 'H' | 'A') => {
+      const defAttRight = isAttackRight(w, defSide);
       const defs = activeAgents.filter((a) => a.side === defSide).map((a) => a.x);
-      defs.sort((u, v) => (defSide === 'H' ? u - v : v - u));
-      return defs[1] ?? (defSide === 'H' ? 18 : 82);
+      defs.sort((u, v) => (defAttRight ? u - v : v - u));
+      return defs[1] ?? (defAttRight ? 18 : 82);
     };
     const hDefLineX = oppSecondLastX('H');
     const aDefLineX = oppSecondLastX('A');
@@ -11806,18 +12494,20 @@ const MatchModal: React.FC<{
     activeAgents.forEach((ag) => {
       if (ag.intentTimer > 0) {
         if (ag.intent === 'CELEBRATE' || ag.intent === 'DIVE') return;
+        ag.intentTimer = Math.max(0, ag.intentTimer - 0.016);
       }
 
       const isH = ag.side === 'H';
+      const attRight = isAttackRight(w, ag.side);
       const cfg = isH ? hCfg : aCfg;
       const inPoss = b.possessionSide === ag.side;
-      const dir = isH ? 1 : -1;
+      const dir = attRight ? 1 : -1;
 
       // Celebration run!
       if (w.celebrateTimer > 0 && inPoss && ag.pos !== 'GK') {
         ag.intent = 'CELEBRATE';
         const cornerY = b.y < 50 ? 12 : 88;
-        const cornerX = isH ? 92 : 8;
+        const cornerX = attRight ? 92 : 8;
         ag.tx = clamp(cornerX + (((ag.slotIndex % 3) - 1) * 4), 6, 94);
         ag.ty = clamp(cornerY + (((ag.slotIndex % 4) - 1.5) * 4), 8, 92);
         ag.runToX = undefined;
@@ -11853,16 +12543,17 @@ const MatchModal: React.FC<{
       // In-match Penalty Kick positioning
       if (setPiece && setPiece.type === 'penalty') {
         const isAtt = ag.side === setPiece.side;
-        const spotX = setPiece.side === 'H' ? 88.5 : 11.5;
+        const penRight = isAttackRight(w, setPiece.side);
+        const spotX = penRight ? 88.5 : 11.5;
         if (!isAtt && ag.pos === 'GK') {
-          ag.tx = setPiece.side === 'H' ? 98.2 : 1.8;
+          ag.tx = penRight ? 98.2 : 1.8;
           ag.ty = 50;
           ag.intent = 'SUPPORT';
           return;
         }
         if (ag.pos !== 'GK') {
-          const lineBackX = setPiece.side === 'H' ? 80.5 : 19.5;
-          ag.tx = setPiece.side === 'H' ? Math.min(spotX - 7, lineBackX - (ag.slotIndex % 3) * 2.5) : Math.max(spotX + 7, lineBackX + (ag.slotIndex % 3) * 2.5);
+          const lineBackX = penRight ? 80.5 : 19.5;
+          ag.tx = penRight ? Math.min(spotX - 7, lineBackX - (ag.slotIndex % 3) * 2.5) : Math.max(spotX + 7, lineBackX + (ag.slotIndex % 3) * 2.5);
           ag.ty = clamp(24 + ((ag.slotIndex * 5.3) % 52), 20, 80);
           ag.intent = 'SUPPORT';
           return;
@@ -11889,10 +12580,11 @@ const MatchModal: React.FC<{
       // Corner kick box crowding
       if (setPiece && setPiece.type === 'corner' && ag.pos !== 'GK') {
         const isAtt = ag.side === setPiece.side;
-        const targetGoalX = setPiece.side === 'H' ? 91 : 9;
+        const cornerRight = isAttackRight(w, setPiece.side);
+        const targetGoalX = cornerRight ? 91 : 9;
         if (isAtt && (ag.pos === 'FW' || ag.role === 'CB' || ag.role === 'CM')) {
           ag.intent = 'MAKE_RUN';
-          ag.tx = clamp(targetGoalX + (ag.role === 'CB' ? -3 * (setPiece.side === 'H' ? 1 : -1) : 0) + ((ag.slotIndex % 3) - 1) * 2.5, 6, 94);
+          ag.tx = clamp(targetGoalX + (ag.role === 'CB' ? -3 * (cornerRight ? 1 : -1) : 0) + ((ag.slotIndex % 3) - 1) * 2.5, 6, 94);
           ag.ty = clamp(40 + (ag.slotIndex % 5) * 5, 34, 66);
           ag.runToX = ag.tx;
           ag.runToY = ag.ty;
@@ -11906,11 +12598,12 @@ const MatchModal: React.FC<{
         }
       }
 
-      // Goalkeeper AI
+      // Goalkeeper AI (signature 'cl' rushes further to close angles)
       if (ag.pos === 'GK') {
-        const goalX = isH ? 3.8 : 96.2;
-        const ballThreat = isH ? clamp((30 - b.x) / 30, 0, 1) : clamp((b.x - 70) / 30, 0, 1);
-        const sweepPush = (ag.d.cl > 68 ? 3.2 : 1.6) * (inPoss ? 1.4 : ballThreat);
+        const goalX = attRight ? 3.8 : 96.2;
+        const ballThreat = attRight ? clamp((30 - b.x) / 30, 0, 1) : clamp((b.x - 70) / 30, 0, 1);
+        const sweepBonus = ag.sig === 'cl' ? 1.5 : 0;
+        const sweepPush = (ag.d.cl > 68 ? 3.2 : 1.6 + sweepBonus) * (inPoss ? 1.4 : ballThreat);
         ag.tx = clamp(goalX + dir * (1.2 + sweepPush), 3, 97);
         ag.ty = clamp(50 + (b.y - 50) * 0.24, 42.5, 57.5);
         ag.intent = 'SUPPORT';
@@ -11921,17 +12614,17 @@ const MatchModal: React.FC<{
 
       // Outfield Base Formation Projection
       const homeBaseX = clamp(100 - ag.slotY, 10, 90);
-      const rawSlotY = isH ? ag.slotX : 100 - ag.slotX;
+      const rawSlotY = attRight ? ag.slotX : 100 - ag.slotX;
       const widthScale = cfg.wid === 2 ? 1.16 : cfg.wid === 0 ? 0.82 : 1;
       const widenedY = clamp(50 + (rawSlotY - 50) * widthScale, 5, 95);
 
       // Shift team longitudinally with ball + tactical line + possession
-      const ballXNorm = isH ? b.x : 100 - b.x;
+      const ballXNorm = attRight ? b.x : 100 - b.x;
       const lineOffset = cfg.line === 2 ? 6.5 : cfg.line === 0 ? -6.5 : 0;
       const possBoost = inPoss ? 7.5 : -6.5;
       const zoneFactor = ag.pos === 'DF' ? 0.42 : ag.pos === 'MF' ? 0.62 : 0.72;
       let tx = homeBaseX + (ballXNorm - 50) * zoneFactor + cfg.pushShift * 0.55 + lineOffset + possBoost;
-      if (!isH) tx = 100 - tx;
+      if (!attRight) tx = 100 - tx;
 
       // Shift horizontally toward ball flank (zonal compactness)
       const flankPull = inPoss ? 0.14 : 0.26;
@@ -11943,7 +12636,6 @@ const MatchModal: React.FC<{
 
       if (b.carrierId === ag.id) {
         ag.intent = 'CARRY';
-        // Carrier advances slightly toward goal / inside
         tx = clamp(ag.x + dir * 4, 6, 94);
         ty = clamp(ag.y + (50 - ag.y) * 0.08, 7, 93);
       } else if (b.targetId === ag.id) {
@@ -11952,54 +12644,50 @@ const MatchModal: React.FC<{
         ty = clamp(b.toY, 5, 95);
       } else if (inPoss) {
         const oppDefLine = isH ? aDefLineX : hDefLineX;
-        const attProgress = isH ? b.x : 100 - b.x;
+        const attProgress = attRight ? b.x : 100 - b.x;
+        const sigRunBoost = ag.sig === 'run' || ag.sig === 'spd' ? 2.5 : 0;
 
         // ROLE-DISTINCT OFF-BALL INTELLIGENCE ("ทำทาง")
-        if (ag.role === 'ST') {
-          // ST pins opponent's last defender and darts across the 6-yard/penalty box
+        if (ag.role === 'ST' || (ag.sig === 'run' && ag.pos === 'FW')) {
           const shoulderX = oppDefLine - dir * 1.2;
-          const runLead = attProgress > 52 ? dir * 7.5 : dir * 2.5;
-          tx = clamp(isH ? Math.max(tx, shoulderX + runLead) : Math.min(tx, shoulderX + runLead), 8, 92);
+          const runLead = attProgress > 52 ? dir * (7.5 + sigRunBoost) : dir * (2.5 + sigRunBoost * 0.5);
+          tx = clamp(attRight ? Math.max(tx, shoulderX + runLead) : Math.min(tx, shoulderX + runLead), 8, 92);
           ty = clamp(50 + Math.sin(w.minuteFloat * 1.3 + ag.slotIndex) * 14, 30, 70);
-          if (attProgress > 48 && carrier && carrier.side === ag.side) {
+          if (attProgress > 46 && carrier && carrier.side === ag.side) {
             ag.intent = 'MAKE_RUN';
             ag.runToX = clamp(tx + dir * 8, 6, 94);
             ag.runToY = clamp(ty + (50 - ty) * 0.25, 32, 68);
           }
         } else if (ag.role === 'CF') {
-          // CF (False 9) drops deeper into pocket toward carrier to link play and pull CBs out!
           const pocketX = carrier ? carrier.x + dir * 13 : oppDefLine - dir * 11;
-          tx = clamp(isH ? Math.min(oppDefLine - 5, pocketX) : Math.max(oppDefLine + 5, pocketX), 14, 86);
+          tx = clamp(attRight ? Math.min(oppDefLine - 5, pocketX) : Math.max(oppDefLine + 5, pocketX), 14, 86);
           ty = clamp(b.y + (50 - b.y) * 0.45, 28, 72);
           ag.intent = 'SUPPORT';
-        } else if (ag.role === 'SS') {
-          // SS (Shadow Striker) floats in half-space pocket, then makes explosive third-man sprint!
+        } else if (ag.role === 'SS' || (ag.sig === 'run' && ag.pos === 'MF')) {
           const halfSpaceY = b.y < 50 ? 60 : 40;
-          const surge = attProgress > 46;
+          const surge = attProgress > 45;
           if (surge) {
-            tx = clamp(oppDefLine + dir * 5.5, 8, 92);
+            tx = clamp(oppDefLine + dir * (5.5 + sigRunBoost), 8, 92);
             ty = clamp(halfSpaceY + (50 - halfSpaceY) * 0.2, 26, 74);
             ag.intent = 'MAKE_RUN';
             ag.runToX = clamp(tx + dir * 8, 7, 93);
             ag.runToY = clamp(50 + (ty - 50) * 0.5, 33, 67);
           } else {
-            tx = clamp((carrier ? carrier.x + dir * 16 : tx), 15, 85);
+            tx = clamp(carrier ? carrier.x + dir * 16 : tx, 15, 85);
             ty = clamp(halfSpaceY, 28, 72);
           }
         } else if (ag.role === 'LW' || ag.role === 'RW' || ag.role === 'LM' || ag.role === 'RM') {
           const isLeftWing = ag.role === 'LW' || ag.role === 'LM';
-          const sideY = isH ? (isLeftWing ? 13 : 87) : isLeftWing ? 87 : 13;
+          const sideY = attRight ? (isLeftWing ? 13 : 87) : isLeftWing ? 87 : 13;
           const ballOnSameFlank = Math.abs(b.y - sideY) < 28;
-          if (attProgress > 55 && !ballOnSameFlank) {
-            // Far-side winger cuts diagonally inside toward far post!
-            tx = clamp(oppDefLine + dir * 3, 9, 91);
-            ty = clamp(isH ? (isLeftWing ? 36 : 64) : isLeftWing ? 64 : 36, 26, 74);
+          if (attProgress > 54 && !ballOnSameFlank) {
+            tx = clamp(oppDefLine + dir * (3 + sigRunBoost), 9, 91);
+            ty = clamp(attRight ? (isLeftWing ? 36 : 64) : isLeftWing ? 64 : 36, 26, 74);
             ag.intent = 'MAKE_RUN';
             ag.runToX = clamp(tx + dir * 7, 7, 93);
             ag.runToY = ty;
-          } else if (attProgress > 50) {
-            // Ball-side winger pushes toward byline for cross or cutback
-            tx = clamp(tx + dir * 10, 8, 93);
+          } else if (attProgress > 49) {
+            tx = clamp(tx + dir * (10 + sigRunBoost), 8, 93);
             ty = clamp(sideY, 6, 94);
             ag.intent = 'MAKE_RUN';
             ag.runToX = clamp(tx + dir * 6, 7, 93);
@@ -12007,18 +12695,16 @@ const MatchModal: React.FC<{
           }
         } else if (ag.role === 'LB' || ag.role === 'RB' || ag.role === 'LWB' || ag.role === 'RWB') {
           const isLeftFb = ag.role === 'LB' || ag.role === 'LWB';
-          const fbY = isH ? (isLeftFb ? 10 : 90) : isLeftFb ? 90 : 10;
+          const fbY = attRight ? (isLeftFb ? 10 : 90) : isLeftFb ? 90 : 10;
           const ballOnMySide = Math.abs(b.y - fbY) < 34;
-          if (attProgress > 46 && ballOnMySide && (cfg.tac === 'A' || cfg.tac === 'X' || ag.role === 'LWB' || ag.role === 'RWB' || attMids.length > 0)) {
-            // Wingback overlapping run outside the winger!
-            tx = clamp(b.x + dir * 14, 10, 90);
+          if (attProgress > 46 && ballOnMySide && (cfg.tac === 'A' || cfg.tac === 'X' || ag.role === 'LWB' || ag.role === 'RWB' || ag.sig === 'spd' || ag.sig === 'crs' || attMids.length > 0)) {
+            tx = clamp(b.x + dir * (14 + sigRunBoost), 10, 90);
             ty = clamp(fbY, 5, 95);
             ag.intent = 'OVERLAP';
             ag.runToX = clamp(tx + dir * 9, 8, 92);
             ag.runToY = ty;
           }
         } else if (attMids.some((m) => m.id === ag.id) && carrier) {
-          // Passing triangle support around the ball carrier
           const idxM = attMids.findIndex((m) => m.id === ag.id);
           const angleOffset = idxM === 0 ? 0.65 : -0.75;
           const triDist = cfg.pass === 0 ? 12 : 16;
@@ -12028,13 +12714,12 @@ const MatchModal: React.FC<{
         }
       } else {
         // OUT OF POSSESSION: Pressing, Covering, & Zonal Marking
-        const pressReach = cfg.press === 2 ? 1.0 : cfg.press === 1 ? 0.72 : 0.42;
+        const pressReach = (cfg.press === 2 ? 1.0 : cfg.press === 1 ? 0.72 : 0.42) + (ag.sig === 'mrk' ? 0.2 : 0);
         if (ag.id === primaryPresserId) {
           ag.intent = 'PRESS';
           tx = clamp(b.x - dir * 1.5, 5, 95);
           ty = clamp(b.y, 6, 94);
           if (pressReach < 0.6) {
-            // Low press: jockey between ball and own goal instead of lunging
             tx = clamp(b.x + dir * 6, 7, 93);
           }
         } else if (ag.id === secondaryCoverId) {
@@ -12042,8 +12727,9 @@ const MatchModal: React.FC<{
           tx = clamp(b.x + dir * 9, 7, 93);
           ty = clamp(b.y + (50 - b.y) * 0.25, 10, 90);
         } else if (ag.pos === 'DF') {
-          // Hold coherent defensive line and track nearest forward
-          const targetDefX = isH ? clamp(Math.min(b.x - 10, 34 + (cfg.line - 1) * 7), 8, 46) : clamp(Math.max(b.x + 10, 66 - (cfg.line - 1) * 7), 54, 92);
+          const targetDefX = attRight
+            ? clamp(Math.min(b.x - 10, 34 + (cfg.line - 1) * 7), 8, 46)
+            : clamp(Math.max(b.x + 10, 66 - (cfg.line - 1) * 7), 54, 92);
           tx = clamp(tx * 0.35 + targetDefX * 0.65, 8, 92);
         }
       }
@@ -12073,18 +12759,17 @@ const MatchModal: React.FC<{
     const active = w.agents.filter((a) => !a.sentOff);
     const getTeamPool = (side: 'H' | 'A') => active.filter((a) => a.side === side);
 
-    // 1. Pending Set Piece Execution (Kickoff, Free Kick, Corner, Offside Restart, Goal Kick)
+    // 1. Pending Set Piece Execution (Kickoff, Free Kick, Corner, Offside Restart, Goal Kick, Penalty)
     if (w.pendingSetPiece) {
       const sp = w.pendingSetPiece;
       if (sp.waitSec > 0) return;
       w.pendingSetPiece = null;
       const attPool = getTeamPool(sp.side);
       const defSide = sp.side === 'H' ? 'A' : 'H';
-      const defPool = getTeamPool(defSide);
-      const dir = sp.side === 'H' ? 1 : -1;
+      const attRight = isAttackRight(w, sp.side);
+      const dir = attRight ? 1 : -1;
       const attTeam = sp.side === 'H' ? homeOrig : awayOrig;
       const attCfg = getEffectiveTeamCfg(sp.side, curMin);
-      const defCfg = getEffectiveTeamCfg(defSide, curMin);
 
       if (sp.type === 'kickoff') {
         const kicker = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.pos === 'MF') || attPool[0];
@@ -12101,8 +12786,9 @@ const MatchModal: React.FC<{
           b.curve = 0;
           b.maxZ = 0;
           b.progress = 0;
-          b.duration = 0.42;
+          b.duration = 0.44;
           b.flightType = 'pass';
+          b.shotStyle = undefined;
           b.carrierId = null;
           b.targetId = midTarget.id;
           b.lastPasserId = kicker.id;
@@ -12115,8 +12801,9 @@ const MatchModal: React.FC<{
 
       if (sp.type === 'goalkick' || sp.type === 'offside') {
         const kicker = sp.type === 'goalkick' ? attPool.find((a) => a.pos === 'GK') || attPool[0] : attPool.find((a) => a.pos === 'DF') || attPool[0];
+        const longDistBias = attCfg.pass >= 2 || kicker?.sig === 'dist';
         const receiver =
-          attCfg.pass >= 2
+          longDistBias
             ? attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.pos === 'MF')
             : attPool.find((a) => (a.pos === 'DF' || a.pos === 'MF') && a.id !== kicker?.id);
         if (kicker && receiver) {
@@ -12124,16 +12811,22 @@ const MatchModal: React.FC<{
           b.fromY = sp.y;
           b.toX = receiver.x;
           b.toY = receiver.y;
-          b.curve = (Math.random() - 0.5) * 3;
-          b.maxZ = attCfg.pass >= 2 ? 12 : 4;
+          b.curve = (Math.random() - 0.5) * 3.5;
+          b.maxZ = longDistBias ? 16 : 4;
           b.progress = 0;
-          b.duration = attCfg.pass >= 2 ? 0.72 : 0.48;
-          b.flightType = 'goalkick';
+          b.duration = longDistBias ? 0.78 : 0.48;
+          b.flightType = longDistBias ? 'lofted' : 'goalkick';
+          b.shotStyle = undefined;
           b.carrierId = null;
           b.targetId = receiver.id;
           b.lastPasserId = kicker.id;
           b.possessionSide = sp.side;
-          w.phaseLabel = sp.type === 'offside' ? `⚽ เตะฟรีคิกล้ำหน้า (${attTeam.name})` : `🥅 เปิดเกมจากประตู (${attTeam.name})`;
+          w.phaseLabel =
+            sp.type === 'offside'
+              ? `⚽ เตะฟรีคิกล้ำหน้า (${attTeam.name})`
+              : kicker.sig === 'dist'
+                ? `🚀 ${kicker.shortName} [จุดเด่น: จ่ายแนวหลัง] เปิดบอลโด่งสวนกลับ!`
+                : `🥅 เปิดเกมจากประตู (${attTeam.name})`;
           w.phaseTone = 'normal';
           SFX.kick();
         }
@@ -12141,59 +12834,64 @@ const MatchModal: React.FC<{
       }
 
       if (sp.type === 'freekick') {
-        const distToGoal = Math.hypot((sp.side === 'H' ? 100 : 0) - sp.x, 50 - sp.y);
+        const goalX = attRight ? 100 : 0;
+        const distToGoal = Math.hypot(goalX - sp.x, 50 - sp.y);
         const taker =
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => v.d.cur + v.d.pw - (u.d.cur + u.d.pw))[0] || attPool[0];
+            .sort((u, v) => (v.d.cur + v.d.pw + (v.sig === 'cur' ? 12 : 0)) - (u.d.cur + u.d.pw + (u.sig === 'cur' ? 12 : 0)))[0] || attPool[0];
         if (!taker) return;
         taker.x = clamp(sp.x - dir * 1.5, 4, 96);
         taker.y = sp.y;
-        const canShootDirect = distToGoal < 35;
+        const canShootDirect = distToGoal < 36;
         if (canShootDirect) {
-          const targetGoalX = sp.side === 'H' ? 99.5 : 0.5;
-          const targetGoalY = 44 + Math.random() * 12;
+          const targetGoalX = attRight ? 99.5 : 0.5;
+          const targetGoalY = 43.2 + Math.random() * 13.6;
+          const isCurlerFk = taker.sig === 'cur' || taker.d.cur >= taker.d.pw;
           b.fromX = sp.x;
           b.fromY = sp.y;
           b.toX = targetGoalX;
           b.toY = targetGoalY;
-          b.curve = (sp.y < 50 ? 1 : -1) * (6 + Math.random() * 5);
-          b.maxZ = 10.5;
+          b.curve = (sp.y < 50 ? 1 : -1) * ((isCurlerFk ? 7.5 : 4.5) + Math.random() * 5);
+          b.maxZ = isCurlerFk ? 11.2 : 8.5;
           b.progress = 0;
-          b.duration = 0.85;
+          b.duration = 0.88;
           b.flightType = 'freekick';
+          b.shotStyle = isCurlerFk ? 'curler' : 'screamer';
           b.carrierId = null;
           b.targetId = null;
           b.shooterId = taker.id;
           b.lastPasserId = null;
           b.possessionSide = sp.side;
-          w.phaseLabel = `🎯 ${taker.shortName} ปั่นฟรีคิก!`;
+          w.phaseLabel = isCurlerFk
+            ? `🎯 ${taker.shortName}${taker.sig === 'cur' ? ' [ยิงโค้ง]' : ''} ปั่นฟรีคิกโค้งข้ามกำแพง!`
+            : `🎯 ${taker.shortName} ตะบันฟรีคิกเต็มข้อ!`;
           w.phaseTone = 'danger';
-          triggerDramaSlow(w, 1.0, `🎯 ฟรีคิกลุ้นประตู · ${taker.shortName}`);
+          triggerDramaSlow(w, 1.15, `🎯 ฟรีคิกลุ้นประตู · ${taker.shortName}`);
           SFX.kick();
-          pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) วิ่งเข้ามาปั่นฟรีคิกข้ามกำแพง!`);
+          pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) วิ่งเข้ามา${isCurlerFk ? 'ปั่นฟรีคิกโค้งๆ' : 'ซัดฟรีคิก'}ข้ามกำแพง!`);
         } else {
-          // Whipped set-piece delivery into the box
           const boxTarget =
-            attPool.filter((a) => a.pos === 'FW' || a.role === 'CB').sort((u, v) => v.d.hd - u.d.hd)[0] ||
+            attPool.filter((a) => a.pos === 'FW' || a.role === 'CB').sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 12 : 0)) - (u.d.hd + (u.sig === 'hd' ? 12 : 0)))[0] ||
             attPool[1] ||
             taker;
-          const destX = clamp(sp.side === 'H' ? 88 + Math.random() * 6 : 6 + Math.random() * 6, 6, 94);
+          const destX = clamp(attRight ? 88 + Math.random() * 6 : 6 + Math.random() * 6, 6, 94);
           const destY = clamp(38 + Math.random() * 24, 30, 70);
           b.fromX = sp.x;
           b.fromY = sp.y;
           b.toX = destX;
           b.toY = destY;
-          b.curve = (sp.y < 50 ? 1 : -1) * 7;
-          b.maxZ = 13;
+          b.curve = (sp.y < 50 ? 1 : -1) * 7.5;
+          b.maxZ = 16.5;
           b.progress = 0;
-          b.duration = 0.72;
+          b.duration = 0.76;
           b.flightType = 'cross';
+          b.shotStyle = undefined;
           b.carrierId = null;
           b.targetId = boxTarget.id;
           b.lastPasserId = taker.id;
           b.possessionSide = sp.side;
-          w.phaseLabel = `⚠️ ${taker.shortName} เปิดฟรีคิกเข้ากรอบเขตโทษ`;
+          w.phaseLabel = `⚠️ ${taker.shortName} เปิดบอลโด่งเข้ากรอบเขตโทษ`;
           w.phaseTone = 'setpiece';
           SFX.kick();
         }
@@ -12204,63 +12902,67 @@ const MatchModal: React.FC<{
         const taker =
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => v.d.crs + v.d.cur - (u.d.crs + u.d.cur))[0] || attPool[0];
+            .sort((u, v) => (v.d.crs + v.d.cur + (v.sig === 'crs' ? 12 : 0)) - (u.d.crs + u.d.cur + (u.sig === 'crs' ? 12 : 0)))[0] || attPool[0];
         const headerTarget =
           attPool
             .filter((a) => a.id !== taker?.id && a.pos !== 'GK')
-            .sort((u, v) => v.d.hd + v.d.str - (u.d.hd + u.d.str))[0] || attPool[1];
+            .sort((u, v) => (v.d.hd + v.d.str + (v.sig === 'hd' ? 14 : 0)) - (u.d.hd + u.d.str + (u.sig === 'hd' ? 14 : 0)))[0] || attPool[1];
         if (taker && headerTarget) {
           taker.x = sp.x;
           taker.y = sp.y;
-          const destX = sp.side === 'H' ? 91.5 + Math.random() * 3.5 : 5 + Math.random() * 3.5;
-          const destY = 41 + Math.random() * 18;
+          const destX = attRight ? 91.5 + Math.random() * 3.5 : 5 + Math.random() * 3.5;
+          const destY = 40 + Math.random() * 20;
           b.fromX = sp.x;
           b.fromY = sp.y;
           b.toX = destX;
           b.toY = destY;
-          b.curve = (sp.y < 50 ? 1 : -1) * 7.5;
-          b.maxZ = 13.5;
+          b.curve = (sp.y < 50 ? 1 : -1) * (taker.sig === 'cur' || taker.sig === 'crs' ? 9.5 : 7.5);
+          b.maxZ = 16;
           b.progress = 0;
-          b.duration = 0.72;
+          b.duration = 0.78;
           b.flightType = 'corner';
+          b.shotStyle = undefined;
           b.carrierId = null;
           b.targetId = headerTarget.id;
           b.lastPasserId = taker.id;
           b.possessionSide = sp.side;
-          w.phaseLabel = `🚩 ${taker.shortName} เปิดเตะมุมเข้ากลาง`;
+          w.phaseLabel = `🚩 ${taker.shortName}${taker.sig === 'crs' ? ' [เปิดบอลแม่น]' : ''} โยนเตะมุมโค้งเข้ากลาง!`;
           w.phaseTone = 'setpiece';
           SFX.kick();
         }
         return;
       }
+
       if (sp.type === 'penalty') {
         const taker =
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.fin + (v.d.comp || 60)) - (u.d.fin + (u.d.comp || 60)))[0] || attPool[0];
+            .sort((u, v) => (v.d.fin + (v.d.comp || 60) + (v.sig === 'comp' || v.sig === 'fin' ? 10 : 0)) - (u.d.fin + (u.d.comp || 60) + (u.sig === 'comp' || u.sig === 'fin' ? 10 : 0)))[0] || attPool[0];
         if (!taker) return;
-        const spotX = sp.side === 'H' ? 88.5 : 11.5;
+        const spotX = attRight ? 88.5 : 11.5;
+        const isPanenka = (taker.sig === 'comp' || (taker.d.comp || 60) >= 74) && Math.random() < 0.18;
         taker.x = spotX - dir * 1.8;
         taker.y = 50;
         b.fromX = spotX;
         b.fromY = 50;
-        b.toX = sp.side === 'H' ? 99.6 : 0.4;
-        b.toY = 43.2 + Math.random() * 13.6;
-        b.curve = (Math.random() - 0.5) * 2;
-        b.maxZ = 4.2;
+        b.toX = attRight ? 99.6 : 0.4;
+        b.toY = isPanenka ? 50 + (Math.random() - 0.5) * 3 : 43.0 + Math.random() * 14.0;
+        b.curve = isPanenka ? 0 : (Math.random() - 0.5) * 2.2;
+        b.maxZ = isPanenka ? 8.8 : 4.4;
         b.progress = 0;
-        b.duration = 0.68;
+        b.duration = isPanenka ? 0.84 : 0.72;
         b.flightType = 'penalty';
+        b.shotStyle = isPanenka ? 'panenka' : 'normal';
         b.carrierId = null;
         b.targetId = null;
         b.shooterId = taker.id;
         b.lastPasserId = null;
         b.possessionSide = sp.side;
-        w.phaseLabel = `🎯 ${taker.shortName} สังหารจุดโทษ!`;
+        w.phaseLabel = isPanenka ? `🪶 ${taker.shortName} ชิพปาเนนก้าจุดโทษ!!` : `🎯 ${taker.shortName} สังหารจุดโทษ!`;
         w.phaseTone = 'danger';
-        triggerDramaSlow(w, 1.2, `🎯 ดวลจุดโทษ · ${taker.shortName}`);
+        triggerDramaSlow(w, 1.35, `🎯 ดวลจุดโทษ · ${taker.shortName}`);
         SFX.kick();
-        pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) รับหน้าที่สังหารจุดโทษ!`);
+        pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) รับหน้าที่สังหารจุดโทษ${isPanenka ? ' — วางเท้าเหนือชั้น!' : '!'}`);
         return;
       }
     }
@@ -12273,24 +12975,97 @@ const MatchModal: React.FC<{
     let carrier = (b.carrierId ? attPool.find((a) => a.id === b.carrierId) : null) || attPool.find((a) => a.pos !== 'GK') || attPool[0];
     if (!carrier) return;
 
+    const attRight = isAttackRight(w, side);
     const attTeam = side === 'H' ? homeOrig : awayOrig;
     const defTeam = defSide === 'H' ? homeOrig : awayOrig;
     const attCfg = getEffectiveTeamCfg(side, curMin);
     const defCfg = getEffectiveTeamCfg(defSide, curMin);
-    const dir = side === 'H' ? 1 : -1;
-    const distToGoal = Math.hypot((side === 'H' ? 100 : 0) - carrier.x, 50 - carrier.y);
+    const dir = attRight ? 1 : -1;
+    const goalX = attRight ? 100 : 0;
+    const distToGoal = Math.hypot(goalX - carrier.x, 50 - carrier.y);
 
-    // Check pressing duel / tackle / foul when defender is close!
+    // Check pressing duel / skill move / tackle / foul when defender is close!
     const nearestDef = defPool
       .filter((d) => d.pos !== 'GK')
       .sort((u, v) => Math.hypot(u.x - carrier.x, u.y - carrier.y) - Math.hypot(v.x - carrier.x, v.y - carrier.y))[0];
     const nearestDefDist = nearestDef ? Math.hypot(nearestDef.x - carrier.x, nearestDef.y - carrier.y) : 99;
 
-    if (nearestDef && nearestDefDist < (defCfg.press === 2 ? 8.5 : 6.2) && carrier.pos !== 'GK') {
+    const inBoxNow = (attRight ? carrier.x >= 83.5 : carrier.x <= 16.5) && Math.abs(carrier.y - 50) <= 21.5;
+    const onBoxEdgeNow = !inBoxNow && (attRight ? carrier.x >= 80.5 : carrier.x <= 19.5) && Math.abs(carrier.y - 50) <= 23;
+
+    // 2a. Signature Skill Move / Flair Dribble to beat the presser!
+    const dribbleSkill = (carrier.d.spd * 0.42 + carrier.d.run * 0.34 + carrier.d.cur * 0.24) +
+      (carrier.sig === 'spd' || carrier.sig === 'cur' || carrier.sig === 'str' || carrier.sig === 'run' ? 8 : 0);
+    if (nearestDef && nearestDefDist < 9.5 && carrier.pos !== 'GK') {
+      const skillProb = clamp(
+        0.16 + (dribbleSkill - (nearestDef.d.rd * 0.5 + nearestDef.d.pos * 0.5)) * 0.0045 + (inBoxNow ? 0.08 : 0) + (carrier.sig === 'spd' || carrier.sig === 'cur' ? 0.07 : 0),
+        0.1,
+        0.42
+      );
+      if (Math.random() < skillProb) {
+        const isBurst = carrier.sig === 'spd' || (carrier.d.spd >= 72 && Math.random() < 0.35);
+        const isShield = carrier.sig === 'str';
+        const isNutmeg = nearestDefDist < 5.2 && Math.random() < 0.32;
+        const skillLabel = isBurst
+          ? `⚡ ${carrier.shortName} กระชากสปีดหนี`
+          : isShield
+            ? `💪 ${carrier.shortName} บังบอลพลิกหนี`
+            : isNutmeg
+              ? `🔥 ${carrier.shortName} ลอดขา!`
+              : carrier.d.cur >= 66 || carrier.sig === 'cur'
+                ? `🪄 ${carrier.shortName} สับขาหลอก!`
+                : `🌀 ${carrier.shortName} หมุนตัว 360°`;
+
+        carrier.acrobatType = 'skill';
+        carrier.acrobatTimer = 0.65;
+        carrier.skillSpinDir = Math.random() < 0.5 ? 1 : -1;
+        nearestDef.intent = 'MARK';
+        nearestDef.intentTimer = 0.65;
+
+        const advX = clamp(carrier.x + dir * (isBurst ? 9.5 : 6.5), 6, 94);
+        const advY = clamp(carrier.y + (50 - carrier.y) * 0.25 + (Math.random() - 0.5) * 10, 7, 93);
+        carrier.tx = advX;
+        carrier.ty = advY;
+        b.fromX = carrier.x;
+        b.fromY = carrier.y;
+        b.toX = advX;
+        b.toY = advY;
+        b.curve = 0;
+        b.maxZ = 0;
+        b.progress = 0;
+        b.duration = 0.42;
+        b.flightType = 'carry';
+        b.shotStyle = undefined;
+        b.carrierId = carrier.id;
+        b.targetId = null;
+        addWorldFx(w, {
+          type: 'skill',
+          x: carrier.x,
+          y: carrier.y,
+          label: skillLabel,
+          color: '#c084fc',
+          ttl: 1.9,
+          maxTtl: 1.9
+        });
+        w.phaseLabel = `${skillLabel}${carrier.sig === 'spd' || carrier.sig === 'str' || carrier.sig === 'cur' ? ` [จุดเด่น: ${SIGL[carrier.sig]}]` : ''}`;
+        w.phaseTone = 'attack';
+        if (inBoxNow || carrier.isMe || Math.random() < 0.34) {
+          pushLog(curMin, `🪄 โชว์ทักษะ! ${skillLabel} (${attTeam.name}) ฉีกหนี ${nearestDef.shortName} ได้สำเร็จ!`);
+        }
+        return;
+      }
+    }
+
+    if (nearestDef && nearestDefDist < (defCfg.press === 2 ? 9.0 : inBoxNow ? 8.2 : 6.8) && carrier.pos !== 'GK') {
       const foulProb = clamp(
-        0.065 + (defCfg.press === 2 ? 0.04 : 0) + (nearestDef.tr === 1 ? 0.045 : 0) + (isDerby ? 0.025 : 0) - (nearestDef.d.pos - 60) * 0.001,
-        0.04,
-        0.2
+        0.075 +
+          (defCfg.press === 2 ? 0.04 : 0) +
+          (nearestDef.tr === 1 ? 0.045 : 0) +
+          (isDerby ? 0.025 : 0) +
+          (inBoxNow ? 0.065 : 0) -
+          ((nearestDef.sig === 'pos' ? nearestDef.d.pos + 8 : nearestDef.d.pos) - 60) * 0.001,
+        0.045,
+        0.26
       );
       if (Math.random() < foulProb && curMin >= 2) {
         // FOUL + FREE KICK OR PENALTY (+ VAR Check)!
@@ -12298,22 +13073,20 @@ const MatchModal: React.FC<{
         else w.foulsA++;
         SFX.foul();
 
-        const inBox = (side === 'H' ? carrier.x >= 83.5 : carrier.x <= 16.5) && Math.abs(carrier.y - 50) <= 21.5;
-        const onBoxEdge = !inBox && (side === 'H' ? carrier.x >= 80.5 : carrier.x <= 19.5) && Math.abs(carrier.y - 50) <= 23;
-        const shouldVarPen = (inBox && Math.random() < 0.42) || (onBoxEdge && Math.random() < 0.35);
+        const shouldVarPen = (inBoxNow && Math.random() < 0.38) || (onBoxEdgeNow && Math.random() < 0.36);
         const isHardFoul = nearestDef.tr === 1 || distToGoal < 30 || Math.random() < 0.25;
-        const shouldVarFoulCard = !shouldVarPen && w.varChecks < 2 && isHardFoul && Math.random() < 0.26;
+        const shouldVarFoulCard = !shouldVarPen && w.varChecks < 2 && isHardFoul && Math.random() < 0.24;
 
         if (shouldVarPen && w.varChecks < 2) {
           w.varChecks++;
-          const spotX = side === 'H' ? 88.5 : 11.5;
-          const overturn = inBox ? Math.random() < 0.24 : Math.random() < 0.48;
+          const spotX = attRight ? 88.5 : 11.5;
+          const overturn = inBoxNow ? Math.random() < 0.22 : Math.random() < 0.45;
           const willAwardPen = !overturn;
           w.varReview = {
             kind: 'penalty',
             side,
-            waitSec: 3.5,
-            totalSec: 3.5,
+            waitSec: 3.4,
+            totalSec: 3.4,
             x: willAwardPen ? spotX : carrier.x,
             y: willAwardPen ? 50 : carrier.y,
             culpritId: nearestDef.id,
@@ -12329,14 +13102,15 @@ const MatchModal: React.FC<{
             y: carrier.y,
             label: '📺 VAR เช็กจุดโทษ!',
             color: '#38bdf8',
-            ttl: 3.5,
-            maxTtl: 3.5
+            ttl: 3.4,
+            maxTtl: 3.4
           });
-          triggerDramaSlow(w, 3.5, '📺 VAR เช็กจุดโทษ');
+          triggerDramaSlow(w, 3.4, '📺 VAR เช็กจุดโทษ');
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
+          b.shotStyle = undefined;
           w.phaseLabel = `📺 VAR กำลังเช็กจังหวะฟาวล์ในเขตโทษ!`;
           w.phaseTone = 'setpiece';
           pushLog(curMin, `📺 ผู้ตัดสินขอเช็ก VAR จังหวะ ${nearestDef.id} (${defTeam.name}) สกัดใส่ ${carrier.id} ในกรอบเขตโทษ!`, 'sys');
@@ -12349,8 +13123,8 @@ const MatchModal: React.FC<{
           w.varReview = {
             kind: 'foul_card',
             side,
-            waitSec: 3.4,
-            totalSec: 3.4,
+            waitSec: 3.3,
+            totalSec: 3.3,
             x: carrier.x,
             y: carrier.y,
             culpritId: nearestDef.id,
@@ -12367,21 +13141,22 @@ const MatchModal: React.FC<{
             y: carrier.y,
             label: '📺 VAR เช็กฟาวล์/ใบแดง!',
             color: '#f59e0b',
-            ttl: 3.4,
-            maxTtl: 3.4
+            ttl: 3.3,
+            maxTtl: 3.3
           });
-          triggerDramaSlow(w, 3.4, '📺 VAR เช็กใบแดง');
+          triggerDramaSlow(w, 3.3, '📺 VAR เช็กใบแดง');
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
+          b.shotStyle = undefined;
           w.phaseLabel = `📺 VAR กำลังเช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName}!`;
           w.phaseTone = 'danger';
           pushLog(curMin, `📺 ผู้ตัดสินเดินไปดูจอ VAR เช็กจังหวะฟาวล์อันตรายของ ${nearestDef.id} (${defTeam.name})!`, 'sys');
           return;
         }
 
-        const cardChance = clamp(0.16 + (nearestDef.tr === 1 ? 0.16 : 0) + (distToGoal < 30 ? 0.12 : 0) + (isDerby ? 0.06 : 0), 0.12, 0.48);
+        const cardChance = clamp(0.18 + (nearestDef.tr === 1 ? 0.16 : 0) + (distToGoal < 30 ? 0.12 : 0) + (isDerby ? 0.06 : 0), 0.14, 0.5);
         let cardLbl = '⚠️ ฟาวล์!';
         let cardCol = '#f59e0b';
         let cardRes: 'Y' | 'R' | null = null;
@@ -12392,14 +13167,13 @@ const MatchModal: React.FC<{
           cardCol = r === 'Y' ? '#facc15' : '#ef4444';
         }
 
-        if (inBox) {
-          // Direct Penalty Kick!
-          const spotX = side === 'H' ? 88.5 : 11.5;
+        if (inBoxNow) {
+          const spotX = attRight ? 88.5 : 11.5;
           addWorldFx(w, {
             type: 'penalty',
             x: spotX,
             y: 50,
-            label: `⚠️ จุดโทษ! (${attTeam.name})`,
+            label: `🚨 จุดโทษ! (${attTeam.name})`,
             color: '#ef4444',
             ttl: 2.8,
             maxTtl: 2.8
@@ -12409,10 +13183,11 @@ const MatchModal: React.FC<{
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
+          b.shotStyle = undefined;
           w.pendingSetPiece = { type: 'penalty', side, x: spotX, y: 50, waitSec: 1.9 };
-          w.phaseLabel = `🚨 จุดโทษ!! ${attTeam.name} ได้ลูกโทษที่จุด 11 เมตร!`;
+          w.phaseLabel = `🚨 จุดโทษ!! ${carrier.shortName} ถูกทำฟาวล์ในเขตโทษ!`;
           w.phaseTone = 'danger';
-          pushLog(curMin, `🚨 จุดโทษ!! ${nearestDef.id} ทำฟาวล์ ${carrier.id} ในเขตโทษ · ${attTeam.name} ได้ยิงจุดโทษ!`, 'card');
+          pushLog(curMin, `🚨 จุดโทษ!! ${nearestDef.id} ทำฟาวล์ใส่ ${carrier.id} ในกรอบเขตโทษ · ${attTeam.name} ได้จุดโทษ!`, 'card');
           return;
         }
 
@@ -12422,12 +13197,10 @@ const MatchModal: React.FC<{
           pushLog(curMin, `⚠️ ${nearestDef.id} (${defTeam.name}) ทำฟาวล์ใส่ ${carrier.id} · ${attTeam.name} ได้ฟรีคิก`);
         }
 
-        // Build defensive wall if in shooting/dangerous range
         const wallCount = distToGoal < 36 ? 3 : 0;
         const wallPlayers: { x: number; y: number }[] = [];
         if (wallCount > 0) {
-          const gX = side === 'H' ? 100 : 0;
-          const ang = Math.atan2(50 - carrier.y, gX - carrier.x);
+          const ang = Math.atan2(50 - carrier.y, goalX - carrier.x);
           const wx = clamp(carrier.x + Math.cos(ang) * 9.5, 5, 95);
           const wy = clamp(carrier.y + Math.sin(ang) * 9.5, 10, 90);
           for (let k = 0; k < wallCount; k++) {
@@ -12452,6 +13225,7 @@ const MatchModal: React.FC<{
         b.targetId = null;
         b.progress = 1;
         b.flightType = 'carry';
+        b.shotStyle = undefined;
         w.pendingSetPiece = {
           type: 'freekick',
           side,
@@ -12465,14 +13239,15 @@ const MatchModal: React.FC<{
         return;
       }
 
-      // Clean tackle / interception check
+      // Clean tackle / interception check (safe dribble calc without missing .dr)
+      const carrierDribble = carrier.d.spd * 0.55 + carrier.d.run * 0.45 + (carrier.sig === 'str' || carrier.sig === 'spd' ? 6 : 0);
+      const defTackleEdge = (nearestDef.sig === 'mrk' || nearestDef.sig === 'pos' ? 8 : 0) + (nearestDef.d.rd + nearestDef.d.pos);
       const tackleProb = clamp(
-        0.16 + (nearestDef.d.rd + nearestDef.d.pos - carrier.d.dr - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
-        0.09,
-        0.34
+        0.15 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
+        0.08,
+        0.33
       );
       if (Math.random() < tackleProb) {
-        // Dispossessed cleanly! Flip possession
         b.possessionSide = defSide;
         b.carrierId = nearestDef.id;
         b.lastPasserId = null;
@@ -12485,30 +13260,34 @@ const MatchModal: React.FC<{
         b.toY = nearestDef.y;
         b.progress = 1;
         b.flightType = 'carry';
-        w.phaseLabel = `🛡️ ${nearestDef.shortName} แย่งบอลสำเร็จ!`;
+        b.shotStyle = undefined;
+        w.phaseLabel = `🛡️ ${nearestDef.shortName}${nearestDef.sig === 'rd' || nearestDef.sig === 'mrk' ? ` [${SIGL[nearestDef.sig]}]` : ''} แย่งบอลสำเร็จ!`;
         w.phaseTone = 'normal';
         SFX.pass();
-        // Immediate counter-attack vertical pass if pass===3
         side = defSide;
         attPool = getTeamPool(side);
         defPool = getTeamPool(side === 'H' ? 'A' : 'H');
         carrier = nearestDef;
-        if (getEffectiveTeamCfg(side, curMin).pass === 3 && Math.random() < 0.7) {
+        if ((getEffectiveTeamCfg(side, curMin).pass === 3 || carrier.sig === 'dist') && Math.random() < 0.72) {
           const counterTarget = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.role === 'SS' || a.role === 'CAM');
           if (counterTarget) {
+            const cAttRight = isAttackRight(w, side);
+            const cDir = cAttRight ? 1 : -1;
+            const cDist = Math.hypot(counterTarget.x - carrier.x, counterTarget.y - carrier.y);
             b.fromX = carrier.x;
             b.fromY = carrier.y;
-            b.toX = clamp(counterTarget.x + (side === 'H' ? 6 : -6), 8, 92);
+            b.toX = clamp(counterTarget.x + cDir * 6, 8, 92);
             b.toY = counterTarget.y;
-            b.curve = (Math.random() - 0.5) * 4;
-            b.maxZ = 7;
+            b.curve = (Math.random() - 0.5) * 4.5;
+            b.maxZ = cDist > 22 ? 15 : 8;
             b.progress = 0;
-            b.duration = 0.52;
-            b.flightType = 'through';
+            b.duration = cDist > 22 ? 0.68 : 0.54;
+            b.flightType = cDist > 22 ? 'lofted' : 'through';
+            b.shotStyle = undefined;
             b.carrierId = null;
             b.targetId = counterTarget.id;
             b.lastPasserId = carrier.id;
-            w.phaseLabel = `⚡ ${defTeam.name} สวนกลับเร็ว!`;
+            w.phaseLabel = cDist > 22 ? `🚀 ${carrier.shortName} เปิดบอลโด่งสวนกลับเร็ว!` : `⚡ ${defTeam.name} สวนกลับเร็ว!`;
             w.phaseTone = 'attack';
             SFX.kick();
             return;
@@ -12517,56 +13296,90 @@ const MatchModal: React.FC<{
       }
     }
 
-    // 3. Should Carrier Shoot?
-    const inShootZone = distToGoal < 26 || (distToGoal < 33 && (carrier.d.pw > 68 || attCfg.tac === 'X'));
+    // 3. Should Carrier Shoot? (Diverse Shot Variety + Signature Finishing/Power/Curl)
+    const inShootZone = distToGoal < 27 || (distToGoal < 35 && (carrier.d.pw > 68 || carrier.sig === 'pw' || attCfg.tac === 'X'));
     const shootChance = inShootZone
-      ? clamp(0.28 + (32 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0), 0.25, 0.72)
+      ? clamp(0.28 + (33 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.08 : 0), 0.25, 0.75)
       : 0;
     if (carrier.pos !== 'GK' && Math.random() < shootChance) {
-      const targetGoalX = side === 'H' ? 99.6 : 0.4;
-      const targetGoalY = 42.5 + Math.random() * 15;
+      const targetGoalX = attRight ? 99.6 : 0.4;
+      const targetGoalY = 42.6 + Math.random() * 14.8;
+      let shotStyle: LiveBallState['shotStyle'] = 'normal';
+      let shotLabel = `🔥 ${carrier.shortName} ซัดเต็มข้อ!`;
+      let curveAmt = (carrier.d.cur > 65 ? 1 : 0.4) * (carrier.y < 50 ? 1 : -1) * (3 + Math.random() * 4);
+      let maxZAmt = 6 + Math.random() * 3.5;
+      let durAmt = clamp(distToGoal / 36, 0.54, 0.82);
+
+      if (distToGoal < 14.5 && (carrier.sig === 'fin' || carrier.sig === 'comp' || carrier.d.fin >= 68) && Math.random() < 0.26) {
+        shotStyle = 'chip';
+        curveAmt = 0;
+        maxZAmt = 10.2;
+        durAmt = 0.74;
+        shotLabel = `🪶 ${carrier.shortName} ชิพข้ามหัวอย่างเหนือชั้น!`;
+      } else if (carrier.sig === 'cur' || (carrier.d.cur >= carrier.d.pw && Math.random() < 0.55)) {
+        shotStyle = 'curler';
+        curveAmt = (carrier.y < 50 ? 1 : -1) * (6.2 + Math.random() * 4.8);
+        maxZAmt = 7.2;
+        shotLabel = `🌀 ${carrier.shortName}${carrier.sig === 'cur' ? ' [ยิงโค้ง]' : ''} ปั่นโค้งๆ เสียบเสา!`;
+      } else if (distToGoal >= 21 && (carrier.sig === 'pw' || carrier.d.pw >= 68)) {
+        shotStyle = 'screamer';
+        curveAmt = (Math.random() - 0.5) * 2.2;
+        maxZAmt = 4.6;
+        durAmt = 0.50;
+        shotLabel = `💥 ${carrier.shortName}${carrier.sig === 'pw' ? ' [พลังยิง]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
+      } else if (inBoxNow && Math.random() < 0.24) {
+        shotStyle = 'volley';
+        carrier.acrobatType = 'volley';
+        carrier.acrobatTimer = 0.58;
+        maxZAmt = 4.2;
+        durAmt = 0.48;
+        shotLabel = `⚡ ${carrier.shortName} ฮาล์ฟวอลเลย์กลางอากาศ!`;
+      }
+
       b.fromX = carrier.x;
       b.fromY = carrier.y;
       b.toX = targetGoalX;
       b.toY = targetGoalY;
-      b.curve = (carrier.d.cur > 65 ? 1 : 0.4) * (carrier.y < 50 ? 1 : -1) * (3 + Math.random() * 4);
-      b.maxZ = 6 + Math.random() * 4;
+      b.curve = curveAmt;
+      b.maxZ = maxZAmt;
       b.progress = 0;
-      b.duration = clamp(distToGoal / 38, 0.52, 0.78);
+      b.duration = durAmt;
       b.flightType = 'shot';
+      b.shotStyle = shotStyle;
       b.carrierId = null;
       b.targetId = null;
       b.shooterId = carrier.id;
-      w.phaseLabel = `🔥 ${carrier.shortName} ซัดด้วย${carrier.d.cur > carrier.d.pw + 4 ? 'ลูกปั่นโค้ง' : 'เต็มข้อ'}!`;
+      w.phaseLabel = shotLabel;
       w.phaseTone = 'danger';
-      triggerDramaSlow(w, 0.95, `🔥 จังหวะยิง · ${carrier.shortName}`);
+      triggerDramaSlow(w, 1.05, shotLabel);
       SFX.kick();
       return;
     }
 
-    // 4. Wing Cross?
-    const inWingZone = (carrier.y < 23 || carrier.y > 77) && (side === 'H' ? carrier.x > 64 : carrier.x < 36);
-    if (inWingZone && Math.random() < 0.62) {
+    // 4. Wing Cross (or Lofted Diagonal Box Delivery)?
+    const inWingZone = (carrier.y < 24 || carrier.y > 76) && (attRight ? carrier.x > 62 : carrier.x < 38);
+    if (inWingZone && Math.random() < (carrier.sig === 'crs' ? 0.74 : 0.62)) {
       const boxRunners = attPool
         .filter((a) => a.id !== carrier.id && (a.pos === 'FW' || a.role === 'CAM' || a.role === 'CM'))
-        .sort((u, v) => (side === 'H' ? v.x - u.x : u.x - v.x) + (v.d.hd + v.d.run) * 0.15);
+        .sort((u, v) => (attRight ? v.x - u.x : u.x - v.x) + (v.d.hd + v.d.run + (v.sig === 'hd' ? 10 : 0)) * 0.15);
       const target = boxRunners[0];
       if (target) {
-        const boxX = clamp(side === 'H' ? 86 + Math.random() * 7 : 7 + Math.random() * 7, 6, 94);
+        const boxX = clamp(attRight ? 86 + Math.random() * 7 : 7 + Math.random() * 7, 6, 94);
         const boxY = clamp(39 + Math.random() * 22, 32, 68);
         b.fromX = carrier.x;
         b.fromY = carrier.y;
         b.toX = boxX;
         b.toY = boxY;
-        b.curve = (carrier.y < 50 ? 1 : -1) * 7.5;
-        b.maxZ = 14.5;
+        b.curve = (carrier.y < 50 ? 1 : -1) * (carrier.sig === 'crs' || carrier.sig === 'cur' ? 8.8 : 7.5);
+        b.maxZ = 16.5;
         b.progress = 0;
-        b.duration = 0.62;
+        b.duration = 0.68;
         b.flightType = 'cross';
+        b.shotStyle = undefined;
         b.carrierId = null;
         b.targetId = target.id;
         b.lastPasserId = carrier.id;
-        w.phaseLabel = `🪽 ${carrier.shortName} เปิดครอสเข้ากรอบ!`;
+        w.phaseLabel = `🪽 ${carrier.shortName}${carrier.sig === 'crs' ? ' [เปิดบอล]' : ''} เปิดบอลโด่งเข้ากรอบ!`;
         w.phaseTone = 'attack';
         SFX.kick();
         return;
@@ -12576,25 +13389,25 @@ const MatchModal: React.FC<{
     // 5. Through-Ball onto an Off-Ball Run ("ทำทาง") with Real Offside Check!
     const forwardRunners = attPool
       .filter((a) => a.id !== carrier.id && (a.role === 'ST' || a.role === 'SS' || a.role === 'LW' || a.role === 'RW' || a.intent === 'MAKE_RUN' || a.intent === 'OVERLAP'))
-      .filter((a) => (side === 'H' ? a.x > carrier.x - 4 : a.x < carrier.x + 4));
+      .filter((a) => (attRight ? a.x > carrier.x - 4 : a.x < carrier.x + 4));
 
     const throughWeight = attCfg.pass === 3 ? 0.42 : attCfg.pass === 2 ? 0.34 : attCfg.pass === 1 ? 0.28 : 0.2;
-    if (forwardRunners.length && (side === 'H' ? carrier.x > 36 : carrier.x < 64) && Math.random() < throughWeight) {
+    if (forwardRunners.length && (attRight ? carrier.x > 36 : carrier.x < 64) && Math.random() < throughWeight) {
       const runner =
-        forwardRunners.sort((u, v) => v.d.run + v.d.spd - (u.d.run + u.d.spd))[0] || P(forwardRunners);
-      const defs = defPool.map((a) => a.x).sort((u, v) => (side === 'H' ? v - u : u - v));
-      const oppLineX = defs[1] ?? (side === 'H' ? 80 : 20);
+        forwardRunners.sort((u, v) => (v.d.run + v.d.spd + (v.sig === 'run' ? 12 : 0)) - (u.d.run + u.d.spd + (u.sig === 'run' ? 12 : 0)))[0] || P(forwardRunners);
+      const defs = defPool.map((a) => a.x).sort((u, v) => (attRight ? v - u : u - v));
+      const oppLineX = defs[1] ?? (attRight ? 80 : 20);
 
-      // Real offside check! (High def line catches runners more often; high `run` attr beats the trap)
-      const isAheadOfLine = side === 'H' ? runner.x > oppLineX + 0.6 : runner.x < oppLineX - 0.6;
+      const isAheadOfLine = attRight ? runner.x > oppLineX + 0.6 : runner.x < oppLineX - 0.6;
       const trapEdge = defCfg.line === 2 ? 0.24 : defCfg.line === 1 ? 0.14 : 0.07;
-      const offsideChance = isAheadOfLine ? 0.62 : clamp(trapEdge - (runner.d.run - 60) * 0.004, 0.03, 0.26);
+      const offsideChance = isAheadOfLine
+        ? runner.sig === 'run' ? 0.45 : 0.62
+        : clamp(trapEdge - ((runner.sig === 'run' ? runner.d.run + 8 : runner.d.run) - 60) * 0.004, 0.025, 0.25);
 
-      if (Math.random() < offsideChance && (side === 'H' ? oppLineX > 52 : oppLineX < 48)) {
-        // Caught OFFSIDE!
+      if (Math.random() < offsideChance && (attRight ? oppLineX > 52 : oppLineX < 48)) {
         if (side === 'H') w.offsidesH++;
         else w.offsidesA++;
-        const flagX = side === 'H' ? Math.max(runner.x, oppLineX + 1.5) : Math.min(runner.x, oppLineX - 1.5);
+        const flagX = attRight ? Math.max(runner.x, oppLineX + 1.5) : Math.min(runner.x, oppLineX - 1.5);
         b.fromX = carrier.x;
         b.fromY = carrier.y;
         b.toX = clamp(flagX, 6, 94);
@@ -12602,8 +13415,9 @@ const MatchModal: React.FC<{
         b.curve = (Math.random() - 0.5) * 3;
         b.maxZ = 4.5;
         b.progress = 0;
-        b.duration = 0.44;
+        b.duration = 0.46;
         b.flightType = 'through';
+        b.shotStyle = undefined;
         b.carrierId = null;
         b.targetId = runner.id;
         b.lastPasserId = carrier.id;
@@ -12631,25 +13445,28 @@ const MatchModal: React.FC<{
         return;
       }
 
-      // Clean killer through-ball!
       const leadX = clamp(runner.x + dir * (9 + Math.random() * 6), 7, 93);
       const leadY = clamp(runner.y + (50 - runner.y) * 0.25, 10, 90);
       runner.tx = leadX;
       runner.ty = leadY;
       runner.intent = 'PASS_TARGET';
+      const isLoftedThrough = Math.hypot(leadX - carrier.x, leadY - carrier.y) > 25 && (carrier.sig === 'dist' || Math.random() < 0.45);
       b.fromX = carrier.x;
       b.fromY = carrier.y;
       b.toX = leadX;
       b.toY = leadY;
-      b.curve = (Math.random() - 0.5) * 4;
-      b.maxZ = 3.5;
+      b.curve = (Math.random() - 0.5) * 4.5;
+      b.maxZ = isLoftedThrough ? 14.5 : 3.5;
       b.progress = 0;
-      b.duration = 0.46;
-      b.flightType = 'through';
+      b.duration = isLoftedThrough ? 0.64 : 0.48;
+      b.flightType = isLoftedThrough ? 'lofted' : 'through';
+      b.shotStyle = undefined;
       b.carrierId = null;
       b.targetId = runner.id;
       b.lastPasserId = carrier.id;
-      w.phaseLabel = `👟 ${carrier.shortName} แทงทะลุช่องให้ ${runner.shortName}!`;
+      w.phaseLabel = isLoftedThrough
+        ? `↗️ ${carrier.shortName} ตักบอลโด่งข้ามไลน์ให้ ${runner.shortName}!`
+        : `👟 ${carrier.shortName} แทงทะลุช่องให้ ${runner.shortName}${runner.sig === 'run' ? ' [วิ่งหาช่อง]' : ''}!`;
       w.phaseTone = 'attack';
       SFX.pass();
       return;
@@ -12669,39 +13486,35 @@ const MatchModal: React.FC<{
       b.curve = 0;
       b.maxZ = 0;
       b.progress = 0;
-      b.duration = attCfg.tempo === 2 ? 0.36 : attCfg.tempo === 0 ? 0.56 : 0.45;
+      b.duration = attCfg.tempo === 2 ? 0.38 : attCfg.tempo === 0 ? 0.58 : 0.48;
       b.flightType = 'carry';
+      b.shotStyle = undefined;
       b.carrierId = carrier.id;
       b.targetId = null;
       w.phaseLabel = `⚡ ${carrier.shortName} พาบอลลุยขึ้นหน้า`;
-      w.phaseTone = side === 'H' ? (carrier.x > 65 ? 'attack' : 'normal') : carrier.x < 35 ? 'attack' : 'normal';
+      w.phaseTone = attRight ? (carrier.x > 65 ? 'attack' : 'normal') : carrier.x < 35 ? 'attack' : 'normal';
       return;
     }
 
-    // 7. Ground Pass / Triangle / Switch of Play
-    const passCandidates = attPool.filter((a) => a.id !== carrier.id && (a.pos !== 'GK' || (side === 'H' ? carrier.x < 32 : carrier.x > 68)));
+    // 7. Ground Pass / Triangle / Lofted Diagonal Switch
+    const passCandidates = attPool.filter((a) => a.id !== carrier.id && (a.pos !== 'GK' || (attRight ? carrier.x < 32 : carrier.x > 68)));
     if (passCandidates.length) {
       const scored = passCandidates.map((cand) => {
         const dist = Math.hypot(cand.x - carrier.x, cand.y - carrier.y);
         const prog = (cand.x - carrier.x) * dir;
         let wgt = 10;
         if (attCfg.pass === 0) {
-          // Tiki-taka short triangles
           wgt += dist < 24 ? 26 : -dist * 0.5;
           if (cand.role === 'CF' || cand.role === 'CM' || cand.role === 'CAM') wgt += 10;
-        } else if (attCfg.pass === 2) {
-          // Direct / wing switch
-          wgt += prog > 12 ? 22 : 0;
-          if (Math.abs(cand.y - carrier.y) > 25) wgt += 12;
+        } else if (attCfg.pass === 2 || carrier.sig === 'dist') {
+          wgt += prog > 12 ? 24 : 0;
+          if (Math.abs(cand.y - carrier.y) > 25) wgt += 14;
         } else if (attCfg.pass === 3) {
-          // Counter forward
           wgt += prog > 8 ? 25 : -10;
         } else {
-          // Mixed
           wgt += prog > 0 ? 14 : 4;
           wgt -= Math.abs(dist - 20) * 0.4;
         }
-        // Check if defender is right in the lane
         const blocked = defPool.some((d) => Math.hypot(d.x - cand.x, d.y - cand.y) < 4.5);
         if (blocked) wgt -= 12;
         return { cand, wgt: Math.max(1, wgt) };
@@ -12709,24 +13522,26 @@ const MatchModal: React.FC<{
       const pool = scored.flatMap((s) => Array(Math.round(s.wgt)).fill(s.cand));
       const receiver = P(pool) || passCandidates[0];
       const dist = Math.hypot(receiver.x - carrier.x, receiver.y - carrier.y);
+      const isLofted = dist > 26 || ((carrier.sig === 'dist' || carrier.sig === 'crs') && dist > 21 && Math.random() < 0.65);
       b.fromX = carrier.x;
       b.fromY = carrier.y;
       b.toX = clamp(receiver.x + dir * 2, 5, 95);
       b.toY = receiver.y;
-      b.curve = dist > 26 ? (Math.random() - 0.5) * 5 : 0;
-      b.maxZ = dist > 28 ? 8 : 0;
+      b.curve = isLofted ? (Math.random() - 0.5) * 6 : dist > 22 ? (Math.random() - 0.5) * 3.5 : 0;
+      b.maxZ = isLofted ? clamp(13.5 + dist * 0.14, 14, 19.5) : 0;
       b.progress = 0;
-      b.duration = clamp(dist / (attCfg.tempo === 2 ? 78 : 58), 0.28, 0.58);
-      b.flightType = 'pass';
+      b.duration = isLofted ? clamp(dist / 42, 0.56, 0.85) : clamp(dist / (attCfg.tempo === 2 ? 72 : 54), 0.30, 0.60);
+      b.flightType = isLofted ? 'lofted' : 'pass';
+      b.shotStyle = undefined;
       b.carrierId = null;
       b.targetId = receiver.id;
       b.lastPasserId = carrier.id;
-      w.phaseLabel =
-        dist > 28
-          ? `↗️ ${carrier.shortName} วางบอลเปลี่ยนแกนให้ ${receiver.shortName}`
-          : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
-      w.phaseTone = 'normal';
-      SFX.pass();
+      w.phaseLabel = isLofted
+        ? `↗️ ${carrier.shortName}${carrier.sig === 'dist' ? ' [จ่ายแนวหลัง]' : ''} เปิดบอลโด่งเปลี่ยนแกนให้ ${receiver.shortName}`
+        : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
+      w.phaseTone = isLofted ? 'attack' : 'normal';
+      if (isLofted) SFX.kick();
+      else SFX.pass();
     }
   };
 
@@ -12747,12 +13562,12 @@ const MatchModal: React.FC<{
     if (side === 'H') {
       sr.gh++;
       setGh(sr.gh);
-      w.goalNetRippleH = 1.0;
     } else {
       sr.ga++;
       setGa(sr.ga);
-      w.goalNetRippleA = 1.0;
     }
+    if (goalX > 50) w.goalNetRippleRight = 1.0;
+    else w.goalNetRippleLeft = 1.0;
     const newEv: MatchEvent = { m: curMin, t: attTeam.id, who: scorerName, as: assisterName };
     sr.evs.push(newEv);
     setEvs(sr.evs.slice());
@@ -12843,7 +13658,7 @@ const MatchModal: React.FC<{
         SFX.foul();
         if (vr.side === 'H') w.offsidesH++;
         else w.offsidesA++;
-        const offX = vr.side === 'H' ? 84 : 16;
+        const offX = isAttackRight(w, vr.side) ? 84 : 16;
         addWorldFx(w, {
           type: 'offside',
           x: offX,
@@ -12896,7 +13711,7 @@ const MatchModal: React.FC<{
       const wallCount = dGoal < 36 ? 3 : 0;
       const wallPlayers: { x: number; y: number }[] = [];
       if (wallCount > 0) {
-        const gX = vr.side === 'H' ? 100 : 0;
+        const gX = isAttackRight(w, vr.side) ? 100 : 0;
         const ang = Math.atan2(50 - vr.y, gX - vr.x);
         const wx = clamp(vr.x + Math.cos(ang) * 9.5, 5, 95);
         const wy = clamp(vr.y + Math.sin(ang) * 9.5, 10, 90);
@@ -12962,11 +13777,12 @@ const MatchModal: React.FC<{
 
     // Penalty VAR Check (+ Card Verdict!)
     const culprit = vr.culpritId ? w.agents.find((a) => a.id === vr.culpritId && !a.sentOff) : undefined;
+    const penRightVar = isAttackRight(w, vr.side);
     if (vr.overturn) {
       SFX.pass();
       if (vr.side === 'H') w.freeKicksH++;
       else w.freeKicksA++;
-      const edgeX = vr.side === 'H' ? 80.5 : 19.5;
+      const edgeX = penRightVar ? 80.5 : 19.5;
       let fkCardTxt = '';
       if (culprit && Math.random() < 0.45 && simRef.current.cards.length < 7) {
         const res = issueCard(culprit, curMin, 0, 'Y');
@@ -12988,7 +13804,7 @@ const MatchModal: React.FC<{
       pushLog(curMin, `📺 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys');
     } else {
       SFX.foul();
-      const spotX = vr.side === 'H' ? 88.5 : 11.5;
+      const spotX = penRightVar ? 88.5 : 11.5;
       let penCardTxt = '';
       if (culprit && simRef.current.cards.length < 7) {
         const roll = Math.random();
@@ -13043,12 +13859,11 @@ const MatchModal: React.FC<{
         if (sh.turn === 'H') {
           sh.hKicks.push('G');
           sh.hScore++;
-          w.goalNetRippleH = 1.0;
         } else {
           sh.aKicks.push('G');
           sh.aScore++;
-          w.goalNetRippleH = 1.0;
         }
+        w.goalNetRippleRight = 1.0;
         SFX.goal();
         sh.lastMsg = `⚽ ${kicker?.shortName || sh.kickerName} ยิงเข้า! (${sh.hScore}-${sh.aScore})`;
         addWorldFx(w, { type: 'goal', x: 99, y: b.toY, label: `⚽ เข้า! ${kicker?.shortName || ''}`, color: '#22c55e', ttl: 2.2, maxTtl: 2.2 });
@@ -13107,17 +13922,19 @@ const MatchModal: React.FC<{
       const gk = defPool.find((a) => a.pos === 'GK') || defPool[0];
       const defenders = defPool.filter((a) => a.pos === 'DF' || a.pos === 'MF');
       const dist = Math.hypot(b.fromX - b.toX, b.fromY - b.toY);
+      const attRightNow = isAttackRight(w, side);
+      const defRightNow = isAttackRight(w, defSide);
 
       // Defender block / Free-kick wall deflection check (skip for Penalty Kick!)
       if (b.flightType !== 'penalty') {
         const wallDef = b.flightType === 'freekick' ? defenders.find((d) => d.intent === 'WALL') || defenders[0] : undefined;
         const nearDef =
           wallDef ||
-          defenders.find((d) => Math.hypot(d.x - (b.fromX + b.toX) * 0.5, d.y - (b.fromY + b.toY) * 0.5) < 9);
+          defenders.find((d) => Math.hypot(d.x - (b.fromX + b.toX) * 0.5, d.y - (b.fromY + b.toY) * 0.5) < (d.sig === 'blk' ? 11.5 : 9));
         const blockChance = nearDef
           ? b.flightType === 'freekick'
             ? clamp(0.24 - ((shooter?.d.cur || 60) - 60) * 0.0025, 0.12, 0.3)
-            : clamp(0.11 + (nearDef.d.blk - 60) * 0.004, 0.06, 0.25)
+            : clamp(0.11 + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) - 60) * 0.004, 0.06, 0.28)
           : 0;
         if (nearDef && Math.random() < blockChance) {
           if (defSide === 'H') w.blocksH++;
@@ -13128,7 +13945,7 @@ const MatchModal: React.FC<{
             type: 'block',
             x: nearDef.x,
             y: nearDef.y,
-            label: b.flightType === 'freekick' ? `🧱 ติดกำแพง (${nearDef.shortName})` : `🛡️ ${nearDef.shortName} บล็อก!`,
+            label: b.flightType === 'freekick' ? `🧱 ติดกำแพง (${nearDef.shortName})` : `🛡️ ${nearDef.shortName}${nearDef.sig === 'blk' ? ' [บล็อกเด่น]' : ''} บล็อก!`,
             color: '#60a5fa',
             ttl: 2.0,
             maxTtl: 2.0
@@ -13141,19 +13958,21 @@ const MatchModal: React.FC<{
                 : `🛡️ ${nearDef.id} พุ่งสไลด์บล็อกลูกยิงของ ${shooter?.id || 'คู่แข่ง'} ได้ทัน!`
             );
           }
-          if (Math.random() < 0.45) {
+          if (Math.random() < 0.48) {
             if (side === 'H') w.cornersH++;
             else w.cornersA++;
             const cy = b.y < 50 ? 2 : 98;
-            const cx = side === 'H' ? 98.5 : 1.5;
+            const cx = attRightNow ? 98.5 : 1.5;
             b.carrierId = null;
-            w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.0 };
+            b.shotStyle = undefined;
+            w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.05 };
             w.phaseLabel = `🚩 บอลแฉลบออกหลัง · ${attTeam.name} ได้เตะมุม!`;
             w.phaseTone = 'setpiece';
           } else {
             b.possessionSide = defSide;
             b.carrierId = nearDef.id;
             b.flightType = 'carry';
+            b.shotStyle = undefined;
             w.phaseLabel = `🛡️ ${nearDef.shortName} บล็อกและเก็บบอลได้`;
             w.phaseTone = 'normal';
           }
@@ -13165,7 +13984,7 @@ const MatchModal: React.FC<{
       const shotXg =
         b.flightType === 'penalty'
           ? 0.78
-          : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002, 0.04, 0.42);
+          : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002 + (b.shotStyle === 'bicycle' || b.shotStyle === 'volley' ? 0.04 : 0), 0.04, 0.45);
       if (side === 'H') {
         w.shotsH++;
         w.xgH = Math.round((w.xgH + shotXg) * 100) / 100;
@@ -13174,12 +13993,13 @@ const MatchModal: React.FC<{
         w.xgA = Math.round((w.xgA + shotXg) * 100) / 100;
       }
 
-      // Animate GK diving!
+      // Sync final GK dive animation toward ball destination
       if (gk) {
         gk.intent = 'DIVE';
-        gk.intentTimer = 0.95;
+        gk.intentTimer = Math.max(gk.intentTimer || 0, 0.75);
         gk.diveDir = b.toY >= gk.y ? 1 : -1;
-        gk.diveProgress = 0.01;
+        gk.diveTargetY = b.toY;
+        if (gk.diveProgress <= 0) gk.diveProgress = 0.05;
       }
 
       // Off-target / Woodwork / On-target resolution
@@ -13187,10 +14007,11 @@ const MatchModal: React.FC<{
       const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
       const edge = side === 'H' ? (hR.at - aR.df) : (aR.at - hR.df);
 
+      const sigFinBoost = shooter?.sig === 'fin' ? 0.06 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.05 : 0;
       const accuracy =
         b.flightType === 'penalty'
-          ? 0.91
-          : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 - Math.max(0, dist - 22) * 0.008, 0.25, 0.68);
+          ? b.shotStyle === 'panenka' ? 0.89 : 0.92
+          : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.72);
       if (Math.random() > accuracy) {
         adjustLiveForm(shooter?.id, -0.12);
         const hitWoodwork = Math.random() < (b.flightType === 'penalty' ? 0.35 : 0.16);
@@ -13212,10 +14033,11 @@ const MatchModal: React.FC<{
         w.pendingSetPiece = {
           type: 'goalkick',
           side: defSide,
-          x: defSide === 'H' ? 5.5 : 94.5,
+          x: defRightNow ? 5.5 : 94.5,
           y: 50,
           waitSec: hitWoodwork || b.flightType === 'penalty' ? 1.45 : 0.75
         };
+        b.shotStyle = undefined;
         w.phaseLabel = hitWoodwork ? `🧱 ชนเสา/คานอย่างจัง! หวุดหวิดเป็นประตู` : `😮 ยิงหลุดกรอบ · ตั้งเตะจากประตู`;
         w.phaseTone = hitWoodwork ? 'danger' : 'normal';
         return;
@@ -13225,8 +14047,12 @@ const MatchModal: React.FC<{
       if (side === 'H') w.onTargetH++;
       else w.onTargetA++;
 
-      const gkSaveScore = gk ? gk.d.sv * 0.55 + gk.d.cl * 0.45 : 58;
-      const shooterScore = shooter ? shooter.d.fin * 0.5 + shooter.d.cur * 0.25 + shooter.d.pw * 0.25 : 60;
+      const gkSaveScore = gk ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.56 + (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.44 : 58;
+      const shooterScore = shooter
+        ? (shooter.d.fin + (shooter.sig === 'fin' ? 8 : 0)) * 0.5 +
+          (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
+          (shooter.d.pw + (shooter.sig === 'pw' ? 8 : 0)) * 0.25
+        : 60;
       const goalProb =
         b.flightType === 'penalty'
           ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.004, 0.65, 0.9)
@@ -13239,24 +14065,34 @@ const MatchModal: React.FC<{
           b.flightType !== 'penalty' && b.lastPasserId && b.lastPasserId !== scorerName && Math.random() < 0.85 ? b.lastPasserId : '';
         const finishVerb =
           b.flightType === 'penalty'
-            ? 'สังหารจุดโทษไม่พลาดเป้า!'
+            ? b.shotStyle === 'panenka'
+              ? 'ชิพจุดโทษปาเนนก้าสุดเหนือชั้น!'
+              : 'สังหารจุดโทษไม่พลาดเป้า!'
             : b.flightType === 'freekick'
               ? 'ปั่นฟรีคิกเสียบสามเหลี่ยมสุดสวย!'
-              : shooter && shooter.d.cur >= shooter.d.pw + 6
-                ? 'ปั่นโค้งเสียบเสาอย่างเหนือชั้น!'
-                : shooter && shooter.d.pw >= shooter.d.fin + 6
-                  ? 'ซัดเต็มข้อบอลพุ่งเสียบตาข่าย!'
-                  : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
+              : b.shotStyle === 'bicycle'
+                ? 'ตีลังกาโอเวอร์เฮดคิกสุดมหัศจรรย์!!'
+                : b.shotStyle === 'volley'
+                  ? 'ฟาดวอลเลย์กลางอากาศบอลพุ่งเสียบตาข่าย!'
+                  : b.shotStyle === 'header'
+                    ? 'โหม่งเช็ดเสียบเสาอย่างเด็ดขาด!'
+                    : b.shotStyle === 'chip'
+                      ? 'ชิพข้ามหัวนายด่านเข้าประตูอย่างเยือกเย็น!'
+                      : b.shotStyle === 'curler'
+                        ? 'ปั่นโค้งเสียบสามเหลี่ยมอย่างเหนือชั้น!'
+                        : b.shotStyle === 'screamer'
+                          ? 'ตะบันไกลสุดแรงบอลพุ่งเสียบตาข่าย!'
+                          : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
 
-        // Tight-call VAR Goal Check (~16% chance on open-play goals)
-        if (b.flightType === 'shot' && w.varChecks < 2 && Math.random() < 0.16) {
+        // Tight-call VAR Goal Check (~15% chance on open-play goals)
+        if (b.flightType === 'shot' && w.varChecks < 2 && Math.random() < 0.15) {
           w.varChecks++;
           const overturn = Math.random() < 0.34;
           w.varReview = {
             kind: 'goal',
             side,
-            waitSec: 3.6,
-            totalSec: 3.6,
+            waitSec: 3.5,
+            totalSec: 3.5,
             shooterId: scorerName,
             shooterShort: scorerShort,
             assisterName,
@@ -13272,46 +14108,59 @@ const MatchModal: React.FC<{
             y: b.toY,
             label: '📺 VAR เช็กประตู!',
             color: '#38bdf8',
-            ttl: 3.6,
-            maxTtl: 3.6
+            ttl: 3.5,
+            maxTtl: 3.5
           });
-          triggerDramaSlow(w, 3.6, `📺 VAR เช็กประตู · ${scorerShort}`);
+          triggerDramaSlow(w, 3.5, `📺 VAR เช็กประตู · ${scorerShort}`);
+          b.shotStyle = undefined;
           w.phaseLabel = `📺 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
           w.phaseTone = 'setpiece';
           pushLog(curMin, `📺 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`, 'sys');
           return;
         }
 
+        b.shotStyle = undefined;
         awardGoalToTeam(w, side, curMin, scorerName, scorerShort, assisterName, finishVerb, b.toX, b.toY);
       } else {
-        // SUPER SAVE by GK!
+        // ACCURATE & SYNCHRONIZED SUPER SAVE by GK!
         if (defSide === 'H') w.savesH++;
         else w.savesA++;
-        adjustLiveForm(gk?.id, 0.25);
+        adjustLiveForm(gk?.id, 0.26);
         adjustLiveForm(shooter?.id, -0.06);
+        const saveTypeText =
+          b.shotStyle === 'bicycle'
+            ? 'บินปัดลูกตีลังกายิงได้เหลือเชื่อ!'
+            : b.shotStyle === 'curler'
+              ? 'เหินตัวปัดลูกปั่นโค้งปลายมือ!'
+              : b.shotStyle === 'chip'
+                ? 'ถอยหลังกระโดดคว้าลูกชิพไว้ได้!'
+                : b.shotStyle === 'volley' || b.shotStyle === 'screamer'
+                  ? 'ปฏิกิริยาไวปัดลูกยิงสุดแรงพ้นกรอบ!'
+                  : 'พุ่งปัดปลายมือสุดสวย!';
         addWorldFx(w, {
           type: 'save',
-          x: gk?.x ?? (defSide === 'H' ? 4 : 96),
-          y: gk?.y ?? 50,
-          label: `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} เซฟ!`,
+          x: gk?.x ?? (defRightNow ? 4 : 96),
+          y: b.toY,
+          label: `🧤 ${gk?.shortName || 'ผู้รักษาประตู'}${gk?.sig === 'sv' ? ' [เซฟเด่น]' : ''} เซฟ!`,
           color: '#38bdf8',
           ttl: 2.5,
           maxTtl: 2.5
         });
         triggerDramaSlow(w, b.flightType === 'penalty' ? 1.85 : 1.35, `🧤 ซูเปอร์เซฟ! · ${gk?.shortName || 'ผู้รักษาประตู'}`);
-        if (b.flightType === 'penalty' || Math.random() < 0.65) {
+        if (b.flightType === 'penalty' || Math.random() < 0.68) {
           pushLog(
             curMin,
             b.flightType === 'penalty'
-              ? `🧤 ซูเปอร์เซฟ!! ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) พุ่งปัดจุดโทษของ ${shooter?.id || 'คู่แข่ง'} ไว้ได้อย่างเหลือเชื่อ!`
-              : `🧤 ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) พุ่งปัดลูกยิงของ ${shooter?.id || 'คู่แข่ง'} ไว้ได้หวุดหวิด!`
+              ? `🧤 ซูเปอร์เซฟ!! ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) อ่านทางพุ่งปัดจุดโทษของ ${shooter?.id || 'คู่แข่ง'} ไว้ได้!`
+              : `🧤 ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) ${saveTypeText} จากลูกยิงของ ${shooter?.id || 'คู่แข่ง'}`
           );
         }
-        if (Math.random() < 0.45) {
+        b.shotStyle = undefined;
+        if (Math.random() < 0.48) {
           if (side === 'H') w.cornersH++;
           else w.cornersA++;
           const cy = b.toY < 50 ? 2 : 98;
-          const cx = side === 'H' ? 98.5 : 1.5;
+          const cx = attRightNow ? 98.5 : 1.5;
           w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.25 };
           w.phaseLabel = `🧤 ปัดออกหลัง! ${attTeam.name} ได้เตะมุม`;
           w.phaseTone = 'setpiece';
@@ -13319,46 +14168,67 @@ const MatchModal: React.FC<{
           b.possessionSide = defSide;
           b.carrierId = gk?.id || null;
           b.flightType = 'carry';
-          w.phaseLabel = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} รับบอลไว้ได้`;
+          w.phaseLabel = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} ${saveTypeText}`;
           w.phaseTone = 'normal';
         }
       }
       return;
     }
 
-    // 2. Resolve Cross or Corner Delivery in the Box
+    // 2. Resolve Cross or Corner Delivery in the Box (Header / Volley / Bicycle Kick!)
     if (b.flightType === 'cross' || b.flightType === 'corner') {
       const target = active.find((a) => a.id === b.targetId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
       const topDef = defPool
         .filter((d) => d.pos === 'DF' || d.pos === 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
 
-      const attAir = target ? target.d.hd * 0.65 + target.d.run * 0.35 : 58;
-      const defAir = topDef ? (topDef.pos === 'GK' ? topDef.d.cl * 0.7 + topDef.d.sv * 0.3 : topDef.d.hd * 0.6 + topDef.d.pos * 0.4) : 60;
-      const winHeaderProb = clamp(0.45 + (attAir - defAir) * 0.007, 0.24, 0.72);
+      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 12 : 0)) * 0.65 + target.d.run * 0.35 : 58;
+      const defAir = topDef
+        ? topDef.pos === 'GK'
+          ? (topDef.d.cl + (topDef.sig === 'cl' ? 10 : 0)) * 0.7 + topDef.d.sv * 0.3
+          : (topDef.d.hd + (topDef.sig === 'hd' ? 10 : 0)) * 0.6 + topDef.d.pos * 0.4
+        : 60;
+      const winHeaderProb = clamp(0.46 + (attAir - defAir) * 0.007, 0.24, 0.74);
 
       if (target && Math.random() < winHeaderProb) {
-        // Attacker wins the header/volley -> immediate shot!
-        const goalX = side === 'H' ? 99.6 : 0.4;
-        const goalY = 43 + Math.random() * 14;
+        const attRightNow = isAttackRight(w, side);
+        const goalX = attRightNow ? 99.6 : 0.4;
+        const goalY = 42.8 + Math.random() * 14.4;
+        const acroRoll = Math.random();
+        const isBicycle = acroRoll < (target.sig === 'fin' || target.d.fin >= 70 ? 0.24 : 0.16);
+        const isVolley = !isBicycle && acroRoll < 0.48;
+
         b.fromX = b.toX;
         b.fromY = b.toY;
         b.toX = goalX;
         b.toY = goalY;
-        b.curve = 0;
-        b.maxZ = 4.5;
+        b.curve = isVolley || isBicycle ? (Math.random() - 0.5) * 4.5 : 0;
+        b.maxZ = isBicycle ? 6.4 : isVolley ? 4.2 : 4.8;
         b.progress = 0;
-        b.duration = 0.52;
+        b.duration = isVolley ? 0.46 : 0.56;
         b.flightType = 'shot';
+        b.shotStyle = isBicycle ? 'bicycle' : isVolley ? 'volley' : 'header';
         b.carrierId = null;
         b.targetId = null;
         b.shooterId = target.id;
-        w.phaseLabel = `🗣️ ${target.shortName} เทกตัวโหม่งเต็มๆ!`;
+        if (isBicycle) {
+          target.acrobatType = 'bicycle';
+          target.acrobatTimer = 0.75;
+          w.phaseLabel = `🤸 ${target.shortName} ตีลังกายิงกลางอากาศ!!`;
+          triggerDramaSlow(w, 1.35, `🤸 ตีลังกายิง!! · ${target.shortName}`);
+          pushLog(curMin, `🤸 โอ้โห!! ${target.id} (${attTeam.name}) ลอยตัวตีลังกาโอเวอร์เฮดคิกอย่างสุดสวย!`);
+        } else if (isVolley) {
+          target.acrobatType = 'volley';
+          target.acrobatTimer = 0.58;
+          w.phaseLabel = `⚡ ${target.shortName} วอลเลย์ไม่ต้องจับ!`;
+          triggerDramaSlow(w, 1.1, `⚡ วอลเลย์ · ${target.shortName}`);
+        } else {
+          w.phaseLabel = `🗣️ ${target.shortName}${target.sig === 'hd' ? ' [โหม่งเด่น]' : ''} เทกตัวโหม่งเต็มๆ!`;
+          triggerDramaSlow(w, 0.95, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
+        }
         w.phaseTone = 'danger';
-        triggerDramaSlow(w, 0.95, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
         SFX.kick();
       } else if (topDef) {
-        // Defender or GK clears/punches!
         b.possessionSide = defSide;
         b.carrierId = topDef.id;
         b.lastPasserId = null;
@@ -13366,14 +14236,15 @@ const MatchModal: React.FC<{
         b.x = topDef.x;
         b.y = topDef.y;
         b.flightType = 'carry';
-        w.phaseLabel = `🛡️ ${topDef.shortName} โหม่งสกัดบอลพ้นอันตราย`;
+        b.shotStyle = undefined;
+        w.phaseLabel = topDef.pos === 'GK' ? `🧤 ${topDef.shortName} ออกมาชก/คว้าบอลพ้นเขตโทษ` : `🛡️ ${topDef.shortName} โหม่งสกัดบอลพ้นอันตราย`;
         w.phaseTone = 'normal';
       }
       return;
     }
 
-    // 3. Resolve Ground Pass / Through-Ball / Carry
-    if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'goalkick') {
+    // 3. Resolve Ground Pass / Lofted Ball / Through-Ball / Carry
+    if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'lofted' || b.flightType === 'goalkick') {
       if (side === 'H') w.passesH++;
       else w.passesA++;
       const receiver = active.find((a) => a.id === b.targetId);
@@ -13381,11 +14252,16 @@ const MatchModal: React.FC<{
         .filter((d) => d.pos !== 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
 
-      // Interception check if pass was ambitious and defender is tight
       const oppDist = nearestOpp ? Math.hypot(nearestOpp.x - b.toX, nearestOpp.y - b.toY) : 99;
       const interceptProb =
-        oppDist < 6.5
-          ? clamp(0.18 + ((nearestOpp?.d.rd || 60) - 60) * 0.004 + (b.flightType === 'through' ? 0.14 : 0), 0.1, 0.45)
+        oppDist < 6.8
+          ? clamp(
+              0.16 +
+                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 10 : nearestOpp?.d.rd || 60) - 60) * 0.004) +
+                (b.flightType === 'through' ? 0.14 : b.flightType === 'lofted' ? -0.05 : 0),
+              0.07,
+              0.45
+            )
           : 0;
       if (nearestOpp && Math.random() < interceptProb) {
         b.possessionSide = defSide;
@@ -13397,7 +14273,8 @@ const MatchModal: React.FC<{
         b.x = nearestOpp.x;
         b.y = nearestOpp.y;
         b.flightType = 'carry';
-        w.phaseLabel = `🔀 ${nearestOpp.shortName} อ่านทางบอลดักตัดไว้ได้!`;
+        b.shotStyle = undefined;
+        w.phaseLabel = `🔀 ${nearestOpp.shortName}${nearestOpp.sig === 'rd' ? ' [อ่านเกม]' : ''} อ่านทางบอลดักตัดไว้ได้!`;
         w.phaseTone = 'normal';
         SFX.pass();
         return;
@@ -13409,6 +14286,7 @@ const MatchModal: React.FC<{
         b.x = receiver.x;
         b.y = receiver.y;
         b.flightType = 'carry';
+        b.shotStyle = undefined;
       }
     } else if (b.flightType === 'carry') {
       // Carry ended cleanly, keep carrier ready for next decision
@@ -13428,7 +14306,8 @@ const MatchModal: React.FC<{
       const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
       if (!pl) return;
       const D = DT(pl, state.p);
-      const drain = (0.34 - (D.d.sta - 65) * 0.0022) * (pl.pos === 'GK' ? 0.25 : 1);
+      const staBonus = D.sig === 'sta' ? 0.8 : 1;
+      const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
@@ -13495,7 +14374,7 @@ const MatchModal: React.FC<{
       // Sync live pitch agent
       const agIdx = w.agents.findIndex((a) => a.id === outPlayer!.n);
       if (agIdx >= 0) {
-        const rep = buildAgentsForTeam(sideOrig, isHomeSide ? 'H' : 'A', curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
+        const rep = buildAgentsForTeam(sideOrig, isHomeSide ? 'H' : 'A', curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
         if (rep[idx]) {
           rep[idx].x = w.agents[agIdx].x;
           rep[idx].y = w.agents[agIdx].y;
@@ -13564,7 +14443,8 @@ const MatchModal: React.FC<{
       const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
       if (!pl) return;
       const D = DT(pl, state.p);
-      const drain = (0.34 - (D.d.sta - 65) * 0.0022) * (pl.pos === 'GK' ? 0.25 : 1);
+      const staBonus = D.sig === 'sta' ? 0.8 : 1;
+      const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
@@ -13633,10 +14513,11 @@ const MatchModal: React.FC<{
 
       const agIdx = w.agents.findIndex((a) => a.id === outPlayer!.n);
       if (agIdx >= 0) {
-        const rep = buildAgentsForTeam(sideOrig, isHomeSide ? 'H' : 'A', curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
+        const rep = buildAgentsForTeam(sideOrig, isHomeSide ? 'H' : 'A', curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
         if (rep[idx]) {
           rep[idx].x = w.agents[agIdx].x;
           rep[idx].y = w.agents[agIdx].y;
+          rep[idx].facing = w.agents[agIdx].facing;
           w.agents[agIdx] = rep[idx];
         }
       }
@@ -13827,20 +14708,23 @@ const MatchModal: React.FC<{
     if (!w || w.phase !== 'halftime') return;
     SFX.whistle();
     const sr = simRef.current;
-    // Halftime stamina recovery (+5%)
+    w.secondHalf = true;
+    // Halftime stamina recovery (+5%) & switch pitch sides for 2nd half
     w.agents.forEach((ag) => {
       if (!ag.sentOff) {
         ag.fit = clamp(ag.fit + 5, 25, 100);
         sr.liveFit[ag.id] = ag.fit;
       }
-      // Reset to kickoff positions
+      // Reset to mirrored kickoff positions for 2nd half
+      const attR = isAttackRight(w, ag.side);
       const homeBaseX = clamp(100 - ag.slotY, 4.5, 95.5);
-      const baseX = ag.side === 'H' ? homeBaseX : 100 - homeBaseX;
-      const baseY = ag.side === 'H' ? clamp(ag.slotX, 6, 94) : clamp(100 - ag.slotX, 6, 94);
-      ag.x = ag.side === 'H' ? Math.min(baseX, 47) : Math.max(baseX, 53);
+      const baseX = attR ? homeBaseX : 100 - homeBaseX;
+      const baseY = attR ? clamp(ag.slotX, 6, 94) : clamp(100 - ag.slotX, 6, 94);
+      ag.x = attR ? Math.min(baseX, 47) : Math.max(baseX, 53);
       ag.y = baseY;
       ag.tx = ag.x;
       ag.ty = ag.y;
+      ag.facing = attR ? 0 : Math.PI;
     });
     if (state.mode === 'm' && talkTone) {
       if (talkTone === 'attack') {
@@ -13930,7 +14814,7 @@ const MatchModal: React.FC<{
       if (!w) return;
 
       if (!paused && !done && !simRef.current.done && w.phase !== 'halftime') {
-        const speedMul = speed === 4 ? 4.4 : speed === 2 ? 2.15 : 1.0;
+        const speedMul = speed === 4 ? 2.45 : speed === 2 ? 1.25 : speed === 0.5 ? 0.36 : 0.65;
 
         // Decay FX, banners & dramatic slow-mo timers in real time for key moments
         const isSlowShot =
@@ -13961,8 +14845,8 @@ const MatchModal: React.FC<{
           w.cardBanner.ttl -= rawDt;
           if (w.cardBanner.ttl <= 0) w.cardBanner = null;
         }
-        w.goalNetRippleH = Math.max(0, w.goalNetRippleH - rawDt * 0.85);
-        w.goalNetRippleA = Math.max(0, w.goalNetRippleA - rawDt * 0.85);
+        w.goalNetRippleLeft = Math.max(0, w.goalNetRippleLeft - rawDt * 0.85);
+        w.goalNetRippleRight = Math.max(0, w.goalNetRippleRight - rawDt * 0.85);
         w.celebrateTimer = Math.max(0, w.celebrateTimer - rawDt);
         w.dramaSlowSec = Math.max(0, w.dramaSlowSec - rawDt);
         if (w.dramaSlowSec <= 0 && !isSlowShot) {
@@ -14018,7 +14902,7 @@ const MatchModal: React.FC<{
             }
           } else {
             const b = w.ball;
-            b.progress = Math.min(1, b.progress + (rawDt * 0.72) / Math.max(0.24, b.duration));
+            b.progress = Math.min(1, b.progress + (rawDt * 0.58) / Math.max(0.24, b.duration));
             const t = b.progress;
             const omt = 1 - t;
             b.x = omt * omt * b.fromX + 2 * omt * t * ((b.fromX + b.toX) * 0.5) + t * t * b.toX;
@@ -14038,7 +14922,7 @@ const MatchModal: React.FC<{
         }
 
         // Open play & Stoppage clock progression (pause during key slow-mo / VAR / goals / penalties)
-        const minDelta = rawDt * 1.45 * speedMul;
+        const minDelta = rawDt * 0.88 * speedMul;
         const pauseClock =
           Boolean(w.varReview) ||
           w.celebrateTimer > 0 ||
@@ -14065,17 +14949,38 @@ const MatchModal: React.FC<{
         // Update tactical targets
         updateAgentTargets(w, Math.max(1, curIntMin));
 
+        // Synchronized early GK dive during live shots
+        if (isSlowShot && w.ball.progress >= 0.22 && w.ball.progress <= 0.9) {
+          const defSide: 'H' | 'A' = w.ball.possessionSide === 'H' ? 'A' : 'H';
+          const defGk = w.agents.find((a) => !a.sentOff && a.side === defSide && a.pos === 'GK');
+          if (defGk && defGk.intent !== 'DIVE') {
+            defGk.intent = 'DIVE';
+            defGk.intentTimer = 0.88;
+            defGk.diveDir = w.ball.toY >= defGk.y ? 1 : -1;
+            defGk.diveTargetY = w.ball.toY;
+            defGk.diveProgress = 0.02;
+          }
+        }
+
         // Smooth physical player movement + running stride + GK dive (slow-mo dampened during dramatic events)
-        const baseMoveScale = speedMul > 2 ? 2.2 : speedMul > 1.5 ? 1.45 : 1.0;
-        const moveScale = w.dramaSlowSec > 0 || isSlowShot ? 0.58 : baseMoveScale;
+        const baseMoveScale = speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.5 ? 0.48 : 0.74;
+        const moveScale = w.dramaSlowSec > 0 || isSlowShot ? (speedMul < 0.5 ? 0.38 : 0.48) : baseMoveScale;
         w.agents.forEach((ag) => {
           if (ag.sentOff) return;
+          if (ag.acrobatTimer && ag.acrobatTimer > 0) {
+            ag.acrobatTimer = Math.max(0, ag.acrobatTimer - rawDt);
+          }
           if (ag.intent === 'DIVE' && ag.intentTimer > 0) {
             ag.intentTimer -= rawDt;
-            ag.diveProgress = clamp(1 - ag.intentTimer / 0.95, 0, 1);
+            ag.diveProgress = clamp(1 - ag.intentTimer / 0.88, 0, 1);
+            if (ag.diveTargetY != null) {
+              ag.y = clamp(ag.y + (ag.diveTargetY - ag.y) * Math.min(1, rawDt * 5.2), 36, 64);
+              ag.ty = ag.y;
+            }
             if (ag.intentTimer <= 0) {
               ag.intent = 'SUPPORT';
               ag.diveProgress = 0;
+              ag.diveTargetY = undefined;
             }
           }
           const dx = ag.tx - ag.x;
@@ -14123,7 +15028,9 @@ const MatchModal: React.FC<{
             spType === 'offside' ||
             spType === 'corner' ||
             (spType === 'freekick' && (w.pendingSetPiece.wallPlayers?.length || 0) > 0);
-          const spRate = isImportantSetPiece ? (speedMul > 2 ? 1.15 : 1.0) : speedMul > 2 ? 1.55 : 1.0;
+          const spRate = isImportantSetPiece
+            ? speedMul > 2.0 ? 0.95 : speedMul < 0.5 ? 0.65 : 0.85
+            : speedMul > 2.0 ? 1.3 : speedMul < 0.5 ? 0.65 : 0.85;
           w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec - rawDt * spRate);
           w.ball.x = w.pendingSetPiece.x;
           w.ball.y = w.pendingSetPiece.y;
@@ -14134,14 +15041,16 @@ const MatchModal: React.FC<{
         } else {
           const b = w.ball;
           const ballRate = isSlowShot
-            ? 0.62
+            ? speedMul < 0.5 ? 0.34 : 0.44
             : w.dramaSlowSec > 0
-              ? 0.72
-              : speedMul > 2
-                ? 2.05
-                : speedMul > 1.5
-                  ? 1.4
-                  : 1.0;
+              ? speedMul < 0.5 ? 0.38 : 0.5
+              : speedMul > 2.0
+                ? 1.48
+                : speedMul > 1.0
+                  ? 1.02
+                  : speedMul < 0.5
+                    ? 0.48
+                    : 0.72;
           const stepProg = (rawDt * ballRate) / Math.max(0.18, b.duration);
           b.progress = Math.min(1, b.progress + stepProg);
 
@@ -14256,6 +15165,7 @@ const MatchModal: React.FC<{
     }
     const startMin = Math.floor(w.minuteFloat);
     for (let m = startMin + 1; m <= 90; m++) {
+      if (m === 46) w.secondHalf = true;
       stepInstantMinute(m, liveTacticsRef.current.tac);
       if (m === 45) pushLog(45, `⏱️ จบครึ่งแรก: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
     }
@@ -14295,10 +15205,11 @@ const MatchModal: React.FC<{
     // Swap live pitch agent immediately so the sub enters right on the pitch!
     const agIdx = w.agents.findIndex((a) => a.id === subPickOut);
     if (agIdx >= 0) {
-      const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
+      const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
       if (updated[idx]) {
         updated[idx].x = w.agents[agIdx].x;
         updated[idx].y = w.agents[agIdx].y;
+        updated[idx].facing = w.agents[agIdx].facing;
         w.agents[agIdx] = updated[idx];
       }
       if (w.ball.carrierId === subPickOut) w.ball.carrierId = benchPlayer.n;
@@ -14433,14 +15344,14 @@ const MatchModal: React.FC<{
 
   const bannerCls =
     actionBanner.tone === 'goal'
-      ? 'bg-[var(--g)] text-white border-[var(--g)]'
+      ? 'bg-emerald-500 text-white border-emerald-300/80 shadow-sm'
       : actionBanner.tone === 'danger'
-        ? 'bg-[var(--red-soft)] text-[var(--red)] border-[var(--red)]/40'
+        ? 'bg-rose-500/25 text-rose-200 border-rose-400/50'
         : actionBanner.tone === 'offside' || actionBanner.tone === 'setpiece'
-          ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] border-[var(--lamp)]/50'
+          ? 'bg-amber-400/20 text-amber-200 border-amber-400/50'
           : actionBanner.tone === 'attack'
-            ? 'bg-[var(--g-soft)] text-[var(--g)] border-[var(--g)]/40'
-            : 'bg-[var(--surface-2)] text-[var(--ink)] border-[var(--line)]';
+            ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/45'
+            : 'bg-white/10 text-white border-white/20';
 
   const handleConfirmFinish = () => {
     if (!fullTimeAnalysis) return;
@@ -15024,19 +15935,11 @@ const MatchModal: React.FC<{
         <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)]">
           <div className="flex items-center justify-between text-xs mland:text-[9.5px] text-[var(--mut)] mb-1 mland:mb-0.5 gap-2">
             <span className="font-semibold truncate">{compTitle}</span>
-            <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
-              <span className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] sm:text-[11px] mland:text-[9px] font-bold truncate max-w-[160px] sm:max-w-[320px] mland:max-w-[210px] ${bannerCls}`}>
-                {actionBanner.label}
+            {done && (
+              <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px] shrink-0">
+                FT
               </span>
-              {stoppageBadge > 0 && (
-                <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[10px] mland:text-[9px]">
-                  +{stoppageBadge}&apos;
-                </span>
-              )}
-              <span className="px-2.5 mland:px-2 py-0.5 rounded-lg bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px]">
-                {done ? 'FT' : clockLabel}
-              </span>
-            </div>
+            )}
           </div>
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3 mland:gap-2">
             <div className="flex items-center justify-end gap-2 mland:gap-1.5 min-w-0">
@@ -15082,14 +15985,33 @@ const MatchModal: React.FC<{
             {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + MOTM + Match Stats */}
             <div className="space-y-2.5 mland:space-y-1.5 min-w-0 mland:h-full mland:flex mland:flex-col mland:min-h-0 mland:justify-center">
               {!(done && fullTimeAnalysis) ? (
-                <div className="relative rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#144d2e] shadow-inner mland:mx-auto mland:w-full">
-                  <canvas
-                    ref={canvasRef}
-                    className="w-full aspect-[16/8.2] mland:max-h-[calc(97dvh-106px)] mland:w-auto mland:max-w-full mland:mx-auto block select-none"
-                    aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
-                  />
+                <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mland:mx-auto mland:w-full flex flex-col">
+                  {/* Live Match Event & Clock Bar Mounted Directly on Pitch */}
+                  <div className="px-2.5 sm:px-3 py-1.5 mland:px-2.5 mland:py-1 bg-[#072113]/95 border-b border-white/15 flex items-center justify-between gap-2 text-white shrink-0">
+                    <span className={`px-2.5 mland:px-2 py-0.5 rounded-lg border text-[11px] sm:text-xs mland:text-[10.5px] font-bold truncate min-w-0 ${bannerCls}`}>
+                      {actionBanner.label}
+                    </span>
+                    <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
+                      {stoppageBadge > 0 && (
+                        <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[11px] mland:text-[10px]">
+                          +{stoppageBadge}&apos;
+                        </span>
+                      )}
+                      <span className="px-2.5 mland:px-2 py-0.5 rounded-lg bg-[var(--g)] text-white font-extrabold tabular text-xs sm:text-sm mland:text-[11px] shadow-xs">
+                        {done ? 'FT' : clockLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="relative bg-[#144d2e]">
+                    <canvas
+                      ref={canvasRef}
+                      onContextMenu={(e) => e.preventDefault()}
+                      style={{ WebkitTouchCallout: 'none', touchAction: 'manipulation' }}
+                      className="w-full aspect-[16/8.2] mland:max-h-[calc(97dvh-132px)] mland:w-auto mland:max-w-full mland:mx-auto block select-none"
+                      aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
+                    />
 
-                  {/* Halftime Break Tactical Overlay */}
+                    {/* Halftime Break Tactical Overlay */}
                   {matchPhaseUi === 'halftime' && !done && (
                     <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 mland:p-1 mland:overflow-y-auto">
                       <div className="w-full max-w-md mland:max-w-sm mland:max-h-full mland:overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 sm:p-4 mland:p-1.5 text-center space-y-2.5 mland:space-y-1 shadow-2xl">
@@ -15152,6 +16074,7 @@ const MatchModal: React.FC<{
                       </div>
                     </div>
                   )}
+                  </div>
                 </div>
               ) : (() => {
                 const hSlots = getFormationSlots(homeOrig);
@@ -15751,12 +16674,12 @@ const MatchModal: React.FC<{
                   {paused ? '▶ เล่นต่อ' : '⏸ พักเกม'}
                 </button>
                 <div className="inline-flex items-center p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
-                  {([1, 2, 4] as const).map((sp) => (
+                  {([0.5, 1, 2, 4] as const).map((sp) => (
                     <button
                       key={sp}
                       type="button"
                       onClick={() => setSpeed(sp)}
-                      className={`min-h-[28px] mland:min-h-[24px] px-2 sm:px-2.5 mland:px-2 py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                      className={`min-h-[28px] mland:min-h-[24px] px-2 sm:px-2.5 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                     >
                       {sp}x
                     </button>
@@ -16338,15 +17261,133 @@ const DilemmaModal: React.FC<{
   </div>
 );
 
+function applySecretBoost(d: GameState, kind: 'money500' | 'money2500' | 'stat5' | 'stat10'): string {
+  if (kind === 'money500' || kind === 'money2500') {
+    const amt = kind === 'money500' ? 500 : 2500;
+    d.money += amt;
+    logFin(d, 'งบสนับสนุนพิเศษ (VIP)', amt);
+    if (d.mode === 'p' && d.p) {
+      d.p.rep = clamp((d.p.rep ?? 20) + (kind === 'money500' ? 8 : 20), 0, 99);
+      d.p.en = 100;
+      syncMe(d);
+    }
+    return `🎁 เติมเงินทุน +${amt.toLocaleString()}k ฿ สำเร็จ!`;
+  }
+  const delta = kind === 'stat5' ? 5 : 10;
+  if (d.mode === 'p' && d.p) {
+    (['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[]).forEach((k) => {
+      d.p!.a[k] = clamp((d.p!.a[k] ?? 60) + delta, 1, 99);
+    });
+    d.p.en = 100;
+    d.p.sus = 0;
+    syncMe(d);
+    return `⚡ อัปเกรดพลัง +${delta} (OVR ${ovMe(d.p)}) & ฟิต 100% สำเร็จ!`;
+  }
+  const t = d.teams[d.me];
+  if (t) {
+    t.sq.forEach((q) => {
+      q.ov = clamp(q.ov + delta, 1, 99);
+      q.pot = Math.max(q.pot ?? q.ov, clamp(q.ov + 5, 1, 99));
+      q.fit = 100;
+      q.inj = 0;
+      q.sus = 0;
+    });
+    t.tacFam = clamp((t.tacFam ?? 65) + delta * 2, 0, 100);
+  }
+  d.mor = clamp((d.mor ?? 60) + 15, 0, 100);
+  return `⚡ เสริมพลังทั้งทีม +${delta} OVR & ฟิต 100% สำเร็จ!`;
+}
+
+const SecretBoostModal: React.FC<{
+  state: GameState;
+  onClose: () => void;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
+  onToast: (msg: string) => void;
+}> = ({ state, onClose, onUpdateState, onToast }) => {
+  const me = state.teams[state.me];
+  const avgOv = me?.sq.length ? Math.round(me.sq.reduce((s, q) => s + q.ov, 0) / me.sq.length) : 60;
+  const runBoost = (kind: 'money500' | 'money2500' | 'stat5' | 'stat10') => {
+    SFX.win();
+    vibrate(35);
+    let msg = '';
+    onUpdateState((d) => {
+      msg = applySecretBoost(d, kind);
+    });
+    if (msg) onToast(msg);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-md mland:max-w-lg max-h-[92dvh] mland:max-h-[95dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/50 flex flex-col overflow-hidden shadow-2xl">
+        <div className="shrink-0 px-5 py-3.5 mland:px-3 mland:py-1.5 bg-[var(--lamp-soft)]/50 border-b border-[var(--lamp)]/30 flex items-center justify-between">
+          <h3 className="font-bold text-base mland:text-xs font-display flex items-center gap-1.5">
+            <span>🤫</span>
+            <span>โหมดลับผู้สนับสนุน (VIP Boost)</span>
+          </h3>
+          <button type="button" onClick={onClose} className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] mland:text-xs font-bold cursor-pointer">✕</button>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 mland:p-2.5 space-y-3 mland:space-y-2">
+          <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between text-xs mland:text-[10.5px] tabular">
+            <span>งบสโมสรปัจจุบัน: <b className="text-[var(--g)]">{state.money.toLocaleString()}k ฿</b></span>
+            {state.mode === 'p' && state.p ? (
+              <span>OVR คุณ: <b className="text-[var(--lamp)]">{ovMe(state.p)}</b> · ฟิต {state.p.en}%</span>
+            ) : (
+              <span>OVR เฉลี่ยทีม: <b className="text-[var(--lamp)]">{avgOv}</b></span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
+            <button
+              type="button"
+              onClick={() => runBoost('money500')}
+              className="p-3 mland:p-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 hover:brightness-105 text-left cursor-pointer"
+            >
+              <div className="font-bold text-xs mland:text-[10.5px] text-[var(--g)]">💰 เติมเงิน +500k ฿</div>
+              <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">งบเสริมทัพ &amp; บริหารทีม</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => runBoost('money2500')}
+              className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 hover:brightness-105 text-left cursor-pointer"
+            >
+              <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-[var(--lamp)]">💎 เติมเงิน +2,500k ฿</div>
+              <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">งบมหาเศรษฐีทุ่มตลาด</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => runBoost('stat5')}
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-left cursor-pointer"
+            >
+              <div className="font-bold text-xs mland:text-[10.5px]">⚡ เพิ่มพลัง +5</div>
+              <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">{state.mode === 'p' ? 'ทุกค่าพลัง +5 & ฟิต 100%' : 'ทั้งทีม +5 OVR & ฟิต 100%'}</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => runBoost('stat10')}
+              className="p-3 mland:p-2 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 hover:brightness-105 text-left cursor-pointer"
+            >
+              <div className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">🔥 เพิ่มพลัง +10</div>
+              <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">{state.mode === 'p' ? 'ซูเปอร์สตาร์ +10 & ฟิตเต็ม' : 'ระดับแชมป์ +10 OVR & หายเจ็บ'}</div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SettingsModal: React.FC<{
   state: GameState;
   onClose: () => void;
   onExitToMenu: () => void;
   onToast: (msg: string) => void;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
   onSettingsChange?: (next: AppSettings) => void;
-}> = ({ state, onClose, onExitToMenu, onToast, onSettingsChange }) => {
+}> = ({ state, onClose, onExitToMenu, onToast, onUpdateState, onSettingsChange }) => {
   const [st, setSt] = useState<AppSettings>(() => getSettings());
   const [saveCode, setSaveCode] = useState('');
+  const [showVip, setShowVip] = useState(false);
 
   const update = (patch: Partial<AppSettings>) => {
     const next = { ...st, ...patch };
@@ -16362,9 +17403,55 @@ const SettingsModal: React.FC<{
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
       <div className="w-full max-w-md mland:max-w-2xl max-h-[92dvh] mland:max-h-[95dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 px-5 py-3.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between">
-          <h3 className="font-bold text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setShowVip((v) => !v); }}
+              title="เวอร์ชันเกม"
+              className="px-1.5 py-0.5 rounded-md text-[10px] font-bold text-[var(--mut)]/75 hover:text-[var(--lamp)] hover:bg-[var(--lamp-soft)] transition-colors cursor-pointer"
+            >
+              v1.0 ✦
+            </button>
+          </div>
           <button type="button" onClick={onClose} className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] mland:text-xs font-bold cursor-pointer">✕</button>
         </div>
+
+        {showVip && (
+          <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--lamp-soft)]/50 border-b border-[var(--lamp)]/30 space-y-1.5">
+            <div className="text-[11px] mland:text-[10px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] flex items-center justify-between">
+              <span>🤫 โหมดลับ VIP Boost</span>
+              <span className="tabular font-normal text-[var(--mut)]">งบ {state.money.toLocaleString()}k ฿</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {(
+                [
+                  ['money500', '💰 +500k ฿'],
+                  ['money2500', '💎 +2,500k ฿'],
+                  ['stat5', '⚡ พลัง +5'],
+                  ['stat10', '🔥 พลัง +10']
+                ] as const
+              ).map(([kind, label]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  onClick={() => {
+                    SFX.win();
+                    vibrate(30);
+                    let msg = '';
+                    onUpdateState((d) => {
+                      msg = applySecretBoost(d, kind);
+                    });
+                    if (msg) onToast(msg);
+                  }}
+                  className="py-1.5 px-2 rounded-lg bg-[var(--surface)] border border-[var(--lamp)]/40 hover:border-[var(--g)] text-[11px] mland:text-[10px] font-bold cursor-pointer"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 mland:p-2 space-y-4 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-2 mland:items-start">
           <div className="contents mland:block mland:space-y-1.5">
@@ -16386,17 +17473,18 @@ const SettingsModal: React.FC<{
 
             <div className="space-y-2 mland:space-y-1">
               <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)]">⚡ ความเร็วการแข่งเริ่มต้น</div>
-              <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
+              <div className="grid grid-cols-4 gap-1.5 mland:gap-1">
                 {([
-                  [1, '1x (มาตรฐาน)'],
-                  [2, '2x (เร็ว)'],
-                  [4, '4x (สูงสุด)']
+                  [0.5, '0.5x ช้าละเอียด'],
+                  [1, '1x มาตรฐาน'],
+                  [2, '2x เร็ว'],
+                  [4, '4x สูงสุด']
                 ] as const).map(([sp, lbl]) => (
                   <button
                     key={sp}
                     type="button"
                     onClick={() => update({ matchSpeed: sp, quick: sp === 4 })}
-                    className={`py-2 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${curMatchSpeed === sp ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                    className={`py-2 mland:py-1 px-1 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${curMatchSpeed === sp ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
                   >
                     {lbl}
                   </button>
@@ -16572,8 +17660,12 @@ export default function App() {
   const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
+  const [navResetSeq, setNavResetSeq] = useState(0);
 
+  const mainRef = useRef<HTMLElement | null>(null);
+  const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
   const toastTimerRef = useRef<number | null>(null);
   const showToast = (msg: string) => {
     setToast(msg);
@@ -16993,28 +18085,52 @@ export default function App() {
   return (
     <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
       {/* Pinned Top Game HUD Bar */}
-      <header className="shrink-0 z-30 bg-[var(--surface)]/92 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-        <div className="max-w-6xl mland:max-w-none mx-auto px-3 sm:px-5 mland:px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 mland:gap-2">
+      <header className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+        <div className="max-w-6xl mland:max-w-none mx-auto px-3 sm:px-5 mland:px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-            <div className="shrink-0 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]/70 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+            <button
+              type="button"
+              onClick={() => {
+                const now = Date.now();
+                const ref = crestTapRef.current;
+                ref.count = now - ref.lastTs > 1800 ? 1 : ref.count + 1;
+                ref.lastTs = now;
+                if (ref.count >= 5) {
+                  ref.count = 0;
+                  SFX.win();
+                  setShowSecretBoost(true);
+                  showToast('🔓 ปลดล็อกโหมดลับผู้สนับสนุนแล้ว!');
+                }
+              }}
+              aria-label="ตราสโมสร"
+              className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform"
+            >
               <ClubCrest name={me.name} size={32} team={me} club={state.club} isMyClub={state.mode === 'm'} />
-            </div>
+            </button>
             <div className="min-w-0">
-              <div className="font-bold text-xs sm:text-base mland:text-[12px] truncate font-display leading-tight tracking-tight">
-                {state.mode === 'p' && state.p ? `${state.p.name} · ` : ''}
-                {me.name}
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="font-bold text-xs sm:text-base mland:text-[12px] truncate font-display leading-tight tracking-tight">
+                  {state.mode === 'p' && state.p ? `${state.p.name} · ` : ''}
+                  {me.name}
+                </span>
+                <span className="hidden mland:inline-flex items-center px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-bold text-[9.5px] tabular shrink-0">
+                  {state.mode === 'm' ? `${state.money.toLocaleString()}k ฿` : `OVR ${state.p ? ovMe(state.p) : 60}`}
+                </span>
               </div>
-              <div className="text-[10px] sm:text-[11px] mland:text-[9.5px] text-[var(--mut)] flex flex-wrap mland:flex-nowrap items-center gap-x-1.5 truncate tabular">
+              <div className="text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] flex flex-wrap mland:flex-nowrap items-center gap-x-1.5 truncate tabular leading-tight">
                 <span className="truncate font-medium">{TN[me.tier]}</span>
                 <span className="opacity-40 shrink-0">·</span>
                 <span className="shrink-0">ซีซั่น {state.season}</span>
                 <span className="opacity-40 shrink-0">·</span>
                 <span className="shrink-0">นัด {Math.min(state.md, state.fx.length)}/{state.fx.length}</span>
-                <span className="opacity-40 shrink-0">·</span>
+                <span className="opacity-40 shrink-0 mland:hidden">·</span>
                 {state.mode === 'm' ? (
-                  <span className="font-bold text-[var(--g)] tabular shrink-0">งบ {state.money}k ฿</span>
+                  <span className="font-bold text-[var(--g)] tabular shrink-0 mland:hidden">งบ {state.money.toLocaleString()}k ฿</span>
                 ) : (
-                  <span className="font-bold text-[var(--g)] tabular shrink-0">OVR {state.p ? ovMe(state.p) : 60} · ฟิต {state.p?.en ?? 100}%</span>
+                  <>
+                    <span className="font-bold text-[var(--g)] tabular shrink-0 mland:hidden">OVR {state.p ? ovMe(state.p) : 60}</span>
+                    <span className="font-semibold text-[var(--mut)] tabular shrink-0">· ฟิต {state.p?.en ?? 100}%</span>
+                  </>
                 )}
               </div>
             </div>
@@ -17025,7 +18141,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleTriggerNextStep}
-              className="min-h-[36px] mland:min-h-[30px] px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[11px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
+              className="min-h-[36px] mland:min-h-[28px] px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[11px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
             >
               {nextMatchInfo
                 ? appSettings.autoSkipMatch
@@ -17045,7 +18161,7 @@ export default function App() {
               type="button"
               onClick={() => { SFX.tap(); setShowSettings(true); }}
               aria-label="ตั้งค่า"
-              className="w-9 h-9 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] flex items-center justify-center text-sm mland:text-xs cursor-pointer shrink-0"
+              className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] flex items-center justify-center text-sm mland:text-xs cursor-pointer shrink-0"
             >
               ⚙️
             </button>
@@ -17055,14 +18171,18 @@ export default function App() {
 
       <div className="flex-1 min-h-0 flex flex-col mland:flex-row overflow-hidden">
         {/* Center Scrollable Game Stage */}
-        <main className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden mland:flex mland:flex-col overflow-x-hidden">
+        <main ref={mainRef} className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden mland:flex mland:flex-col overflow-x-hidden">
           <div className="max-w-6xl mland:max-w-none mland:w-full mx-auto px-3 sm:px-5 mland:px-2.5 py-3 sm:py-4 mland:py-1.5 space-y-3 sm:space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-            {/* Next match + latest news compact bar (shown on overview tab only) */}
+            {/* Next match + latest news compact ticker (shown on overview tab only) */}
             {(state.mode === 'p' ? curTab === 'p' : curTab === 't') && (
-              <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] mland:grid-cols-[1.28fr_1fr] gap-2.5 sm:gap-3 mland:gap-1.5 shrink-0">
+              <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-2.5 sm:gap-3 mland:flex mland:items-center mland:justify-between mland:gap-2 mland:px-2.5 mland:py-1 mland:rounded-xl mland:bg-[var(--surface)] mland:border mland:border-[var(--line)] mland:shadow-xs shrink-0">
                 {nextMatchInfo ? (
-                  <div className="p-2.5 sm:p-3 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex items-center justify-between gap-2.5 mland:gap-1.5">
+                  <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:p-0 mland:rounded-none mland:bg-transparent mland:border-0 mland:shadow-none flex items-center justify-between gap-2.5 mland:gap-2 mland:min-w-0 mland:flex-1">
                     <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+                      <span className="hidden mland:inline-flex items-center px-1.5 py-0.5 rounded bg-[var(--surface-2)] text-[8.5px] font-bold text-[var(--mut)] shrink-0">
+                        {nextMatchInfo.kind === 'asia' ? '🌏 ทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 ถ้วย' : '⚽ นัดหน้า'}
+                        {nextMatchInfo.isDerby && <span className="ml-1 text-[var(--red)]">🔥</span>}
+                      </span>
                       <div className="shrink-0 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
                         <ClubCrest
                           name={state.teams[nextMatchInfo.homeId].name}
@@ -17073,7 +18193,7 @@ export default function App() {
                         />
                       </div>
                       <div className="min-w-0">
-                        <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] font-semibold truncate leading-tight">
+                        <div className="text-[11px] text-[var(--mut)] font-semibold truncate leading-tight mland:hidden">
                           {nextMatchInfo.kind === 'asia' ? '🌏 ถ้วยทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 ถ้วยประชาชน' : `⚽ นัดถัดไป · ${TN[me.tier]}`}
                           {nextMatchInfo.isDerby && <span className="ml-1.5 text-[var(--red)] font-bold">🔥 ดาร์บี้</span>}
                         </div>
@@ -17094,23 +18214,26 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setInspectTeamId(nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId)}
-                      className="px-2.5 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)]/70 text-xs mland:text-[9.5px] font-semibold shrink-0 cursor-pointer"
+                      className="px-2.5 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-md bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)]/70 text-xs mland:text-[9.5px] font-semibold shrink-0 cursor-pointer"
                     >
-                      ส่องคู่แข่ง
+                      ส่อง
                     </button>
                   </div>
                 ) : (
-                  <div className="p-3 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 flex items-center justify-between">
-                    <span className="text-xs mland:text-[10px] font-bold truncate">🏁 แข่งครบโปรแกรมลีกฤดูกาลนี้แล้ว กดปุ่มสรุปจบฤดูกาลเพื่อเลื่อนชั้น/ตกชั้น</span>
+                  <div className="p-3 mland:p-0 rounded-2xl mland:rounded-none bg-[var(--lamp-soft)] mland:bg-transparent border border-[var(--lamp)]/50 mland:border-0 flex items-center justify-between mland:min-w-0 mland:flex-1">
+                    <span className="text-xs mland:text-[10px] font-bold truncate text-[var(--ink)]">🏁 แข่งครบโปรแกรมลีกแล้ว กดสรุปจบฤดูกาล</span>
                   </div>
                 )}
 
-                <div className="p-2.5 sm:p-3 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex items-center justify-between gap-2.5 mland:gap-1.5">
-                  <div className="min-w-0">
-                    <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] font-semibold leading-tight">📰 ข่าวสารสโมสร</div>
-                    <div className="text-xs mland:text-[10px] font-semibold truncate leading-tight">{state.feed?.[0]?.txt || state.news || 'พร้อมลุยศึกฤดูกาลนี้!'}</div>
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:p-0 mland:pl-2 mland:rounded-none mland:bg-transparent mland:border-0 mland:border-l mland:border-[var(--line)] mland:shadow-none flex items-center justify-between gap-2.5 mland:gap-2 mland:min-w-0 mland:max-w-[44%]">
+                  <div className="min-w-0 flex items-center gap-1.5">
+                    <span className="hidden mland:inline text-[10px] shrink-0">📰</span>
+                    <div className="min-w-0">
+                      <div className="text-[11px] text-[var(--mut)] font-semibold leading-tight mland:hidden">📰 ข่าวสารสโมสร</div>
+                      <div className="text-xs mland:text-[9.5px] font-medium truncate leading-tight">{state.feed?.[0]?.txt || state.news || 'พร้อมลุยศึกฤดูกาลนี้!'}</div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
+                  <div className="flex items-center gap-2 mland:gap-1.5 shrink-0 text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
                     <span>❤️ <b>{state.fan ?? 55}%</b></span>
                     {state.mode === 'm' && <span>👔 <b>{state.bd ?? 55}%</b></span>}
                   </div>
@@ -17120,6 +18243,7 @@ export default function App() {
 
           {curTab === 't' && (
             <LeagueView
+              key={`t-${navResetSeq}`}
               state={state}
               onInspectTeam={(tid) => setInspectTeamId(tid)}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
@@ -17128,6 +18252,7 @@ export default function App() {
           )}
           {curTab === 'q' && (
             <SquadTacticsView
+              key={`q-${navResetSeq}`}
               state={state}
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
@@ -17136,6 +18261,7 @@ export default function App() {
           )}
           {curTab === 'k' && state.mode === 'm' && (
             <MarketView
+              key={`k-${navResetSeq}`}
               state={state}
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
@@ -17144,21 +18270,22 @@ export default function App() {
           )}
           {(curTab === 'f' || curTab === 'u') && state.mode === 'm' && (
             <FinanceClubView
+              key={`${curTab}-${navResetSeq}`}
               state={state}
               tab={curTab}
               onUpdateState={updateState}
               onToast={showToast}
             />
           )}
-          {curTab === 'c' && <CupView state={state} onInspectTeam={(tid) => setInspectTeamId(tid)} />}
+          {curTab === 'c' && <CupView key={`c-${navResetSeq}`} state={state} onInspectTeam={(tid) => setInspectTeamId(tid)} />}
           {curTab === 'p' && state.mode === 'p' && (
-            <PlayerCareerView state={state} onUpdateState={updateState} onToast={showToast} />
+            <PlayerCareerView key={`p-${navResetSeq}`} state={state} onUpdateState={updateState} onToast={showToast} />
           )}
           </div>
         </main>
 
         {/* Pinned Bottom / Mobile-Landscape Left-Rail Navigation Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] mland:order-first mland:w-[70px] mland:h-full mland:border-t-0 mland:border-r mland:px-1.5 mland:py-2 mland:overflow-y-auto">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] mland:order-first mland:w-[62px] mland:h-full mland:border-t-0 mland:border-r mland:px-1 mland:py-1.5 mland:overflow-y-auto">
           <div
             className="max-w-6xl mx-auto px-1.5 sm:px-5 py-1.5 grid gap-1 mland:!flex mland:flex-col mland:gap-1 mland:h-full mland:justify-center mland:px-0 mland:py-0"
             style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
@@ -17171,15 +18298,20 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     SFX.tap();
-                    updateState((d) => { d.v = key; });
+                    setNavResetSeq((n) => n + 1);
+                    if (mainRef.current) mainRef.current.scrollTop = 0;
+                    updateState((d) => {
+                      d.v = key;
+                      d.tv = 0;
+                    });
                   }}
-                  className={`relative py-1.5 px-1 sm:px-2 mland:!flex-col mland:py-1 mland:px-0.5 mland:text-[9px] mland:flex-1 mland:min-h-[38px] mland:max-h-[50px] rounded-xl mland:rounded-lg flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-xs font-bold cursor-pointer transition-all min-w-0 ${
+                  className={`relative py-1.5 px-1 sm:px-2 mland:!flex-col mland:py-1 mland:px-0.5 mland:text-[8.5px] mland:flex-1 mland:min-h-[36px] mland:max-h-[48px] rounded-xl mland:rounded-lg flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-xs font-bold cursor-pointer transition-all min-w-0 ${
                     active
                       ? 'bg-gradient-to-b from-[#1a9657] to-[#147845] text-white shadow-[0_2px_8px_rgba(21,128,73,0.3)]'
                       : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/85'
                   }`}
                 >
-                  <span className="text-sm sm:text-base mland:text-xs leading-none">{icon}</span>
+                  <span className="text-sm sm:text-base mland:text-[13px] leading-none">{icon}</span>
                   <span className="truncate max-w-full leading-tight">{label}</span>
                 </button>
               );
@@ -17249,7 +18381,17 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => setState(null)}
           onToast={showToast}
+          onUpdateState={updateState}
           onSettingsChange={setAppSettings}
+        />
+      )}
+
+      {showSecretBoost && (
+        <SecretBoostModal
+          state={state}
+          onClose={() => setShowSecretBoost(false)}
+          onUpdateState={updateState}
+          onToast={showToast}
         />
       )}
 
