@@ -178,6 +178,7 @@ interface MatchEvent {
   t: number;
   who: string;
   as?: string;
+  style?: string;
 }
 
 interface MatchCardEvent {
@@ -192,6 +193,29 @@ interface MatchSubEvent {
   t: number;
   inPlayer: string;
   outPlayer: string;
+}
+
+interface MatchDramaticEvent {
+  m: number;
+  t?: number;
+  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch';
+  text: string;
+}
+
+interface MatchHighlightLine {
+  m: number;
+  kind: 'goal' | 'card' | 'drama' | 'summary';
+  teamId?: number;
+  text: string;
+}
+
+interface MatchHighlightsSummary {
+  id: string;
+  matchLabel: string;
+  scoreLine: string;
+  headline: string;
+  summaryText: string;
+  lines: MatchHighlightLine[];
 }
 
 interface PlayerPerfResult {
@@ -226,6 +250,8 @@ interface MatchResult {
   cards?: MatchCardEvent[];
   subs?: MatchSubEvent[];
   playedNames?: Record<number, string[]>;
+  incidents?: MatchDramaticEvent[];
+  highlights?: MatchHighlightsSummary;
 }
 
 interface CupState {
@@ -351,6 +377,7 @@ interface GameState {
   off?: TransferOffer | null;
   offers?: TransferOffer[];
   res?: string[];
+  matchHighlights?: MatchHighlightsSummary[];
   news?: string;
   feed?: FeedItem[];
   finLog?: FinLogItem[];
@@ -1577,10 +1604,295 @@ function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   const gh = pois(lamH);
   const ga = pois(lamA);
   const evs = [...genMatchGoals(h, H.x, gh, s?.p), ...genMatchGoals(a, G.x, ga, s?.p)].sort((x, y) => x.m - y.m);
-  const xgH = Math.round((lamH * 0.85 + gh * 0.18 + R(-10, 15) / 100) * 100) / 100;
-  const xgA = Math.round((lamA * 0.85 + ga * 0.18 + R(-10, 15) / 100) * 100) / 100;
+  const xgH = Math.max(0.1, Math.round((lamH * 0.85 + gh * 0.18 + R(-10, 15) / 100) * 100) / 100);
+  const xgA = Math.max(0.1, Math.round((lamA * 0.85 + ga * 0.18 + R(-10, 15) / 100) * 100) / 100);
   const { cards, subs, playedNames } = simMatchCardsAndSubs(h, a, s);
-  return { gh, ga, evs, xgH: Math.max(0.1, xgH), xgA: Math.max(0.1, xgA), cards, subs, playedNames };
+  const incidents: MatchDramaticEvent[] = [];
+
+  if (xgH - gh >= 0.9 || (ga === 0 && xgH >= 1.4)) {
+    const gkA = a.sq.find((q) => q.pos === 'GK')?.n || 'ผู้รักษาประตู';
+    incidents.push({
+      m: R(35, 84),
+      t: a.id,
+      kind: 'save',
+      text: `🧤 ซูเปอร์เซฟ! ${gkA} (${a.name}) ป้องกันลูกยิงจ่อๆ ช่วยทีมรอดเสียประตู`
+    });
+  } else if (xgA - ga >= 0.9 || (gh === 0 && xgA >= 1.4)) {
+    const gkH = h.sq.find((q) => q.pos === 'GK')?.n || 'ผู้รักษาประตู';
+    incidents.push({
+      m: R(35, 84),
+      t: h.id,
+      kind: 'save',
+      text: `🧤 ซูเปอร์เซฟ! ${gkH} (${h.name}) โชว์เซฟสำคัญรักษาสกอร์ให้ทีม`
+    });
+  }
+  if (Math.random() < (bg ? 0.42 : 0.24)) {
+    const hitTeam = Math.random() < 0.5 ? h : a;
+    const hitPlayer = (hitTeam.id === h.id ? H.x : G.x).find((q) => q.pos === 'FW' || q.pos === 'MF') || hitTeam.sq[0];
+    incidents.push({
+      m: R(18, 87),
+      t: hitTeam.id,
+      kind: 'woodwork',
+      text: `🧱 หวุดหวิด! ${hitPlayer?.n || 'แนวรุก'} (${hitTeam.name}) ซัดบอลชนเสา/คานอย่างจัง`
+    });
+  }
+  if ((bg || Math.abs(gh - ga) <= 1) && Math.random() < 0.28) {
+    const varSide = Math.random() < 0.5 ? h : a;
+    incidents.push({
+      m: R(40, 88),
+      t: varSide.id,
+      kind: 'var',
+      text: `📺 ดราม่า VAR! ผู้ตัดสินเช็กจังหวะล้ำหน้า/ฟาวล์เขตโทษของ ${varSide.name} อย่างละเอียด`
+    });
+  }
+
+  return { gh, ga, evs, xgH, xgA, cards, subs, playedNames, incidents };
+}
+
+function extractMatchHighlights(
+  h: Team,
+  a: Team,
+  r: MatchResult,
+  opts?: {
+    kind?: 'league' | 'cup' | 'asia';
+    label?: string;
+    isDerby?: boolean;
+    penText?: string;
+    rawLogs?: { m: number; text: string; tone?: 'goal' | 'card' | 'sys' | 'sub' }[];
+  }
+): MatchHighlightsSummary {
+  const lines: MatchHighlightLine[] = [];
+  const teamName = (tid?: number) => (tid === h.id ? h.name : tid === a.id ? a.name : '');
+  const styleDesc = (style?: string): string => {
+    switch (style) {
+      case 'bicycle':
+        return 'ตีลังกายิงสุดมหัศจรรย์';
+      case 'curler':
+        return 'ปั่นโค้งเสียบสามเหลี่ยม';
+      case 'trivela':
+        return 'ไซด์ก้อยทริเวล่าสุดสวย';
+      case 'knuckle':
+        return 'กดลูกส่ายคนัคเคิลฮุคเสียบมุม';
+      case 'panenka':
+        return 'ชิพจุดโทษปาเนนก้าเหนือชั้น';
+      case 'chip':
+        return 'ชิพข้ามหัวนายด่านสุดเยือกเย็น';
+      case 'volley':
+        return 'วอลเลย์กลางอากาศเต็มข้อ';
+      case 'header':
+        return 'ขึ้นโหม่งตุงตาข่าย';
+      case 'freekick':
+        return 'ซัดฟรีคิกสุดคม';
+      case 'penalty':
+        return 'สังหารจุดโทษไม่พลาด';
+      default:
+        return 'ยิงประตู';
+    }
+  };
+
+  // 1. Extract Goals & Running Score Drama from MatchResult.evs
+  const sortedGoals = (r.evs || []).slice().sort((u, v) => u.m - v.m);
+  let runH = 0;
+  let runA = 0;
+  let homeLedFirst = false;
+  let awayLedFirst = false;
+  let homeEverTrailed = false;
+  let awayEverTrailed = false;
+  const goalTallies: Record<string, number> = {};
+
+  sortedGoals.forEach((ev, idx) => {
+    const isH = ev.t === h.id;
+    if (isH) runH++;
+    else runA++;
+    if (idx === 0) {
+      if (isH) homeLedFirst = true;
+      else awayLedFirst = true;
+    }
+    if (runH < runA) homeEverTrailed = true;
+    if (runA < runH) awayEverTrailed = true;
+
+    goalTallies[ev.who] = (goalTallies[ev.who] || 0) + 1;
+    const count = goalTallies[ev.who];
+    const tags: string[] = [];
+    if (ev.m >= 86 && (runH === runA || Math.abs(runH - runA) === 1)) {
+      tags.push('ประตูนาทีบาป!');
+    } else if (runH === runA) {
+      tags.push('ตีเสมอ');
+    } else if (idx === 0) {
+      tags.push('เบิกร่อง');
+    }
+    if (count === 3) tags.push('แฮตทริก!!');
+    else if (count === 2) tags.push('เบิ้ล');
+
+    const tName = teamName(ev.t);
+    const verb = styleDesc(ev.style);
+    const asTxt = ev.as ? ` · แอสซิสต์ ${ev.as}` : '';
+    const tagTxt = tags.length ? ` [${tags.join(' · ')}]` : '';
+    lines.push({
+      m: ev.m,
+      kind: 'goal',
+      teamId: ev.t,
+      text: `⚽ ${ev.who} (${tName}) ${verb} (${runH}-${runA})${asTxt}${tagTxt}`
+    });
+  });
+
+  // 2. Extract Cards from MatchResult.cards
+  const sortedCards = (r.cards || []).slice().sort((u, v) => u.m - v.m);
+  const redCount = sortedCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
+  const yellowCount = sortedCards.filter((c) => c.type === 'Y').length;
+  sortedCards.forEach((c) => {
+    const tName = teamName(c.t);
+    if (c.type === 'R') {
+      lines.push({
+        m: c.m,
+        kind: 'card',
+        teamId: c.t,
+        text: `🟥 ใบแดงโดยตรง! ${c.who} (${tName}) โดนไล่ออกจากสนาม`
+      });
+    } else if (c.type === 'Y2R') {
+      lines.push({
+        m: c.m,
+        kind: 'card',
+        teamId: c.t,
+        text: `🟨🟥 ใบเหลืองที่สอง! ${c.who} (${tName}) โดนไล่ออก`
+      });
+    } else {
+      lines.push({
+        m: c.m,
+        kind: 'card',
+        teamId: c.t,
+        text: `🟨 ใบเหลือง ${c.who} (${tName})`
+      });
+    }
+  });
+
+  // 3. Extract Dramatic Incidents from MatchResult.incidents + rawLogs + derived turning points
+  const seenKeys = new Set<string>();
+  const pushDrama = (m: number, text: string, teamId?: number) => {
+    const normKey = `${m}:${text.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, '').slice(0, 22)}`;
+    if (seenKeys.has(normKey)) return;
+    seenKeys.add(normKey);
+    lines.push({ m, kind: 'drama', teamId, text });
+  };
+
+  (r.incidents || []).forEach((inc) => {
+    pushDrama(inc.m, inc.text, inc.t);
+  });
+
+  if (opts?.rawLogs?.length) {
+    opts.rawLogs.forEach((lg) => {
+      if (lg.tone === 'goal' || lg.tone === 'card' || lg.tone === 'sub') return;
+      const isDramaLog =
+        lg.text.includes('VAR') ||
+        lg.text.includes('จุดโทษ') ||
+        lg.text.includes('ชนเสา') ||
+        lg.text.includes('ชนคาน') ||
+        lg.text.includes('ซูเปอร์เซฟ') ||
+        lg.text.includes('ตีลังกา') ||
+        lg.text.includes('บาดเจ็บ') ||
+        lg.text.includes('ปั่นโค้ง') ||
+        lg.text.includes('ทริเวล่า') ||
+        lg.text.includes('คนัคเคิล') ||
+        lg.text.includes('ปาเนนก้า');
+      if (isDramaLog && !(r.incidents || []).some((inc) => Math.abs(inc.m - lg.m) <= 1)) {
+        pushDrama(lg.m, lg.text);
+      }
+    });
+  }
+
+  // Derived dramatic turning points from MatchResult
+  const comebackWin =
+    (r.gh > r.ga && (homeEverTrailed || awayLedFirst)) ||
+    (r.ga > r.gh && (awayEverTrailed || homeLedFirst));
+  if (comebackWin) {
+    const winner = r.gh > r.ga ? h : a;
+    pushDrama(88, `🔥 พลิกนรก! ${winner.name} ตกเป็นฝ่ายตามหลังก่อนฮึดแซงกลับมาชนะ ${r.gh}-${r.ga}`, winner.id);
+  }
+
+  const hReds = sortedCards.filter((c) => c.t === h.id && (c.type === 'R' || c.type === 'Y2R')).length;
+  const aReds = sortedCards.filter((c) => c.t === a.id && (c.type === 'R' || c.type === 'Y2R')).length;
+  if (hReds > 0 && r.gh >= r.ga) {
+    pushDrama(90, `🛡️ หัวใจแกร่ง! ${h.name} เหลือผู้เล่นน้อยกว่าแต่ยังยันเก็บแต้มได้สำเร็จ`, h.id);
+  } else if (aReds > 0 && r.ga >= r.gh) {
+    pushDrama(90, `🛡️ หัวใจแกร่ง! ${a.name} เหลือผู้เล่นน้อยกว่าแต่ไม่ยอมแพ้จนจบเกม`, a.id);
+  }
+
+  if (opts?.penText || r.pen !== undefined) {
+    pushDrama(90, `🎯 ดวลจุดโทษตัดสินสุดระทึก: ${opts?.penText || (r.pen ? `${h.name} ชนะจุดโทษ!` : `${a.name} ชนะจุดโทษ!`)}`);
+  }
+
+  // Sort chronologically
+  const kindOrder: Record<MatchHighlightLine['kind'], number> = { goal: 0, drama: 1, card: 2, summary: 3 };
+  lines.sort((u, v) => u.m - v.m || kindOrder[u.kind] - kindOrder[v.kind]);
+
+  // Build Headline
+  const diff = Math.abs(r.gh - r.ga);
+  const totalGoals = r.gh + r.ga;
+  const lateGoal = sortedGoals.some((g) => g.m >= 86);
+  const hasHatTrick = Object.values(goalTallies).some((n) => n >= 3);
+  const hasVar = lines.some((l) => l.kind === 'drama' && l.text.includes('VAR'));
+
+  let headline = `${h.name} ${r.gh}-${r.ga} ${a.name}`;
+  if (opts?.penText || r.pen !== undefined) {
+    headline = `ดราม่าดวลจุดโทษ! ${r.pen ? h.name : a.name} เฉือนเข้าป้าย`;
+  } else if (comebackWin) {
+    headline = `พลิกเกมสุดมันส์! ${r.gh > r.ga ? h.name : a.name} แซงคว้าชัย ${r.gh}-${r.ga}`;
+  } else if (hasHatTrick) {
+    const hero = Object.entries(goalTallies).find(([, n]) => n >= 3)?.[0] || '';
+    headline = `แฮตทริกฮีโร่! ${hero} นำทัพซัดกระหน่ำ`;
+  } else if (lateGoal && diff <= 1) {
+    headline = r.gh === r.ga ? `ตีเจ๊านาทีบาป! กินกันไม่ลง ${r.gh}-${r.ga}` : `ซัดชัยท้ายเกม! ${r.gh > r.ga ? h.name : a.name} เฉือนหวิว`;
+  } else if (redCount >= 2 || (redCount >= 1 && yellowCount >= 4)) {
+    headline = `เกมเดือดใบว่อน! ตัดสินด้วยความนิ่งจนจบ 90 นาที`;
+  } else if (diff >= 3) {
+    headline = `ฟอร์มโหดขาดลอย! ${r.gh > r.ga ? h.name : a.name} ไล่ถล่ม ${r.gh}-${r.ga}`;
+  } else if (totalGoals >= 5) {
+    headline = `ยิงกันสนั่น ${totalGoals} ประตู! เกมเปิดแลกสุดเร้าใจ`;
+  } else if (hasVar) {
+    headline = `เกมเข้มข้นมีประเด็น VAR ชี้ขาดจังหวะสำคัญ`;
+  } else if (totalGoals === 0) {
+    headline = `เกมรับเหนียวแน่น! เจ๊าไร้สกอร์ 0-0`;
+  } else if (r.gh === r.ga) {
+    headline = `แบ่งแต้มสุดสูสี ${h.name} เสมอ ${a.name} ${r.gh}-${r.ga}`;
+  } else {
+    headline = `${r.gh > r.ga ? h.name : a.name} เก็บชัยชนะได้ตามเป้า ${r.gh}-${r.ga}`;
+  }
+
+  const statsBits: string[] = [];
+  if (r.motm) statsBits.push(`👑 MOTM: ${r.motm}`);
+  if (r.xgH !== undefined && r.xgA !== undefined) statsBits.push(`xG ${r.xgH.toFixed(2)} - ${r.xgA.toFixed(2)}`);
+  statsBits.push(`⚽ ${totalGoals} ประตู · 🟨 ${yellowCount}${redCount > 0 ? ` · 🟥 ${redCount}` : ''}`);
+  if (r.subs?.length) statsBits.push(`🔄 เปลี่ยนตัว ${r.subs.length} ครั้ง`);
+
+  lines.push({
+    m: 90,
+    kind: 'summary',
+    text: statsBits.join(' · ')
+  });
+
+  const matchLabel = opts?.label || (opts?.kind === 'cup' ? '🏆 ถ้วยประชาชน' : opts?.kind === 'asia' ? '🌏 บอลถ้วยทวีป' : '⚽ ลีก');
+  const scoreLine = `${h.name} ${r.gh}-${r.ga} ${a.name}${opts?.penText ? ` (${opts.penText})` : ''}`;
+  const summaryBody = lines
+    .filter((l) => l.kind !== 'summary')
+    .map((l) => `${l.m}' · ${l.text}`)
+    .join('\n');
+  const summaryText = [
+    `📌 ${headline}`,
+    `${matchLabel} · ${scoreLine}`,
+    '--------------------',
+    summaryBody || 'ไม่มีเหตุการณ์ใหญ่ในเกม — เกมคุมจังหวะกันอย่างรัดกุมตลอด 90 นาที',
+    '--------------------',
+    statsBits.join(' | ')
+  ].join('\n');
+
+  return {
+    id: `${Date.now()}-${h.id}-${a.id}-${r.gh}-${r.ga}`,
+    matchLabel,
+    scoreLine,
+    headline,
+    summaryText,
+    lines
+  };
 }
 
 function computePlayerRatings(
@@ -6807,20 +7119,11 @@ const SquadTacticsView: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onToast: (msg: string) => void;
-  navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
+}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = state.sub ?? 0;
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
-
-  useEffect(() => {
-    if (navIntent?.tab === 'q') {
-      if (navIntent.sub === 'tactics') setLuTab(1);
-      else if (navIntent.sub === 'squad') setLuTab(2);
-      else if (navIntent.sub === 'xi') setLuTab(0);
-    }
-  }, [navIntent]);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
@@ -13455,8 +13758,6 @@ const MatchModal: React.FC<{
     const aCfg = getEffectiveTeamCfg('A', curMin);
 
     const activeAgents = w.agents.filter((a) => !a.sentOff);
-    const hOut = activeAgents.filter((a) => a.side === 'H' && a.pos !== 'GK');
-    const aOut = activeAgents.filter((a) => a.side === 'A' && a.pos !== 'GK');
 
     const oppSecondLastX = (defSide: 'H' | 'A') => {
       const defAttRight = isAttackRight(w, defSide);
@@ -13483,14 +13784,30 @@ const MatchModal: React.FC<{
       .slice(0, 2);
 
     const setPiece = w.pendingSetPiece;
+    const lockedTargetIds = new Set<string>();
+
+    // Track corner role assignment indices so players fan out instead of stacking
+    const cornerAttList =
+      setPiece && setPiece.type === 'corner'
+        ? activeAgents.filter(
+            (z) => z.side === setPiece.side && z.pos !== 'GK' && (z.pos === 'FW' || z.role === 'CB' || z.pos === 'MF')
+          )
+        : [];
+    const cornerDefList =
+      setPiece && setPiece.type === 'corner'
+        ? activeAgents.filter((z) => z.side !== setPiece.side && z.pos !== 'GK')
+        : [];
 
     activeAgents.forEach((ag) => {
       if (ag.intentTimer > 0) {
-        if (ag.intent === 'CELEBRATE' || ag.intent === 'DIVE') return;
+        if (ag.intent === 'CELEBRATE' || ag.intent === 'DIVE') {
+          lockedTargetIds.add(ag.id);
+          return;
+        }
         ag.intentTimer = Math.max(0, ag.intentTimer - 0.016);
         if (ag.intent === 'MAKE_RUN' && ag.runToX != null && ag.runToY != null) {
-          ag.tx = ag.runToX;
-          ag.ty = ag.runToY;
+          ag.tx = clamp(ag.runToX, 5, 95);
+          ag.ty = clamp(ag.runToY, 6, 94);
           return;
         }
       }
@@ -13510,6 +13827,7 @@ const MatchModal: React.FC<{
         ag.ty = clamp(cornerY + (((ag.slotIndex % 4) - 1.5) * 4), 8, 92);
         ag.runToX = undefined;
         ag.runToY = undefined;
+        lockedTargetIds.add(ag.id);
         return;
       }
 
@@ -13518,6 +13836,7 @@ const MatchModal: React.FC<{
         const sh = w.shootout;
         const kickSide = sh.turn;
         const gkSide = kickSide === 'H' ? 'A' : 'H';
+        lockedTargetIds.add(ag.id);
         if (ag.side === gkSide && ag.pos === 'GK') {
           ag.tx = 98.2;
           ag.ty = 50;
@@ -13530,7 +13849,6 @@ const MatchModal: React.FC<{
           ag.intent = 'SUPPORT';
           return;
         }
-        // Rest of players watch from center circle
         const angle = (ag.slotIndex / 11) * Math.PI * 2 + (isH ? 0 : Math.PI);
         ag.tx = clamp(47 + Math.cos(angle) * 6 + (isH ? -4 : 4), 35, 58);
         ag.ty = clamp(50 + Math.sin(angle) * 14, 24, 76);
@@ -13543,6 +13861,7 @@ const MatchModal: React.FC<{
         const isAtt = ag.side === setPiece.side;
         const penRight = isAttackRight(w, setPiece.side);
         const spotX = penRight ? 88.5 : 11.5;
+        lockedTargetIds.add(ag.id);
         if (!isAtt && ag.pos === 'GK') {
           ag.tx = penRight ? 98.2 : 1.8;
           ag.ty = 50;
@@ -13551,8 +13870,10 @@ const MatchModal: React.FC<{
         }
         if (ag.pos !== 'GK') {
           const lineBackX = penRight ? 80.5 : 19.5;
-          ag.tx = penRight ? Math.min(spotX - 7, lineBackX - (ag.slotIndex % 3) * 2.5) : Math.max(spotX + 7, lineBackX + (ag.slotIndex % 3) * 2.5);
-          ag.ty = clamp(24 + ((ag.slotIndex * 5.3) % 52), 20, 80);
+          ag.tx = penRight
+            ? Math.min(spotX - 7.5, lineBackX - (ag.slotIndex % 3) * 2.8)
+            : Math.max(spotX + 7.5, lineBackX + (ag.slotIndex % 3) * 2.8);
+          ag.ty = clamp(22 + ((ag.slotIndex * 5.6) % 56), 18, 82);
           ag.intent = 'SUPPORT';
           return;
         }
@@ -13570,29 +13891,64 @@ const MatchModal: React.FC<{
             ag.intent = 'WALL';
             ag.tx = setPiece.wallPlayers[wallIdx].x;
             ag.ty = setPiece.wallPlayers[wallIdx].y;
+            lockedTargetIds.add(ag.id);
             return;
           }
         }
       }
 
-      // Corner kick box crowding
+      // Corner kick structured box zoning (near post, penalty spot, far post, D-arc edge, rest defense)
       if (setPiece && setPiece.type === 'corner' && ag.pos !== 'GK') {
         const isAtt = ag.side === setPiece.side;
         const cornerRight = isAttackRight(w, setPiece.side);
-        const targetGoalX = cornerRight ? 91 : 9;
-        if (isAtt && (ag.pos === 'FW' || ag.role === 'CB' || ag.role === 'CM')) {
-          ag.intent = 'MAKE_RUN';
-          ag.tx = clamp(targetGoalX + (ag.role === 'CB' ? -3 * (cornerRight ? 1 : -1) : 0) + ((ag.slotIndex % 3) - 1) * 2.5, 6, 94);
-          ag.ty = clamp(40 + (ag.slotIndex % 5) * 5, 34, 66);
-          ag.runToX = ag.tx;
-          ag.runToY = ag.ty;
-          return;
-        }
-        if (!isAtt && (ag.pos === 'DF' || ag.role === 'CDM')) {
-          ag.intent = 'MARK';
-          ag.tx = clamp(targetGoalX + ((ag.slotIndex % 2) * 3 - 1.5), 5, 95);
-          ag.ty = clamp(39 + (ag.slotIndex % 4) * 6, 35, 65);
-          return;
+        const toCornerX = (normX: number) => (cornerRight ? normX : 100 - normX);
+        if (isAtt) {
+          const idx = cornerAttList.findIndex((z) => z.id === ag.id);
+          if (idx >= 0) {
+            const boxZones: [number, number][] = [
+              [91.2, 41],  // Near post flick
+              [88.6, 50],  // Penalty spot
+              [91.0, 59],  // Far post
+              [85.2, 45],  // Central box runner
+              [78.5, 43],  // Edge of box D-arc (cutback/rebound)
+              [78.5, 57],  // Edge of box far side
+              [60.0, 36],  // Rest defense
+              [58.0, 64]   // Rest defense
+            ];
+            const [znX, znY] = boxZones[idx] || [55, 50];
+            ag.intent = idx < 4 ? 'MAKE_RUN' : 'SUPPORT';
+            ag.tx = clamp(toCornerX(znX), 6, 94);
+            ag.ty = clamp(setPiece.y > 50 ? 100 - znY : znY, 10, 90);
+            if (idx < 4) {
+              ag.runToX = ag.tx;
+              ag.runToY = ag.ty;
+            }
+            return;
+          }
+        } else {
+          const defIdx = cornerDefList.findIndex((z) => z.id === ag.id);
+          if (defIdx >= 0) {
+            const defZones: [number, number][] = [
+              [93.2, 41],  // Near post zonal
+              [92.8, 50],  // Central 6y guard
+              [93.0, 59],  // Far post guard
+              [88.8, 45],  // Penalty spot marker
+              [88.4, 56],  // Penalty spot marker 2
+              [82.8, 42],  // Short-corner / edge screen
+              [82.2, 58],  // Edge of box clearance
+              [74.0, 50],  // Counter link
+              [58.0, 38],  // Outlet left
+              [56.0, 62]   // Outlet right
+            ];
+            const [znX, znY] = defZones[defIdx] || [64, 50];
+            // Defending team attacks opposite of cornerRight unless cfg.tac === 'Z'
+            const defNormX = 100 - znX;
+            const outShift = cfg.tac === 'Z' && defIdx >= 7 ? -10 : 0;
+            ag.intent = defIdx < 7 ? 'MARK' : 'SUPPORT';
+            ag.tx = clamp(toCornerX(clamp(100 - (defNormX + outShift), 46, 94.5)), 5, 95);
+            ag.ty = clamp(setPiece.y > 50 ? 100 - znY : znY, 10, 90);
+            return;
+          }
         }
       }
 
@@ -13601,31 +13957,31 @@ const MatchModal: React.FC<{
         const goalX = attRight ? 3.8 : 96.2;
         const ballThreat = attRight ? clamp((30 - b.x) / 30, 0, 1) : clamp((b.x - 70) / 30, 0, 1);
         const sweepBonus = ag.sig === 'cl' ? 1.5 : 0;
-        const sweepPush = (ag.d.cl > 68 ? 3.2 : 1.6 + sweepBonus) * (inPoss ? 1.4 : ballThreat);
+        const sweepPush = (ag.d.cl > 68 ? 3.0 : 1.5 + sweepBonus) * (inPoss ? 1.3 : ballThreat);
         ag.tx = clamp(goalX + dir * (1.2 + sweepPush), 3, 97);
         ag.ty = clamp(50 + (b.y - 50) * 0.24, 42.5, 57.5);
         ag.intent = 'SUPPORT';
         ag.runToX = undefined;
         ag.runToY = undefined;
+        lockedTargetIds.add(ag.id);
         return;
       }
 
-      // Outfield Base Formation Projection
+      // Normalized longitudinal coordinates: 0 = own goal line, 100 = opponent goal line
       const homeBaseX = clamp(100 - ag.slotY, 10, 90);
       const rawSlotY = attRight ? ag.slotX : 100 - ag.slotX;
-      const widthScale = cfg.wid === 2 ? 1.16 : cfg.wid === 0 ? 0.82 : 1;
-      const widenedY = clamp(50 + (rawSlotY - 50) * widthScale, 5, 95);
+      const widthScale = cfg.wid === 2 ? 1.18 : cfg.wid === 0 ? 0.86 : 1.03;
+      const widenedY = clamp(50 + (rawSlotY - 50) * widthScale, 6, 94);
 
-      // Shift team longitudinally with ball + tactical line + possession
-      const ballXNorm = attRight ? b.x : 100 - b.x;
-      const lineOffset = cfg.line === 2 ? 6.5 : cfg.line === 0 ? -6.5 : 0;
-      const possBoost = inPoss ? 7.5 : -6.5;
-      const zoneFactor = ag.pos === 'DF' ? 0.42 : ag.pos === 'MF' ? 0.62 : 0.72;
-      let tx = homeBaseX + (ballXNorm - 50) * zoneFactor + cfg.pushShift * 0.55 + lineOffset + possBoost;
-      if (!attRight) tx = 100 - tx;
+      const ballNormX = attRight ? b.x : 100 - b.x;
+      const lineOffset = cfg.line === 2 ? 5.5 : cfg.line === 0 ? -4.5 : 0;
+      const tacOffset = cfg.pushShift * 0.42;
+      const possBoost = inPoss ? 5.5 : -3.2;
+      const zoneFactor = ag.pos === 'DF' ? 0.38 : ag.pos === 'MF' ? 0.54 : 0.62;
 
-      // Shift horizontally toward ball flank (zonal compactness)
-      const flankPull = inPoss ? 0.14 : 0.26;
+      let normX = homeBaseX + (ballNormX - 50) * zoneFactor + tacOffset + lineOffset + possBoost;
+      // Lateral ball-flank shift (more restrained in possession to preserve width)
+      const flankPull = inPoss ? 0.11 : 0.19;
       let ty = widenedY + (b.y - 50) * flankPull;
 
       ag.intent = inPoss ? 'SUPPORT' : 'MARK';
@@ -13634,120 +13990,227 @@ const MatchModal: React.FC<{
 
       if (b.carrierId === ag.id) {
         ag.intent = 'CARRY';
-        tx = clamp(ag.x + dir * 4, 6, 94);
-        ty = clamp(ag.y + (50 - ag.y) * 0.08, 7, 93);
+        const curNormX = attRight ? ag.x : 100 - ag.x;
+        // Near the byline/6-yard box, look to cut inside at an angle rather than running onto the goal line
+        const nextNormX = curNormX > 88 ? curNormX + 1.5 : curNormX + 4;
+        normX = clamp(nextNormX, 6, 92.5);
+        ty = clamp(ag.y + (50 - ag.y) * (curNormX > 85 ? 0.22 : 0.08), 8, 92);
       } else if (b.targetId === ag.id) {
         ag.intent = 'PASS_TARGET';
-        tx = clamp(b.toX, 5, 95);
-        ty = clamp(b.toY, 5, 95);
+        normX = attRight ? b.toX : 100 - b.toX;
+        ty = clamp(b.toY, 6, 94);
       } else if (inPoss) {
-        const oppDefLine = isH ? aDefLineX : hDefLineX;
-        const attProgress = attRight ? b.x : 100 - b.x;
-        const sigRunBoost = ag.sig === 'run' || ag.sig === 'spd' ? 2.5 : 0;
+        const oppDefRaw = isH ? aDefLineX : hDefLineX;
+        const oppDefNorm = clamp(attRight ? oppDefRaw : 100 - oppDefRaw, 54, 90.5);
+        const carrierNormX = carrier ? (attRight ? carrier.x : 100 - carrier.x) : ballNormX;
+        const sigRunBoost = ag.sig === 'run' || ag.sig === 'spd' ? 2.2 : 0;
 
-        // ROLE-DISTINCT OFF-BALL INTELLIGENCE ("ทำทาง")
+        // ROLE-DISTINCT OFF-BALL INTELLIGENCE ("ทำทาง" แบบกระจายโซน ไม่กองหน้าประตู)
         if (ag.role === 'ST' || (ag.sig === 'run' && ag.pos === 'FW')) {
-          const shoulderX = oppDefLine - dir * 1.2;
-          const runLead = attProgress > 52 ? dir * (7.5 + sigRunBoost) : dir * (2.5 + sigRunBoost * 0.5);
-          tx = clamp(attRight ? Math.max(tx, shoulderX + runLead) : Math.min(tx, shoulderX + runLead), 8, 92);
-          ty = clamp(50 + Math.sin(w.minuteFloat * 1.3 + ag.slotIndex) * 14, 30, 70);
-          if (attProgress > 46 && carrier && carrier.side === ag.side) {
+          const shoulderNorm = Math.min(88.5, oppDefNorm - 1.0);
+          const runLead = ballNormX > 52 ? 5.0 + sigRunBoost : 2.0 + sigRunBoost * 0.5;
+          // Lead the line, but cap at normX = 91.5 so ST stays out of the 6-yard line
+          normX = clamp(Math.max(normX, shoulderNorm + runLead), 12, 91.5);
+          ty = clamp(50 + Math.sin(w.minuteFloat * 1.3 + ag.slotIndex) * 12, 34, 66);
+          if (ballNormX > 48 && carrier && carrier.side === ag.side && normX < 89.5) {
             ag.intent = 'MAKE_RUN';
-            ag.runToX = clamp(tx + dir * 8, 6, 94);
-            ag.runToY = clamp(ty + (50 - ty) * 0.25, 32, 68);
+            const runNorm = clamp(normX + 5.5, 12, 91.8);
+            ag.runToX = attRight ? runNorm : 100 - runNorm;
+            ag.runToY = clamp(ty + (50 - ty) * 0.2, 35, 65);
           }
         } else if (ag.role === 'CF') {
-          const pocketX = carrier ? carrier.x + dir * 13 : oppDefLine - dir * 11;
-          tx = clamp(attRight ? Math.min(oppDefLine - 5, pocketX) : Math.max(oppDefLine + 5, pocketX), 14, 86);
-          ty = clamp(b.y + (50 - b.y) * 0.45, 28, 72);
+          // Drops into Zone 14 / D-arc pocket outside the penalty box for cutbacks & link-up
+          const pocketNorm = Math.min(83.5, Math.min(oppDefNorm - 6.5, carrierNormX + 10));
+          normX = clamp(pocketNorm, 16, 84.5);
+          ty = clamp(50 + (b.y < 50 ? 9 : -9), 33, 67);
           ag.intent = 'SUPPORT';
-        } else if (ag.role === 'SS' || (ag.sig === 'run' && ag.pos === 'MF')) {
-          const halfSpaceY = b.y < 50 ? 60 : 40;
-          const surge = attProgress > 45;
-          if (surge) {
-            tx = clamp(oppDefLine + dir * (5.5 + sigRunBoost), 8, 92);
-            ty = clamp(halfSpaceY + (50 - halfSpaceY) * 0.2, 26, 74);
+        } else if (ag.role === 'SS' || ag.role === 'CAM' || (ag.sig === 'run' && ag.pos === 'MF')) {
+          // Half-space / edge-of-box shadow striker: fills far-side pocket around the 18-yard line
+          const halfSpaceY = b.y < 50 ? 63 : 37;
+          const deepBoxTarget = ballNormX > 72 ? 82.5 : Math.min(86.5, oppDefNorm + 2.5 + sigRunBoost);
+          if (ballNormX > 48) {
+            normX = clamp(deepBoxTarget, 18, 86.5);
+            ty = clamp(halfSpaceY, 27, 73);
             ag.intent = 'MAKE_RUN';
-            ag.runToX = clamp(tx + dir * 8, 7, 93);
-            ag.runToY = clamp(50 + (ty - 50) * 0.5, 33, 67);
+            const runNorm = clamp(normX + 3.8, 18, 87.5);
+            ag.runToX = attRight ? runNorm : 100 - runNorm;
+            ag.runToY = clamp(ty + (50 - ty) * 0.15, 29, 71);
           } else {
-            tx = clamp(carrier ? carrier.x + dir * 16 : tx, 15, 85);
+            normX = clamp(carrierNormX + 14, 18, 82);
             ty = clamp(halfSpaceY, 28, 72);
           }
         } else if (ag.role === 'LW' || ag.role === 'RW' || ag.role === 'LM' || ag.role === 'RM') {
           const isLeftWing = ag.role === 'LW' || ag.role === 'LM';
-          const sideY = attRight ? (isLeftWing ? 13 : 87) : isLeftWing ? 87 : 13;
+          const sideY = attRight ? (isLeftWing ? 11 : 89) : isLeftWing ? 89 : 11;
           const ballOnSameFlank = Math.abs(b.y - sideY) < 28;
-          if (attProgress > 54 && !ballOnSameFlank) {
-            tx = clamp(oppDefLine + dir * (3 + sigRunBoost), 9, 91);
-            ty = clamp(attRight ? (isLeftWing ? 36 : 64) : isLeftWing ? 64 : 36, 26, 74);
+          if (ballNormX > 56 && !ballOnSameFlank) {
+            // Far-side winger attacks the back-post edge of the box (wide of ST)
+            normX = clamp(Math.min(89.5, oppDefNorm + 1.5 + sigRunBoost * 0.7), 14, 89.5);
+            ty = clamp(attRight ? (isLeftWing ? 28 : 72) : isLeftWing ? 72 : 28, 22, 78);
             ag.intent = 'MAKE_RUN';
-            ag.runToX = clamp(tx + dir * 7, 7, 93);
+            const runNorm = clamp(normX + 3.5, 14, 90);
+            ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = ty;
-          } else if (attProgress > 49) {
-            tx = clamp(tx + dir * (10 + sigRunBoost), 8, 93);
-            ty = clamp(sideY, 6, 94);
+          } else if (ballNormX > 48) {
+            // Ball-side winger stays wide to stretch the fullback & deliver crosses
+            normX = clamp(normX + 7 + sigRunBoost, 16, 88.5);
+            ty = clamp(sideY, 7, 93);
             ag.intent = 'MAKE_RUN';
-            ag.runToX = clamp(tx + dir * 6, 7, 93);
+            const runNorm = clamp(normX + 4, 16, 89.5);
+            ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = ty;
           }
         } else if (ag.role === 'LB' || ag.role === 'RB' || ag.role === 'LWB' || ag.role === 'RWB') {
           const isLeftFb = ag.role === 'LB' || ag.role === 'LWB';
-          const fbY = attRight ? (isLeftFb ? 10 : 90) : isLeftFb ? 90 : 10;
+          const fbY = attRight ? (isLeftFb ? 9 : 91) : isLeftFb ? 91 : 9;
           const ballOnMySide = Math.abs(b.y - fbY) < 34;
-          if (attProgress > 46 && ballOnMySide && (cfg.tac === 'A' || cfg.tac === 'X' || ag.role === 'LWB' || ag.role === 'RWB' || ag.sig === 'spd' || ag.sig === 'crs' || attMids.length > 0)) {
-            tx = clamp(b.x + dir * (14 + sigRunBoost), 10, 90);
-            ty = clamp(fbY, 5, 95);
+          if (
+            ballNormX > 48 &&
+            ballOnMySide &&
+            (cfg.tac === 'A' || cfg.tac === 'X' || ag.role === 'LWB' || ag.role === 'RWB' || ag.sig === 'spd' || ag.sig === 'crs' || attMids.length > 0)
+          ) {
+            // Overlap stays wide outside the box corner (max normX = 86) for pull-back crosses
+            normX = clamp(ballNormX + 10 + sigRunBoost * 0.8, 20, 84);
+            ty = clamp(fbY, 6, 94);
             ag.intent = 'OVERLAP';
-            ag.runToX = clamp(tx + dir * 9, 8, 92);
+            const runNorm = clamp(normX + 5, 20, 86.5);
+            ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = ty;
+          } else {
+            // Non-overlapping fullback holds wider rest-defense position
+            normX = clamp(normX, 18, cfg.tac === 'X' ? 68 : 60);
           }
+        } else if (ag.pos === 'DF') {
+          // Center backs hold rest defense around halfway instead of walking into the opponent box
+          normX = clamp(normX, 14, cfg.tac === 'X' ? 62 : 54);
         } else if (attMids.some((m) => m.id === ag.id) && carrier) {
           const idxM = attMids.findIndex((m) => m.id === ag.id);
-          const angleOffset = idxM === 0 ? 0.65 : -0.75;
-          const triDist = cfg.pass === 0 ? 12 : 16;
-          tx = clamp(carrier.x + dir * Math.cos(angleOffset) * triDist * 0.7, 10, 90);
-          ty = clamp(carrier.y + Math.sin(angleOffset) * triDist, 10, 90);
+          if (carrierNormX >= 80) {
+            // When ball is deep in/around the box, supporting MFs wait outside the 18y box (Zone 14) for cutbacks
+            normX = clamp(idxM === 0 ? 78 : 73, 18, 81);
+            ty = clamp(idxM === 0 ? (b.y < 50 ? 44 : 56) : (b.y < 50 ? 64 : 36), 16, 84);
+          } else {
+            const angleOffset = idxM === 0 ? 0.72 : -0.82;
+            const triDist = cfg.pass === 0 ? 12 : 16;
+            normX = clamp(carrierNormX + Math.cos(angleOffset) * triDist * 0.65, 16, 82);
+            ty = clamp(carrier.y + Math.sin(angleOffset) * triDist, 10, 90);
+          }
           ag.intent = 'SUPPORT';
+        } else {
+          // Deep midfield / pivot holds central balance behind the ball
+          normX = clamp(normX, 16, 78);
         }
       } else {
-        // OUT OF POSSESSION: Pressing, Covering, & Zonal Marking
+        // OUT OF POSSESSION: Structured Two-Bank Defense + Counter Outlets (never cramming into the 6y box)
         const pressReach = (cfg.press === 2 ? 1.0 : cfg.press === 1 ? 0.72 : 0.42) + (ag.sig === 'mrk' ? 0.2 : 0);
+        const tacBackDrop = cfg.tac === 'Z' ? -3.0 : cfg.tac === 'D' ? -1.5 : cfg.tac === 'X' ? 4.0 : cfg.tac === 'A' ? 2.0 : 0;
+        const lineHeightFloor = (cfg.line === 2 ? 17.5 : cfg.line === 0 ? 10.5 : 13.5) + tacBackDrop;
+        // Ideal back-line anchor (stays outside 6-yard box unless extreme low-block corner emergency)
+        const backLineNorm = clamp(Math.min(ballNormX - 8.5, 32 + (cfg.line - 1) * 6.5 + tacBackDrop), Math.max(9.8, lineHeightFloor), 45);
+
         if (ag.id === primaryPresserId) {
           ag.intent = 'PRESS';
-          tx = clamp(b.x - dir * 1.5, 5, 95);
-          ty = clamp(b.y, 6, 94);
-          if (pressReach < 0.6) {
-            tx = clamp(b.x + dir * 6, 7, 93);
-          }
+          const stepX = pressReach < 0.6 ? ballNormX - 4.5 : ballNormX - 1.2;
+          normX = clamp(stepX, 8.2, 92);
+          ty = clamp(b.y, 7, 93);
         } else if (ag.id === secondaryCoverId) {
           ag.intent = 'MARK';
-          tx = clamp(b.x + dir * 9, 7, 93);
-          ty = clamp(b.y + (50 - b.y) * 0.25, 10, 90);
+          // Screen goal-side & slightly toward center lane between ball and own goal
+          normX = clamp(Math.max(backLineNorm + 2.5, ballNormX - 6.5), 11.2, 88);
+          ty = clamp(b.y + (50 - b.y) * 0.34, 12, 88);
         } else if (ag.pos === 'DF') {
-          const targetDefX = attRight
-            ? clamp(Math.min(b.x - 10, 34 + (cfg.line - 1) * 7), 8, 46)
-            : clamp(Math.max(b.x + 10, 66 - (cfg.line - 1) * 7), 54, 92);
-          tx = clamp(tx * 0.35 + targetDefX * 0.65, 8, 92);
+          const isFb = ag.role === 'LB' || ag.role === 'RB' || ag.role === 'LWB' || ag.role === 'RWB';
+          if (isFb) {
+            const isLeftFb = ag.role === 'LB' || ag.role === 'LWB';
+            const fbSideY = attRight ? (isLeftFb ? 16 : 84) : isLeftFb ? 84 : 16;
+            const ballOnFlank = Math.abs(b.y - fbSideY) < 30;
+            // Fullback steps slightly out to guard wing channel or tucks cleanly to back post without piling in center
+            normX = clamp(normX * 0.30 + (backLineNorm + (ballOnFlank ? 2.2 : 0.8)) * 0.70, Math.max(10.5, backLineNorm), 52);
+            ty = ballOnFlank
+              ? clamp(fbSideY * 0.7 + b.y * 0.3, 10, 90)
+              : clamp(50 + (fbSideY - 50) * (cfg.wid === 0 ? 0.56 : 0.68), 14, 86);
+          } else {
+            // Center backs guard central 6–14y area with staggered depth and lane width
+            normX = clamp(normX * 0.25 + backLineNorm * 0.75, Math.max(9.8, backLineNorm - 0.5), 48);
+            ty = clamp(50 + (widenedY - 50) * 0.62 + (b.y - 50) * 0.14, 29, 71);
+          }
+        } else if (ag.role === 'CDM' || ag.role === 'LDM' || ag.role === 'RDM' || ag.role === 'CM' || ag.role === 'LCM' || ag.role === 'RCM') {
+          // Midfield defensive bank screens in front of the D-arc (Zone 14), +8..13 ahead of DF line
+          const isHolding = ag.role === 'CDM' || ag.role === 'LDM' || ag.role === 'RDM';
+          const screenGap = (cfg.tac === 'Z' ? 7.5 : 10.5) + (isHolding ? -1.5 : 2.5);
+          const midFloor = backLineNorm + screenGap;
+          normX = clamp(Math.max(midFloor, normX), 17.5, 64);
+        } else if (ag.pos === 'MF') {
+          // Attacking mids / wide mids form upper midfield bank & block wide channels
+          const amFloor = backLineNorm + (cfg.tac === 'Z' ? 12.5 : 16.5);
+          normX = clamp(Math.max(amFloor, normX), 23, 72);
+        } else {
+          // Strikers stay as counter-attacking outlets unless extreme Park the Bus
+          const fwFloor = cfg.tac === 'Z' ? Math.max(25, backLineNorm + 16) : Math.max(32, backLineNorm + 22);
+          normX = clamp(Math.max(fwFloor, normX), 25, 78);
         }
       }
 
-      // Soft separation between teammates so dots don't overlap on top of each other
-      const teamMates = isH ? hOut : aOut;
-      teamMates.forEach((other) => {
-        if (other.id === ag.id) return;
-        const dx = tx - other.x;
-        const dy = ty - other.y;
-        const d = Math.hypot(dx, dy);
-        if (d > 0.1 && d < 5.5) {
-          tx += (dx / d) * (5.5 - d) * 0.5;
-          ty += (dy / d) * (5.5 - d) * 0.5;
-        }
-      });
-
-      ag.tx = clamp(tx, 4, 96);
-      ag.ty = clamp(ty, 5, 95);
+      const tx = attRight ? normX : 100 - normX;
+      ag.tx = clamp(tx, 4.5, 95.5);
+      ag.ty = clamp(ty, 5.5, 94.5);
     });
+
+    // Two-pass target-space separation + goalkeeper box clearance so players keep readable tactical spacing
+    const outfield = activeAgents.filter((a) => a.pos !== 'GK' && !lockedTargetIds.has(a.id));
+    const gks = activeAgents.filter((a) => a.pos === 'GK');
+
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 0; i < outfield.length; i++) {
+        const a = outfield[i];
+        const inGoalZone = a.tx < 20 || a.tx > 80;
+        const minMateDist = inGoalZone ? 7.4 : 6.4;
+
+        for (let j = i + 1; j < outfield.length; j++) {
+          const o = outfield[j];
+          const dx = a.tx - o.tx;
+          const dy = a.ty - o.ty;
+          const d = Math.hypot(dx, dy);
+
+          if (a.side === o.side) {
+            if (d < minMateDist) {
+              const nx = d > 0.05 ? dx / d : (a.slotIndex % 2 === 0 ? 0.6 : -0.6);
+              const ny = d > 0.05 ? dy / d : (a.slotIndex % 2 === 0 ? 0.8 : -0.8);
+              const push = (minMateDist - d) * 0.48;
+              a.tx = clamp(a.tx + nx * push, 4.5, 95.5);
+              a.ty = clamp(a.ty + ny * push, 5.5, 94.5);
+              o.tx = clamp(o.tx - nx * push, 4.5, 95.5);
+              o.ty = clamp(o.ty - ny * push, 5.5, 94.5);
+            }
+          } else {
+            const isDuel = a.intent === 'PRESS' || o.intent === 'PRESS' || a.id === b.carrierId || o.id === b.carrierId;
+            const minOppDist = isDuel ? 2.2 : inGoalZone ? 3.8 : 3.2;
+            if (d > 0.05 && d < minOppDist) {
+              const push = (minOppDist - d) * 0.35;
+              a.tx = clamp(a.tx + (dx / d) * push, 4.5, 95.5);
+              a.ty = clamp(a.ty + (dy / d) * push, 5.5, 94.5);
+              o.tx = clamp(o.tx - (dx / d) * push, 4.5, 95.5);
+              o.ty = clamp(o.ty - (dy / d) * push, 5.5, 94.5);
+            }
+          }
+        }
+
+        // Keep outfield players from standing right on top of the goalkeeper
+        for (let g = 0; g < gks.length; g++) {
+          const gk = gks[g];
+          const dx = a.tx - gk.tx;
+          const dy = a.ty - gk.ty;
+          const d = Math.hypot(dx, dy);
+          const gkClear = a.id === b.carrierId ? 2.4 : 4.8;
+          if (d < gkClear) {
+            const nx = d > 0.05 ? dx / d : (gk.tx < 50 ? 1 : -1);
+            const ny = d > 0.05 ? dy / d : (a.slotIndex % 2 === 0 ? 0.5 : -0.5);
+            a.tx = clamp(gk.tx + nx * gkClear, 4.5, 95.5);
+            a.ty = clamp(gk.ty + ny * gkClear, 5.5, 94.5);
+          }
+        }
+      }
+    }
   };
 
   // Start next micro-play when ball finishes current movement/segment
@@ -14667,10 +15130,12 @@ const MatchModal: React.FC<{
     }
 
     // 6. Dribble forward / cut inside
-    const dribbleBias = carrier.pos === 'FW' || carrier.role === 'CAM' || carrier.role === 'CF' ? 0.36 : 0.22;
+    const carrierNormX = attRight ? carrier.x : 100 - carrier.x;
+    const dribbleBias = carrierNormX > 87 ? 0.16 : carrier.pos === 'FW' || carrier.role === 'CAM' || carrier.role === 'CF' ? 0.34 : 0.22;
     if (carrier.pos !== 'GK' && Math.random() < dribbleBias) {
-      const advX = clamp(carrier.x + dir * (6 + Math.random() * 8), 8, 92);
-      const advY = clamp(carrier.y + (50 - carrier.y) * 0.22 + (Math.random() - 0.5) * 14, 8, 92);
+      const stepFwd = carrierNormX > 86 ? 1 + Math.random() * 2.8 : 6 + Math.random() * 7.5;
+      const advX = clamp(carrier.x + dir * stepFwd, 7.5, 92.5);
+      const advY = clamp(carrier.y + (50 - carrier.y) * (carrierNormX > 82 ? 0.34 : 0.22) + (Math.random() - 0.5) * 12, 8, 92);
       carrier.tx = advX;
       carrier.ty = advY;
       b.fromX = carrier.x;
@@ -14685,17 +15150,19 @@ const MatchModal: React.FC<{
       b.shotStyle = undefined;
       b.carrierId = carrier.id;
       b.targetId = null;
-      w.phaseLabel = `⚡ ${carrier.shortName} พาบอลลุยขึ้นหน้า`;
+      w.phaseLabel = carrierNormX > 82 ? `⚡ ${carrier.shortName} แหวกตัดเข้ากลางหาจังหวะ` : `⚡ ${carrier.shortName} พาบอลลุยขึ้นหน้า`;
       w.phaseTone = attRight ? (carrier.x > 65 ? 'attack' : 'normal') : carrier.x < 35 ? 'attack' : 'normal';
       return;
     }
 
-    // 7. Ground Pass / Flair Pass (Rabona / Backheel) / Lofted Diagonal Switch
+    // 7. Ground Pass / Cutback / Flair Pass (Rabona / Backheel) / Lofted Diagonal Switch
     const passCandidates = attPool.filter((a) => a.id !== carrier.id && (a.pos !== 'GK' || (attRight ? carrier.x < 32 : carrier.x > 68)));
     if (passCandidates.length) {
+      const nearByline = carrierNormX >= 83;
       const scored = passCandidates.map((cand) => {
         const dist = Math.hypot(cand.x - carrier.x, cand.y - carrier.y);
         const prog = (cand.x - carrier.x) * dir;
+        const candNormX = attRight ? cand.x : 100 - cand.x;
         let wgt = 10;
         if (attCfg.pass === 0) {
           wgt += dist < 24 ? 26 : -dist * 0.5;
@@ -14708,6 +15175,10 @@ const MatchModal: React.FC<{
         } else {
           wgt += prog > 0 ? 14 : 4;
           wgt -= Math.abs(dist - 20) * 0.4;
+        }
+        // Smart cutback option: when carrier is deep near goal, reward pulling back to edge of box (Zone 14)
+        if (nearByline && candNormX >= 72 && candNormX <= 85 && prog >= -16 && prog <= 2 && Math.abs(cand.y - 50) <= 26) {
+          wgt += 24;
         }
         const blocked = defPool.some((d) => Math.hypot(d.x - cand.x, d.y - cand.y) < 4.5);
         if (blocked) wgt -= 12;
@@ -19211,6 +19682,8 @@ export default function App() {
     updateState((d) => {
       d.v = tab;
       d.tv = 0;
+      d.sub = tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : 0) : 0;
+      if (tab === 't') d.lg = d.teams[d.me].tier;
     });
   };
 
@@ -19827,7 +20300,6 @@ export default function App() {
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onToast={showToast}
-              navIntent={navIntent}
             />
           )}
           {curTab === 'k' && state.mode === 'm' && (
@@ -19871,11 +20343,14 @@ export default function App() {
                   type="button"
                   onClick={() => {
                     SFX.tap();
+                    setNavIntent(null);
                     setNavResetSeq((n) => n + 1);
                     if (mainRef.current) mainRef.current.scrollTop = 0;
                     updateState((d) => {
                       d.v = key;
                       d.tv = 0;
+                      d.sub = 0;
+                      d.lg = d.teams[d.me].tier;
                     });
                   }}
                   className={`relative py-1.5 px-1 sm:px-2 mland:!flex-col mland:py-1 mland:px-0.5 mland:text-[8.5px] mland:flex-1 mland:min-h-[36px] mland:max-h-[48px] rounded-xl mland:rounded-lg flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-xs font-bold cursor-pointer transition-all min-w-0 ${
