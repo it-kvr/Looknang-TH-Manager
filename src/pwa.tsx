@@ -55,6 +55,7 @@ function detectStandalone(): boolean {
   if (typeof window === 'undefined') return false;
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
     (window.navigator as unknown as { standalone?: boolean }).standalone === true
   );
 }
@@ -89,16 +90,19 @@ export function usePWAInstall() {
     promptSubscribers.add(onPrompt);
     installedSubscribers.add(onInstalled);
 
-    const mq = window.matchMedia('(display-mode: standalone)');
-    const onMqChange = (e: MediaQueryListEvent) => {
-      if (e.matches) setIsInstalled(true);
+    const mqStandalone = window.matchMedia('(display-mode: standalone)');
+    const mqFullscreen = window.matchMedia('(display-mode: fullscreen)');
+    const onMqChange = () => {
+      if (detectStandalone()) setIsInstalled(true);
     };
-    mq.addEventListener?.('change', onMqChange);
+    mqStandalone.addEventListener?.('change', onMqChange);
+    mqFullscreen.addEventListener?.('change', onMqChange);
 
     return () => {
       promptSubscribers.delete(onPrompt);
       installedSubscribers.delete(onInstalled);
-      mq.removeEventListener?.('change', onMqChange);
+      mqStandalone.removeEventListener?.('change', onMqChange);
+      mqFullscreen.removeEventListener?.('change', onMqChange);
     };
   }, []);
 

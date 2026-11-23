@@ -31,6 +31,9 @@ function resolveBase(command: 'build' | 'serve'): string {
 export default defineConfig(({command}) => {
   const base = resolveBase(command);
   const pwaIconSrc = base === './' ? 'icon.svg' : `${base}icon.svg`;
+  const pwaIcon192 = base === './' ? 'pwa-192x192.png' : `${base}pwa-192x192.png`;
+  const pwaIcon512 = base === './' ? 'pwa-512x512.png' : `${base}pwa-512x512.png`;
+  const pwaIconMask = base === './' ? 'pwa-maskable-512x512.png' : `${base}pwa-maskable-512x512.png`;
   const navigateFallback = base === './' ? 'index.html' : `${base}index.html`;
 
   return {
@@ -40,31 +43,44 @@ export default defineConfig(({command}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['icon.svg'],
+        includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: base,
           name: 'ลูกหนังไทย — เกมคุมทีมและนักเตะอาชีพ',
           short_name: 'ลูกหนังไทย',
           description:
             'เกมจำลองการคุมทีมฟุตบอลไทยและโหมดนักเตะอาชีพ ไต่ลีก บอลถ้วย และทีมชาติ เล่นแบบติดตั้งลงมือถือและออฟไลน์ได้',
-          theme_color: '#17804a',
-          background_color: '#08130e',
-          display: 'standalone',
+          theme_color: '#0c1c14',
+          background_color: '#06100b',
+          display: 'fullscreen',
+          display_override: ['fullscreen', 'standalone'],
           orientation: 'any',
           start_url: base,
           scope: base,
           icons: [
             {
-              src: pwaIconSrc,
-              sizes: 'any',
-              type: 'image/svg+xml',
+              src: pwaIcon192,
+              sizes: '192x192',
+              type: 'image/png',
               purpose: 'any',
+            },
+            {
+              src: pwaIcon512,
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: pwaIconMask,
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
             },
             {
               src: pwaIconSrc,
               sizes: 'any',
               type: 'image/svg+xml',
-              purpose: 'maskable',
+              purpose: 'any',
             },
           ],
         },

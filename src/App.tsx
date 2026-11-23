@@ -775,17 +775,22 @@ function getDefaultMatchSpeed(st: AppSettings): 0.25 | 0.5 | 1 | 2 | 4 {
 
 function applyTheme(theme?: 'light' | 'dark' | '') {
   const root = document.documentElement;
+  let isDark = false;
   if (theme === 'dark') {
     root.classList.add('dark');
     root.setAttribute('data-theme', 'dark');
+    isDark = true;
   } else if (theme === 'light') {
     root.classList.remove('dark');
     root.setAttribute('data-theme', 'light');
+    isDark = false;
   } else {
     root.removeAttribute('data-theme');
-    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-    root.classList.toggle('dark', prefersDark);
+    isDark = Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    root.classList.toggle('dark', isDark);
   }
+  const themeColor = isDark ? '#0c1c14' : '#ffffff';
+  document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.setAttribute('content', themeColor));
 }
 
 let audioCtx: AudioContext | null = null;
@@ -4639,8 +4644,8 @@ const MainMenu: React.FC<{
 
   if (step === 'ms' && previewClubs) {
     return (
-      <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
-        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
+      <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
           <div className="max-w-5xl mland:max-w-none mx-auto px-3 sm:px-5 py-3 mland:py-1 flex flex-wrap items-center justify-between gap-2.5 mland:gap-2">
             <div className="min-w-0">
               <h2 className="text-lg sm:text-2xl mland:text-sm font-bold font-display truncate">🏟️ เลือกสโมสรเริ่มต้น</h2>
@@ -4671,7 +4676,7 @@ const MainMenu: React.FC<{
             </div>
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden safe-bottom safe-x">
           <div className="max-w-5xl mland:max-w-none mx-auto p-3 sm:p-5 mland:p-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2.5 mland:gap-1.5 mland:min-h-full mland:auto-rows-fr">
             {previewClubs.t0.map((t, idx) => {
               const avg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length);
@@ -4798,8 +4803,8 @@ const MainMenu: React.FC<{
     };
 
     return (
-      <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
-        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
+      <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
           <div className="max-w-5xl mland:max-w-none mx-auto px-3 sm:px-5 py-2.5 mland:py-1 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl mland:text-sm font-bold font-display truncate">⚽ สร้างนักเตะอาชีพ</h2>
@@ -4811,7 +4816,7 @@ const MainMenu: React.FC<{
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden overflow-x-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden overflow-x-hidden safe-bottom safe-x">
           <div className="max-w-5xl mland:max-w-none mx-auto p-3 sm:p-5 mland:p-1.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] mland:grid-cols-[190px_1fr] gap-4 mland:gap-2 items-start mland:items-stretch mland:h-full">
             <div className="lg:sticky lg:top-3 mland:static flex flex-col gap-2.5 mland:gap-1 mland:h-full mland:justify-between">
               <div className="rounded-3xl mland:rounded-2xl p-4 mland:p-2 text-white border border-white/20" style={{ background: `linear-gradient(155deg, ${ovColor(ov)}, #0b1f15 78%)` }}>
@@ -5175,7 +5180,7 @@ const MainMenu: React.FC<{
   }
 
   return (
-    <div className="h-[100dvh] w-full overflow-y-auto mland:overflow-hidden overflow-x-hidden flex flex-col bg-[var(--bg)]">
+    <div className="h-full min-h-[100dvh] w-full overflow-y-auto mland:overflow-hidden overflow-x-hidden flex flex-col bg-[var(--bg)] safe-all">
       <div className="w-full max-w-5xl mland:max-w-none m-auto mland:m-0 mland:h-full p-3 sm:p-5 mland:p-2 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] mland:grid-cols-[0.74fr_1.26fr] gap-4 lg:gap-6 mland:gap-2.5 items-center mland:items-stretch">
         <div className="text-center lg:text-left mland:text-left mland:flex mland:flex-col mland:justify-between mland:h-full mland:min-h-0 mland:game-card mland:p-2.5 mland:rounded-xl">
           <div>
@@ -17287,7 +17292,7 @@ const MatchModal: React.FC<{
   );
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-3 mland:p-1 overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-5xl mland:max-w-[98vw] max-h-[95dvh] mland:h-[97dvh] mland:max-h-[97dvh] rounded-2xl sm:rounded-3xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Scoreboard Header */}
         <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)]">
@@ -18875,6 +18880,29 @@ const SettingsModal: React.FC<{
   const [st, setSt] = useState<AppSettings>(() => getSettings());
   const [saveCode, setSaveCode] = useState('');
   const [showVip, setShowVip] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement));
+  const canFullscreen = typeof document !== 'undefined' && Boolean(document.fullscreenEnabled);
+
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  const toggleFullscreen = async () => {
+    SFX.tap();
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
+        setIsFullscreen(true);
+      } else {
+        await document.exitFullscreen();
+        setIsFullscreen(false);
+      }
+    } catch {
+      onToast('เบราว์เซอร์อุปกรณ์นี้ไม่รองรับการสั่งเต็มจอจากหน้าต่างนี้');
+    }
+  };
 
   const update = (patch: Partial<AppSettings>) => {
     const next = { ...st, ...patch };
@@ -19020,6 +19048,20 @@ const SettingsModal: React.FC<{
           </div>
 
           <div className="contents mland:block mland:space-y-1.5">
+            {canFullscreen && (
+              <button
+                type="button"
+                onClick={toggleFullscreen}
+                className={`w-full flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10.5px] font-semibold cursor-pointer ${
+                  isFullscreen ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]' : 'bg-[var(--surface-2)] border-[var(--line)]'
+                }`}
+              >
+                <span>🖥️ โหมดเต็มจอไร้ขอบ (ซ่อนแถบบน/ล่าง)</span>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] mland:text-[9.5px] font-bold ${isFullscreen ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                  {isFullscreen ? 'เต็มจออยู่' : 'เปิดเต็มจอ'}
+                </span>
+              </button>
+            )}
             <PWAInstallButton variant="settings" onToast={onToast} />
 
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] space-y-2 mland:space-y-1">
@@ -19609,9 +19651,9 @@ export default function App() {
   const curTab: MainTab = tabs.some(([k]) => k === state.v) ? state.v : tabs[0][0];
 
   return (
-    <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
+    <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
       {/* Pinned Top Game HUD Bar */}
-      <header className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+      <header className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)] safe-top safe-x">
         <div className="max-w-6xl mland:max-w-none mx-auto px-3 sm:px-5 mland:px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
             <button
@@ -19697,7 +19739,7 @@ export default function App() {
 
       <div className="flex-1 min-h-0 flex flex-col mland:flex-row overflow-hidden">
         {/* Center Scrollable Game Stage */}
-        <main ref={mainRef} className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden mland:flex mland:flex-col overflow-x-hidden">
+        <main ref={mainRef} className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden mland:flex mland:flex-col overflow-x-hidden mland:pr-[env(safe-area-inset-right,0px)]">
           <div className="max-w-6xl mland:max-w-none mland:w-full mx-auto px-3 sm:px-5 mland:px-2.5 py-3 sm:py-4 mland:py-1.5 space-y-3 sm:space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
             {/* Next match + latest news compact ticker (shown on overview tab only) */}
             {(state.mode === 'p' ? curTab === 'p' : curTab === 't') && (
@@ -19816,7 +19858,7 @@ export default function App() {
         </main>
 
         {/* Pinned Bottom / Mobile-Landscape Left-Rail Navigation Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] mland:order-first mland:w-[62px] mland:h-full mland:border-t-0 mland:border-r mland:px-1 mland:py-1.5 mland:overflow-y-auto">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] safe-bottom mland:pl-[env(safe-area-inset-left,0px)] mland:order-first mland:w-[calc(62px+env(safe-area-inset-left,0px))] mland:h-full mland:border-t-0 mland:border-r mland:px-1 mland:py-1.5 mland:overflow-y-auto">
           <div
             className="max-w-6xl mx-auto px-1.5 sm:px-5 py-1.5 grid gap-1 mland:!flex mland:flex-col mland:gap-1 mland:h-full mland:justify-center mland:px-0 mland:py-0"
             style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
