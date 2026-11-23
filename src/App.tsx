@@ -3985,28 +3985,145 @@ const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }> = ({ 
 
 
 
+interface PitchPositionZone {
+  id: string;
+  sp: SubRole;
+  label: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  line: Position;
+}
+
+const PITCH_POSITION_ZONES: PitchPositionZone[] = [
+  { id: 'LW', sp: 'LW', label: 'ปีกซ้าย', x1: 3, y1: 7, x2: 26, y2: 29, line: 'FW' },
+  { id: 'ST', sp: 'ST', label: 'หน้าเป้า', x1: 26, y1: 7, x2: 74, y2: 20, line: 'FW' },
+  { id: 'CF', sp: 'CF', label: 'หน้าต่ำ/เชื่อม', x1: 26, y1: 20, x2: 74, y2: 29.5, line: 'FW' },
+  { id: 'RW', sp: 'RW', label: 'ปีกขวา', x1: 74, y1: 7, x2: 97, y2: 29, line: 'FW' },
+  { id: 'LM', sp: 'LM', label: 'กลางซ้าย', x1: 3, y1: 29, x2: 25, y2: 57, line: 'MF' },
+  { id: 'CAM', sp: 'CAM', label: 'กลางรุก', x1: 25, y1: 29.5, x2: 75, y2: 43, line: 'MF' },
+  { id: 'RM', sp: 'RM', label: 'กลางขวา', x1: 75, y1: 29, x2: 97, y2: 57, line: 'MF' },
+  { id: 'CM', sp: 'CM', label: 'กองกลาง', x1: 25, y1: 43, x2: 75, y2: 57, line: 'MF' },
+  { id: 'LWB', sp: 'LWB', label: 'วิงแบ็กซ้าย', x1: 3, y1: 57, x2: 25, y2: 69, line: 'DF' },
+  { id: 'CDM', sp: 'CDM', label: 'กลางตัวรับ', x1: 25, y1: 57, x2: 75, y2: 69, line: 'MF' },
+  { id: 'RWB', sp: 'RWB', label: 'วิงแบ็กขวา', x1: 75, y1: 57, x2: 97, y2: 69, line: 'DF' },
+  { id: 'LB', sp: 'LB', label: 'แบ็กซ้าย', x1: 3, y1: 69, x2: 23, y2: 85, line: 'DF' },
+  { id: 'CB', sp: 'CB', label: 'เซนเตอร์แบ็ก', x1: 23, y1: 69, x2: 77, y2: 85, line: 'DF' },
+  { id: 'RB', sp: 'RB', label: 'แบ็กขวา', x1: 77, y1: 69, x2: 97, y2: 85, line: 'DF' },
+  { id: 'GK', sp: 'GK', label: 'ผู้รักษาประตู', x1: 28, y1: 85, x2: 72, y2: 96, line: 'GK' }
+];
+
+const getPitchZoneAt = (x: number, y: number): PitchPositionZone => {
+  const found = PITCH_POSITION_ZONES.find(
+    (z) => x >= z.x1 && x <= z.x2 && y >= z.y1 && y <= z.y2
+  );
+  if (found) return found;
+  if (y >= 85) return PITCH_POSITION_ZONES[PITCH_POSITION_ZONES.length - 1];
+  return PITCH_POSITION_ZONES[7]; // CM fallback
+};
+
+interface PitchDragPreview {
+  slotIdx: number;
+  player: Player;
+  x: number;
+  y: number;
+  sp: SubRole;
+  zoneId: string;
+  zoneLabel: string;
+}
+
 const FormationPitch: React.FC<{
   team: Team;
   state: GameState;
+  svgRef?: React.RefObject<SVGSVGElement | null>;
+  showPositionZones?: boolean;
   dragSourceName?: string | null;
   dropTargetName?: string | null;
-  onPlayerPointerDown: (e: React.PointerEvent, player: Player, slotSp: SubRole) => void;
-}> = ({ team, state, dragSourceName, dropTargetName, onPlayerPointerDown }) => {
+  dragPreview?: PitchDragPreview | null;
+  onPlayerPointerDown: (e: React.PointerEvent, player: Player, slotSp: SubRole, slotIdx?: number) => void;
+}> = ({
+  team,
+  state,
+  svgRef,
+  showPositionZones = false,
+  dragSourceName,
+  dropTargetName,
+  dragPreview,
+  onPlayerPointerDown
+}) => {
   const uid = React.useId().replace(/:/g, '');
   const starters = xi(team);
   const slots = getFormationSlots(team);
   const col = tc(team, state);
   const trCol = tc(team, state, true);
   const gkCol = pickGK(col);
+  const zoneLineColors: Record<Position, { stroke: string; fill: string; text: string }> = {
+    FW: { stroke: 'rgba(110, 231, 183, 0.55)', fill: 'rgba(16, 185, 129, 0.08)', text: 'rgba(209, 250, 229, 0.85)' },
+    MF: { stroke: 'rgba(252, 211, 77, 0.55)', fill: 'rgba(245, 158, 11, 0.08)', text: 'rgba(254, 243, 199, 0.85)' },
+    DF: { stroke: 'rgba(125, 211, 252, 0.55)', fill: 'rgba(56, 189, 248, 0.08)', text: 'rgba(224, 242, 254, 0.85)' },
+    GK: { stroke: 'rgba(216, 180, 254, 0.55)', fill: 'rgba(168, 85, 247, 0.09)', text: 'rgba(243, 232, 255, 0.85)' }
+  };
 
   return (
-    <svg className="w-full max-w-[440px] mland:h-full mland:max-h-full mland:w-auto mland:max-w-full mx-auto rounded-2xl block select-none" viewBox="0 0 300 340">
+    <svg
+      ref={svgRef}
+      className="w-full max-w-[440px] mland:h-full mland:max-h-full mland:w-auto mland:max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none"
+      viewBox="0 0 300 340"
+    >
       <defs>
         <clipPath id={`fc-${uid}`}>
           <circle cx="30" cy="31" r="27" />
         </clipPath>
       </defs>
       <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
+
+      {showPositionZones && (
+        <g className="pointer-events-none">
+          {PITCH_POSITION_ZONES.map((z) => {
+            const x = 18 + z.x1 * 2.64 + 1.2;
+            const y = 24 + z.y1 * 2.9 + 1.2;
+            const w = Math.max(8, (z.x2 - z.x1) * 2.64 - 2.4);
+            const h = Math.max(8, (z.y2 - z.y1) * 2.9 - 2.4);
+            const isActiveZone = dragPreview?.zoneId === z.id;
+            const pal = zoneLineColors[z.line];
+            const fitPen = isActiveZone && dragPreview ? pen(dragPreview.player.ro, z.sp) : 0;
+            const activeStroke = fitPen === 0 ? '#4ade80' : fitPen === 1 ? '#facc15' : '#f87171';
+            const activeFill = fitPen === 0 ? 'rgba(74, 222, 128, 0.24)' : fitPen === 1 ? 'rgba(250, 204, 21, 0.24)' : 'rgba(248, 113, 113, 0.24)';
+
+            return (
+              <g key={z.id}>
+                <rect
+                  x={x}
+                  y={y}
+                  width={w}
+                  height={h}
+                  rx="4.5"
+                  fill={isActiveZone ? activeFill : pal.fill}
+                  stroke={isActiveZone ? activeStroke : pal.stroke}
+                  strokeWidth={isActiveZone ? '1.8' : '0.9'}
+                  strokeDasharray={isActiveZone ? undefined : '3.5 2.5'}
+                  opacity={dragPreview ? (isActiveZone ? 1 : 0.65) : 0.72}
+                />
+                <text
+                  x={x + 4}
+                  y={y + 8.5}
+                  fontSize={isActiveZone ? '8' : '6.8'}
+                  fontWeight="800"
+                  fontFamily="Sarabun"
+                  fill={isActiveZone ? '#ffffff' : pal.text}
+                  stroke="rgba(5, 22, 13, 0.8)"
+                  strokeWidth="1.6"
+                  paintOrder="stroke"
+                >
+                  {isActiveZone ? `${z.sp} · ${z.label}` : z.sp}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      )}
+
       {starters.map((q, i) => {
         const z = slots[i] || { sp: 'CM', x: 50, y: 50 };
         const cx = 18 + z.x * 2.64;
@@ -4014,6 +4131,7 @@ const FormationPitch: React.FC<{
         const pn = pen(q.ro, z.sp);
         const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
         const isSource = dragSourceName === q.n;
+        const isMovingSelf = dragPreview?.slotIdx === i;
         const isTarget = dropTargetName === q.n && dragSourceName !== q.n;
         const ed = q.inj > 0 || (q.sus || 0) > 0 ? '#ef4444' : isTarget || isMe ? '#f5c242' : PCOL[pn];
         const kc = z.sp === 'GK' ? gkCol : col;
@@ -4028,10 +4146,11 @@ const FormationPitch: React.FC<{
             key={`${q.n}-${i}`}
             data-drop-player={q.n}
             data-drop-slot={z.sp}
-            onPointerDown={(e) => onPlayerPointerDown(e, q, z.sp)}
-            style={{ touchAction: 'none', opacity: isSource ? 0.45 : 1 }}
+            onPointerDown={(e) => onPlayerPointerDown(e, q, z.sp, i)}
+            style={{ touchAction: 'none', opacity: isMovingSelf ? 0.24 : isSource ? 0.45 : 1 }}
             className={dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}
           >
+            <circle cx={cx} cy={cy} r={22} fill="transparent" />
             {isMe && !isTarget && (
               <circle cx={cx} cy={cy} r={22.5} fill="#f5c2422e" stroke="#fde047" strokeWidth="2.2" />
             )}
@@ -4124,6 +4243,46 @@ const FormationPitch: React.FC<{
           </g>
         );
       })}
+
+      {/* Live Dragged Player Preview on Pitch */}
+      {dragPreview && (() => {
+        const pq = dragPreview.player;
+        const gx = 18 + dragPreview.x * 2.64;
+        const gy = 24 + dragPreview.y * 2.9;
+        const pn = pen(pq.ro, dragPreview.sp);
+        const ed = pn === 0 ? '#4ade80' : pn === 1 ? '#facc15' : '#f87171';
+        const kc = dragPreview.sp === 'GK' ? gkCol : col;
+        const sc = 0.56;
+        return (
+          <g className="pointer-events-none">
+            <circle cx={gx} cy={gy} r={23} fill={`${ed}30`} stroke={ed} strokeWidth="2" strokeDasharray="3 2" />
+            <circle cx={gx} cy={gy} r={18} fill={kc} stroke="#fff" strokeWidth="2.5" />
+            <g
+              transform={`translate(${(gx - 30 * sc).toFixed(1)},${(gy - 31 * sc).toFixed(1)}) scale(${sc})`}
+              clipPath={`url(#fc-${uid})`}
+              dangerouslySetInnerHTML={{ __html: faceBodySvg(visOf(pq, state.p), kc, trCol, 32, '#10281d', true, false) }}
+            />
+            <rect x={gx - 22} y={gy - 33} width="44" height="13" rx="6" fill="#0b2018" stroke={ed} strokeWidth="1.2" />
+            <text x={gx} y={gy - 23.6} textAnchor="middle" fontSize="8.5" fontWeight="800" fontFamily="Sarabun" fill={ed}>
+              {dragPreview.sp}
+            </text>
+            <text
+              x={clamp(gx, 28, 272)}
+              y={gy + 29}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="800"
+              fontFamily="Sarabun"
+              fill="#fde047"
+              stroke="#0b2018"
+              strokeWidth="2.6"
+              paintOrder="stroke"
+            >
+              {pq.n.split(' ')[0]}
+            </text>
+          </g>
+        );
+      })()}
     </svg>
   );
 };
@@ -4328,10 +4487,10 @@ const MainMenu: React.FC<{
                 SFX.tap();
                 onLoadSave(m, k, d);
               }}
-              className="flex-1 min-w-0 text-left px-3 py-2 mland:px-2 mland:py-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer"
+              className="flex-1 min-w-0 text-left px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer"
             >
               <div className="font-semibold text-sm mland:text-[10.5px] truncate">▶ สล็อต {k} · {name}</div>
-              <div className="text-xs mland:text-[9px] text-[var(--mut)] truncate">
+              <div className="text-xs mland:text-[9px] text-[var(--mut)] truncate tabular">
                 ซีซั่น {d.season} · นัด {d.md}/{d.fx?.length || 30}
                 {m === 'p' && d.p ? ` · ${d.p.pos} · ${d.p.ap} นัด` : ''}
               </div>
@@ -4340,7 +4499,7 @@ const MainMenu: React.FC<{
               type="button"
               onClick={() => handleDeleteSlot(m, k)}
               aria-label="ลบเซฟ"
-              className={`min-h-[42px] mland:min-h-0 mland:py-1.5 px-3 mland:px-2 rounded-xl border text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors ${
+              className={`min-h-[42px] mland:min-h-[34px] px-3 mland:px-2.5 rounded-xl border text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors shrink-0 ${
                 isConfirm ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]' : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)]'
               }`}
             >
@@ -4355,7 +4514,7 @@ const MainMenu: React.FC<{
             key={k}
             type="button"
             onClick={() => (m === 'm' ? openManagerSetup(k) : openPlayerSetup(k))}
-            className="w-full text-left px-3 py-2 mland:px-2 mland:py-1 rounded-xl border border-dashed border-[var(--line)] hover:border-[var(--g)] transition-colors cursor-pointer"
+            className="w-full text-left px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/40 transition-colors cursor-pointer"
           >
             <div className="font-semibold text-sm mland:text-[10.5px]">＋ สล็อต {k} · ว่าง</div>
             <div className="text-xs mland:text-[9px] text-[var(--mut)]">เริ่มเกมใหม่</div>
@@ -4896,10 +5055,10 @@ const MainMenu: React.FC<{
 
   return (
     <div className="h-[100dvh] w-full overflow-y-auto mland:overflow-hidden overflow-x-hidden flex flex-col bg-[var(--bg)]">
-      <div className="w-full max-w-5xl mland:max-w-none m-auto mland:m-0 mland:h-full p-3 sm:p-5 mland:p-2 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] mland:grid-cols-[0.78fr_1.22fr] gap-4 lg:gap-6 mland:gap-2.5 items-center mland:items-stretch">
-        <div className="text-center lg:text-left mland:text-left mland:flex mland:flex-col mland:justify-between mland:h-full mland:min-h-0">
+      <div className="w-full max-w-5xl mland:max-w-none m-auto mland:m-0 mland:h-full p-3 sm:p-5 mland:p-2.5 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] mland:grid-cols-[0.76fr_1.24fr] gap-4 lg:gap-6 mland:gap-3 items-center mland:items-stretch">
+        <div className="text-center lg:text-left mland:text-left mland:flex mland:flex-col mland:justify-between mland:h-full mland:min-h-0 mland:game-card mland:p-2.5">
           <div>
-            <svg viewBox="0 0 320 155" className="w-full max-w-[380px] mland:max-w-[200px] mland:max-h-[78px] mx-auto lg:mx-0 mland:mx-0 rounded-3xl mland:rounded-xl border border-[var(--line)] mb-4 mland:mb-1">
+            <svg viewBox="0 0 320 155" className="w-full max-w-[380px] mland:max-w-full mland:max-h-[86px] mx-auto lg:mx-0 mland:mx-0 rounded-3xl mland:rounded-xl border border-[var(--line)] mb-4 mland:mb-1.5 shadow-xs">
               <defs>
                 <linearGradient id="sk_hero" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor="#0b2018" />
@@ -4924,22 +5083,22 @@ const MainMenu: React.FC<{
               <circle cx="160" cy="124" r="8" fill="#fff" stroke="#111" strokeWidth="1.5" />
             </svg>
             <h1 className="text-4xl md:text-5xl mland:text-xl font-bold font-display tracking-tight mb-2 mland:mb-0.5 leading-none">ลูกหนังไทย</h1>
-            <p className="text-base mland:text-[10.5px] mland:leading-snug text-[var(--mut)] mb-3 mland:mb-1">จากลีกระดับจังหวัด สู่ลีกสูงสุดในประเทศ บอลถ้วยประชาชน และเวทีชิงแชมป์ทวีป</p>
-            <p className="text-xs text-[var(--mut)] leading-relaxed mland:hidden">
-              ไต่ 3 ระดับ ลีกละ 16 ทีม · อันดับ 1-3 เลื่อนชั้น 3 ทีมท้ายตกชั้น · แข่งขันสด 90 นาที เปลี่ยนตัวแก้เกม ระบบแมวมอง และเส้นทางทีมชาติ
+            <p className="text-base mland:text-[10.5px] mland:leading-snug text-[var(--mut)] mb-3 mland:mb-1.5">จากลีกระดับจังหวัด สู่ลีกสูงสุดในประเทศ บอลถ้วยประชาชน และเวทีชิงแชมป์ทวีป</p>
+            <p className="text-xs mland:text-[9.5px] text-[var(--mut)] leading-relaxed">
+              ไต่ 3 ระดับ 48 ทีม · แข่งสด 2 มิติปรับแผนเรียลไทม์ · แมวมองและเส้นทางทีมชาติ
             </p>
           </div>
-          <div className="hidden mland:block mt-auto pt-1">
+          <div className="hidden mland:block mt-auto pt-1.5">
             <PWAInstallButton variant="card" onToast={onToast} />
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 mland:gap-1.5 mland:h-full mland:min-h-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-1.5 shrink-0">
+        <div className="flex flex-col gap-4 mland:gap-2 mland:h-full mland:min-h-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 shrink-0">
             <button
               type="button"
               onClick={() => openManagerSetup(firstEmptySlot('m'))}
-              className="group relative overflow-hidden p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
+              className="group relative overflow-hidden p-4 mland:p-2.5 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
             >
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-black/10 flex items-center justify-center text-xl mland:text-base shrink-0">📋</span>
@@ -4953,7 +5112,7 @@ const MainMenu: React.FC<{
             <button
               type="button"
               onClick={() => openPlayerSetup(firstEmptySlot('p'))}
-              className="group relative overflow-hidden p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
+              className="group relative overflow-hidden p-4 mland:p-2.5 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
             >
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-white/15 flex items-center justify-center text-xl mland:text-base shrink-0">⚽</span>
@@ -4966,16 +5125,16 @@ const MainMenu: React.FC<{
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-1.5 mland:flex-1 mland:min-h-0">
-            <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:flex mland:flex-col mland:min-h-0">
-              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0">
+            <div className="p-3.5 mland:p-2.5 game-card mland:flex mland:flex-col mland:min-h-0">
+              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1.5 shrink-0 flex items-center justify-between text-[var(--ink)]">
                 <span>เซฟโหมดผู้จัดการ</span>
                 <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
               </div>
               <div className="mland:flex-1 mland:min-h-0 mland:overflow-y-auto pr-0.5">{renderSlotList('m')}</div>
             </div>
-            <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:flex mland:flex-col mland:min-h-0">
-              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
+            <div className="p-3.5 mland:p-2.5 game-card mland:flex mland:flex-col mland:min-h-0">
+              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1.5 shrink-0 flex items-center justify-between text-[var(--ink)]">
                 <span>เซฟโหมดนักเตะ</span>
                 <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
               </div>
@@ -5302,17 +5461,17 @@ const LeagueView: React.FC<{
 
   return (
     <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      <div className="flex flex-wrap items-center gap-2 mland:gap-1 shrink-0">
-        <div className="flex flex-wrap items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] max-w-full">
+      <div className="flex items-center justify-between gap-2 mland:gap-1.5 flex-nowrap overflow-x-auto shrink-0 pb-0.5">
+        <div className="flex items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => (
-            <button key={lbl} type="button" onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors ${vt === idx ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            <button key={lbl} type="button" onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${vt === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
               {lbl}{idx === me.tier ? ' ⭐' : ''}
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] max-w-full">
+        <div className="flex items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {['ตารางคะแนน', 'เทียบพลังทีม', 'สถิติผู้เล่น', 'ปฏิทินแข่ง'].map((lbl, idx) => (
-            <button key={lbl} type="button" onClick={() => { SFX.tap(); onUpdateState((d) => { d.tv = idx; }); }} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)]' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            <button key={lbl} type="button" onClick={() => { SFX.tap(); onUpdateState((d) => { d.tv = idx; }); }} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
               {lbl}
             </button>
           ))}
@@ -5880,6 +6039,7 @@ const SquadTacticsView: React.FC<{
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
   const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
   const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
+  const pitchSvgRef = useRef<SVGSVGElement | null>(null);
 
   const starters = xi(me);
   const slots = getFormationSlots(me);
@@ -5893,6 +6053,7 @@ const SquadTacticsView: React.FC<{
   const dragRef = useRef<{
     player: Player;
     fromSlot?: SubRole;
+    fromPitchIdx?: number;
     pointerId: number;
     startX: number;
     startY: number;
@@ -5902,6 +6063,8 @@ const SquadTacticsView: React.FC<{
   } | null>(null);
   const [dragUi, setDragUi] = useState<{ player: Player; fromSlot?: SubRole; x: number; y: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ name: string; slot?: string } | null>(null);
+  const [pitchDragPreview, setPitchDragPreview] = useState<PitchDragPreview | null>(null);
+  const pitchDragPreviewRef = useRef<PitchDragPreview | null>(null);
 
   const swapAnyPlayers = (nameA: string, nameB: string) => {
     const s = me.sq.find((q) => q.n === nameA);
@@ -5934,6 +6097,24 @@ const SquadTacticsView: React.FC<{
     onToast(`สลับ ${s.n.split(' ')[0]} ↔ ${p.n.split(' ')[0]} แล้ว`);
   };
 
+  const moveStarterToZone = (slotIdx: number, nx: number, ny: number, newRole: SubRole, zoneLabel: string, playerName: string) => {
+    if (slotIdx < 1 || slotIdx >= 11) return;
+    SFX.tap();
+    onUpdateState((draft) => {
+      const t = draft.teams[draft.me];
+      const curXi = xi(t).map((q) => q.n);
+      const baseSlots = getFormationSlots(t);
+      const nextCf: CustomSlot[] = baseSlots.map((z, idx) =>
+        idx === slotIdx ? [newRole, nx, ny] : [z.sp, z.x, z.y]
+      );
+      t.lu = curXi;
+      t.cf = nextCf;
+      t.form = 'custom';
+      t.tacFam = Math.max(45, t.tacFam ?? 65);
+    });
+    onToast(`📍 ย้าย ${playerName.split(' ')[0]} → ${newRole} (${zoneLabel})`);
+  };
+
   const findDropAt = (x: number, y: number): { name: string; slot?: string } | null => {
     const els = document.elementsFromPoint(x, y);
     for (const el of els) {
@@ -5946,11 +6127,32 @@ const SquadTacticsView: React.FC<{
     return null;
   };
 
-  const handlePlayerPointerDown = (e: React.PointerEvent, q: Player, slotSp?: SubRole) => {
+  const clientToPitchCoords = (clientX: number, clientY: number): { px: number; py: number; inside: boolean } | null => {
+    const svg = pitchSvgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const inside = clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom;
+    const ctm = svg.getScreenCTM?.();
+    if (ctm) {
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const inv = pt.matrixTransform(ctm.inverse());
+      return { px: inv.x, py: inv.y, inside };
+    }
+    return {
+      px: ((clientX - rect.left) / Math.max(1, rect.width)) * 300,
+      py: ((clientY - rect.top) / Math.max(1, rect.height)) * 340,
+      inside
+    };
+  };
+
+  const handlePlayerPointerDown = (e: React.PointerEvent, q: Player, slotSp?: SubRole, slotIdx?: number) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     dragRef.current = {
       player: q,
       fromSlot: slotSp,
+      fromPitchIdx: slotIdx,
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
@@ -5960,10 +6162,34 @@ const SquadTacticsView: React.FC<{
     };
   };
 
-  const dragActionsRef = useRef({ onInspectPlayer, swapAnyPlayers, me, isMgr });
-  dragActionsRef.current = { onInspectPlayer, swapAnyPlayers, me, isMgr };
+  const dragActionsRef = useRef({
+    onInspectPlayer,
+    swapAnyPlayers,
+    moveStarterToZone,
+    me,
+    isMgr,
+    starters,
+    slots
+  });
+  dragActionsRef.current = {
+    onInspectPlayer,
+    swapAnyPlayers,
+    moveStarterToZone,
+    me,
+    isMgr,
+    starters,
+    slots
+  };
 
   useEffect(() => {
+    const clearDrag = () => {
+      dragRef.current = null;
+      pitchDragPreviewRef.current = null;
+      setDragUi(null);
+      setDropTarget(null);
+      setPitchDragPreview(null);
+    };
+
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
@@ -5972,24 +6198,87 @@ const SquadTacticsView: React.FC<{
       if (!d.active && dist > 6) {
         d.active = true;
       }
-      if (d.active) {
-        d.x = e.clientX;
-        d.y = e.clientY;
-        setDragUi({ player: d.player, fromSlot: d.fromSlot, x: e.clientX, y: e.clientY });
-        const hit = findDropAt(e.clientX, e.clientY);
-        setDropTarget(hit && hit.name !== d.player.n ? hit : null);
+      if (!d.active) return;
+
+      d.x = e.clientX;
+      d.y = e.clientY;
+
+      const pitchPt = clientToPitchCoords(e.clientX, e.clientY);
+      if (d.fromPitchIdx !== undefined && d.fromPitchIdx >= 1 && pitchPt?.inside) {
+        const { starters: curStarters, slots: curSlots } = dragActionsRef.current;
+        let closestSwap: { name: string; slot?: string; dist: number } | null = null;
+        curStarters.forEach((other, idx) => {
+          if (idx === d.fromPitchIdx) return;
+          const oz = curSlots[idx];
+          if (!oz) return;
+          const ox = 18 + oz.x * 2.64;
+          const oy = 24 + oz.y * 2.9;
+          const sDist = Math.hypot(pitchPt.px - ox, pitchPt.py - oy);
+          if (sDist < 13 && (!closestSwap || sDist < closestSwap.dist)) {
+            closestSwap = { name: other.n, slot: oz.sp, dist: sDist };
+          }
+        });
+        if (closestSwap) {
+          const swapObj = closestSwap as { name: string; slot?: string };
+          pitchDragPreviewRef.current = null;
+          setPitchDragPreview(null);
+          setDropTarget({ name: swapObj.name, slot: swapObj.slot });
+          setDragUi({ player: d.player, fromSlot: d.fromSlot, x: e.clientX, y: e.clientY });
+          return;
+        }
+
+        const nx = clamp(Math.round((pitchPt.px - 18) / 2.64), 4, 96);
+        const ny = clamp(Math.round((pitchPt.py - 24) / 2.9), 8, 84);
+        const zone = getPitchZoneAt(nx, ny);
+        const curSlotSp = curSlots[d.fromPitchIdx]?.sp;
+        const resolvedSp: SubRole =
+          zone.id === 'CF' && curSlotSp === 'SS'
+            ? 'SS'
+            : zone.sp;
+        const preview: PitchDragPreview = {
+          slotIdx: d.fromPitchIdx,
+          player: d.player,
+          x: nx,
+          y: ny,
+          sp: resolvedSp,
+          zoneId: zone.id,
+          zoneLabel: zone.label
+        };
+        pitchDragPreviewRef.current = preview;
+        setPitchDragPreview(preview);
+        setDropTarget(null);
+        setDragUi(null);
+        return;
       }
+
+      pitchDragPreviewRef.current = null;
+      setPitchDragPreview(null);
+      setDragUi({ player: d.player, fromSlot: d.fromSlot, x: e.clientX, y: e.clientY });
+      const hit = findDropAt(e.clientX, e.clientY);
+      setDropTarget(hit && hit.name !== d.player.n ? hit : null);
     };
 
     const onUp = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
-      dragRef.current = null;
-      setDragUi(null);
-      setDropTarget(null);
-      if (!d.active) {
+      const preview = pitchDragPreviewRef.current;
+      const wasActive = d.active;
+      clearDrag();
+
+      if (!wasActive) {
         SFX.tap();
         dragActionsRef.current.onInspectPlayer(d.player, dragActionsRef.current.me);
+        return;
+      }
+      if (preview) {
+        dragActionsRef.current.moveStarterToZone(
+          preview.slotIdx,
+          preview.x,
+          preview.y,
+          preview.sp,
+          preview.zoneLabel,
+          d.player.n
+        );
         return;
       }
       const hit = findDropAt(e.clientX, e.clientY);
@@ -6001,9 +6290,7 @@ const SquadTacticsView: React.FC<{
     const onCancel = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
-      dragRef.current = null;
-      setDragUi(null);
-      setDropTarget(null);
+      clearDrag();
     };
 
     window.addEventListener('pointermove', onMove);
@@ -6077,12 +6364,11 @@ const SquadTacticsView: React.FC<{
           data-drag-grip={isMgr ? '1' : undefined}
           style={isMgr ? { touchAction: 'none' } : undefined}
           title={isMgr ? 'ลากเพื่อเปลี่ยนหรือสลับตำแหน่ง' : 'กด 1 ครั้งเพื่อดูข้อมูล'}
-          className={`flex items-center gap-0.5 shrink-0 [&_svg]:w-5 [&_svg]:h-5 ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+          className={`flex items-center shrink-0 [&_svg]:w-4 [&_svg]:h-4 ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
         >
-          {isMgr && <span className="text-[9px] leading-none text-[var(--mut)] tracking-tighter">⋮⋮</span>}
-          <PlayerFace player={q} team={me} state={state} size={22} />
+          <PlayerFace player={q} team={me} state={state} size={20} />
         </span>
-        <span className="text-[9.5px] font-bold tabular text-[var(--mut)] w-4 text-center shrink-0">#{no}</span>
+        <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">#{no}</span>
         <span className={`px-1 py-0.2 rounded text-[9px] font-bold text-white shrink-0 ${(slotSp ? LINE[slotSp] : q.pos) === 'DF' ? 'bg-blue-600' : (slotSp ? LINE[slotSp] : q.pos) === 'MF' ? 'bg-amber-600' : (slotSp ? LINE[slotSp] : q.pos) === 'GK' ? 'bg-purple-600' : 'bg-[var(--g)]'}`}>
           {slotSp || q.ro}
         </span>
@@ -6094,7 +6380,7 @@ const SquadTacticsView: React.FC<{
             <span className="ml-1 text-[8.5px] text-[var(--mut)]">({q.ro}{pn === 2 ? ' ⚠️' : ''})</span>
           )}
         </span>
-        <div className="flex items-center gap-1 shrink-0 w-9 xl:w-11 mland:w-8">
+        <div className="flex items-center gap-1 shrink-0 w-8 xl:w-10 mland:w-7">
           <div className="hidden xl:block mland:hidden flex-1 h-1 rounded-full bg-[var(--surface)] overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${q.inj > 0 || (q.sus || 0) > 0 ? 0 : f}%`, background: fCol }} />
           </div>
@@ -6123,57 +6409,92 @@ const SquadTacticsView: React.FC<{
           <div className="text-xs min-w-0">
             <div className="font-bold truncate">{dragUi.player.n.split(' ')[0]} · {dragUi.fromSlot || dragUi.player.ro}</div>
             <div className="text-[11px] text-[var(--g)] font-semibold truncate">
-              {dropTarget ? `↔ ${dropTarget.name.split(' ')[0]}${dropTarget.slot ? ` (${dropTarget.slot})` : ''}` : 'ลากไปวางเพื่อสลับ'}
+              {dropTarget ? `↔ ${dropTarget.name.split(' ')[0]}${dropTarget.slot ? ` (${dropTarget.slot})` : ''}` : 'ลากไปวางเพื่อสลับ/ย้าย'}
             </div>
           </div>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1 shrink-0">
-        <div className="flex flex-wrap items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] max-w-full">
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`px-2.5 sm:px-3.5 mland:px-2 py-1.5 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${sub === 0 ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>
-            ⚽ ตัวจริง & จัดตำแหน่ง
+      <div className="flex items-center justify-between gap-2 mland:gap-1.5 flex-nowrap overflow-x-auto shrink-0">
+        <div className="flex items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 0 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            ⚽ ตัวจริง<span className="hidden lg:inline mland:hidden"> & จัดตำแหน่ง</span>
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`px-2.5 sm:px-3.5 mland:px-2 py-1.5 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${sub === 1 ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>
-            🧭 แผนเกม & ยุทธวิธี
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 1 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            🧭 แผนเกม<span className="hidden lg:inline mland:hidden"> & ยุทธวิธี</span>
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`px-2.5 sm:px-3.5 mland:px-2 py-1.5 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer ${sub === 2 ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 2 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
             📋 ทั้งทีม ({me.sq.length})
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 mland:gap-1 text-xs mland:text-[9.5px]">
-          <span className="px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] font-semibold">แผน {formName(me)} · {AR_T[me.tac]}</span>
-          <span className="px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] font-semibold">⚔️ {Math.round(r.at)} · 🛡️ {Math.round(r.df)}</span>
-          <span className="px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] font-semibold">❤️ {avgFit}%</span>
-          {offPosCount > 0 && <span className="px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--red-soft)] text-[var(--red)] font-semibold">⚠️ นอกตำแหน่ง {offPosCount}</span>}
+        <div className="flex items-center gap-1.5 mland:gap-1 text-xs mland:text-[10px] font-semibold tabular whitespace-nowrap shrink-0 px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <span>แผน {formName(me)} · {AR_T[me.tac]}</span>
+          <span className="opacity-35">·</span>
+          <span>⚔️ {Math.round(r.at)} · 🛡️ {Math.round(r.df)}</span>
+          <span className="opacity-35">·</span>
+          <span>❤️ {avgFit}%</span>
+          {offPosCount > 0 && (
+            <>
+              <span className="opacity-35">·</span>
+              <span className="text-[var(--red)] font-bold">⚠️ นอกตำแหน่ง {offPosCount}</span>
+            </>
+          )}
         </div>
       </div>
 
       {sub === 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[1.28fr_0.72fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.22fr_0.78fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
-          <div className="p-3 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2.5 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
-            <div className="flex items-center justify-between gap-2 shrink-0">
-              <div className="flex items-center gap-2 mland:gap-1 font-bold text-sm mland:text-[10.5px] min-w-0">
-                <ClubCrest name={me.name} size={22} team={me} club={state.club} isMyClub={state.mode === 'm'} />
-                <span className="truncate">ตัวจริง 11 · {formName(me)}</span>
+        isMgr ? (
+          <div className="grid grid-cols-1 lg:grid-cols-[1.22fr_0.78fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.18fr_0.82fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
+            {/* CENTER STAGE: Pitch on Top + 🧭 เปลี่ยนแผน Directly Below Pitch */}
+            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
+              <div className="flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm mland:text-[10.5px] min-w-0">
+                  <ClubCrest name={me.name} size={20} team={me} club={state.club} isMyClub={true} />
+                  <span className="truncate">ตัวจริง 11 · {formName(me)}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {pitchDragPreview ? (
+                    <span className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap">
+                      📍 {pitchDragPreview.player.n.split(' ')[0]} → {pitchDragPreview.sp} ({pitchDragPreview.zoneLabel})
+                    </span>
+                  ) : (
+                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap">
+                      เข้าใจ <b className="text-[var(--g)] tabular">{me.tacFam ?? 65}%</b>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => onUpdateState((d) => { d.sub = 1; })}
+                    className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    ⚙️ ปรับละเอียด
+                  </button>
+                </div>
               </div>
-              <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] shrink-0">เข้าใจ <b className="text-[var(--g)] tabular">{me.tacFam ?? 65}%</b></span>
-            </div>
 
-            <div className="w-full max-w-[420px] mland:max-w-none mland:w-full mx-auto mland:flex-1 mland:min-h-0 mland:h-full mland:flex mland:items-center mland:justify-center">
-              <FormationPitch
-                team={me}
-                state={state}
-                dragSourceName={dragUi?.player.n || null}
-                dropTargetName={dropTarget?.name || null}
-                onPlayerPointerDown={handlePlayerPointerDown}
-              />
-            </div>
+              <div className="w-full max-w-[390px] mland:max-w-none mland:w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
+                <FormationPitch
+                  team={me}
+                  state={state}
+                  svgRef={pitchSvgRef}
+                  showPositionZones={Boolean(pitchDragPreview)}
+                  dragSourceName={dragUi?.player.n || null}
+                  dropTargetName={dropTarget?.name || null}
+                  dragPreview={pitchDragPreview}
+                  onPlayerPointerDown={handlePlayerPointerDown}
+                />
+              </div>
 
-            {isMgr ? (
+              {/* 🧭 เปลี่ยนแผน — Underneath the Pitch */}
               <div className="pt-2 mland:pt-1 border-t border-[var(--line)] space-y-1.5 mland:space-y-1 shrink-0">
-                <div className="flex flex-wrap items-center gap-1 justify-center">
+                <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
+                  <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน</span>
+                  <span className="text-[var(--mut)] truncate">
+                    ลากนักเตะในสนามเพื่อปรับตำแหน่ง · ลากทับเพื่อนเพื่อสลับ
+                  </span>
+                </div>
+                <div className="grid grid-cols-5 gap-1">
                   {Object.keys(FSD).map((f) => (
                     <button
                       key={f}
@@ -6189,48 +6510,39 @@ const SquadTacticsView: React.FC<{
                           }
                         });
                       }}
-                      className={`px-2 mland:px-1.5 py-0.5 rounded-md text-[11px] mland:text-[10px] font-semibold cursor-pointer ${me.form === f ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--ink)]'}`}
+                      className={`px-1 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer truncate transition-colors ${
+                        me.form === f
+                          ? 'bg-[var(--g)] text-white shadow-xs'
+                          : 'bg-[var(--surface-2)] text-[var(--ink)] hover:border-[var(--g)]'
+                      }`}
                     >
                       {f}
                     </button>
                   ))}
+                </div>
+                <div className="grid grid-cols-5 gap-1">
                   {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
                     <button
                       key={k}
                       type="button"
                       onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
-                      className={`px-2 mland:px-1.5 py-0.5 rounded-md text-[11px] mland:text-[10px] font-semibold cursor-pointer ${me.tac === k ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
+                      className={`px-1 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer truncate transition-colors ${
+                        me.tac === k ? 'bg-[var(--lamp)] text-[#261900] shadow-xs' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
                     >
                       {AR_T[k]}
                     </button>
                   ))}
                 </div>
-                <p className="text-[11px] text-center text-[var(--mut)] mland:hidden">
-                  💡 <b>กด 1 ครั้ง</b> เพื่อดูข้อมูล · <b>ลากแล้ววาง</b> สลับตำแหน่งได้อิสระ · <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className="text-[var(--g)] font-bold underline cursor-pointer">ปรับแผนละเอียด</button>
-                </p>
               </div>
-            ) : (() => {
-              const myIdx = starters.findIndex((q) => q.me || q.n === state.p?.name);
-              const mySlot = myIdx >= 0 ? slots[myIdx]?.sp : null;
-              const mySq = me.sq.find((q) => q.me || q.n === state.p?.name);
-              const isBanned = (mySq?.sus || state.p?.sus || 0) > 0;
-              return (
-                <div className="pt-2 mland:pt-1 border-t border-[var(--line)] text-center space-y-1 shrink-0">
-                  <div className="text-xs mland:text-[10px]">
-                    <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold ${isBanned ? 'bg-[var(--red-soft)] text-[var(--red)]' : mySlot ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                      {isBanned ? `🟥 ติดโทษแบน (เหลือ ${mySq?.sus || state.p?.sus} นัด)` : mySlot ? `★ ฉัน: ตัวจริง (${mySlot})` : '🪑 ฉัน: ตัวสำรอง (มีโอกาสลงสำรองครึ่งหลัง)'}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--mut)] mland:hidden">💡 กด 1 ครั้งเพื่อดูข้อมูลนักเตะ · โค้ชเลือกตัวจริงจากพลังและพลังกาย (Energy)</p>
-                </div>
-              );
-            })()}
-          </div>
+            </div>
 
-          <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col lg:max-h-[calc(100dvh-250px)] min-h-[280px] mland:min-h-0 mland:max-h-none mland:h-full">
-            <div className="flex items-center justify-between gap-1.5 mb-1.5 mland:mb-1 shrink-0">
-              <div className="font-bold text-xs mland:text-[10.5px] truncate">👥 รายชื่อทีม <span className="text-[10px] mland:text-[9px] font-normal text-[var(--mut)]">({me.lu ? 'จัดเอง' : 'อัตโนมัติ'})</span></div>
-              {isMgr && (
+            {/* RIGHT: Squad & Bench List */}
+            <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col lg:max-h-[calc(100dvh-215px)] min-h-[260px] mland:min-h-0 mland:max-h-none mland:h-full">
+              <div className="flex items-center justify-between gap-1.5 mb-1.5 mland:mb-1 shrink-0">
+                <div className="font-bold text-xs mland:text-[10px] truncate">
+                  👥 รายชื่อ <span className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)]">({me.lu ? 'จัดเอง' : 'อัตโนมัติ'})</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
@@ -6238,23 +6550,74 @@ const SquadTacticsView: React.FC<{
                     onUpdateState((d) => { d.teams[d.me].lu = null; });
                     onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-[11px] mland:text-[9.5px] font-semibold hover:bg-[var(--g)] hover:text-white transition-colors cursor-pointer shrink-0"
+                  className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-[10.5px] mland:text-[9px] font-semibold hover:bg-[var(--g)] hover:text-white transition-colors cursor-pointer shrink-0"
                 >
                   จัดอัตโนมัติ
                 </button>
-              )}
-            </div>
-            <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] mb-1.5 mland:mb-1 shrink-0">
-              {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
-                <button key={k} type="button" onClick={() => setLuTab(k)} className={`py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer truncate ${luTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>{l}</button>
-              ))}
-            </div>
-            <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
-              {luTab !== 2 && (<><div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] pt-0.5">ตัวจริง (11 คน)</div>{starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}</>)}
-              {luTab !== 1 && (<><div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">ตัวสำรอง ({bench.length} คน)</div>{bench.map((q) => renderPlayerRow(q))}</>)}
+              </div>
+              <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] mb-1.5 mland:mb-1 shrink-0">
+                {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
+                  <button key={k} type="button" onClick={() => setLuTab(k)} className={`py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-semibold cursor-pointer truncate ${luTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>{l}</button>
+                ))}
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
+                {luTab !== 2 && (<><div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] pt-0.5">ตัวจริง (11 คน)</div>{starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}</>)}
+                {luTab !== 1 && (<><div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">ตัวสำรอง ({bench.length} คน)</div>{bench.map((q) => renderPlayerRow(q))}</>)}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.18fr_0.82fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
+            <div className="p-3 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
+              <div className="flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2 mland:gap-1 font-bold text-sm mland:text-[10.5px] min-w-0">
+                  <ClubCrest name={me.name} size={22} team={me} club={state.club} isMyClub={false} />
+                  <span className="truncate">ตัวจริง 11 · {formName(me)}</span>
+                </div>
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] shrink-0">เข้าใจ <b className="text-[var(--g)] tabular">{me.tacFam ?? 65}%</b></span>
+              </div>
+
+              <div className="w-full max-w-[400px] mland:max-w-none mland:w-full mx-auto mland:flex-1 mland:min-h-0 mland:h-full mland:flex mland:items-center mland:justify-center">
+                <FormationPitch
+                  team={me}
+                  state={state}
+                  showPositionZones={false}
+                  onPlayerPointerDown={handlePlayerPointerDown}
+                />
+              </div>
+
+              {(() => {
+                const myIdx = starters.findIndex((q) => q.me || q.n === state.p?.name);
+                const mySlot = myIdx >= 0 ? slots[myIdx]?.sp : null;
+                const mySq = me.sq.find((q) => q.me || q.n === state.p?.name);
+                const isBanned = (mySq?.sus || state.p?.sus || 0) > 0;
+                return (
+                  <div className="pt-2 mland:pt-1 border-t border-[var(--line)] text-center space-y-1 shrink-0">
+                    <div className="text-xs mland:text-[10px]">
+                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold ${isBanned ? 'bg-[var(--red-soft)] text-[var(--red)]' : mySlot ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                        {isBanned ? `🟥 ติดโทษแบน (เหลือ ${mySq?.sus || state.p?.sus} นัด)` : mySlot ? `★ ฉัน: ตัวจริง (${mySlot})` : '🪑 ฉัน: ตัวสำรอง (มีโอกาสลงสำรองครึ่งหลัง)'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[var(--mut)] mland:hidden">💡 กด 1 ครั้งเพื่อดูข้อมูลนักเตะ · โค้ชเลือกตัวจริงจากพลังและพลังกาย (Energy)</p>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col lg:max-h-[calc(100dvh-250px)] min-h-[280px] mland:min-h-0 mland:max-h-none mland:h-full">
+              <div className="font-bold text-xs mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0">👥 รายชื่อทีม</div>
+              <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] mb-1.5 mland:mb-1 shrink-0">
+                {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
+                  <button key={k} type="button" onClick={() => setLuTab(k)} className={`py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer truncate ${luTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>{l}</button>
+                ))}
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
+                {luTab !== 2 && (<><div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] pt-0.5">ตัวจริง (11 คน)</div>{starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}</>)}
+                {luTab !== 1 && (<><div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">ตัวสำรอง ({bench.length} คน)</div>{bench.map((q) => renderPlayerRow(q))}</>)}
+              </div>
+            </div>
+          </div>
+        )
       ) : sub === 1 ? (
         <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-4 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)] shrink-0">
@@ -10133,6 +10496,8 @@ interface LiveMatchWorld {
   goalNetRippleH: number;
   goalNetRippleA: number;
   celebrateTimer: number;
+  dramaSlowSec: number;
+  dramaLabel: string | null;
   sparkles: { x: number; y: number; vx: number; vy: number; color: string; size: number; ttl: number; maxTtl: number }[];
   goalBanner: {
     scorer: string;
@@ -10142,6 +10507,15 @@ interface LiveMatchWorld {
     kit: string;
     isMyGoal: boolean;
     isMeScorer: boolean;
+    ttl: number;
+    maxTtl: number;
+  } | null;
+  cardBanner: {
+    who: string;
+    shortName: string;
+    teamName: string;
+    type: 'Y' | 'Y2R' | 'R';
+    kit: string;
     ttl: number;
     maxTtl: number;
   } | null;
@@ -10790,17 +11164,68 @@ const drawLivePitchToCanvas = (
     ctx.restore();
   }
 
+  // 8b. Card Broadcast Banner (Yellow / 2nd Yellow / Direct Red)
+  if (world.cardBanner && world.cardBanner.ttl > 0 && !world.goalBanner && !world.varReview) {
+    const cb = world.cardBanner;
+    const prog = clamp(1 - cb.ttl / Math.max(0.01, cb.maxTtl), 0, 1);
+    const enterT = clamp(prog / 0.2, 0, 1);
+    const fadeOut = clamp(cb.ttl / 0.35, 0, 1);
+    const alpha = Math.min(clamp(enterT * 2.5, 0, 1), fadeOut);
+    const isRed = cb.type === 'R' || cb.type === 'Y2R';
+    const accent = isRed ? '#ef4444' : '#facc15';
+    const title =
+      cb.type === 'R'
+        ? `🟥 ใบแดงไล่ออก!! ${cb.shortName}`
+        : cb.type === 'Y2R'
+          ? `🟨🟨➡🟥 เหลืองที่สอง!! ${cb.shortName}`
+          : `🟨 ใบเหลือง · ${cb.shortName}`;
+    const sub = isRed ? `${cb.teamName} เหลือผู้เล่นน้อยกว่า` : `${cb.teamName} · เตือนจังหวะเข้าหนัก`;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = '800 12px Sarabun, sans-serif';
+    const w1 = ctx.measureText(title).width;
+    ctx.font = '600 10px Sarabun, sans-serif';
+    const w2 = ctx.measureText(sub).width;
+    const cardW = clamp(Math.max(w1, w2) + 46, 178, cssW - 24);
+    const cardH = 38;
+    const cx = cssW / 2;
+    const cy = 12;
+    ctx.fillStyle = 'rgba(11, 18, 28, 0.94)';
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // Mini card icon badge on left
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.roundRect(cx - cardW / 2 + 10, cy + 9, 12, 18, 2.5);
+    ctx.fill();
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = accent;
+    ctx.font = '800 11.5px Sarabun, sans-serif';
+    ctx.fillText(title, cx - cardW / 2 + 29, cy + 13.5);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.font = '600 9.5px Sarabun, sans-serif';
+    ctx.fillText(sub, cx - cardW / 2 + 29, cy + 27);
+    ctx.restore();
+  }
+
   // 9. VAR Check Broadcast Box
   if (world.varReview) {
     const vr = world.varReview;
     const pct = clamp(1 - vr.waitSec / Math.max(0.1, vr.totalSec), 0, 1);
     const accent = vr.kind === 'foul_card' ? '#f59e0b' : '#38bdf8';
     ctx.save();
-    const boxW = Math.min(278, cssW - 24);
+    const boxW = Math.min(286, cssW - 24);
     const boxH = 44;
     const cx = cssW / 2;
     const cy = 14;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.94)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
     ctx.strokeStyle = accent;
     ctx.lineWidth = 1.8;
     ctx.beginPath();
@@ -10808,10 +11233,10 @@ const drawLivePitchToCanvas = (
     ctx.fill();
     ctx.stroke();
 
-    // Blinking VAR badge
-    ctx.fillStyle = Math.floor(pct * 10) % 2 === 0 ? '#ef4444' : '#f87171';
+    // Static broadcast REC indicator
+    ctx.fillStyle = accent;
     ctx.beginPath();
-    ctx.arc(cx - boxW / 2 + 16, cy + 15, 4, 0, Math.PI * 2);
+    ctx.arc(cx - boxW / 2 + 16, cy + 15, 3.8, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.textAlign = 'left';
@@ -10827,7 +11252,7 @@ const drawLivePitchToCanvas = (
       cx - boxW / 2 + 26,
       cy + 15
     );
-    ctx.fillStyle = 'rgba(255,255,255,0.86)';
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
     ctx.font = '600 10px Sarabun, sans-serif';
     ctx.fillText(vr.reasonText, cx - boxW / 2 + 26, cy + 29);
 
@@ -10836,6 +11261,34 @@ const drawLivePitchToCanvas = (
     ctx.fillRect(cx - boxW / 2 + 10, cy + boxH - 6, boxW - 20, 2.5);
     ctx.fillStyle = accent;
     ctx.fillRect(cx - boxW / 2 + 10, cy + boxH - 6, (boxW - 20) * pct, 2.5);
+    ctx.restore();
+  }
+
+  // 10. Subtle Dramatic Slow-Mo Broadcast Cue
+  const isSlowShot =
+    world.ball.flightType === 'shot' ||
+    world.ball.flightType === 'freekick' ||
+    world.ball.flightType === 'penalty' ||
+    world.ball.flightType === 'shootout_kick';
+  if (world.dramaSlowSec > 0 || isSlowShot) {
+    const cue = world.dramaLabel || (isSlowShot ? '🎬 จังหวะสำคัญ · สโลว์โมชัน' : '🎬 ภาพช้าเหตุการณ์สำคัญ');
+    ctx.save();
+    ctx.font = '700 9.5px Sarabun, sans-serif';
+    const tw = ctx.measureText(cue).width;
+    const bw = Math.min(tw + 16, cssW - 24);
+    const bx0 = 10;
+    const by0 = cssH - 25;
+    ctx.fillStyle = 'rgba(7, 19, 13, 0.84)';
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(bx0, by0, bw, 18, 6);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#fde047';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(cue, bx0 + 8, by0 + 9.5);
     ctx.restore();
   }
 };
@@ -11065,8 +11518,11 @@ const MatchModal: React.FC<{
       goalNetRippleH: 0,
       goalNetRippleA: 0,
       celebrateTimer: 0,
+      dramaSlowSec: 0,
+      dramaLabel: null,
       sparkles: [],
       goalBanner: null,
+      cardBanner: null,
       passesH: 0,
       passesA: 0,
       shotsH: 0,
@@ -11226,9 +11682,16 @@ const MatchModal: React.FC<{
     });
   };
 
+  const triggerDramaSlow = (w: LiveMatchWorld, sec: number, label: string) => {
+    w.dramaSlowSec = Math.max(w.dramaSlowSec, sec);
+    w.dramaLabel = label;
+  };
+
   const issueCard = (culprit: LivePitchAgent, curMin: number, directRedBias = 0.04, forceType?: 'Y' | 'R') => {
     const sr = simRef.current;
+    const w = worldRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
+    const kit = culprit.side === 'H' ? homeKit : awayKit;
     const directRed = forceType === 'R' ? true : forceType === 'Y' ? false : Math.random() < (culprit.tr === 1 ? 0.09 : directRedBias);
     if (directRed) {
       culprit.sentOff = true;
@@ -11239,6 +11702,10 @@ const MatchModal: React.FC<{
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) เสียบสกัดอันตราย โดนไล่ออก (แบน 2 นัด)`, 'card');
       setSentOff(sr.sentOff.slice());
+      if (w) {
+        w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'R', kit, ttl: 3.4, maxTtl: 3.4 };
+        triggerDramaSlow(w, 2.5, `🟥 ใบแดง!! ${culprit.shortName}`);
+      }
       return 'R' as const;
     }
     sr.yellows[culprit.id] = (sr.yellows[culprit.id] || 0) + 1;
@@ -11253,6 +11720,10 @@ const MatchModal: React.FC<{
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
       setSentOff(sr.sentOff.slice());
+      if (w) {
+        w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
+        triggerDramaSlow(w, 2.5, `🟨🟥 เหลืองที่สอง!! ${culprit.shortName}`);
+      }
       return 'Y2R' as const;
     }
     adjustLiveForm(culprit.id, -0.35);
@@ -11265,6 +11736,10 @@ const MatchModal: React.FC<{
       `🟨 ใบเหลือง! ${culprit.id} (${team.name}) เข้าสกัดหนัก${totalSeasonY >= 3 ? ' (ครบ 3 ใบ แบนนัดหน้า!)' : ` (สะสม ${totalSeasonY}/3)`}`,
       'card'
     );
+    if (w) {
+      w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y', kit, ttl: 2.6, maxTtl: 2.6 };
+      triggerDramaSlow(w, 1.5, `🟨 ใบเหลือง · ${culprit.shortName}`);
+    }
     return 'Y' as const;
   };
 
@@ -11660,7 +12135,7 @@ const MatchModal: React.FC<{
           b.curve = (sp.y < 50 ? 1 : -1) * (6 + Math.random() * 5);
           b.maxZ = 10.5;
           b.progress = 0;
-          b.duration = 0.62;
+          b.duration = 0.85;
           b.flightType = 'freekick';
           b.carrierId = null;
           b.targetId = null;
@@ -11669,6 +12144,7 @@ const MatchModal: React.FC<{
           b.possessionSide = sp.side;
           w.phaseLabel = `🎯 ${taker.shortName} ปั่นฟรีคิก!`;
           w.phaseTone = 'danger';
+          triggerDramaSlow(w, 1.0, `🎯 ฟรีคิกลุ้นประตู · ${taker.shortName}`);
           SFX.kick();
           pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) วิ่งเข้ามาปั่นฟรีคิกข้ามกำแพง!`);
         } else {
@@ -11686,7 +12162,7 @@ const MatchModal: React.FC<{
           b.curve = (sp.y < 50 ? 1 : -1) * 7;
           b.maxZ = 13;
           b.progress = 0;
-          b.duration = 0.66;
+          b.duration = 0.72;
           b.flightType = 'cross';
           b.carrierId = null;
           b.targetId = boxTarget.id;
@@ -11720,7 +12196,7 @@ const MatchModal: React.FC<{
           b.curve = (sp.y < 50 ? 1 : -1) * 7.5;
           b.maxZ = 13.5;
           b.progress = 0;
-          b.duration = 0.65;
+          b.duration = 0.72;
           b.flightType = 'corner';
           b.carrierId = null;
           b.targetId = headerTarget.id;
@@ -11748,7 +12224,7 @@ const MatchModal: React.FC<{
         b.curve = (Math.random() - 0.5) * 2;
         b.maxZ = 4.2;
         b.progress = 0;
-        b.duration = 0.36;
+        b.duration = 0.68;
         b.flightType = 'penalty';
         b.carrierId = null;
         b.targetId = null;
@@ -11757,6 +12233,7 @@ const MatchModal: React.FC<{
         b.possessionSide = sp.side;
         w.phaseLabel = `🎯 ${taker.shortName} สังหารจุดโทษ!`;
         w.phaseTone = 'danger';
+        triggerDramaSlow(w, 1.2, `🎯 ดวลจุดโทษ · ${taker.shortName}`);
         SFX.kick();
         pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) รับหน้าที่สังหารจุดโทษ!`);
         return;
@@ -11810,8 +12287,8 @@ const MatchModal: React.FC<{
           w.varReview = {
             kind: 'penalty',
             side,
-            waitSec: 2.1,
-            totalSec: 2.1,
+            waitSec: 3.5,
+            totalSec: 3.5,
             x: willAwardPen ? spotX : carrier.x,
             y: willAwardPen ? 50 : carrier.y,
             culpritId: nearestDef.id,
@@ -11827,9 +12304,10 @@ const MatchModal: React.FC<{
             y: carrier.y,
             label: '📺 VAR เช็กจุดโทษ!',
             color: '#38bdf8',
-            ttl: 2.1,
-            maxTtl: 2.1
+            ttl: 3.5,
+            maxTtl: 3.5
           });
+          triggerDramaSlow(w, 3.5, '📺 VAR เช็กจุดโทษ');
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
@@ -11846,8 +12324,8 @@ const MatchModal: React.FC<{
           w.varReview = {
             kind: 'foul_card',
             side,
-            waitSec: 2.0,
-            totalSec: 2.0,
+            waitSec: 3.4,
+            totalSec: 3.4,
             x: carrier.x,
             y: carrier.y,
             culpritId: nearestDef.id,
@@ -11864,9 +12342,10 @@ const MatchModal: React.FC<{
             y: carrier.y,
             label: '📺 VAR เช็กฟาวล์/ใบแดง!',
             color: '#f59e0b',
-            ttl: 2.0,
-            maxTtl: 2.0
+            ttl: 3.4,
+            maxTtl: 3.4
           });
+          triggerDramaSlow(w, 3.4, '📺 VAR เช็กใบแดง');
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
@@ -11897,14 +12376,15 @@ const MatchModal: React.FC<{
             y: 50,
             label: `⚠️ จุดโทษ! (${attTeam.name})`,
             color: '#ef4444',
-            ttl: 1.7,
-            maxTtl: 1.7
+            ttl: 2.8,
+            maxTtl: 2.8
           });
+          triggerDramaSlow(w, 2.0, `🚨 จุดโทษ!! (${attTeam.name})`);
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
-          w.pendingSetPiece = { type: 'penalty', side, x: spotX, y: 50, waitSec: 0.9 };
+          w.pendingSetPiece = { type: 'penalty', side, x: spotX, y: 50, waitSec: 1.9 };
           w.phaseLabel = `🚨 จุดโทษ!! ${attTeam.name} ได้ลูกโทษที่จุด 11 เมตร!`;
           w.phaseTone = 'danger';
           pushLog(curMin, `🚨 จุดโทษ!! ${nearestDef.id} ทำฟาวล์ ${carrier.id} ในเขตโทษ · ${attTeam.name} ได้ยิงจุดโทษ!`, 'card');
@@ -11931,14 +12411,15 @@ const MatchModal: React.FC<{
           }
         }
 
+        const fxTtl = cardRes === 'R' ? 3.2 : cardRes === 'Y' ? 2.4 : 1.9;
         addWorldFx(w, {
           type: 'foul',
           x: carrier.x,
           y: carrier.y,
           label: cardLbl,
           color: cardCol,
-          ttl: 1.5,
-          maxTtl: 1.5,
+          ttl: fxTtl,
+          maxTtl: fxTtl,
           wallPlayers
         });
 
@@ -11951,11 +12432,11 @@ const MatchModal: React.FC<{
           side,
           x: carrier.x,
           y: carrier.y,
-          waitSec: distToGoal < 36 ? 0.95 : 0.45,
+          waitSec: cardRes === 'R' ? 1.85 : cardRes === 'Y' ? 1.35 : distToGoal < 36 ? 1.45 : 0.75,
           wallPlayers
         };
         w.phaseLabel = distToGoal < 36 ? `⚠️ ฟรีคิกระยะ ${Math.round(distToGoal * 0.9)} หลา!` : `⚠️ ฟาวล์ (${attTeam.name} ได้ฟรีคิก)`;
-        w.phaseTone = 'setpiece';
+        w.phaseTone = cardRes === 'R' ? 'danger' : 'setpiece';
         return;
       }
 
@@ -12026,13 +12507,14 @@ const MatchModal: React.FC<{
       b.curve = (carrier.d.cur > 65 ? 1 : 0.4) * (carrier.y < 50 ? 1 : -1) * (3 + Math.random() * 4);
       b.maxZ = 6 + Math.random() * 4;
       b.progress = 0;
-      b.duration = clamp(distToGoal / 58, 0.28, 0.54);
+      b.duration = clamp(distToGoal / 38, 0.52, 0.78);
       b.flightType = 'shot';
       b.carrierId = null;
       b.targetId = null;
       b.shooterId = carrier.id;
       w.phaseLabel = `🔥 ${carrier.shortName} ซัดด้วย${carrier.d.cur > carrier.d.pw + 4 ? 'ลูกปั่นโค้ง' : 'เต็มข้อ'}!`;
       w.phaseTone = 'danger';
+      triggerDramaSlow(w, 0.95, `🔥 จังหวะยิง · ${carrier.shortName}`);
       SFX.kick();
       return;
     }
@@ -12107,15 +12589,15 @@ const MatchModal: React.FC<{
           offsideX: oppLineX,
           label: `🚩 ล้ำหน้า (${runner.shortName})`,
           color: '#facc15',
-          ttl: 1.55,
-          maxTtl: 1.55
+          ttl: 2.3,
+          maxTtl: 2.3
         });
         w.pendingSetPiece = {
           type: 'offside',
           side: defSide,
           x: clamp(oppLineX, 8, 92),
           y: runner.y,
-          waitSec: 0.75
+          waitSec: 1.35
         };
         w.phaseLabel = `🚩 ล้ำหน้า! ${runner.shortName} วิ่งออกตัวเร็วไปนิด`;
         w.phaseTone = 'offside';
@@ -12272,8 +12754,8 @@ const MatchModal: React.FC<{
       y: goalY,
       label: `⚽ GOAL!! ${scorerShort}`,
       color: '#22c55e',
-      ttl: 2.1,
-      maxTtl: 2.1,
+      ttl: 3.4,
+      maxTtl: 3.4,
       goalSide: side
     });
     if (lastSoundMinRef.current !== curMin) {
@@ -12285,8 +12767,8 @@ const MatchModal: React.FC<{
     const isMeScorer = isPlayerMode && scorerName === myPlayerName;
     const scoringKit = side === 'H' ? homeKit : awayKit;
     const sparkCols = [scoringKit, '#facc15', '#ffffff', '#4ade80'];
-    for (let i = 0; i < 20; i++) {
-      const ang = (Math.PI * 2 * i) / 20 + (Math.random() - 0.5) * 0.4;
+    for (let i = 0; i < 22; i++) {
+      const ang = (Math.PI * 2 * i) / 22 + (Math.random() - 0.5) * 0.4;
       const spd = 8 + Math.random() * 18;
       w.sparkles.push({
         x: goalX,
@@ -12295,8 +12777,8 @@ const MatchModal: React.FC<{
         vy: Math.sin(ang) * spd,
         color: sparkCols[i % sparkCols.length],
         size: 1.8 + Math.random() * 2.2,
-        ttl: 1.1 + Math.random() * 0.45,
-        maxTtl: 1.55
+        ttl: 1.8 + Math.random() * 0.6,
+        maxTtl: 2.4
       });
     }
     w.goalBanner = {
@@ -12307,17 +12789,18 @@ const MatchModal: React.FC<{
       kit: scoringKit,
       isMyGoal: isMyTeamGoal,
       isMeScorer,
-      ttl: 2.2,
-      maxTtl: 2.2
+      ttl: 4.2,
+      maxTtl: 4.2
     };
     setGoalFlashSide(side);
     if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
-    goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashSide(null), 1850);
+    goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashSide(null), 3200);
     if (isMeScorer) {
       triggerConfetti();
     }
-    w.celebrateTimer = 1.15;
-    w.pendingSetPiece = { type: 'kickoff', side: defSide, x: 50, y: 50, waitSec: 1.15 };
+    w.celebrateTimer = 2.8;
+    triggerDramaSlow(w, 2.5, `⚽ GOAL!! ${scorerShort} (${attTeam.name})`);
+    w.pendingSetPiece = { type: 'kickoff', side: defSide, x: 50, y: 50, waitSec: 2.8 };
     w.phaseLabel = `⚽ ประตู!! ${scorerName} ยิงให้ ${attTeam.name}!`;
     w.phaseTone = 'goal';
   };
@@ -12343,10 +12826,11 @@ const MatchModal: React.FC<{
           offsideX: offX,
           label: `📺❌ VAR ริบประตู!`,
           color: '#ef4444',
-          ttl: 2.1,
-          maxTtl: 2.1
+          ttl: 3.4,
+          maxTtl: 3.4
         });
-        w.pendingSetPiece = { type: 'offside', side: defSide, x: offX, y: 50, waitSec: 0.75 };
+        triggerDramaSlow(w, 2.2, `📺❌ VAR ริบประตู!`);
+        w.pendingSetPiece = { type: 'offside', side: defSide, x: offX, y: 50, waitSec: 2.1 };
         w.phaseLabel = `📺❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
         w.phaseTone = 'offside';
         pushLog(curMin, `📺❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card');
@@ -12358,8 +12842,8 @@ const MatchModal: React.FC<{
           y: 22,
           label: '📺✅ VAR ยืนยันให้ประตู!',
           color: '#22c55e',
-          ttl: 1.8,
-          maxTtl: 1.8
+          ttl: 3.0,
+          maxTtl: 3.0
         });
         pushLog(curMin, `📺✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`, 'goal');
         awardGoalToTeam(
@@ -12405,10 +12889,11 @@ const MatchModal: React.FC<{
           y: vr.y,
           label: `📺🟥 VAR ใบแดง! ${vr.culpritShort || ''}`,
           color: '#ef4444',
-          ttl: 2.1,
-          maxTtl: 2.1,
+          ttl: 3.4,
+          maxTtl: 3.4,
           wallPlayers
         });
+        triggerDramaSlow(w, 2.5, `📺🟥 VAR ใบแดง!! ${vr.culpritShort || ''}`);
         w.phaseLabel = `📺🟥 VAR ยกระดับเป็นใบแดง! ${vr.culpritShort || ''} โดนไล่ออก`;
         w.phaseTone = 'danger';
         pushLog(curMin, `📺🟥 VAR ยกระดับเป็นใบแดงโดยตรง!! ${culprit.id} (${defTeam.name}) เสียบสกัดอันตราย โดนไล่ออก!`, 'card');
@@ -12422,10 +12907,11 @@ const MatchModal: React.FC<{
           y: vr.y,
           label: isSecondRed ? `📺🟨🟥 เหลืองแดง! ${vr.culpritShort || ''}` : `📺🟨 VAR ใบเหลือง ${vr.culpritShort || ''}`,
           color: isSecondRed ? '#ef4444' : '#facc15',
-          ttl: 1.9,
-          maxTtl: 1.9,
+          ttl: 3.0,
+          maxTtl: 3.0,
           wallPlayers
         });
+        triggerDramaSlow(w, isSecondRed ? 2.4 : 1.7, isSecondRed ? `📺🟨🟥 เหลืองแดง!!` : `📺🟨 VAR ใบเหลือง`);
         w.phaseLabel = isSecondRed
           ? `📺🟨🟥 VAR เหลืองที่สอง! ${vr.culpritShort || ''} โดนไล่ออก`
           : `📺🟨 VAR ให้ใบเหลือง ${vr.culpritShort || ''} · ฟรีคิก`;
@@ -12443,7 +12929,7 @@ const MatchModal: React.FC<{
         side: vr.side,
         x: vr.x,
         y: vr.y,
-        waitSec: wallCount > 0 ? 0.95 : 0.55,
+        waitSec: wallCount > 0 ? 1.8 : 1.4,
         wallPlayers
       };
       return;
@@ -12467,10 +12953,11 @@ const MatchModal: React.FC<{
         y: vr.y,
         label: `📺 VAR: ฟาวล์นอกเขต${fkCardTxt}`,
         color: '#38bdf8',
-        ttl: 1.8,
-        maxTtl: 1.8
+        ttl: 3.0,
+        maxTtl: 3.0
       });
-      w.pendingSetPiece = { type: 'freekick', side: vr.side, x: edgeX, y: vr.y, waitSec: 0.7 };
+      triggerDramaSlow(w, 1.8, `📺 VAR ฟาวล์นอกเขต${fkCardTxt}`);
+      w.pendingSetPiece = { type: 'freekick', side: vr.side, x: edgeX, y: vr.y, waitSec: 1.65 };
       w.phaseLabel = `📺 VAR ชี้ฟาวล์นอกเขต${fkCardTxt} (${attTeam.name})`;
       w.phaseTone = 'setpiece';
       pushLog(curMin, `📺 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys');
@@ -12494,10 +12981,11 @@ const MatchModal: React.FC<{
         y: 50,
         label: `📺✅ VAR จุดโทษ!${penCardTxt}`,
         color: '#ef4444',
-        ttl: 2.0,
-        maxTtl: 2.0
+        ttl: 3.2,
+        maxTtl: 3.2
       });
-      w.pendingSetPiece = { type: 'penalty', side: vr.side, x: spotX, y: 50, waitSec: 0.95 };
+      triggerDramaSlow(w, 2.2, `📺🚨 VAR จุดโทษ!!${penCardTxt}`);
+      w.pendingSetPiece = { type: 'penalty', side: vr.side, x: spotX, y: 50, waitSec: 2.0 };
       w.phaseLabel = `📺🚨 VAR ให้จุดโทษ${penCardTxt} (${attTeam.name})!`;
       w.phaseTone = 'danger';
       pushLog(curMin, `📺🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card');
@@ -12538,13 +13026,15 @@ const MatchModal: React.FC<{
         }
         SFX.goal();
         sh.lastMsg = `⚽ ${kicker?.shortName || sh.kickerName} ยิงเข้า! (${sh.hScore}-${sh.aScore})`;
-        addWorldFx(w, { type: 'goal', x: 99, y: b.toY, label: `⚽ เข้า! ${kicker?.shortName || ''}`, color: '#22c55e', ttl: 1.2, maxTtl: 1.2 });
+        addWorldFx(w, { type: 'goal', x: 99, y: b.toY, label: `⚽ เข้า! ${kicker?.shortName || ''}`, color: '#22c55e', ttl: 2.2, maxTtl: 2.2 });
+        triggerDramaSlow(w, 1.4, `⚽ ยิงเข้า! ${kicker?.shortName || ''}`);
       } else {
         if (sh.turn === 'H') sh.hKicks.push('M');
         else sh.aKicks.push('M');
         SFX.whistle();
         sh.lastMsg = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} เซฟ/หลุดกรอบ! (${sh.hScore}-${sh.aScore})`;
-        addWorldFx(w, { type: 'save', x: 97.5, y: 50, label: `🧤 พลาด!`, color: '#ef4444', ttl: 1.2, maxTtl: 1.2 });
+        addWorldFx(w, { type: 'save', x: 97.5, y: 50, label: `🧤 พลาด!`, color: '#ef4444', ttl: 2.2, maxTtl: 2.2 });
+        triggerDramaSlow(w, 1.4, `🧤 เซฟ/พลาด! ${gk?.shortName || ''}`);
       }
       sh.activeShot = false;
 
@@ -12577,7 +13067,7 @@ const MatchModal: React.FC<{
       const nextGk = active.find((a) => a.side !== sh.turn && a.pos === 'GK');
       sh.kickerName = nextPool[nextIdx]?.id || nextPool[0]?.id || 'นักเตะ';
       sh.gkName = nextGk?.id || 'ผู้รักษาประตู';
-      sh.waitSec = 0.85;
+      sh.waitSec = 1.75;
       b.x = 88.5;
       b.y = 50;
       b.z = 0;
@@ -12615,8 +13105,8 @@ const MatchModal: React.FC<{
             y: nearDef.y,
             label: b.flightType === 'freekick' ? `🧱 ติดกำแพง (${nearDef.shortName})` : `🛡️ ${nearDef.shortName} บล็อก!`,
             color: '#60a5fa',
-            ttl: 1.2,
-            maxTtl: 1.2
+            ttl: 2.0,
+            maxTtl: 2.0
           });
           if (Math.random() < 0.48) {
             pushLog(
@@ -12632,7 +13122,7 @@ const MatchModal: React.FC<{
             const cy = b.y < 50 ? 2 : 98;
             const cx = side === 'H' ? 98.5 : 1.5;
             b.carrierId = null;
-            w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 0.55 };
+            w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.0 };
             w.phaseLabel = `🚩 บอลแฉลบออกหลัง · ${attTeam.name} ได้เตะมุม!`;
             w.phaseTone = 'setpiece';
           } else {
@@ -12662,7 +13152,7 @@ const MatchModal: React.FC<{
       // Animate GK diving!
       if (gk) {
         gk.intent = 'DIVE';
-        gk.intentTimer = 0.7;
+        gk.intentTimer = 0.95;
         gk.diveDir = b.toY >= gk.y ? 1 : -1;
         gk.diveProgress = 0.01;
       }
@@ -12678,23 +13168,31 @@ const MatchModal: React.FC<{
           : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 - Math.max(0, dist - 22) * 0.008, 0.25, 0.68);
       if (Math.random() > accuracy) {
         adjustLiveForm(shooter?.id, -0.12);
-        if (Math.random() < (b.flightType === 'penalty' ? 0.35 : 0.16)) {
+        const hitWoodwork = Math.random() < (b.flightType === 'penalty' ? 0.35 : 0.16);
+        if (hitWoodwork) {
           addWorldFx(w, {
             type: 'woodwork',
             x: b.toX,
             y: b.toY,
             label: '🧱 ชนเสา/คาน!',
             color: '#f59e0b',
-            ttl: 1.4,
-            maxTtl: 1.4
+            ttl: 2.6,
+            maxTtl: 2.6
           });
+          triggerDramaSlow(w, 1.5, `🧱 ชนเสา/คาน! · ${shooter?.shortName || ''}`);
           pushLog(curMin, `🧱 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนคานอย่างจัง!`);
         } else if (b.flightType === 'penalty' || Math.random() < 0.45) {
           pushLog(curMin, `😮 ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ยิงหลุดกรอบออกหลังไปอย่างน่าเสียดาย`);
         }
-        w.pendingSetPiece = { type: 'goalkick', side: defSide, x: defSide === 'H' ? 5.5 : 94.5, y: 50, waitSec: 0.45 };
-        w.phaseLabel = `😮 ยิงหลุดกรอบ · ตั้งเตะจากประตู`;
-        w.phaseTone = 'normal';
+        w.pendingSetPiece = {
+          type: 'goalkick',
+          side: defSide,
+          x: defSide === 'H' ? 5.5 : 94.5,
+          y: 50,
+          waitSec: hitWoodwork || b.flightType === 'penalty' ? 1.45 : 0.75
+        };
+        w.phaseLabel = hitWoodwork ? `🧱 ชนเสา/คานอย่างจัง! หวุดหวิดเป็นประตู` : `😮 ยิงหลุดกรอบ · ตั้งเตะจากประตู`;
+        w.phaseTone = hitWoodwork ? 'danger' : 'normal';
         return;
       }
 
@@ -12732,8 +13230,8 @@ const MatchModal: React.FC<{
           w.varReview = {
             kind: 'goal',
             side,
-            waitSec: 2.2,
-            totalSec: 2.2,
+            waitSec: 3.6,
+            totalSec: 3.6,
             shooterId: scorerName,
             shooterShort: scorerShort,
             assisterName,
@@ -12749,9 +13247,10 @@ const MatchModal: React.FC<{
             y: b.toY,
             label: '📺 VAR เช็กประตู!',
             color: '#38bdf8',
-            ttl: 2.2,
-            maxTtl: 2.2
+            ttl: 3.6,
+            maxTtl: 3.6
           });
+          triggerDramaSlow(w, 3.6, `📺 VAR เช็กประตู · ${scorerShort}`);
           w.phaseLabel = `📺 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
           w.phaseTone = 'setpiece';
           pushLog(curMin, `📺 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`, 'sys');
@@ -12771,9 +13270,10 @@ const MatchModal: React.FC<{
           y: gk?.y ?? 50,
           label: `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} เซฟ!`,
           color: '#38bdf8',
-          ttl: 1.35,
-          maxTtl: 1.35
+          ttl: 2.5,
+          maxTtl: 2.5
         });
+        triggerDramaSlow(w, b.flightType === 'penalty' ? 1.85 : 1.35, `🧤 ซูเปอร์เซฟ! · ${gk?.shortName || 'ผู้รักษาประตู'}`);
         if (b.flightType === 'penalty' || Math.random() < 0.65) {
           pushLog(
             curMin,
@@ -12787,7 +13287,7 @@ const MatchModal: React.FC<{
           else w.cornersA++;
           const cy = b.toY < 50 ? 2 : 98;
           const cx = side === 'H' ? 98.5 : 1.5;
-          w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 0.55 };
+          w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.25 };
           w.phaseLabel = `🧤 ปัดออกหลัง! ${attTeam.name} ได้เตะมุม`;
           w.phaseTone = 'setpiece';
         } else {
@@ -12823,13 +13323,14 @@ const MatchModal: React.FC<{
         b.curve = 0;
         b.maxZ = 4.5;
         b.progress = 0;
-        b.duration = 0.28;
+        b.duration = 0.52;
         b.flightType = 'shot';
         b.carrierId = null;
         b.targetId = null;
         b.shooterId = target.id;
         w.phaseLabel = `🗣️ ${target.shortName} เทกตัวโหม่งเต็มๆ!`;
         w.phaseTone = 'danger';
+        triggerDramaSlow(w, 0.95, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
         SFX.kick();
       } else if (topDef) {
         // Defender or GK clears/punches!
@@ -13278,13 +13779,14 @@ const MatchModal: React.FC<{
       aKicks: [],
       hScore: 0,
       aScore: 0,
-      waitSec: 0.9,
+      waitSec: 1.65,
       lastMsg: `🎯 เสมอกัน ${simRef.current.gh}-${simRef.current.ga} ต้องตัดสินด้วยการดวลจุดโทษ!`,
       kickerName: firstKicker?.id || 'นักเตะ',
       gkName: firstGk?.id || 'ผู้รักษาประตู',
       activeShot: false,
       finished: false
     };
+    triggerDramaSlow(w, 1.65, '🎯 ดวลจุดโทษตัดสิน!');
     w.phaseLabel = `🎯 ดวลจุดโทษตัดสิน! (${homeOrig.name} vs ${awayOrig.name})`;
     w.phaseTone = 'danger';
     SFX.whistle();
@@ -13405,14 +13907,24 @@ const MatchModal: React.FC<{
       if (!paused && !done && !simRef.current.done && w.phase !== 'halftime') {
         const speedMul = speed === 4 ? 4.4 : speed === 2 ? 2.15 : 1.0;
 
-        // Decay FX & celebration / net ripple timers
-        w.fx.forEach((f) => { f.ttl -= rawDt * (speedMul > 2 ? 1.5 : 1); });
+        // Decay FX, banners & dramatic slow-mo timers in real time for key moments
+        const isSlowShot =
+          w.ball.flightType === 'shot' ||
+          w.ball.flightType === 'freekick' ||
+          w.ball.flightType === 'penalty' ||
+          w.ball.flightType === 'shootout_kick';
+        const isBigFx = (t: LivePitchFx['type']) =>
+          t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside';
+
+        w.fx.forEach((f) => {
+          f.ttl -= rawDt * (isBigFx(f.type) ? 1 : speedMul > 2 ? 1.4 : 1);
+        });
         w.fx = w.fx.filter((f) => f.ttl > 0);
         w.sparkles.forEach((sp) => {
           sp.x += sp.vx * rawDt;
           sp.y += sp.vy * rawDt;
-          sp.vx *= 0.94;
-          sp.vy *= 0.94;
+          sp.vx *= 0.95;
+          sp.vy *= 0.95;
           sp.ttl -= rawDt;
         });
         w.sparkles = w.sparkles.filter((sp) => sp.ttl > 0);
@@ -13420,9 +13932,17 @@ const MatchModal: React.FC<{
           w.goalBanner.ttl -= rawDt;
           if (w.goalBanner.ttl <= 0) w.goalBanner = null;
         }
-        w.goalNetRippleH = Math.max(0, w.goalNetRippleH - rawDt * 1.1);
-        w.goalNetRippleA = Math.max(0, w.goalNetRippleA - rawDt * 1.1);
-        w.celebrateTimer = Math.max(0, w.celebrateTimer - rawDt * (speedMul > 2 ? 1.6 : 1));
+        if (w.cardBanner) {
+          w.cardBanner.ttl -= rawDt;
+          if (w.cardBanner.ttl <= 0) w.cardBanner = null;
+        }
+        w.goalNetRippleH = Math.max(0, w.goalNetRippleH - rawDt * 0.85);
+        w.goalNetRippleA = Math.max(0, w.goalNetRippleA - rawDt * 0.85);
+        w.celebrateTimer = Math.max(0, w.celebrateTimer - rawDt);
+        w.dramaSlowSec = Math.max(0, w.dramaSlowSec - rawDt);
+        if (w.dramaSlowSec <= 0 && !isSlowShot) {
+          w.dramaLabel = null;
+        }
 
         // Penalty Shootout Phase
         if (w.phase === 'shootout' && w.shootout && !w.shootout.finished) {
@@ -13443,7 +13963,7 @@ const MatchModal: React.FC<{
           });
 
           if (!sh.activeShot) {
-            sh.waitSec -= rawDt * (speedMul > 2 ? 2.1 : speedMul > 1.5 ? 1.45 : 1);
+            sh.waitSec -= rawDt * (speedMul > 2 ? 1.15 : 1.0);
             w.ball.x = 88.5;
             w.ball.y = 50;
             w.ball.z = 0;
@@ -13457,14 +13977,14 @@ const MatchModal: React.FC<{
               b.curve = (Math.random() - 0.5) * 2.4;
               b.maxZ = 4.5;
               b.progress = 0;
-              b.duration = 0.36;
+              b.duration = 0.68;
               b.flightType = 'shootout_kick';
               b.possessionSide = sh.turn;
               b.shooterId = sh.kickerName;
               const gk = w.agents.find((a) => !a.sentOff && a.side !== sh.turn && a.pos === 'GK');
               if (gk) {
                 gk.intent = 'DIVE';
-                gk.intentTimer = 0.7;
+                gk.intentTimer = 0.95;
                 gk.diveDir = b.toY >= gk.y ? 1 : -1;
                 gk.diveProgress = 0.01;
               }
@@ -13473,14 +13993,14 @@ const MatchModal: React.FC<{
             }
           } else {
             const b = w.ball;
-            b.progress = Math.min(1, b.progress + (rawDt * (speedMul > 2 ? 2.1 : 1.1)) / Math.max(0.18, b.duration));
+            b.progress = Math.min(1, b.progress + (rawDt * 0.72) / Math.max(0.24, b.duration));
             const t = b.progress;
             const omt = 1 - t;
             b.x = omt * omt * b.fromX + 2 * omt * t * ((b.fromX + b.toX) * 0.5) + t * t * b.toX;
             b.y = omt * omt * b.fromY + 2 * omt * t * ((b.fromY + b.toY) * 0.5 + b.curve) + t * t * b.toY;
             b.z = Math.sin(t * Math.PI) * b.maxZ;
             b.trail.push({ x: b.x, y: b.y, z: b.z });
-            if (b.trail.length > 9) b.trail.shift();
+            if (b.trail.length > 12) b.trail.shift();
             if (b.progress >= 1) {
               resolveSegmentArrival(w, 90);
             }
@@ -13492,9 +14012,14 @@ const MatchModal: React.FC<{
           return;
         }
 
-        // Open play & Stoppage clock progression
+        // Open play & Stoppage clock progression (pause during key slow-mo / VAR / goals / penalties)
         const minDelta = rawDt * 1.45 * speedMul;
-        const pauseClock = Boolean(w.varReview);
+        const pauseClock =
+          Boolean(w.varReview) ||
+          w.celebrateTimer > 0 ||
+          w.dramaSlowSec > 0 ||
+          w.pendingSetPiece?.type === 'penalty' ||
+          isSlowShot;
         if (!pauseClock) {
           if (w.phase === 'play1') {
             w.minuteFloat = Math.min(45, w.minuteFloat + minDelta);
@@ -13515,13 +14040,14 @@ const MatchModal: React.FC<{
         // Update tactical targets
         updateAgentTargets(w, Math.max(1, curIntMin));
 
-        // Smooth physical player movement + running stride + GK dive
-        const moveScale = speedMul > 2 ? 2.2 : speedMul > 1.5 ? 1.45 : 1.0;
+        // Smooth physical player movement + running stride + GK dive (slow-mo dampened during dramatic events)
+        const baseMoveScale = speedMul > 2 ? 2.2 : speedMul > 1.5 ? 1.45 : 1.0;
+        const moveScale = w.dramaSlowSec > 0 || isSlowShot ? 0.58 : baseMoveScale;
         w.agents.forEach((ag) => {
           if (ag.sentOff) return;
           if (ag.intent === 'DIVE' && ag.intentTimer > 0) {
             ag.intentTimer -= rawDt;
-            ag.diveProgress = clamp(1 - ag.intentTimer / 0.7, 0, 1);
+            ag.diveProgress = clamp(1 - ag.intentTimer / 0.95, 0, 1);
             if (ag.intentTimer <= 0) {
               ag.intent = 'SUPPORT';
               ag.diveProgress = 0;
@@ -13560,12 +14086,20 @@ const MatchModal: React.FC<{
 
         // VAR Review countdown, Set-piece wait countdown, or Ball physics progression
         if (w.varReview) {
-          w.varReview.waitSec = Math.max(0, w.varReview.waitSec - rawDt * (speedMul > 2 ? 1.65 : 1));
+          w.varReview.waitSec = Math.max(0, w.varReview.waitSec - rawDt * (speedMul > 2 ? 1.1 : 1));
           if (w.varReview.waitSec <= 0) {
             resolveVarReview(w, Math.max(1, curIntMin));
           }
         } else if (w.pendingSetPiece && w.pendingSetPiece.waitSec > 0) {
-          w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec - rawDt * (speedMul > 2 ? 1.8 : 1));
+          const spType = w.pendingSetPiece.type;
+          const isImportantSetPiece =
+            spType === 'penalty' ||
+            spType === 'kickoff' ||
+            spType === 'offside' ||
+            spType === 'corner' ||
+            (spType === 'freekick' && (w.pendingSetPiece.wallPlayers?.length || 0) > 0);
+          const spRate = isImportantSetPiece ? (speedMul > 2 ? 1.15 : 1.0) : speedMul > 2 ? 1.55 : 1.0;
+          w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec - rawDt * spRate);
           w.ball.x = w.pendingSetPiece.x;
           w.ball.y = w.pendingSetPiece.y;
           w.ball.z = 0;
@@ -13574,7 +14108,16 @@ const MatchModal: React.FC<{
           }
         } else {
           const b = w.ball;
-          const stepProg = (rawDt * (speedMul > 2 ? 2.1 : speedMul > 1.5 ? 1.4 : 1.0)) / Math.max(0.18, b.duration);
+          const ballRate = isSlowShot
+            ? 0.62
+            : w.dramaSlowSec > 0
+              ? 0.72
+              : speedMul > 2
+                ? 2.05
+                : speedMul > 1.5
+                  ? 1.4
+                  : 1.0;
+          const stepProg = (rawDt * ballRate) / Math.max(0.18, b.duration);
           b.progress = Math.min(1, b.progress + stepProg);
 
           if (b.carrierId && b.flightType === 'carry') {
@@ -13595,7 +14138,7 @@ const MatchModal: React.FC<{
           }
 
           b.trail.push({ x: b.x, y: b.y, z: b.z });
-          if (b.trail.length > 9) b.trail.shift();
+          if (b.trail.length > (isSlowShot ? 13 : 9)) b.trail.shift();
 
           if (b.progress >= 1) {
             resolveSegmentArrival(w, Math.max(1, curIntMin));
@@ -13610,7 +14153,14 @@ const MatchModal: React.FC<{
         if (w.ball.possessionSide === 'H') w.possTicksH++;
 
         // Phase transitions: Added time & Halftime & Fulltime / Shootout
-        const activePlayInFlight = Boolean(w.varReview) || w.ball.flightType === 'shot' || w.ball.flightType === 'penalty' || w.pendingSetPiece?.type === 'penalty';
+        const activePlayInFlight =
+          Boolean(w.varReview) ||
+          w.celebrateTimer > 0 ||
+          w.dramaSlowSec > 0 ||
+          w.ball.flightType === 'shot' ||
+          w.ball.flightType === 'freekick' ||
+          w.ball.flightType === 'penalty' ||
+          w.pendingSetPiece?.type === 'penalty';
         if (w.phase === 'play1' && w.minuteFloat >= 45) {
           w.phase = 'stop1';
           w.stoppageFloat = 0;
@@ -13664,6 +14214,10 @@ const MatchModal: React.FC<{
     if (done || simRef.current.done) return;
     SFX.tap();
     const w = worldRef.current!;
+    w.dramaSlowSec = 0;
+    w.dramaLabel = null;
+    w.celebrateTimer = 0;
+    w.cardBanner = null;
     if (w.varReview) {
       resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
     }
@@ -13682,6 +14236,10 @@ const MatchModal: React.FC<{
     }
     w.minuteFloat = 90;
     w.lastTickedMin = 90;
+    w.dramaSlowSec = 0;
+    w.dramaLabel = null;
+    w.celebrateTimer = 0;
+    w.cardBanner = null;
     setLiveFitMap({ ...simRef.current.liveFit });
     if (canvasRef.current) {
       drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim);
@@ -14438,19 +14996,19 @@ const MatchModal: React.FC<{
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-3 mland:p-1 overflow-hidden">
       <div className="w-full max-w-5xl mland:max-w-[98vw] max-h-[95dvh] mland:h-[97dvh] mland:max-h-[97dvh] rounded-2xl sm:rounded-3xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Scoreboard Header */}
-        <div className="shrink-0 px-3 sm:px-4 py-2.5 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex items-center justify-between text-xs mland:text-[10px] text-[var(--mut)] mb-1.5 mland:mb-0.5 gap-2">
+        <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)]">
+          <div className="flex items-center justify-between text-xs mland:text-[9.5px] text-[var(--mut)] mb-1 mland:mb-0.5 gap-2">
             <span className="font-semibold truncate">{compTitle}</span>
             <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
-              <span className={`px-2 mland:px-1.5 py-0.5 rounded-full border text-[10px] sm:text-[11px] mland:text-[9px] font-bold truncate max-w-[160px] sm:max-w-[320px] mland:max-w-[200px] ${bannerCls}`}>
+              <span className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] sm:text-[11px] mland:text-[9px] font-bold truncate max-w-[160px] sm:max-w-[320px] mland:max-w-[210px] ${bannerCls}`}>
                 {actionBanner.label}
               </span>
               {stoppageBadge > 0 && (
-                <span className="px-2 mland:px-1.5 py-0.5 rounded-full bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[10px] mland:text-[9px]">
+                <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[10px] mland:text-[9px]">
                   +{stoppageBadge}&apos;
                 </span>
               )}
-              <span className="px-2.5 mland:px-2 py-0.5 rounded-full bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px]">
+              <span className="px-2.5 mland:px-2 py-0.5 rounded-lg bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px]">
                 {done ? 'FT' : clockLabel}
               </span>
             </div>
@@ -14459,7 +15017,7 @@ const MatchModal: React.FC<{
             <div className="flex items-center justify-end gap-2 mland:gap-1.5 min-w-0">
               <div className="text-right min-w-0">
                 <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center justify-end gap-1 ${homeId === state.me ? 'text-[var(--g)]' : ''}`}>
-                  {goalFlashSide === 'H' && <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold animate-pulse shrink-0">⚽ +1</span>}
+                  {goalFlashSide === 'H' && <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">⚽ +1</span>}
                   <span className="truncate">{homeOrig.name}</span>
                 </div>
                 <div className="text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] flex items-center justify-end gap-1">
@@ -14471,7 +15029,7 @@ const MatchModal: React.FC<{
                 <ClubCrest name={homeOrig.name} size={30} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
               </div>
             </div>
-            <div className={`px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-2xl mland:rounded-xl border text-center min-w-[76px] sm:min-w-[88px] mland:min-w-[66px] transition-all duration-300 ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+            <div className={`px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-2xl mland:rounded-xl border text-center min-w-[74px] sm:min-w-[88px] mland:min-w-[62px] transition-all duration-300 ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
               <div className="text-xl sm:text-3xl mland:text-lg font-bold font-display tabular leading-none">{gh} - {ga}</div>
               {penResult && <div className="text-[10px] font-bold text-[var(--lamp)] mt-0.5">{penResult.text}</div>}
             </div>
@@ -14482,7 +15040,7 @@ const MatchModal: React.FC<{
               <div className="min-w-0">
                 <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center gap-1 ${awayId === state.me ? 'text-[var(--g)]' : ''}`}>
                   <span className="truncate">{awayOrig.name}</span>
-                  {goalFlashSide === 'A' && <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold animate-pulse shrink-0">⚽ +1</span>}
+                  {goalFlashSide === 'A' && <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">⚽ +1</span>}
                 </div>
                 <div className="text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] flex items-center gap-1">
                   <span>เยือน {awayId === state.me ? '★' : ''}</span>
@@ -14494,15 +15052,15 @@ const MatchModal: React.FC<{
         </div>
 
         {/* Scrollable Game Broadcast Stage */}
-        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden p-2.5 sm:p-3.5 mland:p-2 space-y-2.5 mland:space-y-0 mland:flex mland:flex-col">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] mland:grid-cols-[1.28fr_1fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden p-2.5 sm:p-3.5 mland:p-1.5 space-y-2.5 mland:space-y-0 mland:flex mland:flex-col">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] mland:grid-cols-[1.32fr_1fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
             {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + MOTM + Match Stats */}
             <div className="space-y-2.5 mland:space-y-1.5 min-w-0 mland:h-full mland:flex mland:flex-col mland:min-h-0 mland:justify-center">
               {!(done && fullTimeAnalysis) ? (
-                <div className="relative rounded-2xl overflow-hidden border border-[var(--line)] bg-[#144d2e] shadow-inner mland:mx-auto mland:w-full">
+                <div className="relative rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#144d2e] shadow-inner mland:mx-auto mland:w-full">
                   <canvas
                     ref={canvasRef}
-                    className="w-full aspect-[16/8.2] mland:max-h-[calc(97dvh-116px)] mland:w-auto mland:max-w-full mland:mx-auto block select-none"
+                    className="w-full aspect-[16/8.2] mland:max-h-[calc(97dvh-106px)] mland:w-auto mland:max-w-full mland:mx-auto block select-none"
                     aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                   />
 
@@ -14991,20 +15549,20 @@ const MatchModal: React.FC<{
             {/* Right Stage: Unified Match Events Feed (including Substitutions) & Mobile Landscape Tabbed Pane */}
             <div className="space-y-2.5 mland:space-y-1.5 min-w-0 mland:h-full mland:flex mland:flex-col mland:min-h-0">
               {/* Mobile Landscape Only Tab Bar */}
-              <div className={`hidden mland:grid shrink-0 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-[9.5px] ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <div className={`hidden mland:grid shrink-0 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-[10px] ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <button
                   type="button"
                   onClick={() => setMlandMatchTab('events')}
-                  className={`py-0.5 px-1 rounded-lg font-bold cursor-pointer truncate ${mlandMatchTab === 'events' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)]'}`}
+                  className={`min-h-[26px] py-0.5 px-1 rounded-lg font-bold cursor-pointer whitespace-nowrap truncate ${mlandMatchTab === 'events' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                 >
                   🎙️ เกม
                 </button>
                 <button
                   type="button"
                   onClick={() => setMlandMatchTab('stats')}
-                  className={`py-0.5 px-1 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 truncate ${mlandMatchTab === 'stats' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)]'}`}
+                  className={`min-h-[26px] py-0.5 px-1 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap truncate ${mlandMatchTab === 'stats' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                 >
-                  <span>📊 สถิติ⚡</span>
+                  <span>📊 สถิติ</span>
                   {subAlertItems.length > 0 && (
                     <span className="px-1 rounded-full bg-[var(--red)] text-white text-[8.5px] font-black leading-tight tabular">
                       {subAlertItems.length}
@@ -15019,7 +15577,7 @@ const MatchModal: React.FC<{
                       setShowTacticsDrawer(true);
                       setPaused(true);
                     }}
-                    className={`py-0.5 px-1 rounded-lg font-bold cursor-pointer truncate ${mlandMatchTab === 'tactics' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)]'}`}
+                    className={`min-h-[26px] py-0.5 px-1 rounded-lg font-bold cursor-pointer whitespace-nowrap truncate ${mlandMatchTab === 'tactics' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                   >
                     ⚡ แผน ({5 - subsUsed.length})
                   </button>
@@ -15028,24 +15586,24 @@ const MatchModal: React.FC<{
 
               <div className="mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden space-y-2.5 mland:space-y-1">
                 <div className={`p-2.5 sm:p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-2 mland:space-y-1 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col ${mlandMatchTab === 'events' ? '' : 'mland:hidden'}`}>
-                  <div className="flex flex-wrap items-center justify-between gap-1 pb-1.5 mland:pb-1 border-b border-[var(--line)]/60 shrink-0">
-                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] uppercase tracking-wide">
-                      🎙️ เหตุการณ์ในเกม
+                  <div className="flex items-center justify-between gap-1 pb-1.5 mland:pb-1 border-b border-[var(--line)]/60 shrink-0 overflow-x-auto">
+                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] uppercase tracking-wide whitespace-nowrap shrink-0">
+                      🎙️ เหตุการณ์
                     </span>
-                    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px]">
+                    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
                       {(
                         [
                           ['all', 'ทั้งหมด'],
                           ['goal', '⚽ ประตู'],
                           ['card', '🟨🟥 VAR'],
-                          ['sub', `🔄 เปลี่ยนตัว${subLog.length ? ` (${subLog.length})` : ''}`]
+                          ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
                         ] as const
                       ).map(([k, lbl]) => (
                         <button
                           key={k}
                           type="button"
                           onClick={() => setEventFilter(k)}
-                          className={`px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                          className={`px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
                             eventFilter === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                           }`}
                         >
@@ -15055,7 +15613,7 @@ const MatchModal: React.FC<{
                     </div>
                   </div>
 
-                  <div className="max-h-56 lg:max-h-[340px] mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1.5 pr-0.5">
+                  <div className="max-h-56 lg:max-h-[340px] mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1 pr-0.5">
                     {eventFilter === 'sub' ? (
                       subLog.length === 0 ? (
                         <div className="text-xs text-[var(--mut)] py-6 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>
@@ -15066,7 +15624,7 @@ const MatchModal: React.FC<{
                           .map((sb, i) => {
                             const tObj = sb.t === homeOrig.id ? homeOrig : awayOrig;
                             return (
-                              <div key={i} className="text-xs flex items-start gap-2 py-1 border-b border-[var(--line)]/40 last:border-b-0">
+                              <div key={i} className="text-xs mland:text-[10.5px] flex items-start gap-2 py-1 px-1.5 rounded-lg bg-blue-500/8">
                                 <span className="w-7 shrink-0 tabular font-bold text-blue-600 dark:text-blue-400">{sb.m}&apos;</span>
                                 <div className="min-w-0">
                                   <span className="font-bold text-[var(--ink)]">{tObj.name}: </span>
@@ -15090,16 +15648,16 @@ const MatchModal: React.FC<{
                       return filteredLogs.map((l, i) => (
                         <div
                           key={i}
-                          className={`text-xs flex items-start gap-2 ${
+                          className={`text-xs mland:text-[10.5px] flex items-start gap-2 rounded-lg transition-colors ${
                             l.tone === 'goal'
-                              ? 'font-bold text-[var(--g)]'
+                              ? 'px-2 py-1 bg-[var(--g-soft)] border border-[var(--g)]/25 font-bold text-[var(--g)]'
                               : l.tone === 'card'
-                                ? 'font-semibold text-[var(--red)]'
+                                ? 'px-2 py-1 bg-[var(--red-soft)] border border-[var(--red)]/20 font-semibold text-[var(--red)]'
                                 : l.tone === 'sub'
-                                  ? 'font-semibold text-blue-600 dark:text-blue-400'
+                                  ? 'px-2 py-0.5 bg-blue-500/8 font-semibold text-blue-600 dark:text-blue-400'
                                   : l.tone === 'sys'
-                                    ? 'font-semibold text-[var(--ink)]'
-                                    : 'text-[var(--mut)]'
+                                    ? 'px-1 py-0.5 font-semibold text-[var(--ink)]'
+                                    : 'px-1 py-0.5 text-[var(--mut)]'
                           }`}
                         >
                           <span className="w-7 shrink-0 tabular font-bold">{l.m}&apos;</span>
@@ -15156,37 +15714,39 @@ const MatchModal: React.FC<{
         </div>
 
         {/* Pinned Bottom Match Action Dock */}
-        <div className="shrink-0 px-3 sm:px-4 py-2.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-t border-[var(--line)]">
+        <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-t border-[var(--line)]">
           {!done ? (
-            <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 mland:gap-1">
-              <div className="flex flex-wrap items-center gap-1">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2 mland:gap-1.5 flex-nowrap overflow-x-auto">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   type="button"
                   onClick={() => setPaused((p) => !p)}
-                  className="px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer"
+                  className="min-h-[34px] mland:min-h-[30px] px-2.5 sm:px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap shrink-0"
                 >
                   {paused ? '▶ เล่นต่อ' : '⏸ พักเกม'}
                 </button>
-                {([1, 2, 4] as const).map((sp) => (
-                  <button
-                    key={sp}
-                    type="button"
-                    onClick={() => setSpeed(sp)}
-                    className={`px-2 sm:px-2.5 mland:px-1.5 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer ${speed === sp ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]'}`}
-                  >
-                    {sp}x
-                  </button>
-                ))}
+                <div className="inline-flex items-center p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
+                  {([1, 2, 4] as const).map((sp) => (
+                    <button
+                      key={sp}
+                      type="button"
+                      onClick={() => setSpeed(sp)}
+                      className={`min-h-[28px] mland:min-h-[24px] px-2 sm:px-2.5 mland:px-2 py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                    >
+                      {sp}x
+                    </button>
+                  ))}
+                </div>
                 <button
                   type="button"
                   onClick={() => setShowRunVectors((v) => !v)}
-                  className={`px-2 sm:px-2.5 mland:px-1.5 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
+                  className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
                 >
                   {showRunVectors ? '↗️ เส้น: เปิด' : '↗️ เส้น: ปิด'}
                 </button>
               </div>
 
-              <div className="flex items-center gap-1.5 mland:gap-1 ml-auto">
+              <div className="flex items-center gap-1.5 mland:gap-1 ml-auto shrink-0">
                 {state.mode === 'm' && (
                   <button
                     type="button"
@@ -15195,7 +15755,7 @@ const MatchModal: React.FC<{
                       setMlandMatchTab((prev) => (prev === 'tactics' ? 'events' : 'tactics'));
                       setPaused(true);
                     }}
-                    className="px-2.5 sm:px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g-soft)] border border-[var(--g)] text-[var(--g)] text-xs mland:text-[10px] font-bold cursor-pointer"
+                    className="min-h-[34px] mland:min-h-[30px] px-2.5 sm:px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g-soft)] border border-[var(--g)] text-[var(--g)] text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap"
                   >
                     🔄 แก้เกม ({subsUsed.length}/5)
                   </button>
@@ -15204,7 +15764,7 @@ const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={() => handleStartSecondHalf()}
-                    className="px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs"
+                    className="min-h-[34px] mland:min-h-[30px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs whitespace-nowrap"
                   >
                     ▶ เริ่มครึ่งหลัง
                   </button>
@@ -15212,7 +15772,7 @@ const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={skipToEnd}
-                    className="px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs"
+                    className="min-h-[34px] mland:min-h-[30px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs whitespace-nowrap"
                   >
                     {matchPhaseUi === 'shootout' ? '⏩ ข้ามดวลจุดโทษ' : '⏩ ข้ามจบเกม'}
                   </button>
@@ -15223,7 +15783,7 @@ const MatchModal: React.FC<{
             <button
               type="button"
               onClick={handleConfirmFinish}
-              className="w-full py-2.5 sm:py-3 mland:py-1 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm mland:text-xs hover:brightness-105 cursor-pointer shadow-sm"
+              className="w-full py-2.5 sm:py-3 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm mland:text-xs hover:brightness-105 cursor-pointer shadow-sm"
             >
               ✅ ดำเนินการต่อ
             </button>
@@ -16409,23 +16969,23 @@ export default function App() {
     <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
       {/* Pinned Top Game HUD Bar */}
       <header className="shrink-0 z-30 bg-[var(--surface)]/92 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_0_rgba(0,0,0,0.03)]">
-        <div className="max-w-6xl mland:max-w-none mx-auto px-3 sm:px-5 mland:px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
+        <div className="max-w-6xl mland:max-w-none mx-auto px-3 sm:px-5 mland:px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 mland:gap-2">
           <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
             <div className="shrink-0 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]/70 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
               <ClubCrest name={me.name} size={32} team={me} club={state.club} isMyClub={state.mode === 'm'} />
             </div>
             <div className="min-w-0">
-              <div className="font-bold text-xs sm:text-base mland:text-[11.5px] truncate font-display leading-tight tracking-tight">
+              <div className="font-bold text-xs sm:text-base mland:text-[12px] truncate font-display leading-tight tracking-tight">
                 {state.mode === 'p' && state.p ? `${state.p.name} · ` : ''}
                 {me.name}
               </div>
-              <div className="text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] flex flex-wrap mland:flex-nowrap items-center gap-x-1.5 truncate tabular">
+              <div className="text-[10px] sm:text-[11px] mland:text-[9.5px] text-[var(--mut)] flex flex-wrap mland:flex-nowrap items-center gap-x-1.5 truncate tabular">
                 <span className="truncate font-medium">{TN[me.tier]}</span>
-                <span className="opacity-45 shrink-0">·</span>
+                <span className="opacity-40 shrink-0">·</span>
                 <span className="shrink-0">ซีซั่น {state.season}</span>
-                <span className="opacity-45 shrink-0">·</span>
+                <span className="opacity-40 shrink-0">·</span>
                 <span className="shrink-0">นัด {Math.min(state.md, state.fx.length)}/{state.fx.length}</span>
-                <span className="opacity-45 shrink-0">·</span>
+                <span className="opacity-40 shrink-0">·</span>
                 {state.mode === 'm' ? (
                   <span className="font-bold text-[var(--g)] tabular shrink-0">งบ {state.money}k ฿</span>
                 ) : (
@@ -16440,7 +17000,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleTriggerNextStep}
-              className="px-3 sm:px-4 mland:px-2.5 py-2 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[10.5px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
+              className="min-h-[36px] mland:min-h-[30px] px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[11px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
             >
               {nextMatchInfo
                 ? appSettings.autoSkipMatch
@@ -16460,7 +17020,7 @@ export default function App() {
               type="button"
               onClick={() => { SFX.tap(); setShowSettings(true); }}
               aria-label="ตั้งค่า"
-              className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] flex items-center justify-center text-sm mland:text-xs cursor-pointer shrink-0"
+              className="w-9 h-9 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] flex items-center justify-center text-sm mland:text-xs cursor-pointer shrink-0"
             >
               ⚙️
             </button>
@@ -16573,7 +17133,7 @@ export default function App() {
         </main>
 
         {/* Pinned Bottom / Mobile-Landscape Left-Rail Navigation Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] mland:order-first mland:w-[66px] mland:h-full mland:border-t-0 mland:border-r mland:px-1.5 mland:py-1.5 mland:overflow-y-auto">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] mland:order-first mland:w-[70px] mland:h-full mland:border-t-0 mland:border-r mland:px-1.5 mland:py-2 mland:overflow-y-auto">
           <div
             className="max-w-6xl mx-auto px-1.5 sm:px-5 py-1.5 grid gap-1 mland:!flex mland:flex-col mland:gap-1 mland:h-full mland:justify-center mland:px-0 mland:py-0"
             style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
@@ -16588,10 +17148,10 @@ export default function App() {
                     SFX.tap();
                     updateState((d) => { d.v = key; });
                   }}
-                  className={`relative py-1.5 px-1 sm:px-2 mland:!flex-col mland:py-1 mland:px-0.5 mland:text-[8.5px] mland:flex-1 mland:max-h-[48px] rounded-xl mland:rounded-lg flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-xs font-bold cursor-pointer transition-all min-w-0 ${
+                  className={`relative py-1.5 px-1 sm:px-2 mland:!flex-col mland:py-1 mland:px-0.5 mland:text-[9px] mland:flex-1 mland:min-h-[38px] mland:max-h-[50px] rounded-xl mland:rounded-lg flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-xs font-bold cursor-pointer transition-all min-w-0 ${
                     active
                       ? 'bg-gradient-to-b from-[#1a9657] to-[#147845] text-white shadow-[0_2px_8px_rgba(21,128,73,0.3)]'
-                      : 'bg-[var(--surface-2)]/50 text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/85'
                   }`}
                 >
                   <span className="text-sm sm:text-base mland:text-xs leading-none">{icon}</span>
@@ -16669,7 +17229,7 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 -translate-x-1/2 z-[70] max-w-[92vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/92 backdrop-blur-md text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
+        <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/92 backdrop-blur-md text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
           {toast}
         </div>
       )}

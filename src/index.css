@@ -67,7 +67,7 @@ textarea:focus-visible {
 }
 
 button:not(:disabled) {
-  transition-property: transform, filter, background-color, border-color, color, box-shadow;
+  transition-property: transform, filter, background-color, border-color, color, box-shadow, opacity;
   transition-duration: 150ms;
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -97,9 +97,11 @@ button:not(:disabled):active {
 
 @media (orientation: landscape) and (max-height: 540px) {
   html {
-    font-size: clamp(12px, 3.2dvh, 14px);
+    font-size: clamp(12px, 3.25dvh, 14px);
   }
   #root {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
@@ -111,6 +113,16 @@ button:not(:disabled):active {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+.game-card {
+  background-color: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 2px rgba(8, 25, 16, 0.05);
+}
+
+.dark .game-card {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
 }
 
 @keyframes confetti-fall {
