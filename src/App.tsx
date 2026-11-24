@@ -513,6 +513,7 @@ export default function App() {
     const finished = activeMatch;
     setActiveMatch(null);
     commitFinishedMatch(finished, payload);
+    navigateToTab('t');
   };
 
   const handleTriggerNextStep = () => {
@@ -525,6 +526,7 @@ export default function App() {
         if (nextMatchInfo.isDerby) simState.derby = 1;
         const payload = simulateInstantMatchPayload(simState, nextMatchInfo.kind, nextMatchInfo.homeId, nextMatchInfo.awayId);
         commitFinishedMatch(nextMatchInfo, payload);
+        navigateToTab('t');
         const H = state.teams[nextMatchInfo.homeId];
         const A = state.teams[nextMatchInfo.awayId];
         const myGf = nextMatchInfo.homeId === state.me ? payload.gh : payload.ga;

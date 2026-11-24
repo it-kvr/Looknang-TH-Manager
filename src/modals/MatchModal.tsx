@@ -4622,6 +4622,7 @@ export const MatchModal: React.FC<{
     w.phaseTone = 'normal';
     setHalftimeTalkUsed(false);
     setHtPickedPlayer(null);
+    setMlandMatchTab('stats');
     setPaused(false);
     setMatchPhaseUi('play2');
     setClockLabel("46'");
@@ -5953,15 +5954,26 @@ export const MatchModal: React.FC<{
             <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
               {!done ? (
                 matchPhaseUi === 'halftime' ? (
-                  <button
-                    type="button"
-                    title="ข้ามครึ่งหลังไปจบเกม"
-                    aria-label="ข้ามครึ่งหลังไปจบเกม"
-                    onClick={skipToEnd}
-                    className="h-7 mland:h-6 px-2.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
-                  >
-                    ⏩ ข้าม
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      title="เริ่มครึ่งหลัง"
+                      aria-label="เริ่มครึ่งหลัง"
+                      onClick={() => handleStartSecondHalf()}
+                      className="h-7 mland:h-6 px-2.5 sm:px-3 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-110"
+                    >
+                      ▶ เริ่มครึ่งหลัง
+                    </button>
+                    <button
+                      type="button"
+                      title="ข้ามครึ่งหลังไปจบเกม"
+                      aria-label="ข้ามครึ่งหลังไปจบเกม"
+                      onClick={skipToEnd}
+                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--lamp)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      ⏩<span className="hidden sm:inline mland:hidden ml-0.5">ข้าม</span>
+                    </button>
+                  </>
                 ) : (
                   <>
                     {state.mode === 'm' && (

@@ -967,11 +967,6 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         title={subsUsed.length < 5 ? 'ลากลงสนามเพื่อเปลี่ยนตัว' : 'ใช้โควต้าครบแล้ว'}
                         className="flex items-center gap-1 shrink-0 py-0.5 pr-0.5 [&_svg]:w-4 [&_svg]:h-4"
                       >
-                        {subsUsed.length < 5 && (
-                          <span className="text-[11px] text-[var(--mut)]/75 leading-none font-bold select-none" aria-hidden="true">
-                            ⋮⋮
-                          </span>
-                        )}
                         <PlayerFace player={pl} team={meTeamOrig} state={state} careerProfile={state.p} size={20} />
                         <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center">#{no}</span>
                         <span className={`px-1 py-0.2 rounded text-[8.5px] font-extrabold text-white ${roleBadgeBg(pl.ro)}`}>{pl.ro}</span>
