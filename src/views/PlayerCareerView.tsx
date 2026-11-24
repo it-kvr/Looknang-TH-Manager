@@ -8,6 +8,7 @@ import { statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
+import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -223,14 +224,115 @@ export const PlayerCareerView: React.FC<{
                   <span>⭐ {avgRt}</span>
                 </div>
               </div>
-              <div className="p-1.5 mland:p-1 rounded-xl bg-[var(--surface-2)]">
-                <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">ทีมชาติไทย 🇹🇭</div>
-                <b className="text-[11.5px] mland:text-[9.5px] tabular">{p.ntCaps || 0} นัด · {p.ntGoals || 0} ล.</b>
+              <div className="col-span-2 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-2 text-left">
+                <span className="text-[10px] mland:text-[8px] text-[var(--mut)] font-semibold">🇹🇭 ทีมชาติไทย</span>
+                <b className="text-[11px] mland:text-[9px] tabular">{p.ntCaps || 0} นัด · {p.ntGoals || 0} ประตู</b>
               </div>
-              <div className="p-1.5 mland:p-1 rounded-xl bg-[var(--surface-2)]">
-                <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">ฟอร์มล่าสุด</div>
-                <b className="text-[11px] mland:text-[8.5px] tabular truncate block">{(p.fm || []).length ? p.fm!.join('·') : '-'}</b>
-              </div>
+              {(() => {
+                const recentFm = (p.fm || []).slice(-5);
+                const recentAvg = recentFm.length
+                  ? recentFm.reduce((sum, val) => sum + val, 0) / recentFm.length
+                  : 0;
+                const lastRt = recentFm.length ? recentFm[recentFm.length - 1] : 0;
+                const prevRt = recentFm.length >= 2 ? recentFm[recentFm.length - 2] : lastRt;
+                const trendLabel =
+                  recentFm.length < 2
+                    ? recentFm.length === 1
+                      ? 'นัดแรก'
+                      : 'รอลงสนาม'
+                    : lastRt >= 7.8 || (lastRt - prevRt >= 0.45 && recentAvg >= 7.1)
+                      ? '🔥 ร้อนแรง'
+                      : lastRt - prevRt <= -0.55
+                        ? '↘ แผ่วลง'
+                        : recentAvg >= 7.1
+                          ? '✨ สม่ำเสมอ'
+                          : '⚖️ ทรงตัว';
+                const avgCls =
+                  recentAvg >= 8.0
+                    ? 'text-[#9a6700] dark:text-[#fde047]'
+                    : recentAvg >= 7.1
+                      ? 'text-[var(--g)]'
+                      : recentAvg >= 6.4
+                        ? 'text-sky-600 dark:text-sky-400'
+                        : 'text-[var(--red)]';
+                return (
+                  <div className="col-span-2 p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]/70 space-y-1.5 mland:space-y-1 text-left">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className="text-[10px] mland:text-[8px] font-bold text-[var(--mut)]">ฟอร์ม 5 นัดล่าสุด</span>
+                        <span className="text-[9.5px] mland:text-[7.5px] font-bold text-[var(--ink)]/80 truncate">· {trendLabel}</span>
+                      </div>
+                      {recentFm.length > 0 && (
+                        <span className={`text-[10px] mland:text-[8px] font-extrabold tabular shrink-0 ${avgCls}`}>
+                          เฉลี่ย {recentAvg.toFixed(1)}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1">
+                      {Array.from({ length: 5 }).map((_, idx) => {
+                        const val = recentFm[idx];
+                        if (val == null) {
+                          return (
+                            <div
+                              key={idx}
+                              className="rounded-lg border border-dashed border-[var(--line)]/80 bg-[var(--surface)]/45 py-1 mland:py-0.5 flex flex-col items-center justify-end gap-0.5 text-[var(--mut)]/55"
+                            >
+                              <div className="w-full px-1.5 h-3.5 mland:h-2.5 flex items-end justify-center">
+                                <span className="w-2 h-[2px] rounded-full bg-current opacity-50" />
+                              </div>
+                              <span className="text-[9.5px] mland:text-[7.5px] font-bold tabular leading-none">-</span>
+                            </div>
+                          );
+                        }
+                        const isLatest = idx === recentFm.length - 1;
+                        const tier =
+                          val >= 8.2
+                            ? {
+                                box: 'bg-amber-400/20 border-amber-400/65 text-[#8a5b00] dark:text-[#fde047]',
+                                bar: '#f59e0b'
+                              }
+                            : val >= 7.2
+                              ? {
+                                  box: 'bg-emerald-500/15 border-emerald-500/45 text-emerald-700 dark:text-emerald-300',
+                                  bar: '#10b981'
+                                }
+                              : val >= 6.4
+                                ? {
+                                    box: 'bg-sky-500/12 border-sky-500/35 text-sky-700 dark:text-sky-300',
+                                    bar: '#38bdf8'
+                                  }
+                                : {
+                                    box: 'bg-rose-500/14 border-rose-500/45 text-rose-700 dark:text-rose-300',
+                                    bar: '#f43f5e'
+                                  };
+                        const pct = clamp(Math.round(((val - 4.5) / 5.5) * 100), 18, 100);
+                        return (
+                          <div
+                            key={idx}
+                            title={`นัดที่ ${idx + 1}${isLatest ? ' (ล่าสุด)' : ''}: เรตติ้ง ${val.toFixed(1)}`}
+                            className={`rounded-lg border py-1 mland:py-0.5 flex flex-col items-center justify-end gap-0.5 transition-all ${tier.box} ${
+                              isLatest ? 'ring-1 ring-[var(--ink)]/25 shadow-2xs' : 'opacity-90'
+                            }`}
+                          >
+                            <div className="w-full px-1.5 h-3.5 mland:h-2.5 flex items-end justify-center">
+                              <div className="w-2.5 mland:w-2 h-full rounded-sm bg-black/10 dark:bg-white/10 overflow-hidden flex items-end">
+                                <div
+                                  className="w-full rounded-sm"
+                                  style={{ height: `${pct}%`, background: tier.bar }}
+                                />
+                              </div>
+                            </div>
+                            <span className={`text-[10px] mland:text-[8px] tabular leading-none ${isLatest ? 'font-black' : 'font-extrabold'}`}>
+                              {val.toFixed(1)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -362,71 +464,37 @@ export const PlayerCareerView: React.FC<{
 
           {careerTab === 'stats' && (
             <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5">
-              {details.G.length === 5 ? (
-                <div className="flex flex-col gap-1.5 mland:gap-1 flex-1 min-h-0 justify-between">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
-                    {details.G.slice(0, 2).map(([grp, items]) => (
-                      <div
-                        key={grp}
-                        className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
-                      >
-                        <div className="font-bold text-[11px] mland:text-[9px] mb-1 pb-0.5 border-b border-[var(--line)]/70">{grp}</div>
-                        <div className="space-y-0.5">
-                          {items.map(([lbl, val]) => (
-                            <StatBarRow
-                              key={lbl}
-                              label={lbl}
-                              value={val}
-                              compact
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5 mland:gap-1">
-                    {details.G.slice(2).map(([grp, items]) => (
-                      <div
-                        key={grp}
-                        className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
-                      >
-                        <div className="font-bold text-[11px] mland:text-[9px] mb-1 pb-0.5 border-b border-[var(--line)]/70">{grp}</div>
-                        <div className="space-y-0.5">
-                          {items.map(([lbl, val]) => (
-                            <StatBarRow
-                              key={lbl}
-                              label={lbl}
-                              value={val}
-                              compact
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
-                  {details.G.map(([grp, items]) => (
-                    <div
-                      key={grp}
-                      className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
-                    >
-                      <div className="font-bold text-[11px] mland:text-[9px] mb-1 pb-0.5 border-b border-[var(--line)]/70">{grp}</div>
-                      <div className="space-y-0.5">
-                        {items.map(([lbl, val]) => (
-                          <StatBarRow
-                            key={lbl}
-                            label={lbl}
-                            value={val}
-                            compact
-                          />
-                        ))}
-                      </div>
+              <PlayerSeasonProgressionCard
+                player={fakePlayer}
+                state={state}
+                careerProfile={p}
+                variant="inline"
+                defaultOpen
+              />
+              <div
+                className={`grid grid-cols-1 gap-1.5 mland:gap-1 ${
+                  details.G.length === 6 ? 'sm:grid-cols-3 mland:grid-cols-3' : 'sm:grid-cols-2 mland:grid-cols-2'
+                }`}
+              >
+                {details.G.map(([grp, items]) => (
+                  <div
+                    key={grp}
+                    className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                  >
+                    <div className="font-bold text-[11px] mland:text-[9px] mb-1 pb-0.5 border-b border-[var(--line)]/70">{grp}</div>
+                    <div className="space-y-0.5">
+                      {items.map(([lbl, val]) => (
+                        <StatBarRow
+                          key={lbl}
+                          label={lbl}
+                          value={val}
+                          compact
+                        />
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

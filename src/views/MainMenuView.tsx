@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL } from '../data/thaiFootballData';
+import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, saveCustomPlayer, loadCustomPlayers } from '../engine/playerCore';
 import { cleanImportJson } from '../engine/saveCodec';
@@ -187,13 +187,14 @@ export const MainMenu: React.FC<{
   };
 
   const rollFaceTraits = () => ({
-    c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111']),
+    c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']),
     k: P(SKIN_P),
     h: P(HAIR_P),
-    hs: R(0, 7),
-    fh: R(0, 3),
-    fs: R(0, 2),
-    ey: R(0, 3)
+    hs: R(0, HS_N.length - 1),
+    fh: R(0, FH_N.length - 1),
+    fs: R(0, FS_N.length - 1),
+    ey: R(0, EY_N.length - 1),
+    acc: Math.random() < 0.45 ? R(1, ACC_N.length - 1) : 0
   });
 
   const defaultNoForPos = (pos: Position) => (pos === 'GK' ? 1 : pos === 'DF' ? 4 : pos === 'MF' ? 8 : 10);
@@ -208,10 +209,11 @@ export const MainMenu: React.FC<{
   const [cColor, setCColor] = useState(() => P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']));
   const [cSkin, setCSkin] = useState(() => P(SKIN_P));
   const [cHair, setCHair] = useState(() => P(HAIR_P));
-  const [cHs, setCHs] = useState(() => R(0, 7));
-  const [cFh, setCFh] = useState(() => R(0, 3));
-  const [cFs, setCFs] = useState(() => R(0, 2));
-  const [cEy, setCEy] = useState(() => R(0, 3));
+  const [cHs, setCHs] = useState(() => R(0, HS_N.length - 1));
+  const [cFh, setCFh] = useState(() => R(0, FH_N.length - 1));
+  const [cFs, setCFs] = useState(() => R(0, FS_N.length - 1));
+  const [cEy, setCEy] = useState(() => R(0, EY_N.length - 1));
+  const [cAcc, setCAcc] = useState(() => (Math.random() < 0.4 ? R(1, ACC_N.length - 1) : 0));
   const [faceChoices, setFaceChoices] = useState(() => Array.from({ length: 6 }, rollFaceTraits));
   const [cSubMap, setCSubMap] = useState<Record<string, number>>({});
   const [cBase, setCBase] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
@@ -254,12 +256,12 @@ export const MainMenu: React.FC<{
     // Weighted pool for 8 random detailed sub-stat points
     const subPoolKeys: string[] =
       pos === 'GK'
-        ? ['sv', 'sv', 'cl', 'cl', 'dist', 'comp', 'sta', 'tol', 'rec']
+        ? ['sv', 'sv', 'rfx', 'rfx', 'cl', 'cl', 'dist', 'spass', 'lpass', 'comp', 'sta', 'tol', 'rec']
         : pos === 'FW'
-          ? ['fin', 'fin', 'pw', 'cur', 'run', 'spd', 'crs', 'hd', 'str', 'sta', 'comp']
+          ? ['fin', 'fin', 'pw', 'cur', 'lsh', 'drb', 'ctrl', 'spass', 'run', 'spd', 'acc', 'crs', 'hd', 'str', 'sta', 'comp']
           : pos === 'MF'
-            ? ['crs', 'cur', 'rd', 'run', 'fin', 'pw', 'pos', 'mrk', 'spd', 'sta', 'comp', 'rec']
-            : ['pos', 'pos', 'rd', 'rd', 'mrk', 'mrk', 'blk', 'blk', 'hd', 'str', 'spd', 'crs', 'sta', 'tol', 'comp'];
+            ? ['spass', 'spass', 'lpass', 'drb', 'ctrl', 'vis', 'crs', 'cur', 'lsh', 'rd', 'run', 'fin', 'pw', 'pos', 'mrk', 'spd', 'acc', 'sta', 'comp', 'rec']
+            : ['pos', 'pos', 'rd', 'rd', 'mrk', 'mrk', 'blk', 'blk', 'spass', 'lpass', 'ctrl', 'hd', 'str', 'spd', 'acc', 'crs', 'sta', 'tol', 'comp'];
     const subPool = [
       ...subPoolKeys,
       arch.sig,
@@ -303,6 +305,7 @@ export const MainMenu: React.FC<{
     setCFh(f.fh);
     setCFs(f.fs);
     setCEy(f.ey);
+    setCAcc(f.acc ?? 0);
   };
 
   const openPlayerSetup = (slot: number) => {
@@ -555,7 +558,7 @@ export const MainMenu: React.FC<{
     };
     const previewProfile: PlayerCareerProfile = {
       name: previewName, pos: cPos, sp: cSp, no: cNo, tr: curArch.tr, sig: curArch.sig, archName: `${curArch.icon} ${curArch.name}`,
-      sb: combinedSb, c: cColor, k: cSkin, h: cHair, hs: cHs, fh: cFh, fs: cFs, ey: cEy, pts: 0, b: cBase, a: cAttrs,
+      sb: combinedSb, c: cColor, k: cSkin, h: cHair, hs: cHs, fh: cFh, fs: cFs, ey: cEy, acc: cAcc, pts: 0, b: cBase, a: cAttrs,
       talent: cTalent, traits: cTraits,
       age: cAge, gl: 0, as: 0, ap: 0, rs: 0, en: 100, plan: 1
     };
@@ -689,6 +692,7 @@ export const MainMenu: React.FC<{
         fh: cFh,
         fs: cFs,
         ey: cEy,
+        acc: cAcc,
         pts: 0,
         a: { ...cAttrs },
         talent: cTalent,
@@ -1074,7 +1078,7 @@ export const MainMenu: React.FC<{
                 <div className="grid grid-cols-3 sm:grid-cols-6 mland:grid-cols-6 gap-2 mland:gap-1.5">
                   {faceChoices.map((f, idx) => {
                     const isPicked =
-                      cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey;
+                      cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey && cAcc === (f.acc ?? 0);
                     const sampleProfile: PlayerCareerProfile = {
                       ...previewProfile,
                       c: f.c,
@@ -1083,7 +1087,8 @@ export const MainMenu: React.FC<{
                       hs: f.hs,
                       fh: f.fh,
                       fs: f.fs,
-                      ey: f.ey
+                      ey: f.ey,
+                      acc: f.acc ?? 0
                     };
                     return (
                       <button
@@ -1142,9 +1147,15 @@ export const MainMenu: React.FC<{
                     ['รูปหน้า', FS_N, cFs, setCFs],
                     ['แววตา / อารมณ์', EY_N, cEy, setCEy],
                     ['ทรงผม', HS_N, cHs, setCHs],
-                    ['หนวดเครา', FH_N, cFh, setCFh]
+                    ['หนวดเครา', FH_N, cFh, setCFh],
+                    ['เอกลักษณ์ / เครื่องประดับ', ACC_N, cAcc, setCAcc]
                   ].map(([lbl, arr, cur, setter]) => (
-                    <div key={lbl as string} className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] space-y-1.5 mland:space-y-1">
+                    <div
+                      key={lbl as string}
+                      className={`p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] space-y-1.5 mland:space-y-1 ${
+                        lbl === 'เอกลักษณ์ / เครื่องประดับ' ? 'sm:col-span-2 mland:col-span-2' : ''
+                      }`}
+                    >
                       <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">{lbl as string}</div>
                       <div className="flex flex-wrap gap-1">
                         {(arr as string[]).map((l, i) => (
@@ -1359,17 +1370,12 @@ export const MainMenu: React.FC<{
                       })}
                     </div>
                   );
-                  return subStats.length === 5 ? (
-                    <div className="space-y-1.5 mland:space-y-1">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
-                        {subStats.slice(0, 2).map(renderSubCard)}
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5 mland:gap-1">
-                        {subStats.slice(2).map(renderSubCard)}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
+                  return (
+                    <div
+                      className={`grid grid-cols-1 gap-1.5 mland:gap-1 ${
+                        subStats.length === 6 ? 'sm:grid-cols-3 mland:grid-cols-3' : 'sm:grid-cols-2 mland:grid-cols-2'
+                      }`}
+                    >
                       {subStats.map(renderSubCard)}
                     </div>
                   );

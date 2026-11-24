@@ -196,6 +196,8 @@ export interface Team {
   trophies?: TrophyRecord[];
 }
 
+export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
+
 export interface ClubIdentity {
   name: string;
   nick: string;
@@ -216,6 +218,8 @@ export interface ClubIdentity {
   motto?: string;
   founded?: number;
   managerName?: string;
+  managerVis?: number[];
+  managerStyle?: CoachStyleId;
 }
 
 export interface PlayerCareerProfile {
@@ -232,6 +236,7 @@ export interface PlayerCareerProfile {
   fh: number;
   fs: number;
   ey: number;
+  acc?: number;
   no?: number;
   pts: number;
   b: CoreAttrs;
@@ -1102,7 +1107,11 @@ export interface LiveSidelineCoach {
   gestureTimer: number;
   shoutText: string | null;
   shoutTimer: number;
+  moodEmoji?: string | null;
+  moodTimer?: number;
+  moodCooldown?: number;
   isUserCoach: boolean;
+  vis?: number[];
 }
 
 export interface GodBlessingPatch {

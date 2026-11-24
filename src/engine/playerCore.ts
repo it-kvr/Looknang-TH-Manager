@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -257,13 +257,14 @@ export function assignTeamShirtNumbers(team: Team) {
 
 export function rndVis(pos: Position, yo?: boolean): number[] {
   return [
-    P([0, 1, 1, 2, 2, 2, 3, 4]),
-    P([0, 0, 0, 1, 1, 2, 3, 4]),
-    R(0, 7),
-    yo || R(0, 9) < 6 ? 0 : R(1, 3),
-    R(0, 3),
+    P([0, 0, 1, 1, 2, 2, 2, 3, 4, 5, 6, 7]),
+    P([0, 0, 0, 1, 1, 2, 3, 4, 5, 7]),
+    R(0, HS_N.length - 1),
+    yo || R(0, 9) < 6 ? 0 : R(1, FH_N.length - 1),
+    R(0, EY_N.length - 1),
     pos === 'GK' ? 1 : 10,
-    R(0, 2)
+    R(0, FS_N.length - 1),
+    R(0, 9) < 8 ? 0 : R(1, 4)
   ];
 }
 
@@ -272,24 +273,43 @@ export function visOf(q: Partial<Player>, careerP?: PlayerCareerProfile | null):
     const ki = SKIN_P.indexOf(careerP.k);
     const hi = HAIR_P.indexOf(careerP.h);
     const no = q.no || careerP.no || 10;
-    return [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, careerP.hs ?? 0, careerP.fh ?? 0, careerP.ey ?? 0, no, careerP.fs ?? 0];
+    return [
+      ki >= 0 ? ki : 2,
+      hi >= 0 ? hi : 0,
+      careerP.hs ?? 0,
+      careerP.fh ?? 0,
+      careerP.ey ?? 0,
+      no,
+      careerP.fs ?? 0,
+      careerP.acc ?? 0
+    ];
   }
   if (Array.isArray(q.vis) && q.vis.length >= 5) {
     const v = q.vis;
     const no = q.no || v[5] || 10;
-    return [v[0], v[1], v[2], v[3], v[4], no, v.length >= 7 ? v[6] : (v[0] + v[1] + v[2] + no) % 3];
+    return [
+      v[0],
+      v[1],
+      v[2],
+      v[3],
+      v[4],
+      no,
+      v.length >= 7 ? v[6] : (v[0] + v[1] + v[2] + no) % FS_N.length,
+      v.length >= 8 ? v[7] : 0
+    ];
   }
   const s = q.n || 'นักเตะ';
   const h = [...s].reduce((a, c, i) => ((a * 33) ^ (c.charCodeAt(0) * (i + 1))) >>> 0, 5381);
   const no = q.no || (q.pos === 'GK' ? [1, 13, 22, 25, 30][h % 5] : 2 + (h % 98));
   return [
-    h % 5,
-    (h >> 3) % 5,
-    (h >> 6) % 8,
-    (q.age && q.age < 19) || ((h >> 9) % 10 < 6) ? 0 : 1 + ((h >> 11) % 3),
-    (h >> 13) % 4,
+    h % SKIN_P.length,
+    (h >> 3) % Math.min(6, HAIR_P.length),
+    (h >> 6) % HS_N.length,
+    (q.age && q.age < 19) || ((h >> 9) % 10 < 6) ? 0 : 1 + ((h >> 11) % (FH_N.length - 1)),
+    (h >> 13) % EY_N.length,
     no,
-    (h >> 16) % 3
+    (h >> 16) % FS_N.length,
+    ((h >> 19) % 10 < 8) ? 0 : 1 + ((h >> 22) % Math.min(4, ACC_N.length - 1))
   ];
 }
 
@@ -560,10 +580,21 @@ export function xi(t: Team): Player[] {
     const o: Player[] = [];
     const rotationReadiness = (q: Player) => {
       const f = q.fit ?? 100;
+      if (q.pos === 'GK') {
+        if (f >= 72) return 1;
+        if (f >= 60) return 0.92;
+        return 0.72;
+      }
+      if (q.me) {
+        // Career player isn't benched prematurely unless visibly tired
+        if (f >= 70) return 1;
+        if (f >= 60) return 0.84 + ((f - 60) / 10) * 0.14;
+        return Math.max(0.55, 0.58 + (f - 40) * 0.012);
+      }
       if (f >= 82) return 1;
-      if (f >= 72) return 0.92 + ((f - 72) / 10) * 0.08;
-      if (f >= 58) return 0.76 + ((f - 58) / 14) * 0.16;
-      return Math.max(0.54, 0.58 + (f - 30) * 0.0064);
+      if (f >= 74) return 0.93 + ((f - 74) / 8) * 0.07;
+      if (f >= 64) return 0.71 + ((f - 64) / 10) * 0.22;
+      return Math.max(0.32, 0.42 + (f - 40) * 0.011);
     };
     POS.forEach((p) => {
       const ix = sl.map((z, i) => (z.pos === p ? i : -1)).filter((i) => i >= 0);
@@ -667,9 +698,15 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     pw: cl(baseA.sh * 0.6 + baseA.ph * 0.4 + hv(1)),
     fin: cl(baseA.sh + hv(2) + (q.pos === 'FW' ? 4 : 0) + (q.ro === 'ST' ? 2 : 0)),
     cur: cl(baseA.sh * 0.5 + baseA.ps * 0.5 + hv(3) + (q.ro === 'CAM' || q.ro === 'CF' ? 2 : 0)),
+    lsh: cl(baseA.sh * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(32) + (q.ro === 'CAM' || q.ro === 'CM' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
     fk: cl(baseA.sh * 0.4 + baseA.ps * 0.45 + baseA.dr * 0.15 + hv(20) + (q.pos === 'MF' ? 3 : 0)),
-    crs: cl(baseA.ps * 0.7 + baseA.dr * 0.3 + hv(4) + (wing ? 6 : 0) + (q.ro === 'CF' ? 4 : 0)),
     run: cl(baseA.sh * 0.5 + baseA.dr * 0.3 + baseA.ph * 0.2 + hv(5) + (q.ro === 'ST' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
+    drb: cl(baseA.dr * 0.78 + baseA.ph * 0.12 + tlVal * 0.1 + hv(30) + (q.ro === 'LW' || q.ro === 'RW' || q.ro === 'CAM' || q.ro === 'CF' ? 3 : 0)),
+    ctrl: cl(baseA.dr * 0.55 + baseA.ps * 0.35 + tlVal * 0.1 + hv(31) + (q.pos === 'MF' || q.ro === 'CF' ? 3 : 0)),
+    spass: cl(baseA.ps * 0.72 + baseA.dr * 0.16 + tlVal * 0.08 + hv(28) + (q.pos === 'MF' ? 4 : q.ro === 'CF' || q.ro === 'CAM' ? 3 : 0)),
+    lpass: cl(baseA.ps * 0.65 + baseA.sh * 0.18 + tlVal * 0.10 + hv(29) + (q.ro === 'CM' || q.ro === 'CDM' || q.ro === 'CB' || q.ro === 'LB' || q.ro === 'RB' ? 3 : 0)),
+    crs: cl(baseA.ps * 0.7 + baseA.dr * 0.3 + hv(4) + (wing ? 6 : 0) + (q.ro === 'CF' ? 4 : 0)),
+    vis: cl(baseA.ps * 0.55 + q.ov * 0.3 + tlVal * 0.15 + hv(26)),
     rd: cl(baseA.tk * 0.6 + baseA.ps * 0.4 + hv(6)),
     tkl: cl(baseA.tk * 0.72 + baseA.ph * 0.18 + baseA.dr * 0.10 + hv(7)),
     pos: cl(baseA.tk * 0.55 + baseA.ps * 0.35 + baseA.ph * 0.10 + hv(21) + (q.pos === 'DF' || q.ro === 'CDM' ? 3 : 0)),
@@ -677,6 +714,7 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     blk: cl(baseA.tk * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(19) + (q.ro === 'CB' ? 4 : 0)),
     hd: cl(baseA.ph * 0.7 + baseA.tk * 0.3 + hv(8)),
     spd: cl(baseA.dr * 0.5 + baseA.ph * 0.5 + hv(9) - Math.max(0, ag - 31) * 2),
+    acc: cl(baseA.dr * 0.55 + baseA.ph * 0.45 + hv(33) - Math.max(0, ag - 30) * 2 + (wing ? 2 : 0)),
     str: cl(baseA.ph + hv(10)),
     sta: cl(baseA.ph * 0.8 + hv(11) + (ag < 30 ? 3 : -3)),
     agi: cl(baseA.dr * 0.65 + baseA.ph * 0.25 + (100 - Math.max(0, ag - 28) * 2) * 0.1 + hv(22)),
@@ -685,23 +723,28 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     rec: cl(82 - Math.max(0, ag - 24) * 2 + hv(0)),
     end: cl(baseA.ph * 0.55 + baseA.tk * 0.15 + 22 + (ag <= 29 ? 4 : -4) + hv(24)),
     bal: cl(baseA.ph * 0.45 + baseA.dr * 0.35 + 15 + hv(25)),
+    con: cl(60 + q.ov * 0.25 + baseA.ph * 0.1 + (ag >= 24 && ag <= 31 ? 4 : 0) + hv(34)),
     comp: cl(q.ov * 0.7 + 22 + hv(14)),
-    vis: cl(baseA.ps * 0.55 + q.ov * 0.3 + tlVal * 0.15 + hv(26)),
+    foc: cl(q.ov * 0.52 + baseA.tk * 0.2 + tlVal * 0.18 + 10 + hv(35)),
+    ldr: cl(q.ov * 0.48 + (ag >= 27 ? 14 : ag >= 23 ? 8 : 2) + tlVal * 0.16 + 14 + hv(36)),
     det: cl(q.ov * 0.45 + baseA.ph * 0.25 + tlVal * 0.2 + 10 + hv(27)),
     sv: cl(q.ov * 0.7 + baseA.ph * 0.3 + hv(15)),
+    rfx: cl(q.ov * 0.65 + baseA.dr * 0.25 + baseA.ph * 0.1 + hv(37)),
     cl: cl(q.ov * 0.85 + hv(16)),
     dist: cl(baseA.ps * 0.8 + hv(17))
   };
 
-  const sk = q.pos === 'GK' ? ['sv', 'cl', 'dist', 'sta', 'comp'] : ['fin', 'pw', 'cur', 'fk', 'run', 'crs', 'rd', 'tkl', 'pos', 'mrk', 'blk', 'hd', 'spd', 'str', 'sta', 'comp'];
+  const sk = q.pos === 'GK'
+    ? ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp']
+    : ['fin', 'pw', 'cur', 'lsh', 'fk', 'run', 'drb', 'ctrl', 'spass', 'lpass', 'crs', 'vis', 'rd', 'tkl', 'pos', 'mrk', 'blk', 'hd', 'spd', 'acc', 'str', 'sta', 'comp'];
   const sig = po?.sig
     ? po.sig
     : q.customSig
       ? q.customSig
       : po?.tr
         ? q.pos === 'GK'
-          ? { sh: 'cl', ps: 'dist', dr: 'cl', tk: 'sv', ph: 'sv' }[po.tr] || 'sv'
-          : { sh: 'fin', ps: 'crs', dr: 'spd', tk: 'tkl', ph: 'str' }[po.tr] || sk[h % sk.length]
+          ? { sh: 'cl', ps: 'dist', dr: 'rfx', tk: 'sv', ph: 'sv' }[po.tr] || 'sv'
+          : { sh: 'fin', ps: 'crs', dr: 'drb', tk: 'tkl', ph: 'str' }[po.tr] || sk[h % sk.length]
         : sk[h % sk.length];
 
   d[sig] = cl(d[sig] + 8);
@@ -728,14 +771,85 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const tlVal = D0.tlVal;
   const G: [string, [string, number, string?][]][] = [
     ...((gk
-      ? [['🧤 ผู้รักษาประตู', [['เซฟ', d.sv, 'sv'], ['ออกมาปิดมุม', d.cl, 'cl'], ['จ่ายจากแนวหลัง', d.dist, 'dist']]]]
+      ? [[
+          '🧤 ผู้รักษาประตู',
+          [
+            ['เซฟ', d.sv, 'sv'],
+            ['ปฏิกิริยา', d.rfx, 'rfx'],
+            ['ออกมาปิดมุม', d.cl, 'cl'],
+            ['จ่ายจากแนวหลัง', d.dist, 'dist'],
+            ['ส่งบอลสั้น', d.spass, 'spass'],
+            ['ส่งบอลยาว', d.lpass, 'lpass']
+          ]
+        ]]
       : [
-          ['⚔️ โจมตี', [['พลังยิง', d.pw, 'pw'], ['จบสกอร์', d.fin, 'fin'], ['ยิงโค้ง', d.cur, 'cur'], ['ลูกตั้งเตะ', d.fk, 'fk'], ['เปิดบอล', d.crs, 'crs'], ['เข้าทำตำแหน่ง', d.run, 'run']]],
-          ['🛡️ ป้องกัน', [['อ่านเกม', d.rd, 'rd'], ['เข้าสกัด', d.tkl, 'tkl'], ['ยืนตำแหน่ง', d.pos, 'pos'], ['ประกบตัว', d.mrk, 'mrk'], ['บล็อกลูกยิง', d.blk, 'blk'], ['โหม่ง', d.hd, 'hd']]]
+          [
+            '⚔️ โจมตี',
+            [
+              ['จบสกอร์', d.fin, 'fin'],
+              ['พลังยิง', d.pw, 'pw'],
+              ['ยิงโค้ง', d.cur, 'cur'],
+              ['ยิงไกล', d.lsh, 'lsh'],
+              ['ลูกตั้งเตะ', d.fk, 'fk'],
+              ['เข้าทำ', d.run, 'run']
+            ]
+          ],
+          [
+            '⚽ การเล่น',
+            [
+              ['เลี้ยงบอล', d.drb, 'drb'],
+              ['จับบอล', d.ctrl, 'ctrl'],
+              ['ส่งบอลสั้น', d.spass, 'spass'],
+              ['ส่งบอลยาว', d.lpass, 'lpass'],
+              ['เปิดบอล', d.crs, 'crs'],
+              ['ไหวพริบ', d.vis, 'vis']
+            ]
+          ],
+          [
+            '🛡️ ป้องกัน',
+            [
+              ['อ่านเกม', d.rd, 'rd'],
+              ['เข้าสกัด', d.tkl, 'tkl'],
+              ['ยืนตำแหน่ง', d.pos, 'pos'],
+              ['ประกบตัว', d.mrk, 'mrk'],
+              ['บล็อกลูกยิง', d.blk, 'blk'],
+              ['โหม่ง', d.hd, 'hd']
+            ]
+          ]
         ]) as [string, [string, number, string?][]][]),
-    ['💪 ร่างกาย', [['ความเร็ว', d.spd, 'spd'], ['ความแข็งแรง', d.str, 'str'], ['ความอึด', d.sta, 'sta'], ['ความคล่องตัว', d.agi, 'agi'], ['พลังกระโดด', d.jmp, 'jmp']]],
-    ['❤️ ความฟิต', [['ฟิตปัจจุบัน', f], ['ทนต่อบาดเจ็บ', d.tol, 'tol'], ['ฟื้นตัวเร็ว', d.rec, 'rec'], ['ยืนระยะเกม', d.end, 'end'], ['สมดุลร่างกาย', d.bal, 'bal']]],
-    ['🌟 พรสวรรค์', [['ค่าพรสวรรค์', tlVal], ['ศักยภาพสูงสุด', q.pot || q.ov], ['นิ่งในนัดใหญ่', d.comp, 'comp'], ['ไหวพริบอ่านเกม', d.vis, 'vis'], ['ความมุ่งมั่น', d.det, 'det']]]
+    [
+      '💪 ร่างกาย',
+      [
+        ['ความเร็ว', d.spd, 'spd'],
+        ['สปีดต้น', d.acc, 'acc'],
+        ['แข็งแกร่ง', d.str, 'str'],
+        ['ความอึด', d.sta, 'sta'],
+        ['ความคล่องตัว', d.agi, 'agi'],
+        ['พลังกระโดด', d.jmp, 'jmp']
+      ]
+    ],
+    [
+      '❤️ ความฟิต',
+      [
+        ['ฟิตปัจจุบัน', f],
+        ['ทนต่อบาดเจ็บ', d.tol, 'tol'],
+        ['ฟื้นตัวเร็ว', d.rec, 'rec'],
+        ['ยืนระยะเกม', d.end, 'end'],
+        ['สมดุลร่างกาย', d.bal, 'bal'],
+        ['ความสม่ำเสมอ', d.con, 'con']
+      ]
+    ],
+    [
+      '🌟 พรสวรรค์',
+      [
+        ['ค่าพรสวรรค์', tlVal],
+        ['ศักยภาพสูงสุด', q.pot || q.ov],
+        ['นิ่งในนัดใหญ่', d.comp, 'comp'],
+        ['สมาธิในเกม', d.foc, 'foc'],
+        ['ภาวะผู้นำ', d.ldr, 'ldr'],
+        ['ความมุ่งมั่น', d.det, 'det']
+      ]
+    ]
   ];
   const allD = G.flatMap((g) => g[1]).filter((z) => !['ฟิตปัจจุบัน', 'ศักยภาพสูงสุด', 'ค่าพรสวรรค์'].includes(z[0]));
   const sg = allD.find((z) => z[2] === D0.sig) || allD.find((z) => z[0] === SIGL[D0.sig]);
@@ -1108,6 +1222,25 @@ export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity
   };
 }
 
+export function getDefaultCoachVis(seedName: string): number[] {
+  let h = 2166136261;
+  for (let i = 0; i < seedName.length; i++) {
+    h ^= seedName.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  h = Math.abs(h);
+  return [
+    h % SKIN_P.length,
+    [0, 1, 5, 6, 2][Math.floor(h / 7) % 5],
+    [0, 2, 5, 7, 9, 13][Math.floor(h / 13) % 6],
+    [0, 2, 3, 5, 6, 7][Math.floor(h / 23) % 6],
+    [0, 1, 3, 4, 7][Math.floor(h / 31) % 5],
+    0,
+    Math.floor(h / 41) % FS_N.length,
+    Math.floor(h / 59) % 5 === 0 ? 5 : 0
+  ];
+}
+
 export function ensureClubIdentity(s: GameState): ClubIdentity {
   if (!s.club) {
     const t = s.teams[s.me];
@@ -1124,8 +1257,20 @@ export function ensureClubIdentity(s: GameState): ClubIdentity {
       icon: icKeys[h % icKeys.length] || '⚽',
       iconColor: '',
       crestBorder: (h >> 6) % 4,
-      kit: (h >> 3) % KIT_PATTERNS.length
+      kit: (h >> 3) % KIT_PATTERNS.length,
+      managerName: 'หัวหน้าผู้ฝึกสอน',
+      managerStyle: 'balanced',
+      managerVis: getDefaultCoachVis(t.name || 'coach')
     };
+  }
+  if (!s.club.managerVis || s.club.managerVis.length < 8) {
+    const baseVis = getDefaultCoachVis(s.club.managerName || s.club.name || 'coach');
+    s.club.managerVis = Array.isArray(s.club.managerVis) && s.club.managerVis.length >= 6
+      ? [...s.club.managerVis.slice(0, 6), s.club.managerVis[6] ?? baseVis[6], s.club.managerVis[7] ?? baseVis[7]]
+      : baseVis;
+  }
+  if (!s.club.managerStyle) {
+    s.club.managerStyle = 'balanced';
   }
   return s.club;
 }
@@ -1167,28 +1312,43 @@ export interface CreatedPlayerCandidate {
   key: string;
   sourceType: 'career_save' | 'custom_pool';
   slot?: number;
+  sourceSeason?: number;
   templateId?: string;
   sourceLabel: string;
   clubName: string;
+  sourceTier?: number;
   archName?: string;
   ov: number;
   pot: number;
   price: number;
   player: Player;
   profile: Omit<PlayerCareerProfile, 'b' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>;
+  careerStats: {
+    seasons: number;
+    apps: number;
+    goals: number;
+    assists: number;
+    cleanSheets: number;
+    motm: number;
+    avgRating: number;
+    ntCaps: number;
+    ntGoals: number;
+  };
 }
 
 export function buildPlayerFromCareerProfile(
-  p: Omit<PlayerCareerProfile, 'b' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>,
+  p: Omit<PlayerCareerProfile, 'b' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'> &
+    Partial<Pick<PlayerCareerProfile, 'gl' | 'as' | 'ap' | 'rs' | 'yc' | 'rc' | 'history' | 'careerLog' | 'ntCaps' | 'ntGoals'>>,
   opts?: { livePlayer?: Player | null; ovOverride?: number; potOverride?: number; asHomegrown?: boolean }
 ): Player {
   const lp = opts?.livePlayer;
+  const srcA = lp?.customA || p.a;
   const attrs: CoreAttrs = {
-    sh: clamp(Math.round(p.a?.sh ?? 55), 1, 99),
-    ps: clamp(Math.round(p.a?.ps ?? 55), 1, 99),
-    dr: clamp(Math.round(p.a?.dr ?? 55), 1, 99),
-    tk: clamp(Math.round(p.a?.tk ?? 55), 1, 99),
-    ph: clamp(Math.round(p.a?.ph ?? 55), 1, 99)
+    sh: clamp(Math.round(srcA?.sh ?? 55), 1, 99),
+    ps: clamp(Math.round(srcA?.ps ?? 55), 1, 99),
+    dr: clamp(Math.round(srcA?.dr ?? 55), 1, 99),
+    tk: clamp(Math.round(srcA?.tk ?? 55), 1, 99),
+    ph: clamp(Math.round(srcA?.ph ?? 55), 1, 99)
   };
   const ov = clamp(Math.round(opts?.ovOverride ?? lp?.ov ?? OVF(p.pos, attrs)), 30, 99);
   const talent = clamp(Math.round(p.talent ?? lp?.talent ?? 78), 25, 99);
@@ -1198,26 +1358,71 @@ export function buildPlayerFromCareerProfile(
   const no = clamp(p.no || lp?.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);
   const vis = lp?.vis && lp.vis.length >= 5
     ? [...lp.vis]
-    : [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, no, p.fs ?? 0];
+    : [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, no, p.fs ?? 0, p.acc ?? 0];
   const traits = p.traits?.length ? [...p.traits] : lp?.traits?.length ? [...lp.traits] : [];
+  const mergedSb = lp?.sb && Object.keys(lp.sb).length
+    ? { ...lp.sb }
+    : p.sb && Object.keys(p.sb).length
+      ? { ...p.sb }
+      : undefined;
+  const mergedCoreSb = lp?.coreSb && Object.keys(lp.coreSb).length ? { ...lp.coreSb } : undefined;
+  const histMap = new Map<number, NonNullable<Player['history']>[number]>();
+  (p.history || []).forEach((h) => {
+    if (h && typeof h.season === 'number') histMap.set(h.season, { ...h });
+  });
+  (lp?.history || []).forEach((h) => {
+    if (h && typeof h.season === 'number') histMap.set(h.season, { ...h });
+  });
+  const mergedHistory = Array.from(histMap.values()).sort((a, b) => b.season - a.season);
+  const hasHistory = mergedHistory.length > 0;
+  const mergedCareerLog: string[] = [];
+  [...(p.careerLog || []), ...(lp?.careerLog || [])].forEach((entry) => {
+    if (entry && !mergedCareerLog.includes(entry)) mergedCareerLog.push(entry);
+  });
+
+  const sp = lp?.sp ?? (hasHistory ? 0 : p.ap ?? 0);
+  const sg = lp?.sg ?? (hasHistory ? 0 : p.gl ?? 0);
+  const sa = lp?.sa ?? (hasHistory ? 0 : p.as ?? 0);
+  const cs = lp?.cs ?? 0;
+  const motm = lp?.motm ?? 0;
+  const yc = lp?.yc ?? p.yc ?? 0;
+  const tyc = lp?.tyc ?? lp?.yc ?? p.yc ?? 0;
+  const rc = lp?.rc ?? p.rc ?? 0;
+  const srs = lp?.srs ?? (hasHistory ? 0 : p.rs ?? 0);
+  const sra = lp?.sra ?? (hasHistory ? 0 : p.ap ?? 0);
+
   const basePlayer: Player = {
     n: p.name.trim() || 'นักเตะสร้างเอง',
     pos: p.pos,
     ro: p.sp,
-    sp: 0,
+    sp,
+    sg,
+    sa,
+    cs,
+    motm,
+    yc,
+    tyc,
+    rc,
+    srs,
+    sra,
     ov,
     age: clamp(Math.round(p.age ?? lp?.age ?? 17), 15, 42),
     pot,
     talent,
     traits,
-    fit: 100,
-    inj: 0,
+    fit: lp?.fit ?? 100,
+    inj: lp?.inj ?? 0,
     no,
     vis,
     customA: attrs,
-    ...(p.customD ? { customD: { ...p.customD } } : {}),
-    ...(p.sig ? { customSig: p.sig } : {}),
-    ...(p.sb && Object.keys(p.sb).length ? { sb: { ...p.sb } } : {}),
+    ...(p.customD || lp?.customD ? { customD: { ...(p.customD || lp?.customD) } } : {}),
+    ...(p.sig || lp?.customSig ? { customSig: p.sig || lp?.customSig } : {}),
+    ...(mergedSb ? { sb: mergedSb } : {}),
+    ...(mergedCoreSb ? { coreSb: mergedCoreSb } : {}),
+    ...(lp?.blessed ? { blessed: true } : {}),
+    ...(mergedHistory.length ? { history: mergedHistory } : {}),
+    ...(mergedCareerLog.length ? { careerLog: mergedCareerLog } : {}),
+    ...(lp?.seasonProg ? { seasonProg: { s: lp.seasonProg.s, pts: lp.seasonProg.pts.map((pt) => ({ ...pt, a: { ...pt.a } })) } } : {}),
     ...(opts?.asHomegrown !== false ? { hg: 1, customCreated: 1 } : {})
   };
   basePlayer.price = Math.max(8, vlu(basePlayer));
@@ -1235,20 +1440,94 @@ export function listCreatedPlayersForManager(): CreatedPlayerCandidate[] {
     const club = ps.teams[ps.me];
     const mePl = club?.sq?.find((q) => q.me) || null;
     const player = buildPlayerFromCareerProfile(ps.p, { livePlayer: mePl, ovOverride: mePl?.ov || ovMe(ps.p) });
+
+    // If career save has progressed past season 1 and the current active season isn't in history yet,
+    // append a clean snapshot row so PlayerHistoryPanel displays both past and current career seasons without collision.
+    const curSp = player.sp || 0;
+    const curSra = player.sra || 0;
+    const curAvg = curSra > 0
+      ? Math.round(((player.srs || 0) / curSra) * 100) / 100
+      : curSp > 0
+        ? clamp(Math.round((6.2 + ((player.sg || 0) * 1.05 + (player.sa || 0) * 0.65 + (player.cs || 0) * 0.5) / Math.max(1, curSp) + (player.ov - 60) / 90) * 100) / 100, 5, 9.5)
+        : 0;
+    if (ps.season > 1 && curSp > 0 && !(player.history || []).some((h) => h.season === ps.season)) {
+      player.history = [
+        {
+          season: ps.season,
+          teamId: club?.id ?? -1,
+          teamName: club?.name || 'สโมสรอาชีพ',
+          tier: club?.tier ?? 0,
+          ov: player.ov,
+          sp: curSp,
+          sg: player.sg || 0,
+          sa: player.sa || 0,
+          cs: player.cs || 0,
+          motm: player.motm || 0,
+          yc: player.tyc ?? player.yc ?? 0,
+          rc: player.rc || 0,
+          avgRating: curAvg
+        },
+        ...(player.history || [])
+      ];
+    }
+
+    const histRows = player.history || [];
+    const curAlreadyCounted = histRows.some((h) => h.season === ps.season);
+    const sumHistApps = histRows.reduce((s, r) => s + (r.sp || 0), 0) + (curAlreadyCounted ? 0 : curSp);
+    const sumHistGoals = histRows.reduce((s, r) => s + (r.sg || 0), 0) + (curAlreadyCounted ? 0 : player.sg || 0);
+    const sumHistAssists = histRows.reduce((s, r) => s + (r.sa || 0), 0) + (curAlreadyCounted ? 0 : player.sa || 0);
+    const sumHistCs = histRows.reduce((s, r) => s + (r.cs || 0), 0) + (curAlreadyCounted ? 0 : player.cs || 0);
+    const sumHistMotm = histRows.reduce((s, r) => s + (r.motm || 0), 0) + (curAlreadyCounted ? 0 : player.motm || 0);
+
+    let wSum = 0;
+    let wApps = 0;
+    histRows.forEach((r) => {
+      if (r.avgRating > 0 && r.sp > 0) {
+        wSum += r.avgRating * r.sp;
+        wApps += r.sp;
+      }
+    });
+    if (!curAlreadyCounted && curAvg > 0 && curSp > 0) {
+      wSum += curAvg * curSp;
+      wApps += curSp;
+    }
+
+    const apps = Math.max(sumHistApps, ps.p.ap || 0);
+    const goals = Math.max(sumHistGoals, ps.p.gl || 0);
+    const assists = Math.max(sumHistAssists, ps.p.as || 0);
+    const avgRating = wApps > 0
+      ? Math.round((wSum / wApps) * 100) / 100
+      : (ps.p.ap || 0) > 0 && (ps.p.rs || 0) > 0
+        ? Math.round(((ps.p.rs || 0) / Math.max(1, ps.p.ap || 1)) * 100) / 100
+        : 0;
+
     const price = Math.max(8, player.price || vlu(player));
     seenNames.add(player.n);
     out.push({
       key: `career_${k}_${player.n}`,
       sourceType: 'career_save',
       slot: k,
+      sourceSeason: ps.season,
       sourceLabel: `เซฟนักเตะอาชีพ #${k} (ซีซั่น ${ps.season})`,
       clubName: club?.name || 'สโมสรอาชีพ',
+      sourceTier: club?.tier ?? 0,
       archName: ps.p.archName,
       ov: player.ov,
       pot: player.pot,
       price,
       player,
-      profile: ps.p
+      profile: ps.p,
+      careerStats: {
+        seasons: histRows.length + (!curAlreadyCounted && (curSp > 0 || ps.md > 0) ? 1 : 0),
+        apps,
+        goals,
+        assists,
+        cleanSheets: sumHistCs,
+        motm: sumHistMotm,
+        avgRating,
+        ntCaps: ps.p.ntCaps || 0,
+        ntGoals: ps.p.ntGoals || 0
+      }
     });
   }
 
@@ -1272,7 +1551,18 @@ export function listCreatedPlayersForManager(): CreatedPlayerCandidate[] {
       pot: player.pot,
       price,
       player,
-      profile: tpl.profile
+      profile: tpl.profile,
+      careerStats: {
+        seasons: 0,
+        apps: 0,
+        goals: 0,
+        assists: 0,
+        cleanSheets: 0,
+        motm: 0,
+        avgRating: 0,
+        ntCaps: 0,
+        ntGoals: 0
+      }
     });
   }
 

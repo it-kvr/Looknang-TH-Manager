@@ -28,7 +28,7 @@ interface MatchTimelineItem {
   who: string;
   detail?: string;
 }
-import { getShirtNo, visOf, xi, DT, injD, matchKits, pickGK } from '../engine/playerCore';
+import { getShirtNo, visOf, xi, DT, injD, matchKits, pickGK, getDefaultCoachVis } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf } from '../engine/simulation';
 import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
@@ -150,7 +150,6 @@ export const MatchModal: React.FC<{
   const [cineSlowMo, setCineSlowMo] = useState(true);
   const [showRunVectors, setShowRunVectors] = useState(true);
   const [showPositions, setShowPositions] = useState(true);
-  const [showPitchRatings, setShowPitchRatings] = useState(true);
   const [injuryAlert, setInjuryAlert] = useState<{ name: string; role: SubRole; no: number; games: number; minute: number } | null>(null);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
@@ -276,8 +275,8 @@ export const MatchModal: React.FC<{
     userSubInMin: null as number | null,
     userSubOutMin: null as number | null,
     userSentOffMin: null as number | null,
-    aiSubMinH: [R(56, 64), R(68, 76), R(78, 86)],
-    aiSubMinA: [R(56, 64), R(68, 76), R(78, 86)],
+    aiSubMinH: [R(54, 61), R(64, 71), R(73, 79), R(81, 86)],
+    aiSubMinA: [R(54, 61), R(64, 71), R(73, 79), R(81, 86)],
     gh: 0,
     ga: 0,
     evs: [] as MatchEvent[],
@@ -351,6 +350,14 @@ export const MatchModal: React.FC<{
     c.gestureTimer = Math.max(c.gestureTimer, dur * 0.8);
   };
 
+  const triggerCoachMood = (w: LiveMatchWorld | null | undefined, side: 'H' | 'A', emoji: string, dur = 2.2) => {
+    if (!w?.sideline) return;
+    const c = side === 'H' ? w.sideline.coachH : w.sideline.coachA;
+    c.moodEmoji = emoji;
+    c.moodTimer = Math.max(c.moodTimer || 0, dur);
+    c.moodCooldown = Math.max(c.moodCooldown || 0, 5.5 + Math.random() * 4.5);
+  };
+
   const buildInitialWorld = (): LiveMatchWorld => {
     const sr = simRef.current;
     const hAgents = buildAgentsForTeam(homeOrig, 'H', sr.homeLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
@@ -361,19 +368,32 @@ export const MatchModal: React.FC<{
       firstCarrier.y = 50;
       firstCarrier.intent = 'CARRY';
     }
-    const mkCoach = (side: 'H' | 'A', startX: number): LiveSidelineCoach => ({
-      side,
-      x: startX,
-      y: 104,
-      tx: startX,
-      ty: 104,
-      facing: -Math.PI / 2,
-      pacePhase: side === 'H' ? 0 : 1.7,
-      gestureTimer: 1.5,
-      shoutText: side === 'H' ? '📣 ลุยเต็มที่!' : null,
-      shoutTimer: side === 'H' ? 2.4 : 0,
-      isUserCoach: state.mode === 'm' && ((side === 'H' && meIsHome) || (side === 'A' && !meIsHome))
-    });
+    const mkCoach = (side: 'H' | 'A', startX: number): LiveSidelineCoach => {
+      const orig = side === 'H' ? homeOrig : awayOrig;
+      const isUser = state.mode === 'm' && ((side === 'H' && meIsHome) || (side === 'A' && !meIsHome));
+      const seedName = isUser && state.club?.managerName ? state.club.managerName : `${orig.name} coach`;
+      const coachVis =
+        isUser && Array.isArray(state.club?.managerVis) && state.club.managerVis.length >= 6
+          ? [...state.club.managerVis]
+          : getDefaultCoachVis(seedName);
+      return {
+        side,
+        x: startX,
+        y: 104,
+        tx: startX,
+        ty: 104,
+        facing: -Math.PI / 2,
+        pacePhase: side === 'H' ? 0 : 1.7,
+        gestureTimer: 1.5,
+        shoutText: side === 'H' ? '📣 ลุยเต็มที่!' : null,
+        shoutTimer: side === 'H' ? 2.4 : 0,
+        moodEmoji: null,
+        moodTimer: 0,
+        moodCooldown: side === 'H' ? 6.5 : 9.0,
+        isUserCoach: isUser,
+        vis: coachVis
+      };
+    };
     return {
       agents: [...hAgents, ...aAgents],
       ball: {
@@ -628,13 +648,19 @@ export const MatchModal: React.FC<{
 
   const agentHasTrait = (ag: LivePitchAgent | null | undefined, traitId: string) => Boolean(ag?.traits?.includes(traitId));
 
-  const issueCard = (culprit: LivePitchAgent, curMin: number, directRedBias = 0.04, forceType?: 'Y' | 'R') => {
+  const issueCard = (culprit: LivePitchAgent, curMin: number, directRedBias = 0.015, forceType?: 'Y' | 'R', silentLog = false) => {
     const sr = simRef.current;
     const w = worldRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
     const kit = culprit.side === 'H' ? homeKit : awayKit;
-    const hotHeadBias = agentHasTrait(culprit, 'hot_headed') ? 0.06 : agentHasTrait(culprit, 'calm_leader') ? -0.02 : 0;
-    const directRed = forceType === 'R' ? true : forceType === 'Y' ? false : Math.random() < Math.max(0.01, (culprit.tr === 1 ? 0.09 : directRedBias) + hotHeadBias);
+    const hotHeadBias = agentHasTrait(culprit, 'hot_headed') ? 0.02 : agentHasTrait(culprit, 'calm_leader') ? -0.01 : 0;
+    const teamRedCount = sr.cards.filter((c) => c.t === team.id && (c.type === 'R' || c.type === 'Y2R')).length;
+    const directRed =
+      forceType === 'R'
+        ? true
+        : forceType === 'Y' || teamRedCount >= 2
+          ? false
+          : Math.random() < Math.max(0.008, (culprit.tr === 1 ? 0.025 : directRedBias) + hotHeadBias);
     SFX.card();
     if (directRed) {
       culprit.sentOff = true;
@@ -643,12 +669,16 @@ export const MatchModal: React.FC<{
       sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'R' });
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
-      pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) เสียบสกัดอันตราย โดนไล่ออก (แบน 2 นัด)`, 'card');
+      if (!silentLog) {
+        pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) เสียบสกัดอันตราย โดนไล่ออก (แบน 2 นัด)`, 'card');
+      }
       pushTimeline(curMin, culprit.side, 'red', culprit.id, 'ใบแดงโดยตรง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'R', kit, ttl: 3.4, maxTtl: 3.4 };
         triggerDramaSlow(w, 2.5, `🟥 ใบแดง!! ${culprit.shortName}`);
+        triggerCoachMood(w, culprit.side, '🤬', 2.8);
+        triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😮', 2.4);
       }
       return 'R' as const;
     }
@@ -662,12 +692,16 @@ export const MatchModal: React.FC<{
       sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y2R' });
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
-      pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
+      if (!silentLog) {
+        pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
+      }
       pushTimeline(curMin, culprit.side, 'red', culprit.id, 'เหลืองที่สอง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
         triggerDramaSlow(w, 2.5, `🟨🟥 เหลืองที่สอง!! ${culprit.shortName}`);
+        triggerCoachMood(w, culprit.side, '🤦', 2.7);
+        triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😤', 2.3);
       }
       return 'Y2R' as const;
     }
@@ -676,15 +710,19 @@ export const MatchModal: React.FC<{
     const totalSeasonY = (origPl?.yc || 0) + 1;
     sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y' });
     setMatchCards(sr.cards.slice());
-    pushLog(
-      curMin,
-      `🟨 ใบเหลือง! ${culprit.id} (${team.name}) เข้าสกัดหนัก${totalSeasonY >= 3 ? ' (ครบ 3 ใบ แบนนัดหน้า!)' : ` (สะสม ${totalSeasonY}/3)`}`,
-      'card'
-    );
+    if (!silentLog) {
+      pushLog(
+        curMin,
+        `🟨 ใบเหลือง! ${culprit.id} (${team.name}) เข้าสกัดหนัก${totalSeasonY >= 3 ? ' (ครบ 3 ใบ แบนนัดหน้า!)' : ` (สะสม ${totalSeasonY}/3)`}`,
+        'card'
+      );
+    }
     pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : undefined);
     if (w) {
       w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y', kit, ttl: 2.6, maxTtl: 2.6 };
       triggerDramaSlow(w, 1.5, `🟨 ใบเหลือง · ${culprit.shortName}`);
+      triggerCoachMood(w, culprit.side, '😬', 2.1);
+      triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😡', 2.1);
     }
     return 'Y' as const;
   };
@@ -2359,16 +2397,16 @@ export const MatchModal: React.FC<{
 
     if (nearestDef && nearestDefDist < (defCfg.press === 2 ? 9.0 : inBoxNow ? 8.2 : 6.8) && carrier.pos !== 'GK') {
       const foulProb = clamp(
-        0.075 +
-          (defCfg.press === 2 ? 0.04 : 0) +
-          (nearestDef.tr === 1 ? 0.04 : 0) +
-          (agentHasTrait(nearestDef, 'hot_headed') ? 0.05 : agentHasTrait(nearestDef, 'calm_leader') ? -0.025 : 0) +
-          (agentHasTrait(nearestDef, 'slide_tackler') ? 0.015 : 0) +
-          (isDerby ? 0.025 : 0) +
-          (inBoxNow ? 0.065 : 0) -
-          ((nearestDef.sig === 'pos' ? nearestDef.d.pos + 8 : nearestDef.d.pos) - 60) * 0.001,
-        0.045,
-        0.29
+        0.052 +
+          (defCfg.press === 2 ? 0.025 : 0) +
+          (nearestDef.tr === 1 ? 0.025 : 0) +
+          (agentHasTrait(nearestDef, 'hot_headed') ? 0.03 : agentHasTrait(nearestDef, 'calm_leader') ? -0.015 : 0) +
+          (agentHasTrait(nearestDef, 'slide_tackler') ? 0.012 : 0) +
+          (isDerby ? 0.015 : 0) +
+          (inBoxNow ? 0.035 : 0) -
+          ((nearestDef.sig === 'pos' ? nearestDef.d.pos + 8 : nearestDef.d.pos) - 60) * 0.0008,
+        0.035,
+        0.18
       );
       if (Math.random() < foulProb && curMin >= 2) {
         // FOUL + FREE KICK OR PENALTY (+ VAR Check & In-Match Injury Check)!
@@ -2380,9 +2418,13 @@ export const MatchModal: React.FC<{
         nearestDef.acrobatTimer = 0.65;
         tryTriggerInMatchInjury(w, carrier, curMin, 'foul');
 
-        const shouldVarPen = (inBoxNow && Math.random() < 0.38) || (onBoxEdgeNow && Math.random() < 0.36);
-        const isHardFoul = nearestDef.tr === 1 || distToGoal < 30 || Math.random() < 0.25;
-        const shouldVarFoulCard = !shouldVarPen && w.varChecks < 2 && isHardFoul && Math.random() < 0.24;
+        const shouldVarPen = (inBoxNow && Math.random() < 0.34) || (onBoxEdgeNow && Math.random() < 0.28);
+        const existingReds = simRef.current.cards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
+        const isHardFoul =
+          (nearestDef.tr === 1 || agentHasTrait(nearestDef, 'hot_headed') || agentHasTrait(nearestDef, 'slide_tackler')) && Math.random() < 0.25
+            ? true
+            : distToGoal < 28 && Math.random() < 0.08;
+        const shouldVarFoulCard = !shouldVarPen && w.varChecks < 2 && existingReds === 0 && isHardFoul && Math.random() < 0.14;
 
         if (shouldVarPen && w.varChecks < 2) {
           w.varChecks++;
@@ -2427,7 +2469,7 @@ export const MatchModal: React.FC<{
 
         if (shouldVarFoulCard) {
           w.varChecks++;
-          const upgradeRed = Math.random() < (nearestDef.tr === 1 ? 0.48 : 0.36);
+          const upgradeRed = Math.random() < (nearestDef.tr === 1 ? 0.22 : 0.14);
           w.varReview = {
             kind: 'foul_card',
             side,
@@ -2465,19 +2507,22 @@ export const MatchModal: React.FC<{
           return;
         }
 
-        const cardChance = clamp(
-          0.18 +
-            (nearestDef.tr === 1 ? 0.14 : 0) +
-            (agentHasTrait(nearestDef, 'hot_headed') ? 0.18 : agentHasTrait(nearestDef, 'calm_leader') ? -0.08 : 0) +
-            (distToGoal < 30 ? 0.12 : 0) +
-            (isDerby ? 0.06 : 0),
-          0.12,
-          0.58
+        const alreadyYellowed = (simRef.current.yellows[nearestDef.id] || 0) >= 1;
+        const baseCardChance = clamp(
+          0.09 +
+            (nearestDef.tr === 1 ? 0.06 : 0) +
+            (agentHasTrait(nearestDef, 'hot_headed') ? 0.08 : agentHasTrait(nearestDef, 'calm_leader') ? -0.04 : 0) +
+            (distToGoal < 26 ? 0.04 : 0) +
+            (isDerby ? 0.03 : 0),
+          0.06,
+          0.26
         );
+        const cardChance = alreadyYellowed ? baseCardChance * 0.55 : baseCardChance;
+        const maxRegularCards = isDerby ? 5 : 4;
         let cardLbl = '⚠️ ฟาวล์!';
         let cardCol = '#f59e0b';
         let cardRes: 'Y' | 'R' | null = null;
-        if (Math.random() < cardChance && simRef.current.cards.length < 7) {
+        if (Math.random() < cardChance && simRef.current.cards.length < maxRegularCards) {
           const r = issueCard(nearestDef, curMin);
           cardRes = r === 'Y' ? 'Y' : 'R';
           cardLbl = r === 'Y' ? `🟨 ใบเหลือง ${nearestDef.shortName}` : `🟥 ใบแดง ${nearestDef.shortName}!`;
@@ -3165,7 +3210,9 @@ export const MatchModal: React.FC<{
       b.curve = (Math.random() - 0.5) * 4.5;
       b.maxZ = isLoftedThrough ? 14.5 : 3.5;
       b.progress = 0;
-      b.duration = isLoftedThrough ? 0.62 : attCfg.tempo === 2 ? 0.40 : 0.48;
+      const passSkill = isLoftedThrough ? (carrier.d.lpass ?? 60) : (carrier.d.spass ?? 60);
+      const passPaceFactor = clamp(1 - (passSkill - 60) * 0.0022, 0.88, 1.08);
+      b.duration = (isLoftedThrough ? 0.62 : attCfg.tempo === 2 ? 0.40 : 0.48) * passPaceFactor;
       b.flightType = isLoftedThrough ? 'lofted' : 'through';
       b.shotStyle = undefined;
       b.carrierId = null;
@@ -3301,7 +3348,9 @@ export const MatchModal: React.FC<{
             : 0;
       b.maxZ = isLofted ? clamp(13.5 + dist * 0.14, 14, 19.5) : isTrivelaPass ? 3.5 : 0;
       b.progress = 0;
-      b.duration = isLofted ? clamp(dist / 44, 0.54, 0.82) : isTrivelaPass ? clamp(dist / 52, 0.36, 0.62) : clamp(dist / (attCfg.tempo === 2 ? 78 : attCfg.tempo === 0 ? 48 : 58), 0.26, 0.60);
+      const basePassDur = isLofted ? clamp(dist / 44, 0.54, 0.82) : isTrivelaPass ? clamp(dist / 52, 0.36, 0.62) : clamp(dist / (attCfg.tempo === 2 ? 78 : attCfg.tempo === 0 ? 48 : 58), 0.26, 0.60);
+      const passStat = isLofted ? (carrier.d.lpass ?? 60) : (carrier.d.spass ?? 60);
+      b.duration = basePassDur * clamp(1 - (passStat - 60) * 0.002, 0.88, 1.08);
       b.flightType = isLofted ? 'lofted' : isTrivelaPass ? 'trivela_pass' : 'pass';
       b.shotStyle = undefined;
       b.carrierId = null;
@@ -3527,7 +3576,7 @@ export const MatchModal: React.FC<{
       }
       if (vr.pendingCardUpgrade === 'R' && culprit) {
         SFX.whistle();
-        issueCard(culprit, curMin, 1, 'R');
+        issueCard(culprit, curMin, 1, 'R', true);
         addWorldFx(w, {
           type: 'foul',
           x: vr.x,
@@ -3544,7 +3593,7 @@ export const MatchModal: React.FC<{
         pushLog(curMin, `📺🟥 VAR ยกระดับเป็นใบแดงโดยตรง!! ${culprit.id} (${defTeam.name}) เสียบสกัดอันตราย โดนไล่ออก!`, 'card');
       } else {
         SFX.foul();
-        const issued = culprit ? issueCard(culprit, curMin, 0, 'Y') : 'Y';
+        const issued = culprit ? issueCard(culprit, curMin, 0, 'Y', true) : 'Y';
         const isSecondRed = issued === 'Y2R' || issued === 'R';
         addWorldFx(w, {
           type: 'foul',
@@ -3589,8 +3638,8 @@ export const MatchModal: React.FC<{
       else w.freeKicksA++;
       const edgeX = penRightVar ? 80.5 : 19.5;
       let fkCardTxt = '';
-      if (culprit && Math.random() < 0.45 && simRef.current.cards.length < 7) {
-        const res = issueCard(culprit, curMin, 0, 'Y');
+      if (culprit && Math.random() < 0.28 && simRef.current.cards.length < 5) {
+        const res = issueCard(culprit, curMin, 0, 'Y', true);
         fkCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 ใบแดง';
       }
       addWorldFx(w, {
@@ -3611,13 +3660,13 @@ export const MatchModal: React.FC<{
       SFX.foul();
       const spotX = penRightVar ? 88.5 : 11.5;
       let penCardTxt = '';
-      if (culprit && simRef.current.cards.length < 7) {
+      if (culprit && simRef.current.cards.length < 5) {
         const roll = Math.random();
-        if (roll < (culprit.tr === 1 ? 0.24 : 0.14)) {
-          issueCard(culprit, curMin, 1, 'R');
+        if (roll < (culprit.tr === 1 ? 0.08 : 0.04)) {
+          issueCard(culprit, curMin, 1, 'R', true);
           penCardTxt = ' + 🟥 ใบแดง!';
-        } else if (roll < 0.68) {
-          const res = issueCard(culprit, curMin, 0, 'Y');
+        } else if (roll < 0.36) {
+          const res = issueCard(culprit, curMin, 0, 'Y', true);
           penCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 เหลืองแดง!';
         }
       }
@@ -4018,6 +4067,8 @@ export const MatchModal: React.FC<{
             maxTtl: 2.6
           });
           triggerDramaSlow(w, 1.5, `🧱 ${plan.deflectedFrom ? 'แฉลบ' : ''}ชนเสา/คาน! · ${shooter?.shortName || ''}`);
+          triggerCoachMood(w, side, '😩', 2.3);
+          triggerCoachMood(w, defSide, '😮‍💨', 2.3);
           pushLog(
             curMin,
             plan.deflectedFrom
@@ -4244,6 +4295,8 @@ export const MatchModal: React.FC<{
           maxTtl: 2.5
         });
         triggerDramaSlow(w, b.flightType === 'penalty' ? 2.0 : 1.5, `🧤 ซูเปอร์เซฟ! · ${gk?.shortName || 'ผู้รักษาประตู'}`);
+        triggerCoachMood(w, side, '😫', 2.1);
+        triggerCoachMood(w, defSide, '👏', 2.2);
         if (b.flightType === 'penalty' || Math.random() < 0.68) {
           pushLog(
             curMin,
@@ -4629,14 +4682,17 @@ export const MatchModal: React.FC<{
         }
       }
 
+      const lastPasser = b.lastPasserId ? w.agents.find((a) => a.id === b.lastPasserId) : undefined;
+      const passerSkill = b.flightType === 'lofted' ? (lastPasser?.d.lpass ?? 60) : (lastPasser?.d.spass ?? 60);
       const interceptProb =
         oppDist < (agentHasTrait(nearestOpp, 'interception_hawk') ? 8.0 : 6.8)
           ? clamp(
               0.16 +
-                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 8 : nearestOpp?.d.rd || 60) + (agentHasTrait(nearestOpp, 'interception_hawk') ? 14 : 0) - 60) * 0.004) +
+                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 8 : nearestOpp?.d.rd || 60) + (agentHasTrait(nearestOpp, 'interception_hawk') ? 14 : 0) - 60) * 0.004) -
+                ((passerSkill - 60) * 0.0018) +
                 (agentHasTrait(nearestOpp, 'pressing_machine') ? 0.04 : 0) +
                 (b.flightType === 'through' ? 0.14 : b.flightType === 'lofted' ? -0.05 : b.flightType === 'onetwo' ? -0.04 : 0),
-              0.07,
+              0.06,
               0.50
             )
           : 0;
@@ -4766,7 +4822,11 @@ export const MatchModal: React.FC<{
       const curPlayed = isHomeSide ? sr.homePlayed : sr.awayPlayed;
       const availableBench = sideOrig.sq
         .filter((q) => !curPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n))
-        .sort((a, b) => b.ov - a.ov);
+        .sort((a, b) => {
+          const sa = a.ov * ((a.fit ?? 100) >= 72 ? 1 : 0.68) * (0.8 + 0.2 * ((a.fit ?? 100) / 100));
+          const sb = b.ov * ((b.fit ?? 100) >= 72 ? 1 : 0.68) * (0.8 + 0.2 * ((b.fit ?? 100) / 100));
+          return sb - sa;
+        });
       if (!availableBench.length) return;
       const onPitchPlayers = curLu
         .map((n) => sideOrig.sq.find((q) => q.n === n))
@@ -4923,7 +4983,11 @@ export const MatchModal: React.FC<{
       const curPlayed = isHomeSide ? sr.homePlayed : sr.awayPlayed;
       const availableBench = sideOrig.sq
         .filter((q) => !curPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n))
-        .sort((a, b) => b.ov - a.ov);
+        .sort((a, b) => {
+          const sa = a.ov * ((a.fit ?? 100) >= 72 ? 1 : 0.68) * (0.8 + 0.2 * ((a.fit ?? 100) / 100));
+          const sb = b.ov * ((b.fit ?? 100) >= 72 ? 1 : 0.68) * (0.8 + 0.2 * ((b.fit ?? 100) / 100));
+          return sb - sa;
+        });
       if (!availableBench.length) return;
       const onPitchPlayers = curLu
         .map((n) => sideOrig.sq.find((q) => q.n === n))
@@ -5201,7 +5265,25 @@ export const MatchModal: React.FC<{
       setClockLabel(`${nextMin}'`);
       setStoppageBadge(0);
     }
-    setActionBanner({ label: w.phaseLabel, tone: w.phaseTone });
+    const isSlowShot =
+      w.ball.flightType === 'shot' ||
+      w.ball.flightType === 'freekick' ||
+      w.ball.flightType === 'penalty' ||
+      w.ball.flightType === 'shootout_kick';
+    const hasDrama = w.dramaSlowSec > 0 || isSlowShot;
+    const baseBannerLabel =
+      w.dramaLabel && w.dramaSlowSec > 0
+        ? w.dramaLabel
+        : w.phaseLabel || (isSlowShot ? '🎬 จังหวะสำคัญ · สโลว์โมชัน' : '');
+    const mergedBannerLabel =
+      hasDrama && cineSlowMo && baseBannerLabel && !baseBannerLabel.startsWith('🎬')
+        ? `🎬 ${baseBannerLabel}`
+        : baseBannerLabel;
+    setActionBanner((prev) =>
+      prev.label === mergedBannerLabel && prev.tone === w.phaseTone
+        ? prev
+        : { label: mergedBannerLabel, tone: w.phaseTone }
+    );
     setMatchStats({
       possH: clamp(Math.round((w.possTicksH / Math.max(1, w.possTicksTotal)) * 100), 28, 72),
       shotsH: w.shotsH,
@@ -5502,6 +5584,37 @@ export const MatchModal: React.FC<{
               c.shoutTimer = Math.max(0, c.shoutTimer - rawDt);
               if (c.shoutTimer <= 0) c.shoutText = null;
             }
+            if ((c.moodTimer || 0) > 0) {
+              c.moodTimer = Math.max(0, (c.moodTimer || 0) - rawDt);
+              if (c.moodTimer <= 0) c.moodEmoji = null;
+            }
+            if ((c.moodCooldown || 0) > 0) {
+              c.moodCooldown = Math.max(0, (c.moodCooldown || 0) - rawDt);
+            } else if (!(c.shoutText && c.shoutTimer > 0) && !(c.moodEmoji && (c.moodTimer || 0) > 0)) {
+              const cGoals = c.side === 'H' ? simRef.current.gh : simRef.current.ga;
+              const oGoals = c.side === 'H' ? simRef.current.ga : simRef.current.gh;
+              const uStyle = c.isUserCoach ? state.club?.managerStyle || 'balanced' : 'balanced';
+              const pool = w.varReview
+                ? ['🤔', '😬']
+                : cGoals > oGoals
+                  ? uStyle === 'attack'
+                    ? ['🔥', '😎', '💪', '🙌']
+                    : uStyle === 'defense'
+                      ? ['🛡️', '😌', '👏', '🧐']
+                      : ['😎', '😌', '👏', '💪']
+                  : cGoals < oGoals
+                    ? uStyle === 'motivator'
+                      ? ['📣', '💪', '😤', '👏']
+                      : ['😰', '😤', '🤨', '😬']
+                    : uStyle === 'youth'
+                      ? ['🌱', '👏', '👀', '💪']
+                      : uStyle === 'attack'
+                        ? ['🔥', '👀', '😤', '💪']
+                        : ['🤔', '👀', '👏', '💪', '😮‍💨'];
+              c.moodEmoji = pool[Math.floor(Math.random() * pool.length)];
+              c.moodTimer = 2.1 + Math.random() * 0.7;
+              c.moodCooldown = 7.5 + Math.random() * 8.0;
+            }
           });
         }
 
@@ -5633,7 +5746,7 @@ export const MatchModal: React.FC<{
             }
           }
           if (canvas) {
-            drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, showPitchRatings, simRef.current.liveForm);
+            drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, true, simRef.current.liveForm);
           }
           rafId = window.requestAnimationFrame(frame);
           return;
@@ -5894,7 +6007,7 @@ export const MatchModal: React.FC<{
       }
 
       if (canvas) {
-        drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, showPitchRatings, simRef.current.liveForm);
+        drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, true, simRef.current.liveForm);
       }
       rafId = window.requestAnimationFrame(frame);
     };
@@ -5902,7 +6015,7 @@ export const MatchModal: React.FC<{
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, cineSlowMo, showRunVectors, showPositions, showPitchRatings, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
+  }, [paused, done, speed, cineSlowMo, showRunVectors, showPositions, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
@@ -5971,7 +6084,7 @@ export const MatchModal: React.FC<{
         }
         setLiveFitMap({ ...simRef.current.liveFit });
         if (canvasRef.current) {
-          drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, showPitchRatings, simRef.current.liveForm);
+          drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, true, simRef.current.liveForm);
         }
       }
     } finally {
@@ -6256,14 +6369,14 @@ export const MatchModal: React.FC<{
 
   const bannerCls =
     actionBanner.tone === 'goal'
-      ? 'bg-emerald-500 text-white border-emerald-300/80 shadow-sm'
+      ? 'bg-[#03150b]/95 text-[#fde047] border-emerald-400 shadow-lg shadow-black/55'
       : actionBanner.tone === 'danger'
-        ? 'bg-rose-500/25 text-rose-200 border-rose-400/50'
+        ? 'bg-[#120407]/94 text-rose-200 border-rose-400/80 shadow-lg shadow-black/55'
         : actionBanner.tone === 'offside' || actionBanner.tone === 'setpiece'
-          ? 'bg-amber-400/20 text-amber-200 border-amber-400/50'
+          ? 'bg-[#120c03]/94 text-amber-200 border-amber-400/80 shadow-lg shadow-black/55'
           : actionBanner.tone === 'attack'
-            ? 'bg-emerald-500/25 text-emerald-200 border-emerald-400/45'
-            : 'bg-white/10 text-white border-white/20';
+            ? 'bg-[#04110b]/94 text-emerald-200 border-emerald-400/75 shadow-lg shadow-black/55'
+            : 'bg-black/90 text-white border-white/30 shadow-lg shadow-black/55';
 
   const handleConfirmFinish = () => {
     if (!fullTimeAnalysis) return;
@@ -6847,11 +6960,10 @@ export const MatchModal: React.FC<{
                   title="จบเกมและดำเนินการต่อ"
                   aria-label="จบเกมและดำเนินการต่อ"
                   onClick={handleConfirmFinish}
-                  className="h-7 sm:h-8 mland:h-6 px-2.5 sm:px-3.5 mland:px-2.5 rounded-lg sm:rounded-xl bg-[var(--lamp)] text-[#261900] text-[10.5px] sm:text-xs mland:text-[9.5px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105 transition-all inline-flex items-center gap-1"
+                  className="h-7 sm:h-8 mland:h-6 px-3 sm:px-3.5 mland:px-2.5 rounded-lg sm:rounded-xl bg-[var(--g)] hover:brightness-110 active:scale-[0.98] text-white text-[11px] sm:text-xs mland:text-[10px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap transition-all inline-flex items-center gap-1.5"
                 >
-                  <span>🏁 จบเกม</span>
-                  <span className="hidden sm:inline mland:hidden opacity-60">·</span>
-                  <span className="hidden sm:inline mland:hidden">ดำเนินการต่อ</span>
+                  <span>🏁</span>
+                  <span>จบเกม</span>
                 </button>
               )}
             </div>
@@ -6985,10 +7097,10 @@ export const MatchModal: React.FC<{
                     </div>
                   )}
                   <div className="relative bg-[#144d2e]">
-                    {/* Centered Live Commentary Badge inside Top Stadium Apron (Never crosses touchline into field) */}
+                    {/* Unified Centered Live Commentary Badge inside Top Stadium Apron */}
                     {matchPhaseUi !== 'halftime' && !done && (
                       <div className="pointer-events-none absolute top-0 left-0 right-0 h-[25px] sm:h-[28px] mland:h-[22px] flex items-center justify-center px-3 z-10">
-                        <span className={`px-2.5 mland:px-2 py-[1.5px] rounded-full border text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold truncate max-w-[84%] shadow-xs ${bannerCls}`}>
+                        <span className={`px-3 mland:px-2.5 py-[2px] rounded-full border backdrop-blur-xs text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold truncate max-w-[86%] ${bannerCls}`}>
                           {actionBanner.label}
                         </span>
                       </div>
@@ -7062,21 +7174,6 @@ export const MatchModal: React.FC<{
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                type="button"
-                                title={showPitchRatings ? 'แสดงเรทติ้งนักเตะ (กดเพื่อสลับดู OVR)' : 'แสดง OVR นักเตะ (กดเพื่อเปิดเรทติ้ง)'}
-                                aria-label="เปิด/ปิดเรทติ้ง"
-                                onClick={() => setShowPitchRatings((v) => !v)}
-                                className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
-                                  showPitchRatings
-                                    ? 'bg-[#facc15]/22 border-[#facc15]/60 text-[#8a5b00] dark:text-[#fde047]'
-                                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                                }`}
-                              >
-                                <span>⭐</span>
-                                <span>เรทติ้ง</span>
-                                <span className="opacity-75 text-[9px] mland:text-[7.5px]">{showPitchRatings ? 'เปิด' : 'ปิด'}</span>
-                              </button>
                               <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px]">
                                 <button
                                   type="button"
@@ -7165,7 +7262,7 @@ export const MatchModal: React.FC<{
                                         gkKitOverride={homeGkKit}
                                         trimOverride={homeTrim}
                                         matchMeta={hMeta}
-                                        statMode={showPitchRatings ? 'rating' : 'ovr'}
+                                        statMode="rating"
                                         showFitBar={true}
                                         subAlertFitTh={subAlertFitTh}
                                         selectedPlayerName={htPickedPlayer}
@@ -7188,7 +7285,7 @@ export const MatchModal: React.FC<{
                                         gkKitOverride={awayGkKit}
                                         trimOverride={awayTrim}
                                         matchMeta={aMeta}
-                                        statMode={showPitchRatings ? 'rating' : 'ovr'}
+                                        statMode="rating"
                                         showFitBar={true}
                                         subAlertFitTh={subAlertFitTh}
                                         selectedPlayerName={htPickedPlayer}
@@ -7206,7 +7303,7 @@ export const MatchModal: React.FC<{
                                   gkKitOverride={htPitchMode === 'H' ? homeGkKit : awayGkKit}
                                   trimOverride={htPitchMode === 'H' ? homeTrim : awayTrim}
                                   matchMeta={htPitchMode === 'H' ? hMeta : aMeta}
-                                  statMode={showPitchRatings ? 'rating' : 'ovr'}
+                                  statMode="rating"
                                   showFitBar={true}
                                   subAlertFitTh={subAlertFitTh}
                                   selectedPlayerName={htPickedPlayer}
@@ -7434,21 +7531,6 @@ export const MatchModal: React.FC<{
                         )}
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          title={showPitchRatings ? 'แสดงเรทติ้งนักเตะ (กดเพื่อสลับดู OVR)' : 'แสดง OVR นักเตะ (กดเพื่อเปิดเรทติ้ง)'}
-                          aria-label="เปิด/ปิดเรทติ้ง"
-                          onClick={() => setShowPitchRatings((v) => !v)}
-                          className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
-                            showPitchRatings
-                              ? 'bg-[#facc15]/22 border-[#facc15]/60 text-[#8a5b00] dark:text-[#fde047]'
-                              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          <span>⭐</span>
-                          <span>เรทติ้ง</span>
-                          <span className="opacity-75 text-[9px] mland:text-[7.5px]">{showPitchRatings ? 'เปิด' : 'ปิด'}</span>
-                        </button>
                         <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
                           <button
                             type="button"
@@ -7543,7 +7625,7 @@ export const MatchModal: React.FC<{
                                 gkKitOverride={homeGkKit}
                                 trimOverride={homeTrim}
                                 matchMeta={homeFtMeta}
-                                statMode={showPitchRatings ? 'rating' : 'ovr'}
+                                statMode="rating"
                                 showFitBar={false}
                                 selectedPlayerName={ftPickedPlayer}
                                 onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
@@ -7558,7 +7640,7 @@ export const MatchModal: React.FC<{
                                 gkKitOverride={awayGkKit}
                                 trimOverride={awayTrim}
                                 matchMeta={awayFtMeta}
-                                statMode={showPitchRatings ? 'rating' : 'ovr'}
+                                statMode="rating"
                                 showFitBar={false}
                                 selectedPlayerName={ftPickedPlayer}
                                 onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
@@ -7574,7 +7656,7 @@ export const MatchModal: React.FC<{
                             gkKitOverride={ftPitchMode === 'H' ? homeGkKit : awayGkKit}
                             trimOverride={ftPitchMode === 'H' ? homeTrim : awayTrim}
                             matchMeta={ftPitchMode === 'H' ? homeFtMeta : awayFtMeta}
-                            statMode={showPitchRatings ? 'rating' : 'ovr'}
+                            statMode="rating"
                             showFitBar={false}
                             selectedPlayerName={ftPickedPlayer}
                             onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
@@ -7747,20 +7829,6 @@ export const MatchModal: React.FC<{
 
                     {!done && matchPhaseUi !== 'halftime' && (
                       <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
-                        <button
-                          type="button"
-                          title={showPitchRatings ? 'ซ่อนเรทติ้งนักเตะบนสนาม' : 'แสดงเรทติ้งนักเตะบนสนาม'}
-                          aria-label="เปิด/ปิดเรทติ้งนักเตะ"
-                          onClick={() => setShowPitchRatings((v) => !v)}
-                          className={`h-6 mland:h-5 px-1.5 sm:px-2 rounded-md font-bold cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
-                            showPitchRatings
-                              ? 'bg-[#facc15]/22 text-[#8a5b00] dark:text-[#fde047] shadow-xs'
-                              : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          <span>⭐</span>
-                          <span className="hidden sm:inline mland:hidden">เรทติ้ง</span>
-                        </button>
                         <button
                           type="button"
                           title="แสดง/ซ่อนเส้นวิ่งทำทาง"
@@ -8110,6 +8178,16 @@ export const MatchModal: React.FC<{
                       </>
                     )}
                   </div>
+                )}
+                {done && (
+                  <button
+                    type="button"
+                    onClick={handleConfirmFinish}
+                    className="shrink-0 w-full h-9 sm:h-10 mland:h-8 px-4 rounded-xl bg-[var(--lamp)] hover:brightness-105 active:scale-[0.99] text-[#261900] text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold cursor-pointer shadow-sm transition-all flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  >
+                    <span>🏁</span>
+                    <span>จบเกมและดำเนินการต่อ</span>
+                  </button>
                 )}
               </div>
             </div>

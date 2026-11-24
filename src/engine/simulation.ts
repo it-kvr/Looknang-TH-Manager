@@ -31,10 +31,10 @@ export function rate(
     const l = DL.filter(([, , slotPos]) => ps.includes(slotPos));
     return l.length ? l.reduce((sum, [q, D]) => sum + fn(q, D.d, D.a), 0) / l.length : 0;
   };
-  at += M(['FW', 'MF'], (q, d) => d.fin * 0.35 + d.pw * 0.15 + d.cur * 0.1 + d.run * 0.25 + d.crs * 0.15 - q.ov) * 0.35;
+  at += M(['FW', 'MF'], (q, d) => d.fin * 0.32 + d.pw * 0.14 + d.cur * 0.1 + d.run * 0.22 + d.crs * 0.1 + d.spass * 0.06 + d.lpass * 0.06 - q.ov) * 0.35;
   at += M(['FW', 'MF'], (q, d, a) => d.spd * 0.65 + a.dr * 0.35 - q.ov) * 0.14;
   at += M(['FW'], (q, d) => d.str - q.ov) * 0.06;
-  at += M(['GK'], (q, d) => d.dist - q.ov) * 0.08;
+  at += M(['GK'], (q, d) => d.dist * 0.65 + d.lpass * 0.35 - q.ov) * 0.08;
   df += M(['DF'], (q, d) => d.rd * 0.25 + d.pos * 0.25 + d.mrk * 0.2 + d.blk * 0.15 + d.hd * 0.15 - q.ov) * 0.4;
   df += M(['MF'], (q, d) => d.rd * 0.35 + d.pos * 0.35 + d.mrk * 0.3 - q.ov) * 0.14;
   df += M(['GK'], (q, d) => d.sv * 0.5 + d.cl * 0.3 + d.dist * 0.2 - q.ov) * 0.3;
@@ -163,6 +163,13 @@ export function rate(
     const bMods = getActiveBoardModifiers(s);
     const effMor = clamp((s.mor ?? 50) + bMods.mor, 0, 100);
     const mo = (effMor - 50) / 25 + (s.winBonus === 25 ? 1.5 : s.winBonus === 10 ? 0.8 : 0);
+    const coachStyle = s.club?.managerStyle || 'balanced';
+    if (coachStyle === 'attack') at += 1.5;
+    if (coachStyle === 'defense') df += 1.5;
+    if (coachStyle === 'motivator' && matchMin && matchMin >= 65) {
+      at += 0.9;
+      df += 0.9;
+    }
     at += mo + bMods.att;
     df += mo + bMods.df;
   }
@@ -216,7 +223,7 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
         if (hasTrait(z, 'setpiece_specialist', careerP)) assistBoost += 0.24;
         if (hasTrait(z, 'team_first', careerP)) assistBoost += 0.26;
         if (hasTrait(z, 'selfish_shooter', careerP)) assistBoost *= 0.68;
-        return W(z, (z.pos === 'MF' ? 4 : z.pos === 'FW' ? 3 : 1) * assistBoost, D.d.crs * 0.4 + D.a.ps * 0.35 + D.d.cur * 0.1 + D.a.dr * 0.1 + D.d.rd * 0.05);
+        return W(z, (z.pos === 'MF' ? 4 : z.pos === 'FW' ? 3 : 1) * assistBoost, D.d.crs * 0.28 + D.d.spass * 0.18 + D.d.lpass * 0.16 + D.a.ps * 0.20 + D.d.cur * 0.08 + D.a.dr * 0.05 + D.d.rd * 0.05);
       });
     return { m: R(1, 90), t: t.id, who: q.n, as: Math.random() < 0.75 && o.length ? P(o).n : '' };
   });
@@ -235,27 +242,32 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
   [h, a].forEach((tm) => {
     const starters = xi(tm);
     const active = starters.map((q) => q.n);
-    const bench = tm.sq.filter((q) => !active.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0).sort((x, y) => y.ov - x.ov);
-    const subCount = Math.min(3, bench.length);
+    const bench = tm.sq
+      .filter((q) => !active.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0)
+      .sort((x, y) => ef(y) - ef(x));
+    const subCount = Math.min(4, bench.length);
     const currentLineup = starters.slice();
     const played = new Set(active);
 
-    // Simulate 1-3 substitutions between minutes 58-82
+    // Simulate 2-4 substitutions between minutes 55-84, prioritizing fatigued starters
     for (let k = 0; k < subCount; k++) {
-      if (Math.random() > 0.72) continue;
       const candidateOut = currentLineup
         .filter((q) => q.pos !== 'GK')
         .sort((x, y) => (x.fit ?? 100) - (y.fit ?? 100) || x.ov - y.ov)[0];
       if (!candidateOut) break;
-      const samePosPool = bench.filter((b) => !played.has(b.n) && b.pos === candidateOut.pos);
-      const anyPool = bench.filter((b) => !played.has(b.n) && b.pos !== 'GK');
+      const needRest = (candidateOut.fit ?? 100) < 76;
+      if (Math.random() > (needRest ? 0.88 : 0.7)) continue;
+      const samePosPool = bench.filter((b) => !played.has(b.n) && b.pos === candidateOut.pos && (b.fit ?? 100) >= 64);
+      const anyPool = bench.filter((b) => !played.has(b.n) && b.pos !== 'GK' && (b.fit ?? 100) >= 64);
+      const fallbackPool = bench.filter((b) => !played.has(b.n) && b.pos !== 'GK');
       const candidateIn =
         samePosPool.find((b) => hasTrait(b, 'super_sub', s?.p)) ||
         samePosPool[0] ||
         anyPool.find((b) => hasTrait(b, 'super_sub', s?.p)) ||
-        anyPool[0];
+        anyPool[0] ||
+        fallbackPool[0];
       if (!candidateIn) break;
-      const min = R(58, 83);
+      const min = needRest ? R(54, 72) : R(62, 84);
       const idx = currentLineup.indexOf(candidateOut);
       if (idx >= 0) currentLineup[idx] = candidateIn;
       played.add(candidateIn.n);
@@ -263,10 +275,10 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     }
     playedNames[tm.id] = Array.from(played);
 
-    // Simulate cards (0-3 yellows per team, ~3.5% direct or 2nd yellow red)
+    // Simulate cards (realistic ~1-2 yellows per team, rare red card)
     const pool = currentLineup.filter((q) => q.pos !== 'GK');
-    const cardRoll = (tm.press ?? 1) === 2 ? 0.65 : 0.48;
-    const numYellows = (Math.random() < cardRoll ? 1 : 0) + (Math.random() < cardRoll * 0.55 ? 1 : 0) + (big && Math.random() < 0.3 ? 1 : 0);
+    const cardRoll = (tm.press ?? 1) === 2 ? 0.54 : 0.40;
+    const numYellows = (Math.random() < cardRoll ? 1 : 0) + (Math.random() < cardRoll * 0.45 ? 1 : 0) + (big && Math.random() < 0.2 ? 1 : 0);
     const matchY: Record<string, number> = {};
     for (let c = 0; c < numYellows && pool.length; c++) {
       const weighted = pool.flatMap((q) => {
@@ -281,12 +293,14 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
       const min = R(12, 89);
       matchY[culprit.n] = (matchY[culprit.n] || 0) + 1;
       if (matchY[culprit.n] >= 2) {
-        cards.push({ m: min, t: tm.id, who: culprit.n, type: 'Y2R' });
+        if (Math.random() < 0.55) {
+          cards.push({ m: min, t: tm.id, who: culprit.n, type: 'Y2R' });
+        }
       } else {
         cards.push({ m: min, t: tm.id, who: culprit.n, type: 'Y' });
       }
     }
-    if (pool.length && Math.random() < (big ? 0.045 : 0.025)) {
+    if (pool.length && Math.random() < (big ? 0.032 : 0.018)) {
       const rough = pool.filter((q) => DT(q, s?.p).tr === 1 || hasTrait(q, 'hot_headed', s?.p));
       const culprit = rough.length ? P(rough) : P(pool);
       if (!cards.some((c) => c.t === tm.id && c.who === culprit.n && (c.type === 'R' || c.type === 'Y2R'))) {
@@ -630,7 +644,7 @@ export function computePlayerRatings(
         q.pos === 'FW'
           ? (D.d.fin * 0.35 + D.d.run * 0.25 + D.d.pw * 0.15 + D.d.cur * 0.15 + D.d.spd * 0.1)
           : q.pos === 'MF'
-            ? (D.a.ps * 0.3 + D.a.dr * 0.2 + D.d.crs * 0.2 + D.d.rd * 0.15 + D.d.sta * 0.15)
+            ? (D.a.ps * 0.22 + D.d.spass * 0.14 + D.d.lpass * 0.12 + D.a.dr * 0.16 + D.d.crs * 0.12 + D.d.rd * 0.12 + D.d.sta * 0.12)
             : q.pos === 'DF'
               ? (D.d.rd * 0.25 + D.d.pos * 0.25 + D.d.mrk * 0.2 + D.d.blk * 0.15 + D.d.hd * 0.15)
               : (D.d.sv * 0.45 + D.d.cl * 0.3 + D.d.dist * 0.15 + D.d.comp * 0.1);
@@ -1065,7 +1079,7 @@ export function createNewGame(
       signedSeason: 1,
       careerLog: [startLog],
       history: [],
-      vis: [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, chosenNo, p.fs ?? 0]
+      vis: [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, chosenNo, p.fs ?? 0, p.acc ?? 0]
     });
     assignTeamShirtNumbers(t);
   }
@@ -1288,7 +1302,7 @@ export function calcPlayerPerf(
     p.pos === 'FW'
       ? (D.d.fin * 0.35 + D.d.run * 0.25 + D.d.pw * 0.15 + D.d.cur * 0.15 + D.d.spd * 0.1 - 60) / 90
       : p.pos === 'MF'
-        ? (D.a.ps * 0.3 + D.a.dr * 0.2 + D.d.crs * 0.2 + D.d.rd * 0.15 + D.d.sta * 0.15 - 60) / 90
+        ? (D.a.ps * 0.22 + D.d.spass * 0.14 + D.d.lpass * 0.12 + D.a.dr * 0.16 + D.d.crs * 0.12 + D.d.rd * 0.12 + D.d.sta * 0.12 - 60) / 90
         : p.pos === 'DF'
           ? (D.d.rd * 0.25 + D.d.pos * 0.25 + D.d.mrk * 0.2 + D.d.blk * 0.15 + D.d.hd * 0.15 - 60) / 90
           : (D.d.sv * 0.45 + D.d.cl * 0.3 + D.d.dist * 0.15 + D.d.comp * 0.1 - 60) / 90;
@@ -2429,8 +2443,9 @@ export function afterMatchDay(
   const progMeta = TEAM_TRAINING_PROGRAMS[plan.program];
   const intMeta = TRAINING_INTENSITY_META[plan.intensity];
 
+  const coachStyle = mg ? s.club?.managerStyle || 'balanced' : 'balanced';
   const tacFamDelta = mg
-    ? Math.max(0, (plan.program === 'recovery' ? 1 : 2) + progMeta.tacFamBonus + intMeta.tacAdd + stf.asst)
+    ? Math.max(0, (plan.program === 'recovery' ? 1 : 2) + progMeta.tacFamBonus + intMeta.tacAdd + stf.asst + (coachStyle === 'balanced' ? 2 : 0))
     : 2 + stf.asst;
   me.tacFam = clamp((me.tacFam ?? 65) + tacFamDelta, 30, 100);
 
@@ -2442,14 +2457,20 @@ export function afterMatchDay(
   s.teams.forEach((t) => {
     const pl = xi(t);
     const mine = t.id === s.me;
-    const ps = mine ? (t.press ?? 1) + (t.tempo ?? 1) - 1 : 1;
+    const isAiManaged = !mine || !mg;
+    const ps = mine && mg ? (t.press ?? 1) + (t.tempo ?? 1) - 1 : 1;
     const teamSubsOut = subbedOutByTeam[t.id] || {};
-    const avgAiFit = !mine && t.sq.length
-      ? t.sq.reduce((sum, x) => sum + (x.fit ?? 100), 0) / t.sq.length
+    const avgStarterFit = isAiManaged && pl.length
+      ? pl.reduce((sum, x) => sum + (x.fit ?? 100), 0) / pl.length
       : 100;
-    const aiRecoveryWeek = !mine && avgAiFit < 80 ? 3 : 0;
-    const aiFacilityBonus = !mine ? ([3, 5, 7][t.tier] ?? 4) : 0;
-    const aiPhysioChance = !mine ? ([0.16, 0.28, 0.38][t.tier] ?? 0.25) : 0;
+    const tiredStarterCount = isAiManaged
+      ? pl.filter((x) => (x.fit ?? 100) < 74).length
+      : 0;
+    const aiRecoveryWeek = isAiManaged
+      ? (avgStarterFit < 74 || tiredStarterCount >= 4 ? 5 : avgStarterFit < 81 || tiredStarterCount >= 2 ? 3 : 0)
+      : 0;
+    const aiFacilityBonus = isAiManaged ? ([4, 6, 8][t.tier] ?? 5) : 0;
+    const aiPhysioChance = isAiManaged ? ([0.18, 0.28, 0.38][t.tier] ?? 0.25) : 0;
 
     t.sq.forEach((q) => {
       if (q.me) {
@@ -2472,18 +2493,19 @@ export function afterMatchDay(
       const earlySubRest = pi && typeof subOutMin === 'number' && subOutMin < 85
         ? Math.round(clamp((90 - subOutMin) / 8, 2, 7))
         : 0;
-      const trainFitBonus = mine
+      const trainFitBonus = mine && mg
         ? lv * 2 +
           stf.fit * 2 +
           progMeta.fitMod +
-          (mg ? intMeta.fitDelta : 0) +
-          (mg && plan.restStarters && pi ? 5 : 0) +
+          intMeta.fitDelta +
+          (coachStyle === 'motivator' ? 2 : 0) +
+          (plan.restStarters && pi ? 5 : 0) +
           (isIndivRest ? 10 : 0)
-        : (pi ? Math.round(aiFacilityBonus * 0.65) : aiFacilityBonus + (prevFit < 76 ? 4 : prevFit < 86 ? 2 : 0)) + aiRecoveryWeek;
+        : (pi ? Math.round(aiFacilityBonus * 0.72) : aiFacilityBonus + (prevFit < 78 ? 5 : prevFit < 88 ? 2 : 0)) + aiRecoveryWeek;
       const ironLungsMult = hasTrait(q, 'iron_lungs', s.p) ? 0.72 : hasTrait(q, 'glass_cannon', s.p) ? 1.18 : 1;
       const consRec = hasTrait(q, 'consistency_pro', s.p) ? 2 : 0;
       const matchOrRestDelta = pi
-        ? -Math.round(R(7, 12) * (Dq.tr === 2 ? 0.8 : 1) * ironLungsMult) - ps * (mine ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
+        ? -Math.round(R(7, 12) * (Dq.tr === 2 ? 0.8 : 1) * ironLungsMult) - ps * (mine && mg ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
         : R(10, 17) + Math.round((Dq.d.rec - 68) / 7) + consRec;
       q.fit = clamp(prevFit + matchOrRestDelta + trainFitBonus, hasTrait(q, 'consistency_pro', s.p) ? 55 : 35, 100);
       if (mine) {
@@ -2535,12 +2557,14 @@ export function afterMatchDay(
             : Array.isArray(progMeta.positions) && progMeta.positions.includes(q.pos);
         const benchSharpBonus = plan.restStarters && !xiSet.has(q.n) ? 1.2 : 1;
         const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.65;
+        const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.25 : 1;
         const chance =
           (0.05 + 0.03 * lv + stf.asst * 0.02) *
           progMeta.devMult *
           intMeta.devMult *
           benchSharpBonus *
           tlFactor *
+          youthCoachMul *
           (isFocus ? 2.2 : 1);
         if ((matchesPos || isFocus) && q.age < 31 && q.ov < (q.pot || 92) && Math.random() < chance) {
           q.ov++;
@@ -2550,7 +2574,7 @@ export function afterMatchDay(
     }
     const avgFitAfter = myFitCount ? myFitAfterSum / myFitCount : 80;
     const fitDeltaAvg = myFitCount ? Math.round((myFitAfterSum - myFitBeforeSum) / myFitCount) : 0;
-    const morDelta = progMeta.morBonus + (plan.intensity === 'heavy' && avgFitAfter < 68 ? -1 : 0);
+    const morDelta = progMeta.morBonus + (coachStyle === 'motivator' ? 1 : 0) + (plan.intensity === 'heavy' && avgFitAfter < 68 ? -1 : 0);
     if (morDelta !== 0) s.mor = clamp((s.mor ?? 50) + morDelta, 0, 100);
     s.trainingPlan = {
       ...plan,
@@ -3311,7 +3335,7 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
   const X = [h, a].map((t) => rate(t, s).x.filter((q) => q.pos !== 'GK'));
   const N = [h.name, a.name];
   const templates: ((q: Player, t: string) => string)[] = [
-    (q, t) => `🟨 ${q.n} (${t}) เข้าสกัดหนักโดนใบเหลืองเตือน`,
+    (q, t) => `⚠️ ${q.n} (${t}) เข้าสกัดหนักโดนผู้ตัดสินเรียกเตือน`,
     (q, t) => `😮 ${q.n} (${t}) ยิงเฉียดเสาไปนิดเดียว`,
     (q) => `🎯 ${q.n} ปั่นโค้งเกือบเสียบสามเหลี่ยม`,
     (q, t) => `🩹 ${q.n} (${t}) ปะทะหนักลงไปนอน แต่ลุกมาเล่นต่อได้`,

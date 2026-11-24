@@ -14,9 +14,9 @@ import {
 import type { Position, MainTab, Player, Team, GameState } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
-import { TN, KIT_P, KIT_SW } from '../data/thaiFootballData';
+import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { wagOf, logFin, colDist, ensureClubIdentity } from '../engine/playerCore';
+import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis } from '../engine/playerCore';
 import {
   sortTable,
   getStaffState,
@@ -29,7 +29,7 @@ import {
   getClubFinanceChartData,
   type ClubFinanceChartPoint
 } from '../engine/simulation';
-import { renderCrestPattern, ClubCrest, KitJersey } from '../components/SvgVisuals';
+import { renderCrestPattern, ClubCrest, KitJersey, PlayerFace } from '../components/SvgVisuals';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 
 interface FinTooltipProps {
@@ -88,6 +88,7 @@ export const FinanceClubView: React.FC<{
   const [finChartMode, setFinChartMode] = useState<'balance' | 'cashflow'>('balance');
   const [clubTab, setClubTab] = useState<'info' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
+  const [showCoachEditor, setShowCoachEditor] = useState(false);
 
   useEffect(() => {
     if (navIntent?.tab === 'f' && (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'ledger')) {
@@ -965,8 +966,13 @@ export const FinanceClubView: React.FC<{
                 </p>
               ) : (
                 <>
-                  <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate">
-                    🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}) · 👔 กุนซือ: {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+                  <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate flex items-center gap-1.5">
+                    <span>🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1})</span>
+                    <span aria-hidden="true">·</span>
+                    <span className="truncate font-semibold text-[var(--ink)]">
+                      👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'} ({COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.icon}{' '}
+                      {COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.name})
+                    </span>
                   </p>
                   {k.motto && <p className="text-xs italic text-[var(--ink)]/85 mland:hidden">&ldquo;{k.motto}&rdquo;</p>}
                 </>
@@ -1139,6 +1145,211 @@ export const FinanceClubView: React.FC<{
                 </div>
               </div>
             </div>
+
+            {/* Head Coach Profile, Style & Face Customization */}
+            {(() => {
+              const coachVis = k.managerVis && k.managerVis.length >= 8 ? k.managerVis : getDefaultCoachVis(k.managerName || k.name || 'coach');
+              const curStyle = COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced')) || COACH_STYLES[0];
+              const setCoachVisPart = (idx: number, val: number) => {
+                SFX.tap();
+                onUpdateState((d) => {
+                  const cl = ensureClubIdentity(d);
+                  const next = [...(cl.managerVis || getDefaultCoachVis(cl.managerName || cl.name || 'coach'))];
+                  next[idx] = val;
+                  cl.managerVis = next;
+                });
+              };
+              const randomizeCoachVis = () => {
+                SFX.tap();
+                onUpdateState((d) => {
+                  const cl = ensureClubIdentity(d);
+                  cl.managerVis = [
+                    R(0, SKIN_P.length - 1),
+                    R(0, HAIR_P.length - 1),
+                    R(0, HS_N.length - 1),
+                    R(0, FH_N.length - 1),
+                    R(0, EY_N.length - 1),
+                    0,
+                    R(0, FS_N.length - 1),
+                    Math.random() < 0.45 ? R(1, ACC_N.length - 1) : 0
+                  ];
+                });
+                onToast('สุ่มหน้าตาหัวหน้าผู้ฝึกสอนใหม่แล้ว!');
+              };
+              const coachFacePlayer: Player = {
+                n: k.managerName || 'หัวหน้าผู้ฝึกสอน',
+                pos: 'MF',
+                ro: 'CM',
+                ov: 75,
+                age: 38,
+                pot: 75,
+                fit: 100,
+                inj: 0,
+                vis: coachVis
+              };
+              return (
+                <div className="pt-2.5 border-t border-[var(--line)]/70 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="shrink-0 w-12 h-12 rounded-2xl bg-gradient-to-b from-[#1a2b24] to-[#0c1410] border border-[var(--line)] flex items-end justify-center overflow-hidden shadow-xs">
+                        <PlayerFace
+                          player={coachFacePlayer}
+                          team={me}
+                          state={state}
+                          kitColor="#1e293b"
+                          trimColor={k.c2 || '#facc15'}
+                          size={44}
+                          bare
+                        />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm text-[var(--ink)] truncate">
+                          👔 ระบบโค้ช · {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+                        </div>
+                        <div className="text-[11px] text-[var(--mut)] truncate">
+                          {repRank} · สไตล์ <b className="text-[var(--g)]">{curStyle.icon} {curStyle.name}</b> ({curStyle.effectDesc})
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={randomizeCoachVis}
+                        title="สุ่มหน้าตาโค้ช"
+                        className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] font-bold cursor-pointer"
+                      >
+                        🎲 สุ่ม
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setShowCoachEditor((v) => !v);
+                        }}
+                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
+                          showCoachEditor
+                            ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                        }`}
+                      >
+                        {showCoachEditor ? 'ย่อแต่งหน้า ▴' : '🎨 แต่งหน้าโค้ช'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Coaching Style Picker */}
+                  <div className="space-y-1">
+                    <div className="text-[11px] font-bold text-[var(--mut)]">สไตล์การคุมทีมของโค้ช (มีผลทั้งในสนาม 2D และการซ้อม)</div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                      {COACH_STYLES.map((st) => {
+                        const active = (k.managerStyle || 'balanced') === st.id;
+                        return (
+                          <button
+                            key={st.id}
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              onUpdateState((d) => {
+                                ensureClubIdentity(d).managerStyle = st.id;
+                              });
+                              onToast(`เปลี่ยนสไตล์โค้ชเป็น "${st.icon} ${st.name}"`);
+                            }}
+                            className={`p-2 rounded-xl border text-left cursor-pointer transition-all ${
+                              active
+                                ? 'bg-[var(--g-soft)] border-[var(--g)] shadow-xs'
+                                : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
+                            }`}
+                          >
+                            <div className="text-[11px] font-bold text-[var(--ink)] truncate">
+                              {st.icon} {st.name}
+                            </div>
+                            <div className="text-[10px] text-[var(--g)] font-semibold truncate mt-0.5">{st.effectDesc}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Expandable Coach Face Customizer */}
+                  {showCoachEditor && (
+                    <div className="p-2.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-2 text-[11px]">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <span className="font-bold text-[var(--mut)]">สีผิว</span>
+                        <div className="flex items-center gap-1">
+                          {SKIN_P.map((col, idx) => (
+                            <button
+                              key={col}
+                              type="button"
+                              aria-label={`สีผิว ${idx + 1}`}
+                              onClick={() => setCoachVisPart(0, idx)}
+                              className={`w-5 h-5 rounded-full border cursor-pointer transition-transform ${
+                                coachVis[0] === idx ? 'border-[var(--g)] scale-110 ring-2 ring-[var(--g)]/40' : 'border-black/25'
+                              }`}
+                              style={{ background: col }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <span className="font-bold text-[var(--mut)]">สีผม</span>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {HAIR_P.map((col, idx) => (
+                            <button
+                              key={col}
+                              type="button"
+                              aria-label={`สีผม ${idx + 1}`}
+                              onClick={() => setCoachVisPart(1, idx)}
+                              className={`w-4.5 h-4.5 rounded-full border cursor-pointer transition-transform ${
+                                coachVis[1] === idx ? 'border-[var(--g)] scale-115 ring-2 ring-[var(--g)]/40' : 'border-black/25'
+                              }`}
+                              style={{ background: col }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {(
+                          [
+                            ['ทรงผม', 2, HS_N],
+                            ['รูปหน้า', 6, FS_N],
+                            ['ดวงตา', 4, EY_N],
+                            ['หนวดเครา', 3, FH_N],
+                            ['แว่น / เพิ่มเติม', 7, ACC_N]
+                          ] as const
+                        ).map(([lbl, visIdx, opts]) => {
+                          const curIdx = (coachVis[visIdx] ?? 0) % opts.length;
+                          const stepPart = (delta: number) => setCoachVisPart(visIdx, (curIdx + delta + opts.length) % opts.length);
+                          return (
+                            <div key={lbl} className="rounded-lg bg-[var(--surface)] border border-[var(--line)] px-2 py-1 flex items-center justify-between gap-1">
+                              <div className="min-w-0">
+                                <div className="text-[9.5px] text-[var(--mut)]">{lbl}</div>
+                                <div className="font-bold text-[10.5px] truncate">{opts[curIdx]}</div>
+                              </div>
+                              <div className="flex items-center gap-0.5 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => stepPart(-1)}
+                                  className="w-5 h-5 rounded bg-[var(--surface-2)] hover:bg-[var(--line)] font-bold cursor-pointer"
+                                >
+                                  ‹
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => stepPart(1)}
+                                  className="w-5 h-5 rounded bg-[var(--surface-2)] hover:bg-[var(--line)] font-bold cursor-pointer"
+                                >
+                                  ›
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">

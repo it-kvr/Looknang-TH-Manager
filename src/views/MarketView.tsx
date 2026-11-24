@@ -1200,8 +1200,38 @@ export const MarketView: React.FC<{
                         d.money -= fee;
                         logFin(d, `ซื้อตัวสร้างเอง ${q.n}`, -fee);
                       }
+                      const priorHistory = (q.history || []).map((h) => ({ ...h }));
+                      if ((q.sp || 0) > 0 && cand.sourceSeason != null && !priorHistory.some((h) => h.season === cand.sourceSeason)) {
+                        priorHistory.unshift({
+                          season: cand.sourceSeason,
+                          teamId: -1,
+                          teamName: cand.clubName || 'สโมสรเดิม',
+                          tier: cand.sourceTier ?? 0,
+                          ov: q.ov,
+                          sp: q.sp || 0,
+                          sg: q.sg || 0,
+                          sa: q.sa || 0,
+                          cs: q.cs || 0,
+                          motm: q.motm || 0,
+                          yc: q.tyc ?? q.yc ?? 0,
+                          rc: q.rc || 0,
+                          avgRating: cand.careerStats.avgRating || 6.5
+                        });
+                      }
                       const incoming: Player = {
                         ...q,
+                        sp: 0,
+                        sg: 0,
+                        sa: 0,
+                        cs: 0,
+                        motm: 0,
+                        yc: 0,
+                        tyc: 0,
+                        rc: 0,
+                        srs: 0,
+                        sra: 0,
+                        history: priorHistory.length ? priorHistory : undefined,
+                        careerLog: q.careerLog ? [...q.careerLog] : undefined,
                         hg: 1,
                         customCreated: 1,
                         no: undefined,
@@ -1229,70 +1259,112 @@ export const MarketView: React.FC<{
                     onToast(fee > 0 ? `💰 ซื้อ ${q.n} เข้าทีมเรียบร้อย (🌱 เด็กปั้น)!` : `🌱 ดึง ${q.n} เข้าทีมเป็นเด็กปั้นฟรีเรียบร้อย!`);
                   };
 
+                  const cs = cand.careerStats;
+                  const coreA = q.customA || cand.profile.a;
                   return (
                     <div
                       key={cand.key}
-                      className="flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors"
+                      className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors"
                     >
                       <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
                         <PlayerFace player={q} team={me} state={state} size={40} />
                       </div>
-                      <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                      <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer group">
                         <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
                           <span className="text-[var(--g)]">{q.ro}</span>
-                          <span className="truncate">{q.n}</span>
+                          <span className="truncate group-hover:underline">{q.n}</span>
                           <span className="px-1.5 py-[1px] rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
                             🌱 เด็กปั้น
                           </span>
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                          {cand.sourceLabel}{cand.archName ? ` · ${cand.archName}` : ''} · อายุ {q.age} ปี · ศักยภาพ {cand.pot}
+                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                          {cand.sourceLabel}
+                          {cand.sourceType === 'career_save' && cand.clubName ? ` · ${cand.clubName}` : ''}
+                          {cand.archName ? ` · ${cand.archName}` : ''} · อายุ {q.age} ปี · ศักยภาพ {cand.pot}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] mland:text-[8.5px] tabular">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-[var(--surface-2)] border border-[var(--line)]/80 text-[var(--ink)] font-semibold">
+                            <span>ยิง <b>{coreA.sh}</b></span>
+                            <span className="opacity-40">·</span>
+                            <span>จ่าย <b>{coreA.ps}</b></span>
+                            <span className="opacity-40">·</span>
+                            <span>เลี้ยง <b>{coreA.dr}</b></span>
+                            <span className="opacity-40">·</span>
+                            <span>แย่ง <b>{coreA.tk}</b></span>
+                            <span className="opacity-40">·</span>
+                            <span>กาย <b>{coreA.ph}</b></span>
+                          </span>
+                          {cs.apps > 0 ? (
+                            <span className="inline-flex flex-wrap items-center gap-1.5 px-1.5 py-[1px] rounded bg-emerald-500/10 border border-emerald-500/25 text-[var(--ink)] font-bold">
+                              <span>👕 {cs.apps} นัด</span>
+                              <span>⚽ {cs.goals}</span>
+                              <span>{q.pos === 'GK' ? `🧤 ${cs.cleanSheets}` : `🎯 ${cs.assists}`}</span>
+                              {cs.avgRating > 0 && <span className="text-[#8a5b00] dark:text-[#fde047]">⭐ {cs.avgRating.toFixed(2)}</span>}
+                              {cs.motm > 0 && <span>👑 {cs.motm}</span>}
+                              {cs.ntCaps > 0 && <span>🇹🇭 {cs.ntCaps}</span>}
+                            </span>
+                          ) : (
+                            <span className="text-[var(--mut)]">ยังไม่เคยลงแข่งอาชีพ</span>
+                          )}
                         </div>
                       </button>
                       <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                         {q.ov}
                       </span>
-                      {alreadyInSquad ? (
-                        <span className="px-2.5 py-1 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[11px] mland:text-[9.5px] font-bold shrink-0">
-                          ✅ อยู่ในทีม
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            type="button"
-                            disabled={squadFull}
-                            onClick={() => signCreatedPlayer(false)}
-                            className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--g)] hover:brightness-110 text-white text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
-                            title="ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร"
-                          >
-                            🌱 ปั้นฟรี
-                          </button>
-                          <button
-                            type="button"
-                            disabled={squadFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
-                            onClick={() => signCreatedPlayer(true)}
-                            className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp)] hover:brightness-105 text-[#261900] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
-                            title="ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น"
-                          >
-                            💰 ซื้อ {fmtMoneyNum(cand.price)}
-                          </button>
-                          {cand.sourceType === 'custom_pool' && cand.templateId && (
+                      <div className="flex items-center gap-1 shrink-0 ml-auto sm:ml-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            onInspectPlayer(q, null);
+                          }}
+                          className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] hover:border-[var(--g)] border border-[var(--line)] text-[11px] mland:text-[9px] font-bold text-[var(--ink)] whitespace-nowrap cursor-pointer"
+                          title="ดูการ์ดพลังและประวัติสถิติทั้งหมด"
+                        >
+                          📊 สถิติ
+                        </button>
+                        {alreadyInSquad ? (
+                          <span className="px-2.5 py-1 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[11px] mland:text-[9.5px] font-bold shrink-0">
+                            ✅ อยู่ในทีม
+                          </span>
+                        ) : (
+                          <>
                             <button
                               type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                deleteCustomPlayer(cand.templateId!);
-                                setCreatedRefresh((n) => n + 1);
-                                onToast(`ลบ ${q.n} ออกจากทำเนียบนักเตะสร้างเองแล้ว`);
-                              }}
-                              aria-label={`ลบ ${q.n}`}
-                              className="px-2 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--red-soft)] border border-[var(--line)] text-xs cursor-pointer"
+                              disabled={squadFull}
+                              onClick={() => signCreatedPlayer(false)}
+                              className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--g)] hover:brightness-110 text-white text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
+                              title="ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร"
                             >
-                              🗑️
+                              🌱 ปั้นฟรี
                             </button>
-                          )}
-                        </div>
-                      )}
+                            <button
+                              type="button"
+                              disabled={squadFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
+                              onClick={() => signCreatedPlayer(true)}
+                              className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp)] hover:brightness-105 text-[#261900] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
+                              title="ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น"
+                            >
+                              💰 ซื้อ {fmtMoneyNum(cand.price)}
+                            </button>
+                            {cand.sourceType === 'custom_pool' && cand.templateId && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  deleteCustomPlayer(cand.templateId!);
+                                  setCreatedRefresh((n) => n + 1);
+                                  onToast(`ลบ ${q.n} ออกจากทำเนียบนักเตะสร้างเองแล้ว`);
+                                }}
+                                aria-label={`ลบ ${q.n}`}
+                                className="px-2 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--red-soft)] border border-[var(--line)] text-xs cursor-pointer"
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
                   );
                 })

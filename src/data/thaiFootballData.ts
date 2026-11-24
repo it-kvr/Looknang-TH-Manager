@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, Mentality, TrainingFocus, TrainingProgramId, TrainingIntensity, TeamTrainingPlan, CoreAttrs, GameState, PlayerArchetype, TrainingProgramMeta, FootballTraitDef } from '../types/game';
+import type { Position, SubRole, StatKey, Mentality, TrainingFocus, TrainingProgramId, TrainingIntensity, TeamTrainingPlan, CoreAttrs, GameState, PlayerArchetype, TrainingProgramMeta, FootballTraitDef, CoachStyleId } from '../types/game';
 
 export const A1 = ['ธน', 'กิต', 'วีร', 'ภัค', 'ศุภ', 'นรา', 'อนุ', 'ชัย', 'พงศ์', 'กฤษ', 'ปริญ', 'รัฐ', 'เมธ', 'ณัฐ'];
 export const A2 = ['พล', 'ภัทร', 'วัฒน์', 'ศักดิ์', 'เดช', 'พัฒน์', 'ชนม์', 'ธร', 'นนท์', 'กร'];
@@ -101,12 +101,16 @@ export const ROLE_HINT: Partial<Record<SubRole, string>> = {
 };
 
 export const POSL: SubRole[] = ['ST', 'CF', 'CAM', 'LW', 'RW', 'LM', 'RM', 'CM', 'CDM', 'LCM', 'RCM', 'LDM', 'RDM', 'CB', 'RWB', 'LWB', 'LB', 'RB'];
-export const SKIN_P = ['#f6d4b3', '#f1c9a0', '#d9a273', '#a8744a', '#6b4630'];
-export const HAIR_P = ['#16161a', '#4a2e16', '#8b5a2b', '#c9a227', '#7a2e22'];
-export const HS_N = ['คลาสสิก', 'สไปกี้', 'ปัดข้าง', 'หยิกฟู', 'สกินเฮด', 'เสยเรียบ', 'คาดผม', 'แสกกลาง'];
-export const FH_N = ['ไม่มี', 'เคราแพะ', 'เคราเต็ม', 'หนวด'];
-export const FS_N = ['เรียว', 'กลม', 'กรามคม'];
-export const EY_N = ['มุ่งมั่น', 'จริงจัง', 'ยิ้มมั่นใจ', 'สุขุม'];
+export const SKIN_P = ['#f6d4b3', '#f1c9a0', '#d9a273', '#a8744a', '#6b4630', '#fde4cf', '#c68642', '#4b2e1e'];
+export const HAIR_P = ['#16161a', '#4a2e16', '#8b5a2b', '#c9a227', '#7a2e22', '#d1d5db', '#e5e7eb', '#d97706', '#2563eb', '#be185d'];
+export const HS_N = [
+  'คลาสสิก', 'สไปกี้', 'ปัดข้าง', 'หยิกฟู', 'สกินเฮด', 'เสยเรียบ', 'คาดผม', 'แสกกลาง',
+  'โมฮอว์ก', 'อันเดอร์คัต', 'มัดจุก', 'เดรดล็อก', 'มัลเล็ต', 'หัวโล้น'
+];
+export const FH_N = ['ไม่มี', 'เคราแพะ', 'เคราเต็ม', 'หนวด', 'ตอหนวดจาง', 'เคราแพะ+หนวด', 'เคราจอนยาว', 'เคราหนาเข้ม'];
+export const FS_N = ['เรียว', 'กลม', 'กรามคม', 'เหลี่ยมคม', 'หน้ายาว', 'โหนกแก้มชัด'];
+export const EY_N = ['มุ่งมั่น', 'จริงจัง', 'ยิ้มมั่นใจ', 'สุขุม', 'ดุดัน', 'ยิ้มมุมปาก', 'ตาโตสดใส', 'เยือกเย็น'];
+export const ACC_N = ['ไม่มี', 'ผ้าคาดหัว', 'พลาสเตอร์แก้ม', 'เทปจมูก', 'รอยบากคิ้ว', 'แว่นสปอร์ต', 'หน้ากากกันชน', 'เพนต์แก้มทีม'];
 
 export const KIT_P: [string, string][] = [
   ['#c0392b', '#ffffff'], ['#2f6fd6', '#f4c63d'], ['#e67e22', '#1d2d44'], ['#6d28d9', '#fde68a'],
@@ -121,12 +125,13 @@ export const KIT_SW = [
 ];
 
 export const SIGL: Record<string, string> = {
-  fin: 'จบสกอร์', pw: 'พลังยิง', cur: 'ยิงโค้ง', fk: 'ลูกตั้งเตะ', run: 'เข้าทำตำแหน่ง (วิ่งหาช่อง)',
-  crs: 'เปิดบอล', rd: 'อ่านเกม', tkl: 'เข้าสกัด', pos: 'ยืนตำแหน่ง', mrk: 'ประกบตัว', blk: 'บล็อกลูกยิง', hd: 'โหม่ง',
-  spd: 'ความเร็ว', str: 'ความแข็งแรง', sta: 'ความอึด', agi: 'ความคล่องตัว', jmp: 'พลังกระโดด',
-  tol: 'ทนต่อบาดเจ็บ', rec: 'ฟื้นตัวเร็ว', end: 'ยืนระยะเกม', bal: 'สมดุลร่างกาย',
-  comp: 'นิ่งในนัดใหญ่', vis: 'ไหวพริบอ่านเกม', det: 'ความมุ่งมั่น',
-  sv: 'เซฟ', cl: 'ออกมาปิดมุม', dist: 'จ่ายจากแนวหลัง'
+  fin: 'จบสกอร์', pw: 'พลังยิง', cur: 'ยิงโค้ง', lsh: 'ยิงไกล', fk: 'ลูกตั้งเตะ', run: 'เข้าทำ',
+  drb: 'เลี้ยงบอล', ctrl: 'จับบอล', spass: 'ส่งบอลสั้น', lpass: 'ส่งบอลยาว', crs: 'เปิดบอล', vis: 'ไหวพริบ',
+  rd: 'อ่านเกม', tkl: 'เข้าสกัด', pos: 'ยืนตำแหน่ง', mrk: 'ประกบตัว', blk: 'บล็อกลูกยิง', hd: 'โหม่ง',
+  spd: 'ความเร็ว', acc: 'สปีดต้น', str: 'แข็งแกร่ง', sta: 'ความอึด', agi: 'ความคล่องตัว', jmp: 'พลังกระโดด',
+  tol: 'ทนต่อบาดเจ็บ', rec: 'ฟื้นตัวเร็ว', end: 'ยืนระยะเกม', bal: 'สมดุลร่างกาย', con: 'ความสม่ำเสมอ',
+  comp: 'นิ่งในนัดใหญ่', foc: 'สมาธิในเกม', ldr: 'ภาวะผู้นำ', det: 'ความมุ่งมั่น',
+  sv: 'เซฟ', rfx: 'ปฏิกิริยา', cl: 'ออกมาปิดมุม', dist: 'จ่ายจากแนวหลัง'
 };
 
 export const FOOTBALL_TRAITS: FootballTraitDef[] = [
@@ -553,9 +558,9 @@ export const PLAYER_ARCHETYPES: PlayerArchetype[] = [
     tr: 'ps',
     sig: 'crs',
     coreBonus: { ps: 3, dr: 1 },
-    sbBonus: { cur: 5, rd: 5, comp: 4 },
+    sbBonus: { spass: 5, lpass: 4, rd: 4, comp: 3 },
     autoCorePts: { ps: 6, dr: 3, sh: 2, tk: 1 },
-    autoSubPts: { crs: 4, rd: 2, cur: 2 }
+    autoSubPts: { spass: 3, lpass: 2, crs: 2, rd: 1 }
   },
   {
     id: 'b2b',
@@ -566,9 +571,9 @@ export const PLAYER_ARCHETYPES: PlayerArchetype[] = [
     tr: 'ph',
     sig: 'sta',
     coreBonus: { ph: 2, tk: 1, ps: 1 },
-    sbBonus: { rec: 6, run: 4, rd: 4 },
+    sbBonus: { rec: 6, spass: 4, run: 3, rd: 3 },
     autoCorePts: { ph: 4, ps: 4, tk: 3, dr: 1 },
-    autoSubPts: { sta: 4, rec: 2, rd: 2 }
+    autoSubPts: { sta: 4, rec: 2, spass: 2 }
   },
   {
     id: 'destroyer',
@@ -605,9 +610,9 @@ export const PLAYER_ARCHETYPES: PlayerArchetype[] = [
     tr: 'ps',
     sig: 'rd',
     coreBonus: { ps: 2, tk: 2 },
-    sbBonus: { crs: 5, blk: 4, comp: 4 },
+    sbBonus: { lpass: 5, spass: 4, blk: 4, comp: 3 },
     autoCorePts: { tk: 5, ps: 4, ph: 2, dr: 1 },
-    autoSubPts: { rd: 3, crs: 3, blk: 2 }
+    autoSubPts: { rd: 3, lpass: 3, blk: 2 }
   },
   {
     id: 'shotstopper',
@@ -695,7 +700,7 @@ export const PACT = [
   { i: '🏃', n: 'ซ้อมเบา', d: 'พัฒนาค่าพลังได้สม่ำเสมอ · พลังกายฟื้นตัวดี', en: 18, gr: 0.14 },
   { i: '😴', n: 'พักผ่อน', d: 'ฟื้นพลังกายได้มากที่สุด · รักษาความฟิตเต็มร้อย', en: 36, gr: 0 },
   { i: '📺', n: 'ดูวิดีโอวิเคราะห์เกม', d: 'นัดหน้าเล่นดีขึ้น (เรตติ้ง +0.3) · โอกาสพัฒนาไหวพริบ', en: 12, gr: 0, vid: 0.3, pt: 0.25 },
-  { i: '🏋️', n: 'ยิม / วิ่งนอกสนาม', d: 'เน้นเพิ่มค่าความแข็งแรงร่างกาย · เหนื่อยพอสมควร', en: 10, gr: 0.25, k: 'ph' as StatKey },
+  { i: '🏋️', n: 'ยิม / วิ่งนอกสนาม', d: 'เน้นเพิ่มค่าความแข็งแกร่งร่างกาย · เหนื่อยพอสมควร', en: 10, gr: 0.25, k: 'ph' as StatKey },
   { i: '🤝', n: 'พบปะแฟนบอล', d: 'ขวัญแฟนบอลเพิ่ม ช่วยให้เล่นดีขึ้น · โอกาสพัฒนาความนิ่ง', en: 14, gr: 0, fan: 6, pt: 0.28 }
 ];
 
@@ -868,3 +873,47 @@ export function syncTrainingFocusToPlan(d: GameState, tf: TrainingFocus) {
     tf === 'F' ? 'recovery' : tf === 'FW' ? 'attack' : tf === 'DF' ? 'defense' : cur.program === 'recovery' || cur.program === 'attack' || cur.program === 'defense' ? 'tactics' : cur.program;
   d.trainingPlan = { ...cur, program: nextProg };
 }
+
+export const COACH_STYLES: Array<{
+  id: CoachStyleId;
+  icon: string;
+  name: string;
+  shortDesc: string;
+  effectDesc: string;
+}> = [
+  {
+    id: 'balanced',
+    icon: '⚖️',
+    name: 'สมดุลรอบด้าน',
+    shortDesc: 'ปรับแท็กติกไว เล่นเป็นระบบ',
+    effectDesc: 'เข้าใจแผนหลังเกม +2%'
+  },
+  {
+    id: 'attack',
+    icon: '🔥',
+    name: 'เกมรุกดุดัน',
+    shortDesc: 'เดินหน้าบุก สร้างจังหวะจบสกอร์',
+    effectDesc: 'พลังเกมรุกในสนาม +1.5'
+  },
+  {
+    id: 'defense',
+    icon: '🛡️',
+    name: 'วินัยเกมรับ',
+    shortDesc: 'คุมโซนแน่น เสียประตูยาก',
+    effectDesc: 'พลังเกมรับในสนาม +1.5'
+  },
+  {
+    id: 'youth',
+    icon: '🌱',
+    name: 'ปั้นดาวรุ่ง',
+    shortDesc: 'ดันและเคี่ยวดาวรุ่งอย่างต่อเนื่อง',
+    effectDesc: 'โอกาสดาวรุ่ง (≤23 ปี) โต +25%'
+  },
+  {
+    id: 'motivator',
+    icon: '📣',
+    name: 'จิตวิทยาปลุกใจ',
+    shortDesc: 'ปลุกใจลูกทีม สู้ยิบตาจนจบเกม',
+    effectDesc: 'ฟิต & ขวัญทีมหลังเกม +2% / +1'
+  }
+];

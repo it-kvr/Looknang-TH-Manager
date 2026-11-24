@@ -215,11 +215,11 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     unit: 'ครั้ง',
     targets: [80, 220, 460, 820, 1300],
     subRewards: [
-      { crs: 3, rd: 3, dist: 2 },
-      { crs: 4, rd: 3, dist: 3 },
-      { crs: 4, rd: 4, dist: 3 },
-      { crs: 5, rd: 4, dist: 4 },
-      { crs: 6, rd: 5, dist: 5, comp: 2 }
+      { spass: 3, lpass: 2, rd: 2 },
+      { spass: 4, lpass: 3, crs: 2, rd: 2 },
+      { spass: 4, lpass: 4, crs: 3, rd: 3 },
+      { spass: 5, lpass: 4, crs: 3, rd: 4 },
+      { spass: 6, lpass: 5, crs: 4, rd: 4, comp: 2 }
     ],
     coreReward: 'ps',
     coreRewards: [1, 1, 1, 1, 2]

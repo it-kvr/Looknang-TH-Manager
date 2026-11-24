@@ -491,63 +491,148 @@ export function faceBodySvg(
   const hi = v[1] ?? 0;
   const hs = v[2] ?? 0;
   const fh = v[3] ?? 0;
-  const ey = (v[4] ?? 0) % 4;
+  const ey = (v[4] ?? 0) % 8;
   const no = v[5] ?? 10;
-  const fs = (v[6] ?? ((ki + hi + hs + no) % 3)) % 3;
+  const fs = (v[6] ?? ((ki + hi + hs + no) % 6)) % 6;
+  const acc = (v[7] ?? 0) % 8;
   const sk = SKIN_P[ki] || SKIN_P[2];
   const hr = HAIR_P[hi] || HAIR_P[0];
 
   const headD = [
+    // 0: เรียว (Oval slim)
     'M16 25c0-10 6-15 14-15s14 5 14 15c0 9-5 16-14 16s-14-7-14-16z',
+    // 1: กลม (Round)
     'M14.5 25.5c0-10 6.5-15.5 15.5-15.5s15.5 5.5 15.5 15.5c0 8.8-6 15.5-15.5 15.5s-15.5-6.7-15.5-15.5z',
-    'M15.5 24.5c0-9.5 6-14.5 14.5-14.5s14.5 5 14.5 14.5l-1 9.5c-.8 3.8-6.5 7-13.5 7s-12.7-3.2-13.5-7z'
+    // 2: กรามคม (Sharp jaw)
+    'M15.5 24.5c0-9.5 6-14.5 14.5-14.5s14.5 5 14.5 14.5l-1 9.5c-.8 3.8-6.5 7-13.5 7s-12.7-3.2-13.5-7z',
+    // 3: เหลี่ยมคม (Square athletic)
+    'M15 24c0-9.2 5.8-14 15-14s15 4.8 15 14l-.4 10.2c-.3 3.4-4.2 6.8-14.6 6.8s-14.3-3.4-14.6-6.8z',
+    // 4: หน้ายาว (Long oval)
+    'M17 24.5c0-10.2 5.4-15.2 13-15.2s13 5 13 15.2c0 10-4.6 17.3-13 17.3s-13-7.3-13-17.3z',
+    // 5: โหนกแก้มชัด (Chiseled cheekbones)
+    'M15.2 24.5c0-9.5 6.2-14.5 14.8-14.5s14.8 5 14.8 14.5l-1.8 6.4-3.6 7.4c-1.8 2-5.4 3.2-9.4 3.2s-7.6-1.2-9.4-3.2L17 30.9z'
   ][fs];
 
-  const hHtml = [
-    `<path d="M15 24c0-11 7-17 15-17s15 6 15 17c-3-6-9-8-15-8s-12 2-15 8z" fill="${hr}"/>`,
-    `<path d="M15 24c0-9 5-15 15-16c4 0 8 2 11 5l3-4-2 8c2 2 3 4 3 7c-3-6-9-8-15-8s-12 2-15 8z" fill="${hr}"/><path d="M20 12l4-5 4 4 4-6 4 5 5-3-2 7z" fill="${hr}"/>`,
-    `<path d="M15 25c0-12 7-18 16-18s14 6 14 17c-4-4-12-5-20-2c-5 2-8 4-10 3z" fill="${hr}"/>`,
-    `<path d="M14 25c-2-5 1-11 5-13c2-5 8-7 13-6c6-1 11 2 12 7c4 2 5 8 2 12c-3-5-9-8-16-8s-13 3-16 8z" fill="${hr}"/>`,
-    `<path d="M16 23c1-9 6-14 14-14s13 5 14 14c-3-5-8-7-14-7s-11 2-14 7z" fill="${hr}" opacity="0.58"/>`,
-    `<path d="M15 23c1-11 7-17 15-17s14 6 15 17c-2-8-8-10-15-10s-13 2-15 10z" fill="${hr}"/><path d="M21 11q9-3 18 0" stroke="#fff" stroke-width="0.9" opacity="0.25" fill="none"/>`,
-    `<path d="M15 24c0-11 7-17 15-17s15 6 15 17c-3-6-9-8-15-8s-12 2-15 8z" fill="${hr}"/><path d="M16 18q14-3 28 0" stroke="${trim}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
-    `<path d="M15 25c0-11 7-17 15-17s15 6 15 17c-3-5-7-8-12-8l-3 5-3-5c-5 0-9 3-12 8z" fill="${hr}"/>`
-  ][hs % 8];
-
-  const fhHtml =
-    fh === 1
-      ? `<path d="M25 37c2 3 8 3 10 0c-1 4-9 4-10 0z" fill="${hr}" opacity="0.88"/>`
-      : fh === 2
-        ? `<path d="M17 29c1 9 6 13 13 13s12-4 13-13c-2 5-6 8-13 8s-11-3-13-8z" fill="${hr}" opacity="0.82"/>`
-        : fh === 3
-          ? `<path d="M24 33q6-2.5 12 0q-6 1-12 0z" fill="${hr}" opacity="0.9"/>`
+  const hBackHtml =
+    hs % 14 === 10
+      ? `<circle cx="30" cy="7.2" r="4.8" fill="${hr}"/><path d="M25.5 9.2h9" stroke="${trim}" stroke-width="1.4" stroke-linecap="round"/>`
+      : hs % 14 === 11
+        ? `<path d="M13.5 24v12M16 26v11M44 26v11M46.5 24v12" stroke="${hr}" stroke-width="3" stroke-linecap="round"/>`
+        : hs % 14 === 12
+          ? `<path d="M15.5 28l-2 11 4.5-2zM44.5 28l2 11-4.5-2z" fill="${hr}"/>`
           : '';
+
+  const hHtml = [
+    // 0: คลาสสิก
+    `<path d="M15 24c0-11 7-17 15-17s15 6 15 17c-3-6-9-8-15-8s-12 2-15 8z" fill="${hr}"/>`,
+    // 1: สไปกี้
+    `<path d="M15 24c0-9 5-15 15-16c4 0 8 2 11 5l3-4-2 8c2 2 3 4 3 7c-3-6-9-8-15-8s-12 2-15 8z" fill="${hr}"/><path d="M20 12l4-5 4 4 4-6 4 5 5-3-2 7z" fill="${hr}"/>`,
+    // 2: ปัดข้าง
+    `<path d="M15 25c0-12 7-18 16-18s14 6 14 17c-4-4-12-5-20-2c-5 2-8 4-10 3z" fill="${hr}"/>`,
+    // 3: หยิกฟู
+    `<path d="M14 25c-2-5 1-11 5-13c2-5 8-7 13-6c6-1 11 2 12 7c4 2 5 8 2 12c-3-5-9-8-16-8s-13 3-16 8z" fill="${hr}"/>`,
+    // 4: สกินเฮด
+    `<path d="M16 23c1-9 6-14 14-14s13 5 14 14c-3-5-8-7-14-7s-11 2-14 7z" fill="${hr}" opacity="0.58"/>`,
+    // 5: เสยเรียบ
+    `<path d="M15 23c1-11 7-17 15-17s14 6 15 17c-2-8-8-10-15-10s-13 2-15 10z" fill="${hr}"/><path d="M21 11q9-3 18 0" stroke="#fff" stroke-width="0.9" opacity="0.25" fill="none"/>`,
+    // 6: คาดผม
+    `<path d="M15 24c0-11 7-17 15-17s15 6 15 17c-3-6-9-8-15-8s-12 2-15 8z" fill="${hr}"/><path d="M16 18q14-3 28 0" stroke="${trim}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
+    // 7: แสกกลาง
+    `<path d="M15 25c0-11 7-17 15-17s15 6 15 17c-3-5-7-8-12-8l-3 5-3-5c-5 0-9 3-12 8z" fill="${hr}"/>`,
+    // 8: โมฮอว์ก (Mohawk)
+    `<path d="M24 19c1-8 3-14 6-14s5 6 6 14c-2-2-4-3-6-3s-4 1-6 3z" fill="${hr}"/><path d="M16 23c.5-4 2.5-7 5-9l1 6c-3 1-5 2-6 3zM44 23c-.5-4-2.5-7-5-9l-1 6c3 1 5 2 6 3z" fill="${hr}" opacity="0.28"/>`,
+    // 9: อันเดอร์คัต (Undercut fade)
+    `<path d="M16.5 23c1-6 4-14 13.5-15c9.5 1 12.5 9 13.5 15c-1.5-4-5-6.5-13.5-6.5S18 19 16.5 23z" fill="${hr}" opacity="0.32"/><path d="M20 17c0-7 4.5-11 10-11s10 4 10 11c-3-3-7-4-10-4s-7 1-10 4z" fill="${hr}"/><path d="M22 10.5l14-2.5" stroke="#fff" stroke-width="0.9" opacity="0.22" fill="none" stroke-linecap="round"/>`,
+    // 10: มัดจุก (Top knot / Man bun)
+    `<path d="M15.5 23.5c.8-10 6.5-14.5 14.5-14.5s13.7 4.5 14.5 14.5c-3-5.5-8.5-7.5-14.5-7.5s-11.5 2-14.5 7.5z" fill="${hr}"/><path d="M22 14l8-5 8 5" stroke="#000" stroke-width="0.7" opacity="0.16" fill="none"/>`,
+    // 11: เดรดล็อก (Dreadlocks / Braids)
+    `<path d="M15 24c0-11 7-16.5 15-16.5s15 5.5 15 16.5c-2.5-5.5-8.5-7.5-15-7.5s-12.5 2-15 7.5z" fill="${hr}"/><path d="M19 16l1-6M24 14l.5-6.5M30 13.5V7M36 14l-.5-6.5M41 16l-1-6" stroke="#000" stroke-width="0.9" opacity="0.28" stroke-linecap="round"/>`,
+    // 12: มัลเล็ต (Modern mullet)
+    `<path d="M15 24c0-10.5 6.8-16.2 15-16.2s15 5.7 15 16.2c-2.5-4.5-6.5-6.5-10-6.5-2.5 0-4 2.5-5 2.5s-2.5-2.5-5-2.5c-3.5 0-7.5 2-10 6.5z" fill="${hr}"/>`,
+    // 13: หัวโล้น (Clean bald + subtle scalp highlight)
+    `<path d="M23.5 13.5q6.5-2.5 13 0" stroke="#fff" stroke-width="1.6" opacity="0.32" fill="none" stroke-linecap="round"/>`
+  ][hs % 14];
+
+  const fhMod = fh % 8;
+  const fhHtml =
+    fhMod === 1
+      ? `<path d="M25 37c2 3 8 3 10 0c-1 4-9 4-10 0z" fill="${hr}" opacity="0.88"/>`
+      : fhMod === 2
+        ? `<path d="M17 29c1 9 6 13 13 13s12-4 13-13c-2 5-6 8-13 8s-11-3-13-8z" fill="${hr}" opacity="0.82"/>`
+        : fhMod === 3
+          ? `<path d="M24 33q6-2.5 12 0q-6 1-12 0z" fill="${hr}" opacity="0.9"/>`
+          : fhMod === 4
+            ? `<path d="M18.5 31c1.2 6.8 5.2 10 11.5 10s10.3-3.2 11.5-10c-2 4.5-5.8 7-11.5 7s-9.5-2.5-11.5-7z" fill="${hr}" opacity="0.34"/>`
+            : fhMod === 5
+              ? `<path d="M24 32.8q6-2.4 12 0q-6 1.1-12 0zM25.5 36.8c1.8 2.8 7.2 2.8 9 0c-.8 3.6-8.2 3.6-9 0z" fill="${hr}" opacity="0.9"/>`
+              : fhMod === 6
+                ? `<path d="M16 25l1.6 7.5c1.5 5 5.8 8.5 12.4 8.5s10.9-3.5 12.4-8.5L44 25l-1.5 5.2c-1.8 5.2-6 8-12.5 8s-10.7-2.8-12.5-8z" fill="${hr}" opacity="0.84"/>`
+                : fhMod === 7
+                  ? `<path d="M16.2 28c.8 9.8 5.8 14.5 13.8 14.5S43 37.8 43.8 28c-2 4.8-5.5 7.4-9.5 8.2v-2.4q-4.3-1.6-8.6 0v2.4c-4-.8-7.5-3.4-9.5-8.2z" fill="${hr}" opacity="0.92"/>`
+                  : '';
 
   const br =
     ey === 1
       ? `<path d="M19.5 22.2l7 1.4M40.5 22.2l-7 1.4" stroke="${hr}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`
       : ey === 3
         ? `<path d="M19.5 22.8h7.2M33.3 22.8h7.2" stroke="${hr}" stroke-width="1.7" fill="none" stroke-linecap="round"/>`
-        : `<path d="M19.8 22.5q3.7-1.6 7 0M33.2 22.5q3.7-1.6 7 0" stroke="${hr}" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.9"/>`;
+        : ey === 4
+          ? `<path d="M19.2 21.4l7.4 2.2M40.8 21.4l-7.4 2.2" stroke="${hr}" stroke-width="2" fill="none" stroke-linecap="round"/>`
+          : ey === 5
+            ? `<path d="M19.8 22.8q3.6-1.4 6.8-.2M33.2 21.9q3.6-2 7-.4" stroke="${hr}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`
+            : ey === 6
+              ? `<path d="M19.8 21.5q3.7-2.2 7 0M33.2 21.5q3.7-2.2 7 0" stroke="${hr}" stroke-width="1.5" fill="none" stroke-linecap="round"/>`
+              : ey === 7
+                ? `<path d="M19.6 23.1l7-.4M33.4 22.7l7 .4" stroke="${hr}" stroke-width="1.8" fill="none" stroke-linecap="round"/>`
+                : `<path d="M19.8 22.5q3.7-1.6 7 0M33.2 22.5q3.7-1.6 7 0" stroke="${hr}" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.9"/>`;
 
   const eyes =
     ey === 3
       ? `<path d="M21 26.8h5.5M33.5 26.8h5.5" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round"/>`
-      : `<ellipse cx="23.8" cy="27" rx="2.5" ry="1.9" fill="#fff" opacity="0.92"/><ellipse cx="36.2" cy="27" rx="2.5" ry="1.9" fill="#fff" opacity="0.92"/><circle cx="23.8" cy="27" r="1.75" fill="#1a1a1a"/><circle cx="36.2" cy="27" r="1.75" fill="#1a1a1a"/><circle cx="23.2" cy="26.3" r="0.65" fill="#fff" opacity="0.9"/><circle cx="35.6" cy="26.3" r="0.65" fill="#fff" opacity="0.9"/>`;
+      : ey === 6
+        ? `<ellipse cx="23.8" cy="27" rx="2.9" ry="2.4" fill="#fff" opacity="0.96"/><ellipse cx="36.2" cy="27" rx="2.9" ry="2.4" fill="#fff" opacity="0.96"/><circle cx="23.8" cy="27" r="1.95" fill="#1a1a1a"/><circle cx="36.2" cy="27" r="1.95" fill="#1a1a1a"/><circle cx="23.1" cy="26.1" r="0.8" fill="#fff"/><circle cx="35.5" cy="26.1" r="0.8" fill="#fff"/>`
+        : ey === 7
+          ? `<ellipse cx="23.8" cy="27.2" rx="2.5" ry="1.4" fill="#fff" opacity="0.88"/><ellipse cx="36.2" cy="27.2" rx="2.5" ry="1.4" fill="#fff" opacity="0.88"/><circle cx="23.8" cy="27.2" r="1.45" fill="#1a1a1a"/><circle cx="36.2" cy="27.2" r="1.45" fill="#1a1a1a"/><path d="M21 25.8h5.6M33.4 25.8h5.6" stroke="${sk}" stroke-width="1" stroke-linecap="round"/>`
+          : `<ellipse cx="23.8" cy="27" rx="2.5" ry="1.9" fill="#fff" opacity="0.92"/><ellipse cx="36.2" cy="27" rx="2.5" ry="1.9" fill="#fff" opacity="0.92"/><circle cx="23.8" cy="27" r="1.75" fill="#1a1a1a"/><circle cx="36.2" cy="27" r="1.75" fill="#1a1a1a"/><circle cx="23.2" cy="26.3" r="0.65" fill="#fff" opacity="0.9"/><circle cx="35.6" cy="26.3" r="0.65" fill="#fff" opacity="0.9"/>`;
 
   const mo =
-    ey === 2
+    ey === 2 || ey === 6
       ? `<path d="M25 34q5 4.2 10 0z" fill="#fff" stroke="#222" stroke-width="0.8"/>`
       : ey === 1
         ? `<path d="M26 35h8" stroke="#222" stroke-width="1.4" stroke-linecap="round"/>`
-        : ey === 3
+        : ey === 3 || ey === 7
           ? `<path d="M26 35q4 1.5 8-.6" stroke="#222" fill="none" stroke-width="1.4" stroke-linecap="round"/>`
-          : `<path d="M26 34.5q4 2.8 8 0" stroke="#222" fill="none" stroke-width="1.4" stroke-linecap="round"/>`;
+          : ey === 4
+            ? `<path d="M25.5 35.8q4.5-2 9 0" stroke="#222" fill="none" stroke-width="1.5" stroke-linecap="round"/>`
+            : ey === 5
+              ? `<path d="M26 35q4.5 1.8 8.5-1.4" stroke="#222" fill="none" stroke-width="1.45" stroke-linecap="round"/>`
+              : `<path d="M26 34.5q4 2.8 8 0" stroke="#222" fill="none" stroke-width="1.4" stroke-linecap="round"/>`;
 
   const uid = kitSpec?.uid || `f${(++_faceSeq).toString(36)}`;
   const pat = kitSpec?.kitPattern ?? 0;
   const collar = kitSpec?.collar ?? 0;
   const accent = kitSpec?.accent || trim;
+
+  const accUnderHairHtml =
+    acc === 2
+      ? `<rect x="35.8" y="30.2" width="5.6" height="2.6" rx="0.8" transform="rotate(-14 38.6 31.5)" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.5"/><path d="M37.4 31.5h2.4" stroke="#94a3b8" stroke-width="0.5" stroke-dasharray="0.6 0.6"/>`
+      : acc === 3
+        ? `<rect x="27.2" y="28.3" width="5.6" height="1.8" rx="0.7" fill="#f8fafc" stroke="#cbd5e1" stroke-width="0.45"/>`
+        : acc === 4
+          ? `<path d="M21.4 20.5l-1.3 4" stroke="${sk}" stroke-width="1.35" stroke-linecap="round"/>`
+          : acc === 6
+            ? `<path d="M18.2 26.8c1-2.6 4.2-3.4 6.8-2.2l3 2.4h4l3-2.4c2.6-1.2 5.8-.4 6.8 2.2l-1.1 3.7c-1.5 2-4.4 2.2-6.5.8l-2.4-1.6h-3.6l-2.4 1.6c-2.1 1.4-5 1.2-6.5-.8z" fill="#1e293b" fill-opacity="0.76" stroke="#94a3b8" stroke-width="0.75"/>`
+            : acc === 7
+              ? `<rect x="19" y="30.6" width="5.2" height="1.3" rx="0.5" fill="${kit}"/><rect x="19.3" y="32.4" width="4.6" height="1.1" rx="0.5" fill="${trim}"/><rect x="35.8" y="30.6" width="5.2" height="1.3" rx="0.5" fill="${kit}"/><rect x="36.1" y="32.4" width="4.6" height="1.1" rx="0.5" fill="${trim}"/>`
+              : '';
+
+  const accOverHairHtml =
+    acc === 1
+      ? `<path d="M16 18.8q14-3.4 28 0" stroke="${accent}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M16.5 18.8q13.5-3.2 27 0" stroke="${trim}" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.8"/>`
+      : acc === 5
+        ? `<rect x="19.8" y="24.5" width="8.2" height="5" rx="1.6" fill="#0f172a" fill-opacity="0.38" stroke="#0f172a" stroke-width="1.2"/><rect x="32" y="24.5" width="8.2" height="5" rx="1.6" fill="#0f172a" fill-opacity="0.38" stroke="#0f172a" stroke-width="1.2"/><path d="M28 26.8h4M16.8 26.5l3 .4M40.2 26.9l3-.4" stroke="#0f172a" stroke-width="1.1" stroke-linecap="round"/>`
+        : '';
+
   const torsoPath = 'M8 64c0-14 7-20 22-20s22 6 22 20z';
   const torsoDefs = `<defs><clipPath id="jk-${uid}"><path d="${torsoPath}"/></clipPath>${
     pat === 11 ? `<linearGradient id="fg-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${kit}"/><stop offset="100%" stop-color="${trim}"/></linearGradient>` : ''
@@ -564,7 +649,7 @@ export function faceBodySvg(
       ? `<text x="${noX}" y="${noY}" text-anchor="middle" font-size="${noSize}" font-weight="800" font-family="Sarabun" fill="#fff" stroke="#0007" stroke-width="0.9" paint-order="stroke" opacity="0.95">${no || 10}</text>`
       : '';
 
-  return `${bare ? '' : `<rect width="60" height="64" fill="${bg}"/><path d="M0 0h60v26L0 42z" fill="#fff" opacity="0.1"/>`}${torsoDefs}${torsoBody}${chestCrest}${noMarkup}<rect x="25" y="36" width="10" height="11" rx="3" fill="${sk}"/><ellipse cx="30" cy="40" rx="5" ry="2.4" fill="#000" opacity="0.14"/><circle cx="14.6" cy="28" r="3.2" fill="${sk}"/><circle cx="45.4" cy="28" r="3.2" fill="${sk}"/><path d="${headD}" fill="${sk}"/>${fhHtml}<path d="M30 27.5v3.8l-1.3.9" stroke="#000" opacity="0.16" stroke-width="1.2" fill="none" stroke-linecap="round"/>${br}${eyes}${mo}${hHtml}`;
+  return `${bare ? '' : `<rect width="60" height="64" fill="${bg}"/><path d="M0 0h60v26L0 42z" fill="#fff" opacity="0.1"/>`}${torsoDefs}${torsoBody}${chestCrest}${noMarkup}<rect x="25" y="36" width="10" height="11" rx="3" fill="${sk}"/><ellipse cx="30" cy="40" rx="5" ry="2.4" fill="#000" opacity="0.14"/>${hBackHtml}<circle cx="14.6" cy="28" r="3.2" fill="${sk}"/><circle cx="45.4" cy="28" r="3.2" fill="${sk}"/><path d="${headD}" fill="${sk}"/>${fhHtml}<path d="M30 27.5v3.8l-1.3.9" stroke="#000" opacity="0.16" stroke-width="1.2" fill="none" stroke-linecap="round"/>${br}${eyes}${mo}${accUnderHairHtml}${hHtml}${accOverHairHtml}`;
 }
 
 export const PlayerFace: React.FC<{
