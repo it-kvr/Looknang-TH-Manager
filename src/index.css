@@ -86,6 +86,11 @@ html.is-fullscreen #root {
   background-color: var(--bg);
 }
 
+html:fullscreen::backdrop,
+html:-webkit-full-screen::backdrop {
+  background-color: var(--bg);
+}
+
 .safe-top {
   padding-top: env(safe-area-inset-top, 0px);
 }

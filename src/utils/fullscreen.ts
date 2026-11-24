@@ -41,12 +41,22 @@ export function isFullscreenSupported(): boolean {
   if (typeof document === 'undefined') return false;
   const doc = document as FullscreenDoc;
   const el = document.documentElement as FullscreenEl;
+
+  if (typeof doc.fullscreenEnabled === 'boolean') {
+    return doc.fullscreenEnabled && Boolean(el.requestFullscreen);
+  }
+  if (typeof doc.webkitFullscreenEnabled === 'boolean') {
+    return doc.webkitFullscreenEnabled && Boolean(el.webkitRequestFullscreen);
+  }
+  if (typeof doc.mozFullScreenEnabled === 'boolean') {
+    return doc.mozFullScreenEnabled && Boolean(el.mozRequestFullScreen);
+  }
+  if (typeof doc.msFullscreenEnabled === 'boolean') {
+    return doc.msFullscreenEnabled && Boolean(el.msRequestFullscreen);
+  }
+
   return Boolean(
-    doc.fullscreenEnabled ||
-      doc.webkitFullscreenEnabled ||
-      doc.mozFullScreenEnabled ||
-      doc.msFullscreenEnabled ||
-      el.requestFullscreen ||
+    el.requestFullscreen ||
       el.webkitRequestFullscreen ||
       el.mozRequestFullScreen ||
       el.msRequestFullscreen
@@ -60,6 +70,8 @@ export function syncFullscreenClass(isFs: boolean) {
 
 export async function lockLandscapeOrientation(): Promise<void> {
   if (typeof window === 'undefined' || typeof screen === 'undefined') return;
+  if (!isMobileDevice()) return;
+  if (!getFullscreenElement() && !isStandaloneDisplayMode()) return;
   try {
     const orientation = (screen as Screen & { orientation?: { lock?: (mode: string) => Promise<void> } }).orientation;
     if (orientation?.lock) {
@@ -70,17 +82,23 @@ export async function lockLandscapeOrientation(): Promise<void> {
       }
     }
   } catch {
-    // Ignore when browser or desktop environment restricts orientation lock
+    // Ignore when browser or OS restricts orientation lock
   }
 }
 
 export async function enterImmersiveFullscreen(): Promise<boolean> {
   if (typeof document === 'undefined') return false;
+
   if (getFullscreenElement()) {
     syncFullscreenClass(true);
-    await lockLandscapeOrientation();
+    lockLandscapeOrientation().catch(() => undefined);
     return true;
   }
+
+  if (!isFullscreenSupported()) {
+    return false;
+  }
+
   const el = document.documentElement as FullscreenEl;
   try {
     if (el.requestFullscreen) {
@@ -89,34 +107,24 @@ export async function enterImmersiveFullscreen(): Promise<boolean> {
       } catch {
         await el.requestFullscreen();
       }
-      syncFullscreenClass(true);
-      await lockLandscapeOrientation();
-      return true;
-    }
-    if (el.webkitRequestFullscreen) {
+    } else if (el.webkitRequestFullscreen) {
       await Promise.resolve(el.webkitRequestFullscreen());
-      syncFullscreenClass(true);
-      await lockLandscapeOrientation();
-      return true;
-    }
-    if (el.mozRequestFullScreen) {
+    } else if (el.mozRequestFullScreen) {
       await Promise.resolve(el.mozRequestFullScreen());
-      syncFullscreenClass(true);
-      await lockLandscapeOrientation();
-      return true;
-    }
-    if (el.msRequestFullscreen) {
+    } else if (el.msRequestFullscreen) {
       await Promise.resolve(el.msRequestFullscreen());
-      syncFullscreenClass(true);
-      await lockLandscapeOrientation();
-      return true;
     }
   } catch {
-    await lockLandscapeOrientation();
+    syncFullscreenClass(Boolean(getFullscreenElement()));
     return false;
   }
-  await lockLandscapeOrientation();
-  return false;
+
+  const active = Boolean(getFullscreenElement());
+  syncFullscreenClass(active);
+  if (active) {
+    lockLandscapeOrientation().catch(() => undefined);
+  }
+  return active;
 }
 
 export async function exitFullscreenSafe(): Promise<void> {
@@ -132,7 +140,10 @@ export async function exitFullscreenSafe(): Promise<void> {
     } else if (doc.msFullscreenElement && doc.msExitFullscreen) {
       await Promise.resolve(doc.msExitFullscreen());
     }
+  } catch {
+    // Ignore errors if document is no longer in fullscreen
   } finally {
+    await unlockOrientationSafe();
     syncFullscreenClass(Boolean(getFullscreenElement()));
   }
 }
@@ -219,54 +230,25 @@ export function bindAutoLandscapeFullscreen(): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
   let inFlight = false;
   let lastAttempt = 0;
-  let retryTimers: number[] = [];
-
-  const clearRetryTimers = () => {
-    if (retryTimers.length) {
-      retryTimers.forEach((id) => window.clearTimeout(id));
-      retryTimers = [];
-    }
-  };
 
   const shouldSkipTarget = (target: EventTarget | null): boolean => {
     if (!(target instanceof Element)) return false;
-    return Boolean(target.closest('input, textarea, select, option, [contenteditable="true"], [data-no-auto-fs="1"]'));
-  };
-
-  const reassertOnReturn = () => {
-    if (!shouldAutoMobileFullscreen()) return;
-    if (document.visibilityState === 'hidden') {
-      clearRetryTimers();
-      return;
-    }
-
-    const attempt = () => {
-      if (!shouldAutoMobileFullscreen() || document.visibilityState === 'hidden') return;
-      lockLandscapeOrientation().catch(() => undefined);
-      if (!isStandaloneDisplayMode() && !getFullscreenElement() && isFullscreenSupported()) {
-        enterImmersiveFullscreen().catch(() => undefined);
-      }
-    };
-
-    clearRetryTimers();
-    attempt();
-    // Retry shortly after OS/browser app-switch animation settles
-    retryTimers.push(window.setTimeout(attempt, 140));
-    retryTimers.push(window.setTimeout(attempt, 380));
+    return Boolean(
+      target.closest('input, textarea, select, option, [contenteditable="true"], [data-no-auto-fs="1"]')
+    );
   };
 
   const tryEngage = (target: EventTarget | null) => {
     if (shouldSkipTarget(target)) return;
     if (!shouldAutoMobileFullscreen()) return;
 
-    const now = Date.now();
-    if (inFlight || now - lastAttempt < 450) return;
-
     if (isStandaloneDisplayMode() || getFullscreenElement() || !isFullscreenSupported()) {
-      lastAttempt = now;
       lockLandscapeOrientation().catch(() => undefined);
       return;
     }
+
+    const now = Date.now();
+    if (inFlight || now - lastAttempt < 250) return;
 
     inFlight = true;
     lastAttempt = now;
@@ -277,39 +259,17 @@ export function bindAutoLandscapeFullscreen(): () => void {
       });
   };
 
-  let touchStartPos: { x: number; y: number } | null = null;
-  const onTouchStart = (e: TouchEvent) => {
-    const t = e.touches[0];
-    if (t) touchStartPos = { x: t.clientX, y: t.clientY };
-  };
-  const onClick = (e: MouseEvent) => tryEngage(e.target);
-  const onTouchEnd = (e: TouchEvent) => {
-    const t = e.changedTouches[0];
-    if (t && touchStartPos) {
-      const dx = Math.abs(t.clientX - touchStartPos.x);
-      const dy = Math.abs(t.clientY - touchStartPos.y);
-      touchStartPos = null;
-      if (dx > 12 || dy > 12) return;
-    }
+  // Use trusted click event so Chrome/Android never wastes the user activation on touchend
+  const onClick = (e: MouseEvent) => {
     tryEngage(e.target);
   };
-  const onKeyDown = (e: KeyboardEvent) => tryEngage(e.target);
-  const onVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-      reassertOnReturn();
-    } else {
-      clearRetryTimers();
+
+  const onVisibilityOrFocus = () => {
+    if (document.visibilityState === 'visible' && shouldAutoMobileFullscreen()) {
+      lockLandscapeOrientation().catch(() => undefined);
     }
   };
-  const onWindowReturn = () => reassertOnReturn();
-  const onOrientationChange = () => {
-    if (!shouldAutoMobileFullscreen() || document.visibilityState === 'hidden') return;
-    const isPortraitNow =
-      window.matchMedia?.('(orientation: portrait)').matches || window.innerHeight > window.innerWidth;
-    if (isPortraitNow) {
-      reassertOnReturn();
-    }
-  };
+
   const onFsChange = () => {
     const active = Boolean(getFullscreenElement());
     syncFullscreenClass(active);
@@ -323,35 +283,22 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
   };
 
-  const screenOrient = (screen as Screen & { orientation?: EventTarget }).orientation;
-
   window.addEventListener('click', onClick, { capture: true, passive: true });
-  window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
-  window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
-  window.addEventListener('keydown', onKeyDown, { capture: true, passive: true });
-  window.addEventListener('focus', onWindowReturn);
-  window.addEventListener('pageshow', onWindowReturn);
-  window.addEventListener('orientationchange', onOrientationChange);
-  screenOrient?.addEventListener?.('change', onOrientationChange);
-  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('focus', onVisibilityOrFocus);
+  document.addEventListener('visibilitychange', onVisibilityOrFocus);
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
   document.addEventListener('mozfullscreenchange', onFsChange);
   document.addEventListener('MSFullscreenChange', onFsChange);
   syncFullscreenClass(Boolean(getFullscreenElement()));
-  reassertOnReturn();
+  if (isStandaloneDisplayMode() && shouldAutoMobileFullscreen()) {
+    lockLandscapeOrientation().catch(() => undefined);
+  }
 
   return () => {
-    clearRetryTimers();
     window.removeEventListener('click', onClick, { capture: true });
-    window.removeEventListener('touchstart', onTouchStart, { capture: true });
-    window.removeEventListener('touchend', onTouchEnd, { capture: true });
-    window.removeEventListener('keydown', onKeyDown, { capture: true });
-    window.removeEventListener('focus', onWindowReturn);
-    window.removeEventListener('pageshow', onWindowReturn);
-    window.removeEventListener('orientationchange', onOrientationChange);
-    screenOrient?.removeEventListener?.('change', onOrientationChange);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('focus', onVisibilityOrFocus);
+    document.removeEventListener('visibilitychange', onVisibilityOrFocus);
     document.removeEventListener('fullscreenchange', onFsChange);
     document.removeEventListener('webkitfullscreenchange', onFsChange);
     document.removeEventListener('mozfullscreenchange', onFsChange);
