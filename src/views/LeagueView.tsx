@@ -35,18 +35,19 @@ export const LeagueView: React.FC<{
     .map((t) => ({ t, st: teamStats(t, state) }))
     .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
 
-  const renderFormDots = (fm?: string, compact = false) => {
+  const renderFormDots = (fm?: string) => {
     const chars = (fm || '').slice(-5).split('');
-    if (!chars.length) return compact ? null : <span className="text-[10px] text-[var(--mut)]">—</span>;
+    if (!chars.length) return <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">—</span>;
+    const thaiForm = chars.map((c) => (c === 'W' ? 'ชนะ' : c === 'D' ? 'เสมอ' : 'แพ้')).join(' · ');
     return (
       <div
-        className={`flex items-center ${compact ? 'justify-start gap-0.5' : 'justify-center gap-0.5'}`}
-        title={`ฟอร์ม 5 นัดหลัง: ${chars.join('')}`}
+        className="flex items-center justify-center gap-[2px] sm:gap-0.5 mland:gap-[2px]"
+        title={`ฟอร์ม 5 นัดหลัง: ${thaiForm}`}
       >
         {chars.map((c, idx) => (
           <span
             key={idx}
-            className={`${compact ? 'w-1.5 h-1.5' : 'w-2 h-2 mland:w-1.5 mland:h-1.5'} rounded-full shrink-0 ${
+            className={`w-1.5 h-1.5 sm:w-2 sm:h-2 mland:w-1.5 mland:h-1.5 rounded-full shrink-0 ${
               c === 'W' ? 'bg-emerald-500' : c === 'D' ? 'bg-amber-400' : 'bg-rose-500'
             }`}
           />
@@ -716,11 +717,11 @@ export const LeagueView: React.FC<{
           </div>
 
           {/* Table Column Header */}
-          <div className="shrink-0 grid grid-cols-[20px_18px_minmax(0,1fr)_19px_19px_19px_19px_27px_32px] sm:grid-cols-[24px_22px_minmax(0,1fr)_50px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[20px_18px_minmax(0,1fr)_18px_18px_18px_18px_26px_30px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 bg-[var(--surface-2)]/90 text-[10px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
+          <div className="shrink-0 grid grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 bg-[var(--surface-2)]/90 text-[10px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
             <span className="text-center">#</span>
             <span />
             <span className="truncate">สโมสร</span>
-            <span className="hidden sm:block mland:hidden text-center">5 นัด</span>
+            <span className="text-center text-[9px] sm:text-[11px] mland:text-[8px] whitespace-nowrap" title="ฟอร์ม 5 นัดหลังสุด">5 นัด</span>
             <span className="text-center" title="แข่ง">น</span>
             <span className="text-center" title="ชนะ">ช</span>
             <span className="text-center" title="เสมอ">ส</span>
@@ -752,7 +753,7 @@ export const LeagueView: React.FC<{
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
-                  className={`w-full grid grid-cols-[20px_18px_minmax(0,1fr)_19px_19px_19px_19px_27px_32px] sm:grid-cols-[24px_22px_minmax(0,1fr)_50px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[20px_18px_minmax(0,1fr)_18px_18px_18px_18px_26px_30px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 border-l-[3px] text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${zoneBorder}`}
+                  className={`w-full grid grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 border-l-[3px] text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${zoneBorder}`}
                 >
                   <span className={`text-center tabular font-bold text-[10px] mland:text-[9px] rounded-md py-0.5 leading-none ${rankBadge}`}>
                     {i + 1}
@@ -760,7 +761,7 @@ export const LeagueView: React.FC<{
                   <div className="flex items-center justify-center mland:[&>svg]:w-4 mland:[&>svg]:h-4">
                     <ClubCrest name={t.name} size={17} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                   </div>
-                  <div className="min-w-0 pr-0.5 space-y-0.5">
+                  <div className="min-w-0 pr-0.5">
                     <div className="flex items-center gap-1 min-w-0">
                       <span className={`whitespace-normal break-words text-[11px] sm:text-[12.5px] mland:text-[10px] leading-[1.18] ${isMe ? 'font-bold text-[var(--ink)]' : ''}`}>
                         {t.name}
@@ -775,13 +776,8 @@ export const LeagueView: React.FC<{
                         </span>
                       )}
                     </div>
-                    {t.fm && (
-                      <div className="sm:hidden mland:flex items-center">
-                        {renderFormDots(t.fm, true)}
-                      </div>
-                    )}
                   </div>
-                  <div className="hidden sm:flex mland:hidden items-center justify-center">
+                  <div className="flex items-center justify-center">
                     {renderFormDots(t.fm)}
                   </div>
                   <span className="text-center tabular text-[var(--mut)]">{t.p}</span>
