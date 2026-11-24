@@ -188,13 +188,13 @@ export const MainMenu: React.FC<{
 
   const rollFaceTraits = () => ({
     c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']),
-    k: P(SKIN_P),
-    h: P(HAIR_P),
-    hs: R(0, HS_N.length - 1),
-    fh: R(0, FH_N.length - 1),
-    fs: R(0, FS_N.length - 1),
-    ey: R(0, EY_N.length - 1),
-    acc: Math.random() < 0.45 ? R(1, ACC_N.length - 1) : 0
+    k: P([SKIN_P[0], SKIN_P[1], SKIN_P[2], SKIN_P[5], SKIN_P[6]]),
+    h: P([HAIR_P[0], HAIR_P[0], HAIR_P[1], HAIR_P[2], HAIR_P[5]]),
+    hs: P([14, 15, 16, 17, 18, 19, 9, 7, 5, 2]),
+    fh: P([0, 0, 0, 4, 1]),
+    fs: P([0, 2, 3, 5, 4]),
+    ey: P([9, 8, 5, 2, 0, 3]),
+    acc: Math.random() < 0.25 ? P([1, 4]) : 0
   });
 
   const defaultNoForPos = (pos: Position) => (pos === 'GK' ? 1 : pos === 'DF' ? 4 : pos === 'MF' ? 8 : 10);
@@ -207,13 +207,13 @@ export const MainMenu: React.FC<{
   const [cDiff, setCDiff] = useState<number>(1);
   const [cArchId, setCArchId] = useState<string>('poacher');
   const [cColor, setCColor] = useState(() => P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']));
-  const [cSkin, setCSkin] = useState(() => P(SKIN_P));
-  const [cHair, setCHair] = useState(() => P(HAIR_P));
-  const [cHs, setCHs] = useState(() => R(0, HS_N.length - 1));
-  const [cFh, setCFh] = useState(() => R(0, FH_N.length - 1));
-  const [cFs, setCFs] = useState(() => R(0, FS_N.length - 1));
-  const [cEy, setCEy] = useState(() => R(0, EY_N.length - 1));
-  const [cAcc, setCAcc] = useState(() => (Math.random() < 0.4 ? R(1, ACC_N.length - 1) : 0));
+  const [cSkin, setCSkin] = useState(() => SKIN_P[5]);
+  const [cHair, setCHair] = useState(() => HAIR_P[0]);
+  const [cHs, setCHs] = useState<number>(14);
+  const [cFh, setCFh] = useState<number>(0);
+  const [cFs, setCFs] = useState<number>(2);
+  const [cEy, setCEy] = useState<number>(9);
+  const [cAcc, setCAcc] = useState<number>(0);
   const [faceChoices, setFaceChoices] = useState(() => Array.from({ length: 6 }, rollFaceTraits));
   const [cSubMap, setCSubMap] = useState<Record<string, number>>({});
   const [cBase, setCBase] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));

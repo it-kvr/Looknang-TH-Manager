@@ -3,7 +3,7 @@ import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, A
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { getShirtNo, getFormationSlots, getFormationCounts, pen, xi, vlu, ensureCon, tc } from '../engine/playerCore';
+import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
@@ -516,7 +516,7 @@ export const SquadTacticsView: React.FC<{
           : z
       )
     : slots;
-  const offPosCount = starters.filter((q, i) => pen(q.ro, liveSlots[i]?.sp || '') > 0).length;
+  const offPosCount = starters.filter((q, i) => playerPen(q, liveSlots[i]?.sp || '') > 0).length;
 
   const formName = (t: Team, preview?: PitchDragPreview | null) => {
     if (preview) {
@@ -556,7 +556,7 @@ export const SquadTacticsView: React.FC<{
     const isSource = dragUi?.player.n === q.n;
     const isTarget = dropTarget?.name === q.n && dragUi?.player.n !== q.n;
     const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
-    const pn = slotSp ? pen(q.ro, slotSp) : 0;
+    const pn = slotSp ? playerPen(q, slotSp) : 0;
     const no = getShirtNo(me, q);
     const unavailable = q.inj > 0 || (q.sus || 0) > 0;
     const starterWarnCls = slotSp && !unavailable ? stMeta.rowTint : '';

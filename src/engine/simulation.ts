@@ -62,7 +62,7 @@ export function rate(
     at += cm;
     df += cm;
   }
-  if (x.some((q) => DT(q, s?.p).tr === 0)) {
+  if (x.some((q) => { const tr = DT(q, s?.p).tr; return tr === 0 || tr === 21; })) {
     at += 0.5;
     df += 0.5;
   }
@@ -76,7 +76,7 @@ export function rate(
     const isClutchMoment = Boolean(big || (matchMin && matchMin >= 70));
     const slotSp = sl[idx]?.sp;
 
-    // Personality effects (0..11)
+    // Personality effects (0..23)
     if (Dq.tr === 4 && isClutchMoment) {
       traitAt += 0.45;
       traitDf += 0.35;
@@ -91,6 +91,37 @@ export function rate(
       traitDf += 0.35;
     } else if (Dq.tr === 11 && (q.fit ?? 100) >= 75) {
       traitAt += 0.28;
+    } else if (Dq.tr === 12) {
+      traitAt += 0.26;
+      traitDf += 0.18;
+    } else if (Dq.tr === 13) {
+      traitAt += 0.34;
+      traitDf -= 0.12;
+    } else if (Dq.tr === 14) {
+      traitDf += 0.42;
+    } else if (Dq.tr === 16 && (big || (s && t.id === s.me))) {
+      traitAt += 0.35;
+      traitDf += 0.22;
+    } else if (Dq.tr === 17 && isClutchMoment) {
+      traitAt += 0.4;
+      traitDf += 0.35;
+    } else if (Dq.tr === 18 && (!matchMin || matchMin >= 60)) {
+      traitAt += 0.22;
+      traitDf += 0.28;
+    } else if (Dq.tr === 19 && (q.fit ?? 100) < 72) {
+      traitAt -= 0.22;
+      traitDf -= 0.22;
+    } else if (Dq.tr === 20) {
+      traitAt += 0.42;
+    } else if (Dq.tr === 21) {
+      traitAt += 0.16;
+      traitDf += 0.24;
+    } else if (Dq.tr === 22) {
+      traitAt += 0.45;
+      traitDf -= 0.25;
+    } else if (Dq.tr === 23) {
+      traitAt += 0.25;
+      traitDf += 0.25;
     }
 
     if (hasTrait(q, 'clutch_player', cpForTrait) && isClutchMoment) {
@@ -176,6 +207,48 @@ export function rate(
       traitAt += hasRawPen ? 0.38 : 0.2;
       traitDf += hasRawPen ? 0.38 : 0.2;
     }
+    // New 45..64 traits
+    if (hasTrait(q, 'fox_in_box', cpForTrait) && q.pos === 'FW') traitAt += 0.56;
+    if (hasTrait(q, 'knuckleball_king', cpForTrait) && (q.pos === 'FW' || q.pos === 'MF')) traitAt += 0.45;
+    if (hasTrait(q, 'inverted_winger', cpForTrait) && (q.pos === 'FW' || q.pos === 'MF')) traitAt += 0.5;
+    if (hasTrait(q, 'target_man', cpForTrait) && q.pos === 'FW') {
+      traitAt += 0.44;
+      traitDf += 0.12;
+    }
+    if (hasTrait(q, 'shadow_striker', cpForTrait) && (q.pos === 'MF' || q.pos === 'FW')) traitAt += 0.52;
+    if (hasTrait(q, 'deep_lying_playmaker', cpForTrait) && (q.pos === 'MF' || q.pos === 'DF')) {
+      traitAt += 0.44;
+      traitDf += 0.25;
+    }
+    if (hasTrait(q, 'nutmeg_master', cpForTrait) && (q.pos === 'FW' || q.pos === 'MF')) traitAt += 0.38;
+    if (hasTrait(q, 'deadball_curler', cpForTrait)) traitAt += 0.42;
+    if (hasTrait(q, 'giant_thrower', cpForTrait) && (q.pos === 'DF' || q.pos === 'MF')) traitAt += 0.32;
+    if (hasTrait(q, 'sweeper_cb', cpForTrait) && q.pos === 'DF') traitDf += 0.56;
+    if (hasTrait(q, 'wing_lockdown', cpForTrait) && (q.pos === 'DF' || q.pos === 'MF')) traitDf += 0.5;
+    if (hasTrait(q, 'ball_winner_dm', cpForTrait) && (q.pos === 'MF' || q.pos === 'DF')) traitDf += 0.54;
+    if (hasTrait(q, 'acrobat_clearance', cpForTrait) && (q.pos === 'DF' || q.pos === 'MF')) traitDf += 0.52;
+    if (hasTrait(q, 'cross_claimer', cpForTrait) && q.pos === 'GK') traitDf += 0.62;
+    if (hasTrait(q, 'distribution_master', cpForTrait) && q.pos === 'GK') {
+      traitAt += 0.35;
+      traitDf += 0.3;
+    }
+    if (hasTrait(q, 'penalty_box_boss', cpForTrait) && q.pos === 'GK') traitDf += 0.68;
+    if (hasTrait(q, 'box_to_box_engine', cpForTrait) && (q.pos === 'MF' || q.pos === 'DF')) {
+      traitAt += 0.38;
+      traitDf += 0.38;
+    }
+    if (hasTrait(q, 'speed_demon', cpForTrait)) {
+      traitAt += 0.44;
+      traitDf += 0.16;
+    }
+    if (hasTrait(q, 'tireless_mentor', cpForTrait)) {
+      traitAt += 0.26;
+      traitDf += 0.3;
+    }
+    if (hasTrait(q, 'risk_taker', cpForTrait)) {
+      traitAt += 0.46;
+      traitDf -= 0.22;
+    }
     if (q.me && cpForTrait?.perks?.includes('adaptable') && slotSp && playerPen(q, slotSp) > 0) {
       traitAt += 0.55;
       traitDf += 0.55;
@@ -190,8 +263,8 @@ export function rate(
       }
     }
   });
-  at += clamp(traitAt, -3.5, 5.4);
-  df += clamp(traitDf, -3.5, 5.4);
+  at += clamp(traitAt, -3.5, 6.2);
+  df += clamp(traitDf, -3.5, 6.2);
 
   if (t.tac === 'A') { at += 4; df -= 4; }
   if (t.tac === 'D') { at -= 4; df += 4; }
@@ -366,11 +439,11 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     for (let c = 0; c < numYellows && pool.length; c++) {
       const weighted = pool.flatMap((q) => {
         const D = DT(q, s?.p);
-        let w = (D.tr === 1 || D.tr === 7 ? 3 : 1) + (D.d.pos < 58 ? 1 : 0);
-        if (D.tr === 6) w = Math.max(1, w - 1);
+        let w = (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22 ? 3 : 1) + (D.d.pos < 58 ? 1 : 0);
+        if (D.tr === 6 || D.tr === 17 || D.tr === 23) w = Math.max(1, w - 1);
         if (hasTrait(q, 'hot_headed', s?.p)) w += 3;
-        if (hasTrait(q, 'slide_tackler', s?.p)) w += 2;
-        if (hasTrait(q, 'calm_leader', s?.p)) w = Math.max(1, w - 1);
+        if (hasTrait(q, 'slide_tackler', s?.p) || hasTrait(q, 'risk_taker', s?.p)) w += 2;
+        if (hasTrait(q, 'calm_leader', s?.p) || hasTrait(q, 'tireless_mentor', s?.p)) w = Math.max(1, w - 1);
         if (q.me && s?.p?.perks?.includes('discipline_pro')) w = Math.max(1, w - 1);
         return Array(w).fill(q);
       });
@@ -388,7 +461,7 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     if (pool.length && Math.random() < (big ? 0.032 : 0.018)) {
       const rough = pool.filter((q) => {
         const tr = DT(q, s?.p).tr;
-        return tr === 1 || tr === 7 || hasTrait(q, 'hot_headed', s?.p);
+        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || hasTrait(q, 'hot_headed', s?.p);
       });
       const culprit = rough.length ? P(rough) : P(pool);
       if (!cards.some((c) => c.t === tm.id && c.who === culprit.n && (c.type === 'R' || c.type === 'Y2R'))) {
@@ -1461,7 +1534,7 @@ export function applyPositionAdaptation(
       const persTr = DT(q, isMePlayer ? s?.p : null).tr;
       const hasAdaptTrait = hasTrait(q, 'versatile_utility', isMePlayer ? s?.p : null);
       const hasAdaptPerk = isMePlayer && Boolean(s?.p?.perks?.includes('adaptable'));
-      const fastAdapt = persTr === 10 || hasAdaptTrait || hasAdaptPerk;
+      const fastAdapt = persTr === 10 || persTr === 12 || persTr === 23 || hasAdaptTrait || hasAdaptPerk;
       let bonusExp = (age <= 22 || tl >= 76) && Math.random() < 0.35 ? 2 : 1;
       if (hasAdaptPerk) bonusExp += 1;
       else if (fastAdapt && Math.random() < 0.65) bonusExp += 1;
@@ -1473,7 +1546,7 @@ export function applyPositionAdaptation(
       const target = ROLE_ADAPT_TARGETS[normSlot] || ROLE_ADAPT_TARGETS.CM;
       const devNotes: string[] = [];
       if (age <= 32) {
-        const subChance = age <= 24 ? 0.68 : 0.52;
+        const subChance = (age <= 24 ? 0.68 : 0.52) + (fastAdapt ? 0.1 : 0);
         if (Math.random() < subChance) {
           const sk = P(target.subs);
           q.sb = { ...(q.sb || {}) };
@@ -1486,7 +1559,7 @@ export function applyPositionAdaptation(
           devNotes.push(`${SIGL[sk] || sk} +1`);
         }
 
-        const coreChance = (age <= 24 ? 0.38 : 0.24) + (tl >= 75 ? 0.08 : 0);
+        const coreChance = (age <= 24 ? 0.38 : 0.24) + (tl >= 75 ? 0.08 : 0) + (fastAdapt ? 0.08 : 0);
         const softCap = clamp(Math.max(q.pot || 90, q.ov + 3), 50, 97);
         if (q.ov < softCap && Math.random() < coreChance) {
           const ck = P(target.cores);
@@ -1544,7 +1617,7 @@ export function applyPositionAdaptation(
         if (isMePlayer && s?.p) {
           s.p.roleExp = { ...q.roleExp };
         }
-        if (devNotes.length && s && isMePlayer) {
+        if (devNotes.length && s && (isMePlayer || (isMyTeam && devNotes.some((n) => !n.includes('เซฟ')) && Math.random() < 0.45))) {
           pushFeed(
             s,
             'ปรับตัวตำแหน่ง',
@@ -1564,15 +1637,16 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
   s.teams.forEach((t) => {
     if (s.mode === 'm' && t.id === s.me) return;
     const recent = (t.fm || '').slice(-5);
-    if (recent.length < 3) return;
+    if (recent.length < 2) return;
+    const last2 = recent.slice(-2);
     const last3 = recent.slice(-3);
     const losses5 = recent.split('').filter((ch) => ch === 'L').length;
-    const winless5 = recent.length >= 5 && !recent.includes('W');
+    const winless4 = recent.length >= 4 && !recent.includes('W');
 
-    if (last3 !== 'LLL' && losses5 < 3 && !winless5) return;
-    if (t.tacticTrialMd != null && curMd - t.tacticTrialMd < 3) return;
+    if (last2 !== 'LL' && last3 !== 'LLL' && losses5 < 3 && !winless4) return;
+    if (t.tacticTrialMd != null && curMd - t.tacticTrialMd < 2) return;
 
-    const tryChance = last3 === 'LLL' ? 0.58 : losses5 >= 4 ? 0.68 : 0.38;
+    const tryChance = last3 === 'LLL' ? 0.65 : losses5 >= 4 ? 0.75 : last2 === 'LL' ? 0.34 : 0.42;
     if (Math.random() >= tryChance) return;
 
     const fitSquad = t.sq.filter((q) => q.inj <= 0 && (q.sus || 0) <= 0);
@@ -1585,7 +1659,8 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
     const concedingLots = t.ga > t.gf + 3;
     const lowScoring = t.gf < Math.max(1, t.p) * 0.9;
 
-    const candidates = CLUB_PHILOSOPHIES.filter((ph) => ph.form !== t.form || ph.name !== t.philosophy);
+    const diffFormCandidates = CLUB_PHILOSOPHIES.filter((ph) => ph.form !== t.form);
+    const candidates = diffFormCandidates.length ? diffFormCandidates : CLUB_PHILOSOPHIES.filter((ph) => ph.name !== t.philosophy);
     if (!candidates.length) return;
 
     const scored = candidates
@@ -1599,8 +1674,8 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
         score -= Math.max(0, needDF - availCounts.DF) * 4;
         score -= Math.max(0, needMF - availCounts.MF) * 4;
         score -= Math.max(0, needFW - availCounts.FW) * 4;
-        if (concedingLots && (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced' || needDF >= 4)) score += 3;
-        if (lowScoring && (ph.styleGroup === 'attack' || ph.styleGroup === 'control' || needFW >= 2)) score += 3;
+        if (concedingLots && (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced' || needDF >= 4)) score += 3.5;
+        if (lowScoring && (ph.styleGroup === 'attack' || ph.styleGroup === 'control' || needFW >= 2)) score += 3.5;
         score += Math.random() * 4.5;
         return { ph, score };
       })
@@ -1612,17 +1687,17 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
 
     applyClubPhilosophy(t, chosen);
     t.tacticTrialMd = curMd;
-    t.tacticTrialLabel = `ปรับแผน ${chosen.form} (${chosen.name})`;
-    t.tacFam = clamp(R(58, 72), 45, 85);
+    t.tacticTrialLabel = `ทดลองแผน ${chosen.form} (${chosen.name})`;
+    t.tacFam = clamp(R(60, 74), 48, 86);
 
     if (s.mode === 'p' && t.id === s.me) {
       pushFeed(
         s,
-        'โค้ชเปลี่ยนแผน',
-        `🧭 โค้ชปรับแท็กติกใหม่เป็น ${chosen.form} (${chosen.name}) เพื่อแก้เกมหลังผลงานทีมสะดุด!`,
+        'โค้ชลองแผนใหม่',
+        `🧭 โค้ชทดลองเปลี่ยนแผนใหม่เป็น ${chosen.form} (${chosen.name}) เพื่อแก้เกมหลังผลงานทีมสะดุด!`,
         'urg'
       );
-    } else if (t.tier === s.teams[s.me]?.tier && Math.random() < 0.25) {
+    } else if (t.tier === s.teams[s.me]?.tier && Math.random() < 0.3) {
       pushFeed(
         s,
         'ข่าวลีก',
@@ -1751,10 +1826,13 @@ export function calcPlayerPerf(
     (perks.includes('wall_defender') && op <= 1 ? (op === 0 ? 0.45 : 0.2) : 0) +
     (perks.includes('adaptable') ? 0.15 : 0);
   const persBonus =
-    (D.tr === 4 && (s.pc || s.pa || s.derby) ? 0.25 : 0) +
-    (D.tr === 5 ? (Math.random() < 0.65 ? 0.35 : -0.25) : 0) +
-    (D.tr === 9 && my <= op ? 0.2 : 0) +
-    (D.tr === 11 && my > op ? 0.2 : 0);
+    ((D.tr === 4 || D.tr === 16) && (s.pc || s.pa || s.derby) ? 0.28 : 0) +
+    (D.tr === 5 || D.tr === 22 ? (Math.random() < 0.65 ? 0.35 : -0.25) : 0) +
+    ((D.tr === 9 || D.tr === 17) && my <= op ? 0.22 : 0) +
+    ((D.tr === 11 || D.tr === 12 || D.tr === 20) && my > op ? 0.22 : 0) +
+    (D.tr === 14 && op <= 1 ? 0.2 : 0) +
+    (D.tr === 23 ? 0.16 : 0) -
+    (D.tr === 19 && my < op ? 0.18 : 0);
   const fatigueRatingAdj = perks.includes('iron_will') && en < 65 ? 0.22 : (en - 70) / 140;
 
   let rt =
@@ -1839,13 +1917,13 @@ export function runPlayerWeek(s: GameState) {
   const recBonus = Math.round((D.d.rec - 65) / 8);
   const tolBonus = Math.round((D.d.tol - 65) / 14);
   const baseFatigue = p.sat ? -8 : perks.includes('engine') ? -16 : -22;
-  const persFitBonus = D.tr === 2 || D.tr === 6 ? 3 : D.tr === 7 ? -3 : 0;
+  const persFitBonus = D.tr === 2 || D.tr === 6 || D.tr === 18 || D.tr === 23 ? 3 : D.tr === 7 || D.tr === 19 ? -3 : 0;
   const healEnBonus = perks.includes('quick_healer') ? 6 : 0;
   const fatigueCost = Math.min(-4, baseFatigue + staBonus + tolBonus + persFitBonus);
   p.en = clamp((p.en ?? 100) + fatigueCost + ac.en + recBonus + healEnBonus + R(0, 7), 20, 100);
   let m = `${ac.i} ${ac.n}`;
   const focus = ({ FW: 'sh', MF: 'ps', DF: 'tk', GK: 'ph' } as Record<Position, StatKey>)[p.pos] || 'sh';
-  const prodigyBonus = (perks.includes('prodigy') ? 0.1 : 0) + (D.tr === 2 || D.tr === 10 ? 0.05 : 0);
+  const prodigyBonus = (perks.includes('prodigy') ? 0.1 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.06 : 0);
 
   if (ac.gr) {
     const k = ac.k || P([focus, focus, p.tr || 'sh', P(['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[])]);
@@ -2971,9 +3049,9 @@ export function afterMatchDay(
           (plan.restStarters && pi ? 5 : 0) +
           (isIndivRest ? 10 : 0)
         : (pi ? Math.round(aiFacilityBonus * 0.72) : aiFacilityBonus + (prevFit < 78 ? 5 : prevFit < 88 ? 2 : 0)) + aiRecoveryWeek;
-      const ironLungsMult = hasTrait(q, 'iron_lungs', s.p) ? 0.72 : hasTrait(q, 'glass_cannon', s.p) ? 1.18 : 1;
-      const consRec = (hasTrait(q, 'consistency_pro', s.p) ? 2 : 0) + (Dq.tr === 6 ? 2 : 0);
-      const persStamMult = Dq.tr === 2 ? 0.8 : Dq.tr === 7 ? 1.15 : 1;
+      const ironLungsMult = hasTrait(q, 'iron_lungs', s.p) || hasTrait(q, 'box_to_box_engine', s.p) ? 0.72 : hasTrait(q, 'glass_cannon', s.p) ? 1.18 : 1;
+      const consRec = (hasTrait(q, 'consistency_pro', s.p) || hasTrait(q, 'tireless_mentor', s.p) ? 2 : 0) + (Dq.tr === 6 || Dq.tr === 18 || Dq.tr === 21 || Dq.tr === 23 ? 2 : 0);
+      const persStamMult = Dq.tr === 2 || Dq.tr === 18 ? 0.78 : Dq.tr === 7 || Dq.tr === 19 ? 1.15 : 1;
       const matchOrRestDelta = pi
         ? -Math.round(R(7, 12) * persStamMult * ironLungsMult) - ps * (mine && mg ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
         : R(10, 17) + Math.round((Dq.d.rec - 68) / 7) + consRec;
@@ -3029,7 +3107,7 @@ export function afterMatchDay(
         const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.65;
         const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.25 : 1;
         const persTr = DT(q, s.p).tr;
-        const persDevMul = persTr === 2 || persTr === 10 ? 1.18 : 1;
+        const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.2 : 1;
         const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.024 : stf.setPieceCoach * 0.01;
         const chance =
           (0.04 + 0.02 * lv * trCondFactor + stf.asst * 0.015 + (analyticsLv - 1) * 0.008 + roleCoachBonus) *
@@ -3787,9 +3865,9 @@ export function growPlayers(s: GameState) {
       const D = DT(q, s.p);
       const delta =
         q.age < D.pk - 2
-          ? R(0, 3) + ((D.tr === 2 || D.tr === 10) && Math.random() < 0.35 ? 1 : 0)
+          ? R(0, 3) + ((D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23) && Math.random() < 0.38 ? 1 : 0)
           : q.age > D.pk + 4
-            ? -R(0, 3)
+            ? -R(0, 3) + (D.tr === 23 && Math.random() < 0.35 ? 1 : 0)
             : R(-1, 1);
       q.ov = clamp(q.ov + delta + (t.id === s.me && q.age < 24 && (s.tr ?? 1) > 2 ? 1 : 0), 25, q.pot || 92);
       if (q.age > 35) {
@@ -3832,7 +3910,7 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
       k === 0
         ? pickWeighted((z) => {
             const tr = DT(z, s?.p).tr;
-            return tr === 1 || tr === 7 ? 3 : 1;
+            return tr === 1 || tr === 7 || tr === 15 || tr === 22 ? 3 : 1;
           })
         : k === 3
           ? pickWeighted((z) => (105 - DT(z, s?.p).d.tol) / 12)

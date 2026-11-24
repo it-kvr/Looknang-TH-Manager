@@ -118,9 +118,6 @@ export interface Player {
   history?: PlayerSeasonHistoryRecord[];
   careerLog?: string[];
   seasonProg?: PlayerSeasonProgression;
-  altRoles?: SubRole[];
-  roleExp?: Record<string, number>;
-  customPers?: number;
 }
 
 export interface CreatedPlayerTemplate {
@@ -254,6 +251,9 @@ export interface PlayerCareerProfile {
   age: number;
   talent?: number;
   traits?: string[];
+  altRoles?: SubRole[];
+  roleExp?: Record<string, number>;
+  customPers?: number;
   gl: number;
   as: number;
   ap: number;
@@ -1174,6 +1174,7 @@ export interface GodBlessingPatch {
   altRoles?: SubRole[];
   customPers?: number;
   perks?: string[];
+  vis?: number[];
   coreA: CoreAttrs;
   subD: Record<string, number>;
 }

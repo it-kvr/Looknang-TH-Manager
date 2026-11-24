@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { FootballTraitDef, Player, PlayerCareerProfile, Position } from '../types/game';
-import { FOOTBALL_TRAITS, PLAYER_ARCHETYPES, SIGL } from '../data/thaiFootballData';
+import { FOOTBALL_TRAITS, PLAYER_ARCHETYPES, PLAYER_PERSONALITIES, SIGL } from '../data/thaiFootballData';
 import { talentTierMeta } from '../engine/missions';
+import { ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS } from '../engine/simulation';
+import { playerPen } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 
 interface GuideEntry {
@@ -17,14 +19,7 @@ interface GuideEntry {
   meta?: string;
 }
 
-const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler']);
-
-const ALL_PERSONALITIES: Array<{ title: string; icon: string; desc: string; tone: 'pos' | 'warn' | 'neutral' }> = [
-  { title: 'ผู้นำ', icon: '👑', desc: 'ช่วยเพิ่มโบนัสเล็กน้อยให้ทีมเมื่อลงตัวจริง และคุมขวัญกำลังใจเพื่อนร่วมทีม', tone: 'pos' },
-  { title: 'ขยัน', icon: '🏃', desc: 'ฟิตลดช้าลงระหว่างเกมและพัฒนาค่าพลังจากการฝึกซ้อมไวขึ้นเล็กน้อย', tone: 'pos' },
-  { title: 'สายเกเร', icon: '😤', desc: 'เล่นดุดันแต่มีโอกาสโดนใบเหลือง/ใบแดงบ่อยกว่าปกติ', tone: 'warn' },
-  { title: 'ปกติ', icon: '😐', desc: 'ไม่มีลักษณะนิสัยพิเศษ เล่นตามมาตรฐานปกติและสมดุล', tone: 'neutral' }
-];
+const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 
 const TALENT_TIERS: Array<{ id: string; range: string; label: string; emoji: string; desc: string; check: (tl: number) => boolean }> = [
   { id: 'tl_legend', range: '85–99', label: 'อัจฉริยะลูกหนัง', emoji: '💎', desc: 'พรสวรรค์ระดับสูงสุด พัฒนาค่าพลังไวมากและทำภารกิจอัปพลังติดง่ายที่สุด', check: (tl) => tl >= 85 },
@@ -87,14 +82,14 @@ export const PlayerTraitsStrip: React.FC<{
   const allGuideEntries = useMemo<GuideEntry[]>(() => {
     const entries: GuideEntry[] = [];
 
-    // 1) Personalities (4)
-    ALL_PERSONALITIES.forEach((p) => {
-      const owned = rawTrTitle.includes(p.title) || trShortName === p.title;
+    // 1) Personalities (all dynamic)
+    PLAYER_PERSONALITIES.forEach((p) => {
+      const owned = rawTrTitle === p.label || trShortName === p.name;
       entries.push({
-        id: `pers_${p.title}`,
+        id: `pers_${p.id}`,
         section: 'personality',
-        subGroup: 'นิสัยประจำตัว (4 แบบ)',
-        title: `${p.icon} ${p.title}`,
+        subGroup: `นิสัยประจำตัว (${PLAYER_PERSONALITIES.length} แบบ)`,
+        title: p.label,
         desc: p.desc,
         owned,
         tone: p.tone
@@ -118,14 +113,14 @@ export const PlayerTraitsStrip: React.FC<{
       });
     }
 
-    // 3) All Football Traits (36)
+    // 3) All Football Traits
     FOOTBALL_TRAITS.forEach((t) => {
       const owned = ownedTraitIds.has(t.id);
       const isRisk = RISKY_TRAIT_IDS.has(t.id);
       entries.push({
         id: `trait_${t.id}`,
         section: 'style',
-        subGroup: 'สไตล์การเล่นเฉพาะตัว (36 สไตล์)',
+        subGroup: `สไตล์การเล่น & สกิลติดตัว (${FOOTBALL_TRAITS.length} แบบ)`,
         title: `${t.icon} ${t.name}`,
         desc: t.desc,
         owned,
@@ -236,11 +231,16 @@ export const PlayerTraitsStrip: React.FC<{
   const ownedCount = useMemo(() => allGuideEntries.filter((x) => x.owned).length, [allGuideEntries]);
   const unownedCount = allGuideEntries.length - ownedCount;
 
-  const persBadgeCls = rawTrTitle.includes('เกเร')
-    ? 'bg-amber-500/12 border-amber-500/40 text-amber-800 dark:text-amber-200'
-    : rawTrTitle.includes('ปกติ')
-      ? 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)]'
-      : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]';
+  const matchedPers = PLAYER_PERSONALITIES.find((p) => rawTrTitle === p.label || trShortName === p.name);
+  const persTone = matchedPers?.tone || 'neutral';
+  const persBadgeCls =
+    persTone === 'warn'
+      ? 'bg-amber-500/12 border-amber-500/40 text-amber-800 dark:text-amber-200'
+      : persTone === 'gold'
+        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#7a4f00] dark:text-[#fde047]'
+        : persTone === 'neutral'
+          ? 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)]'
+          : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]';
 
   const growthBadgeCls =
     growthStage === 'เริ่มถดถอย'
@@ -338,6 +338,43 @@ export const PlayerTraitsStrip: React.FC<{
             </span>
           </div>
         </div>
+
+        {/* Section 3b: ตำแหน่งถนัดรอง & การปรับตัว */}
+        {(() => {
+          const altRoles = careerProfile?.altRoles?.length ? careerProfile.altRoles : player.altRoles || [];
+          const roleExp = careerProfile?.roleExp && Object.keys(careerProfile.roleExp).length ? careerProfile.roleExp : player.roleExp || {};
+          const expEntries = Object.entries(roleExp).filter(([r, exp]) => exp > 0 && r !== (player.ro || careerProfile?.sp) && !altRoles.includes(r as never));
+          if (!altRoles.length && !expEntries.length) return null;
+          return (
+            <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/45">
+              <div className="text-[9px] mland:text-[7.5px] font-bold text-[var(--mut)]">ตำแหน่งที่เล่นได้ &amp; กำลังปรับตัว</div>
+              <div className="flex flex-wrap gap-1">
+                {altRoles.map((r) => (
+                  <span
+                    key={r}
+                    className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-emerald-500/12 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight"
+                  >
+                    🧩 {r} (ถนัดเพิ่ม)
+                  </span>
+                ))}
+                {expEntries.map(([r, exp]) => {
+                  const need = playerPen({ ro: player.ro || careerProfile?.sp || 'CM', altRoles }, r as never) === 1
+                    ? ROLE_ADAPT_THRESHOLD_ADJ
+                    : ROLE_ADAPT_THRESHOLD_CROSS;
+                  return (
+                    <span
+                      key={r}
+                      title={`กำลังซึมซับตำแหน่ง ${r} (${exp}/${need} นัด) — ยิ่งลงตำแหน่งนี้ ค่าพลังจะพัฒนาไปตามบทบาทและปลดล็อกเป็นตำแหน่งถนัด`}
+                      className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-sky-500/10 border-sky-500/35 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight tabular"
+                    >
+                      🔄 ฝึก {r} ({exp}/{need})
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {showGuideModal &&
@@ -376,7 +413,7 @@ export const PlayerTraitsStrip: React.FC<{
                 <div className="flex flex-wrap items-center gap-1">
                   {([
                     ['all', `ทั้งหมด (${allGuideEntries.length})`],
-                    ['personality', 'นิสัย (4)'],
+                    ['personality', `นิสัย (${PLAYER_PERSONALITIES.length})`],
                     ['style', `สไตล์ (${FOOTBALL_TRAITS.length})`],
                     ['insight', 'ข้อมูลเชิงลึก']
                   ] as const).map(([k, lbl]) => (

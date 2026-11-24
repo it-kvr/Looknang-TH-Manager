@@ -82,7 +82,10 @@ export const PlayerInspectorModal: React.FC<{
                 </span>
               </div>
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1.5">
-                <span>{SPN[livePlayer.ro] || livePlayer.pos}</span>
+                <span>
+                  {SPN[livePlayer.ro] || livePlayer.pos}
+                  {livePlayer.altRoles?.length ? ` (+${livePlayer.altRoles.join(', ')})` : ''}
+                </span>
                 <span aria-hidden="true">·</span>
                 <span className="font-semibold" style={{ color: fitCol }}>{statusBadgeText}</span>
               </div>
@@ -605,6 +608,7 @@ export const TeamInspectorModal: React.FC<{
                 </div>
                 <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] tabular whitespace-nowrap shrink-0">
                   {team.form} · {AR_T[team.tac]}
+                  {team.tacticTrialLabel && (state.md ?? 0) - (team.tacticTrialMd ?? -99) <= 4 ? ` · 🧪 ลองแผนใหม่` : ''}
                 </span>
               </div>
               <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden">

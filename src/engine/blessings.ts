@@ -1,6 +1,6 @@
 import type { StatKey, Player, Team, GameState, GodBlessingPatch } from '../types/game';
 import { clamp, fmtMoney } from '../utils/math';
-import { LINE, CAREER_PERKS } from '../data/thaiFootballData';
+import { LINE, CAREER_PERKS, PLAYER_PERSONALITIES, SKIN_P, HAIR_P } from '../data/thaiFootballData';
 import { ovMe, syncMe, logFin, recordPlayerSeasonProgress } from './playerCore';
 
 export const findMutablePlayerInState = (d: GameState, playerName: string, teamId: number | null): { pl: Player | null; team: Team | null } => {
@@ -31,7 +31,21 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
     pl.talent = clamp(Math.round(patch.talent), 25, 99);
   }
   if (patch.traits !== undefined) {
-    pl.traits = patch.traits.slice(0, 5);
+    pl.traits = patch.traits.slice(0, 6);
+  }
+  if (patch.altRoles !== undefined) {
+    const cleanAlt = Array.from(new Set(patch.altRoles)).filter(
+      (r) => r !== patch.ro && (nextPos === 'GK' ? LINE[r] === 'GK' : LINE[r] !== 'GK')
+    );
+    pl.altRoles = cleanAlt;
+  }
+  if (patch.customPers !== undefined) {
+    pl.customPers = clamp(Math.round(patch.customPers), 0, PLAYER_PERSONALITIES.length - 1);
+  }
+  if (Array.isArray(patch.vis) && patch.vis.length >= 6) {
+    const v = patch.vis.slice();
+    v[5] = pl.no || v[5] || 10;
+    pl.vis = v;
   }
   pl.age = clamp(Math.round(patch.age), 15, 45);
   pl.fit = clamp(Math.round(patch.fit), 1, 100);
@@ -61,6 +75,18 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
     d.p.customD = { ...cleanSub };
     if (pl.talent !== undefined) d.p.talent = pl.talent;
     if (pl.traits !== undefined) d.p.traits = [...pl.traits];
+    if (pl.altRoles !== undefined) d.p.altRoles = [...pl.altRoles];
+    if (pl.customPers !== undefined) d.p.customPers = pl.customPers;
+    if (patch.perks !== undefined) d.p.perks = [...patch.perks];
+    if (Array.isArray(patch.vis) && patch.vis.length >= 6) {
+      d.p.k = SKIN_P[patch.vis[0]] || d.p.k;
+      d.p.h = HAIR_P[patch.vis[1]] || d.p.h;
+      d.p.hs = patch.vis[2] ?? d.p.hs;
+      d.p.fh = patch.vis[3] ?? d.p.fh;
+      d.p.ey = patch.vis[4] ?? d.p.ey;
+      d.p.fs = patch.vis[6] ?? d.p.fs;
+      d.p.acc = patch.vis[7] ?? d.p.acc;
+    }
     d.p.age = pl.age;
     d.p.en = pl.fit;
     d.p.inj = pl.inj;
@@ -77,9 +103,11 @@ export const resetGodBlessingOnPlayer = (d: GameState, playerName: string, teamI
   delete pl.customA;
   delete pl.customD;
   delete pl.customSig;
+  delete pl.customPers;
   delete pl.blessed;
   if ((pl.me || (d.mode === 'p' && d.p?.name === pl.n)) && d.p) {
     delete d.p.customD;
+    delete d.p.customPers;
     syncMe(d);
   }
   recordPlayerSeasonProgress(pl, d.season ?? 1, d.md ?? 0, pl.me ? d.p : null);

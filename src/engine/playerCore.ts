@@ -255,16 +255,20 @@ export function assignTeamShirtNumbers(team: Team) {
   });
 }
 
+const HANDSOME_HAIR_POOL = [14, 15, 16, 17, 18, 19, 9, 7, 5, 2, 0, 1, 6, 10];
+const HANDSOME_EYE_POOL = [0, 2, 5, 8, 9, 3, 6, 7];
+const HANDSOME_SHAPE_POOL = [0, 2, 3, 5, 4];
+
 export function rndVis(pos: Position, yo?: boolean): number[] {
   return [
-    P([0, 0, 1, 1, 2, 2, 2, 3, 4, 5, 6, 7]),
-    P([0, 0, 0, 1, 1, 2, 3, 4, 5, 7]),
-    R(0, HS_N.length - 1),
-    yo || R(0, 9) < 6 ? 0 : R(1, FH_N.length - 1),
-    R(0, EY_N.length - 1),
+    P([0, 0, 1, 1, 2, 2, 5, 5, 6, 3]),
+    P([0, 0, 0, 1, 1, 2, 4, 5]),
+    P(HANDSOME_HAIR_POOL),
+    yo || R(0, 9) < 7 ? 0 : P([4, 4, 1, 5, 3]),
+    P(HANDSOME_EYE_POOL),
     pos === 'GK' ? 1 : 10,
-    R(0, FS_N.length - 1),
-    R(0, 9) < 8 ? 0 : R(1, 4)
+    P(HANDSOME_SHAPE_POOL),
+    R(0, 9) < 8 ? 0 : P([1, 4, 2])
   ];
 }
 
@@ -302,14 +306,14 @@ export function visOf(q: Partial<Player>, careerP?: PlayerCareerProfile | null):
   const h = [...s].reduce((a, c, i) => ((a * 33) ^ (c.charCodeAt(0) * (i + 1))) >>> 0, 5381);
   const no = q.no || (q.pos === 'GK' ? [1, 13, 22, 25, 30][h % 5] : 2 + (h % 98));
   return [
-    h % SKIN_P.length,
+    h % Math.min(7, SKIN_P.length),
     (h >> 3) % Math.min(6, HAIR_P.length),
-    (h >> 6) % HS_N.length,
-    (q.age && q.age < 19) || ((h >> 9) % 10 < 6) ? 0 : 1 + ((h >> 11) % (FH_N.length - 1)),
-    (h >> 13) % EY_N.length,
+    HANDSOME_HAIR_POOL[(h >> 6) % HANDSOME_HAIR_POOL.length],
+    (q.age && q.age < 20) || ((h >> 9) % 10 < 7) ? 0 : [4, 1, 5, 3, 2][(h >> 11) % 5],
+    HANDSOME_EYE_POOL[(h >> 13) % HANDSOME_EYE_POOL.length],
     no,
-    (h >> 16) % FS_N.length,
-    ((h >> 19) % 10 < 8) ? 0 : 1 + ((h >> 22) % Math.min(4, ACC_N.length - 1))
+    HANDSOME_SHAPE_POOL[(h >> 16) % HANDSOME_SHAPE_POOL.length],
+    ((h >> 19) % 10 < 8) ? 0 : [1, 4, 2][(h >> 22) % 3]
   ];
 }
 
@@ -331,7 +335,8 @@ export function rollPlayerTraits(
   };
 
   const rRoll = nextRand();
-  let count = rRoll < 0.28 ? 2 : rRoll < 0.84 ? 3 : 4;
+  let count = rRoll < 0.2 ? 2 : rRoll < 0.72 ? 3 : 4;
+  if (ov >= 78 || talent >= 82) count = Math.max(count, rRoll < 0.5 ? 3 : 4);
   if (ov < 52 && talent < 60 && count > 2) count = 2;
   if (pos === 'GK' && count > 3) count = 3;
 

@@ -1407,9 +1407,9 @@ export const drawLivePitchToCanvas = (
       ctx.fillText(String(ag.no), 0, 0.5);
     } else {
       const noStr = String(ag.no);
-      const badgeW = showRatings ? Math.max(9.5, noStr.length * 4.5 + 3.2) : Math.max(10.5, noStr.length * 5.2 + 4);
+      const badgeW = Math.max(9.5, noStr.length * 4.5 + 3.2);
       const badgeH = 9.5;
-      const bx0 = showRatings ? -playerRadius * 1.18 : -playerRadius * 0.98;
+      const bx0 = -playerRadius * 1.18;
       const by0 = playerRadius * 0.25;
       noBadgeRightX = bx0 + badgeW;
       ctx.fillStyle = 'rgba(11, 32, 24, 0.92)';
@@ -1420,37 +1420,50 @@ export const drawLivePitchToCanvas = (
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#ffd75e';
-      ctx.font = showRatings ? '800 7px Sarabun, sans-serif' : '800 7.5px Sarabun, sans-serif';
+      ctx.font = '800 7px Sarabun, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(noStr, bx0 + badgeW / 2, by0 + badgeH / 2 + 0.3);
     }
 
-    // Live Match Rating pill on bottom-right corner when enabled
-    if (showRatings) {
-      const rtVal = liveRatings?.[ag.id] ?? 6.5;
-      const rtStr = rtVal.toFixed(1);
-      const rtBg =
-        rtVal >= 8.2 ? '#facc15' : rtVal >= 7.1 ? '#10b981' : rtVal >= 6.2 ? '#0f172a' : '#e11d48';
-      const rtFg = rtVal >= 8.2 ? '#1c1300' : '#ffffff';
-      const rtStroke =
-        rtVal >= 8.2 ? '#fef08a' : rtVal >= 7.1 ? '#a7f3d0' : rtVal >= 6.2 ? '#94a3b8' : '#fecdd3';
-      const rtW = 16.5;
-      const rtH = 9.5;
+    // Bottom-right pill: Live Match Rating when showRatings=true, or Player OVR when showRatings=false
+    {
+      let pillStr = '';
+      let pillBg = '#0f172a';
+      let pillFg = '#ffffff';
+      let pillStroke = '#94a3b8';
+      let pillW = 16.5;
+
+      if (showRatings) {
+        const rtVal = liveRatings?.[ag.id] ?? 6.5;
+        pillStr = rtVal.toFixed(1);
+        pillBg = rtVal >= 8.2 ? '#facc15' : rtVal >= 7.1 ? '#10b981' : rtVal >= 6.2 ? '#0f172a' : '#e11d48';
+        pillFg = rtVal >= 8.2 ? '#1c1300' : '#ffffff';
+        pillStroke = rtVal >= 8.2 ? '#fef08a' : rtVal >= 7.1 ? '#a7f3d0' : rtVal >= 6.2 ? '#94a3b8' : '#fecdd3';
+      } else {
+        const ovVal = Math.round(ag.ov ?? 60);
+        pillStr = String(ovVal);
+        pillBg = ovVal >= 84 ? '#facc15' : ovVal >= 73 ? '#10b981' : ovVal >= 62 ? '#0284c7' : '#334155';
+        pillFg = ovVal >= 84 ? '#1c1300' : '#ffffff';
+        pillStroke = ovVal >= 84 ? '#fef08a' : ovVal >= 73 ? '#a7f3d0' : ovVal >= 62 ? '#bae6fd' : '#cbd5e1';
+        pillW = 14.5;
+      }
+
+      const pillH = 9.5;
       const rx0 = faceCanvas ? Math.max(0.8, noBadgeRightX + 1.2) : playerRadius * 0.05;
       const ry0 = playerRadius * 0.25;
-      ctx.fillStyle = rtBg;
-      ctx.strokeStyle = rtStroke;
+      ctx.fillStyle = pillBg;
+      ctx.strokeStyle = pillStroke;
       ctx.lineWidth = 0.95;
       ctx.beginPath();
-      ctx.roundRect(rx0, ry0, rtW, rtH, 3);
+      ctx.roundRect(rx0, ry0, pillW, pillH, 3);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = rtFg;
+      ctx.fillStyle = pillFg;
       ctx.font = '800 7px Sarabun, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(rtStr, rx0 + rtW / 2, ry0 + rtH / 2 + 0.3);
+      ctx.fillText(pillStr, rx0 + pillW / 2, ry0 + pillH / 2 + 0.3);
     }
 
     // Yellow card mini indicator on right shoulder (clear of top position badge)

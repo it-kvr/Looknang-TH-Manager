@@ -30,7 +30,7 @@ interface MatchTimelineItem {
   who: string;
   detail?: string;
 }
-import { getShirtNo, visOf, xi, DT, injD, matchKits, pickGK, getDefaultCoachVis } from '../engine/playerCore';
+import { getShirtNo, visOf, xi, DT, injD, matchKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf } from '../engine/simulation';
 import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
@@ -168,6 +168,7 @@ export const MatchModal: React.FC<{
   const [stoppageBadge, setStoppageBadge] = useState<number>(0);
   const [matchPhaseUi, setMatchPhaseUi] = useState<LiveMatchWorld['phase']>('play1');
   const [halftimeTalkUsed, setHalftimeTalkUsed] = useState(false);
+  const [halftimeWarmupUsed, setHalftimeWarmupUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 5>(() => getDefaultMatchSpeed(settings));
@@ -727,14 +728,15 @@ export const MatchModal: React.FC<{
     const w = worldRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
     const kit = culprit.side === 'H' ? homeKit : awayKit;
-    const hotHeadBias = agentHasTrait(culprit, 'hot_headed') ? 0.02 : agentHasTrait(culprit, 'calm_leader') ? -0.01 : 0;
+    const hotHeadBias = (agentHasTrait(culprit, 'hot_headed') ? 0.02 : agentHasTrait(culprit, 'calm_leader') ? -0.01 : 0) + (agentHasTrait(culprit, 'risk_taker') ? 0.01 : 0);
+    const isVolatilePers = culprit.tr === 1 || culprit.tr === 7 || culprit.tr === 15 || culprit.tr === 22;
     const teamRedCount = sr.cards.filter((c) => c.t === team.id && (c.type === 'R' || c.type === 'Y2R')).length;
     const directRed =
       forceType === 'R'
         ? true
         : forceType === 'Y' || teamRedCount >= 2
           ? false
-          : Math.random() < Math.max(0.008, (culprit.tr === 1 ? 0.025 : directRedBias) + hotHeadBias);
+          : Math.random() < Math.max(0.008, (isVolatilePers ? 0.025 : directRedBias) + hotHeadBias);
     SFX.card();
     SFX.boo(directRed || (sr.yellows[culprit.id] || 0) >= 1 ? 0.95 : 0.72);
     if (directRed) {
@@ -2549,12 +2551,13 @@ export const MatchModal: React.FC<{
     }
 
     if (nearestDef && nearestDefDist < (defCfg.press === 2 ? 9.0 : inBoxNow ? 8.2 : 6.8) && carrier.pos !== 'GK') {
+      const defVolatile = nearestDef.tr === 1 || nearestDef.tr === 7 || nearestDef.tr === 15 || nearestDef.tr === 22;
       const foulProb = clamp(
         0.052 +
           (defCfg.press === 2 ? 0.025 : 0) +
-          (nearestDef.tr === 1 ? 0.025 : 0) +
-          (agentHasTrait(nearestDef, 'hot_headed') ? 0.03 : agentHasTrait(nearestDef, 'calm_leader') ? -0.015 : 0) +
-          (agentHasTrait(nearestDef, 'slide_tackler') ? 0.012 : 0) +
+          (defVolatile ? 0.024 : nearestDef.tr === 6 || nearestDef.tr === 23 ? -0.008 : 0) +
+          (agentHasTrait(nearestDef, 'hot_headed') ? 0.03 : agentHasTrait(nearestDef, 'calm_leader') || agentHasTrait(nearestDef, 'tireless_mentor') ? -0.015 : 0) +
+          (agentHasTrait(nearestDef, 'slide_tackler') || agentHasTrait(nearestDef, 'risk_taker') ? 0.012 : 0) +
           (isDerby ? 0.015 : 0) +
           (inBoxNow ? 0.035 : 0) -
           ((nearestDef.sig === 'pos' ? nearestDef.d.pos + 8 : nearestDef.d.pos) - 60) * 0.0008,
@@ -2575,7 +2578,7 @@ export const MatchModal: React.FC<{
         const shouldVarPen = (inBoxNow && Math.random() < 0.34) || (onBoxEdgeNow && Math.random() < 0.28);
         const existingReds = simRef.current.cards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
         const isHardFoul =
-          (nearestDef.tr === 1 || agentHasTrait(nearestDef, 'hot_headed') || agentHasTrait(nearestDef, 'slide_tackler')) && Math.random() < 0.25
+          (defVolatile || agentHasTrait(nearestDef, 'hot_headed') || agentHasTrait(nearestDef, 'slide_tackler')) && Math.random() < 0.25
             ? true
             : distToGoal < 28 && Math.random() < 0.08;
         const shouldVarFoulCard = !shouldVarPen && w.varChecks < 2 && existingReds === 0 && isHardFoul && Math.random() < 0.14;
@@ -2623,7 +2626,7 @@ export const MatchModal: React.FC<{
 
         if (shouldVarFoulCard) {
           w.varChecks++;
-          const upgradeRed = Math.random() < (nearestDef.tr === 1 ? 0.22 : 0.14);
+          const upgradeRed = Math.random() < (defVolatile ? 0.22 : 0.14);
           w.varReview = {
             kind: 'foul_card',
             side,
@@ -2664,7 +2667,7 @@ export const MatchModal: React.FC<{
         const alreadyYellowed = (simRef.current.yellows[nearestDef.id] || 0) >= 1;
         const baseCardChance = clamp(
           0.09 +
-            (nearestDef.tr === 1 ? 0.06 : 0) +
+            (defVolatile ? 0.06 : 0) +
             (agentHasTrait(nearestDef, 'hot_headed') ? 0.08 : agentHasTrait(nearestDef, 'calm_leader') ? -0.04 : 0) +
             (distToGoal < 26 ? 0.04 : 0) +
             (isDerby ? 0.03 : 0),
@@ -3880,7 +3883,8 @@ export const MatchModal: React.FC<{
       let penCardTxt = '';
       if (culprit && simRef.current.cards.length < 5) {
         const roll = Math.random();
-        if (roll < (culprit.tr === 1 ? 0.08 : 0.04)) {
+        const culpritVolatile = culprit.tr === 1 || culprit.tr === 7 || culprit.tr === 15 || culprit.tr === 22;
+        if (roll < (culpritVolatile ? 0.08 : 0.04)) {
           issueCard(culprit, curMin, 1, 'R', true);
           penCardTxt = ' + 🟥 ใบแดง!';
         } else if (roll < 0.36) {
@@ -5351,6 +5355,10 @@ export const MatchModal: React.FC<{
 
     runAiSubForSide(true);
     runAiSubForSide(false);
+    if (state.mode === 'm' && autoSubEnabledRef.current && !sr.done) {
+      runAutoUserSubs(w, sr, curMin);
+      runAutoOnPitchRebalance(w, sr, curMin);
+    }
 
     // Auto-tactical rules
     if (state.mode === 'm' && state.rules && state.rules.length) {
@@ -5520,118 +5528,10 @@ export const MatchModal: React.FC<{
     runAiSubForSide(true);
     runAiSubForSide(false);
 
-    // Smart Position-Matched Auto-Substitution for Manager Mode (Youth Talent Experience + Ready Fit Players)
+    // Smart Position-Matched Auto-Substitution & On-Pitch Role Rebalance for Manager Mode
     if (state.mode === 'm' && autoSubEnabledRef.current && !sr.done) {
-      const mySubsCount = meIsHome ? sr.homeSubsCount : sr.awaySubsCount;
-      if (mySubsCount < 5) {
-        const myLu = meIsHome ? sr.homeLu : sr.awayLu;
-        const myPlayed = meIsHome ? sr.homePlayed : sr.awayPlayed;
-        const availBench = meTeamOrig.sq.filter(
-          (q) => !myLu.includes(q.n) && !myPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n)
-        );
-        if (availBench.length > 0) {
-          const myGoals = meIsHome ? sr.gh : sr.ga;
-          const oppGoals = meIsHome ? sr.ga : sr.gh;
-          const isSafeLead = myGoals - oppGoals >= 2 || (curMin >= 74 && myGoals > oppGoals);
-          const scheduledMins = [56, 63, 70, 77, 84];
-          const onPitch = myLu
-            .map((n, idx) => ({ idx, n, pl: meTeamOrig.sq.find((q) => q.n === n) }))
-            .filter((x): x is { idx: number; n: string; pl: Player } => Boolean(x.pl) && !sr.sentOff.includes(x.n));
-
-          // Check emergency first: injured on pitch or critically fatigued (<54%)
-          let outPick = onPitch.find((x) => sr.injuredNames.includes(x.n))
-            || onPitch
-              .filter((x) => x.pl.pos !== 'GK' && (sr.liveFit[x.n] ?? x.pl.fit ?? 100) < 54)
-              .sort((a, b) => (sr.liveFit[a.n] ?? 100) - (sr.liveFit[b.n] ?? 100))[0];
-
-          const isScheduledWindow = scheduledMins.includes(curMin) && mySubsCount < scheduledMins.indexOf(curMin) + 1;
-          if (!outPick && curMin >= 56 && (isScheduledWindow || curMin % 5 === 0)) {
-            outPick = onPitch
-              .filter((x) => x.pl.pos !== 'GK')
-              .map((x) => {
-                const fitNow = sr.liveFit[x.n] ?? x.pl.fit ?? 100;
-                const yCnt = sr.yellows[x.n] || 0;
-                const rtNow = sr.liveForm[x.n] ?? 6.5;
-                // Prioritize taking off tired, yellow-carded, older veterans (or when protecting lead, rest key seniors so youths get minutes)
-                const fatigueNeed = (100 - fitNow) * 1.15;
-                const cardRisk = yCnt > 0 ? 18 : 0;
-                const lowFormBonus = rtNow < 6.1 ? 10 : 0;
-                const protectVeteran = isSafeLead && x.pl.age >= 24 ? 16 : 0;
-                const keepYoungster = x.pl.age <= 21 && fitNow >= 64 ? -22 : 0;
-                return { ...x, outScore: fatigueNeed + cardRisk + lowFormBonus + protectVeteran + keepYoungster };
-              })
-              .filter((x) => x.outScore >= (isSafeLead ? 18 : 26) || (sr.liveFit[x.n] ?? 100) <= 72)
-              .sort((a, b) => b.outScore - a.outScore)[0];
-          }
-
-          if (outPick) {
-            const outPl = outPick.pl;
-            const posMatchedPool = availBench.filter((b) =>
-              outPl.pos === 'GK' ? b.pos === 'GK' : b.pos === outPl.pos
-            );
-            const candidatePool = posMatchedPool.length > 0
-              ? posMatchedPool
-              : outPl.pos === 'GK'
-                ? []
-                : availBench.filter((b) => b.pos !== 'GK');
-
-            if (candidatePool.length > 0) {
-              const bestCand = candidatePool
-                .map((cand) => {
-                  const fitCand = cand.fit ?? 100;
-                  const tl = getPlayerTalent(cand, null);
-                  const exactRoleBonus = cand.ro === outPl.ro ? 48 : cand.pos === outPl.pos ? 28 : -15;
-                  const isTalentedYouth = cand.age <= 22 && tl >= 65;
-                  const youthExpBonus = isTalentedYouth
-                    ? (isSafeLead ? 34 : 22) + (tl - 60) * 0.65 + (cand.age <= 19 ? 8 : 0)
-                    : cand.age <= 23
-                      ? 8
-                      : 0;
-                  const readyFitBonus = fitCand >= 82 ? 18 + (fitCand - 82) * 0.4 : fitCand < 64 ? -35 : 0;
-                  const score = exactRoleBonus + youthExpBonus + readyFitBonus + cand.ov * 0.45 + tl * 0.12;
-                  return { cand, tl, isTalentedYouth, fitCand, score };
-                })
-                .sort((a, b) => b.score - a.score)[0];
-
-              if (bestCand && (bestCand.cand.pos === outPl.pos || sr.injuredNames.includes(outPl.n) || (sr.liveFit[outPl.n] ?? 100) < 55)) {
-                const { cand, tl, isTalentedYouth, fitCand } = bestCand;
-                myLu[outPick.idx] = cand.n;
-                if (!myPlayed.includes(cand.n)) myPlayed.push(cand.n);
-                if (meIsHome) sr.homeSubsCount++;
-                else sr.awaySubsCount++;
-                const subEv: MatchSubEvent = { m: curMin, t: meTeamOrig.id, inPlayer: cand.n, outPlayer: outPl.n };
-                sr.subs.push(subEv);
-
-                const agIdx = w.agents.findIndex((a) => a.id === outPl.n);
-                if (agIdx >= 0) {
-                  const rep = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
-                  if (rep[outPick.idx]) {
-                    rep[outPick.idx].x = w.agents[agIdx].x;
-                    rep[outPick.idx].y = w.agents[agIdx].y;
-                    rep[outPick.idx].facing = w.agents[agIdx].facing;
-                    w.agents[agIdx] = rep[outPick.idx];
-                  }
-                  if (w.ball.carrierId === outPl.n) w.ball.carrierId = cand.n;
-                  if (w.ball.targetId === outPl.n) w.ball.targetId = cand.n;
-                }
-
-                setLiveLu(myLu.slice());
-                setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
-                setSubLog(sr.subs.slice());
-                syncSidelineBenches(w);
-                triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 เปลี่ยนตัว!', 2.3);
-                const reasonTag = sr.injuredNames.includes(outPl.n)
-                  ? `แทนผู้เจ็บ · ตรงตำแหน่ง ${cand.ro}`
-                  : isTalentedYouth
-                    ? `ปั้นดาวรุ่งเก็บประสบการณ์ · อายุ ${cand.age} พรสวรรค์ ${tl}`
-                    : `ตัวพร้อมลง · ฟิต ${Math.round(fitCand)}%`;
-                pushLog(curMin, `🤖 ออโต้เปลี่ยนตัว (${reasonTag}): 🟢 ${cand.n} (${cand.ro}) แทน 🔴 ${outPl.n}`, 'sub');
-                if (injuryAlert && injuryAlert.name === outPl.n) setInjuryAlert(null);
-              }
-            }
-          }
-        }
-      }
+      runAutoUserSubs(w, sr, curMin);
+      runAutoOnPitchRebalance(w, sr, curMin);
     }
 
     if (state.mode === 'm' && state.rules && state.rules.length) {
@@ -5899,6 +5799,260 @@ export const MatchModal: React.FC<{
     setShootoutUi({ ...w.shootout });
   };
 
+  const runAutoOnPitchRebalance = (
+    w: LiveMatchWorld,
+    sr: typeof simRef.current,
+    curMin: number
+  ) => {
+    const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+    const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
+    const slots = getFormationSlots(meTeamOrig);
+    if (myLu.length !== 11 || slots.length !== 11) return false;
+
+    const getPl = (name: string) => meTeamOrig.sq.find((q) => q.n === name);
+    const activeDfs = myLu.filter((n, idx) => !sr.sentOff.includes(n) && slots[idx]?.pos === 'DF').length;
+    const activeFws = myLu.filter((n, idx) => !sr.sentOff.includes(n) && slots[idx]?.pos === 'FW').length;
+
+    const slotPenalty = (name: string, slotIdx: number): number => {
+      const slot = slots[slotIdx];
+      if (!slot) return 0;
+      if (sr.sentOff.includes(name)) {
+        if (slot.pos === 'GK') return 2500;
+        if (slot.pos === 'DF' && activeDfs < 3 && activeFws >= 2) return 95;
+        return 0;
+      }
+      const pl = getPl(name);
+      if (!pl) return 0;
+      const penVal = playerPen(pl, slot.sp);
+      const gkMismatch =
+        (slot.pos === 'GK' && pl.pos !== 'GK') || (slot.pos !== 'GK' && pl.pos === 'GK') ? 1000 : 0;
+      return penVal * 12 + gkMismatch;
+    };
+
+    let bestI = -1;
+    let bestJ = -1;
+    let bestGain = 8;
+
+    for (let i = 0; i < 11; i++) {
+      for (let j = i + 1; j < 11; j++) {
+        const nA = myLu[i];
+        const nB = myLu[j];
+        if (sr.sentOff.includes(nA) && sr.sentOff.includes(nB)) continue;
+        const cNow = slotPenalty(nA, i) + slotPenalty(nB, j);
+        const cSwap = slotPenalty(nA, j) + slotPenalty(nB, i);
+        const gain = cNow - cSwap;
+        if (gain > bestGain) {
+          bestGain = gain;
+          bestI = i;
+          bestJ = j;
+        }
+      }
+    }
+
+    if (bestI < 0 || bestJ < 0) return false;
+
+    const nameA = myLu[bestI];
+    const nameB = myLu[bestJ];
+    myLu[bestI] = nameB;
+    myLu[bestJ] = nameA;
+
+    const updated = buildAgentsForTeam(
+      meTeamOrig,
+      mySide,
+      myLu,
+      sr.sentOff,
+      sr.yellows,
+      sr.liveFit,
+      state.p,
+      myPlayerName,
+      w.secondHalf
+    );
+    updated.forEach((nextAg) => {
+      const oldIdx = w.agents.findIndex((a) => a.side === mySide && a.id === nextAg.id);
+      if (oldIdx >= 0) {
+        const oldAg = w.agents[oldIdx];
+        nextAg.x = oldAg.x;
+        nextAg.y = oldAg.y;
+        nextAg.facing = oldAg.facing;
+        nextAg.stride = oldAg.stride;
+        nextAg.injuredOut = oldAg.injuredOut;
+        nextAg.sentOff = oldAg.sentOff;
+        w.agents[oldIdx] = nextAg;
+      }
+    });
+
+    setLiveLu(myLu.slice());
+    triggerCoachShout(w, mySide, '🔀 ปรับตำแหน่ง!', 2.1);
+    const sA = slots[bestI]?.sp || '';
+    const sB = slots[bestJ]?.sp || '';
+    pushLog(
+      curMin,
+      `🤖 ออโต้ปรับตำแหน่ง (${meTeamOrig.name}): 🔀 ${nameA.split(' ')[0]} (${sB}) ↔ ${nameB.split(' ')[0]} (${sA})`,
+      'sys'
+    );
+    return true;
+  };
+
+  const runAutoUserSubs = (
+    w: LiveMatchWorld,
+    sr: typeof simRef.current,
+    curMin: number
+  ) => {
+    const mySubsCount = meIsHome ? sr.homeSubsCount : sr.awaySubsCount;
+    if (mySubsCount >= 5) return;
+    const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+    const myPlayed = meIsHome ? sr.homePlayed : sr.awayPlayed;
+    const mySlots = getFormationSlots(meTeamOrig);
+    const availBench = meTeamOrig.sq.filter(
+      (q) => !myLu.includes(q.n) && !myPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n)
+    );
+    if (!availBench.length) return;
+
+    const myGoals = meIsHome ? sr.gh : sr.ga;
+    const oppGoals = meIsHome ? sr.ga : sr.gh;
+    const isSafeLead = myGoals - oppGoals >= 2 || (curMin >= 74 && myGoals > oppGoals);
+    const isChasing = myGoals < oppGoals && curMin >= 58;
+    const scheduledMins = [56, 63, 70, 77, 84];
+    const onPitch = myLu
+      .map((n, idx) => ({ idx, n, pl: meTeamOrig.sq.find((q) => q.n === n), slot: mySlots[idx] }))
+      .filter((x): x is { idx: number; n: string; pl: Player; slot: (typeof mySlots)[number] } => Boolean(x.pl) && !sr.sentOff.includes(x.n));
+
+    let outPick =
+      onPitch.find((x) => sr.injuredNames.includes(x.n)) ||
+      onPitch
+        .filter((x) => x.pl.pos !== 'GK' && (sr.liveFit[x.n] ?? x.pl.fit ?? 100) < 54)
+        .sort((a, b) => (sr.liveFit[a.n] ?? 100) - (sr.liveFit[b.n] ?? 100))[0];
+
+    const isScheduledWindow = scheduledMins.includes(curMin) && mySubsCount < scheduledMins.indexOf(curMin) + 1;
+    if (!outPick && curMin >= 55 && (isScheduledWindow || curMin % 4 === 0)) {
+      outPick = onPitch
+        .filter((x) => x.pl.pos !== 'GK')
+        .map((x) => {
+          const fitNow = sr.liveFit[x.n] ?? x.pl.fit ?? 100;
+          const yCnt = sr.yellows[x.n] || 0;
+          const rtNow = sr.liveForm[x.n] ?? 6.5;
+          const offPos = x.slot ? playerPen(x.pl, x.slot.sp) * 14 : 0;
+          const fatigueNeed = (100 - fitNow) * 1.15;
+          const cardRisk = yCnt > 0 ? 18 : 0;
+          const lowFormBonus = rtNow < 6.1 ? 11 : 0;
+          const chaseNeed = isChasing && (x.pl.pos === 'DF' || x.pl.ro === 'CDM') && rtNow < 6.7 ? 12 : 0;
+          const protectVeteran = isSafeLead && x.pl.age >= 24 ? 16 : 0;
+          const keepYoungster = x.pl.age <= 21 && fitNow >= 64 ? -22 : 0;
+          return { ...x, outScore: fatigueNeed + cardRisk + lowFormBonus + offPos + chaseNeed + protectVeteran + keepYoungster };
+        })
+        .filter((x) => x.outScore >= (isSafeLead ? 18 : 24) || (sr.liveFit[x.n] ?? 100) <= 72)
+        .sort((a, b) => b.outScore - a.outScore)[0];
+    }
+
+    if (!outPick) return;
+    const outPl = outPick.pl;
+    const slotSp = outPick.slot?.sp || outPl.ro;
+    const slotPos = outPick.slot?.pos || outPl.pos;
+    const posMatchedPool = availBench.filter((b) =>
+      slotPos === 'GK' ? b.pos === 'GK' : b.pos === slotPos || playerPen(b, slotSp) <= 1
+    );
+    const candidatePool =
+      posMatchedPool.length > 0
+        ? posMatchedPool
+        : slotPos === 'GK'
+          ? []
+          : availBench.filter((b) => b.pos !== 'GK');
+    if (!candidatePool.length) return;
+
+    const bestCand = candidatePool
+      .map((cand) => {
+        const fitCand = cand.fit ?? 100;
+        const tl = getPlayerTalent(cand, null);
+        const penCand = playerPen(cand, slotSp);
+        const exactRoleBonus = penCand === 0 ? 48 : penCand === 1 ? 26 : -12;
+        const isTalentedYouth = cand.age <= 22 && tl >= 65;
+        const youthExpBonus = isTalentedYouth
+          ? (isSafeLead ? 34 : 22) + (tl - 60) * 0.65 + (cand.age <= 19 ? 8 : 0)
+          : cand.age <= 23
+            ? 8
+            : 0;
+        const chaseAttBonus = isChasing && (cand.pos === 'FW' || cand.ro === 'CAM') ? 16 : 0;
+        const readyFitBonus = fitCand >= 82 ? 18 + (fitCand - 82) * 0.4 : fitCand < 64 ? -35 : 0;
+        const score = exactRoleBonus + youthExpBonus + chaseAttBonus + readyFitBonus + cand.ov * 0.45 + tl * 0.12;
+        return { cand, tl, isTalentedYouth, fitCand, score };
+      })
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (
+      bestCand &&
+      (bestCand.cand.pos === slotPos ||
+        playerPen(bestCand.cand, slotSp) <= 1 ||
+        sr.injuredNames.includes(outPl.n) ||
+        (sr.liveFit[outPl.n] ?? 100) < 55)
+    ) {
+      const { cand, tl, isTalentedYouth, fitCand } = bestCand;
+      myLu[outPick.idx] = cand.n;
+      if (!myPlayed.includes(cand.n)) myPlayed.push(cand.n);
+      if (meIsHome) sr.homeSubsCount++;
+      else sr.awaySubsCount++;
+      const subEv: MatchSubEvent = { m: curMin, t: meTeamOrig.id, inPlayer: cand.n, outPlayer: outPl.n };
+      sr.subs.push(subEv);
+
+      const agIdx = w.agents.findIndex((a) => a.id === outPl.n);
+      if (agIdx >= 0) {
+        const rep = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+        if (rep[outPick.idx]) {
+          rep[outPick.idx].x = w.agents[agIdx].x;
+          rep[outPick.idx].y = w.agents[agIdx].y;
+          rep[outPick.idx].facing = w.agents[agIdx].facing;
+          w.agents[agIdx] = rep[outPick.idx];
+        }
+        if (w.ball.carrierId === outPl.n) w.ball.carrierId = cand.n;
+        if (w.ball.targetId === outPl.n) w.ball.targetId = cand.n;
+      }
+
+      setLiveLu(myLu.slice());
+      setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
+      setSubLog(sr.subs.slice());
+      syncSidelineBenches(w);
+      triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 เปลี่ยนตัว!', 2.3);
+      const reasonTag = sr.injuredNames.includes(outPl.n)
+        ? `แทนผู้เจ็บ · ตรงตำแหน่ง ${cand.ro}`
+        : isTalentedYouth
+          ? `ปั้นดาวรุ่งเก็บประสบการณ์ · อายุ ${cand.age} พรสวรรค์ ${tl}`
+          : `ตัวพร้อมลง · ฟิต ${Math.round(fitCand)}%`;
+      pushLog(curMin, `🤖 ออโต้เปลี่ยนตัว (${reasonTag}): 🟢 ${cand.n} (${cand.ro}) แทน 🔴 ${outPl.n}`, 'sub');
+      if (injuryAlert && injuryAlert.name === outPl.n) setInjuryAlert(null);
+    }
+  };
+
+  const handleHalftimeWarmup = () => {
+    const w = worldRef.current;
+    if (!w || w.phase !== 'halftime' || halftimeWarmupUsed) return;
+    const sr = simRef.current;
+    SFX.coach();
+    setHalftimeWarmupUsed(true);
+    if (state.mode === 'p' && myPlayerName) {
+      const meAg = w.agents.find((a) => a.id === myPlayerName);
+      if (meAg && !meAg.sentOff) {
+        meAg.fit = clamp(meAg.fit + 6, 25, 100);
+        sr.liveFit[meAg.id] = meAg.fit;
+      } else {
+        sr.liveFit[myPlayerName] = clamp((sr.liveFit[myPlayerName] ?? 80) + 6, 25, 100);
+      }
+      setLiveFitMap({ ...sr.liveFit });
+      pushLog(45, `💪 คุณวอร์มอัพเติมฟิตช่วงพักครึ่ง (+6%) พร้อมลุย 45 นาทีหลัง!`, 'sys');
+    } else if (state.mode === 'm') {
+      const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+      myLu.forEach((name) => {
+        if (sr.sentOff.includes(name)) return;
+        const ag = w.agents.find((a) => a.id === name);
+        const curFit = ag ? ag.fit : (sr.liveFit[name] ?? 80);
+        const nextFit = clamp(curFit + 4, 25, 100);
+        if (ag) ag.fit = nextFit;
+        sr.liveFit[name] = nextFit;
+      });
+      setLiveFitMap({ ...sr.liveFit });
+      triggerCoachShout(w, meIsHome ? 'H' : 'A', '💪 วอร์มเตรียมลุยครึ่งหลัง!', 2.6);
+      pushLog(45, `💪 สั่งทีมวอร์มอัพพักครึ่ง (${meTeamOrig.name}): พลังกายผู้เล่นในสนาม +4%`, 'sys');
+    }
+  };
+
   const handleStartSecondHalf = (talkTone?: 'attack' | 'balanced' | 'defend' | 'fit') => {
     const w = worldRef.current;
     if (!w || w.phase !== 'halftime') return;
@@ -5933,7 +6087,7 @@ export const MatchModal: React.FC<{
       } else {
         pushLog(45, `📣 ปลุกใจพักครึ่ง: "รักษาฟอร์มและจังหวะการเล่นต่อไป!"`, 'sys');
       }
-    } else if (state.mode === 'p' && talkTone === 'fit' && myPlayerName) {
+    } else if (state.mode === 'p' && talkTone === 'fit' && myPlayerName && !halftimeWarmupUsed) {
       const meAg = w.agents.find((a) => a.id === myPlayerName);
       if (meAg) {
         meAg.fit = clamp(meAg.fit + 6, 25, 100);
@@ -5950,6 +6104,7 @@ export const MatchModal: React.FC<{
     triggerCoachShout(w, 'H', '📣 ย้ายฝั่ง! สู้ต่อ!', 3.2);
     triggerCoachShout(w, 'A', '📣 สลับฝั่ง! ลุย!', 3.2);
     setHalftimeTalkUsed(false);
+    setHalftimeWarmupUsed(false);
     setHtPickedPlayer(null);
     setMlandMatchTab('stats');
     setPaused(false);
@@ -7592,19 +7747,22 @@ export const MatchModal: React.FC<{
                         type="button"
                         title={
                           autoSubEnabled
-                            ? 'เปิดอยู่: เปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ส่งดาวรุ่งมีพรสวรรค์ / นักเตะฟิตพร้อมลง) — กดเพื่อปิด'
-                            : 'ปิดอยู่: กดเพื่อเปิดเปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ดาวรุ่งมีพรสวรรค์ / ตัวพร้อม)'
+                            ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
+                            : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
                         }
-                        aria-label="เปิด/ปิด เปลี่ยนตัวอัตโนมัติตามตำแหน่ง"
+                        aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
                         onClick={() => {
                           SFX.tap();
                           setAutoSubEnabled((v) => {
                             const next = !v;
+                            if (next && worldRef.current && !simRef.current.done) {
+                              runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
+                            }
                             pushLog(
                               minute,
                               next
-                                ? '🤖 เปิดระบบเปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ดันดาวรุ่งมีพรสวรรค์ & ตัวฟิตพร้อม)'
-                                : '🤖 ปิดระบบเปลี่ยนตัวอัตโนมัติ (คุมเปลี่ยนตัวด้วยตนเอง)',
+                                ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
+                                : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
                               'sys'
                             );
                             return next;
@@ -7743,11 +7901,14 @@ export const MatchModal: React.FC<{
               onToggleAutoSub={() => {
                 setAutoSubEnabled((v) => {
                   const next = !v;
+                  if (next && worldRef.current && !simRef.current.done) {
+                    runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
+                  }
                   pushLog(
                     minute,
                     next
-                      ? '🤖 เปิดระบบเปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ดันดาวรุ่งมีพรสวรรค์ & ตัวฟิตพร้อม)'
-                      : '🤖 ปิดระบบเปลี่ยนตัวอัตโนมัติ (คุมเปลี่ยนตัวด้วยตนเอง)',
+                      ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
+                      : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
                     'sys'
                   );
                   return next;
@@ -7795,34 +7956,6 @@ export const MatchModal: React.FC<{
                       </div>
                     </div>
                   )}
-                  {(miracleBannerUi || blessedListUi.length > 0) && !done && (
-                    <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-gradient-to-r from-amber-950/90 via-[#1b2e19]/95 to-emerald-950/90 border-b border-amber-400/35 flex flex-wrap items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px] text-amber-100 shrink-0">
-                      {miracleBannerUi && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/25 border border-amber-300/60 text-amber-200 font-extrabold animate-pulse">
-                          <span>⚡🔥</span>
-                          <span>ปาฏิหาริย์: {miracleBannerUi.teamName} (เหลือ {miracleBannerUi.minsLeft}&apos;)</span>
-                        </span>
-                      )}
-                      {blessedListUi.length > 0 && (
-                        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-                          {blessedListUi.map((bl) => {
-                            const blTeamName = bl.side === 'H' ? homeOrig.name : awayOrig.name;
-                            return (
-                              <span
-                                key={bl.id}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-300/15 border border-yellow-300/45 text-yellow-200 font-bold"
-                                title={`${bl.id} (${blTeamName}) ได้รับพร: ${bl.tag}`}
-                              >
-                                <span>✨</span>
-                                <span>{bl.shortName}</span>
-                                <span className="opacity-75">[{bl.tag} · {bl.minsLeft}&apos;]</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  )}
                   <div
                     className={`relative ${
                       matchEnv.timeOfDay === 'night'
@@ -7834,14 +7967,74 @@ export const MatchModal: React.FC<{
                           : 'bg-[#165834]'
                     }`}
                   >
-                    {/* Unified Centered Live Commentary Badge inside Top Stadium Apron */}
-                    {matchPhaseUi !== 'halftime' && !done && (
-                      <div className="pointer-events-none absolute top-0 left-0 right-0 h-[26px] sm:h-[29px] mland:h-[23px] flex items-center justify-center px-2 z-10">
-                        <span className={`inline-flex items-center px-2.5 mland:px-2 py-[2px] rounded-full border backdrop-blur-xs text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold max-w-[92%] overflow-hidden ${bannerCls}`}>
-                          {renderActionBannerContent()}
-                        </span>
-                      </div>
-                    )}
+                    {/* Top-Left (Home) & Top-Right (Away) Sacred / Miracle Corner Badges + Centered Commentary */}
+                    {matchPhaseUi !== 'halftime' && !done && (() => {
+                      const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
+                      const awayMiracle = miracleBannerUi?.side === 'A' ? miracleBannerUi : null;
+                      const homeBlessed = blessedListUi.filter((b) => b.side === 'H');
+                      const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
+                      return (
+                        <>
+                          {(homeMiracle || homeBlessed.length > 0) && (
+                            <div className="pointer-events-none absolute top-1 left-1.5 z-20 flex flex-col items-start gap-0.5 max-w-[27%] sm:max-w-[28%]">
+                              {homeMiracle && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-amber-950/85 border border-amber-300/65 text-amber-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-extrabold animate-pulse truncate max-w-full shadow-xs"
+                                  title={`ปาฏิหาริย์ฝั่งเจ้าบ้าน (${homeMiracle.teamName}) เหลือ ${homeMiracle.minsLeft}'`}
+                                >
+                                  <span>⚡</span>
+                                  <span className="truncate">ปาฏิหาริย์ {homeMiracle.minsLeft}&apos;</span>
+                                </span>
+                              )}
+                              {homeBlessed.map((bl) => (
+                                <span
+                                  key={bl.id}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[#112419]/88 border border-yellow-300/50 text-yellow-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-bold truncate max-w-full shadow-xs"
+                                  title={`${bl.id} (${homeOrig.name}) ได้รับพร: ${bl.tag}`}
+                                >
+                                  <span>✨</span>
+                                  <span className="truncate">{bl.shortName}</span>
+                                  <span className="opacity-80 shrink-0">[{bl.tag}·{bl.minsLeft}&apos;]</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {(awayMiracle || awayBlessed.length > 0) && (
+                            <div className="pointer-events-none absolute top-1 right-1.5 z-20 flex flex-col items-end gap-0.5 max-w-[27%] sm:max-w-[28%]">
+                              {awayMiracle && (
+                                <span
+                                  className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-amber-950/85 border border-amber-300/65 text-amber-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-extrabold animate-pulse truncate max-w-full shadow-xs"
+                                  title={`ปาฏิหาริย์ฝั่งทีมเยือน (${awayMiracle.teamName}) เหลือ ${awayMiracle.minsLeft}'`}
+                                >
+                                  <span>⚡</span>
+                                  <span className="truncate">ปาฏิหาริย์ {awayMiracle.minsLeft}&apos;</span>
+                                </span>
+                              )}
+                              {awayBlessed.map((bl) => (
+                                <span
+                                  key={bl.id}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[#112419]/88 border border-yellow-300/50 text-yellow-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-bold truncate max-w-full shadow-xs"
+                                  title={`${bl.id} (${awayOrig.name}) ได้รับพร: ${bl.tag}`}
+                                >
+                                  <span>✨</span>
+                                  <span className="truncate">{bl.shortName}</span>
+                                  <span className="opacity-80 shrink-0">[{bl.tag}·{bl.minsLeft}&apos;]</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <div className="pointer-events-none absolute top-0 left-0 right-0 h-[26px] sm:h-[29px] mland:h-[23px] flex items-center justify-center px-2 z-10">
+                            <span
+                              className={`inline-flex items-center px-2.5 mland:px-2 py-[2px] rounded-full border backdrop-blur-xs text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold overflow-hidden ${
+                                miracleBannerUi || blessedListUi.length > 0 ? 'max-w-[46%] sm:max-w-[48%]' : 'max-w-[92%]'
+                              } ${bannerCls}`}
+                            >
+                              {renderActionBannerContent()}
+                            </span>
+                          </div>
+                        </>
+                      );
+                    })()}
                     <canvas
                       ref={canvasRef}
                       onContextMenu={(e) => e.preventDefault()}
@@ -7904,11 +8097,28 @@ export const MatchModal: React.FC<{
                         <div className="flex flex-col bg-[var(--surface)] text-[var(--ink)]">
                           {/* Top Team, Formation & Ratings Toggle Header */}
                           <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold min-w-0">
+                            <div className="flex items-center gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold min-w-0 flex-wrap">
                               <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] mland:text-[8px] font-extrabold shrink-0">☕ พักครึ่ง</span>
                               <span className="truncate">
                                 แผน {htPitchMode === 'all' ? `${liveHome.cf ? 'กำหนดเอง' : liveHome.form} vs ${liveAway.cf ? 'กำหนดเอง' : liveAway.form}` : `${formLabel}${activeTeam.id === meTeamOrig.id ? ` · ${AR_T[liveTac]}` : ''}`}
                               </span>
+                              <button
+                                type="button"
+                                disabled={halftimeWarmupUsed}
+                                onClick={handleHalftimeWarmup}
+                                title={state.mode === 'p' ? 'วอร์มอัพพักครึ่งเติมฟิต +6% ทันที' : 'สั่งทีมวอร์มอัพพักครึ่งเติมฟิต +4% ทันที'}
+                                className={`px-2 py-0.5 rounded-md border text-[10px] mland:text-[8.5px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors ${
+                                  halftimeWarmupUsed
+                                    ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-700 dark:text-emerald-300 cursor-default'
+                                    : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-700 dark:text-emerald-200 hover:brightness-110 cursor-pointer'
+                                }`}
+                              >
+                                {halftimeWarmupUsed
+                                  ? '✅ วอร์มแล้ว'
+                                  : state.mode === 'p'
+                                    ? '💪 วอร์ม (+6%)'
+                                    : '💪 วอร์มทีม (+4%)'}
+                              </button>
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
                               <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px]">
@@ -8503,17 +8713,17 @@ export const MatchModal: React.FC<{
                         </button>
                         <button
                           type="button"
-                          title="แสดง/ซ่อนเรตติ้งสดนักเตะบนสนาม"
-                          aria-label="แสดง/ซ่อนเรตติ้ง"
+                          title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนาม"
+                          aria-label="สลับเรตติ้งหรือพลัง"
                           onClick={() => setShowRatings((v) => !v)}
                           className={`h-6 mland:h-5 px-1.5 sm:px-2 rounded-md font-bold cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
                             showRatings
                               ? 'bg-amber-400/20 text-[#8a5b00] dark:text-[#fde047] shadow-xs'
-                              : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                              : 'bg-sky-500/20 text-sky-700 dark:text-sky-300 shadow-xs'
                           }`}
                         >
-                          <span>⭐</span>
-                          <span className="hidden sm:inline mland:hidden">เรตติ้ง</span>
+                          <span>{showRatings ? '⭐' : '⚡'}</span>
+                          <span className="hidden sm:inline mland:hidden">{showRatings ? 'เรตติ้ง' : 'พลัง'}</span>
                         </button>
                         <button
                           type="button"
@@ -8550,38 +8760,28 @@ export const MatchModal: React.FC<{
                           <span>{htStatMode === 'rating' ? '⭐ เรตติ้ง' : '⚡ พลัง'}</span>
                         </button>
 
-                        {!halftimeTalkUsed ? (
-                          state.mode === 'm' ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('attack'); }}
-                                className="h-6 mland:h-5 px-2 rounded-md bg-rose-500/18 border border-rose-400/50 text-rose-700 dark:text-rose-200 font-bold cursor-pointer hover:brightness-110 inline-flex items-center gap-1 whitespace-nowrap"
-                              >
-                                <span>🔥 บุกครึ่งหลัง</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('defend'); }}
-                                className="h-6 mland:h-5 px-2 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] font-bold cursor-pointer hover:border-[var(--g)] inline-flex items-center gap-1 whitespace-nowrap"
-                              >
-                                <span>🛡️ รับรัดกุม</span>
-                              </button>
-                            </>
-                          ) : (
+                        {state.mode === 'm' && (!halftimeTalkUsed ? (
+                          <>
                             <button
                               type="button"
-                              onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('fit'); }}
-                              className="h-6 mland:h-5 px-2 rounded-md bg-emerald-500/18 border border-emerald-400/50 text-emerald-700 dark:text-emerald-200 font-bold cursor-pointer hover:brightness-110 inline-flex items-center gap-1 whitespace-nowrap"
+                              onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('attack'); }}
+                              className="h-6 mland:h-5 px-2 rounded-md bg-rose-500/18 border border-rose-400/50 text-rose-700 dark:text-rose-200 font-bold cursor-pointer hover:brightness-110 inline-flex items-center gap-1 whitespace-nowrap"
                             >
-                              <span>💪 วอร์มเติมฟิต (+6%)</span>
+                              <span>🔥 บุกครึ่งหลัง</span>
                             </button>
-                          )
+                            <button
+                              type="button"
+                              onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('defend'); }}
+                              className="h-6 mland:h-5 px-2 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] font-bold cursor-pointer hover:border-[var(--g)] inline-flex items-center gap-1 whitespace-nowrap"
+                            >
+                              <span>🛡️ รับรัดกุม</span>
+                            </button>
+                          </>
                         ) : (
                           <span className="h-6 mland:h-5 px-2 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-700 dark:text-emerald-300 font-bold inline-flex items-center whitespace-nowrap">
                             ✅ สั่งการแล้ว
                           </span>
-                        )}
+                        ))}
 
                         {state.mode === 'm' && (
                           <button
@@ -8595,14 +8795,6 @@ export const MatchModal: React.FC<{
                             </span>
                           </button>
                         )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleStartSecondHalf()}
-                          className="h-6 mland:h-5 px-2.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold cursor-pointer hover:brightness-105 shadow-2xs inline-flex items-center gap-1 whitespace-nowrap"
-                        >
-                          <span>▶ เริ่มครึ่งหลัง</span>
-                        </button>
                       </div>
                     )}
                   </div>

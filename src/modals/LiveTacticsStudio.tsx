@@ -13,7 +13,7 @@ import type {
 import { clamp } from '../utils/math';
 import { AR_T, LINE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { getFormationSlots, getShirtNo, pen } from '../engine/playerCore';
+import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 
@@ -200,7 +200,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       const yellowCnt = isRed ? 0 : (matchYellows[name] || (cards.some((c) => c.type === 'Y') ? 1 : 0));
       const isInjured = injuredNames.includes(name);
       const subInEv = subLog.find((s) => s.t === activeTeam.id && s.inPlayer === name);
-      const offPosPen = pl ? pen(pl.ro, slot.sp) : 0;
+      const offPosPen = pl ? playerPen(pl, slot.sp) : 0;
       const xPct = clamp(10 + (slot.x / 100) * 80, 10, 90);
       const yPct = clamp(12 + ((slot.y - 12) / 80) * 74, 12, 86);
       const nodeKit = slot.pos === 'GK' ? activeGkKit : activeKit;
@@ -529,7 +529,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       const inFit = Math.round(dragUi.player.fit ?? 100);
       const fitDiff = inFit - outNode.fitVal;
       const slotSp = dropTarget.role || outNode.slot.sp;
-      const pn = pen(dragUi.player.ro, slotSp);
+      const pn = playerPen(dragUi.player, slotSp);
       const fitLabel = pn === 0 ? '✅ ตรงตำแหน่ง' : pn === 1 ? '🟡 เล่นแทนได้' : '⚠️ ต่างตำแหน่ง';
       return {
         tone: pn === 0 ? 'emerald' : pn === 1 ? 'amber' : 'rose',
@@ -540,7 +540,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       const benchObj = benchList.find((b) => b.n === dropTarget.name);
       const outNode = pitchNodes.find((n) => n.name === dragUi.player.n);
       if (!benchObj || !outNode) return null;
-      const pn = pen(benchObj.ro, outNode.slot.sp);
+      const pn = playerPen(benchObj, outNode.slot.sp);
       const fitLabel = pn === 0 ? '✅ ตรงตำแหน่ง' : pn === 1 ? '🟡 เล่นแทนได้' : '⚠️ ต่างตำแหน่ง';
       return {
         tone: pn === 0 ? 'emerald' : pn === 1 ? 'amber' : 'rose',
@@ -622,7 +622,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         const rt = Number((liveFormMap[name] ?? 6.5).toFixed(1));
         const isInj = injuredNames.includes(name);
         const yellowCnt = matchYellows[name] || (cards.some((c) => c.type === 'Y') ? 1 : 0);
-        const offPen = pl ? pen(pl.ro, slot.sp) : 0;
+        const offPen = pl ? playerPen(pl, slot.sp) : 0;
         const urgencyScore =
           (isInj ? -1000 : 0) +
           (slot.pos === 'GK' && !isInj && fitVal >= 45 ? 120 : 0) +
@@ -857,14 +857,14 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                       SFX.tap();
                       onToggleAutoSub();
                     }}
-                    title="เปลี่ยนตัวอัตโนมัติตามตำแหน่ง: ส่งดาวรุ่งมีพรสวรรค์เก็บประสบการณ์หรือตัวที่ฟิตพร้อมลงแทน"
+                    title="ออโต้ปรับตำแหน่งระหว่างเกม & เปลี่ยนตัวอัตโนมัติ (สลับตำแหน่งให้ตรงบทบาทและส่งตัวฟิต/ดาวรุ่งลง)"
                     className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-extrabold border cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
                       autoSubEnabled
                         ? 'bg-emerald-500/18 border-emerald-500 text-emerald-700 dark:text-emerald-300'
                         : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
                     }`}
                   >
-                    {autoSubEnabled ? '🤖 ออโต้เปลี่ยนตัว: เปิด' : '🤖 ออโต้เปลี่ยนตัว: ปิด'}
+                    {autoSubEnabled ? '🤖 ออโต้: เปิด' : '🤖 ออโต้: ปิด'}
                   </button>
                 )}
                 {subsUsed.length < 5 && smartAutoSub ? (
@@ -926,7 +926,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   const isDraggingThis = dragUi?.source === 'bench' && dragUi.player.n === pl.n;
                   const isBenchDropTarget = dropTarget?.kind === 'bench' && dropTarget.name === pl.n;
                   const isAutoRecommended = subsUsed.length < 5 && smartAutoSub?.inPlayer.n === pl.n;
-                  const compatPen = selectedPitchOutSlot ? pen(pl.ro, selectedPitchOutSlot) : selectedPitchOutObj ? pen(pl.ro, selectedPitchOutObj.ro) : null;
+                  const compatPen = selectedPitchOutSlot ? playerPen(pl, selectedPitchOutSlot) : selectedPitchOutObj ? playerPen(pl, selectedPitchOutObj.ro) : null;
                   const canQuickSub = subsUsed.length < 5 && Boolean(selectedPitchOut);
 
                   return (

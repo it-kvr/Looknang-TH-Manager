@@ -1,11 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Position, SubRole, StatKey, CoreAttrs, Player, Team, GameState } from '../types/game';
 import { clamp } from '../utils/math';
-import { ATT, LINE, ALL_SUB_ROLES, SPN, FOOTBALL_TRAITS } from '../data/thaiFootballData';
+import {
+  ATT,
+  LINE,
+  ALL_SUB_ROLES,
+  SPN,
+  SIGL,
+  FOOTBALL_TRAITS,
+  PLAYER_PERSONALITIES,
+  CAREER_PERKS,
+  SKIN_P,
+  HAIR_P,
+  HS_N,
+  FH_N,
+  FS_N,
+  EY_N,
+  ACC_N
+} from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { OVF, dtInfo, rollPlayerTraits } from '../engine/playerCore';
+import { OVF, dtInfo, rollPlayerTraits, visOf, rndVis } from '../engine/playerCore';
 import { ovColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/blessings';
+import { PlayerFace } from './SvgVisuals';
+
+const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
+const GK_SIG_KEYS = ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp'];
 
 export const PlayerBlessingEditor: React.FC<{
   player: Player;
@@ -16,14 +36,25 @@ export const PlayerBlessingEditor: React.FC<{
   onSaved?: () => void;
 }> = ({ player, team, state, onUpdateState, onToast, onSaved }) => {
   const isMePlayer = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
-  const initInfo = dtInfo(player, isMePlayer ? state.p : null);
+  const careerRef = isMePlayer ? state.p : null;
+  const initInfo = dtInfo(player, careerRef);
 
   const [ro, setRo] = useState<SubRole>(player.ro || 'CM');
   const [sig, setSig] = useState<string>(initInfo.D0.sig || 'fin');
   const [ov, setOv] = useState<number>(player.ov || 60);
   const [pot, setPot] = useState<number>(Math.max(player.pot || player.ov || 65, player.ov || 60));
-  const [talent, setTalent] = useState<number>(() => getPlayerTalent(player, isMePlayer ? state.p : null));
+  const [talent, setTalent] = useState<number>(() => getPlayerTalent(player, careerRef));
   const [traits, setTraits] = useState<string[]>(() => initInfo.traits.map((t) => t.id));
+  const [customPers, setCustomPers] = useState<number>(initInfo.D0.tr);
+  const [altRoles, setAltRoles] = useState<SubRole[]>(() =>
+    isMePlayer && state.p?.altRoles ? [...state.p.altRoles] : player.altRoles ? [...player.altRoles] : []
+  );
+  const [vis, setVis] = useState<number[]>(() => visOf(player, careerRef));
+  const [perks, setPerks] = useState<string[]>(() => (isMePlayer && state.p?.perks ? [...state.p.perks] : []));
+  const [traitSearch, setTraitSearch] = useState('');
+  const [traitFilterPos, setTraitFilterPos] = useState(true);
+  const [showAppearance, setShowAppearance] = useState(false);
+
   const [age, setAge] = useState<number>(player.age || 24);
   const [fit, setFit] = useState<number>(Math.round(player.fit ?? 100));
   const [inj, setInj] = useState<number>(player.inj || 0);
@@ -58,15 +89,23 @@ export const PlayerBlessingEditor: React.FC<{
 
   useEffect(() => {
     const nextMe = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
-    const nextInfo = dtInfo(player, nextMe ? state.p : null);
+    const nextCareer = nextMe ? state.p : null;
+    const nextInfo = dtInfo(player, nextCareer);
     const nextRo = player.ro || 'CM';
     const nextPos = LINE[nextRo] || player.pos;
     setRo(nextRo);
-    setSig(nextInfo.D0.sig || 'fin');
+    setSig(nextInfo.D0.sig || (nextPos === 'GK' ? 'sv' : 'fin'));
     setOv(player.ov || 60);
     setPot(Math.max(player.pot || player.ov || 65, player.ov || 60));
-    setTalent(getPlayerTalent(player, nextMe ? state.p : null));
+    setTalent(getPlayerTalent(player, nextCareer));
     setTraits(nextInfo.traits.map((t) => t.id));
+    setCustomPers(nextInfo.D0.tr);
+    setAltRoles(
+      nextMe && state.p?.altRoles ? [...state.p.altRoles] : player.altRoles ? [...player.altRoles] : []
+    );
+    setVis(visOf(player, nextCareer));
+    setPerks(nextMe && state.p?.perks ? [...state.p.perks] : []);
+    setTraitSearch('');
     setAge(player.age || 24);
     setFit(Math.round(player.fit ?? 100));
     setInj(player.inj || 0);
@@ -80,6 +119,11 @@ export const PlayerBlessingEditor: React.FC<{
   }, [player.n, team?.id]);
 
   const curPos = LINE[ro] || player.pos;
+  const persDef = PLAYER_PERSONALITIES[customPers] || PLAYER_PERSONALITIES[3];
+
+  const sigOptions = Object.keys(SIGL).filter((k) =>
+    curPos === 'GK' ? GK_SIG_KEYS.includes(k) : !['sv', 'rfx', 'cl', 'dist'].includes(k)
+  );
 
   const shiftAllStatsBy = (delta: number) => {
     SFX.tap();
@@ -182,6 +226,15 @@ export const PlayerBlessingEditor: React.FC<{
   const handleRoleChange = (nextRo: SubRole) => {
     setRo(nextRo);
     const nextPos = LINE[nextRo] || curPos;
+    const nextSigPool = Object.keys(SIGL).filter((k) =>
+      nextPos === 'GK' ? GK_SIG_KEYS.includes(k) : !['sv', 'rfx', 'cl', 'dist'].includes(k)
+    );
+    if (!nextSigPool.includes(sig)) {
+      setSig(nextPos === 'GK' ? 'sv' : 'fin');
+    }
+    setAltRoles((prev) =>
+      prev.filter((r) => r !== nextRo && (nextPos === 'GK' ? LINE[r] === 'GK' : LINE[r] !== 'GK'))
+    );
     const computedOv = clamp(OVF(nextPos, coreA), 1, 99);
     setOv(computedOv);
     if (computedOv > pot) setPot(computedOv);
@@ -296,6 +349,10 @@ export const PlayerBlessingEditor: React.FC<{
         pot,
         talent,
         traits,
+        altRoles,
+        customPers,
+        perks: isMePlayer ? perks : undefined,
+        vis,
         age,
         fit,
         inj,
@@ -318,6 +375,33 @@ export const PlayerBlessingEditor: React.FC<{
     });
     onToast(`🔄 คืนค่าพลังพื้นฐานให้ ${player.n} แล้ว`);
     onSaved?.();
+  };
+
+  const updateVisIdx = (idx: number, val: number) => {
+    SFX.tap();
+    setVis((prev) => {
+      const next = prev.slice();
+      next[idx] = val;
+      return next;
+    });
+  };
+
+  const filteredTraits = FOOTBALL_TRAITS.filter((tr) => {
+    if (traitFilterPos && tr.pos && !tr.pos.includes(curPos) && !traits.includes(tr.id)) return false;
+    const q = traitSearch.trim().toLowerCase();
+    if (!q) return true;
+    return tr.name.toLowerCase().includes(q) || tr.desc.toLowerCase().includes(q);
+  });
+
+  const compatibleAltRoles = ALL_SUB_ROLES.filter(
+    (r) => r !== ro && (curPos === 'GK' ? false : LINE[r] !== 'GK')
+  );
+
+  const previewPlayer: Player = {
+    ...player,
+    ro,
+    pos: curPos,
+    vis
   };
 
   return (
@@ -353,13 +437,146 @@ export const PlayerBlessingEditor: React.FC<{
             >
               💚 ฟิต 100% / หายเจ็บ
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setShowAppearance((v) => !v);
+              }}
+              className={`px-2 py-1 rounded-lg border text-[10.5px] font-bold cursor-pointer ${
+                showAppearance
+                  ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                  : 'bg-[var(--surface)] border-[var(--line)] hover:border-[var(--g)]'
+              }`}
+            >
+              💈 หน้าตา/ทรงผม
+            </button>
           </div>
         </div>
 
+        {/* Appearance Customizer (Collapsible) */}
+        {showAppearance && (
+          <div className="p-2.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <PlayerFace player={previewPlayer} team={team} state={state} size={46} />
+                <div>
+                  <div className="text-[11px] font-bold">ปรับโฉมหน้าตา & ทรงผม</div>
+                  <div className="text-[10px] text-[var(--mut)]">
+                    {HS_N[vis[2] % HS_N.length]} · {EY_N[vis[4] % EY_N.length]} · {FS_N[(vis[6] ?? 0) % FS_N.length]}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  const next = rndVis(curPos, age < 20);
+                  next[5] = player.no || vis[5] || 10;
+                  setVis(next);
+                }}
+                className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-[var(--lamp-soft)] to-[var(--g-soft)] border border-[var(--lamp)]/50 text-[10.5px] font-extrabold cursor-pointer"
+              >
+                ✨ สุ่มหน้าหล่อเท่
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10.5px]">
+              <div className="space-y-1">
+                <div className="text-[var(--mut)] font-semibold">สีผิว</div>
+                <div className="flex flex-wrap gap-1">
+                  {SKIN_P.map((c, idx) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => updateVisIdx(0, idx)}
+                      className={`w-5 h-5 rounded-full border-2 cursor-pointer ${vis[0] === idx ? 'border-[var(--g)] scale-110' : 'border-transparent'}`}
+                      style={{ background: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="text-[var(--mut)] font-semibold">สีผม</div>
+                <div className="flex flex-wrap gap-1">
+                  {HAIR_P.map((c, idx) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => updateVisIdx(1, idx)}
+                      className={`w-5 h-5 rounded-full border-2 cursor-pointer ${vis[1] === idx ? 'border-[var(--g)] scale-110' : 'border-white/30'}`}
+                      style={{ background: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+              <label className="block space-y-0.5">
+                <span className="text-[var(--mut)] font-semibold">ทรงผม</span>
+                <select
+                  value={vis[2] % HS_N.length}
+                  onChange={(e) => updateVisIdx(2, Number(e.target.value))}
+                  className="w-full px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-bold"
+                >
+                  {HS_N.map((lbl, i) => (
+                    <option key={lbl} value={i}>{lbl}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-0.5">
+                <span className="text-[var(--mut)] font-semibold">แววตา / อารมณ์</span>
+                <select
+                  value={vis[4] % EY_N.length}
+                  onChange={(e) => updateVisIdx(4, Number(e.target.value))}
+                  className="w-full px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-bold"
+                >
+                  {EY_N.map((lbl, i) => (
+                    <option key={lbl} value={i}>{lbl}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-0.5">
+                <span className="text-[var(--mut)] font-semibold">โครงหน้า</span>
+                <select
+                  value={(vis[6] ?? 0) % FS_N.length}
+                  onChange={(e) => updateVisIdx(6, Number(e.target.value))}
+                  className="w-full px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-bold"
+                >
+                  {FS_N.map((lbl, i) => (
+                    <option key={lbl} value={i}>{lbl}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-0.5">
+                <span className="text-[var(--mut)] font-semibold">หนวด/เครา & เครื่องประดับ</span>
+                <div className="flex gap-1">
+                  <select
+                    value={(vis[3] ?? 0) % FH_N.length}
+                    onChange={(e) => updateVisIdx(3, Number(e.target.value))}
+                    className="w-1/2 px-1.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] font-bold"
+                  >
+                    {FH_N.map((lbl, i) => (
+                      <option key={lbl} value={i}>{lbl}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={(vis[7] ?? 0) % ACC_N.length}
+                    onChange={(e) => updateVisIdx(7, Number(e.target.value))}
+                    className="w-1/2 px-1.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] font-bold"
+                  >
+                    {ACC_N.map((lbl, i) => (
+                      <option key={lbl} value={i}>{lbl}</option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+            </div>
+          </div>
+        )}
+
         {/* Role, Signature & Basic Vitals */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mland:gap-1.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mland:gap-1.5">
           <label className="block space-y-0.5">
-            <span className="text-[10px] font-semibold text-[var(--mut)]">ตำแหน่ง / บทบาท</span>
+            <span className="text-[10px] font-semibold text-[var(--mut)]">ตำแหน่งหลัก / บทบาท</span>
             <select
               value={ro}
               onChange={(e) => handleRoleChange(e.target.value as SubRole)}
@@ -373,6 +590,55 @@ export const PlayerBlessingEditor: React.FC<{
             </select>
           </label>
 
+          <label className="block space-y-0.5">
+            <span className="text-[10px] font-semibold text-[var(--mut)]">🌟 ท่าไม้ตาย (+8 ค่าพลัง)</span>
+            <select
+              value={sig}
+              onChange={(e) => { SFX.tap(); setSig(e.target.value); }}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold"
+            >
+              {sigOptions.map((sKey) => (
+                <option key={sKey} value={sKey}>
+                  {SIGL[sKey]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="col-span-2 sm:col-span-1 space-y-0.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-semibold text-[var(--mut)]">🧠 นิสัยประจำตัว</span>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setCustomPers(Math.floor(Math.random() * PLAYER_PERSONALITIES.length));
+                }}
+                className="text-[9.5px] font-bold text-[var(--g)] hover:underline cursor-pointer"
+              >
+                🎲 สุ่ม
+              </button>
+            </div>
+            <select
+              value={customPers}
+              onChange={(e) => { SFX.tap(); setCustomPers(Number(e.target.value)); }}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold"
+            >
+              {PLAYER_PERSONALITIES.map((pDef) => (
+                <option key={pDef.id} value={pDef.id}>
+                  {pDef.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="px-2.5 py-1.5 rounded-lg bg-[var(--surface)]/90 border border-[var(--line)] flex items-center gap-2 text-[10.5px]">
+          <span className="font-bold shrink-0">{persDef.label}:</span>
+          <span className="text-[var(--mut)] leading-snug">{persDef.desc}</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1.5">
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-[var(--mut)] font-semibold">🌟 พรสวรรค์ (TL)</span>
@@ -410,25 +676,90 @@ export const PlayerBlessingEditor: React.FC<{
           </div>
         </div>
 
+        {/* Secondary Playable Positions */}
+        {compatibleAltRoles.length > 0 && (
+          <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-bold text-[var(--ink)]">
+                🧩 ตำแหน่งถนัดเพิ่ม ({altRoles.length}) <span className="font-normal text-[var(--mut)]">· ลดโทษเวลาหลุดตำแหน่ง</span>
+              </span>
+              {altRoles.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setAltRoles([]); }}
+                  className="text-[10px] font-bold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
+                >
+                  ล้าง
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {compatibleAltRoles.map((rKey) => {
+                const active = altRoles.includes(rKey);
+                return (
+                  <button
+                    key={rKey}
+                    type="button"
+                    title={SPN[rKey] || rKey}
+                    onClick={() => {
+                      SFX.tap();
+                      setAltRoles((prev) =>
+                        prev.includes(rKey) ? prev.filter((x) => x !== rKey) : [...prev, rKey]
+                      );
+                    }}
+                    className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
+                      active
+                        ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                        : 'bg-[var(--surface-2)]/80 border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    {rKey}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Multi Football Traits Selector */}
         <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-1.5">
             <span className="text-[10.5px] font-bold text-[var(--ink)]">
-              🎭 นิสัยลูกหนัง / จุดเด่น ({traits.length}/5) <span className="font-normal text-[var(--mut)]">· มีผลจริงในการแข่งขัน</span>
+              🎭 สกิลติดตัว / นิสัยลูกหนัง ({traits.length}/6) <span className="font-normal text-[var(--mut)]">· มีผลจริงในการแข่งขัน</span>
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                setTraits(rollPlayerTraits(curPos, ro, ov, talent));
-              }}
-              className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10px] font-bold cursor-pointer"
-            >
-              🎲 สุ่มตามตำแหน่ง
-            </button>
+            <div className="flex flex-wrap items-center gap-1">
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setTraitFilterPos((v) => !v); }}
+                className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer ${
+                  traitFilterPos
+                    ? 'bg-[var(--g-soft)] border-[var(--g)]/40 text-[var(--g)]'
+                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'
+                }`}
+              >
+                {traitFilterPos ? `เฉพาะ ${curPos}` : 'ทั้งหมด'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setTraits(rollPlayerTraits(curPos, ro, ov, talent));
+                }}
+                className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10px] font-bold cursor-pointer"
+              >
+                🎲 สุ่มตามตำแหน่ง
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
-            {FOOTBALL_TRAITS.filter((tr) => !tr.pos || tr.pos.includes(curPos) || traits.includes(tr.id)).map((tr) => {
+          <input
+            type="text"
+            value={traitSearch}
+            onChange={(e) => setTraitSearch(e.target.value)}
+            placeholder="🔍 ค้นหาสกิลติดตัว..."
+            className="w-full px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px]"
+          />
+          <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
+            {filteredTraits.map((tr) => {
               const active = traits.includes(tr.id);
               return (
                 <button
@@ -440,14 +771,14 @@ export const PlayerBlessingEditor: React.FC<{
                     setTraits((prev) =>
                       prev.includes(tr.id)
                         ? prev.filter((id) => id !== tr.id)
-                        : prev.length >= 5
+                        : prev.length >= 6
                           ? [...prev.slice(1), tr.id]
                           : [...prev, tr.id]
                     );
                   }}
                   className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
                     active
-                      ? ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(tr.id)
+                      ? RISKY_TRAIT_IDS.has(tr.id)
                         ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
                         : 'bg-[var(--g)] text-white border-[var(--g)]'
                       : 'bg-[var(--surface-2)]/80 border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
@@ -459,6 +790,60 @@ export const PlayerBlessingEditor: React.FC<{
             })}
           </div>
         </div>
+
+        {/* Career Perks (Player Career Mode only) */}
+        {isMePlayer && (
+          <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-bold text-[var(--ink)]">
+                👑 สกิลอาชีพ (Career Perks {perks.length}/{CAREER_PERKS.length})
+              </span>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setPerks(CAREER_PERKS.map((pk) => pk.id)); }}
+                  className="px-2 py-0.5 rounded-lg bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)] text-[10px] font-bold cursor-pointer"
+                >
+                  🔓 ปลดล็อกทั้งหมด
+                </button>
+                {perks.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); setPerks([]); }}
+                    className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] font-bold text-[var(--mut)] cursor-pointer"
+                  >
+                    ล้าง
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+              {CAREER_PERKS.map((pk) => {
+                const active = perks.includes(pk.id);
+                return (
+                  <button
+                    key={pk.id}
+                    type="button"
+                    title={pk.desc}
+                    onClick={() => {
+                      SFX.tap();
+                      setPerks((prev) =>
+                        prev.includes(pk.id) ? prev.filter((id) => id !== pk.id) : [...prev, pk.id]
+                      );
+                    }}
+                    className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
+                      active
+                        ? 'bg-[var(--lamp)] text-[#261900] border-[#ca8a04]/50'
+                        : 'bg-[var(--surface-2)]/80 border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    {pk.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mland:gap-1.5">
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">

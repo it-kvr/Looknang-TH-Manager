@@ -55,8 +55,8 @@ export const PlayerCareerView: React.FC<{
               <div className={`text-xl sm:text-[22px] mland:text-sm font-extrabold font-display tabular leading-none ${statTierMeta(ov).darkTextClass}`}>
                 {ov}
               </div>
-              <div className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide mt-0.5">
-                {p.sp} · #{myShirtNo}
+              <div className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide mt-0.5 truncate max-w-[115px]">
+                {p.sp}{p.altRoles?.length ? `/${p.altRoles.slice(0, 2).join('/')}` : ''} · #{myShirtNo}
               </div>
             </div>
             <div className="flex items-center gap-1">
