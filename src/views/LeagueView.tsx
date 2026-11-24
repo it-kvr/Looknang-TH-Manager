@@ -8,7 +8,6 @@ import { xi, vlu, ensureCon } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
-import { StatIconBadge } from '../components/StatIconBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -17,8 +16,9 @@ export const LeagueView: React.FC<{
   onInspectPlayer: (player: Player, team: Team) => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onNavigate?: (tab: MainTab, sub?: string) => void;
+  onOpenSeasonStats?: (season?: number) => void;
   onToast?: (msg: string) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onNavigate, onToast }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onNavigate, onOpenSeasonStats, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -844,7 +844,7 @@ export const LeagueView: React.FC<{
     }[] = [
       {
         id: 'golden-boot',
-        icon: '🥾',
+        icon: '👟',
         title: 'รองเท้าทองคำ',
         enTitle: 'Golden Boot',
         criteria: 'ผู้ทำประตูสูงสุดประจำลีก (วัดอัตราส่วนต่อนัดเมื่อเท่ากัน)',
@@ -866,7 +866,7 @@ export const LeagueView: React.FC<{
       },
       {
         id: 'poy',
-        icon: '🌟',
+        icon: '👑',
         title: 'นักเตะยอดเยี่ยมประจำฤดูกาล',
         enTitle: 'Player of the Season',
         criteria: 'คะแนนรวมจากประตู แอสซิสต์ คลีนชีต วินัย และอันดับทีม',
@@ -913,12 +913,24 @@ export const LeagueView: React.FC<{
         {/* Unified Context Strip */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm mland:text-[11px]">
-            <span className="font-bold text-[var(--ink)]">⭐ สถิติและรางวัลส่วนตัวนักเตะ</span>
+            <span className="font-bold text-[var(--ink)]">🏅 สถิติและรางวัลส่วนตัวนักเตะ</span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
             <span className="text-[var(--mut)] font-medium">{TN[vt]}</span>
           </div>
-          <div className="text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] tabular-nums">
-            ซีซั่น {state.season} · แข่งแล้ว {maxPlayedInTier}/{totalRounds} นัด · {isSeasonDone ? 'สรุปผลประจำฤดูกาล' : 'กำลังลุ้นรางวัล'}
+          <div className="flex items-center gap-2 text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] tabular-nums">
+            <span>ซีซั่น {state.season} · แข่งแล้ว {maxPlayedInTier}/{totalRounds} นัด · {isSeasonDone ? 'สรุปผลประจำฤดูกาล' : 'กำลังลุ้นรางวัล'}</span>
+            {onOpenSeasonStats && (state.seasonArchives?.length || 0) > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  onOpenSeasonStats();
+                }}
+                className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 whitespace-nowrap"
+              >
+                📜 สถิติซีซั่นที่จบแล้ว ({state.seasonArchives!.length})
+              </button>
+            )}
           </div>
         </div>
 
@@ -1051,12 +1063,12 @@ export const LeagueView: React.FC<{
 
           {/* 6 Stat Leaderboards */}
           <div className="grid grid-cols-3 gap-2 mland:gap-1.5 content-start">
-            {board(<StatIconBadge kind="goal" size="sm" />, 'ดาวซัลโว', (q) => q.sg || 0, (q) => ((q.sg || 0) > 1 ? <StatIconBadge kind="goal" count={q.sg} size="sm" /> : `${q.sg}`))}
-            {board(<StatIconBadge kind="assist" size="sm" />, 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => ((q.sa || 0) > 1 ? <StatIconBadge kind="assist" count={q.sa} size="sm" /> : `${q.sa}`))}
-            {board('✨', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
-            {board(<StatIconBadge kind="save" size="sm" />, 'คลีนชีต (ผู้รักษาประตู)', (q) => q.cs || 0, (q) => ((q.cs || 0) > 1 ? <StatIconBadge kind="save" count={q.cs} size="sm" /> : `${q.cs}`), (q) => q.pos === 'GK')}
+            {board('⚽', 'ดาวซัลโว', (q) => q.sg || 0, (q) => `${q.sg || 0}`)}
+            {board('🎯', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
+            {board('🔥', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
+            {board('🧤', 'คลีนชีต (ผู้รักษาประตู)', (q) => q.cs || 0, (q) => `${q.cs || 0}`, (q) => q.pos === 'GK')}
             {board('💎', 'ค่าตัวสูงสุด', vlu, (q) => fmtMoneyNum(vlu(q)))}
-            {board('⭐', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`)}
+            {board('⚡', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`)}
           </div>
         </div>
       </div>
@@ -1070,13 +1082,13 @@ export const LeagueView: React.FC<{
         <div className="order-2 w-auto max-w-full inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-x-auto">
           {(
             [
-              ['🏆', 'ตาราง', 'ตาราง'],
-              ['📊', 'พลัง', 'พลังทีม'],
-              ['⭐', 'สถิติ', 'สถิติ & รางวัล'],
-              ['📅', 'ปฏิทิน', 'ปฏิทิน'],
-              ['🏅', 'ถ้วย', 'บอลถ้วย']
+              [0, '🏆', 'บอลลีก'],
+              [4, '🏅', 'บอลถ้วย'],
+              [2, '⭐', 'สถิติ & รางวัล'],
+              [3, '📅', 'ปฏิทิน'],
+              [1, '📊', 'พลังทีม']
             ] as const
-          ).map(([ic, _shortLbl, fullLbl], idx) => (
+          ).map(([tabIdx, ic, fullLbl]) => (
             <button
               key={fullLbl}
               type="button"
@@ -1084,11 +1096,11 @@ export const LeagueView: React.FC<{
                 SFX.tap();
                 onUpdateState((d) => {
                   if (d.v === 'c') d.v = 't';
-                  d.tv = idx;
+                  d.tv = tabIdx;
                 });
               }}
               className={`flex flex-row items-center justify-center gap-1 px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${
-                sub === idx
+                sub === tabIdx
                   ? 'bg-[var(--g)] text-white shadow-xs'
                   : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
               }`}

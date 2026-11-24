@@ -28,6 +28,20 @@ if (typeof document !== 'undefined') {
       e.preventDefault();
     }
   });
+  const isEditableOrSelectable = (target: EventTarget | null) => {
+    if (!(target instanceof Element)) return false;
+    return Boolean(target.closest('input, textarea, [contenteditable="true"], .select-text, .select-all'));
+  };
+  document.addEventListener('selectstart', (e: Event) => {
+    if (!isEditableOrSelectable(e.target)) {
+      e.preventDefault();
+    }
+  });
+  document.addEventListener('contextmenu', (e: Event) => {
+    if (!isEditableOrSelectable(e.target)) {
+      e.preventDefault();
+    }
+  });
 }
 
 class RootErrorBoundary extends React.Component<

@@ -26,7 +26,7 @@ export const SettingsModal: React.FC<{
   });
   const vipTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
   const { isInstalled } = usePWAInstall();
-  const { needRefresh, checkingUpdate, checkForUpdate, applyUpdate } = usePWAUpdate();
+  const { checkingUpdate, forceRefresh } = usePWAUpdate();
 
   const handleSecretVersionTap = () => {
     if (vipUnlocked) {
@@ -143,27 +143,24 @@ export const SettingsModal: React.FC<{
                 </span>
               </button>
 
-              <div className="space-y-2 mland:space-y-1.5 pt-0.5">
-                <div className="p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 space-y-2 mland:space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs mland:text-[10px] font-bold">🎚️ ระดับเสียงเกม</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        unlockAudio();
-                        SFX.whistle();
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer hover:brightness-95"
-                    >
-                      🔊 ทดสอบเสียง
-                    </button>
-                  </div>
+              <div className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 space-y-2 mland:space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs mland:text-[10px] font-bold">🎚️ ระดับเสียงเกม</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      unlockAudio();
+                      SFX.whistle();
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer hover:brightness-95 whitespace-nowrap"
+                  >
+                    🔊 ทดสอบ
+                  </button>
+                </div>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] mland:text-[9px]">
-                      <span className="text-[var(--mut)] font-semibold">เสียงเอฟเฟกต์ (SFX)</span>
-                      <span className="font-bold tabular">{st.mute ? 'ปิด' : `${st.sfxVolume ?? 85}%`}</span>
-                    </div>
+                <div className="space-y-1.5 mland:space-y-1">
+                  <label className="grid grid-cols-[58px_1fr_34px] mland:grid-cols-[50px_1fr_30px] items-center gap-2 text-[11px] mland:text-[9px]">
+                    <span className="text-[var(--mut)] font-semibold truncate">เอฟเฟกต์</span>
                     <input
                       type="range"
                       min={0}
@@ -174,13 +171,11 @@ export const SettingsModal: React.FC<{
                       onChange={(e) => update({ sfxVolume: Number(e.target.value) })}
                       className="w-full accent-[var(--g)] h-1.5 cursor-pointer disabled:opacity-40"
                     />
-                  </div>
+                    <span className="font-bold tabular text-right">{st.mute ? 'ปิด' : `${st.sfxVolume ?? 85}%`}</span>
+                  </label>
 
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] mland:text-[9px]">
-                      <span className="text-[var(--mut)] font-semibold">เสียงเชียร์ในสนาม</span>
-                      <span className="font-bold tabular">{st.mute || st.nocrowd ? 'ปิด' : `${st.crowdVolume ?? 70}%`}</span>
-                    </div>
+                  <label className="grid grid-cols-[58px_1fr_34px] mland:grid-cols-[50px_1fr_30px] items-center gap-2 text-[11px] mland:text-[9px]">
+                    <span className="text-[var(--mut)] font-semibold truncate">เสียงเชียร์</span>
                     <input
                       type="range"
                       min={0}
@@ -191,28 +186,32 @@ export const SettingsModal: React.FC<{
                       onChange={(e) => update({ crowdVolume: Number(e.target.value) })}
                       className="w-full accent-[var(--g)] h-1.5 cursor-pointer disabled:opacity-40"
                     />
-                  </div>
+                    <span className="font-bold tabular text-right">{st.mute || st.nocrowd ? 'ปิด' : `${st.crowdVolume ?? 70}%`}</span>
+                  </label>
                 </div>
 
-                {(
-                  [
-                    ['mute', '🔇 ปิดเสียงทั้งหมด', !!st.mute],
-                    ['nocrowd', '🏟️ ปิดเสียงเชียร์ในสนามแข่ง', !!st.nocrowd],
-                    ['novib', '📳 ปิดการสั่นแจ้งเตือน', !!st.novib]
-                  ] as [keyof AppSettings, string, boolean][]
-                ).map(([key, label, active]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => { unlockAudio(); SFX.tap(); update({ [key]: !active }); }}
-                    className="w-full flex items-center justify-between p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 text-xs mland:text-[10px] font-semibold cursor-pointer"
-                  >
-                    <span>{label}</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold ${active ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                      {active ? 'เปิด' : 'ปิด'}
-                    </span>
-                  </button>
-                ))}
+                <div className="grid grid-cols-3 gap-1.5 mland:gap-1 pt-0.5">
+                  {(
+                    [
+                      ['mute', '🔇 ปิดเสียง', !!st.mute],
+                      ['nocrowd', '🏟️ ปิดเชียร์', !!st.nocrowd],
+                      ['novib', '📳 ปิดสั่น', !!st.novib]
+                    ] as [keyof AppSettings, string, boolean][]
+                  ).map(([key, label, active]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => { unlockAudio(); SFX.tap(); update({ [key]: !active }); }}
+                      className={`py-1.5 mland:py-1 px-1.5 rounded-lg text-[10.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors truncate ${
+                        active
+                          ? 'bg-[var(--g)] text-white shadow-xs'
+                          : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -282,28 +281,15 @@ export const SettingsModal: React.FC<{
                 <button
                   type="button"
                   disabled={checkingUpdate}
-                  onClick={async () => {
+                  onClick={() => {
                     SFX.tap();
-                    if (needRefresh) {
-                      await applyUpdate();
-                      return;
-                    }
-                    const res = await checkForUpdate();
-                    if (res === 'updated') {
-                      onToast('🆕 พบเวอร์ชันใหม่แล้ว กดอีกครั้งเพื่ออัปเดต!');
-                    } else if (res === 'offline') {
-                      onToast('⚠️ กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่อเช็กอัปเดต');
-                    } else {
-                      onToast('✅ ตัวเกมเป็นเวอร์ชันล่าสุดแล้ว');
-                    }
+                    forceRefresh();
                   }}
-                  className={`w-full flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-semibold cursor-pointer ${
-                    needRefresh ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)]/80'
-                  }`}
+                  className="w-full flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-semibold cursor-pointer bg-[var(--surface)] border-[var(--line)]/80 hover:border-[var(--g)]"
                 >
-                  <span>{needRefresh ? '🆕 มีแพตช์อัปเดตใหม่' : '🔄 ตรวจสอบอัปเดตตัวเกม'}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] mland:text-[9px] font-bold shrink-0 ${needRefresh ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                    {checkingUpdate ? 'กำลังเช็ก...' : needRefresh ? 'อัปเดตเลย' : 'เช็กอัปเดต'}
+                  <span>↻ ล้างแคชตัวเกม & โหลดแพตช์ล่าสุด</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] mland:text-[9px] font-bold shrink-0 bg-[var(--surface-2)] text-[var(--mut)]">
+                    {checkingUpdate ? 'กำลังโหลด...' : 'รีเฟรช'}
                   </span>
                 </button>
               )}

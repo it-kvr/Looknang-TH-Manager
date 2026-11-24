@@ -10,8 +10,9 @@ export type SeasonSummaryData = ReturnType<typeof finishSeasonComputation>;
 export const SeasonEndModal: React.FC<{
   state: GameState;
   summary: SeasonSummaryData;
+  onOpenSeasonStats?: () => void;
   onStartNextSeason: (transferToTeamId?: number) => void;
-}> = ({ state, summary, onStartNextSeason }) => {
+}> = ({ state, summary, onOpenSeasonStats, onStartNextSeason }) => {
   const me = state.teams[state.me];
   useEffect(() => {
     if (summary.ch || summary.nt > summary.mt) {
@@ -21,6 +22,8 @@ export const SeasonEndModal: React.FC<{
       SFX.whistle();
     }
   }, [summary]);
+
+  const arc = summary.archive;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
@@ -61,8 +64,30 @@ export const SeasonEndModal: React.FC<{
             </div>
           )}
 
+          {arc && (arc.topScorer || arc.topAssist || arc.topRating) && (
+            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)]/35 border border-[var(--g)]/35 space-y-1 text-xs mland:text-[10px] col-span-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold">⭐ ผู้นำสถิติประจำทีม ({me.name})</span>
+                <span className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
+                  ชนะ {arc.won} · เสมอ {arc.drawn} · แพ้ {arc.lost} ({arc.gf}-{arc.ga})
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5">
+                <div className="px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)]/80 border border-[var(--line)]/60 truncate">
+                  ⚽ ประตู: <b>{arc.topScorer ? `${arc.topScorer.name} (${arc.topScorer.sg})` : '-'}</b>
+                </div>
+                <div className="px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)]/80 border border-[var(--line)]/60 truncate">
+                  🎯 จ่าย: <b>{arc.topAssist ? `${arc.topAssist.name} (${arc.topAssist.sa})` : '-'}</b>
+                </div>
+                <div className="px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)]/80 border border-[var(--line)]/60 truncate">
+                  ⭐ เรตติ้งเฉลี่ย: <b>{arc.topRating ? `${arc.topRating.name} (${arc.topRating.avgRating.toFixed(2)})` : '-'}</b>
+                </div>
+              </div>
+            </div>
+          )}
+
           {state.mode === 'm' && (
-            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs mland:text-[10px] space-y-1">
+            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs mland:text-[10px] space-y-1 col-span-2">
               <div className="font-bold">📋 ประเมินจากบอร์ดบริหาร</div>
               <div>เป้าหมาย: จบอันดับ 1-{state.obj || '-'} · ความเชื่อมั่นบอร์ด: <b>{state.bd ?? 50}%</b></div>
               {state.sack === 1 && (
@@ -94,11 +119,23 @@ export const SeasonEndModal: React.FC<{
           )}
         </div>
 
-        <div className="shrink-0 p-3.5 sm:p-4 mland:p-1.5 bg-[var(--surface-2)] border-t border-[var(--line)]">
+        <div className="shrink-0 p-3.5 sm:p-4 mland:p-1.5 bg-[var(--surface-2)] border-t border-[var(--line)] flex items-center gap-2">
+          {onOpenSeasonStats && (
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                onOpenSeasonStats();
+              }}
+              className="px-4 mland:px-3 py-3 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] font-bold text-xs sm:text-sm mland:text-[10.5px] cursor-pointer whitespace-nowrap shrink-0"
+            >
+              📊 สรุปสถิตินักเตะ & สโมสร
+            </button>
+          )}
           <button
             type="button"
             onClick={() => onStartNextSeason()}
-            className="w-full py-3 mland:py-1 rounded-xl bg-[var(--g)] text-white font-bold text-sm mland:text-xs hover:brightness-105 cursor-pointer shadow-sm"
+            className="flex-1 py-3 mland:py-1 rounded-xl bg-[var(--g)] text-white font-bold text-sm mland:text-xs hover:brightness-105 cursor-pointer shadow-sm"
           >
             {state.sack === 1 ? '🔄 กลับสู่หน้าหลัก' : `🚀 เริ่มฤดูกาลที่ ${state.season + 1}`}
           </button>

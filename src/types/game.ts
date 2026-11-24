@@ -93,6 +93,10 @@ export interface Player {
   sb?: Record<string, number>;
   coreSb?: Partial<CoreAttrs>;
   missions?: PlayerMissionsState;
+  srs?: number;
+  sra?: number;
+  motm?: number;
+  tyc?: number;
 }
 
 export type PersonalMissionMetric =
@@ -369,6 +373,52 @@ export interface ClubRecords {
   curStreak?: number;
 }
 
+export interface SeasonPlayerStatRecord {
+  name: string;
+  pos: Position;
+  ro: SubRole;
+  no?: number;
+  age: number;
+  ov: number;
+  isMe?: boolean;
+  sp: number;
+  sg: number;
+  sa: number;
+  cs: number;
+  yc: number;
+  rc: number;
+  motm: number;
+  avgRating: number;
+}
+
+export interface SeasonArchiveRecord {
+  season: number;
+  teamId: number;
+  teamName: string;
+  tier: number;
+  nextTier: number;
+  rank: number;
+  totalTeams: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  pts: number;
+  champion: boolean;
+  statusText: string;
+  cupStatus: string;
+  asiaStatus?: string;
+  leagueBestScorer?: string;
+  leagueBestAssist?: string;
+  topScorer?: { name: string; pos: Position; sg: number; sp: number } | null;
+  topAssist?: { name: string; pos: Position; sa: number; sp: number } | null;
+  topRating?: { name: string; pos: Position; avgRating: number; sp: number; motm: number } | null;
+  topCleanSheet?: { name: string; pos: Position; cs: number; sp: number } | null;
+  players: SeasonPlayerStatRecord[];
+}
+
 export interface GameState {
   ver: number;
   mode: GameMode;
@@ -438,6 +488,7 @@ export interface GameState {
   merchLv?: number;
   staff?: { asst: number; fit: number; scout: number; physio: number };
   sponsorDeal?: { id: string; name: string; perMatch: number; left: number } | null;
+  seasonArchives?: SeasonArchiveRecord[];
 }
 
 export interface AppSettings {

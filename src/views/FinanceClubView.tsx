@@ -13,8 +13,9 @@ export const FinanceClubView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
+  onOpenSeasonStats?: (season?: number) => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
-}> = ({ tab, state, onUpdateState, onToast, navIntent }) => {
+}> = ({ tab, state, onUpdateState, onToast, onOpenSeasonStats, navIntent }) => {
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'ledger'>('overview');
   const [clubTab, setClubTab] = useState<'info' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
@@ -1670,8 +1671,58 @@ export const FinanceClubView: React.FC<{
           </div>
 
           <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full flex flex-col min-h-0">
-            <h3 className="font-bold text-sm mland:text-xs shrink-0">📜 ประวัติศาสตร์สโมสรรายฤดูกาล</h3>
-            {state.hist && state.hist.length > 0 ? (
+            <div className="flex items-center justify-between gap-2 shrink-0">
+              <h3 className="font-bold text-sm mland:text-xs">📜 ประวัติศาสตร์สโมสรรายฤดูกาล</h3>
+              {onOpenSeasonStats && (state.seasonArchives?.length || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onOpenSeasonStats();
+                  }}
+                  className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 whitespace-nowrap"
+                >
+                  📊 สรุปสถิติซีซั่น
+                </button>
+              )}
+            </div>
+            {(state.seasonArchives?.length || 0) > 0 ? (
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
+                {state.seasonArchives!
+                  .slice()
+                  .sort((a, b) => b.season - a.season)
+                  .map((arc) => (
+                    <div
+                      key={arc.season}
+                      className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/80 border border-[var(--line)]/80 space-y-1.5 text-xs mland:text-[10px]"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold truncate">
+                          ซีซั่น {arc.season} · {TN[arc.tier]} · อันดับ {arc.rank}/{arc.totalTeams} ({arc.pts} แต้ม)
+                        </div>
+                        {onOpenSeasonStats && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              onOpenSeasonStats(arc.season);
+                            }}
+                            className="px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer shrink-0"
+                          >
+                            ดูสถิติ ›
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>{arc.statusText}</span>
+                        <span>ถ้วย: {arc.cupStatus}</span>
+                        {arc.topScorer && <span>⚽ {arc.topScorer.name} ({arc.topScorer.sg})</span>}
+                        {arc.topRating && <span>⭐ {arc.topRating.name} ({arc.topRating.avgRating.toFixed(2)})</span>}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : state.hist && state.hist.length > 0 ? (
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
                 {state.hist
                   .slice()

@@ -65,14 +65,29 @@ export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: str
   </>
 );
 
-export const ClubCrest: React.FC<{
-  name: string;
-  size?: number;
-  team?: Team | null;
-  club?: ClubIdentity | null;
-  isMyClub?: boolean;
-}> = ({ name, size = 24, team, club, isMyClub }) => {
-  const uid = React.useId().replace(/:/g, '');
+interface ResolvedCrestSpec {
+  c1: string;
+  c2: string;
+  c3: string;
+  hasCustomC3: boolean;
+  sh: number;
+  d: string;
+  pat: number;
+  ic: string;
+  borderStyle: number;
+  strokeCol: string;
+  stars: number;
+  icCol: string;
+  haloCol: string;
+  icTransform: string;
+}
+
+function resolveCrestSpec(
+  name: string,
+  team?: Team | null,
+  club?: ClubIdentity | null,
+  isMyClub?: boolean
+): ResolvedCrestSpec {
   const h = ([...(name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
   const k = isMyClub && club ? club : null;
   const kp = team?.kc;
@@ -87,59 +102,133 @@ export const ClubCrest: React.FC<{
   const borderStyle = k?.crestBorder ?? 0;
   const strokeCol = borderStyle === 1 ? '#f4c63d' : borderStyle === 3 ? '#0f172a' : '#ffffff';
   const stars = clamp(k?.stars || 0, 0, 3);
-
   const centerLum = pat !== 8 ? colLum(c1) * 0.52 + colLum(c2) * 0.48 : colLum(c1);
   const icCol = k?.iconColor ? k.iconColor : centerLum > 0.54 ? '#0f172a' : '#ffffff';
   const haloCol = colLum(icCol) > 0.52 ? 'rgba(9, 20, 15, 0.82)' : 'rgba(255, 255, 255, 0.92)';
   const icTransform = `translate(5.2 ${stars > 0 ? 6.0 : 5.2}) scale(.57)`;
+  return {
+    c1,
+    c2,
+    c3,
+    hasCustomC3: Boolean(k?.c3),
+    sh,
+    d,
+    pat,
+    ic,
+    borderStyle,
+    strokeCol,
+    stars,
+    icCol,
+    haloCol,
+    icTransform
+  };
+}
+
+function renderCrestPatternStr(pat: number, uid: string, c1: string, c2: string): string {
+  const base = `<rect width="24" height="24" fill="${pat === 9 ? `url(#cg-${uid})` : pat === 19 ? `url(#cr-${uid})` : c1}"/>`;
+  if (pat === 0) return `${base}<rect y="7" width="24" height="5" fill="${c2}"/>`;
+  if (pat === 1) return `${base}<rect x="12" width="12" height="24" fill="${c2}"/>`;
+  if (pat === 2) return `${base}<path d="M0 24L24 0v8L8 24z" fill="${c2}"/>`;
+  if (pat === 3) return `${base}<rect y="5" width="24" height="3" fill="${c2}"/><rect y="11" width="24" height="3" fill="${c2}"/>`;
+  if (pat === 4) return `${base}${[0, 1, 2, 3].map((i) => `<rect x="${i * 6 + 1.5}" width="2.8" height="24" fill="${c2}"/>`).join('')}`;
+  if (pat === 5) return `${base}<rect x="12" y="0" width="12" height="12" fill="${c2}"/><rect x="0" y="12" width="12" height="12" fill="${c2}"/>`;
+  if (pat === 6) return `${base}<path d="M0 6l12 9 12-9v5l-12 9-12-9z" fill="${c2}"/>`;
+  if (pat === 7) return `${base}<rect x="9.5" y="0" width="5" height="24" fill="${c2}"/><rect x="0" y="9.5" width="24" height="5" fill="${c2}"/>`;
+  if (pat === 8) return `${base}<circle cx="12" cy="12" r="7.5" fill="none" stroke="${c2}" stroke-width="2.4"/>`;
+  if (pat === 10) return `${base}<rect y="12" width="24" height="12" fill="${c2}"/>`;
+  if (pat === 11) {
+    return `${base}${[0, 1, 2, 3]
+      .flatMap((r) => [0, 1, 2, 3].map((col) => ((r + col) % 2 === 1 ? `<rect x="${col * 6}" y="${r * 6}" width="6" height="6" fill="${c2}"/>` : '')))
+      .join('')}`;
+  }
+  if (pat === 12) return `${base}<path d="M12 2.5L21.5 12 12 21.5 2.5 12z" fill="${c2}"/>`;
+  if (pat === 13) return `${base}<path d="M-1 2L2 -1 25 22 22 25z" fill="${c2}"/><path d="M22 -1L25 2 2 25 -1 22z" fill="${c2}"/>`;
+  if (pat === 14) {
+    return `${base}<path d="M12 12L8 0h8zM12 12l12-4v8zM12 12l4 12H8zM12 12L0 16V8z" fill="${c2}"/><path d="M12 12L21 0h3v3zM12 12l12 9v3h-3zM12 12L3 24H0v-3zM12 12L0 3V0h3z" fill="${c2}" opacity="0.65"/>`;
+  }
+  if (pat === 15) return `${base}<path d="M0 0h24L12 14z" fill="${c2}"/>`;
+  if (pat === 16) return `${base}<path d="M-2 17L17 -2h5L-2 22z" fill="${c2}"/><path d="M4 26L26 4v5L9 26z" fill="${c2}"/>`;
+  if (pat === 17) return `${base}<rect x="8.5" y="0" width="7" height="24" fill="${c2}"/>`;
+  if (pat === 18) return `${base}${[-12, -4, 4, 12, 20].map((off) => `<path d="M${off} 24L${off + 24} 0h3.5L${off + 3.5} 24z" fill="${c2}"/>`).join('')}`;
+  return base;
+}
+
+function buildCrestSvgMarkup(spec: ResolvedCrestSpec, uid: string, withStars = false): string {
+  const defs = `<defs><clipPath id="mcp-${uid}"><path d="${spec.d}"/></clipPath>${
+    spec.pat === 9 ? `<linearGradient id="cg-${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${spec.c1}"/><stop offset="100%" stop-color="${spec.c2}"/></linearGradient>` : ''
+  }${
+    spec.pat === 19 ? `<radialGradient id="cr-${uid}" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="${spec.c2}"/><stop offset="100%" stop-color="${spec.c1}"/></radialGradient>` : ''
+  }</defs>`;
+  const patBody = renderCrestPatternStr(spec.pat, uid, spec.c1, spec.c2);
+  const c3Stroke = spec.hasCustomC3 && spec.pat !== 8 ? `<path d="${spec.d}" fill="none" stroke="${spec.c3}" stroke-width="2.2" opacity="0.6"/>` : '';
+  const borderExtra = spec.borderStyle === 2 ? `<path d="${spec.d}" fill="none" stroke="${spec.c3}" stroke-width="0.9" opacity="0.9"/>` : '';
+  const starsHtml =
+    withStars && spec.stars > 0
+      ? Array.from({ length: spec.stars })
+          .map((_, idx) => `<circle cx="${12 + (idx - (spec.stars - 1) / 2) * 4.5}" cy="2.6" r="1.25" fill="#facc15" stroke="#1e293b" stroke-width="0.35"/>`)
+          .join('')
+      : '';
+  const icRaw = CREST_IC[spec.ic] || '';
+  return `${defs}<g clip-path="url(#mcp-${uid})">${patBody}${c3Stroke}</g><path d="${spec.d}" fill="none" stroke="${spec.strokeCol}" stroke-width="${spec.borderStyle === 2 ? '2.2' : '1.8'}"/>${borderExtra}${starsHtml}<g transform="${spec.icTransform}" fill="none" stroke="${spec.haloCol}" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">${icRaw}</g><g transform="${spec.icTransform}" fill="none" stroke="${spec.icCol}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icRaw}</g>`;
+}
+
+export const ClubCrest: React.FC<{
+  name: string;
+  size?: number;
+  team?: Team | null;
+  club?: ClubIdentity | null;
+  isMyClub?: boolean;
+}> = ({ name, size = 24, team, club, isMyClub }) => {
+  const uid = React.useId().replace(/:/g, '');
+  const spec = resolveCrestSpec(name, team, club, isMyClub);
 
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
       <defs>
         <clipPath id={`cp-${uid}`}>
-          <path d={d} />
+          <path d={spec.d} />
         </clipPath>
-        {pat === 9 && (
+        {spec.pat === 9 && (
           <linearGradient id={`cg-${uid}`} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor={c1} />
-            <stop offset="100%" stopColor={c2} />
+            <stop offset="0%" stopColor={spec.c1} />
+            <stop offset="100%" stopColor={spec.c2} />
           </linearGradient>
         )}
-        {pat === 19 && (
+        {spec.pat === 19 && (
           <radialGradient id={`cr-${uid}`} cx="50%" cy="50%" r="55%">
-            <stop offset="0%" stopColor={c2} />
-            <stop offset="100%" stopColor={c1} />
+            <stop offset="0%" stopColor={spec.c2} />
+            <stop offset="100%" stopColor={spec.c1} />
           </radialGradient>
         )}
       </defs>
       <g clipPath={`url(#cp-${uid})`}>
-        {renderCrestPattern(pat, uid, c1, c2)}
-        {k?.c3 && pat !== 8 && <path d={d} fill="none" stroke={c3} strokeWidth="2.2" opacity="0.6" />}
+        {renderCrestPattern(spec.pat, uid, spec.c1, spec.c2)}
+        {spec.hasCustomC3 && spec.pat !== 8 && <path d={spec.d} fill="none" stroke={spec.c3} strokeWidth="2.2" opacity="0.6" />}
       </g>
-      <path d={d} fill="none" stroke={strokeCol} strokeWidth={borderStyle === 2 ? '2' : '1.5'} />
-      {borderStyle === 2 && <path d={d} fill="none" stroke={c3} strokeWidth="0.7" opacity="0.9" />}
-      {stars > 0 &&
-        Array.from({ length: stars }).map((_, idx) => {
-          const sx = 12 + (idx - (stars - 1) / 2) * 4.5;
+      <path d={spec.d} fill="none" stroke={spec.strokeCol} strokeWidth={spec.borderStyle === 2 ? '2' : '1.5'} />
+      {spec.borderStyle === 2 && <path d={spec.d} fill="none" stroke={spec.c3} strokeWidth="0.7" opacity="0.9" />}
+      {spec.stars > 0 &&
+        Array.from({ length: spec.stars }).map((_, idx) => {
+          const sx = 12 + (idx - (spec.stars - 1) / 2) * 4.5;
           return <circle key={idx} cx={sx} cy="2.6" r="1.25" fill="#facc15" stroke="#1e293b" strokeWidth="0.35" />;
         })}
       <g
-        transform={icTransform}
+        transform={spec.icTransform}
         fill="none"
-        stroke={haloCol}
+        stroke={spec.haloCol}
         strokeWidth="4.6"
         strokeLinecap="round"
         strokeLinejoin="round"
-        dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+        dangerouslySetInnerHTML={{ __html: CREST_IC[spec.ic] }}
       />
       <g
-        transform={icTransform}
+        transform={spec.icTransform}
         fill="none"
-        stroke={icCol}
+        stroke={spec.icCol}
         strokeWidth="2.2"
         strokeLinecap="round"
         strokeLinejoin="round"
-        dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+        dangerouslySetInnerHTML={{ __html: CREST_IC[spec.ic] }}
       />
     </svg>
   );
@@ -264,11 +353,11 @@ export const KitJersey: React.FC<{ club: ClubIdentity; away?: boolean; size?: nu
 
       <path d={J} fill="none" stroke="#0e2b1f" strokeWidth="2" />
 
-      {/* Mini Club Crest on Left Chest */}
-      <g transform="translate(57, 27)">
-        <circle cx="5.5" cy="5.5" r="5" fill={club.c1} stroke="#ffffff" strokeWidth="1" />
-        <circle cx="5.5" cy="5.5" r="2.2" fill={club.c2} />
-      </g>
+      {/* Real Club Crest on Left Chest */}
+      <g
+        transform="translate(55, 25) scale(0.46)"
+        dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(resolveCrestSpec(club.name || team?.name || 'Club', team, club, true), `${uid}-jc`) }}
+      />
 
       {!hideNumber && (
         <text
@@ -289,6 +378,82 @@ export const KitJersey: React.FC<{ club: ClubIdentity; away?: boolean; size?: nu
   );
 };
 
+export interface KitVisualSpec {
+  uid: string;
+  kitPattern: number;
+  collar: number;
+  accent: string;
+  crestSpec: ResolvedCrestSpec | null;
+}
+
+let _faceSeq = 0;
+
+function resolveKitVisualForFace(
+  team?: Team | null,
+  state?: GameState | null,
+  club?: ClubIdentity | null,
+  isMyClubProp?: boolean,
+  kitColor?: string,
+  trimColor?: string,
+  isGK = false,
+  uidOverride?: string,
+  fallbackName?: string
+): KitVisualSpec {
+  const uid = uidOverride || `f${(++_faceSeq).toString(36)}`;
+  const mine = Boolean(isMyClubProp || club || (team && state && team.id === state.me && state.mode === 'm'));
+  const activeClub = club || (mine ? state?.club || null : null);
+  const seedName = activeClub?.name || team?.name || fallbackName || 'Club';
+  const h = ([...seedName].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
+  const rawPat = activeClub ? (activeClub.kit ?? 0) % KIT_PATTERNS.length : team ? (h >> 3) % KIT_PATTERNS.length : h % 6;
+  const gkPatterns = [0, 4, 6, 10, 12, 13];
+  const kitPattern = isGK ? gkPatterns[(rawPat + 2) % gkPatterns.length] : rawPat;
+  const collar = activeClub ? (activeClub.collar ?? 0) % 4 : (h >> 5) % 4;
+  const resolvedTrim = trimColor || activeClub?.c2 || team?.kc?.[1] || '#ffd75e';
+  const accent = activeClub?.c3 || (colDist(resolvedTrim, '#ffffff') < 100 ? '#f4c63d' : '#ffffff');
+  const crestSpec = team || activeClub ? resolveCrestSpec(seedName, team, activeClub, mine) : null;
+  return { uid, kitPattern, collar, accent, crestSpec };
+}
+
+function renderFaceTorsoPattern(pat: number, kit: string, trim: string, accent: string, uid: string): string {
+  const base = `<rect x="8" y="44" width="44" height="20" fill="${pat === 11 ? `url(#fg-${uid})` : kit}"/>`;
+  let overlays = '';
+  if (pat === 1) {
+    overlays = [10, 17, 24, 31, 38, 45].map((x) => `<rect x="${x}" y="44" width="3.5" height="20" fill="${trim}"/>`).join('');
+  } else if (pat === 2) {
+    overlays = [45, 51, 57, 62].map((y) => `<rect x="8" y="${y}" width="44" height="3" fill="${trim}"/>`).join('');
+  } else if (pat === 3) {
+    overlays = `<rect x="30" y="44" width="22" height="20" fill="${trim}"/>`;
+  } else if (pat === 4) {
+    overlays = `<path d="M10 64L37 44h9L19 64z" fill="${trim}"/><path d="M8.5 64L35.5 44h1.5L10 64z" fill="${accent}" opacity="0.88"/>`;
+  } else if (pat === 5) {
+    overlays = `<rect x="8" y="52" width="44" height="6.2" fill="${trim}"/><rect x="8" y="51.2" width="44" height="1" fill="${accent}"/><rect x="8" y="58" width="44" height="1" fill="${accent}"/>`;
+  } else if (pat === 6) {
+    overlays = `<path d="M12 45l18 9 18-9v5L30 59 12 50z" fill="${trim}"/><path d="M12 50l18 9 18-9v1.8L30 60.8 12 51.8z" fill="${accent}"/>`;
+  } else if (pat === 7) {
+    overlays = [0, 1, 2]
+      .flatMap((r) => [0, 1, 2, 3, 4, 5].map((c) => ((r + c) % 2 === 0 ? `<rect x="${8 + c * 7.5}" y="${44 + r * 7}" width="7.5" height="7" fill="${trim}"/>` : '')))
+      .join('');
+  } else if (pat === 8) {
+    overlays = `<rect x="30" y="44" width="22" height="10" fill="${trim}"/><rect x="8" y="54" width="22" height="10" fill="${trim}"/>`;
+  } else if (pat === 9) {
+    overlays = `<rect x="27.2" y="44" width="5.6" height="20" fill="${trim}"/><rect x="8" y="51.5" width="44" height="5" fill="${trim}"/>`;
+  } else if (pat === 10) {
+    overlays = `<rect x="8" y="44" width="10.5" height="20" fill="${trim}"/><rect x="41.5" y="44" width="10.5" height="20" fill="${trim}"/><rect x="18" y="44" width="1.2" height="20" fill="${accent}"/><rect x="40.8" y="44" width="1.2" height="20" fill="${accent}"/>`;
+  } else if (pat === 12) {
+    overlays = [11, 15, 19, 23, 27, 31, 35, 39, 43, 47].map((x) => `<rect x="${x}" y="44" width="1.1" height="20" fill="${trim}" opacity="0.9"/>`).join('');
+  } else if (pat === 13) {
+    overlays = `<path d="M8 52l9-4 7 4 6-4 6 4 7-4 9 4v4.5l-9-4-7 4-6-4-6 4-7-4-9 4z" fill="${trim}" opacity="0.92"/><path d="M8 58l9-4 7 4 6-4 6 4 7-4 9 4v2.5l-9-4-7 4-6-4-6 4-7-4-9 4z" fill="${accent}" opacity="0.82"/>`;
+  }
+  return `${base}${overlays}`;
+}
+
+function renderFaceCollar(collar: number, trim: string, accent: string): string {
+  if (collar === 1) return `<path d="M21 44l9 8 9-8" stroke="${accent}" stroke-width="2.2" fill="none" stroke-linejoin="round"/>`;
+  if (collar === 2) return `<path d="M21 44l5.5 5.5 3.5-2 3.5 2L39 44z" fill="${trim}" stroke="${accent}" stroke-width="0.9"/><line x1="30" y1="47.5" x2="30" y2="52" stroke="${accent}" stroke-width="1.4" stroke-linecap="round"/>`;
+  if (collar === 3) return `<path d="M21.5 44c2.5 5 5 6.5 8.5 6.5s6-1.5 8.5-6.5" fill="none" stroke="${trim}" stroke-width="2.8" stroke-linecap="round"/><path d="M22.5 44.3c2.2 4 4.4 5.2 7.5 5.2s5.3-1.2 7.5-5.2" fill="none" stroke="${accent}" stroke-width="1.1" stroke-linecap="round"/>`;
+  return `<path d="M21.5 44c2.5 5 5 6.5 8.5 6.5s6-1.5 8.5-6.5" stroke="${accent}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+}
+
 export function faceBodySvg(
   v: number[],
   kit: string,
@@ -296,7 +461,8 @@ export function faceBodySvg(
   w = 38,
   bg = 'none',
   bare = false,
-  showNo = true
+  showNo = true,
+  kitSpec?: KitVisualSpec
 ): string {
   const ki = v[0] ?? 2;
   const hi = v[1] ?? 0;
@@ -355,7 +521,27 @@ export function faceBodySvg(
           ? `<path d="M26 35q4 1.5 8-.6" stroke="#222" fill="none" stroke-width="1.4" stroke-linecap="round"/>`
           : `<path d="M26 34.5q4 2.8 8 0" stroke="#222" fill="none" stroke-width="1.4" stroke-linecap="round"/>`;
 
-  return `${bare ? '' : `<rect width="60" height="64" fill="${bg}"/><path d="M0 0h60v26L0 42z" fill="#fff" opacity="0.1"/>`}<path d="M8 64c0-14 7-20 22-20s22 6 22 20z" fill="${kit}"/><path d="M21 44l9 8 9-8" stroke="${trim}" stroke-width="2.5" fill="none" stroke-linejoin="round"/><path d="M12 52l4 12M48 52l-4 12" stroke="${trim}" stroke-width="2" opacity="0.35"/>${showNo && w >= 44 ? `<text x="30" y="60" text-anchor="middle" font-size="10" font-weight="700" font-family="Sarabun" fill="#fff" stroke="#0005" stroke-width="0.6" opacity="0.92">${no || 10}</text>` : ''}<rect x="25" y="36" width="10" height="11" rx="3" fill="${sk}"/><ellipse cx="30" cy="40" rx="5" ry="2.4" fill="#000" opacity="0.14"/><circle cx="14.6" cy="28" r="3.2" fill="${sk}"/><circle cx="45.4" cy="28" r="3.2" fill="${sk}"/><path d="${headD}" fill="${sk}"/>${fhHtml}<path d="M30 27.5v3.8l-1.3.9" stroke="#000" opacity="0.16" stroke-width="1.2" fill="none" stroke-linecap="round"/>${br}${eyes}${mo}${hHtml}`;
+  const uid = kitSpec?.uid || `f${(++_faceSeq).toString(36)}`;
+  const pat = kitSpec?.kitPattern ?? 0;
+  const collar = kitSpec?.collar ?? 0;
+  const accent = kitSpec?.accent || trim;
+  const torsoPath = 'M8 64c0-14 7-20 22-20s22 6 22 20z';
+  const torsoDefs = `<defs><clipPath id="jk-${uid}"><path d="${torsoPath}"/></clipPath>${
+    pat === 11 ? `<linearGradient id="fg-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${kit}"/><stop offset="100%" stop-color="${trim}"/></linearGradient>` : ''
+  }</defs>`;
+  const torsoBody = `<g clip-path="url(#jk-${uid})">${renderFaceTorsoPattern(pat, kit, trim, accent, uid)}<path d="M12 52l4 12M48 52l-4 12" stroke="${accent}" stroke-width="1.6" opacity="0.32"/>${renderFaceCollar(collar, trim, accent)}</g><path d="${torsoPath}" fill="none" stroke="#0c1f15" stroke-opacity="0.35" stroke-width="0.8"/>`;
+  const chestCrest = kitSpec?.crestSpec
+    ? `<g transform="translate(35.8, 49.5) scale(0.32)">${buildCrestSvgMarkup(kitSpec.crestSpec, `${uid}-cc`)}</g>`
+    : '';
+  const noX = kitSpec?.crestSpec ? '22.5' : '30';
+  const noY = kitSpec?.crestSpec ? '59.5' : '60';
+  const noSize = kitSpec?.crestSpec ? '8.4' : '10';
+  const noMarkup =
+    showNo && w >= 44
+      ? `<text x="${noX}" y="${noY}" text-anchor="middle" font-size="${noSize}" font-weight="800" font-family="Sarabun" fill="#fff" stroke="#0007" stroke-width="0.9" paint-order="stroke" opacity="0.95">${no || 10}</text>`
+      : '';
+
+  return `${bare ? '' : `<rect width="60" height="64" fill="${bg}"/><path d="M0 0h60v26L0 42z" fill="#fff" opacity="0.1"/>`}${torsoDefs}${torsoBody}${chestCrest}${noMarkup}<rect x="25" y="36" width="10" height="11" rx="3" fill="${sk}"/><ellipse cx="30" cy="40" rx="5" ry="2.4" fill="#000" opacity="0.14"/><circle cx="14.6" cy="28" r="3.2" fill="${sk}"/><circle cx="45.4" cy="28" r="3.2" fill="${sk}"/><path d="${headD}" fill="${sk}"/>${fhHtml}<path d="M30 27.5v3.8l-1.3.9" stroke="#000" opacity="0.16" stroke-width="1.2" fill="none" stroke-linecap="round"/>${br}${eyes}${mo}${hHtml}`;
 }
 
 export const PlayerFace: React.FC<{
@@ -363,26 +549,31 @@ export const PlayerFace: React.FC<{
   team?: Team | null;
   state?: GameState | null;
   careerProfile?: PlayerCareerProfile | null;
+  club?: ClubIdentity | null;
+  isMyClub?: boolean;
   size?: number;
   bare?: boolean;
   kitColor?: string;
   trimColor?: string;
-}> = ({ player, team, state, careerProfile, size = 38, bare = false, kitColor, trimColor }) => {
+}> = ({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor }) => {
+  const uid = React.useId().replace(/:/g, '');
   const q = player || {};
   const resolvedNo = q.no || (team && q.n ? getShirtNo(team, q) : undefined) || (q.me ? (careerProfile || state?.p)?.no : undefined);
   const v = visOf(resolvedNo ? { ...q, no: resolvedNo } : q, careerProfile || state?.p);
   const teamKit = team ? tc(team, state) : null;
+  const isGK = q.pos === 'GK' || q.ro === 'GK';
   const kc = kitColor
     ? kitColor
-    : q.pos === 'GK'
+    : isGK
       ? pickGK(teamKit || '#2f6fd6')
       : teamKit
         ? teamKit
         : q.me && (careerProfile || state?.p)
           ? (careerProfile || state?.p)!.c
           : '#2f6fd6';
-  const tr = trimColor ? trimColor : team ? tc(team, state, true) : '#ffd75e';
+  const tr = trimColor ? trimColor : team ? tc(team, state, true) : club?.c2 || '#ffd75e';
   const bg = bare ? 'transparent' : `color-mix(in srgb, ${kc} 18%, transparent)`;
+  const kitSpec = resolveKitVisualForFace(team, state, club, isMyClub, kc, tr, isGK, uid, q.n);
   return (
     <svg
       className={`shrink-0 ${bare ? '' : 'rounded-xl border border-[var(--line)]'}`}
@@ -390,7 +581,7 @@ export const PlayerFace: React.FC<{
       height={Math.round((size * 64) / 60)}
       viewBox="0 0 60 64"
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, true) }}
+      dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, true, kitSpec) }}
     />
   );
 };
@@ -427,7 +618,18 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
               <g
                 transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
                 clipPath={`url(#mfc-${uid})`}
-                dangerouslySetInnerHTML={{ __html: faceBodySvg(visOf(q, state?.p), kc, trCol, 32, '#10281d', true, false) }}
+                dangerouslySetInnerHTML={{
+                  __html: faceBodySvg(
+                    visOf(q, state?.p),
+                    kc,
+                    trCol,
+                    32,
+                    '#10281d',
+                    true,
+                    false,
+                    resolveKitVisualForFace(team, state, null, undefined, kc, trCol, z.sp === 'GK', `${uid}-m-${idx}`, q.n)
+                  )
+                }}
               />
             )}
             <rect x={cx - 14} y={cy + 10} width="28" height="11" rx="4" fill="#0b2018" stroke={isMe ? '#f5c242' : '#fff8'} strokeWidth="0.9" />
@@ -760,7 +962,18 @@ export const FormationPitch: React.FC<{
             <g
               transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
               clipPath={`url(#fc-${uid})`}
-              dangerouslySetInnerHTML={{ __html: faceBodySvg(visOf(q, state.p), kc, trCol, 32, '#10281d', true, false) }}
+              dangerouslySetInnerHTML={{
+                __html: faceBodySvg(
+                  visOf(q, state.p),
+                  kc,
+                  trCol,
+                  32,
+                  '#10281d',
+                  true,
+                  false,
+                  resolveKitVisualForFace(team, state, null, undefined, kc, trCol, z.sp === 'GK', `${uid}-p-${i}`, q.n)
+                )
+              }}
             />
 
             {/* Bottom-Left: Shirt Number */}
@@ -929,7 +1142,18 @@ export const FormationPitch: React.FC<{
             <g
               transform={`translate(${(gx - 30 * sc).toFixed(1)},${(gy - 31 * sc).toFixed(1)}) scale(${sc})`}
               clipPath={`url(#fc-${uid})`}
-              dangerouslySetInnerHTML={{ __html: faceBodySvg(visOf(pq, state.p), kc, trCol, 32, '#10281d', true, false) }}
+              dangerouslySetInnerHTML={{
+                __html: faceBodySvg(
+                  visOf(pq, state.p),
+                  kc,
+                  trCol,
+                  32,
+                  '#10281d',
+                  true,
+                  false,
+                  resolveKitVisualForFace(team, state, null, undefined, kc, trCol, dragPreview.sp === 'GK', `${uid}-drag`, pq.n)
+                )
+              }}
             />
             <rect x={clamp(gx - 38, 6, 218)} y={gy - 37} width="76" height="14" rx="7" fill="#0b2018" stroke={ed} strokeWidth="1.3" />
             <text x={clamp(gx, 44, 256)} y={gy - 27.2} textAnchor="middle" fontSize="8.2" fontWeight="800" fontFamily="Sarabun" fill={ed}>

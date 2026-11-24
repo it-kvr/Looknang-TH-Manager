@@ -55,6 +55,11 @@ let crowdLfo: OscillatorNode | null = null;
 let crowdActive = false;
 let noiseBuffer: AudioBuffer | null = null;
 let unlockBound = false;
+let sfxSuppressed = false;
+
+export function setSfxSuppressed(on: boolean) {
+  sfxSuppressed = on;
+}
 
 function getSfxScale(st: AppSettings): number {
   if (st.mute) return 0;
@@ -148,6 +153,7 @@ function getPinkNoiseBuffer(ctx: AudioContext): AudioBuffer {
 }
 
 export function snd(freq: number, dur = 0.12, type: OscillatorType = 'triangle', vol = 0.05, delay = 0) {
+  if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
   const ctx = ensureAudio();
@@ -171,6 +177,7 @@ export function snd(freq: number, dur = 0.12, type: OscillatorType = 'triangle',
 }
 
 function playNoiseBurst(dur: number, filterType: BiquadFilterType, freq: number, q: number, vol: number, delay = 0) {
+  if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
   const ctx = ensureAudio();
@@ -197,6 +204,7 @@ function playNoiseBurst(dur: number, filterType: BiquadFilterType, freq: number,
 }
 
 function playThump(startFreq: number, endFreq: number, dur: number, vol: number, delay = 0) {
+  if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
   const ctx = ensureAudio();
@@ -220,6 +228,7 @@ function playThump(startFreq: number, endFreq: number, dur: number, vol: number,
 }
 
 function playPeaWhistle(duration = 0.24, delay = 0, baseFreq = 2680, vol = 0.048) {
+  if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
   const ctx = ensureAudio();
@@ -264,6 +273,7 @@ function playPeaWhistle(duration = 0.24, delay = 0, baseFreq = 2680, vol = 0.048
 }
 
 export function pulseCrowdRoar(intensity = 0.85) {
+  if (sfxSuppressed) return;
   const st = getSettings();
   const scale = getCrowdScale(st);
   if (scale <= 0 || !audioCtx || !crowdGainNode || !crowdPresenceFilter) return;
@@ -457,6 +467,7 @@ export function setCrowdAudio(on: boolean) {
 }
 
 export function vibrate(pattern: number | number[]) {
+  if (sfxSuppressed) return;
   const st = getSettings();
   if (st.novib) return;
   try {

@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, SeasonPlayerStatRecord, SeasonArchiveRecord } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, squadWage, logFin, pushFeed, ensureClubIdentity } from './playerCore';
@@ -985,6 +985,10 @@ export function startSeason(s: GameState) {
       q.sa = 0;
       q.sp = 0;
       q.cs = 0;
+      q.srs = 0;
+      q.sra = 0;
+      q.motm = 0;
+      q.tyc = 0;
     });
     assignTeamShirtNumbers(t);
   });
@@ -1049,6 +1053,14 @@ export function tallyMatchPlayers(h: Team, a: Team, r: MatchResult) {
     playedList.forEach((q) => {
       q.sp = (q.sp || 0) + 1;
       if (q.pos === 'GK' && (ga as number) === 0 && starterSet.includes(q)) q.cs = (q.cs || 0) + 1;
+      const matchRt = r.ratings?.[q.n];
+      if (typeof matchRt === 'number' && matchRt > 0) {
+        q.srs = (q.srs || 0) + matchRt;
+        q.sra = (q.sra || 0) + 1;
+      }
+      if (r.motm && r.motm === q.n) {
+        q.motm = (q.motm || 0) + 1;
+      }
     });
   });
   r.evs.forEach((e) => {
@@ -1076,12 +1088,14 @@ export function applyMatchCards(s: GameState, h: Team, a: Team, cards?: MatchCar
         pushFeed(s, 'โดนแบน', `🟥 ${q.n} โดนใบแดงโดยตรง! ติดโทษแบน 2 นัด`, 'urg');
       }
     } else if (c.type === 'Y2R') {
+      q.tyc = (q.tyc || 0) + 1;
       q.rc = (q.rc || 0) + 1;
       q.sus = (q.sus || 0) + 1;
       if (isMyTeam) {
         pushFeed(s, 'โดนแบน', `🟨🟨➡🟥 ${q.n} โดนใบเหลือง-แดง! ติดโทษแบน 1 นัด`, 'urg');
       }
     } else {
+      q.tyc = (q.tyc || 0) + 1;
       q.yc = (q.yc || 0) + 1;
       if (q.yc >= 3) {
         q.yc -= 3;
@@ -2320,7 +2334,15 @@ export function finishSeasonComputation(s: GameState) {
   }
 
   const cupStatus = s.cup.done && s.cup.ids[0] === s.me ? 'แชมป์ถ้วย' : s.cup.alive ? 'ถึงรอบสุดท้าย' : 'ตกรอบ';
-  s.hist.push(`ซีซั่น ${s.season}: ${TN[mt]} อันดับ ${pos} · ${cupStatus}`);
+  const asiaStatus =
+    s.ac && s.ac.p.includes(s.me)
+      ? s.ac.done && s.ac.ids[0] === s.me
+        ? 'แชมป์ถ้วยทวีป'
+        : s.ac.alive
+          ? 'ถึงรอบสุดท้าย'
+          : 'ตกรอบถ้วยทวีป'
+      : undefined;
+  s.hist.push(`ซีซั่น ${s.season}: ${TN[mt]} อันดับ ${pos} · ${cupStatus}${asiaStatus ? ` · ${asiaStatus}` : ''}`);
 
   let offers: Team[] = [];
   if (s.mode === 'p' && s.p) {
@@ -2334,6 +2356,110 @@ export function finishSeasonComputation(s: GameState) {
     }
   }
 
+  const stText = nt > mt ? 'เลื่อนชั้น! 🎉' : nt < mt ? 'ตกชั้น' : ch ? 'แชมป์ลีก!' : 'อยู่ชั้นเดิม';
+  const leagueBestScorer = bs && bs.q.sg ? `${bs.q.n} (${bs.t.name}) ${bs.q.sg} ประตู` : '';
+  const leagueBestAssist = ba && ba.q.sa ? `${ba.q.n} (${ba.t.name}) ${ba.q.sa} ครั้ง` : '';
+
+  const playerStats: SeasonPlayerStatRecord[] = meTeam.sq
+    .map((q) => {
+      const sp = q.sp || 0;
+      const sg = q.sg || 0;
+      const sa = q.sa || 0;
+      const cs = q.cs || 0;
+      const motm = q.motm || 0;
+      const yc = q.tyc ?? q.yc ?? 0;
+      const rc = q.rc || 0;
+      let avgRating = 0;
+      if ((q.sra || 0) > 0) {
+        avgRating = Math.round(((q.srs || 0) / q.sra!) * 100) / 100;
+      } else if (sp > 0) {
+        avgRating = clamp(
+          Math.round((6.2 + (sg * 1.05 + sa * 0.65 + cs * 0.5) / Math.max(1, sp) + (q.ov - 60) / 90) * 100) / 100,
+          5.0,
+          9.5
+        );
+      }
+      return {
+        name: q.n,
+        pos: q.pos,
+        ro: q.ro,
+        no: q.no,
+        age: q.age,
+        ov: q.ov,
+        isMe: !!q.me,
+        sp,
+        sg,
+        sa,
+        cs,
+        yc,
+        rc,
+        motm,
+        avgRating
+      };
+    })
+    .sort((a, b) => b.avgRating - a.avgRating || b.sg + b.sa - (a.sg + a.sa) || b.sp - a.sp || b.ov - a.ov);
+
+  const bestTeamScorer = playerStats
+    .filter((x) => x.sg > 0)
+    .sort((a, b) => b.sg - a.sg || b.sa - a.sa || a.sp - b.sp || b.avgRating - a.avgRating)[0];
+  const bestTeamAssist = playerStats
+    .filter((x) => x.sa > 0)
+    .sort((a, b) => b.sa - a.sa || b.sg - a.sg || a.sp - b.sp || b.avgRating - a.avgRating)[0];
+  const minAppsForRating = Math.max(1, Math.floor((meTeam.p || 1) * 0.25));
+  const ratingPool = playerStats.filter((x) => x.avgRating > 0 && x.sp >= minAppsForRating);
+  const ratingFallbackPool = playerStats.filter((x) => x.avgRating > 0 && x.sp > 0);
+  const bestTeamRating = (ratingPool.length ? ratingPool : ratingFallbackPool)
+    .slice()
+    .sort((a, b) => b.avgRating - a.avgRating || b.sp - a.sp || b.sg + b.sa - (a.sg + a.sa))[0];
+  const bestTeamCleanSheet = playerStats
+    .filter((x) => x.pos === 'GK' && x.cs > 0)
+    .sort((a, b) => b.cs - a.cs || b.sp - a.sp || b.avgRating - a.avgRating)[0];
+
+  const archive: SeasonArchiveRecord = {
+    season: s.season,
+    teamId: meTeam.id,
+    teamName: meTeam.name,
+    tier: mt,
+    nextTier: nt,
+    rank: pos,
+    totalTeams: tb[mt].length,
+    played: meTeam.p,
+    won: meTeam.w,
+    drawn: meTeam.d,
+    lost: meTeam.l,
+    gf: meTeam.gf,
+    ga: meTeam.ga,
+    pts: meTeam.pts,
+    champion: ch,
+    statusText: stText,
+    cupStatus,
+    asiaStatus,
+    leagueBestScorer,
+    leagueBestAssist,
+    topScorer: bestTeamScorer
+      ? { name: bestTeamScorer.name, pos: bestTeamScorer.pos, sg: bestTeamScorer.sg, sp: bestTeamScorer.sp }
+      : null,
+    topAssist: bestTeamAssist
+      ? { name: bestTeamAssist.name, pos: bestTeamAssist.pos, sa: bestTeamAssist.sa, sp: bestTeamAssist.sp }
+      : null,
+    topRating: bestTeamRating
+      ? {
+          name: bestTeamRating.name,
+          pos: bestTeamRating.pos,
+          avgRating: bestTeamRating.avgRating,
+          sp: bestTeamRating.sp,
+          motm: bestTeamRating.motm
+        }
+      : null,
+    topCleanSheet: bestTeamCleanSheet
+      ? { name: bestTeamCleanSheet.name, pos: bestTeamCleanSheet.pos, cs: bestTeamCleanSheet.cs, sp: bestTeamCleanSheet.sp }
+      : null,
+    players: playerStats
+  };
+
+  const existingArchives = (s.seasonArchives || []).filter((rec) => rec.season !== s.season);
+  s.seasonArchives = [...existingArchives, archive].sort((a, b) => b.season - a.season);
+
   return {
     mt,
     nt,
@@ -2341,10 +2467,12 @@ export function finishSeasonComputation(s: GameState) {
     totalTeams: tb[mt].length,
     ch,
     cupStatus,
-    bestScorer: bs && bs.q.sg ? `${bs.q.n} (${bs.t.name}) ${bs.q.sg} ประตู` : '',
-    bestAssist: ba && ba.q.sa ? `${ba.q.n} (${ba.t.name}) ${ba.q.sa} ครั้ง` : '',
+    asiaStatus,
+    bestScorer: leagueBestScorer,
+    bestAssist: leagueBestAssist,
     offers,
-    stText: nt > mt ? 'เลื่อนชั้น! 🎉' : nt < mt ? 'ตกชั้น' : ch ? 'แชมป์ลีก!' : 'อยู่ชั้นเดิม'
+    stText,
+    archive
   };
 }
 

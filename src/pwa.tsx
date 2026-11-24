@@ -39,7 +39,9 @@ function ensureGlobalPWAListeners() {
   window.addEventListener('beforeinstallprompt', (e: Event) => {
     e.preventDefault();
     cachedDeferredPrompt = e as BeforeInstallPromptEvent;
+    setNeedRefresh(false);
     promptSubscribers.forEach((cb) => cb(cachedDeferredPrompt));
+    installedSubscribers.forEach((cb) => cb(false));
   });
 
   window.addEventListener('appinstalled', () => {
@@ -50,6 +52,7 @@ function ensureGlobalPWAListeners() {
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      setNeedRefresh(false);
       if (reloadingForSwUpdate) return;
       reloadingForSwUpdate = true;
       window.location.reload();
@@ -76,7 +79,11 @@ export function registerPWA() {
     updateSWFn = registerSW({
       immediate: true,
       onNeedRefresh() {
-        setNeedRefresh(true);
+        if (detectStandalone()) {
+          setNeedRefresh(true);
+        } else {
+          swRegistration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
+        }
       },
       onOfflineReady() {
         // Cached assets ready for offline play
@@ -84,16 +91,13 @@ export function registerPWA() {
       onRegisteredSW(_swUrl, reg) {
         if (!reg) return;
         swRegistration = reg;
-        if (reg.waiting) setNeedRefresh(true);
-        reg.addEventListener('updatefound', () => {
-          const nw = reg.installing;
-          if (!nw) return;
-          nw.addEventListener('statechange', () => {
-            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
-              setNeedRefresh(true);
-            }
-          });
-        });
+        if (reg.waiting) {
+          if (detectStandalone()) {
+            setNeedRefresh(true);
+          } else {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        }
         reg.update().catch(() => undefined);
         window.setInterval(() => {
           if (navigator.onLine) reg.update().catch(() => undefined);
@@ -174,7 +178,11 @@ export async function forceRefreshAppCache(): Promise<void> {
     }
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map((r) => r.update().catch(() => undefined)));
+      if (!detectStandalone()) {
+        await Promise.all(regs.map((r) => r.unregister().catch(() => undefined)));
+      } else {
+        await Promise.all(regs.map((r) => r.update().catch(() => undefined)));
+      }
     }
   } catch {
     // ignore
@@ -213,7 +221,7 @@ export const PWAUpdateBanner: React.FC = () => {
   const { needRefresh, checkingUpdate, applyUpdate } = usePWAUpdate();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!needRefresh || dismissed) return null;
+  if (!needRefresh || dismissed || !detectStandalone()) return null;
 
   return (
     <div className="fixed bottom-3 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border-2 border-[var(--g)] shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
@@ -284,7 +292,7 @@ export function usePWAInstall() {
     const mqStandalone = window.matchMedia('(display-mode: standalone)');
     const mqFullscreen = window.matchMedia('(display-mode: fullscreen)');
     const onMqChange = () => {
-      if (detectStandalone()) setIsInstalled(true);
+      setIsInstalled(detectStandalone());
     };
     mqStandalone.addEventListener?.('change', onMqChange);
     mqFullscreen.addEventListener?.('change', onMqChange);

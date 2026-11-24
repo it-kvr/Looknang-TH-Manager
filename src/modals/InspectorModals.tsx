@@ -3,7 +3,7 @@ import type { Position, Player, Team, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, ATT, SPN, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin } from '../engine/playerCore';
+import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, statBarColor, countReadyMissions } from '../engine/missions';
 import { sortTable, teamStats } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
@@ -36,7 +36,8 @@ export const PlayerInspectorModal: React.FC<{
   const sigLabel = SIGL[info.D0.sig] || info.D0.sig;
   const fitVal = Math.round(livePlayer.fit ?? 100);
   const fitCol = livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'var(--red)' : fitVal >= 75 ? 'var(--g)' : fitVal >= 55 ? '#c98a00' : 'var(--red)';
-  const topCoreVal = Math.max(...ATT.map(([k]) => info.a[k]));
+  const kit1 = liveTeam ? tc(liveTeam, state, false) : isMePlayer && state.p ? state.p.c : ovColor(livePlayer.ov);
+  const kit2 = liveTeam ? tc(liveTeam, state, true) : '#f5c242';
   const statusBadgeText =
     (livePlayer.sus || 0) > 0
       ? `ติดโทษแบน ${livePlayer.sus} นัด`
@@ -47,146 +48,84 @@ export const PlayerInspectorModal: React.FC<{
           : 'พร้อมลงสนาม';
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-4xl mland:max-w-[96vw] h-[90dvh] mland:h-[96dvh] max-h-[94dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-        {/* Hero Identity Header */}
-        <div
-          className="shrink-0 px-4 py-3.5 sm:px-5 sm:py-4 mland:px-3 mland:py-2 text-white flex items-center justify-between gap-3 mland:gap-2"
-          style={{ background: `linear-gradient(135deg, ${ovColor(livePlayer.ov)}, #0b1f15 80%)` }}
-        >
-          <div className="flex items-center gap-3 mland:gap-2.5 min-w-0">
-            <div className="relative shrink-0 p-1 rounded-2xl mland:rounded-xl bg-black/20 border border-white/15 mland:[&_svg]:w-11 mland:[&_svg]:h-11">
-              <PlayerFace
-                player={{ ...livePlayer, no: currentNo }}
-                team={liveTeam}
-                state={state}
-                careerProfile={isMePlayer ? state.p : null}
-                size={60}
-                bare
-              />
-              <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 rounded-md bg-black/75 border border-white/25 text-[10px] mland:text-[8.5px] font-extrabold tabular leading-tight">
-                #{currentNo}
-              </span>
-            </div>
-
-            <div className="min-w-0 space-y-0.5">
-              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                <h3 className="font-bold text-base sm:text-xl mland:text-sm font-display truncate leading-tight">
-                  {livePlayer.n}
-                </h3>
-                {isMePlayer && (
-                  <span
-                    title="ตัวคุณ"
-                    aria-label="ตัวคุณ"
-                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--lamp)] text-[#261900] text-[11px] font-black shrink-0"
-                  >
-                    ★
-                  </span>
-                )}
-                {livePlayer.blessed && (
-                  <span className="px-1.5 py-0.5 rounded bg-amber-300 text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold shrink-0">
-                    ✨ พร
-                  </span>
-                )}
-                {isCap && (
-                  <span className="px-1.5 py-0.5 rounded bg-white/20 text-[10px] mland:text-[8.5px] font-bold shrink-0">
-                    © กัปตัน
-                  </span>
-                )}
+    <div
+      className="fixed inset-0 z-[60] bg-black/68 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl mland:max-w-[95vw] h-[90dvh] mland:h-[94dvh] max-h-[650px] mland:max-h-[calc(100dvh-18px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Clean Compact Modal Header */}
+        <header className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            {liveTeam && (
+              <div className="shrink-0 w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
+                <ClubCrest
+                  name={liveTeam.name}
+                  size={20}
+                  team={liveTeam}
+                  club={state.club}
+                  isMyClub={isMyTeam && state.mode === 'm'}
+                />
               </div>
-
-              <div className="text-xs mland:text-[10px] text-white/90 flex items-center gap-1.5 flex-wrap">
-                {liveTeam && (
-                  <ClubCrest
-                    name={liveTeam.name}
-                    size={15}
-                    team={liveTeam}
-                    club={state.club}
-                    isMyClub={isMyTeam && state.mode === 'm'}
-                  />
-                )}
-                <span className="font-semibold truncate max-w-[160px] sm:max-w-none">
-                  {liveTeam ? liveTeam.name : livePlayer.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขาย'}
+            )}
+            <div className="min-w-0">
+              <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
+                <span className="truncate">{livePlayer.n}</span>
+                <span className="text-[var(--mut)] font-semibold text-[11px] mland:text-[10px] shrink-0">
+                  · {liveTeam ? liveTeam.name : livePlayer.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขาย'}
                 </span>
-                <span className="opacity-55" aria-hidden="true">·</span>
-                <span className="font-bold text-[var(--lamp)]">{livePlayer.ro}</span>
-                <span className="text-white/80">({SPN[livePlayer.ro] || livePlayer.pos})</span>
               </div>
-
-              <div className="text-[11px] mland:text-[9px] text-white/80 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                <span className="tabular">อายุ {livePlayer.age} ปี ({info.gro})</span>
-                <span className="opacity-50" aria-hidden="true">·</span>
-                <span>{info.TR[0]}</span>
-                {((livePlayer.yc || 0) > 0 || (livePlayer.rc || 0) > 0) && (
-                  <>
-                    <span className="opacity-50" aria-hidden="true">·</span>
-                    <span className="inline-flex items-center gap-1 tabular">
-                      {(livePlayer.yc || 0) > 0 && (
-                        <span className="inline-flex items-center gap-0.5">
-                          <StatIconBadge kind="yellow" count={livePlayer.yc || 1} size="xs" />
-                          <span>{livePlayer.yc}/3</span>
-                        </span>
-                      )}
-                      {(livePlayer.rc || 0) > 0 && (
-                        <StatIconBadge kind="red" count={livePlayer.rc || 1} size="xs" />
-                      )}
-                    </span>
-                  </>
-                )}
+              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1.5">
+                <span>{SPN[livePlayer.ro] || livePlayer.pos}</span>
+                <span aria-hidden="true">·</span>
+                <span className="font-semibold" style={{ color: fitCol }}>{statusBadgeText}</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 mland:gap-2 shrink-0">
-            <div className="px-3 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-black/25 border border-white/20 text-center min-w-[60px] mland:min-w-[46px]">
-              <div className="text-2xl sm:text-3xl mland:text-lg font-extrabold font-display leading-none tabular">
-                {livePlayer.ov}
+          <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+            {canDoMissions && (
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setInspectMode('info'); }}
+                  className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                    effectiveMode === 'info'
+                      ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  📊 การ์ด &amp; ค่าพลัง
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setInspectMode('missions'); }}
+                  className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                    effectiveMode === 'missions'
+                      ? 'bg-[var(--g)] text-white shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  🎯 ภารกิจ{readyMissionCnt ? ` (${readyMissionCnt})` : ''}
+                </button>
               </div>
-              <div className="text-[9.5px] mland:text-[8px] font-bold tracking-wide text-white/75 mt-0.5 tabular">
-                OVR · POT {livePlayer.pot}
-              </div>
-            </div>
+            )}
+
             <button
               type="button"
               onClick={onClose}
               aria-label="ปิดหน้าต่าง"
-              className="w-9 h-9 mland:w-7 mland:h-7 rounded-full bg-white/15 hover:bg-white/25 border border-white/20 text-sm mland:text-xs font-bold flex items-center justify-center cursor-pointer transition-colors"
+              className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface-2)] hover:bg-[var(--line)]/60 border border-[var(--line)] text-xs font-bold flex items-center justify-center cursor-pointer transition-colors shrink-0"
             >
               ✕
             </button>
           </div>
-        </div>
-
-        {/* Clean Segmented Sub-navigation */}
-        {canDoMissions && (
-          <div className="shrink-0 px-4 py-2 mland:px-3 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)] flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => { SFX.tap(); setInspectMode('info'); }}
-              className={`flex-1 sm:flex-initial px-3.5 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                effectiveMode === 'info'
-                  ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs border border-[var(--line)]'
-                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
-              }`}
-            >
-              📊 ข้อมูล &amp; ค่าพลัง
-            </button>
-            <button
-              type="button"
-              onClick={() => { SFX.tap(); setInspectMode('missions'); }}
-              className={`flex-1 sm:flex-initial px-3.5 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                effectiveMode === 'missions'
-                  ? 'bg-[var(--g)] text-white shadow-xs'
-                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
-              }`}
-            >
-              🎯 ภารกิจ{readyMissionCnt ? ` (${readyMissionCnt})` : ''}
-            </button>
-          </div>
-        )}
+        </header>
 
         {effectiveMode === 'missions' && canDoMissions ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5">
             <PlayerMissionsPanel
               player={livePlayer}
               team={liveTeam}
@@ -196,233 +135,324 @@ export const PlayerInspectorModal: React.FC<{
             />
           </div>
         ) : (
-        <div className="flex-1 min-h-0 overflow-hidden p-3.5 mland:p-2 grid grid-cols-[0.95fr_1.05fr] gap-3.5 mland:gap-2">
-          {/* Left Column: Core 5, Contract/Status, Season Stats, Rehab & Number */}
-          <div className="space-y-3 mland:space-y-1.5 h-full overflow-y-auto pr-1">
-            {/* 5 Core Attributes Showcase */}
-            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/80 space-y-2 mland:space-y-1">
-              <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                <span className="font-bold text-[var(--ink)]">ค่าพลังหลัก 5 ด้าน</span>
-                <span className="font-bold text-[var(--g)] truncate">⭐ จุดเด่น: {sigLabel}</span>
+          <div className="flex-1 min-h-0 overflow-hidden p-3 sm:p-4 mland:p-2 grid grid-cols-1 md:grid-cols-[252px_1fr] mland:grid-cols-[220px_1fr] gap-3 mland:gap-2">
+            {/* Left Column: Collectible Athlete Card + Quick Squad Controls */}
+            <div className="flex flex-col gap-2.5 mland:gap-1.5 min-h-0 overflow-y-auto pr-0.5">
+              {/* Signature Athlete Card */}
+              <div className="relative rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-lg overflow-hidden shrink-0 flex flex-col">
+                {/* Club Accent Top Bar */}
+                <div
+                  aria-hidden="true"
+                  className="h-1 w-full shrink-0"
+                  style={{ background: `linear-gradient(90deg, ${kit1}, ${kit2})` }}
+                />
+
+                {/* Top Corner: OVR / POS + POT / Badges */}
+                <div className="px-3 pt-2.5 mland:px-2.5 mland:pt-1.5 flex items-start justify-between gap-2">
+                  <div className="leading-none">
+                    <div className="text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular text-[#fad05a]">
+                      {livePlayer.ov}
+                    </div>
+                    <div className="text-[10px] mland:text-[8.5px] font-bold text-white/80 tracking-wide mt-0.5">
+                      {livePlayer.ro} · #{currentNo}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col items-end gap-1">
+                    <span className="text-[10.5px] mland:text-[9px] font-bold tabular text-emerald-200/90">
+                      POT {livePlayer.pot}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {isMePlayer && (
+                        <span
+                          title="ตัวคุณ"
+                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--lamp)] text-[#261900] text-[9.5px] font-black"
+                        >
+                          ★
+                        </span>
+                      )}
+                      {livePlayer.blessed && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-300 text-[#261900] text-[9px] font-extrabold leading-none">
+                          ✨ พร
+                        </span>
+                      )}
+                      {isCap && (
+                        <span className="px-1.5 py-0.5 rounded bg-white/18 text-white text-[9px] font-bold leading-none">
+                          © กัปตัน
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Neutral Studio Spotlight Portrait Stage */}
+                <div className="relative mx-3 my-2 mland:mx-2.5 mland:my-1 rounded-xl border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-2 mland:pt-1 flex items-end justify-center overflow-hidden shadow-inner">
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      backgroundImage: 'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)'
+                    }}
+                  />
+                  <div className="relative z-10 [&>svg]:w-[88px] [&>svg]:h-[94px] mland:[&>svg]:w-[64px] mland:[&>svg]:h-[68px] drop-shadow-[0_10px_16px_rgba(0,0,0,0.72)]">
+                    <PlayerFace
+                      player={{ ...livePlayer, no: currentNo }}
+                      team={liveTeam}
+                      state={state}
+                      careerProfile={isMePlayer ? state.p : null}
+                      kitColor={kit1}
+                      trimColor={kit2}
+                      size={88}
+                      bare
+                    />
+                  </div>
+                </div>
+
+                {/* Athlete Identity & Trait */}
+                <div className="px-3 pb-2 mland:px-2.5 mland:pb-1.5 text-center space-y-0.5">
+                  <div className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-white truncate leading-tight">
+                    {livePlayer.n}
+                  </div>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-emerald-100/80 truncate tabular">
+                    อายุ {livePlayer.age} ปี · {info.gro} · {info.TR[0]}
+                  </div>
+                </div>
+
+                {/* Bottom 5 Core Stats Bar */}
+                <div className="bg-[#060c09]/90 border-t border-white/10 px-2.5 py-2 mland:px-2 mland:py-1.5 grid grid-cols-5 gap-1 text-center">
+                  {ATT.map(([k, l]) => {
+                    const val = info.a[k];
+                    return (
+                      <div key={k} className="space-y-0.5">
+                        <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-tight text-white">
+                          {val}
+                        </div>
+                        <div className="h-1 rounded-full bg-white/12 overflow-hidden mx-0.5">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }}
+                          />
+                        </div>
+                        <div className="text-[9px] mland:text-[7.5px] text-white/65 leading-tight truncate">{l}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="grid grid-cols-5 gap-1.5 mland:gap-1">
-                {ATT.map(([k, l]) => {
-                  const val = info.a[k];
-                  const isTop = val === topCoreVal;
+
+              {/* Quick Team Controls Card (Shirt # & Captain) */}
+              {isMyTeam && state.mode === 'm' && (
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-2 shadow-xs space-y-2 mland:space-y-1.5 shrink-0">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">เบอร์เสื้อ</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={1}
+                        max={99}
+                        value={shirtNo}
+                        onChange={(e) => setShirtNo(e.target.value)}
+                        className="w-12 px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold text-center tabular"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const n = clamp(parseInt(shirtNo, 10) || currentNo, 1, 99);
+                          onUpdateState((d) => {
+                            const sq = d.teams[d.me].sq;
+                            const pl = sq.find((q) => q.n === livePlayer.n);
+                            if (!pl) return;
+                            const oldNo = getShirtNo(d.teams[d.me], pl);
+                            const holder = sq.find((q) => q !== pl && q.no === n);
+                            if (holder) {
+                              holder.no = oldNo;
+                              if (Array.isArray(holder.vis) && holder.vis.length >= 6) holder.vis[5] = oldNo;
+                            }
+                            pl.no = n;
+                            if (Array.isArray(pl.vis) && pl.vis.length >= 6) pl.vis[5] = n;
+                            if (pl.me && d.p) d.p.no = n;
+                          });
+                          setShirtNo(String(n));
+                          onToast(`เปลี่ยนเบอร์เสื้อ ${livePlayer.n} เป็น #${n}`);
+                        }}
+                        className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer"
+                      >
+                        บันทึก
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onUpdateState((d) => {
+                        d.teams[d.me].cap = livePlayer.n;
+                      });
+                      onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
+                    }}
+                    className={`w-full py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors ${
+                      isCap
+                        ? 'bg-[var(--lamp)] text-[#261900]'
+                        : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                    }`}
+                  >
+                    {isCap ? '© กัปตันทีมปัจจุบัน' : 'แต่งตั้งเป็นกัปตันทีม'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Modular Status Cards & Attribute Breakdown Cards */}
+            <div className="h-full min-h-0 overflow-y-auto pr-0.5 space-y-3 mland:space-y-2">
+              {/* Row 1: 3 Modular Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2.5 mland:gap-1.5">
+                {/* Card 1: Fitness & Discipline */}
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3 mland:p-2 shadow-xs flex flex-col justify-between gap-1.5 mland:gap-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">⚡ สภาพร่างกาย</span>
+                    <span className="text-sm mland:text-xs font-extrabold tabular" style={{ color: fitCol }}>{fitVal}%</span>
+                  </div>
+                  <div className="h-2 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${clamp(fitVal, 4, 100)}%`, background: fitCol }} />
+                  </div>
+                  <div className="flex items-center justify-between gap-1 text-[10.5px] mland:text-[8.5px]">
+                    <span className="font-semibold truncate" style={{ color: fitCol }}>{statusBadgeText}</span>
+                    <span className="tabular text-[var(--mut)] shrink-0">
+                      🟨{livePlayer.yc || 0}/3 · 🟥{livePlayer.rc || 0}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Card 2: Market Value & Contract */}
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3 mland:p-2 shadow-xs flex flex-col justify-between gap-1">
+                  <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">💎 ค่าตัว &amp; สัญญา</div>
+                  <div className="font-extrabold text-base sm:text-lg mland:text-xs font-display text-[var(--g)] tabular leading-tight">
+                    {fmtMoney(vlu(livePlayer))}
+                  </div>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
+                    {con ? `สัญญา ${con.yr} ปี · ${fmtMoneyNum(con.wg)}/นัด` : `ค่าเหนื่อย ${fmtMoneyNum(wagOf(livePlayer))}/นัด`}
+                  </div>
+                </div>
+
+                {/* Card 3: Season Performance */}
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3 mland:p-2 shadow-xs flex flex-col justify-between gap-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">📈 ผลงานซีซั่นนี้</span>
+                    <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] tabular">
+                      {livePlayer.sp || 0} นัด
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 pt-0.5 text-center">
+                    <div className="rounded-lg bg-[var(--surface-2)]/80 px-1.5 py-1 mland:py-0.5">
+                      <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">ประตู</div>
+                      <div className="font-extrabold text-sm mland:text-xs tabular inline-flex items-center gap-1 leading-tight">
+                        <span>{livePlayer.sg || 0}</span>
+                        {(livePlayer.sg || 0) > 0 && <StatIconBadge kind="goal" count={1} size="xs" />}
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-2)]/80 px-1.5 py-1 mland:py-0.5">
+                      <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">
+                        {livePlayer.pos === 'GK' ? 'คลีนชีต' : 'แอสซิสต์'}
+                      </div>
+                      <div className="font-extrabold text-sm mland:text-xs tabular inline-flex items-center gap-1 leading-tight">
+                        <span>{livePlayer.pos === 'GK' ? livePlayer.cs || 0 : livePlayer.sa || 0}</span>
+                        {(livePlayer.pos === 'GK' ? (livePlayer.cs || 0) > 0 : (livePlayer.sa || 0) > 0) && (
+                          <StatIconBadge kind={livePlayer.pos === 'GK' ? 'save' : 'assist'} count={1} size="xs" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Injury Rehab Card (when injured) */}
+              {livePlayer.inj > 0 && (() => {
+                const curTurn = state.season * 40 + state.md;
+                const medLv = state.med ?? 1;
+                const physioLv = state.staff?.physio ?? 0;
+                const treatCost = Math.max(6, 14 - medLv * 2 - physioLv * 2);
+                const alreadyTreated = livePlayer.treatedMd === curTurn;
+                return (
+                  <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 space-y-2 mland:space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">
+                        🩹 ศูนย์ฟื้นฟูอาการบาดเจ็บ (พักอีก {livePlayer.inj} นัด)
+                      </span>
+                      <span className="text-[10px] mland:text-[9px] font-bold text-[var(--mut)]">
+                        🏥 Lv.{medLv}
+                      </span>
+                    </div>
+                    <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                      พักฟื้นอัตโนมัติ -1 นัดหลังจบเกม (-2 นัดหากศูนย์แพทย์ Lv.3+ หรือมีนักกายภาพ Lv.2+)
+                    </div>
+                    {isMyTeam && state.mode === 'm' && (
+                      <button
+                        type="button"
+                        disabled={alreadyTreated || state.money < treatCost}
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => {
+                            const sq = d.teams[d.me].sq;
+                            const pl = sq.find((q) => q.n === livePlayer.n);
+                            if (!pl || pl.inj <= 0 || pl.treatedMd === curTurn || d.money < treatCost) return;
+                            d.money -= treatCost;
+                            logFin(d, `กายภาพบำบัด ${pl.n}`, -treatCost);
+                            pl.inj = Math.max(0, pl.inj - 1);
+                            pl.fit = clamp((pl.fit ?? 70) + 10, 40, 100);
+                            pl.treatedMd = curTurn;
+                          });
+                          onToast(livePlayer.inj - 1 <= 0 ? `💉 รักษา ${livePlayer.n} หายเจ็บพร้อมลงสนามแล้ว!` : `💉 ทำกายภาพ ${livePlayer.n} ลดวันพักเหลือ ${livePlayer.inj - 1} นัด (+10% ฟิต)`);
+                        }}
+                        className="w-full py-2 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer disabled:opacity-45"
+                      >
+                        {alreadyTreated
+                          ? '✅ ทำกายภาพรอบนี้ไปแล้ว (รอหลังจบนัดถัดไป)'
+                          : `💉 ทำกายภาพบำบัดเร่งด่วน (-1 นัด · +10% ฟิต · ${fmtMoney(treatCost)})`}
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* Section Header: Sub-Attributes Cards */}
+              <div className="flex items-center justify-between gap-2 px-0.5 pt-0.5">
+                <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)]">
+                  รายละเอียดค่าพลังเฉพาะทาง
+                </span>
+                <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] truncate">
+                  ⭐ จุดเด่น: {sigLabel} · {info.TR[1]}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-1.5 pb-1">
+                {info.G.map(([grp, rows], idx) => {
+                  const spanFull = info.G.length === 5 && idx === 4;
                   return (
                     <div
-                      key={k}
-                      className={`p-2 mland:p-1 rounded-xl mland:rounded-lg text-center border ${
-                        isTop
-                          ? 'bg-[var(--surface)] border-[var(--g)]/45 shadow-2xs'
-                          : 'bg-[var(--surface)]/80 border-[var(--line)]/60'
+                      key={grp}
+                      className={`p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs ${
+                        spanFull ? 'sm:col-span-2 mland:col-span-2' : ''
                       }`}
                     >
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] font-medium truncate">{l}</div>
-                      <div className="text-lg mland:text-xs font-extrabold tabular leading-tight my-0.5" style={{ color: statBarColor(val) }}>
-                        {val}
+                      <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] pb-1.5 mland:pb-1 mb-1.5 mland:mb-1 border-b border-[var(--line)]/70">
+                        {grp}
                       </div>
-                      <div className="h-1.5 mland:h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${Math.max(8, Math.min(100, val))}%`, background: statBarColor(val) }} />
+                      <div className={spanFull ? 'grid grid-cols-2 gap-x-4 gap-y-0.5' : 'space-y-0.5'}>
+                        {rows.map(([lbl, val, statKey]) => (
+                          <StatBarRow
+                            key={lbl}
+                            label={lbl}
+                            value={val}
+                            isSig={!!(statKey && statKey === info.D0.sig)}
+                            compact
+                          />
+                        ))}
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
-
-            {/* Profile, Contract & Readiness Card */}
-            <div className="rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)]/80 divide-y divide-[var(--line)]/60">
-              <div className="grid grid-cols-2 divide-x divide-[var(--line)]/60">
-                <div className="p-2.5 sm:p-3 mland:p-1.5">
-                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ค่าตัวประเมิน</div>
-                  <div className="font-extrabold text-sm mland:text-xs text-[var(--g)] tabular mt-0.5">{fmtMoney(vlu(livePlayer))}</div>
-                </div>
-                <div className="p-2.5 sm:p-3 mland:p-1.5">
-                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">สัญญา &amp; ค่าเหนื่อย</div>
-                  <div className="font-bold text-xs sm:text-sm mland:text-[10.5px] text-[var(--ink)] tabular mt-0.5 truncate">
-                    {con ? `${con.yr} ปี · ${fmtMoneyNum(con.wg)}/นัด` : `${fmtMoneyNum(wagOf(livePlayer))}/นัด`}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-2.5 sm:p-3 mland:p-1.5 space-y-1.5 mland:space-y-1">
-                <div className="flex items-center justify-between gap-2 text-xs mland:text-[10px]">
-                  <span className="text-[var(--mut)] font-medium">สภาพร่างกาย · <b className="text-[var(--ink)]">{statusBadgeText}</b></span>
-                  <span className="font-extrabold tabular" style={{ color: fitCol }}>⚡ {fitVal}%</span>
-                </div>
-                <div className="h-2 mland:h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${clamp(fitVal, 4, 100)}%`, background: fitCol }} />
-                </div>
-              </div>
-
-              <div className="px-3 py-2 mland:px-2 mland:py-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] mland:text-[9.5px]">
-                <span className="text-[var(--mut)]">นิสัย/สไตล์: <b className="text-[var(--ink)] font-semibold">{info.TR[0]} · {info.TR[1]}</b></span>
-              </div>
-            </div>
-
-            {/* Season Performance Strip */}
-            <div className="rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)]/80 grid grid-cols-4 divide-x divide-[var(--line)]/60 text-center">
-              <div className="p-2.5 mland:p-1.5">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ลงเล่น</div>
-                <div className="font-extrabold text-sm mland:text-xs tabular mt-0.5">{livePlayer.sp || 0} <span className="text-[10px] font-normal text-[var(--mut)]">นัด</span></div>
-              </div>
-              <div className="p-2.5 mland:p-1.5">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ประตู</div>
-                <div className="font-extrabold text-sm mland:text-xs tabular mt-0.5 inline-flex items-center justify-center gap-1">
-                  <span>{livePlayer.sg || 0}</span>
-                  {(livePlayer.sg || 0) > 0 && <StatIconBadge kind="goal" count={1} size="xs" />}
-                </div>
-              </div>
-              <div className="p-2.5 mland:p-1.5">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แอสซิสต์</div>
-                <div className="font-extrabold text-sm mland:text-xs tabular mt-0.5 inline-flex items-center justify-center gap-1">
-                  <span>{livePlayer.sa || 0}</span>
-                  {(livePlayer.sa || 0) > 0 && <StatIconBadge kind="assist" count={1} size="xs" />}
-                </div>
-              </div>
-              <div className="p-2.5 mland:p-1.5">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">{livePlayer.pos === 'GK' ? 'คลีนชีต' : 'เหลือง/แดง'}</div>
-                {livePlayer.pos === 'GK' ? (
-                  <div className="font-extrabold text-sm mland:text-xs tabular mt-0.5 inline-flex items-center justify-center gap-1">
-                    <span>{livePlayer.cs || 0}</span>
-                    {(livePlayer.cs || 0) > 0 && <StatIconBadge kind="save" count={1} size="xs" />}
-                  </div>
-                ) : (
-                  <div className="font-bold text-xs mland:text-[10px] tabular mt-1 mland:mt-0.5 inline-flex items-center justify-center gap-1.5">
-                    <span className={(livePlayer.yc || 0) > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--mut)]'}>🟨{livePlayer.yc || 0}</span>
-                    <span className={(livePlayer.rc || 0) > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>🟥{livePlayer.rc || 0}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {livePlayer.inj > 0 && (() => {
-              const curTurn = state.season * 40 + state.md;
-              const medLv = state.med ?? 1;
-              const physioLv = state.staff?.physio ?? 0;
-              const treatCost = Math.max(6, 14 - medLv * 2 - physioLv * 2);
-              const alreadyTreated = livePlayer.treatedMd === curTurn;
-              return (
-                <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 space-y-2 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-xs mland:text-[10.5px] text-[var(--red)]">
-                      🩹 ศูนย์ฟื้นฟูอาการบาดเจ็บ (พักอีก {livePlayer.inj} นัด)
-                    </span>
-                    <span className="text-[10px] mland:text-[9px] font-bold text-[var(--mut)]">
-                      🏥 Lv.{medLv}
-                    </span>
-                  </div>
-                  <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
-                    พักฟื้นอัตโนมัติ -1 นัดหลังจบเกม (-2 นัดหากศูนย์แพทย์ Lv.3+ หรือมีนักกายภาพ Lv.2+)
-                  </div>
-                  {isMyTeam && state.mode === 'm' && (
-                    <button
-                      type="button"
-                      disabled={alreadyTreated || state.money < treatCost}
-                      onClick={() => {
-                        SFX.tap();
-                        onUpdateState((d) => {
-                          const sq = d.teams[d.me].sq;
-                          const pl = sq.find((q) => q.n === livePlayer.n);
-                          if (!pl || pl.inj <= 0 || pl.treatedMd === curTurn || d.money < treatCost) return;
-                          d.money -= treatCost;
-                          logFin(d, `กายภาพบำบัด ${pl.n}`, -treatCost);
-                          pl.inj = Math.max(0, pl.inj - 1);
-                          pl.fit = clamp((pl.fit ?? 70) + 10, 40, 100);
-                          pl.treatedMd = curTurn;
-                        });
-                        onToast(livePlayer.inj - 1 <= 0 ? `💉 รักษา ${livePlayer.n} หายเจ็บพร้อมลงสนามแล้ว!` : `💉 ทำกายภาพ ${livePlayer.n} ลดวันพักเหลือ ${livePlayer.inj - 1} นัด (+10% ฟิต)`);
-                      }}
-                      className="w-full py-2 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer disabled:opacity-45"
-                    >
-                      {alreadyTreated
-                        ? '✅ ทำกายภาพรอบนี้ไปแล้ว (รอหลังจบนัดถัดไป)'
-                        : `💉 ทำกายภาพบำบัดเร่งด่วน (-1 นัด · +10% ฟิต · ${fmtMoney(treatCost)})`}
-                    </button>
-                  )}
-                </div>
-              );
-            })()}
-
-            {isMyTeam && state.mode === 'm' && (
-              <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/80 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs mland:text-[10px] font-semibold text-[var(--mut)]">เบอร์เสื้อ</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={shirtNo}
-                    onChange={(e) => setShirtNo(e.target.value)}
-                    className="w-14 px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold text-center tabular"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const n = clamp(parseInt(shirtNo, 10) || currentNo, 1, 99);
-                      onUpdateState((d) => {
-                        const sq = d.teams[d.me].sq;
-                        const pl = sq.find((q) => q.n === livePlayer.n);
-                        if (!pl) return;
-                        const oldNo = getShirtNo(d.teams[d.me], pl);
-                        const holder = sq.find((q) => q !== pl && q.no === n);
-                        if (holder) {
-                          holder.no = oldNo;
-                          if (Array.isArray(holder.vis) && holder.vis.length >= 6) holder.vis[5] = oldNo;
-                        }
-                        pl.no = n;
-                        if (Array.isArray(pl.vis) && pl.vis.length >= 6) pl.vis[5] = n;
-                        if (pl.me && d.p) d.p.no = n;
-                      });
-                      setShirtNo(String(n));
-                      onToast(`เปลี่ยนเบอร์เสื้อ ${livePlayer.n} เป็น #${n}`);
-                    }}
-                    className="px-3 py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer"
-                  >
-                    บันทึก
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUpdateState((d) => {
-                      d.teams[d.me].cap = livePlayer.n;
-                    });
-                    onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
-                  }}
-                  className={`px-3 py-1.5 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold cursor-pointer ${
-                    isCap ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)]'
-                  }`}
-                >
-                  {isCap ? '© กัปตันทีมปัจจุบัน' : 'ตั้งเป็นกัปตัน'}
-                </button>
-              </div>
-            )}
           </div>
-
-          {/* Right Column: Detailed Sub-Attributes Breakdown */}
-          <div className="h-full overflow-y-auto pr-1">
-            <div className="grid grid-cols-2 gap-2.5 mland:gap-1.5">
-              {info.G.map(([grp, rows]) => (
-                <div key={grp} className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]/75 space-y-1">
-                  <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] pb-1.5 mland:pb-1 mb-1 border-b border-[var(--line)]/70">
-                    {grp}
-                  </div>
-                  {rows.map(([lbl, val, statKey]) => (
-                    <StatBarRow
-                      key={lbl}
-                      label={lbl}
-                      value={val}
-                      isSig={!!(statKey && statKey === info.D0.sig)}
-                      compact
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
         )}
       </div>
     </div>

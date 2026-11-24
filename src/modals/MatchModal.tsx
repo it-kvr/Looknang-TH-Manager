@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { RN, TN, SIGL, AR_T } from '../data/thaiFootballData';
-import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, vibrate, triggerConfetti } from '../utils/audioTheme';
+import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti } from '../utils/audioTheme';
 
 type TimelineKind =
   | 'kickoff'
@@ -4874,47 +4874,55 @@ export const MatchModal: React.FC<{
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
-    SFX.tap();
     const w = worldRef.current!;
     w.dramaSlowSec = 0;
     w.dramaLabel = null;
     w.celebrateTimer = 0;
     w.cardBanner = null;
-    if (w.varReview) {
-      resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
+    let penOutcome: { winnerHome: boolean; text: string } | null = null;
+    setSfxSuppressed(true);
+    try {
+      if (w.varReview) {
+        resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
+      }
+      if (w.phase === 'shootout' && w.shootout && !w.shootout.finished) {
+        penOutcome = computePenWinnerInstant();
+        w.shootout = null;
+        setShootoutUi(null);
+        pushLog(90, `🎯 ${penOutcome.text}`, 'sys');
+      } else {
+        const startMin = Math.floor(w.minuteFloat);
+        if (startMin >= 45) {
+          pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
+        }
+        for (let m = startMin + 1; m <= 90; m++) {
+          if (m === 46) {
+            w.secondHalf = true;
+            pushTimeline(46, 'N', 'second_half', 'เริ่มครึ่งหลัง', 'ครึ่งหลัง');
+          }
+          stepInstantMinute(m, liveTacticsRef.current.tac);
+          if (m === 45) {
+            pushLog(45, `⏱️ จบครึ่งแรก: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
+            pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
+          }
+        }
+        w.minuteFloat = 90;
+        w.lastTickedMin = 90;
+        w.dramaSlowSec = 0;
+        w.dramaLabel = null;
+        w.celebrateTimer = 0;
+        w.cardBanner = null;
+        setLiveFitMap({ ...simRef.current.liveFit });
+        if (canvasRef.current) {
+          drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions);
+        }
+      }
+    } finally {
+      setSfxSuppressed(false);
     }
-    if (w.phase === 'shootout' && w.shootout && !w.shootout.finished) {
-      const pen = computePenWinnerInstant();
-      w.shootout = null;
-      setShootoutUi(null);
-      pushLog(90, `🎯 ${pen.text}`, 'sys');
-      finalizeMatch(pen.winnerHome, pen.text);
+    if (penOutcome) {
+      finalizeMatch(penOutcome.winnerHome, penOutcome.text);
       return;
-    }
-    const startMin = Math.floor(w.minuteFloat);
-    if (startMin >= 45) {
-      pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
-    }
-    for (let m = startMin + 1; m <= 90; m++) {
-      if (m === 46) {
-        w.secondHalf = true;
-        pushTimeline(46, 'N', 'second_half', 'เริ่มครึ่งหลัง', 'ครึ่งหลัง');
-      }
-      stepInstantMinute(m, liveTacticsRef.current.tac);
-      if (m === 45) {
-        pushLog(45, `⏱️ จบครึ่งแรก: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
-        pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
-      }
-    }
-    w.minuteFloat = 90;
-    w.lastTickedMin = 90;
-    w.dramaSlowSec = 0;
-    w.dramaLabel = null;
-    w.celebrateTimer = 0;
-    w.cardBanner = null;
-    setLiveFitMap({ ...simRef.current.liveFit });
-    if (canvasRef.current) {
-      drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions);
     }
     finalizeMatch();
   };

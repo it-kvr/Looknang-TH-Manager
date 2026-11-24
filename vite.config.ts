@@ -54,7 +54,7 @@ export default defineConfig(({command}) => {
           background_color: '#06100b',
           display: 'fullscreen',
           display_override: ['fullscreen', 'standalone', 'minimal-ui'],
-          orientation: 'any',
+          orientation: 'landscape',
           start_url: base,
           scope: base,
           icons: [
@@ -85,7 +85,7 @@ export default defineConfig(({command}) => {
           ],
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,jpg,svg,woff,woff2}'],
           globIgnores: ['**/assets/aistudio/**'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           cleanupOutdatedCaches: true,

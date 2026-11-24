@@ -45,6 +45,10 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.sb && Object.keys(q.sb).length) ex.sb = q.sb;
   if (q.coreSb && Object.keys(q.coreSb).length) ex.cb = q.coreSb;
   if (q.missions) ex.ms = q.missions;
+  if (q.srs) ex.srs = Math.round(q.srs * 10) / 10;
+  if (q.sra) ex.sra = q.sra;
+  if (q.motm) ex.mt = q.motm;
+  if (q.tyc) ex.tyc = q.tyc;
 
   const base: unknown[] = [
     q.n,
@@ -118,6 +122,10 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (ex.sb) p.sb = ex.sb as Record<string, number>;
   if (ex.cb) p.coreSb = ex.cb as Partial<CoreAttrs>;
   if (ex.ms) p.missions = ex.ms as PlayerMissionsState;
+  if (ex.srs !== undefined) p.srs = Number(ex.srs);
+  if (ex.sra !== undefined) p.sra = Number(ex.sra);
+  if (ex.mt !== undefined) p.motm = Number(ex.mt);
+  if (ex.tyc !== undefined) p.tyc = Number(ex.tyc);
   return p;
 };
 

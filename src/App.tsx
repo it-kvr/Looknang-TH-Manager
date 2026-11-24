@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
-import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen, exitFullscreenAndUnlockOrientation } from './utils/fullscreen';
+import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
@@ -21,6 +21,7 @@ import { GodBlessingModal } from './modals/GodBlessingModal';
 import { PlayerInspectorModal, TeamInspectorModal } from './modals/InspectorModals';
 import type { SeasonSummaryData } from './modals/SeasonEndModal';
 import { SeasonEndModal } from './modals/SeasonEndModal';
+import { SeasonStatsModal } from './modals/SeasonStatsModal';
 import { DilemmaModal } from './modals/DilemmaModal';
 import { SecretBoostModal } from './modals/SecretBoostModal';
 import { SettingsModal } from './modals/SettingsModal';
@@ -33,6 +34,7 @@ export default function App() {
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
   const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
+  const [seasonStatsTarget, setSeasonStatsTarget] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
@@ -40,16 +42,9 @@ export default function App() {
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
 
-  const [menuStep, setMenuStep] = useState<'menu' | 'ms' | 'cr'>('menu');
-
-  const shouldBeLandscape = Boolean(state) || menuStep !== 'menu';
   useEffect(() => {
-    if (!shouldBeLandscape) {
-      exitFullscreenAndUnlockOrientation().catch(() => undefined);
-      return;
-    }
     return bindAutoLandscapeFullscreen();
-  }, [shouldBeLandscape]);
+  }, []);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -332,6 +327,9 @@ export default function App() {
 
       // League Matchday
       if (isDerby) d.derby = 1;
+      if (d.mode === 'p' && d.p && payload.pf?.played && payload.pf.rt > 0) {
+        resObj.ratings = { ...(resObj.ratings || {}), [d.p.name]: payload.pf.rt };
+      }
       applyMatchResult(H, payload.gh, A, payload.ga);
       tallyMatchPlayers(H, A, resObj);
 
@@ -447,7 +445,6 @@ export default function App() {
 
   const handleTriggerNextStep = () => {
     if (!state) return;
-    SFX.tap();
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     if (nextMatchInfo) {
@@ -461,15 +458,18 @@ export default function App() {
         const myGf = nextMatchInfo.homeId === state.me ? payload.gh : payload.ga;
         const myGa = nextMatchInfo.homeId === state.me ? payload.ga : payload.gh;
         if (myGf > myGa) SFX.win();
+        else SFX.confirm();
         showToast(`⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`);
         return;
       }
+      SFX.tap();
       if (nextMatchInfo.isDerby) {
         updateState((d) => { d.derby = 1; });
       }
       setActiveMatch(nextMatchInfo);
       return;
     }
+    SFX.tap();
     if (state.md >= state.fx.length) {
       const clone: GameState = JSON.parse(JSON.stringify(state));
       const summary = finishSeasonComputation(clone);
@@ -480,6 +480,7 @@ export default function App() {
 
   const handleStartNextSeason = (transferToTeamId?: number) => {
     if (!state) return;
+    setSeasonStatsTarget(null);
     if (state.sack === 1) {
       setSeasonSummary(null);
       setState(null);
@@ -519,7 +520,6 @@ export default function App() {
           onStartPlayer={handleStartPlayer}
           onLoadSave={handleLoadSave}
           onToast={showToast}
-          onStepChange={setMenuStep}
         />
         {toast && (
           <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/92 backdrop-blur-md text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
@@ -712,6 +712,9 @@ export default function App() {
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onUpdateState={updateState}
               onNavigate={navigateToTab}
+              onOpenSeasonStats={(seasonNum) =>
+                setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
+              }
               onToast={showToast}
             />
           )}
@@ -751,11 +754,22 @@ export default function App() {
               tab={curTab}
               onUpdateState={updateState}
               onToast={showToast}
+              onOpenSeasonStats={(seasonNum) =>
+                setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
+              }
               navIntent={navIntent}
             />
           )}
           {curTab === 'p' && state.mode === 'p' && (
-            <PlayerCareerView key={`p-${navResetSeq}`} state={state} onUpdateState={updateState} onToast={showToast} />
+            <PlayerCareerView
+              key={`p-${navResetSeq}`}
+              state={state}
+              onUpdateState={updateState}
+              onToast={showToast}
+              onOpenSeasonStats={(seasonNum) =>
+                setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
+              }
+            />
           )}
           </div>
         </main>
@@ -847,9 +861,30 @@ export default function App() {
         <SeasonEndModal
           state={state}
           summary={seasonSummary}
+          onOpenSeasonStats={() =>
+            setSeasonStatsTarget(seasonSummary.archive?.season ?? state.seasonArchives?.[0]?.season ?? state.season)
+          }
           onStartNextSeason={handleStartNextSeason}
         />
       )}
+
+      {seasonStatsTarget !== null && (() => {
+        const archiveList =
+          state.seasonArchives && state.seasonArchives.length > 0
+            ? state.seasonArchives
+            : seasonSummary?.archive
+              ? [seasonSummary.archive]
+              : [];
+        if (!archiveList.length) return null;
+        return (
+          <SeasonStatsModal
+            state={state}
+            archives={archiveList}
+            initialSeason={seasonStatsTarget}
+            onClose={() => setSeasonStatsTarget(null)}
+          />
+        );
+      })()}
 
       {state.dilemma && !activeMatch && !seasonSummary && (
         <DilemmaModal
@@ -870,7 +905,7 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => {
             setShowSettings(false);
-            setMenuStep('menu');
+            setSeasonStatsTarget(null);
             setState(null);
           }}
           onOpenSecretBoost={() => setShowSecretBoost(true)}

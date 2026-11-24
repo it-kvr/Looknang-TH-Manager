@@ -2,13 +2,151 @@ import React, { useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, SIGL, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES } from '../data/thaiFootballData';
+import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, SIGL, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo } from '../engine/playerCore';
 import { cleanImportJson } from '../engine/saveCodec';
-import { ovColor } from '../engine/missions';
+import { ovColor, statBarColor } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
+import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
+import type { ClubIdentity } from '../types/game';
+
+interface StarPosterCard {
+  id: string;
+  name: string;
+  pos: SubRole;
+  no: number;
+  ov: number;
+  clubName: string;
+  sourceLabel: string;
+  archLabel: string;
+  attrs: CoreAttrs;
+  kit1: string;
+  kit2: string;
+  player: Partial<Player>;
+  team?: Team | null;
+  club?: ClubIdentity | null;
+  profile?: PlayerCareerProfile | null;
+}
+
+const STAR_CLUB_PRESETS: Array<{ name: string; kit: [string, string]; pos: Position; sp: SubRole; no: number; archId: string }> = [
+  { name: `${NG[2][0]} ${SFX0[2][0]}`, kit: KIT_P[0], pos: 'FW', sp: 'ST', no: 9, archId: 'poacher' },
+  { name: `${NG[2][1]} ${SFX0[2][5]}`, kit: KIT_P[1], pos: 'MF', sp: 'CAM', no: 10, archId: 'maestro' },
+  { name: `${NG[2][2]} ${SFX0[2][6]}`, kit: KIT_P[2], pos: 'FW', sp: 'LW', no: 7, archId: 'winger' },
+  { name: `${NG[2][7]} ${SFX0[2][8]}`, kit: KIT_P[3], pos: 'MF', sp: 'CM', no: 8, archId: 'b2b' },
+  { name: `${NG[2][9]} ${SFX0[2][9]}`, kit: KIT_P[4], pos: 'DF', sp: 'CB', no: 4, archId: 'destroyer' },
+  { name: `${NG[2][12]} ${SFX0[2][1]}`, kit: KIT_P[5], pos: 'GK', sp: 'GK', no: 1, archId: 'sweeper_gk' },
+  { name: `${NG[2][20]} ${SFX0[2][3]}`, kit: KIT_P[7], pos: 'FW', sp: 'RW', no: 11, archId: 'cannon' },
+  { name: `${NG[2][14]} ${SFX0[2][7]}`, kit: KIT_P[13], pos: 'DF', sp: 'RB', no: 2, archId: 'fullback' }
+];
+
+function buildStarPosterPool(): StarPosterCard[] {
+  const pool: StarPosterCard[] = [];
+
+  // Pull real stars from saved Manager & Player Career slots if available
+  for (let k = 1; k <= NSL; k++) {
+    const ms = loadGameFromSlot('m', k);
+    if (ms && Array.isArray(ms.teams)) {
+      const meT = ms.teams[ms.me];
+      const top = meT?.sq?.slice().sort((a, b) => b.ov - a.ov)[0];
+      if (meT && top) {
+        const clubName = ms.club?.name || meT.name;
+        const kit1 = ms.club?.c1 || meT.kc?.[0] || '#158049';
+        const kit2 = ms.club?.c2 || meT.kc?.[1] || '#f5c242';
+        pool.push({
+          id: `save_m_${k}`,
+          name: top.n,
+          pos: top.ro,
+          no: top.no || 10,
+          ov: top.ov,
+          clubName,
+          sourceLabel: `สตาร์จากเซฟ #${k}`,
+          archLabel: `${SPN[top.ro] || top.ro} · อายุ ${top.age} ปี`,
+          attrs: top.customA || dtInfo(top).a,
+          kit1,
+          kit2,
+          player: top,
+          team: meT,
+          club: ms.club || null
+        });
+      }
+    }
+    const ps = loadGameFromSlot('p', k);
+    if (ps && ps.p && Array.isArray(ps.teams)) {
+      const meT = ps.teams[ps.me];
+      const mePl = meT?.sq?.find((q) => q.me);
+      const attrs = ps.p.a || ROLE_BASE_ATTRS(ps.p.pos, ps.p.sp);
+      const ov = mePl?.ov || OVF(ps.p.pos, attrs);
+      pool.push({
+        id: `save_p_${k}`,
+        name: ps.p.name,
+        pos: ps.p.sp,
+        no: ps.p.no || 10,
+        ov,
+        clubName: meT?.name || 'ทีมชาติไทย',
+        sourceLabel: `นักเตะของคุณ #${k}`,
+        archLabel: ps.p.archName || SPN[ps.p.sp] || ps.p.sp,
+        attrs,
+        kit1: meT?.kc?.[0] || ps.p.c || '#158049',
+        kit2: meT?.kc?.[1] || '#f5c242',
+        player: mePl || { n: ps.p.name, pos: ps.p.pos, ro: ps.p.sp, no: ps.p.no, me: 1 },
+        team: meT || null,
+        profile: ps.p
+      });
+    }
+  }
+
+  // Add randomized Thai League Division 1 stars from in-game archetypes & clubs
+  STAR_CLUB_PRESETS.forEach((preset, idx) => {
+    const arch = PLAYER_ARCHETYPES.find((a) => a.id === preset.archId) || PLAYER_ARCHETYPES.find((a) => a.pos.includes(preset.pos)) || PLAYER_ARCHETYPES[0];
+    const base = ROLE_BASE_ATTRS(preset.pos, preset.sp);
+    const attrs: CoreAttrs = {
+      sh: clamp(base.sh + (arch.coreBonus.sh || 0) + (preset.pos === 'FW' ? 22 : preset.pos === 'MF' ? 16 : 8), 35, 92),
+      ps: clamp(base.ps + (arch.coreBonus.ps || 0) + (preset.pos === 'MF' ? 24 : 15), 38, 92),
+      dr: clamp(base.dr + (arch.coreBonus.dr || 0) + (preset.pos === 'FW' || preset.pos === 'MF' ? 21 : 12), 34, 92),
+      tk: clamp(base.tk + (arch.coreBonus.tk || 0) + (preset.pos === 'DF' || preset.pos === 'GK' ? 22 : 10), 32, 92),
+      ph: clamp(base.ph + (arch.coreBonus.ph || 0) + 18, 45, 92)
+    };
+    const ov = OVF(preset.pos, attrs);
+    const starName = genPlayerName();
+    const teamStub: Team = {
+      id: 900 + idx,
+      name: preset.name,
+      tier: 2,
+      pts: 0, gf: 0, ga: 0, w: 0, d: 0, l: 0, p: 0,
+      form: '4-3-3',
+      tac: 'B',
+      kc: preset.kit,
+      sq: []
+    };
+    pool.push({
+      id: `league_star_${idx}`,
+      name: starName,
+      pos: preset.sp,
+      no: preset.no,
+      ov,
+      clubName: preset.name,
+      sourceLabel: 'ซูเปอร์สตาร์ลีกสูงสุด',
+      archLabel: `${arch.icon} ${arch.name}`,
+      attrs,
+      kit1: preset.kit[0],
+      kit2: preset.kit[1],
+      player: {
+        n: starName,
+        pos: preset.pos,
+        ro: preset.sp,
+        no: preset.no,
+        ov,
+        age: 21 + (idx % 6),
+        vis: [idx % 5, idx % 5, idx % 8, idx % 2 === 0 ? 0 : idx % 4, idx % 4, preset.no, idx % 3]
+      },
+      team: teamStub
+    });
+  });
+
+  return pool;
+}
 
 export const MainMenu: React.FC<{
   onStartManager: (slot: number, names: string[][], t0: Team[], pick: number, diff: number) => void;
@@ -33,6 +171,12 @@ export const MainMenu: React.FC<{
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
+  const [starPoster, setStarPoster] = useState<{ pool: StarPosterCard[]; idx: number }>(() => {
+    const pool = buildStarPosterPool();
+    return { pool, idx: Math.floor(Math.random() * Math.max(1, pool.length)) };
+  });
+  const starPool = starPoster.pool;
+  const starIdx = starPoster.idx;
   const countSaves = (m: GameMode) => {
     let n = 0;
     for (let k = 1; k <= NSL; k++) {
@@ -206,34 +350,64 @@ export const MainMenu: React.FC<{
   const renderSlotList = (m: GameMode) => {
     const rows: React.ReactNode[] = [];
     let shownEmpty = false;
+    const isMgr = m === 'm';
     for (let k = 1; k <= NSL; k++) {
       const d = loadGameFromSlot(m, k);
-      if (d && Array.isArray(d.teams) && (m === 'm' || d.p)) {
-        const name = m === 'm' ? d.club?.name || d.teams[d.me]?.name : d.p?.name;
+      if (d && Array.isArray(d.teams) && (isMgr || d.p)) {
+        const meTeam = d.teams[d.me] || null;
+        const name = isMgr ? d.club?.name || meTeam?.name || 'สโมสร' : d.p?.name || 'นักเตะ';
+        const mePlayer = !isMgr && d.p
+          ? meTeam?.sq?.find((q) => q.me) || { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1 }
+          : null;
         const delKey = `${m}_${k}`;
         const isConfirm = confirmDel === delKey;
         rows.push(
-          <div key={k} className="flex items-center gap-1">
+          <div key={k} className="flex items-center gap-1.5 mland:gap-1">
             <button
               type="button"
               onClick={() => {
                 SFX.tap();
                 onLoadSave(m, k, d);
               }}
-              className="flex-1 min-w-0 min-h-[42px] text-left px-2 py-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer"
+              className="group flex-1 min-w-0 min-h-[48px] mland:min-h-[42px] text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer flex items-center gap-2.5 mland:gap-2"
             >
-              <div className="font-semibold text-[11px] truncate leading-tight">▶ #{k} {name}</div>
-              <div className="text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                ซ.{d.season} · น.{d.md}/{d.fx?.length || 30}
-                {m === 'p' && d.p ? ` · ${d.p.pos}` : ''}
+              <div className="shrink-0 w-9 h-9 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-center overflow-hidden">
+                {isMgr ? (
+                  <div className="[&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                    <ClubCrest name={name} size={28} team={meTeam} club={d.club} isMyClub />
+                  </div>
+                ) : (
+                  <div className="[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                    <PlayerFace player={mePlayer} team={meTeam} state={d} careerProfile={d.p} size={32} bare />
+                  </div>
+                )}
               </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)] flex items-center gap-1.5">
+                  <span className={`font-display tabular shrink-0 ${isMgr ? 'text-[#a16c00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+                    #{k}
+                  </span>
+                  <span className="truncate">{name}</span>
+                </div>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                  ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
+                  {!isMgr && d.p ? ` · ${d.p.pos}${meTeam ? ` · ${meTeam.name}` : ''}` : ''}
+                </div>
+              </div>
+
+              <span className="text-xs font-bold text-[var(--mut)] group-hover:text-[var(--g)] shrink-0 transition-colors" aria-hidden="true">
+                ▶
+              </span>
             </button>
             <button
               type="button"
               onClick={() => handleDeleteSlot(m, k)}
               aria-label="ลบเซฟ"
-              className={`min-h-[42px] px-1.5 rounded-xl border text-[10px] font-semibold cursor-pointer transition-colors shrink-0 ${
-                isConfirm ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]' : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)]'
+              className={`min-h-[48px] mland:min-h-[42px] px-2.5 mland:px-2 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer transition-colors shrink-0 ${
+                isConfirm
+                  ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
+                  : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50'
               }`}
             >
               {isConfirm ? 'ลบ?' : '🗑'}
@@ -246,16 +420,26 @@ export const MainMenu: React.FC<{
           <button
             key={k}
             type="button"
-            onClick={() => (m === 'm' ? openManagerSetup(k) : openPlayerSetup(k))}
-            className="w-full min-h-[42px] text-left px-2 py-1.5 rounded-xl border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/40 transition-colors cursor-pointer"
+            onClick={() => (isMgr ? openManagerSetup(k) : openPlayerSetup(k))}
+            className="w-full min-h-[48px] mland:min-h-[42px] text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/45 transition-colors cursor-pointer flex items-center gap-2.5 mland:gap-2"
           >
-            <div className="font-semibold text-[11px] truncate leading-tight">＋ ช่อง {k} ว่าง</div>
-            <div className="text-[9.5px] text-[var(--mut)] leading-tight mt-0.5">เริ่มเกมใหม่</div>
+            <div className="shrink-0 w-9 h-9 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface-2)]/70 border border-dashed border-[var(--line)] flex items-center justify-center text-sm mland:text-xs font-bold text-[var(--mut)]">
+              ＋
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">
+                เปิดเซฟช่อง {k}
+              </div>
+              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight mt-0.5 truncate">
+                {isMgr ? 'เริ่มคุมสโมสรใหม่' : 'สร้างนักเตะอาชีพใหม่'}
+              </div>
+            </div>
+            <span className="text-xs font-bold text-[var(--mut)] shrink-0" aria-hidden="true">›</span>
           </button>
         );
       }
     }
-    return <div className="flex flex-col gap-1.5">{rows}</div>;
+    return <div className="flex flex-col gap-1.5 mland:gap-1">{rows}</div>;
   };
 
   if (step === 'ms' && previewClubs) {
@@ -813,131 +997,278 @@ export const MainMenu: React.FC<{
     );
   }
 
+  const mCount = countSaves('m');
+  const pCount = countSaves('p');
+  const activeStar = starPool[starIdx % starPool.length];
+
+  const cycleStarPoster = () => {
+    SFX.tap();
+    if (starPool.length <= 1) return;
+    setStarPoster((cur) => {
+      let next = Math.floor(Math.random() * cur.pool.length);
+      if (next === cur.idx) next = (cur.idx + 1) % cur.pool.length;
+      return { ...cur, idx: next };
+    });
+  };
+
   return (
-    <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] safe-all">
-      <div className="flex-1 min-h-0 w-full max-w-lg mx-auto px-3 py-2.5 flex flex-col gap-2 overflow-hidden">
-        {/* Compact Portrait Stadium Hero Bar */}
-        <div className="relative shrink-0 overflow-hidden rounded-2xl px-3.5 py-2 border border-emerald-950/25 dark:border-emerald-500/25 bg-gradient-to-r from-[#091f14] via-[#103322] to-[#174a31] text-white shadow-sm flex items-center gap-3">
-          {/* Subtle integrated stadium pitch markings backdrop */}
-          <svg
-            viewBox="0 0 240 64"
-            aria-hidden="true"
-            className="pointer-events-none absolute right-0 top-0 h-full w-48 opacity-20"
-            preserveAspectRatio="xMaxYMid slice"
-          >
-            <g fill="none" stroke="#d8f5e3" strokeWidth="1.2">
-              <line x1="120" y1="0" x2="120" y2="64" />
-              <circle cx="120" cy="32" r="20" />
-              <rect x="172" y="10" width="68" height="44" rx="2" />
-              <rect x="206" y="20" width="34" height="24" rx="1" />
-            </g>
-          </svg>
+    <div className="relative h-[100dvh] w-full flex flex-col justify-center overflow-hidden bg-[#040c08] safe-all">
+      {/* Full-Bleed Stadium Artwork Canvas — Blurred & Dark Moody Night Atmosphere */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 bg-[#040c08]"
+      >
+        <img
+          src={stadiumHeroBg}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="h-full w-full object-cover object-center scale-105 blur-[4px] brightness-[0.62] saturate-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#020805]/86 via-[#05140c]/68 to-[#020805]/88" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(16,68,40,0.16),rgba(2,8,5,0.62)_78%)]" />
+      </div>
 
-          {/* Compact Stadium Emblem */}
-          <div className="relative z-10 w-10 h-10 rounded-xl bg-black/30 border border-white/15 flex items-center justify-center shrink-0">
-            <svg viewBox="0 0 40 40" className="w-8 h-8" aria-hidden="true">
-              <defs>
-                <linearGradient id="pitch_crest" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#123a26" />
-                  <stop offset="1" stopColor="#22794b" />
-                </linearGradient>
-                <radialGradient id="flood_crest" cx="0.5" cy="0.15" r="0.65">
-                  <stop offset="0" stopColor="#fde68a" stopOpacity="0.65" />
-                  <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-                </radialGradient>
-              </defs>
-              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#pitch_crest)" />
-              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#flood_crest)" />
-              <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.85">
-                <path d="M5 24h30" />
-                <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
-              </g>
-              <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
-            </svg>
+      {/* Landscape-First Main Hub: Centered Stage with Breathing Room Top/Bottom */}
+      <div className="relative z-10 w-full max-w-5xl mx-auto h-full sm:max-h-[500px] mland:max-h-[min(360px,calc(100dvh-28px))] px-4 sm:px-7 mland:px-5 py-4 sm:py-5 mland:py-2.5 flex flex-col gap-3 sm:gap-3.5 mland:gap-2.5 overflow-hidden">
+        {/* Top Stadium Masthead */}
+        <header className="shrink-0 flex items-center justify-between gap-3 mland:gap-2">
+          <div className="flex items-center gap-3 mland:gap-2 min-w-0">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 mland:w-8 mland:h-8 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-lg">
+              <svg viewBox="0 0 40 40" className="w-7 h-7 sm:w-8 sm:h-8 mland:w-6 mland:h-6" aria-hidden="true">
+                <defs>
+                  <linearGradient id="pitch_crest" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stopColor="#123a26" />
+                    <stop offset="1" stopColor="#22794b" />
+                  </linearGradient>
+                  <radialGradient id="flood_crest" cx="0.5" cy="0.15" r="0.65">
+                    <stop offset="0" stopColor="#fde68a" stopOpacity="0.7" />
+                    <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
+                  </radialGradient>
+                </defs>
+                <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#pitch_crest)" />
+                <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#flood_crest)" />
+                <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
+                  <path d="M5 24h30" />
+                  <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
+                </g>
+                <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl mland:text-lg font-extrabold font-display tracking-wide leading-none text-white drop-shadow-xs">
+                ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
+              </h1>
+              <p className="text-[11px] sm:text-xs mland:text-[9.5px] font-medium text-emerald-100/75 truncate mt-0.5">
+                เกมจำลองคุมสโมสร &amp; นักเตะอาชีพไทย
+              </p>
+            </div>
           </div>
 
-          <div className="relative z-10 flex-1 min-w-0">
-            <h1 className="text-[19px] font-bold font-display tracking-wide leading-tight text-white">
-              ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
-            </h1>
-            <p className="text-[11px] font-medium text-emerald-100/85 truncate mt-0.5">
-              ปั้นสโมสรสู่แชมป์ลีกและเวทีทีมชาติ
-            </p>
-          </div>
-
-          <div className="relative z-10 shrink-0">
+          <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-white/20 bg-white/10 hover:bg-white/18 backdrop-blur-sm text-[11px] mland:text-[10px] font-semibold text-white transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <span>📥</span>
+              <span>นำเข้าเซฟ</span>
+            </button>
             <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
           </div>
-        </div>
+        </header>
 
-        {/* Mode Launchers Side-by-Side (Portrait Fit) */}
-        <div className="shrink-0 grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => { unlockAudio(); openManagerSetup(firstEmptySlot('m')); }}
-            className="p-2.5 rounded-2xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-xs hover:brightness-[1.03] transition-all cursor-pointer flex items-center gap-2 min-w-0"
-          >
-            <span className="w-9 h-9 rounded-xl bg-black/10 flex items-center justify-center text-lg shrink-0">📋</span>
-            <div className="min-w-0">
-              <div className="text-xs sm:text-sm font-display leading-tight truncate">ผู้จัดการทีม</div>
-              <div className="text-[10px] font-medium opacity-80 truncate">คุมแผน & ซื้อขาย</div>
+        {/* Main 2 Columns: Col 1 = Randomized In-Game Star Poster | Col 2 = 2-Column Save & Mode Hub */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] mland:grid-cols-[0.74fr_1.46fr] gap-3 sm:gap-4 mland:gap-3 overflow-hidden items-stretch">
+          {/* Column 1: Premium Collector Star Footballer Poster */}
+          <aside className="relative min-h-0 rounded-2xl mland:rounded-xl p-[1px] bg-gradient-to-b from-[#fad05a]/60 via-white/20 to-[#1f6a42]/60 shadow-[0_20px_48px_rgba(0,0,0,0.72)] overflow-hidden">
+            <div className="relative h-full w-full rounded-[15px] mland:rounded-[11px] bg-gradient-to-b from-[#131e18] via-[#0c1410] to-[#060b08] overflow-hidden flex flex-col justify-between text-white">
+              {/* Top Team Ribbon Accent */}
+              <div
+                aria-hidden="true"
+                className="h-1 w-full shrink-0"
+                style={{ background: `linear-gradient(90deg, ${activeStar.kit1}, #fad05a 50%, ${activeStar.kit2})` }}
+              />
+
+              {/* Top Poster Header: OVR Shield + Club Identity + Reroll */}
+              <div className="relative z-10 px-3 pt-2.5 mland:px-2.5 mland:pt-1.5 flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+                  <div className="leading-none pr-2 border-r border-white/15 shrink-0 text-center">
+                    <div className="text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular bg-gradient-to-b from-[#fff2b2] via-[#fad05a] to-[#d69514] bg-clip-text text-transparent drop-shadow-xs">
+                      {activeStar.ov}
+                    </div>
+                    <div className="text-[9.5px] mland:text-[8px] font-bold text-white/80 tracking-wider mt-0.5">
+                      {activeStar.pos} · #{activeStar.no}
+                    </div>
+                  </div>
+                  <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/8 border border-white/12 flex items-center justify-center shrink-0 [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
+                    <ClubCrest name={activeStar.clubName} size={20} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] mland:text-[8.5px] font-bold text-[#fad05a] truncate leading-tight">
+                      {activeStar.sourceLabel}
+                    </div>
+                    <div className="text-[11px] mland:text-[9.5px] font-semibold text-white/95 truncate leading-tight">
+                      {activeStar.clubName}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={cycleStarPoster}
+                  title="สุ่มโปสเตอร์นักเตะคนอื่น"
+                  aria-label="สุ่มโปสเตอร์นักเตะคนอื่น"
+                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/10 hover:bg-[#fad05a]/25 border border-white/15 hover:border-[#fad05a]/50 text-xs mland:text-[10px] flex items-center justify-center cursor-pointer transition-all shrink-0"
+                >
+                  🎲
+                </button>
+              </div>
+
+              {/* Center Contrasting Neutral Studio Showcase */}
+              <div className="relative z-10 flex-1 min-h-0 mx-3 my-1.5 mland:mx-2.5 mland:my-1 rounded-xl border border-[#fad05a]/20 bg-gradient-to-b from-[#24332d] via-[#17221d] to-[#0f1713] flex items-end justify-center overflow-hidden shadow-inner">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: 'radial-gradient(circle at 50% 44%, rgba(248, 252, 250, 0.28) 0%, rgba(212, 228, 220, 0.08) 48%, transparent 74%)'
+                  }}
+                />
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-0 inset-x-6 h-3 rounded-full bg-black/55 blur-sm"
+                />
+                <div className="relative z-10 [&>svg]:w-[98px] [&>svg]:h-[104px] sm:[&>svg]:w-[116px] sm:[&>svg]:h-[123px] mland:[&>svg]:w-[74px] mland:[&>svg]:h-[79px] drop-shadow-[0_12px_20px_rgba(0,0,0,0.78)]">
+                  <PlayerFace
+                    player={activeStar.player}
+                    team={activeStar.team}
+                    club={activeStar.club}
+                    isMyClub={!!activeStar.club}
+                    careerProfile={activeStar.profile}
+                    kitColor={activeStar.kit1}
+                    trimColor={activeStar.kit2}
+                    size={116}
+                    bare
+                  />
+                </div>
+              </div>
+
+              {/* Gold Divider + Nameplate & 5 Color-Coded Stats */}
+              <div className="relative z-10 bg-[#050a07]/92 px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5 mland:space-y-1">
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#fad05a]/50 to-transparent"
+                />
+                <div className="text-center">
+                  <div className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-white truncate leading-tight tracking-wide">
+                    {activeStar.name}
+                  </div>
+                  <div className="text-[10px] mland:text-[8.5px] text-emerald-100/75 truncate mt-0.5 mland:mt-0">
+                    {activeStar.archLabel}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-5 gap-1 pt-1 border-t border-white/10 text-center">
+                  {ATT.map(([k, l]) => {
+                    const val = activeStar.attrs[k];
+                    return (
+                      <div key={k} className="space-y-0.5">
+                        <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-tight text-white">
+                          {val}
+                        </div>
+                        <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${clamp(val, 10, 100)}%`, background: statBarColor(val) }}
+                          />
+                        </div>
+                        <div className="text-[9px] mland:text-[7.5px] text-white/65 leading-tight">{l}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
-          </button>
+          </aside>
 
-          <button
-            type="button"
-            onClick={() => { unlockAudio(); openPlayerSetup(firstEmptySlot('p')); }}
-            className="p-2.5 rounded-2xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-xs hover:brightness-[1.05] transition-all cursor-pointer flex items-center gap-2 min-w-0"
-          >
-            <span className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center text-lg shrink-0">⚽</span>
-            <div className="min-w-0">
-              <div className="text-xs sm:text-sm font-display leading-tight truncate">นักเตะอาชีพ</div>
-              <div className="text-[10px] font-medium opacity-85 truncate">ปั้นตัว & ทีมชาติ</div>
-            </div>
-          </button>
-        </div>
+          {/* Column 2: Save Hub Split Inside into 2 Columns ([Manager Mode + Saves] | [Player Mode + Saves]) */}
+          <div className="min-h-0 grid grid-cols-2 gap-2.5 sm:gap-3 mland:gap-2 overflow-hidden">
+            {/* Sub-Column 1: Manager Mode + Manager Saves */}
+            <section className="min-h-0 flex flex-col gap-2 mland:gap-1.5">
+              <button
+                type="button"
+                onClick={() => { unlockAudio(); openManagerSetup(firstEmptySlot('m')); }}
+                className="group shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fde078] via-[#f5c242] to-[#dfa116] text-[#211500] text-left shadow-lg hover:brightness-[1.03] transition-all cursor-pointer flex items-center gap-2.5 mland:gap-2 min-w-0"
+              >
+                <span className="w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-black/10 flex items-center justify-center text-lg mland:text-sm shrink-0">
+                  📋
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display leading-tight truncate">
+                    โหมดผู้จัดการทีม
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] mland:text-[8.5px] font-semibold opacity-80 truncate mt-0.5 mland:mt-0">
+                    คุมสโมสร จัดแผน &amp; ซื้อขาย
+                  </div>
+                </div>
+                <span className="text-xs mland:text-[10px] font-extrabold opacity-80 group-hover:translate-x-0.5 transition-transform shrink-0 whitespace-nowrap">
+                  เริ่มใหม่ ›
+                </span>
+              </button>
 
-        {/* 2-Column Side-by-Side Save Slots (Manager | Player) */}
-        {(() => {
-          const mCount = countSaves('m');
-          const pCount = countSaves('p');
-          return (
-            <div className="flex-1 min-h-0 grid grid-cols-2 gap-2">
-              <div className="min-h-0 flex flex-col p-2 game-card rounded-2xl gap-1.5">
-                <div className="shrink-0 font-bold text-[11px] flex items-center justify-between gap-1 text-[var(--ink)] px-0.5">
-                  <span className="truncate">📋 ผู้จัดการ</span>
-                  <span className="px-1.5 py-0.5 rounded-md bg-[var(--lamp-soft)] text-[var(--ink)] text-[9.5px] font-bold tabular shrink-0">
+              <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl overflow-hidden">
+                <div className="shrink-0 px-3 mland:px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
+                    เซฟผู้จัดการทีม
+                  </span>
+                  <span className="text-[10.5px] mland:text-[9px] font-bold tabular text-[#9c6900] dark:text-[var(--lamp)] shrink-0">
                     {mCount}/{NSL}
                   </span>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-y-auto p-2 mland:p-1.5">
                   {renderSlotList('m')}
                 </div>
               </div>
+            </section>
 
-              <div className="min-h-0 flex flex-col p-2 game-card rounded-2xl gap-1.5">
-                <div className="shrink-0 font-bold text-[11px] flex items-center justify-between gap-1 text-[var(--ink)] px-0.5">
-                  <span className="truncate">⚽ นักเตะ</span>
-                  <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[9.5px] font-bold tabular shrink-0">
+            {/* Sub-Column 2: Player Career Mode + Player Saves */}
+            <section className="min-h-0 flex flex-col gap-2 mland:gap-1.5">
+              <button
+                type="button"
+                onClick={() => { unlockAudio(); openPlayerSetup(firstEmptySlot('p')); }}
+                className="group shrink-0 p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#199354]/95 via-[#137442]/95 to-[#0c4f2d]/95 border border-emerald-300/25 text-white text-left shadow-lg hover:brightness-[1.06] transition-all cursor-pointer flex items-center gap-2.5 mland:gap-2 min-w-0"
+              >
+                <span className="w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-white/12 border border-white/12 flex items-center justify-center text-lg mland:text-sm shrink-0">
+                  ⚽
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display leading-tight truncate">
+                    โหมดนักเตะอาชีพ
+                  </div>
+                  <div className="text-[10px] sm:text-[11px] mland:text-[8.5px] font-medium text-emerald-50/85 truncate mt-0.5 mland:mt-0">
+                    ปั้นนักเตะ &amp; ล่าฝันทีมชาติ
+                  </div>
+                </div>
+                <span className="text-xs mland:text-[10px] font-extrabold opacity-85 group-hover:translate-x-0.5 transition-transform shrink-0 whitespace-nowrap">
+                  เริ่มใหม่ ›
+                </span>
+              </button>
+
+              <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl overflow-hidden">
+                <div className="shrink-0 px-3 mland:px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
+                    เซฟนักเตะอาชีพ
+                  </span>
+                  <span className="text-[10.5px] mland:text-[9px] font-bold tabular text-[var(--g)] shrink-0">
                     {pCount}/{NSL}
                   </span>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="flex-1 min-h-0 overflow-y-auto p-2 mland:p-1.5">
                   {renderSlotList('p')}
                 </div>
               </div>
-            </div>
-          );
-        })()}
-
-        {/* Save Code Import Trigger (Opens Modal Overlay so Page Never Grows) */}
-        <button
-          type="button"
-          onClick={() => setShowImport(true)}
-          className="shrink-0 w-full py-2.5 px-3.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-xs font-semibold text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)] transition-colors cursor-pointer"
-        >
-          📥 นำเข้าโค้ดเซฟจากเครื่องอื่น
-        </button>
+            </section>
+          </div>
+        </div>
       </div>
 
       {showImport && (
