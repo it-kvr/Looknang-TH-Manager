@@ -1072,6 +1072,37 @@ export interface LiveMatchWorld {
   xgH: number;
   xgA: number;
   inMatchInjuryCount: number;
+  sideline?: {
+    benchH: LiveBenchSeat[];
+    benchA: LiveBenchSeat[];
+    coachH: LiveSidelineCoach;
+    coachA: LiveSidelineCoach;
+    warmupPhase: number;
+  };
+}
+
+export interface LiveBenchSeat {
+  id: string;
+  shortName: string;
+  no: number;
+  role: SubRole;
+  vis: number[];
+  subbedOut?: boolean;
+  isMe?: boolean;
+}
+
+export interface LiveSidelineCoach {
+  side: 'H' | 'A';
+  x: number;
+  y: number;
+  tx: number;
+  ty: number;
+  facing: number;
+  pacePhase: number;
+  gestureTimer: number;
+  shoutText: string | null;
+  shoutTimer: number;
+  isUserCoach: boolean;
 }
 
 export interface GodBlessingPatch {

@@ -830,7 +830,7 @@ export const MainMenu: React.FC<{
                   อายุ {cAge} ปี · {curArch.icon} {curArch.name}
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
-                  {cTraits.slice(0, 3).map((tid) => {
+                  {cTraits.map((tid) => {
                     const tr = TRAIT_BY_ID[tid];
                     if (!tr) return null;
                     return (
@@ -856,7 +856,7 @@ export const MainMenu: React.FC<{
                       <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-none text-white">
                         {val}
                       </div>
-                      <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                      <div className="h-2 mland:h-1.5 rounded-full bg-white/15 overflow-hidden mx-0.5">
                         <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 10, 100)}%`, background: statBarColor(val) }} />
                       </div>
                     </div>
@@ -1247,7 +1247,7 @@ export const MainMenu: React.FC<{
                             {archCoreAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--g)]">+{archCoreAdd}</span>}
                             {rolledAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--lamp)]">+{rolledAdd}</span>}
                           </span>
-                          <div className="flex-1 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
+                          <div className="flex-1 h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface)] border border-[var(--line)]/65 overflow-hidden">
                             <div className="h-full rounded-full transition-all" style={{ width: `${cAttrs[k]}%`, background: statBarColor(cAttrs[k]) }} />
                           </div>
                           <span className="w-6 text-right font-extrabold tabular">{cAttrs[k]}</span>
@@ -1315,34 +1315,34 @@ export const MainMenu: React.FC<{
                 </div>
               </div>
 
-              {/* Tab 4: Sub-stats Breakdown */}
-              <div className={`space-y-3 mland:space-y-1.5 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
+              {/* Tab 4: Sub-stats Breakdown (Balanced 2+3 single-screen grid) */}
+              <div className={`space-y-2 mland:space-y-1 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="font-bold text-xs sm:text-sm mland:text-xs">ค่าพลังเฉพาะด้านทั้งหมด</div>
-                    <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
-                      ★ สีทอง = ท่าประจำสาย (+8) · <span className="text-[var(--g)] font-semibold">เขียว = โบนัสสาย</span> · <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">เหลือง = แต้มสุ่ม</span>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] mland:text-[9px] text-[var(--mut)]">
+                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)]">ค่าพลังเฉพาะด้าน</span>
+                    <span>
+                      ★ <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">ท่าประจำสาย (+8)</span> · <span className="text-[var(--g)] font-semibold">โบนัสสาย</span> · <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">แต้มสุ่ม</span>
+                    </span>
                   </div>
                   <button
                     type="button"
                     onClick={rerollStartingPoints}
-                    className="px-2.5 py-1 rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold cursor-pointer hover:brightness-105 shrink-0"
+                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 shrink-0"
                   >
                     🎲 สุ่มแต้มใหม่
                   </button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mland:grid-cols-3 gap-2.5 mland:gap-1.5">
-                  {subStats.map((g) => (
-                    <div key={g[0]} className="p-3 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-1.5 mland:space-y-1">
-                      <div className="font-bold text-xs mland:text-[10px] pb-1 border-b border-[var(--line)]/60">{g[0]}</div>
+                {(() => {
+                  const renderSubCard = (g: (typeof subStats)[number]) => (
+                    <div key={g[0]} className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-1 mland:space-y-0.5">
+                      <div className="font-bold text-[11.5px] mland:text-[9.5px] pb-0.5 border-b border-[var(--line)]/60">{g[0]}</div>
                       {g[1].map(([lbl, val, statKey]) => {
                         const isSig = statKey === curArch.sig;
                         const archBonus = statKey ? curArch.sbBonus[statKey] || 0 : 0;
                         const rolledSub = statKey ? cSubMap[statKey] || 0 : 0;
                         return (
-                          <div key={lbl} className="flex items-center gap-1.5 text-[11px] mland:text-[9.5px]">
-                            <span className="w-[92px] sm:w-[100px] mland:w-[76px] shrink-0 truncate flex items-center gap-1 min-w-0">
+                          <div key={lbl} className="flex items-center gap-1.5 text-[11px] mland:text-[9px]">
+                            <span className="w-[82px] sm:w-[90px] mland:w-[68px] shrink-0 truncate flex items-center gap-1 min-w-0">
                               {isSig && <span className="text-[#9a6700] dark:text-[var(--lamp)] font-black shrink-0" title="ท่าไม้ตายประจำสาย">★</span>}
                               <span className={`truncate ${isSig ? 'font-bold text-[var(--ink)]' : archBonus > 0 ? 'font-semibold text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                                 {lbl}
@@ -1350,7 +1350,7 @@ export const MainMenu: React.FC<{
                               {archBonus > 0 && <span className="text-[9px] font-bold text-[var(--g)] shrink-0">+{archBonus}</span>}
                               {rolledSub > 0 && <span className="text-[9px] font-bold text-[#9a6700] dark:text-[var(--lamp)] shrink-0">+{rolledSub}</span>}
                             </span>
-                            <div className="flex-1 min-w-[28px] h-1.5 mland:h-1 rounded-full bg-[var(--surface)] overflow-hidden">
+                            <div className="flex-1 min-w-[36px] h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface)] border border-[var(--line)]/65 overflow-hidden">
                               <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 6, 100)}%`, background: statBarColor(val) }} />
                             </div>
                             <b className="w-6 mland:w-5 text-right shrink-0 tabular text-[var(--ink)]">{val}</b>
@@ -1358,8 +1358,22 @@ export const MainMenu: React.FC<{
                         );
                       })}
                     </div>
-                  ))}
-                </div>
+                  );
+                  return subStats.length === 5 ? (
+                    <div className="space-y-1.5 mland:space-y-1">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
+                        {subStats.slice(0, 2).map(renderSubCard)}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5 mland:gap-1">
+                        {subStats.slice(2).map(renderSubCard)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
+                      {subStats.map(renderSubCard)}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -1546,7 +1560,7 @@ export const MainMenu: React.FC<{
                         <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-tight text-white">
                           {val}
                         </div>
-                        <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                        <div className="h-2 mland:h-1.5 rounded-full bg-white/15 overflow-hidden mx-0.5">
                           <div
                             className="h-full rounded-full"
                             style={{ width: `${clamp(val, 10, 100)}%`, background: statBarColor(val) }}

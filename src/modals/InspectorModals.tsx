@@ -126,7 +126,7 @@ export const PlayerInspectorModal: React.FC<{
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(92dvh,690px)] mland:h-[95dvh] mland:max-h-[calc(100dvh-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(94dvh,740px)] mland:h-[95dvh] mland:max-h-[calc(100dvh-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Clean Compact Modal Header */}
@@ -322,7 +322,7 @@ export const PlayerInspectorModal: React.FC<{
                   </div>
                   {info.traits.length > 0 && (
                     <div className="flex flex-wrap justify-center gap-1 pt-0.5">
-                      {info.traits.slice(0, 3).map((t) => (
+                      {info.traits.map((t) => (
                         <span
                           key={t.id}
                           title={t.desc}
@@ -350,7 +350,7 @@ export const PlayerInspectorModal: React.FC<{
                         <div className={`text-xs sm:text-[13px] mland:text-[10px] font-extrabold font-display tabular leading-tight ${tier.darkTextClass}`}>
                           {val}
                         </div>
-                        <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                        <div className="h-2 sm:h-2.5 mland:h-1.5 rounded-full bg-white/15 overflow-hidden mx-0.5">
                           <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
                         </div>
                       </div>
@@ -421,11 +421,11 @@ export const PlayerInspectorModal: React.FC<{
             </div>
 
             {/* Right Column: Modular Status Cards, Compact Season Bar & Attribute Breakdown Cards */}
-            <div className="min-h-0 flex flex-col gap-2 mland:gap-1.5 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
+            <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
               {/* Row 1: 3 Modular Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5 shrink-0">
+              <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5 mland:gap-1 shrink-0">
                 {/* Card 1: Fitness & Discipline */}
-                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:p-1.5 shadow-xs flex flex-col justify-between gap-1">
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1.5 mland:p-1 shadow-xs flex flex-col justify-between gap-0.5">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[11px] mland:text-[8.5px] font-bold text-[var(--mut)]">⚡ สภาพร่างกาย</span>
                     <span className="tabular text-[10px] mland:text-[8px] text-[var(--mut)] shrink-0">
@@ -440,13 +440,13 @@ export const PlayerInspectorModal: React.FC<{
                       {statusBadgeText}
                     </span>
                   </div>
-                  <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div className="h-2.5 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                     <div className="h-full rounded-full transition-all" style={{ width: `${clamp(fitVal, 6, 100)}%`, background: fitCol }} />
                   </div>
                 </div>
 
                 {/* Card 2: Market Value & Contract */}
-                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:p-1.5 shadow-xs flex flex-col justify-between gap-0.5">
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1.5 mland:p-1 shadow-xs flex flex-col justify-between gap-0.5">
                   <div className="text-[11px] mland:text-[8.5px] font-bold text-[var(--mut)]">💎 ค่าตัว &amp; สัญญา</div>
                   <div className="font-extrabold text-base sm:text-lg mland:text-xs font-display text-[var(--g)] tabular leading-tight">
                     {fmtMoney(vlu(livePlayer))}
@@ -457,7 +457,7 @@ export const PlayerInspectorModal: React.FC<{
                 </div>
 
                 {/* Card 3: Season Performance */}
-                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:p-1.5 shadow-xs flex flex-col justify-between gap-1">
+                <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1.5 mland:p-1 shadow-xs flex flex-col justify-between gap-0.5">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[11px] mland:text-[8.5px] font-bold text-[var(--mut)]">📈 ผลงานซีซั่นนี้</span>
                     <span className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] tabular">
@@ -719,38 +719,16 @@ export const PlayerInspectorModal: React.FC<{
                 )}
               </div>
 
-              {/* Section Header: Sub-Attributes & Football Traits */}
-              <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 px-0.5">
-                <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">
-                  รายละเอียดค่าพลังเฉพาะทาง
-                </span>
-                <div className="flex flex-wrap items-center gap-1">
-                  {info.traits.map((t) => (
-                    <span
-                      key={t.id}
-                      title={t.desc}
-                      className={`px-1.5 py-[1px] rounded-md border text-[10px] mland:text-[8px] font-bold leading-tight ${
-                        ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(t.id)
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]'
-                          : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
-                      }`}
-                    >
-                      {t.icon} {t.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-
-              {/* Balanced Fit-to-Screen Attribute Card Grid */}
+              {/* Balanced Fit-to-Screen Attribute Card Grid (No duplicate traits header) */}
               {info.G.length === 5 ? (
-                <div className="flex flex-col gap-2 mland:gap-1.5 min-h-0">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+                <div className="flex flex-col gap-1.5 mland:gap-1 flex-1 min-h-0 justify-between">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
                     {info.G.slice(0, 2).map(([grp, rows]) => (
                       <div
                         key={grp}
-                        className="px-3 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                        className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
                       >
-                        <div className="font-bold text-xs mland:text-[9.5px] text-[var(--ink)] pb-1 mb-1 border-b border-[var(--line)]/70">
+                        <div className="font-bold text-[11.5px] mland:text-[9px] text-[var(--ink)] pb-0.5 mb-1 border-b border-[var(--line)]/70">
                           {grp}
                         </div>
                         <div className="space-y-0.5">
@@ -766,13 +744,13 @@ export const PlayerInspectorModal: React.FC<{
                       </div>
                     ))}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-1.5 mland:gap-1">
                     {info.G.slice(2).map(([grp, rows]) => (
                       <div
                         key={grp}
-                        className="px-3 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                        className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
                       >
-                        <div className="font-bold text-xs mland:text-[9.5px] text-[var(--ink)] pb-1 mb-1 border-b border-[var(--line)]/70">
+                        <div className="font-bold text-[11.5px] mland:text-[9px] text-[var(--ink)] pb-0.5 mb-1 border-b border-[var(--line)]/70">
                           {grp}
                         </div>
                         <div className="space-y-0.5">
@@ -790,13 +768,13 @@ export const PlayerInspectorModal: React.FC<{
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
                   {info.G.map(([grp, rows]) => (
                     <div
                       key={grp}
-                      className="px-3 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                      className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
                     >
-                      <div className="font-bold text-xs mland:text-[9.5px] text-[var(--ink)] pb-1 mb-1 border-b border-[var(--line)]/70">
+                      <div className="font-bold text-[11.5px] mland:text-[9px] text-[var(--ink)] pb-0.5 mb-1 border-b border-[var(--line)]/70">
                         {grp}
                       </div>
                       <div className="space-y-0.5">

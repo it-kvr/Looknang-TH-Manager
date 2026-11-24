@@ -111,7 +111,7 @@ export const PlayerCareerView: React.FC<{
             )}
             {details.traits.length > 0 && (
               <div className="flex flex-wrap justify-center gap-0.5 pt-0.5">
-                {details.traits.slice(0, 3).map((t) => (
+                {details.traits.map((t) => (
                   <span
                     key={t.id}
                     title={t.desc}
@@ -139,7 +139,7 @@ export const PlayerCareerView: React.FC<{
                   <div className={`text-[11.5px] mland:text-[9.5px] font-extrabold font-display tabular leading-tight ${tier.darkTextClass}`}>
                     {val}
                   </div>
-                  <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                  <div className="h-2 mland:h-1.5 rounded-full bg-white/15 overflow-hidden mx-0.5">
                     <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
                   </div>
                 </div>
@@ -157,7 +157,7 @@ export const PlayerCareerView: React.FC<{
                   {p.en}
                 </span>
               </div>
-              <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+              <div className="h-2.5 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                 <div className="h-full rounded-full transition-all" style={{ width: `${clamp(p.en, 6, 100)}%`, background: statBarColor(p.en) }} />
               </div>
             </div>
@@ -362,26 +362,8 @@ export const PlayerCareerView: React.FC<{
 
           {careerTab === 'stats' && (
             <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5">
-              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-                <h3 className="font-bold text-xs mland:text-[10px]">📊 รายละเอียดค่าพลังเฉพาะทาง</h3>
-                <div className="flex flex-wrap items-center gap-1">
-                  {details.traits.map((t) => (
-                    <span
-                      key={t.id}
-                      title={t.desc}
-                      className={`px-1.5 py-[1px] rounded-md border text-[9.5px] mland:text-[7.5px] font-bold leading-tight ${
-                        ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(t.id)
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]'
-                          : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
-                      }`}
-                    >
-                      {t.icon} {t.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
               {details.G.length === 5 ? (
-                <div className="flex flex-col gap-1.5 mland:gap-1 flex-1 min-h-0">
+                <div className="flex flex-col gap-1.5 mland:gap-1 flex-1 min-h-0 justify-between">
                   <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
                     {details.G.slice(0, 2).map(([grp, items]) => (
                       <div
