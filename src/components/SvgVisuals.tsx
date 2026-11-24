@@ -489,8 +489,6 @@ export const FormationPitch: React.FC<{
   dropTargetName?: string | null;
   dragPreview?: PitchDragPreview | null;
   touchPointerPitchPt?: { px: number; py: number } | null;
-  tapMovePlayerName?: string | null;
-  onPitchZoneTap?: (nx: number, ny: number, sp: SubRole, zoneLabel: string) => void;
   onPlayerPointerDown: (e: React.PointerEvent, player: Player, slotSp: SubRole, slotIdx?: number) => void;
 }> = ({
   team,
@@ -501,8 +499,6 @@ export const FormationPitch: React.FC<{
   dropTargetName,
   dragPreview,
   touchPointerPitchPt,
-  tapMovePlayerName,
-  onPitchZoneTap,
   onPlayerPointerDown
 }) => {
   const uid = React.useId().replace(/:/g, '');
@@ -523,7 +519,7 @@ export const FormationPitch: React.FC<{
       ref={svgRef}
       onContextMenu={(e) => e.preventDefault()}
       style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-      className="w-full max-w-[440px] mland:h-full mland:max-h-full mland:w-auto mland:max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none"
+      className="aspect-[300/340] h-full max-h-full w-auto max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none"
       viewBox="0 0 300 340"
     >
       <defs>
@@ -533,8 +529,8 @@ export const FormationPitch: React.FC<{
       </defs>
       <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
 
-      {(showPositionZones || tapMovePlayerName) && (
-        <g className={tapMovePlayerName && onPitchZoneTap ? 'cursor-pointer' : 'pointer-events-none'}>
+      {showPositionZones && (
+        <g className="pointer-events-none">
           {PITCH_POSITION_ZONES.map((z) => {
             const x = 18 + z.x1 * 2.64 + 1.2;
             const y = 24 + z.y1 * 2.9 + 1.2;
@@ -545,22 +541,9 @@ export const FormationPitch: React.FC<{
             const fitPen = isActiveZone && dragPreview ? pen(dragPreview.player.ro, z.sp) : 0;
             const activeStroke = fitPen === 0 ? '#4ade80' : fitPen === 1 ? '#facc15' : '#f87171';
             const activeFill = fitPen === 0 ? 'rgba(74, 222, 128, 0.24)' : fitPen === 1 ? 'rgba(250, 204, 21, 0.24)' : 'rgba(248, 113, 113, 0.24)';
-            const canTapZone = Boolean(tapMovePlayerName && onPitchZoneTap && z.sp !== 'GK');
-            const zoneCenterX = Math.round((z.x1 + z.x2) / 2);
-            const zoneCenterY = Math.round((z.y1 + z.y2) / 2);
 
             return (
-              <g
-                key={z.id}
-                onClick={
-                  canTapZone
-                    ? (e) => {
-                        e.stopPropagation();
-                        onPitchZoneTap?.(zoneCenterX, zoneCenterY, z.sp, z.label);
-                      }
-                    : undefined
-                }
-              >
+              <g key={z.id}>
                 <rect
                   x={x}
                   y={y}
@@ -571,7 +554,7 @@ export const FormationPitch: React.FC<{
                   stroke={isActiveZone ? activeStroke : pal.stroke}
                   strokeWidth={isActiveZone ? '1.8' : '0.9'}
                   strokeDasharray={isActiveZone ? undefined : '3.5 2.5'}
-                  opacity={dragPreview ? (isActiveZone ? 1 : 0.65) : tapMovePlayerName ? 0.88 : 0.72}
+                  opacity={dragPreview ? (isActiveZone ? 1 : 0.65) : 0.72}
                 />
                 <text
                   x={x + 4}
@@ -599,13 +582,13 @@ export const FormationPitch: React.FC<{
         const cy = 24 + z.y * 2.9;
         const pn = pen(q.ro, z.sp);
         const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
-        const isSource = dragSourceName === q.n || tapMovePlayerName === q.n;
+        const isSource = dragSourceName === q.n;
         const isMovingSelf = dragPreview?.slotIdx === i;
         const isTarget = dropTargetName === q.n && dragSourceName !== q.n;
-        const ed = q.inj > 0 || (q.sus || 0) > 0 ? '#ef4444' : tapMovePlayerName === q.n ? '#38bdf8' : isTarget || isMe ? '#f5c242' : PCOL[pn];
+        const ed = q.inj > 0 || (q.sus || 0) > 0 ? '#ef4444' : isTarget || isMe ? '#f5c242' : PCOL[pn];
         const kc = z.sp === 'GK' ? gkCol : col;
-        const rad = isTarget || tapMovePlayerName === q.n ? 19 : 16;
-        const sc = isTarget || tapMovePlayerName === q.n ? 0.58 : 0.5;
+        const rad = isTarget ? 19 : 16;
+        const sc = isTarget ? 0.58 : 0.5;
         const no = getShirtNo(team, q);
         const efVal = q.inj > 0 || (q.sus || 0) > 0 ? 0 : Math.max(0, Math.min(100, Math.round(q.fit ?? 100)));
         const efc = efVal >= 85 ? '#3fcf7f' : efVal >= 65 ? '#f4c63d' : '#ff7a5c';
@@ -627,10 +610,7 @@ export const FormationPitch: React.FC<{
             className={dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}
           >
             <circle cx={cx} cy={cy} r={24} fill="transparent" />
-            {tapMovePlayerName === q.n && (
-              <circle cx={cx} cy={cy} r={25} fill="rgba(56, 189, 248, 0.24)" stroke="#38bdf8" strokeWidth="2.5" strokeDasharray="4 2" />
-            )}
-            {isMe && !isTarget && tapMovePlayerName !== q.n && (
+            {isMe && !isTarget && (
               <circle cx={cx} cy={cy} r={22.5} fill="#f5c2422e" stroke="#fde047" strokeWidth="2.2" />
             )}
             {isTarget && (

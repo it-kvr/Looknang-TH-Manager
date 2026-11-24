@@ -448,6 +448,9 @@ export interface AppSettings {
   autoSkipMatch?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
+  sfxVolume?: number;
+  crowdVolume?: number;
+  preferFullscreen?: boolean;
   subAlertEnabled?: boolean;
   subAlertFitThreshold?: number;
   subAlertFormThreshold?: number;

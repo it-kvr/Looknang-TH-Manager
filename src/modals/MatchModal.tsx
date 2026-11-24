@@ -2,12 +2,33 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { RN, TN, SIGL, AR_T } from '../data/thaiFootballData';
-import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, vibrate, triggerConfetti } from '../utils/audioTheme';
+import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, vibrate, triggerConfetti } from '../utils/audioTheme';
+
+type TimelineKind =
+  | 'goal'
+  | 'pen_goal'
+  | 'pen_awarded'
+  | 'pen_miss'
+  | 'yellow'
+  | 'red'
+  | 'injury'
+  | 'miss'
+  | 'var_no_goal';
+
+interface MatchTimelineItem {
+  id: string;
+  m: number;
+  side: 'H' | 'A';
+  kind: TimelineKind;
+  who: string;
+  detail?: string;
+}
 import { getShirtNo, getFormationSlots, pen, xi, DT, injD, matchKits, pickGK } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
+import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 
 export const MatchModal: React.FC<{
   state: GameState;
@@ -15,10 +36,8 @@ export const MatchModal: React.FC<{
   homeId: number;
   awayId: number;
   isDerby: boolean;
-  isFullscreen?: boolean;
-  onExitFullscreen?: () => void;
   onFinish: (payload: FinishedMatchPayload) => void;
-}> = ({ state, kind, homeId, awayId, isDerby, isFullscreen, onExitFullscreen, onFinish }) => {
+}> = ({ state, kind, homeId, awayId, isDerby, onFinish }) => {
   const settings = useMemo(() => getSettings(), []);
   const homeOrig = state.teams[homeId];
   const awayOrig = state.teams[awayId];
@@ -120,17 +139,24 @@ export const MatchModal: React.FC<{
   const [liveFormMap, setLiveFormMap] = useState<Record<string, number>>(() =>
     Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5]))
   );
-  const [subAlertEnabled, setSubAlertEnabled] = useState<boolean>(() => settings.subAlertEnabled ?? true);
-  const [subAlertFitTh, setSubAlertFitTh] = useState<number>(() => clamp(settings.subAlertFitThreshold ?? 58, 45, 75));
-  const [subAlertFormTh, setSubAlertFormTh] = useState<number>(() => clamp(settings.subAlertFormThreshold ?? 5.8, 5.0, 6.4));
-  const [showAlertConfig, setShowAlertConfig] = useState(false);
-  const [dismissedAlerts, setDismissedAlerts] = useState<Record<string, string>>({});
+  const subAlertEnabled = settings.subAlertEnabled ?? true;
+  const subAlertFitTh = clamp(settings.subAlertFitThreshold ?? 58, 45, 75);
+  const subAlertFormTh = clamp(settings.subAlertFormThreshold ?? 5.8, 5.0, 6.4);
+  const [timelineEvents, setTimelineEvents] = useState<MatchTimelineItem[]>([]);
   const [matchYellows, setMatchYellows] = useState<Record<string, number>>({});
   const [matchCards, setMatchCards] = useState<MatchCardEvent[]>([]);
   const [sentOff, setSentOff] = useState<string[]>([]);
+  const [injuredNamesUi, setInjuredNamesUi] = useState<string[]>([]);
+  const [livePlayerStatsUi, setLivePlayerStatsUi] = useState<Record<string, LivePlayerMatchStats>>({});
   const [subPickOut, setSubPickOut] = useState<string | null>(null);
-  const [showTacticsDrawer, setShowTacticsDrawer] = useState(false);
-  const [mlandMatchTab, setMlandMatchTab] = useState<'stats' | 'events' | 'tactics'>('stats');
+  const [mlandMatchTab, setMlandMatchTab] = useState<'stats' | 'tactics'>('stats');
+  const openTacticsStudio = (pickOutName?: string) => {
+    if (pickOutName) setSubPickOut(pickOutName);
+    setLivePlayerStatsUi({ ...simRef.current.playerStats });
+    setInjuredNamesUi(simRef.current.injuredNames.slice());
+    setMlandMatchTab('tactics');
+    setPaused(true);
+  };
   const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'sub'>('all');
   const [htPitchMode, setHtPitchMode] = useState<'all' | 'H' | 'A'>(() => (meIsHome ? 'H' : 'A'));
   const [htPickedPlayer, setHtPickedPlayer] = useState<string | null>(null);
@@ -160,6 +186,7 @@ export const MatchModal: React.FC<{
     injuredNames: [] as string[],
     liveFit: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, Math.round(q.fit ?? 100)])) as Record<string, number>,
     liveForm: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5])) as Record<string, number>,
+    playerStats: {} as Record<string, LivePlayerMatchStats>,
     userStarted: myInitialStarted,
     userSubInMin: null as number | null,
     userSubOutMin: null as number | null,
@@ -169,6 +196,7 @@ export const MatchModal: React.FC<{
     gh: 0,
     ga: 0,
     evs: [] as MatchEvent[],
+    timeline: [] as MatchTimelineItem[],
     done: false
   });
 
@@ -399,14 +427,38 @@ export const MatchModal: React.FC<{
     sr.liveForm[playerName] = clamp(Math.round((cur + delta) * 10) / 10, 4.5, 10.0);
   };
 
-  const persistSubAlertPrefs = (enabled: boolean, fitTh: number, formTh: number) => {
-    const cur = getSettings();
-    saveSettings({
-      ...cur,
-      subAlertEnabled: enabled,
-      subAlertFitThreshold: fitTh,
-      subAlertFormThreshold: formTh
-    });
+  const bumpPlayerStat = (
+    playerName: string | null | undefined,
+    key: keyof LivePlayerMatchStats,
+    amt = 1
+  ) => {
+    if (!playerName) return;
+    const ps = simRef.current.playerStats;
+    const cur = ps[playerName] || { shots: 0, onTarget: 0, passes: 0, tackles: 0, saves: 0, blocks: 0 };
+    cur[key] = (cur[key] || 0) + amt;
+    ps[playerName] = cur;
+  };
+
+  const pushTimeline = (m: number, side: 'H' | 'A', kind: TimelineKind, who: string, detail?: string) => {
+    const tl = simRef.current.timeline;
+    if ((kind === 'pen_goal' || kind === 'pen_miss') && tl.length > 0) {
+      for (let i = tl.length - 1; i >= 0; i--) {
+        if (tl[i].side === side && tl[i].kind === 'pen_awarded' && Math.abs(m - tl[i].m) <= 2) {
+          tl.splice(i, 1);
+          break;
+        }
+      }
+    }
+    const item: MatchTimelineItem = {
+      id: `${m}-${side}-${kind}-${tl.length + 1}-${Math.random().toString(36).slice(2, 6)}`,
+      m,
+      side,
+      kind,
+      who,
+      detail
+    };
+    tl.push(item);
+    setTimelineEvents(tl.slice());
   };
 
   const triggerDramaSlow = (w: LiveMatchWorld, sec: number, label: string) => {
@@ -420,6 +472,7 @@ export const MatchModal: React.FC<{
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
     const kit = culprit.side === 'H' ? homeKit : awayKit;
     const directRed = forceType === 'R' ? true : forceType === 'Y' ? false : Math.random() < (culprit.tr === 1 ? 0.09 : directRedBias);
+    SFX.card();
     if (directRed) {
       culprit.sentOff = true;
       sr.sentOff.push(culprit.id);
@@ -428,6 +481,7 @@ export const MatchModal: React.FC<{
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) เสียบสกัดอันตราย โดนไล่ออก (แบน 2 นัด)`, 'card');
+      pushTimeline(curMin, culprit.side, 'red', culprit.id, 'ใบแดงโดยตรง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -446,6 +500,7 @@ export const MatchModal: React.FC<{
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
+      pushTimeline(curMin, culprit.side, 'red', culprit.id, 'เหลืองที่สอง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -463,6 +518,7 @@ export const MatchModal: React.FC<{
       `🟨 ใบเหลือง! ${culprit.id} (${team.name}) เข้าสกัดหนัก${totalSeasonY >= 3 ? ' (ครบ 3 ใบ แบนนัดหน้า!)' : ` (สะสม ${totalSeasonY}/3)`}`,
       'card'
     );
+    pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : undefined);
     if (w) {
       w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y', kit, ttl: 2.6, maxTtl: 2.6 };
       triggerDramaSlow(w, 1.5, `🟨 ใบเหลือง · ${culprit.shortName}`);
@@ -503,6 +559,7 @@ export const MatchModal: React.FC<{
     w.inMatchInjuryCount++;
     sr.injuredNames.push(victim.id);
     sr.injuries.push({ teamId: sideOrig.id, name: victim.id, games });
+    setInjuredNamesUi(sr.injuredNames.slice());
     victim.injuredOut = true;
 
     addWorldFx(w, {
@@ -515,6 +572,7 @@ export const MatchModal: React.FC<{
       maxTtl: 2.8
     });
     pushLog(curMin, `🩹 บาดเจ็บในสนาม!! ${victim.id} (${sideOrig.name}) เจ็บระหว่างเล่น · คาดพัก ${games} นัด`, 'card');
+    pushTimeline(curMin, victim.side, 'injury', victim.id, `พัก ${games} นัด`);
 
     const isHomeSide = victim.side === 'H';
     const curLu = isHomeSide ? sr.homeLu : sr.awayLu;
@@ -537,10 +595,7 @@ export const MatchModal: React.FC<{
           games,
           minute: curMin
         });
-        setSubPickOut(victim.id);
-        setShowTacticsDrawer(true);
-        setMlandMatchTab('tactics');
-        setPaused(true);
+        openTacticsStudio(victim.id);
         vibrate(55);
       } else if (subsCount < 5) {
         // Instant skip mode auto-sub
@@ -1573,7 +1628,7 @@ export const MatchModal: React.FC<{
             : `🎯 ${taker.shortName} ตะบันฟรีคิกเต็มข้อ!`;
           w.phaseTone = 'danger';
           triggerDramaSlow(w, 1.15, `🎯 ฟรีคิกลุ้นประตู · ${taker.shortName}`);
-          SFX.kick();
+          SFX.shot();
           pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) วิ่งเข้ามา${isCurlerFk ? 'ปั่นฟรีคิกโค้งๆ' : 'ซัดฟรีคิก'}ข้ามกำแพง!`);
         } else {
           const boxTarget =
@@ -1667,7 +1722,7 @@ export const MatchModal: React.FC<{
         w.phaseLabel = isPanenka ? `🪶 ${taker.shortName} ชิพปาเนนก้าจุดโทษ!!` : `🎯 ${taker.shortName} สังหารจุดโทษ!`;
         w.phaseTone = 'danger';
         triggerDramaSlow(w, 1.35, `🎯 ดวลจุดโทษ · ${taker.shortName}`);
-        SFX.kick();
+        SFX.shot();
         pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) รับหน้าที่สังหารจุดโทษ${isPanenka ? ' — วางเท้าเหนือชั้น!' : '!'}`);
         return;
       }
@@ -1874,6 +1929,7 @@ export const MatchModal: React.FC<{
             maxTtl: 3.4
           });
           triggerDramaSlow(w, 3.4, '📺 VAR เช็กจุดโทษ');
+          SFX.var();
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
@@ -1913,6 +1969,7 @@ export const MatchModal: React.FC<{
             maxTtl: 3.3
           });
           triggerDramaSlow(w, 3.3, '📺 VAR เช็กใบแดง');
+          SFX.var();
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
@@ -1956,6 +2013,7 @@ export const MatchModal: React.FC<{
           w.phaseLabel = `🚨 จุดโทษ!! ${carrier.shortName} ถูกทำฟาวล์ในเขตโทษ!`;
           w.phaseTone = 'danger';
           pushLog(curMin, `🚨 จุดโทษ!! ${nearestDef.id} ทำฟาวล์ใส่ ${carrier.id} ในกรอบเขตโทษ · ${attTeam.name} ได้จุดโทษ!`, 'card');
+          pushTimeline(curMin, side, 'pen_awarded', carrier.id, 'ได้จุดโทษ (ฟาวล์ในเขต)');
           return;
         }
 
@@ -2053,6 +2111,7 @@ export const MatchModal: React.FC<{
             tryTriggerInMatchInjury(w, nearestDef, curMin, 'clash');
           } else {
             // Defender wins the clash cleanly!
+            bumpPlayerStat(nearestDef.id, 'tackles');
             tryTriggerInMatchInjury(w, carrier, curMin, 'clash');
             b.possessionSide = defSide;
             b.carrierId = nearestDef.id;
@@ -2096,6 +2155,7 @@ export const MatchModal: React.FC<{
             tryTriggerInMatchInjury(w, carrier, curMin, 'slide');
           }
 
+          bumpPlayerStat(nearestDef.id, 'tackles');
           b.possessionSide = defSide;
           b.carrierId = nearestDef.id;
           b.lastPasserId = null;
@@ -2232,7 +2292,7 @@ export const MatchModal: React.FC<{
       w.phaseLabel = shotLabel;
       w.phaseTone = 'danger';
       triggerDramaSlow(w, shotStyle === 'bicycle' || shotStyle === 'curler' || shotStyle === 'trivela' ? 1.45 : 1.15, shotLabel);
-      SFX.kick();
+      SFX.shot();
       if (shotStyle === 'bicycle' || shotStyle === 'knuckle' || shotStyle === 'trivela') {
         pushLog(curMin, `🔥 ${shotLabel} (${attTeam.name})`);
       }
@@ -2561,10 +2621,18 @@ export const MatchModal: React.FC<{
       else if (dPl?.pos === 'DF') adjustLiveForm(dn, -0.12);
     });
 
+    const isPenaltyGoal = finishVerb.includes('จุดโทษ');
     pushLog(
       curMin,
       `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · แอสซิสต์ ${assisterName}` : ''}`,
       'goal'
+    );
+    pushTimeline(
+      curMin,
+      side,
+      isPenaltyGoal ? 'pen_goal' : 'goal',
+      scorerName,
+      isPenaltyGoal ? 'จุดโทษ' : assisterName ? `แอสซิสต์ ${assisterName.split(' ')[0]}` : undefined
     );
     addWorldFx(w, {
       type: 'goal',
@@ -2655,6 +2723,7 @@ export const MatchModal: React.FC<{
         w.phaseLabel = `📺❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
         w.phaseTone = 'offside';
         pushLog(curMin, `📺❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card');
+        pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, 'VAR ริบประตู (ล้ำหน้า)');
       } else {
         // Goal stands!
         addWorldFx(w, {
@@ -2811,6 +2880,7 @@ export const MatchModal: React.FC<{
       w.phaseLabel = `📺🚨 VAR ให้จุดโทษ${penCardTxt} (${attTeam.name})!`;
       w.phaseTone = 'danger';
       pushLog(curMin, `📺🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card');
+      pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, 'VAR ชี้จุดโทษ');
     }
   };
 
@@ -3065,6 +3135,7 @@ export const MatchModal: React.FC<{
         if (nearDef) {
           if (defSide === 'H') w.blocksH++;
           else w.blocksA++;
+          bumpPlayerStat(nearDef.id, 'blocks');
           adjustLiveForm(nearDef.id, 0.2);
           adjustLiveForm(shooter?.id, -0.08);
           if (b.flightType !== 'freekick') {
@@ -3143,6 +3214,7 @@ export const MatchModal: React.FC<{
         b.flightType === 'penalty'
           ? 0.78
           : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002 + (b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'diving_header' ? 0.04 : 0), 0.04, 0.45);
+      bumpPlayerStat(shooter?.id, 'shots');
       if (side === 'H') {
         w.shotsH++;
         w.xgH = Math.round((w.xgH + shotXg) * 100) / 100;
@@ -3156,6 +3228,7 @@ export const MatchModal: React.FC<{
         adjustLiveForm(shooter?.id, -0.12);
         const hitWoodwork = plan.outcome === 'woodwork';
         if (hitWoodwork) {
+          SFX.woodwork();
           addWorldFx(w, {
             type: 'woodwork',
             x: b.toX,
@@ -3171,6 +3244,13 @@ export const MatchModal: React.FC<{
             plan.deflectedFrom
               ? `🧱 โอ้โห! ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง!`
               : `🧱 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนเสา/คานอย่างจัง!`
+          );
+          pushTimeline(
+            curMin,
+            side,
+            b.flightType === 'penalty' ? 'pen_miss' : 'miss',
+            shooter?.id || attTeam.name,
+            b.flightType === 'penalty' ? 'จุดโทษชนเสา/คาน' : 'ชนเสา/คาน'
           );
           b.fromX = b.toX;
           b.fromY = b.toY;
@@ -3222,6 +3302,13 @@ export const MatchModal: React.FC<{
         }
         if (b.flightType === 'penalty' || Math.random() < 0.45) {
           pushLog(curMin, `😮 ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ยิงหลุดกรอบออกหลังไปอย่างน่าเสียดาย`);
+          pushTimeline(
+            curMin,
+            side,
+            b.flightType === 'penalty' ? 'pen_miss' : 'miss',
+            shooter?.id || attTeam.name,
+            b.flightType === 'penalty' ? 'ยิงจุดโทษพลาดกรอบ' : 'ยิงหลุดกรอบ'
+          );
         }
         w.pendingSetPiece = {
           type: 'goalkick',
@@ -3237,6 +3324,7 @@ export const MatchModal: React.FC<{
       }
 
       // On target!
+      bumpPlayerStat(shooter?.id, 'onTarget');
       if (side === 'H') w.onTargetH++;
       else w.onTargetA++;
 
@@ -3320,6 +3408,7 @@ export const MatchModal: React.FC<{
             maxTtl: 3.5
           });
           triggerDramaSlow(w, 3.5, `📺 VAR เช็กประตู · ${scorerShort}`);
+          SFX.var();
           b.shotStyle = undefined;
           w.phaseLabel = `📺 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
           w.phaseTone = 'setpiece';
@@ -3331,8 +3420,10 @@ export const MatchModal: React.FC<{
         awardGoalToTeam(w, side, curMin, scorerName, scorerShort, assisterName, finishVerb, b.toX, b.toY);
       } else {
         // ACCURATE & SYNCHRONIZED SUPER SAVE RIGHT AT GK'S POSITION!
+        SFX.save();
         if (defSide === 'H') w.savesH++;
         else w.savesA++;
+        bumpPlayerStat(gk?.id, 'saves');
         adjustLiveForm(gk?.id, 0.26);
         adjustLiveForm(shooter?.id, -0.06);
         if (gk) {
@@ -3375,6 +3466,9 @@ export const MatchModal: React.FC<{
               ? `🧤 ซูเปอร์เซฟ!! ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) อ่านทางพุ่งปัดจุดโทษของ ${shooter?.id || 'คู่แข่ง'} ไว้ได้!`
               : `🧤 ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) ${saveTypeText} จากลูกยิงของ ${shooter?.id || 'คู่แข่ง'}`
           );
+          if (b.flightType === 'penalty') {
+            pushTimeline(curMin, side, 'pen_miss', shooter?.id || attTeam.name, `${gk?.shortName || 'ผู้รักษาประตู'} เซฟจุดโทษ`);
+          }
         }
         const parryCorner = plan?.parryCorner ?? Math.random() < 0.48;
         if (parryCorner) {
@@ -3586,6 +3680,7 @@ export const MatchModal: React.FC<{
     if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'lofted' || b.flightType === 'goalkick' || b.flightType === 'onetwo') {
       if (side === 'H') w.passesH++;
       else w.passesA++;
+      bumpPlayerStat(b.lastPasserId, 'passes');
       const receiver = active.find((a) => a.id === b.targetId);
       const nearestOpp = defPool
         .filter((d) => d.pos !== 'GK')
@@ -3651,6 +3746,7 @@ export const MatchModal: React.FC<{
           nearestOpp.acrobatTimer = 0.58;
           nearestOpp.facing = Math.atan2(0, -dir);
           adjustLiveForm(nearestOpp.id, 0.14);
+          bumpPlayerStat(nearestOpp.id, 'tackles');
           const clearX = clamp(nearestOpp.x - dir * (12 + Math.random() * 8), 8, 92);
           const clearY = clamp(nearestOpp.y + (Math.random() - 0.5) * 20, 10, 90);
           const outlet =
@@ -3697,6 +3793,7 @@ export const MatchModal: React.FC<{
         b.possessionSide = defSide;
         b.carrierId = nearestOpp.id;
         adjustLiveForm(nearestOpp.id, 0.14);
+        bumpPlayerStat(nearestOpp.id, 'tackles');
         adjustLiveForm(b.lastPasserId, -0.07);
         b.lastPasserId = null;
         b.targetId = null;
@@ -4137,6 +4234,7 @@ export const MatchModal: React.FC<{
       xgH: Math.max(0.05, Math.round(w.xgH * 100) / 100),
       xgA: Math.max(0.05, Math.round(w.xgA * 100) / 100)
     });
+    setLivePlayerStatsUi({ ...simRef.current.playerStats });
   };
 
   const computePenWinnerInstant = () => {
@@ -4294,7 +4392,7 @@ export const MatchModal: React.FC<{
     setMatchPhaseUi('ft');
     setClockLabel('FT');
     setStoppageBadge(0);
-    SFX.whistle();
+    SFX.fullWhistle();
     setCrowdAudio(false);
 
     setLiveLu((meIsHome ? sr.homeLu : sr.awayLu).slice());
@@ -4306,6 +4404,8 @@ export const MatchModal: React.FC<{
     setSentOff(sr.sentOff.slice());
     setLiveFitMap({ ...sr.liveFit });
     setLiveFormMap({ ...sr.liveForm });
+    setInjuredNamesUi(sr.injuredNames.slice());
+    setLivePlayerStatsUi({ ...sr.playerStats });
 
     const finalGh = sr.gh;
     const finalGa = sr.ga;
@@ -4459,7 +4559,7 @@ export const MatchModal: React.FC<{
                   gk.diveProgress = 0.02;
                 }
               }
-              SFX.kick();
+              SFX.shot();
               setShootoutUi({ ...sh, hKicks: sh.hKicks.slice(), aKicks: sh.aKicks.slice() });
             }
           } else {
@@ -4707,7 +4807,7 @@ export const MatchModal: React.FC<{
           w.phaseTone = 'setpiece';
         } else if (w.phase === 'stop1' && w.stoppageFloat >= w.added1 && !activePlayInFlight) {
           w.phase = 'halftime';
-          SFX.whistle();
+          SFX.halfWhistle();
           pushLog(45, `☕ พักครึ่งเวลา: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
           w.phaseLabel = `☕ พักครึ่งเวลา (${simRef.current.gh} - ${simRef.current.ga})`;
           w.phaseTone = 'normal';
@@ -4784,28 +4884,27 @@ export const MatchModal: React.FC<{
     finalizeMatch();
   };
 
-  const handleSubstitute = (benchPlayer: Player) => {
-    if (!subPickOut) return;
+  const performSubstitution = (outName: string, benchPlayer: Player) => {
     const sr = simRef.current;
     const w = worldRef.current!;
     const myLu = meIsHome ? sr.homeLu : sr.awayLu;
     const myPlayed = meIsHome ? sr.homePlayed : sr.awayPlayed;
     const mySubsCount = meIsHome ? sr.homeSubsCount : sr.awaySubsCount;
     if (mySubsCount >= 5) return;
-    if (sr.sentOff.includes(subPickOut)) return;
-    const idx = myLu.indexOf(subPickOut);
+    if (sr.sentOff.includes(outName)) return;
+    const idx = myLu.indexOf(outName);
     if (idx < 0) return;
 
-    SFX.tap();
+    SFX.sub();
     myLu[idx] = benchPlayer.n;
     if (!myPlayed.includes(benchPlayer.n)) myPlayed.push(benchPlayer.n);
     if (meIsHome) sr.homeSubsCount++;
     else sr.awaySubsCount++;
-    const subEv: MatchSubEvent = { m: minute, t: meTeamOrig.id, inPlayer: benchPlayer.n, outPlayer: subPickOut };
+    const subEv: MatchSubEvent = { m: minute, t: meTeamOrig.id, inPlayer: benchPlayer.n, outPlayer: outName };
     sr.subs.push(subEv);
 
     // Swap live pitch agent immediately so the sub enters right on the pitch!
-    const agIdx = w.agents.findIndex((a) => a.id === subPickOut);
+    const agIdx = w.agents.findIndex((a) => a.id === outName);
     if (agIdx >= 0) {
       const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
       if (updated[idx]) {
@@ -4814,19 +4913,51 @@ export const MatchModal: React.FC<{
         updated[idx].facing = w.agents[agIdx].facing;
         w.agents[agIdx] = updated[idx];
       }
-      if (w.ball.carrierId === subPickOut) w.ball.carrierId = benchPlayer.n;
-      if (w.ball.targetId === subPickOut) w.ball.targetId = benchPlayer.n;
+      if (w.ball.carrierId === outName) w.ball.carrierId = benchPlayer.n;
+      if (w.ball.targetId === outName) w.ball.targetId = benchPlayer.n;
     }
 
-    const replacedName = subPickOut;
     setLiveLu(myLu.slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
     setSubLog(sr.subs.slice());
-    pushLog(minute, `🔄 เปลี่ยนตัว (${meTeamOrig.name}): 🟢 ${benchPlayer.n} เข้าแทน 🔴 ${replacedName}`, 'sub');
-    if (injuryAlert && injuryAlert.name === replacedName) {
+    pushLog(minute, `🔄 เปลี่ยนตัว (${meTeamOrig.name}): 🟢 ${benchPlayer.n} เข้าแทน 🔴 ${outName}`, 'sub');
+    if (injuryAlert && injuryAlert.name === outName) {
       setInjuryAlert(null);
     }
     setSubPickOut(null);
+  };
+
+  const performOnPitchSwap = (nameA: string, nameB: string) => {
+    if (nameA === nameB) return;
+    const sr = simRef.current;
+    const w = worldRef.current!;
+    const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+    const idxA = myLu.indexOf(nameA);
+    const idxB = myLu.indexOf(nameB);
+    if (idxA < 0 || idxB < 0) return;
+
+    SFX.tap();
+    const tmp = myLu[idxA];
+    myLu[idxA] = myLu[idxB];
+    myLu[idxB] = tmp;
+
+    const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
+    const updated = buildAgentsForTeam(meTeamOrig, mySide, myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+    updated.forEach((nextAg) => {
+      const oldIdx = w.agents.findIndex((a) => a.side === mySide && a.id === nextAg.id);
+      if (oldIdx >= 0) {
+        const oldAg = w.agents[oldIdx];
+        nextAg.x = oldAg.x;
+        nextAg.y = oldAg.y;
+        nextAg.facing = oldAg.facing;
+        nextAg.stride = oldAg.stride;
+        nextAg.injuredOut = oldAg.injuredOut;
+        w.agents[oldIdx] = nextAg;
+      }
+    });
+
+    setLiveLu(myLu.slice());
+    pushLog(minute, `🔀 สลับตำแหน่ง (${meTeamOrig.name}): ${nameA.split(' ')[0]} ↔ ${nameB.split(' ')[0]}`, 'sys');
   };
 
   const handleQuickSubInjured = () => {
@@ -4849,7 +4980,7 @@ export const MatchModal: React.FC<{
       benchList[0];
     if (!bestSub) return;
 
-    SFX.tap();
+    SFX.sub();
     myLu[idx] = bestSub.n;
     if (!myPlayed.includes(bestSub.n)) myPlayed.push(bestSub.n);
     if (meIsHome) sr.homeSubsCount++;
@@ -4997,67 +5128,6 @@ export const MatchModal: React.FC<{
       .sort((a, b) => b.ov - a.ov);
   }, [meTeamOrig.sq, liveLu, sentOff, meIsHome]);
 
-  const subAlertItems = useMemo(() => {
-    if (state.mode !== 'm' || done || !subAlertEnabled || subsUsed.length >= 5) return [];
-    const items: {
-      name: string;
-      role: SubRole;
-      no: number;
-      fitVal: number;
-      formVal: number;
-      lowFit: boolean;
-      lowForm: boolean;
-      urgent: boolean;
-      reasonSig: string;
-      suggestedSub: Player | null;
-    }[] = [];
-
-    liveLu.forEach((name) => {
-      if (sentOff.includes(name)) return;
-      const pl = meTeamOrig.sq.find((q) => q.n === name);
-      if (!pl) return;
-      const fitVal = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
-      const formVal = Number((liveFormMap[name] ?? 6.5).toFixed(1));
-      const lowFit = fitVal <= subAlertFitTh;
-      const lowForm = formVal <= subAlertFormTh;
-      if (!lowFit && !lowForm) return;
-      const reasonSig = `${lowFit ? 'F' : ''}${lowForm ? 'R' : ''}`;
-      if (dismissedAlerts[name] === reasonSig) return;
-      const urgent = fitVal <= Math.max(35, subAlertFitTh - 8) || (lowFit && lowForm);
-      const suggestedSub =
-        benchList.find((b) => b.pos === pl.pos) ||
-        (pl.pos !== 'GK' ? benchList.find((b) => b.pos !== 'GK') || null : null);
-      items.push({
-        name,
-        role: pl.ro,
-        no: getShirtNo(meTeamOrig, pl),
-        fitVal,
-        formVal,
-        lowFit,
-        lowForm,
-        urgent,
-        reasonSig,
-        suggestedSub
-      });
-    });
-
-    return items.sort((a, b) => Number(b.urgent) - Number(a.urgent) || a.fitVal - b.fitVal || a.formVal - b.formVal);
-  }, [
-    state.mode,
-    done,
-    subAlertEnabled,
-    subsUsed.length,
-    liveLu,
-    sentOff,
-    meTeamOrig,
-    liveFitMap,
-    liveFormMap,
-    subAlertFitTh,
-    subAlertFormTh,
-    dismissedAlerts,
-    benchList
-  ]);
-
   const compTitle =
     kind === 'asia'
       ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
@@ -5065,8 +5135,18 @@ export const MatchModal: React.FC<{
         ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
         : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
 
+  const compShortTitle =
+    kind === 'asia'
+      ? `🌏 ทวีป · ${RN[state.ac?.r ?? 0] || 'คัดเลือก'}`
+      : kind === 'cup'
+        ? `🏆 ถ้วย · ${RN[state.cup.r] || `ร.${state.cup.r + 1}`}`
+        : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
 
-  const mySubsList = subLog.filter((s) => s.t === meTeamOrig.id);
+  const cycleMatchSpeed = () => {
+    const order: readonly (0.25 | 0.5 | 1 | 2 | 4)[] = [0.25, 0.5, 1, 2, 4];
+    SFX.tap();
+    setSpeed((cur) => order[(order.indexOf(cur) + 1) % order.length]);
+  };
 
   const bannerCls =
     actionBanner.tone === 'goal'
@@ -5193,634 +5273,414 @@ export const MatchModal: React.FC<{
     );
   };
 
-  const renderLiveEnergyPanel = () => {
-    if (done && fullTimeAnalysis) return null;
-    const hNames = (meIsHome ? liveLu : liveOppLu).filter((n) => !sentOff.includes(n));
-    const aNames = (meIsHome ? liveOppLu : liveLu).filter((n) => !sentOff.includes(n));
-    const hAvg = Math.round(hNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, hNames.length));
-    const aAvg = Math.round(aNames.reduce((a, n) => a + (liveFitMap[n] ?? 100), 0) / Math.max(1, aNames.length));
-    const tiredCount = liveLu.filter((n) => !sentOff.includes(n) && (liveFitMap[n] ?? 100) <= subAlertFitTh).length;
-    const lowFormCount = liveLu.filter((n) => !sentOff.includes(n) && (liveFormMap[n] ?? 6.5) <= subAlertFormTh).length;
-    const fitColor = (v: number) => (v >= 70 ? 'var(--g)' : v >= subAlertFitTh ? '#f59e0b' : 'var(--red)');
-    const fitTextCls = (v: number) => (v >= 70 ? 'text-[var(--g)]' : v >= subAlertFitTh ? 'text-[#c98a00] dark:text-[var(--lamp)]' : 'text-[var(--red)]');
+  const renderMatchTimelinePanel = () => {
+    const iconForKind = (kind: TimelineKind) => {
+      switch (kind) {
+        case 'goal':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">⚽</span>;
+        case 'pen_goal':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">🎯</span>;
+        case 'pen_awarded':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[11px] shrink-0">🎯</span>;
+        case 'pen_miss':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">❌</span>;
+        case 'yellow':
+          return <StatIconBadge kind="yellow" size="xs" />;
+        case 'red':
+          return <StatIconBadge kind="red" size="xs" />;
+        case 'injury':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🩹</span>;
+        case 'var_no_goal':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] shrink-0">📺</span>;
+        case 'miss':
+        default:
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--surface-2)] text-[var(--mut)] text-[10px] shrink-0">🥅</span>;
+      }
+    };
 
-    if (isPlayerMode && myPlayerName) {
-      const myFit = Math.round(liveFitMap[myPlayerName] ?? myPlayerSquadObj?.fit ?? 100);
-      const myForm = Number((liveFormMap[myPlayerName] ?? 6.5).toFixed(1));
-      const onPitchNow = liveLu.includes(myPlayerName) && !sentOff.includes(myPlayerName);
-      const subOutEv = subLog.find((s) => s.t === meTeamOrig.id && s.outPlayer === myPlayerName);
-      const statusTxt = myInitialBanned
-        ? 'ติดโทษแบน (ชมข้างสนาม)'
-        : sentOff.includes(myPlayerName)
-          ? 'โดนใบแดงไล่ออก'
-          : onPitchNow
-            ? 'กำลังลงสนาม'
-            : subOutEv
-              ? `ถูกเปลี่ยนออก น.${subOutEv.m}'`
-              : 'รอโอกาสที่ม้านั่งสำรอง';
-      const myWarnFit = onPitchNow && subAlertEnabled && myFit <= subAlertFitTh;
-      const myWarnForm = onPitchNow && subAlertEnabled && myForm <= subAlertFormTh;
-      return (
-        <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[10px]">
-            <span className="font-bold flex items-center gap-1.5">
-              <span>⚡ พลังงานในสนาม</span>
-              <span className="text-[var(--mut)] font-semibold">· {statusTxt}</span>
-            </span>
-            <span className="text-[var(--mut)] tabular">
-              เฉลี่ยทีม: <b className={fitTextCls(meIsHome ? hAvg : aAvg)}>{meIsHome ? hAvg : aAvg}%</b> vs คู่แข่ง <b className={fitTextCls(meIsHome ? aAvg : hAvg)}>{meIsHome ? aAvg : hAvg}%</b>
-            </span>
-          </div>
-          {(myWarnFit || myWarnForm) && (
-            <div className="px-2.5 py-2 mland:py-1 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/50 text-[11px] mland:text-[10px] flex flex-wrap items-center justify-between gap-1.5">
-              <span className="font-bold text-[var(--red)]">
-                🩺 {myWarnFit ? `พลังงานต่ำ ${myFit}% เสี่ยงบาดเจ็บ!` : ''}
-                {myWarnFit && myWarnForm ? ' · ' : ''}
-                {myWarnForm ? `ฟอร์มตกเหลือ ${myForm.toFixed(1)}` : ''}
-              </span>
-              <span className="text-[10px] text-[var(--mut)]">ระวังจังหวะปะทะหนัก</span>
-            </div>
-          )}
-          <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
-            <div className="flex items-center justify-between text-xs gap-2">
-              <span className="font-bold truncate">★ {myPlayerName} ({myPlayerSquadObj?.ro || state.p?.sp})</span>
-              <span className="flex items-center gap-2 shrink-0 tabular">
-                <span className={`font-bold text-[11px] ${myForm <= subAlertFormTh ? 'text-[var(--red)]' : myForm >= 7.2 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                  ฟอร์ม {myForm.toFixed(1)}
-                </span>
-                <span className={`font-extrabold ${fitTextCls(myFit)}`}>
-                  {myFit}% · {myFit >= 70 ? 'ฟิตสมบูรณ์' : myFit >= subAlertFitTh ? 'เริ่มล้า' : 'เสี่ยงเจ็บ'}
-                </span>
-              </span>
-            </div>
-            <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
-              <div className="h-full rounded-full transition-all duration-300" style={{ width: `${clamp(myFit, 0, 100)}%`, background: fitColor(myFit) }} />
-            </div>
-          </div>
-        </div>
-      );
-    }
+    const labelForKind = (kind: TimelineKind, detail?: string) => {
+      if (detail) return detail;
+      switch (kind) {
+        case 'goal':
+          return 'ประตู';
+        case 'pen_goal':
+          return 'ประตูจุดโทษ';
+        case 'pen_awarded':
+          return 'ได้จุดโทษ';
+        case 'pen_miss':
+          return 'พลาดจุดโทษ';
+        case 'yellow':
+          return 'ใบเหลือง';
+        case 'red':
+          return 'ใบแดง';
+        case 'injury':
+          return 'บาดเจ็บ';
+        case 'var_no_goal':
+          return 'VAR ริบประตู';
+        case 'miss':
+          return 'ยิงพลาด';
+      }
+    };
+
+    const sortedTimeline = timelineEvents.slice().sort((a, b) => a.m - b.m);
 
     return (
-      <div className="space-y-2 mland:space-y-1.5">
-        {subAlertItems.length > 0 && (
-          <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--red-soft)]/80 border border-[var(--red)]/55 space-y-2 mland:space-y-1.5 shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[10px]">
-              <div className="flex items-center gap-1.5 font-extrabold text-[var(--red)]">
-                <span className="animate-pulse">🩺</span>
-                <span>แจ้งเตือนเปลี่ยนตัว ({subAlertItems.length} คน) · ป้องกันบาดเจ็บ &amp; ฟอร์มตก</span>
-              </div>
-              <span className="text-[10px] text-[var(--mut)] font-semibold">
-                เกณฑ์: ฟิต ≤ {subAlertFitTh}% หรือ ฟอร์ม ≤ {subAlertFormTh.toFixed(1)}
-              </span>
-            </div>
-            <div className="space-y-1.5 mland:space-y-1">
-              {subAlertItems.slice(0, 3).map((al) => (
-                <div
-                  key={al.name}
-                  className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--red)]/35 flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[10px]"
-                >
-                  <div className="min-w-0 space-y-0.5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="px-1.5 py-0.2 rounded bg-[var(--surface-2)] text-[10px] font-bold text-[var(--mut)]">
-                        #{al.no} {al.role}
-                      </span>
-                      <span className="font-bold text-[var(--ink)] truncate">{al.name}</span>
-                      {al.lowFit && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-[var(--red-soft)] text-[var(--red)] text-[10px] font-extrabold tabular">
-                          ⚡ ฟิต {al.fitVal}% (เสี่ยงเจ็บ)
-                        </span>
-                      )}
-                      {al.lowForm && (
-                        <span className="px-1.5 py-0.2 rounded-full bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] text-[10px] font-extrabold tabular">
-                          📉 ฟอร์ม {al.formVal.toFixed(1)}
-                        </span>
-                      )}
-                    </div>
-                    {al.suggestedSub && (
-                      <div className="text-[10px] text-[var(--mut)] truncate">
-                        แนะนำสำรอง: <b className="text-[var(--g)]">🟢 {al.suggestedSub.n}</b> ({al.suggestedSub.ro} · OVR {al.suggestedSub.ov} · ฟิต {Math.round(al.suggestedSub.fit ?? 100)}%)
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      disabled={benchList.length === 0 || subsUsed.length >= 5}
-                      onClick={() => {
-                        const rep = handleAutoSubstitute(al.name);
-                        if (!rep) {
-                          setSubPickOut(al.name);
-                          setShowTacticsDrawer(true);
-                          setMlandMatchTab('tactics');
-                          setPaused(true);
-                        }
-                      }}
-                      title={al.suggestedSub ? `เปลี่ยนตัวทันที: ส่ง ${al.suggestedSub.n} แทน` : 'เปลี่ยนตัวอัตโนมัติ'}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--g)] text-white text-[10px] font-bold cursor-pointer hover:brightness-105 disabled:opacity-45 whitespace-nowrap"
-                    >
-                      🔄 เปลี่ยนเลย
-                    </button>
-                    <button
-                      type="button"
-                      title="ปิดการเตือนนักเตะคนนี้ชั่วคราว"
-                      onClick={() => setDismissedAlerts((prev) => ({ ...prev, [al.name]: al.reasonSig }))}
-                      className="w-6 h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {subAlertItems.length > 3 && (
-                <div className="text-[10px] text-[var(--mut)] text-right font-semibold">
-                  และอีก {subAlertItems.length - 3} คนในแผงพลังงานด้านล่าง
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+      <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 shadow-xs">
+        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/70 text-[11px] font-bold">
+          <span className="text-[var(--ink)] flex items-center gap-1.5">
+            <span>⏱️ ไทม์ไลน์การแข่งขัน</span>
+          </span>
+          <span className="text-[10px] font-semibold text-[var(--mut)] tabular">
+            {sortedTimeline.length > 0 ? `${sortedTimeline.length} จังหวะสำคัญ` : 'กำลังรอจังหวะสำคัญ'}
+          </span>
+        </div>
 
-        <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 shadow-xs">
-          <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[10px]">
-            <span className="font-bold">⚡ พลังงาน &amp; ฟอร์ม ({meTeamOrig.name})</span>
-            <div className="flex flex-wrap items-center gap-2 tabular text-[var(--mut)]">
-              <span>
-                เฉลี่ย <b className={fitTextCls(hAvg)}>{hAvg}%</b> / <b className={fitTextCls(aAvg)}>{aAvg}%</b>
-              </span>
-              {(tiredCount > 0 || lowFormCount > 0) && (
-                <span className="font-bold text-[var(--red)]">
-                  · เตือน {tiredCount > 0 ? `ล้า ${tiredCount}` : ''}{tiredCount > 0 && lowFormCount > 0 ? '/' : ''}{lowFormCount > 0 ? `ตก ${lowFormCount}` : ''}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowAlertConfig((v) => !v)}
-                className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
-                  showAlertConfig || !subAlertEnabled
-                    ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
-                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                }`}
-              >
-                ⚙️ เกณฑ์
-              </button>
-            </div>
+        {sortedTimeline.length === 0 ? (
+          <div className="py-5 text-center text-[11px] text-[var(--mut)]">
+            ยังไม่มีประตู จุดโทษ ใบเหลือง-แดง อาการบาดเจ็บ หรือจังหวะพลาดสำคัญ
           </div>
+        ) : (
+          <div className="relative py-1">
+            {/* Central Vertical Minute Spine */}
+            <div className="pointer-events-none absolute top-1 bottom-1 left-1/2 -translate-x-1/2 w-px bg-[var(--line)]" />
 
-          {showAlertConfig && (
-            <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 text-[11px]">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-[var(--ink)]">🩺 แจ้งเตือนเปลี่ยนตัว (กันเจ็บ/ฟอร์มตก)</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !subAlertEnabled;
-                    setSubAlertEnabled(next);
-                    persistSubAlertPrefs(next, subAlertFitTh, subAlertFormTh);
-                  }}
-                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer ${
-                    subAlertEnabled ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]'
-                  }`}
-                >
-                  {subAlertEnabled ? 'เปิดเตือน' : 'ปิดเตือน'}
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="flex items-center justify-between gap-2 bg-[var(--surface)] px-2.5 py-1.5 rounded-lg">
-                  <span className="text-[10px] font-semibold text-[var(--mut)]">ฟิต ≤</span>
-                  <div className="flex items-center gap-1">
-                    {[50, 55, 58, 65].map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => {
-                          setSubAlertFitTh(v);
-                          setDismissedAlerts({});
-                          persistSubAlertPrefs(subAlertEnabled, v, subAlertFormTh);
-                        }}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular cursor-pointer ${
-                          subAlertFitTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'
-                        }`}
-                      >
-                        {v}%
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 bg-[var(--surface)] px-2.5 py-1.5 rounded-lg">
-                  <span className="text-[10px] font-semibold text-[var(--mut)]">ฟอร์ม ≤</span>
-                  <div className="flex items-center gap-1">
-                    {[5.4, 5.8, 6.0].map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => {
-                          setSubAlertFormTh(v);
-                          setDismissedAlerts({});
-                          persistSubAlertPrefs(subAlertEnabled, subAlertFitTh, v);
-                        }}
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular cursor-pointer ${
-                          subAlertFormTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'
-                        }`}
-                      >
-                        {v.toFixed(1)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+            <div className="space-y-1.5">
+              {sortedTimeline.map((item) => {
+                const isHomeSide = item.side === 'H';
+                const shortWho = item.who.split(' ')[0] || item.who;
+                const isGoal = item.kind === 'goal' || item.kind === 'pen_goal';
+                const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss';
+                const titleCls = isGoal
+                  ? 'text-[var(--g)] font-extrabold'
+                  : isNeg
+                    ? 'text-[var(--red)] font-bold'
+                    : 'text-[var(--ink)] font-bold';
+                const subText = labelForKind(item.kind, item.detail);
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 mland:grid-cols-3 gap-1.5 mland:gap-1">
-            {liveLu.map((name) => {
-              const pl = meTeamOrig.sq.find((q) => q.n === name);
-              if (!pl) return null;
-              const isRed = sentOff.includes(name);
-              const fitVal = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
-              const formVal = Number((liveFormMap[name] ?? 6.5).toFixed(1));
-              const warnFit = !isRed && subAlertEnabled && fitVal <= subAlertFitTh;
-              const warnForm = !isRed && subAlertEnabled && formVal <= subAlertFormTh;
-              const canSubClick = !isRed && subsUsed.length < 5 && benchList.length > 0;
-              const nextSub = canSubClick ? findBestSubFor(name) : null;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  disabled={!canSubClick}
-                  onClick={() => handleAutoSubstitute(name)}
-                  title={canSubClick ? `แตะเพื่อเปลี่ยนตัวทันที${nextSub ? ` (${nextSub.n.split(' ')[0]} เข้าแทน)` : ''}` : undefined}
-                  className={`group p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]/70 border text-left transition-colors ${
-                    isRed
-                      ? 'opacity-45 border-[var(--red)]/40 cursor-not-allowed'
-                      : warnFit
-                        ? 'border-[var(--red)]/75 bg-[var(--red-soft)]/35 hover:bg-[var(--red-soft)]/55 cursor-pointer'
-                        : warnForm
-                          ? 'border-[var(--lamp)]/75 bg-[var(--lamp-soft)]/35 hover:bg-[var(--lamp-soft)]/55 cursor-pointer'
-                          : 'border-[var(--line)]/80 hover:border-[var(--g)] cursor-pointer'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-1 text-[10.5px] mland:text-[9.5px]">
-                    <span className="font-bold truncate flex items-center gap-1 min-w-0">
-                      <span className="px-1 py-0.2 rounded bg-[var(--surface)] text-[8.5px] font-extrabold text-[var(--mut)] shrink-0">
-                        {pl.ro}
-                      </span>
-                      <span className="truncate">{pl.n.split(' ')[0]}</span>
-                    </span>
-                    <span className={`font-extrabold tabular shrink-0 ${isRed ? 'text-[var(--red)]' : fitTextCls(fitVal)}`}>
-                      {isRed ? <StatIconBadge kind="red" size="xs" /> : `${fitVal}%`}
-                    </span>
-                  </div>
-                  <div className="mt-1.5 mland:mt-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all duration-300"
-                      style={{ width: `${isRed ? 0 : clamp(fitVal, 0, 100)}%`, background: fitColor(fitVal) }}
-                    />
-                  </div>
-                  {!isRed && (
-                    <div className="mt-1 flex items-center justify-between gap-1 text-[9.5px] mland:text-[8.5px] tabular">
-                      <span className={warnForm ? 'font-extrabold text-[#b45309] dark:text-[var(--lamp)]' : formVal >= 7.2 ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)] font-semibold'}>
-                        ฟอร์ม {formVal.toFixed(1)}
-                      </span>
-                      {warnFit ? (
-                        <span className="font-extrabold text-[var(--red)]">เปลี่ยน</span>
-                      ) : warnForm ? (
-                        <span className="font-bold text-[#b45309] dark:text-[var(--lamp)]">เปลี่ยน</span>
-                      ) : canSubClick ? (
-                        <span className="text-[var(--g)] opacity-0 group-hover:opacity-100 transition-opacity font-bold">เปลี่ยน</span>
-                      ) : null}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-          {subsUsed.length < 5 && benchList.length > 0 && (
-            <div className="text-[10px] text-[var(--mut)] text-right">
-              แตะที่การ์ดนักเตะเพื่อเปลี่ยนตัวอัตโนมัติทันที (เหลือ {5 - subsUsed.length} โควตา)
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderLiveTacticsPanel = () => (
-    <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--g)]/40 space-y-3 mland:space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-bold text-xs mland:text-[11px]">⚡ ปรับแผนสด &amp; เปลี่ยนตัว ({meTeamOrig.name}) · เหลือโควต้า {5 - subsUsed.length} คน</span>
-        <button
-          type="button"
-          onClick={() => {
-            setShowTacticsDrawer(false);
-            setMlandMatchTab('events');
-            setPaused(false);
-          }}
-          className="px-3 py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[11px] font-bold cursor-pointer"
-        >
-          ใช้แผน &amp; เล่นต่อ ▶
-        </button>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5 text-xs mland:text-[10px]">
-        <div>
-          <div className="text-[11px] mland:text-[10px] font-bold text-[var(--mut)] mb-1">สไตล์ (Mentality)</div>
-          <div className="flex flex-wrap gap-1">
-            {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => {
-                  setLiveTac(m);
-                  pushLog(minute, `📣 สั่งการข้างสนาม: ปรับแผนเป็น "${AR_T[m]}"`, 'sys');
-                }}
-                className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg font-semibold cursor-pointer ${liveTac === m ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)]'}`}
-              >
-                {AR_T[m]}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="text-[11px] mland:text-[10px] font-bold text-[var(--mut)] mb-1">สไตล์จ่ายบอล</div>
-          <div className="flex flex-wrap gap-1">
-            {['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'].map((lbl, idx) => (
-              <button
-                key={lbl}
-                type="button"
-                onClick={() => {
-                  setLivePass(idx);
-                  pushLog(minute, `📣 สั่งการข้างสนาม: เน้นจ่ายแบบ "${lbl}"`, 'sys');
-                }}
-                className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg font-semibold cursor-pointer ${livePass === idx ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)]'}`}
-              >
-                {lbl}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-2 gap-2 mland:gap-1.5 text-[11px] mland:text-[10px]">
-        <div>
-          <div className="font-bold text-[var(--mut)] mb-1">เพรสซิ่ง</div>
-          <div className="flex gap-1">
-            {['ต่ำ', 'กลาง', 'สูง'].map((lbl, k) => (
-              <button key={lbl} type="button" onClick={() => setLivePress(k)} className={`flex-1 py-1 mland:py-0.5 rounded-md font-semibold cursor-pointer ${livePress === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)]'}`}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="font-bold text-[var(--mut)] mb-1">จังหวะ</div>
-          <div className="flex gap-1">
-            {['ช้า', 'กลาง', 'เร็ว'].map((lbl, k) => (
-              <button key={lbl} type="button" onClick={() => setLiveTempo(k)} className={`flex-1 py-1 mland:py-0.5 rounded-md font-semibold cursor-pointer ${liveTempo === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)]'}`}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="font-bold text-[var(--mut)] mb-1">แนวรับ</div>
-          <div className="flex gap-1">
-            {['ลึก', 'กลาง', 'สูง'].map((lbl, k) => (
-              <button key={lbl} type="button" onClick={() => setLiveLine(k)} className={`flex-1 py-1 mland:py-0.5 rounded-md font-semibold cursor-pointer ${liveLine === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)]'}`}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div className="font-bold text-[var(--mut)] mb-1">ความกว้าง</div>
-          <div className="flex gap-1">
-            {['แคบ', 'กลาง', 'กว้าง'].map((lbl, k) => (
-              <button key={lbl} type="button" onClick={() => setLiveWid(k)} className={`flex-1 py-1 mland:py-0.5 rounded-md font-semibold cursor-pointer ${liveWid === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)]'}`}>{lbl}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {subsUsed.length < 5 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-1.5">
-          <div>
-            <div className="text-[11px] mland:text-[10px] font-bold text-[var(--red)] mb-1">1. 🔴 เลือกนักเตะในสนามที่ต้องการ &ldquo;เปลี่ยนออก&rdquo;</div>
-            <div className="max-h-36 mland:max-h-28 overflow-y-auto space-y-1 pr-0.5">
-              {liveLu.map((name) => {
-                const pl = meTeamOrig.sq.find((q) => q.n === name);
-                if (!pl) return null;
-                const isRed = sentOff.includes(name);
-                const hasY = (matchYellows[name] || 0) > 0;
-                const curF = Math.round(liveFitMap[name] ?? pl.fit ?? 100);
-                const curForm = Number((liveFormMap[name] ?? 6.5).toFixed(1));
-                const flagFit = !isRed && subAlertEnabled && curF <= subAlertFitTh;
-                const flagForm = !isRed && subAlertEnabled && curForm <= subAlertFormTh;
-                const activePick = subPickOut === name;
                 return (
-                  <div
-                    key={name}
-                    className={`w-full flex items-center justify-between gap-1.5 px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] ${
-                      isRed
-                        ? 'bg-[var(--surface)] opacity-45'
-                        : activePick
-                          ? 'bg-[var(--lamp)] text-[#261900] font-bold'
-                          : flagFit
-                            ? 'bg-[var(--red-soft)]/50 border border-[var(--red)]/50'
-                            : flagForm
-                              ? 'bg-[var(--lamp-soft)]/50 border border-[var(--lamp)]/50'
-                              : 'bg-[var(--surface)]'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      disabled={isRed}
-                      onClick={() => setSubPickOut(activePick ? null : name)}
-                      className="flex-1 min-w-0 flex items-center justify-between gap-1.5 text-left cursor-pointer disabled:cursor-not-allowed"
+                  <div key={item.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] relative">
+                    {/* Home Event (Left Side) */}
+                    <div className={`min-w-0 ${isHomeSide ? 'flex items-center justify-end gap-1.5 text-right pr-1' : ''}`}>
+                      {isHomeSide && (
+                        <>
+                          <div className="min-w-0 leading-tight">
+                            <div className={`truncate ${titleCls}`}>{shortWho}</div>
+                            <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
+                          </div>
+                          {iconForKind(item.kind)}
+                        </>
+                      )}
+                    </div>
+
+                    {/* Center Minute Node */}
+                    <div
+                      className={`z-10 min-w-[30px] h-5 px-1.5 rounded-full border text-[9.5px] mland:text-[8.5px] font-extrabold tabular flex items-center justify-center shadow-2xs ${
+                        isGoal
+                          ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                          : isNeg
+                            ? 'bg-[var(--red)] border-[var(--red)] text-white'
+                            : item.kind === 'yellow'
+                              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                              : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)]'
+                      }`}
                     >
-                      <span className="truncate flex items-center gap-1">
-                        <span className="text-[10px] font-bold text-[var(--mut)]">#{getShirtNo(meTeamOrig, pl)}</span>
-                        <span className="font-bold">{pl.ro}</span>
-                        <span className="truncate">{pl.n}</span>
-                        {isRed && <StatIconBadge kind="red" size="xs" />}
-                        {!isRed && hasY && <StatIconBadge kind="yellow" count={matchYellows[name] || 1} size="xs" />}
-                        {flagFit && <span className="text-[9px] font-extrabold text-[var(--red)]">🩺</span>}
-                        {!flagFit && flagForm && <span className="text-[9px] font-extrabold text-[#b45309] dark:text-[var(--lamp)]">📉</span>}
-                      </span>
-                      <span className="flex items-center gap-1.5 shrink-0 tabular text-[11px] mland:text-[10px]">
-                        <span className={flagForm ? 'text-[#b45309] dark:text-[var(--lamp)] font-bold' : 'text-[var(--mut)]'}>
-                          ★{curForm.toFixed(1)}
-                        </span>
-                        <span className={curF <= subAlertFitTh ? 'text-[var(--red)] font-bold' : curF < 75 ? 'text-[#c98a00]' : 'text-[var(--g)]'}>
-                          {curF}%
-                        </span>
-                        <span className="font-bold">{pl.ov}</span>
-                      </span>
-                    </button>
-                    {!isRed && benchList.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleAutoSubstitute(name)}
-                        title="เปลี่ยนตัวอัตโนมัติทันที"
-                        className="px-1.5 py-0.5 rounded bg-[var(--g)] text-white text-[9.5px] font-bold cursor-pointer hover:brightness-110 shrink-0"
-                      >
-                        ⚡เปลี่ยน
-                      </button>
-                    )}
+                      {item.m}&apos;
+                    </div>
+
+                    {/* Away Event (Right Side) */}
+                    <div className={`min-w-0 ${!isHomeSide ? 'flex items-center justify-start gap-1.5 text-left pl-1' : ''}`}>
+                      {!isHomeSide && (
+                        <>
+                          {iconForKind(item.kind)}
+                          <div className="min-w-0 leading-tight">
+                            <div className={`truncate ${titleCls}`}>{shortWho}</div>
+                            <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
-          <div>
-            <div className="text-[11px] mland:text-[10px] font-bold text-[var(--g)] mb-1">
-              2. 🟢 เลือกตัวสำรอง &ldquo;ส่งเข้าแทน&rdquo; {subPickOut ? `(${subPickOut.split(' ')[0]})` : ''}
-            </div>
-            <div className="max-h-36 mland:max-h-28 overflow-y-auto space-y-1 pr-0.5">
-              {(() => {
-                const outObj = subPickOut ? meTeamOrig.sq.find((q) => q.n === subPickOut) : null;
-                return benchList.map((pl) => {
-                  const fitMatch = outObj && pl.pos === outObj.pos;
-                  const curF = Math.round(pl.fit ?? 100);
-                  return (
-                    <button
-                      key={pl.n}
-                      type="button"
-                      disabled={!subPickOut}
-                      onClick={() => handleSubstitute(pl)}
-                      className={`w-full flex items-center justify-between gap-1.5 px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)] border text-xs mland:text-[10px] cursor-pointer disabled:opacity-45 ${fitMatch ? 'border-[var(--g)]/60' : 'border-transparent hover:border-[var(--g)]'}`}
-                    >
-                      <span className="truncate flex items-center gap-1">
-                        <span className="text-[10px] font-bold text-[var(--mut)]">#{getShirtNo(meTeamOrig, pl)}</span>
-                        <span className="font-bold">{pl.ro}</span>
-                        <span className="truncate">{pl.n}</span>
-                        {fitMatch && <span className="text-[10px] text-[var(--g)] font-bold">ตรงตำแหน่ง</span>}
-                      </span>
-                      <span className="flex items-center gap-1.5 shrink-0 tabular text-[11px] mland:text-[10px]">
-                        <span className="text-[var(--mut)]">{curF}%</span>
-                        <span className="font-bold text-[var(--g)]">{pl.ov}</span>
-                      </span>
-                    </button>
-                  );
-                });
-              })()}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="text-xs font-semibold text-[var(--mut)]">ใช้โควต้าเปลี่ยนตัวครบ 5 คนแล้ว</div>
-      )}
-      {mySubsList.length > 0 && (
-        <div className="pt-2 mland:pt-1 border-t border-[var(--line)] flex flex-wrap gap-1.5 text-[11px] mland:text-[10px]">
-          <span className="font-bold text-[var(--mut)]">เปลี่ยนตัวแล้ว:</span>
-          {mySubsList.map((sb, i) => (
-            <span key={i} className="px-2 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] tabular">
-              {sb.m}&apos; 🟢{sb.inPlayer.split(' ')[0]} ↔ 🔴{sb.outPlayer.split(' ')[0]}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden">
-      <div className="w-full max-w-5xl mland:max-w-[98vw] max-h-[95dvh] mland:h-[97dvh] mland:max-h-[97dvh] rounded-2xl sm:rounded-3xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-        {/* Pinned Top Broadcast Scoreboard */}
-        <div className="shrink-0 px-3 sm:px-5 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex items-center justify-between text-[11px] mland:text-[9.5px] text-[var(--mut)] mb-1.5 mland:mb-0.5 gap-2">
-            <span className="font-semibold truncate">{compTitle}</span>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {isFullscreen && onExitFullscreen && (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
+      <div className="w-full max-w-6xl mland:max-w-[98vw] h-[96dvh] max-h-[96dvh] mland:h-[97dvh] mland:max-h-[97dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+        {/* Pinned Top Broadcast Scoreboard: Single-Row Layout (League Tier Left + Score Center + Compact Controls Right) */}
+        <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
+          <div className="flex flex-nowrap items-center justify-between gap-1.5">
+            {/* Left: Competition / League Tier + Live Clock Status */}
+            <div className="flex flex-col items-start justify-center gap-0.5 min-w-0 max-w-[118px] sm:max-w-[165px] mland:max-w-[125px] shrink-0">
+              <div className="flex items-center gap-1 min-w-0 max-w-full">
+                {done ? (
+                  <span className="px-1.5 py-0.2 rounded bg-[var(--g)] text-white font-extrabold tabular text-[9.5px] mland:text-[8.5px] tracking-wide shrink-0">
+                    FT
+                  </span>
+                ) : matchPhaseUi === 'halftime' ? (
+                  <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[9.5px] mland:text-[8.5px] shrink-0">
+                    HT
+                  </span>
+                ) : paused ? (
+                  <span className="px-1.5 py-0.2 rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-bold tabular text-[9.5px] mland:text-[8.5px] shrink-0">
+                    ⏸ {clockLabel}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-extrabold tabular text-[9.5px] mland:text-[8.5px] shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
+                    <span>{clockLabel}{stoppageBadge > 0 ? `+${stoppageBadge}'` : ''}</span>
+                  </span>
+                )}
+              </div>
+              <span className="text-[10.5px] mland:text-[9px] font-semibold text-[var(--mut)] truncate max-w-full" title={compTitle}>
+                <span className="lg:hidden">{compShortTitle}</span>
+                <span className="hidden lg:inline">{compTitle}</span>
+              </span>
+            </div>
+
+            {/* Center: Home + Score + Away */}
+            <div className="flex-1 min-w-0 flex items-center justify-center gap-1.5 sm:gap-2.5 mland:gap-1.5">
+              {/* Home Team */}
+              <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 max-w-[130px] sm:max-w-[175px] mland:max-w-[125px]">
+                <div className="text-right min-w-0">
+                  <div className={`font-bold text-[11px] sm:text-sm mland:text-[11px] truncate flex items-center justify-end gap-1 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                    {goalFlashSide === 'H' && (
+                      <span className="px-1 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold shrink-0">
+                        GOAL
+                      </span>
+                    )}
+                    <span className="truncate">{homeOrig.name}</span>
+                  </div>
+                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] flex items-center justify-end gap-1 truncate">
+                    {homeGoalsList.length > 0 ? (
+                      <span className="truncate font-semibold text-[var(--ink)]/75">⚽ {formatScorerSummary(homeGoalsList)}</span>
+                    ) : (
+                      <span>เหย้า{homeId === state.me ? '·คุณ' : ''}</span>
+                    )}
+                    <span className="inline-block w-2 h-2 rounded-full border border-black/15 dark:border-white/60 shrink-0" style={{ background: homeKit }} />
+                  </div>
+                </div>
+                <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                  <ClubCrest name={homeOrig.name} size={28} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                </div>
+              </div>
+
+              {/* Center Score Box */}
+              <div className={`px-2.5 sm:px-3.5 mland:px-2 py-1 mland:py-0.5 rounded-xl border text-center min-w-[60px] sm:min-w-[78px] mland:min-w-[54px] shrink-0 transition-all duration-300 shadow-xs ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+                <div className="text-lg sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none tracking-tight">
+                  {gh}<span className="text-[var(--mut)]/50 mx-0.5">:</span>{ga}
+                </div>
+                {penResult && <div className="text-[8.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5 truncate">{penResult.text}</div>}
+              </div>
+
+              {/* Away Team */}
+              <div className="flex items-center gap-1.5 min-w-0 flex-1 max-w-[130px] sm:max-w-[175px] mland:max-w-[125px]">
+                <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                  <ClubCrest name={awayOrig.name} size={28} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+                </div>
+                <div className="min-w-0">
+                  <div className={`font-bold text-[11px] sm:text-sm mland:text-[11px] truncate flex items-center gap-1 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                    <span className="truncate">{awayOrig.name}</span>
+                    {goalFlashSide === 'A' && (
+                      <span className="px-1 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold shrink-0">
+                        GOAL
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] flex items-center gap-1 truncate">
+                    <span className="inline-block w-2 h-2 rounded-full border border-black/15 dark:border-white/60 shrink-0" style={{ background: awayKit }} />
+                    {awayGoalsList.length > 0 ? (
+                      <span className="truncate font-semibold text-[var(--ink)]/75">⚽ {formatScorerSummary(awayGoalsList)}</span>
+                    ) : (
+                      <span>เยือน{awayId === state.me ? '·คุณ' : ''}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right: Abbreviated Match Control Buttons */}
+            <div className="flex items-center justify-end gap-1 shrink-0 ml-auto">
+              {!done ? (
+                <>
+                  <button
+                    type="button"
+                    title={paused ? 'เล่นต่อ' : 'พักเกม'}
+                    aria-label={paused ? 'เล่นต่อ' : 'พักเกม'}
+                    onClick={() => setPaused((p) => !p)}
+                    className={`h-7 mland:h-6 min-w-[28px] px-1.5 rounded-lg border text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
+                      paused
+                        ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                    }`}
+                  >
+                    {paused ? '▶' : '⏸'}
+                  </button>
+                  <button
+                    type="button"
+                    title="ปรับความเร็วการแข่งขัน"
+                    onClick={cycleMatchSpeed}
+                    className="h-7 mland:h-6 min-w-[34px] px-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] mland:text-[9px] font-extrabold tabular cursor-pointer whitespace-nowrap"
+                  >
+                    {speed}x
+                  </button>
+                  <button
+                    type="button"
+                    title="แสดง/ซ่อนเส้นวิ่งทำทาง"
+                    aria-label="แสดง/ซ่อนเส้นวิ่งทำทาง"
+                    onClick={() => setShowRunVectors((v) => !v)}
+                    className={`h-7 mland:h-6 w-7 mland:w-6 rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer flex items-center justify-center transition-colors ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'}`}
+                  >
+                    ↗️
+                  </button>
+                  <button
+                    type="button"
+                    title="แสดง/ซ่อนป้ายตำแหน่งบนหัวนักเตะ"
+                    aria-label="แสดง/ซ่อนป้ายตำแหน่ง"
+                    onClick={() => setShowPositions((v) => !v)}
+                    className={`h-7 mland:h-6 w-7 mland:w-6 rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer flex items-center justify-center transition-colors ${showPositions ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'}`}
+                  >
+                    🏷️
+                  </button>
+                  <button
+                    type="button"
+                    title="เปิด/ปิดภาพช้าสโลว์โมชันจังหวะสำคัญ"
+                    aria-label="สโลว์โมชัน"
+                    onClick={() => setCineSlowMo((v) => !v)}
+                    className={`h-7 mland:h-6 w-7 mland:w-6 rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer flex items-center justify-center transition-colors ${cineSlowMo ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'}`}
+                  >
+                    🎬
+                  </button>
+                  {state.mode === 'm' && (
+                    <button
+                      type="button"
+                      title="แก้เกมและเปลี่ยนตัว"
+                      onClick={() => {
+                        if (mlandMatchTab !== 'tactics') {
+                          openTacticsStudio();
+                        } else {
+                          setMlandMatchTab('stats');
+                        }
+                      }}
+                      className={`h-7 mland:h-6 px-1.5 rounded-lg border text-[10.5px] mland:text-[9px] font-bold cursor-pointer whitespace-nowrap tabular transition-colors ${
+                        mlandMatchTab === 'tactics'
+                          ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                          : 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] hover:brightness-95'
+                      }`}
+                    >
+                      🔄{subsUsed.length}/5
+                    </button>
+                  )}
+                  {matchPhaseUi === 'halftime' ? (
+                    <button
+                      type="button"
+                      title="เริ่มครึ่งหลัง"
+                      onClick={() => handleStartSecondHalf()}
+                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap"
+                    >
+                      ▶2H
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
+                      aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
+                      onClick={skipToEnd}
+                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
+                    >
+                      ⏩
+                    </button>
+                  )}
+                </>
+              ) : (
                 <button
                   type="button"
-                  onClick={onExitFullscreen}
-                  className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] font-bold text-[10.5px] mland:text-[9px] cursor-pointer hover:border-[var(--g)]"
+                  onClick={handleConfirmFinish}
+                  className="h-7 mland:h-6 px-2.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9.5px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
                 >
-                  ✕ ย่อจอ
+                  ✅ ต่อ
                 </button>
               )}
-              {done ? (
-                <span className="px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[10.5px] mland:text-[9px] tracking-wide">
-                  FT · จบเกม
-                </span>
-              ) : matchPhaseUi === 'halftime' ? (
-                <span className="px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[10.5px] mland:text-[9px]">
-                  HT · พักครึ่ง
-                </span>
-              ) : paused ? (
-                <span className="px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-bold tabular text-[10.5px] mland:text-[9px]">
-                  ⏸ พัก · {clockLabel}
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1 px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-extrabold tabular text-[10.5px] mland:text-[9px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
-                  <span>{clockLabel}{stoppageBadge > 0 ? ` +${stoppageBadge}'` : ''}</span>
-                </span>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 mland:gap-2">
-            {/* Home Team */}
-            <div className="flex items-center justify-end gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0">
-              <div className="text-right min-w-0">
-                <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center justify-end gap-1.5 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                  {goalFlashSide === 'H' && (
-                    <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">
-                      GOAL!
-                    </span>
-                  )}
-                  <span className="truncate">{homeOrig.name}</span>
-                </div>
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] flex items-center justify-end gap-1.5 truncate">
-                  {homeGoalsList.length > 0 ? (
-                    <span className="truncate font-semibold text-[var(--ink)]/75">⚽ {formatScorerSummary(homeGoalsList)}</span>
-                  ) : (
-                    <span>เหย้า{homeId === state.me ? ' · ทีมคุณ' : ''}</span>
-                  )}
-                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-black/15 dark:border-white/60 shrink-0" style={{ background: homeKit }} />
-                </div>
-              </div>
-              <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                <ClubCrest name={homeOrig.name} size={34} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-              </div>
-            </div>
-
-            {/* Center Score Box */}
-            <div className={`px-3.5 sm:px-5 mland:px-3 py-1.5 mland:py-0.5 rounded-2xl mland:rounded-xl border text-center min-w-[82px] sm:min-w-[104px] mland:min-w-[68px] transition-all duration-300 shadow-xs ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
-              <div className="text-2xl sm:text-3xl mland:text-lg font-extrabold font-display tabular leading-none tracking-tight">
-                {gh} <span className="text-[var(--mut)]/50 mx-0.5">:</span> {ga}
-              </div>
-              {penResult && <div className="text-[10px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5">{penResult.text}</div>}
-            </div>
-
-            {/* Away Team */}
-            <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0">
-              <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                <ClubCrest name={awayOrig.name} size={34} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-              </div>
-              <div className="min-w-0">
-                <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center gap-1.5 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                  <span className="truncate">{awayOrig.name}</span>
-                  {goalFlashSide === 'A' && (
-                    <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">
-                      GOAL!
-                    </span>
-                  )}
-                </div>
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-1.5 truncate">
-                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-black/15 dark:border-white/60 shrink-0" style={{ background: awayKit }} />
-                  {awayGoalsList.length > 0 ? (
-                    <span className="truncate font-semibold text-[var(--ink)]/75">⚽ {formatScorerSummary(awayGoalsList)}</span>
-                  ) : (
-                    <span>เยือน{awayId === state.me ? ' · ทีมคุณ' : ''}</span>
-                  )}
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Scrollable Game Broadcast Stage */}
-        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden p-2.5 sm:p-3.5 mland:p-1.5 space-y-2.5 mland:space-y-0 mland:flex mland:flex-col">
-          <div className="grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] mland:grid-cols-[1.32fr_1fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-            {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + MOTM + Match Stats */}
-            <div className="space-y-2.5 mland:space-y-1.5 min-w-0 mland:h-full mland:flex mland:flex-col mland:min-h-0 mland:justify-center">
+        {/* Horizontal Landscape Broadcast Stage OR Live Tactical Formation & Drag-Drop Sub Studio */}
+        <div className="flex-1 min-h-0 overflow-hidden p-2.5 mland:p-1.5 flex flex-col">
+          {state.mode === 'm' && !done && mlandMatchTab === 'tactics' ? (
+            <LiveTacticsStudio
+              state={state}
+              meTeamOrig={meTeamOrig}
+              oppTeamOrig={oppTeamOrig}
+              liveHome={liveHome}
+              liveAway={liveAway}
+              meIsHome={meIsHome}
+              homeKit={homeKit}
+              awayKit={awayKit}
+              homeGkKit={homeGkKit}
+              awayGkKit={awayGkKit}
+              homeTrim={homeTrim}
+              awayTrim={awayTrim}
+              liveLu={liveLu}
+              liveOppLu={liveOppLu}
+              benchList={benchList}
+              subsUsed={subsUsed}
+              subLog={subLog}
+              evs={evs}
+              matchCards={matchCards}
+              matchYellows={matchYellows}
+              sentOff={sentOff}
+              injuredNames={injuredNamesUi}
+              liveFitMap={liveFitMap}
+              liveFormMap={liveFormMap}
+              livePlayerStats={livePlayerStatsUi}
+              liveTac={liveTac}
+              livePress={livePress}
+              liveTempo={liveTempo}
+              liveLine={liveLine}
+              liveWid={liveWid}
+              livePass={livePass}
+              minute={minute}
+              matchPhaseUi={matchPhaseUi}
+              subAlertFitTh={subAlertFitTh}
+              subAlertFormTh={subAlertFormTh}
+              subPickOut={subPickOut}
+              setSubPickOut={setSubPickOut}
+              onSetTac={(m) => {
+                setLiveTac(m);
+                pushLog(minute, `📣 สั่งการข้างสนาม: ปรับแผนเป็น "${AR_T[m]}"`, 'sys');
+              }}
+              onSetPress={setLivePress}
+              onSetTempo={setLiveTempo}
+              onSetLine={setLiveLine}
+              onSetWid={setLiveWid}
+              onSetPass={(idx) => {
+                setLivePass(idx);
+                pushLog(minute, `📣 สั่งการข้างสนาม: เน้นจ่ายแบบ "${['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'][idx]}"`, 'sys');
+              }}
+              onSubstitute={performSubstitution}
+              onAutoSubstitute={handleAutoSubstitute}
+              onSwapStarters={performOnPitchSwap}
+              findBestSubFor={findBestSubFor}
+              onCloseAndResume={() => {
+                setMlandMatchTab('stats');
+                if (matchPhaseUi !== 'halftime') setPaused(false);
+              }}
+              onCloseToStats={() => {
+                setMlandMatchTab('stats');
+              }}
+            />
+          ) : (
+            <div className="grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + Events Feed Below */}
+            <div className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
               {!(done && fullTimeAnalysis) ? (
-                <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mland:mx-auto mland:w-full flex flex-col">
+                <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
                   {/* Live Match Event & Clock Bar Mounted Directly on Pitch */}
                   <div className="px-2.5 sm:px-3 py-1.5 mland:px-2.5 mland:py-1 bg-[#072113]/95 border-b border-white/15 flex items-center justify-between gap-2 text-white shrink-0">
                     <span className={`px-2.5 mland:px-2 py-0.5 rounded-lg border text-[11px] sm:text-xs mland:text-[10.5px] font-bold truncate min-w-0 ${bannerCls}`}>
@@ -5857,12 +5717,7 @@ export const MatchModal: React.FC<{
                         )}
                         <button
                           type="button"
-                          onClick={() => {
-                            setSubPickOut(injuryAlert.name);
-                            setShowTacticsDrawer(true);
-                            setMlandMatchTab('tactics');
-                            setPaused(true);
-                          }}
+                          onClick={() => openTacticsStudio(injuryAlert.name)}
                           className="px-2 py-0.5 rounded-lg bg-white/15 border border-white/25 text-white text-[10px] font-bold cursor-pointer hover:bg-white/25 whitespace-nowrap"
                         >
                           🔄 เลือกเอง
@@ -5882,7 +5737,7 @@ export const MatchModal: React.FC<{
                       ref={canvasRef}
                       onContextMenu={(e) => e.preventDefault()}
                       style={{ WebkitTouchCallout: 'none', touchAction: 'manipulation' }}
-                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}w-full aspect-[16/8.2] mland:max-h-[calc(97dvh-132px)] mland:w-auto mland:max-w-full mland:mx-auto block select-none`}
+                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(96dvh-114px)] mland:max-h-[calc(97dvh-98px)] object-contain mx-auto block select-none`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
 
@@ -6009,7 +5864,7 @@ export const MatchModal: React.FC<{
 
                           {/* Live Halftime Turf Pitch */}
                           <div
-                            className="relative w-full aspect-[16/9.2] sm:aspect-[16/8.6] min-h-[240px] sm:min-h-[290px] mland:min-h-[165px] mland:max-h-[calc(97dvh-215px)] select-none overflow-hidden"
+                            className="relative w-full aspect-[16/8.8] max-h-[calc(96dvh-195px)] mland:min-h-[165px] mland:max-h-[calc(97dvh-205px)] select-none overflow-hidden"
                             style={{
                               backgroundImage:
                                 'repeating-linear-gradient(90deg, #175c36 0%, #175c36 8.333%, #1d6b40 8.333%, #1d6b40 16.666%)'
@@ -6194,7 +6049,7 @@ export const MatchModal: React.FC<{
                                 {state.mode === 'm' && (
                                   <button
                                     type="button"
-                                    onClick={() => { setShowTacticsDrawer(true); setMlandMatchTab('tactics'); }}
+                                    onClick={() => openTacticsStudio()}
                                     className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-white/10 border border-white/25 text-white text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:bg-white/20"
                                   >
                                     ⚙️ ปรับแท็กติก
@@ -6304,7 +6159,7 @@ export const MatchModal: React.FC<{
                         : 'bg-rose-600 text-white border-rose-200/80';
 
                 return (
-                  <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0b2e1b] shadow-lg mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
+                  <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0b2e1b] shadow-lg w-full flex flex-col">
                     {/* Compact Pitch Top Bar */}
                     <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[#072113] border-b border-white/15 flex items-center justify-between gap-2 text-white shrink-0">
                       <span className="text-[11px] sm:text-xs mland:text-[9.5px] font-bold flex items-center gap-1 whitespace-nowrap">
@@ -6337,7 +6192,7 @@ export const MatchModal: React.FC<{
 
                     {/* Full-Time Turf Stage */}
                     <div
-                      className="relative w-full aspect-[16/9.6] sm:aspect-[16/9] min-h-[265px] sm:min-h-[320px] mland:min-h-0 mland:aspect-auto mland:flex-1 select-none overflow-hidden"
+                      className="relative w-full aspect-[16/8.6] max-h-[calc(96dvh-185px)] mland:min-h-[175px] mland:max-h-[calc(97dvh-175px)] select-none overflow-hidden"
                       style={{
                         backgroundImage:
                           'repeating-linear-gradient(90deg, #175c36 0%, #175c36 8.333%, #1d6b40 8.333%, #1d6b40 16.666%)'
@@ -6652,163 +6507,125 @@ export const MatchModal: React.FC<{
                 </div>
               )}
 
-              {/* Manager Live Tactics & Substitutions Drawer directly under pitch on Desktop / Mobile Portrait */}
-              {state.mode === 'm' && showTacticsDrawer && !done && (
-                <div className="mland:hidden">{renderLiveTacticsPanel()}</div>
-              )}
+              {/* Live Commentary & Match Events Below the Pitch (Scroll Down to Read) */}
+              <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 shadow-xs">
+                <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-[var(--line)]/70 overflow-x-auto">
+                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] uppercase tracking-wide whitespace-nowrap shrink-0">
+                    🎙️ เหตุการณ์ในสนาม
+                  </span>
+                  <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
+                    {(
+                      [
+                        ['all', 'ทั้งหมด'],
+                        ['goal', '⚽ ประตู'],
+                        ['card', '🟨🟥 VAR'],
+                        ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
+                      ] as const
+                    ).map(([k, lbl]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setEventFilter(k)}
+                        className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                          eventFilter === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
-              {/* Portrait Match Stats (shown before Events on < lg) + Live Pitch Energy & Alerts (hide energy panel after FT) */}
-              <div className="space-y-2.5 mland:hidden">
-                <div className="lg:hidden">{renderMatchStatsPanel()}</div>
-                {!done && renderLiveEnergyPanel()}
+                <div className="space-y-1.5 mland:space-y-1">
+                  {eventFilter === 'sub' ? (
+                    subLog.length === 0 ? (
+                      <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>
+                    ) : (
+                      subLog
+                        .slice()
+                        .reverse()
+                        .map((sb, i) => {
+                          const tObj = sb.t === homeOrig.id ? homeOrig : awayOrig;
+                          return (
+                            <div key={i} className="text-xs mland:text-[10.5px] flex items-start gap-2 py-1.5 px-2.5 rounded-xl bg-sky-500/8 border border-sky-500/20">
+                              <span className="px-1.5 py-0.2 rounded bg-sky-500/15 tabular font-extrabold text-[10.5px] text-sky-700 dark:text-sky-300 shrink-0">{sb.m}&apos;</span>
+                              <div className="min-w-0 leading-snug">
+                                <span className="font-bold text-[var(--ink)]">{tObj.name}: </span>
+                                <span className="font-semibold text-[var(--g)]">เข้า {sb.inPlayer}</span>
+                                <span className="text-[var(--mut)]"> · ออก </span>
+                                <span className="text-[var(--red)]">{sb.outPlayer}</span>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )
+                  ) : (() => {
+                    const filteredLogs = logs.filter((l) => {
+                      if (eventFilter === 'goal') return l.tone === 'goal';
+                      if (eventFilter === 'card') return l.tone === 'card' || l.text.includes('VAR') || l.text.includes('จุดโทษ');
+                      return true;
+                    });
+                    if (!filteredLogs.length) {
+                      return <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีเหตุการณ์ในหมวดนี้</div>;
+                    }
+                    return filteredLogs.map((l, i) => (
+                      <div
+                        key={i}
+                        className={`text-xs mland:text-[10.5px] flex items-start gap-2 rounded-xl transition-colors leading-snug ${
+                          l.tone === 'goal'
+                            ? 'px-2.5 py-1.5 bg-[var(--g-soft)] border border-[var(--g)]/25 font-bold text-[var(--g)]'
+                            : l.tone === 'card'
+                              ? 'px-2.5 py-1.5 bg-[var(--red-soft)] border border-[var(--red)]/25 font-semibold text-[var(--red)]'
+                              : l.tone === 'sub'
+                                ? 'px-2.5 py-1 bg-sky-500/8 border border-sky-500/20 font-semibold text-sky-700 dark:text-sky-300'
+                                : l.tone === 'sys'
+                                  ? 'px-2 py-1 bg-[var(--surface-2)]/70 font-semibold text-[var(--ink)]'
+                                  : 'px-2 py-0.5 text-[var(--mut)]'
+                        }`}
+                      >
+                        <span className={`px-1.5 py-0.2 rounded tabular font-bold text-[10.5px] shrink-0 ${
+                          l.tone === 'goal'
+                            ? 'bg-[var(--g)] text-white'
+                            : l.tone === 'card'
+                              ? 'bg-[var(--red)] text-white'
+                              : 'bg-black/8 dark:bg-white/10'
+                        }`}>
+                          {l.m}&apos;
+                        </span>
+                        <span className="min-w-0">{l.text}</span>
+                      </div>
+                    ));
+                  })()}
+                </div>
               </div>
             </div>
 
-            {/* Right Stage: Stats First on Desktop + Unified Match Events Feed & Mobile Landscape Tabbed Pane */}
-            <div className="space-y-2.5 mland:space-y-1.5 min-w-0 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-              {/* Mobile Landscape Only Tab Bar (Stats First) */}
-              <div className={`hidden mland:grid shrink-0 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-[10px] ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                <button
-                  type="button"
-                  onClick={() => setMlandMatchTab('stats')}
-                  className={`min-h-[26px] py-0.5 px-1 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap truncate ${mlandMatchTab === 'stats' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
-                >
-                  <span>📊 สถิติ</span>
-                  {subAlertItems.length > 0 && (
-                    <span className="px-1 rounded-full bg-[var(--red)] text-white text-[8.5px] font-black leading-tight tabular">
-                      {subAlertItems.length}
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMlandMatchTab('events')}
-                  className={`min-h-[26px] py-0.5 px-1 rounded-lg font-bold cursor-pointer whitespace-nowrap truncate ${mlandMatchTab === 'events' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
-                >
-                  🎙️ เหตุการณ์
-                </button>
-                {state.mode === 'm' && !done && (
+            {/* Right Stage: Stats + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
+            <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
+              {state.mode === 'm' && !done && (
+                <div className="grid grid-cols-2 shrink-0 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[10px]">
                   <button
                     type="button"
-                    onClick={() => {
-                      setMlandMatchTab('tactics');
-                      setShowTacticsDrawer(true);
-                      setPaused(true);
-                    }}
-                    className={`min-h-[26px] py-0.5 px-1 rounded-lg font-bold cursor-pointer whitespace-nowrap truncate ${mlandMatchTab === 'tactics' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                    onClick={() => setMlandMatchTab('stats')}
+                    className={`min-h-[28px] mland:min-h-[26px] py-0.5 px-1.5 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap truncate ${mlandMatchTab === 'stats' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                  >
+                    <span>📊 สถิติ &amp; ไทม์ไลน์</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openTacticsStudio()}
+                    className={`min-h-[28px] mland:min-h-[26px] py-0.5 px-1.5 rounded-lg font-bold cursor-pointer whitespace-nowrap truncate ${mlandMatchTab === 'tactics' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                   >
                     ⚡ แผน ({5 - subsUsed.length})
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
-              <div className="mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden space-y-2.5 mland:space-y-1">
-                <div className="hidden lg:block mland:hidden shrink-0">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-1.5">
+                <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2">
                   {renderMatchStatsPanel()}
+                  {renderMatchTimelinePanel()}
                 </div>
-                <div className={`p-3 sm:p-3.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1 shadow-xs mland:flex-1 mland:min-h-0 mland:flex mland:flex-col ${mlandMatchTab === 'events' ? '' : 'mland:hidden'}`}>
-                  <div className="flex items-center justify-between gap-1.5 pb-2 mland:pb-1 border-b border-[var(--line)]/70 shrink-0 overflow-x-auto">
-                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] uppercase tracking-wide whitespace-nowrap shrink-0">
-                      🎙️ เหตุการณ์ในสนาม
-                    </span>
-                    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
-                      {(
-                        [
-                          ['all', 'ทั้งหมด'],
-                          ['goal', '⚽ ประตู'],
-                          ['card', '🟨🟥 VAR'],
-                          ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
-                        ] as const
-                      ).map(([k, lbl]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setEventFilter(k)}
-                          className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
-                            eventFilter === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="max-h-60 lg:max-h-[340px] mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
-                    {eventFilter === 'sub' ? (
-                      subLog.length === 0 ? (
-                        <div className="text-xs text-[var(--mut)] py-6 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>
-                      ) : (
-                        subLog
-                          .slice()
-                          .reverse()
-                          .map((sb, i) => {
-                            const tObj = sb.t === homeOrig.id ? homeOrig : awayOrig;
-                            return (
-                              <div key={i} className="text-xs mland:text-[10.5px] flex items-start gap-2 py-1.5 px-2 rounded-xl bg-sky-500/8 border-l-2 border-sky-500">
-                                <span className="px-1.5 py-0.2 rounded bg-sky-500/15 tabular font-extrabold text-[10.5px] text-sky-700 dark:text-sky-300 shrink-0">{sb.m}&apos;</span>
-                                <div className="min-w-0 leading-snug">
-                                  <span className="font-bold text-[var(--ink)]">{tObj.name}: </span>
-                                  <span className="font-semibold text-[var(--g)]">เข้า {sb.inPlayer}</span>
-                                  <span className="text-[var(--mut)]"> · ออก </span>
-                                  <span className="text-[var(--red)]">{sb.outPlayer}</span>
-                                </div>
-                              </div>
-                            );
-                          })
-                      )
-                    ) : (() => {
-                      const filteredLogs = logs.filter((l) => {
-                        if (eventFilter === 'goal') return l.tone === 'goal';
-                        if (eventFilter === 'card') return l.tone === 'card' || l.text.includes('VAR') || l.text.includes('จุดโทษ');
-                        return true;
-                      });
-                      if (!filteredLogs.length) {
-                        return <div className="text-xs text-[var(--mut)] py-6 text-center">ยังไม่มีเหตุการณ์ในหมวดนี้</div>;
-                      }
-                      return filteredLogs.map((l, i) => (
-                        <div
-                          key={i}
-                          className={`text-xs mland:text-[10.5px] flex items-start gap-2 rounded-xl transition-colors leading-snug ${
-                            l.tone === 'goal'
-                              ? 'px-2.5 py-1.5 bg-[var(--g-soft)] border-l-3 border-[var(--g)] font-bold text-[var(--g)]'
-                              : l.tone === 'card'
-                                ? 'px-2.5 py-1.5 bg-[var(--red-soft)] border-l-3 border-[var(--red)] font-semibold text-[var(--red)]'
-                                : l.tone === 'sub'
-                                  ? 'px-2.5 py-1 bg-sky-500/8 border-l-2 border-sky-500 font-semibold text-sky-700 dark:text-sky-300'
-                                  : l.tone === 'sys'
-                                    ? 'px-2 py-1 bg-[var(--surface-2)]/70 font-semibold text-[var(--ink)]'
-                                    : 'px-2 py-0.5 text-[var(--mut)]'
-                          }`}
-                        >
-                          <span className={`px-1.5 py-0.2 rounded tabular font-bold text-[10.5px] shrink-0 ${
-                            l.tone === 'goal'
-                              ? 'bg-[var(--g)] text-white'
-                              : l.tone === 'card'
-                                ? 'bg-[var(--red)] text-white'
-                                : 'bg-black/8 dark:bg-white/10'
-                          }`}>
-                            {l.m}&apos;
-                          </span>
-                          <span className="min-w-0">{l.text}</span>
-                        </div>
-                      ));
-                    })()}
-                  </div>
-                </div>
-
-                {/* Mobile Landscape Stats & Energy / Tactics Tab Content */}
-                {mlandMatchTab !== 'events' && (
-                  <div className="hidden mland:block mland:flex-1 mland:min-h-0 mland:overflow-y-auto pr-0.5 space-y-2">
-                    {mlandMatchTab === 'stats' && (
-                      <div className="space-y-2">
-                        {renderMatchStatsPanel()}
-                        {!done && renderLiveEnergyPanel()}
-                      </div>
-                    )}
-                    {mlandMatchTab === 'tactics' && state.mode === 'm' && !done && renderLiveTacticsPanel()}
-                  </div>
-                )}
 
                 {done && fullTimeAnalysis?.pf && (
                   <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[11px] shrink-0">
@@ -6844,102 +6661,12 @@ export const MatchModal: React.FC<{
               </div>
             </div>
           </div>
+          )}
         </div>
 
-        {/* Pinned Bottom Match Action Dock */}
-        <div className="shrink-0 px-2.5 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-t border-[var(--line)]">
-          {!done ? (
-            <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 mland:gap-1.5">
-              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap sm:flex-nowrap mland:flex-nowrap min-w-0">
-                <button
-                  type="button"
-                  onClick={() => setPaused((p) => !p)}
-                  className={`min-h-[32px] mland:min-h-[28px] px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${
-                    paused
-                      ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
-                      : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                  }`}
-                >
-                  {paused ? '▶ เล่นต่อ' : '⏸ พัก'}
-                </button>
-                <div className="inline-flex items-center p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
-                  {([0.25, 0.5, 1, 2, 4] as const).map((sp) => (
-                    <button
-                      key={sp}
-                      type="button"
-                      onClick={() => setSpeed(sp)}
-                      className={`min-h-[26px] mland:min-h-[22px] px-1.5 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
-                    >
-                      {sp}x
-                    </button>
-                  ))}
-                </div>
-                <div className="inline-flex items-center gap-1 shrink-0">
-                  <button
-                    type="button"
-                    title="แสดง/ซ่อนเส้นวิ่งทำทาง"
-                    onClick={() => setShowRunVectors((v) => !v)}
-                    className={`min-h-[32px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer whitespace-nowrap transition-colors ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-75'}`}
-                  >
-                    ↗️ เส้น
-                  </button>
-                  <button
-                    type="button"
-                    title="แสดง/ซ่อนป้ายตำแหน่งบนหัวนักเตะ"
-                    onClick={() => setShowPositions((v) => !v)}
-                    className={`min-h-[32px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer whitespace-nowrap transition-colors ${showPositions ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-75'}`}
-                  >
-                    🏷️ ตำแหน่ง
-                  </button>
-                  <button
-                    type="button"
-                    title="เปิด/ปิดภาพช้าสโลว์โมชันจังหวะสำคัญ"
-                    onClick={() => setCineSlowMo((v) => !v)}
-                    className={`min-h-[32px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer whitespace-nowrap transition-colors ${cineSlowMo ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-75'}`}
-                  >
-                    🎬 สโลว์
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1.5 mland:gap-1 ml-auto shrink-0">
-                {state.mode === 'm' && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowTacticsDrawer((v) => !v);
-                      setMlandMatchTab((prev) => (prev === 'tactics' ? 'events' : 'tactics'));
-                      setPaused(true);
-                    }}
-                    className={`min-h-[32px] mland:min-h-[28px] px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
-                      showTacticsDrawer
-                        ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
-                        : 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] hover:brightness-95'
-                    }`}
-                  >
-                    🔄 แก้เกม ({subsUsed.length}/5)
-                  </button>
-                )}
-                {matchPhaseUi === 'halftime' ? (
-                  <button
-                    type="button"
-                    onClick={() => handleStartSecondHalf()}
-                    className="min-h-[32px] mland:min-h-[28px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs whitespace-nowrap"
-                  >
-                    ▶ เริ่มครึ่งหลัง
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={skipToEnd}
-                    className="min-h-[32px] mland:min-h-[28px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
-                  >
-                    {matchPhaseUi === 'shootout' ? '⏩ ข้ามดวลจุดโทษ' : '⏩ ข้ามจบเกม'}
-                  </button>
-                )}
-              </div>
-            </div>
-          ) : (
+        {/* Pinned Bottom Post-Match Continue Dock */}
+        {done && (
+          <div className="shrink-0 px-2.5 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-t border-[var(--line)]">
             <button
               type="button"
               onClick={handleConfirmFinish}
@@ -6947,8 +6674,8 @@ export const MatchModal: React.FC<{
             >
               ✅ ดำเนินการต่อ
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

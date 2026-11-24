@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
-import { exitFullscreenSafe, getFullscreenElement, onFullscreenChange } from './utils/fullscreen';
+import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
-import { getSettings, applyTheme, SFX, triggerConfetti } from './utils/audioTheme';
+import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload } from './engine/simulation';
 import { ClubCrest } from './components/SvgVisuals';
@@ -37,16 +37,10 @@ export default function App() {
   const [showGodBlessing, setShowGodBlessing] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
   const godBlessingEnabled = appSettings.godBlessingEnabled !== false;
-  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(getFullscreenElement()));
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
 
-  useEffect(() => onFullscreenChange(setIsFullscreen), []);
-
-  const exitFullscreenQuick = () => {
-    SFX.tap();
-    exitFullscreenSafe().catch(() => undefined);
-  };
+  useEffect(() => bindAutoLandscapeFullscreen(), []);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -100,6 +94,8 @@ export default function App() {
   };
 
   const handleStartManager = (targetSlot: number, names: string[][], t0: Team[], pick: number, diff: number) => {
+    unlockAudio();
+    enterAutoMobileFullscreen().catch(() => undefined);
     const fresh = createNewGame('m', { names, t0, pick });
     fresh.diff = diff;
     setSlot(targetSlot);
@@ -112,6 +108,8 @@ export default function App() {
     targetSlot: number,
     profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>
   ) => {
+    unlockAudio();
+    enterAutoMobileFullscreen().catch(() => undefined);
     const fresh = createNewGame('p', { player: profile });
     fresh.v = 'p';
     setSlot(targetSlot);
@@ -121,6 +119,8 @@ export default function App() {
   };
 
   const handleLoadSave = (_mode: GameMode, targetSlot: number, loaded: GameState) => {
+    unlockAudio();
+    enterAutoMobileFullscreen().catch(() => undefined);
     setSlot(targetSlot);
     setState(loaded);
     showToast('โหลดเซฟเรียบร้อย');
@@ -308,6 +308,14 @@ export default function App() {
       const roundCards: { h: Team; a: Team; cards?: MatchCardEvent[] }[] = [
         { h: H, a: A, cards: payload.cards }
       ];
+      const subbedOutByTeam: Record<number, Record<string, number>> = {};
+      const recordSubOut = (teamId: number, outName: string, min: number) => {
+        if (!subbedOutByTeam[teamId]) subbedOutByTeam[teamId] = {};
+        if (subbedOutByTeam[teamId][outName] == null || min < subbedOutByTeam[teamId][outName]) {
+          subbedOutByTeam[teamId][outName] = min;
+        }
+      };
+      payload.subs.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
 
       // Simulate remaining fixtures in user's league & other tiers
       d.fx[d.md].forEach(([fidH, fidA]) => {
@@ -318,6 +326,7 @@ export default function App() {
         applyMatchResult(th, r.gh, ta, r.ga);
         tallyMatchPlayers(th, ta, r);
         roundCards.push({ h: th, a: ta, cards: r.cards });
+        r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
       });
 
       if (d.fxo) {
@@ -331,6 +340,7 @@ export default function App() {
             applyMatchResult(th, r.gh, ta, r.ga);
             tallyMatchPlayers(th, ta, r);
             roundCards.push({ h: th, a: ta, cards: r.cards });
+            r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
           });
         });
       }
@@ -393,17 +403,7 @@ export default function App() {
 
       d.md++;
       applyLiveInjuries();
-      afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames });
-      if (d.mode === 'm' && payload.subs.length > 0) {
-        payload.subs.forEach((sb) => {
-          if (sb.t !== d.me) return;
-          const outPl = me.sq.find((q) => q.n === sb.outPlayer);
-          if (outPl && sb.m < 85) {
-            const restBonus = Math.round(clamp((90 - sb.m) / 8, 2, 7));
-            outPl.fit = clamp((outPl.fit ?? 100) + restBonus, 30, 100);
-          }
-        });
-      }
+      afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam });
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
     });
   };
@@ -418,6 +418,8 @@ export default function App() {
   const handleTriggerNextStep = () => {
     if (!state) return;
     SFX.tap();
+    unlockAudio();
+    enterAutoMobileFullscreen().catch(() => undefined);
     if (nextMatchInfo) {
       if (appSettings.autoSkipMatch) {
         const simState: GameState = JSON.parse(JSON.stringify(state));
@@ -473,6 +475,7 @@ export default function App() {
       d.season++;
       d.yth = Array.from({ length: 4 }, () => mkPlayer(P(POS), BASE[d.teams[d.me].tier] - 2 + (d.ya ?? 1) * 2, true));
       startSeason(d);
+      d.lg = d.teams[d.me].tier;
       pushFeed(d, 'ฤดูกาลใหม่', `🚀 เปิดฉากฤดูกาลที่ ${d.season} · ${TN[d.teams[d.me].tier]}`, 'ok');
     });
     showToast(`เริ่มต้นฤดูกาลที่ ${state.season + 1} แล้ว!`);
@@ -525,10 +528,10 @@ export default function App() {
 
   return (
     <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
-      {/* Pinned Top Game HUD Bar */}
+      {/* Pinned Single-Row Horizontal Top HUD Bar */}
       <header className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)] safe-top safe-x">
-        <div className="max-w-6xl mland:max-w-none mx-auto px-3 sm:px-5 mland:px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
-          <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 shrink lg:max-w-[34%] mland:max-w-[33%]">
+        <div className="max-w-7xl mland:max-w-none mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
+          <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 shrink max-w-[36%]">
             <button
               type="button"
               onClick={() => {
@@ -551,7 +554,7 @@ export default function App() {
               aria-label="ตราสโมสร"
               className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform"
             >
-              <ClubCrest name={me.name} size={32} team={me} club={state.club} isMyClub={state.mode === 'm'} />
+              <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
             </button>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
@@ -559,36 +562,34 @@ export default function App() {
                   {state.mode === 'p' && state.p ? `${state.p.name} · ` : ''}
                   {me.name}
                 </span>
-                <span className="hidden mland:inline-flex items-center px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-bold text-[9px] tabular shrink-0">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-bold text-[10px] mland:text-[9px] tabular shrink-0">
                   {state.mode === 'm' ? fmtMoney(state.money) : `OVR ${state.p ? ovMe(state.p) : 60}`}
                 </span>
               </div>
-              <div className="text-[10px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1 truncate tabular leading-tight">
+              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1 truncate tabular leading-tight">
                 <span className="truncate font-medium">{TN[me.tier]}</span>
                 <span className="opacity-40 shrink-0">·</span>
                 <span className="shrink-0">ซ.{state.season}</span>
                 <span className="opacity-40 shrink-0">·</span>
                 <span className="shrink-0">นัด {Math.min(state.md, state.fx.length)}/{state.fx.length}</span>
-                <span className="opacity-40 shrink-0 mland:hidden">·</span>
                 {state.mode === 'm' ? (
                   <>
-                    <span className="font-bold text-[var(--g)] tabular shrink-0 mland:hidden">{fmtMoney(state.money)}</span>
-                    <span className="hidden sm:inline mland:inline opacity-40 shrink-0">·</span>
-                    <span className="hidden sm:inline mland:inline shrink-0">❤️{state.fan ?? 55}%</span>
-                    <span className="hidden lg:inline mland:inline shrink-0">👔{state.bd ?? 55}%</span>
+                    <span className="opacity-40 shrink-0">·</span>
+                    <span className="shrink-0">❤️{state.fan ?? 55}%</span>
+                    <span className="shrink-0">👔{state.bd ?? 55}%</span>
                   </>
                 ) : (
                   <>
-                    <span className="font-bold text-[var(--g)] tabular shrink-0 mland:hidden">OVR {state.p ? ovMe(state.p) : 60}</span>
-                    <span className="font-semibold text-[var(--mut)] tabular shrink-0">· ฟิต {state.p?.en ?? 100}%</span>
+                    <span className="opacity-40 shrink-0">·</span>
+                    <span className="font-semibold text-[var(--mut)] tabular shrink-0">ฟิต {state.p?.en ?? 100}%</span>
                   </>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Center Next Match Pill (Tablet / Desktop / Mobile Landscape) */}
-          <div className="hidden md:flex mland:flex items-center justify-center min-w-0 flex-1 max-w-[430px] mland:max-w-[310px]">
+          {/* Center Next Match Pill */}
+          <div className="flex items-center justify-center min-w-0 flex-1 max-w-[440px] mland:max-w-[330px]">
             {nextMatchInfo ? (
               <div className="w-full flex items-center justify-between gap-1.5 mland:gap-1 px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/85 border border-[var(--line)] min-w-0">
                 <div className="flex items-center gap-1.5 mland:gap-1 min-w-0 flex-1">
@@ -635,21 +636,10 @@ export default function App() {
 
           <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 shrink-0">
             <PWAInstallButton variant="compact" onToast={showToast} />
-            {isFullscreen && (
-              <button
-                type="button"
-                onClick={exitFullscreenQuick}
-                aria-label="ออกจากโหมดเต็มจอ"
-                title="ออกจากโหมดเต็มจอ"
-                className="min-h-[34px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] cursor-pointer shrink-0 whitespace-nowrap"
-              >
-                ✕ ย่อจอ
-              </button>
-            )}
             <button
               type="button"
               onClick={handleTriggerNextStep}
-              className="min-h-[34px] mland:min-h-[28px] px-2.5 sm:px-3.5 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[10.5px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
+              className="min-h-[34px] mland:min-h-[28px] px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[10.5px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
             >
               {nextMatchInfo
                 ? appSettings.autoSkipMatch
@@ -675,60 +665,12 @@ export default function App() {
             </button>
           </div>
         </div>
-
-        {/* Mobile Portrait Ultra-Compact Next Match Strip inside Top Header */}
-        <div className="flex md:hidden mland:hidden items-center justify-between gap-2 px-3 py-1 border-t border-[var(--line)]/55 bg-[var(--surface-2)]/45">
-          {nextMatchInfo ? (
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)]/70 text-[9px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap">
-                {nextMatchInfo.kind === 'asia' ? '🌏 ทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 ถ้วย' : '⚽ นัดหน้า'}
-                {nextMatchInfo.isDerby && <span className="ml-0.5 text-[var(--red)]">🔥</span>}
-              </span>
-              <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4">
-                <ClubCrest
-                  name={state.teams[nextMatchInfo.homeId].name}
-                  size={16}
-                  team={state.teams[nextMatchInfo.homeId]}
-                  club={state.club}
-                  isMyClub={nextMatchInfo.homeId === state.me && state.mode === 'm'}
-                />
-              </div>
-              <span className="font-bold text-[11px] truncate min-w-0 flex-1 leading-tight">
-                {state.teams[nextMatchInfo.homeId].name} <span className="text-[var(--mut)] font-normal">vs</span> {state.teams[nextMatchInfo.awayId].name}
-              </span>
-              <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4">
-                <ClubCrest
-                  name={state.teams[nextMatchInfo.awayId].name}
-                  size={16}
-                  team={state.teams[nextMatchInfo.awayId]}
-                  club={state.club}
-                  isMyClub={nextMatchInfo.awayId === state.me && state.mode === 'm'}
-                />
-              </div>
-            </div>
-          ) : (
-            <span className="text-[10.5px] font-bold truncate text-[var(--ink)]">🏁 ครบโปรแกรมลีกแล้ว</span>
-          )}
-          <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-[var(--mut)] tabular">
-            <span>❤️<b>{state.fan ?? 55}%</b></span>
-            {state.mode === 'm' && <span>👔<b>{state.bd ?? 55}%</b></span>}
-            {nextMatchInfo && (
-              <button
-                type="button"
-                onClick={() => setInspectTeamId(nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId)}
-                className="px-2 py-0.5 rounded-md bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10px] font-bold text-[var(--ink)] cursor-pointer"
-              >
-                ส่อง
-              </button>
-            )}
-          </div>
-        </div>
       </header>
 
-      <div className="flex-1 min-h-0 flex flex-col mland:flex-row overflow-hidden">
-        {/* Center Scrollable Game Stage */}
-        <main ref={mainRef} className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden mland:flex mland:flex-col overflow-x-hidden mland:pr-[env(safe-area-inset-right,0px)]">
-          <div className="max-w-6xl mland:max-w-none mland:w-full mx-auto px-3 sm:px-5 mland:px-2.5 py-2.5 sm:py-3 mland:py-1.5 space-y-2.5 sm:space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+      <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
+        {/* Center Game Stage */}
+        <main ref={mainRef} className="flex-1 min-h-0 overflow-hidden flex flex-col overflow-x-hidden pr-[env(safe-area-inset-right,0px)]">
+          <div className="max-w-7xl mland:max-w-none w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5">
 
           {curTab === 't' && (
             <LeagueView
@@ -747,7 +689,6 @@ export default function App() {
               state={state}
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
-              onOpenGodBlessing={godBlessingEnabled ? () => setShowGodBlessing(true) : undefined}
               onToast={showToast}
             />
           )}
@@ -786,12 +727,9 @@ export default function App() {
           </div>
         </main>
 
-        {/* Pinned Bottom / Mobile-Landscape Left-Rail Navigation Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-t border-[var(--line)] safe-bottom mland:pl-[env(safe-area-inset-left,0px)] mland:order-first mland:w-[calc(62px+env(safe-area-inset-left,0px))] mland:h-full mland:border-t-0 mland:border-r mland:px-1 mland:py-1.5 mland:overflow-y-auto">
-          <div
-            className="max-w-6xl mx-auto px-1.5 sm:px-5 py-1.5 grid gap-1 mland:!flex mland:flex-col mland:gap-1 mland:h-full mland:justify-center mland:px-0 mland:py-0"
-            style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
-          >
+        {/* Pinned Left-Rail Navigation Dock */}
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-r border-[var(--line)] pl-[env(safe-area-inset-left,0px)] order-first w-[calc(70px+env(safe-area-inset-left,0px))] mland:w-[calc(62px+env(safe-area-inset-left,0px))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
+          <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
               return (
@@ -810,13 +748,13 @@ export default function App() {
                       d.lg = d.teams[d.me].tier;
                     });
                   }}
-                  className={`relative py-1.5 px-1 sm:px-2 mland:!flex-col mland:py-1 mland:px-0.5 mland:text-[8.5px] mland:flex-1 mland:min-h-[36px] mland:max-h-[48px] rounded-xl mland:rounded-lg flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 text-[10px] sm:text-xs font-bold cursor-pointer transition-all min-w-0 ${
+                  className={`relative flex-col py-1.5 px-1 mland:py-1 mland:px-0.5 text-[9.5px] mland:text-[8.5px] flex-1 min-h-[40px] max-h-[60px] mland:min-h-[36px] mland:max-h-[48px] rounded-xl mland:rounded-lg flex items-center justify-center gap-0.5 font-bold cursor-pointer transition-all min-w-0 ${
                     active
                       ? 'bg-gradient-to-b from-[#1a9657] to-[#147845] text-white shadow-[0_2px_8px_rgba(21,128,73,0.3)]'
                       : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/85'
                   }`}
                 >
-                  <span className="text-sm sm:text-base mland:text-[13px] leading-none">{icon}</span>
+                  <span className="text-base mland:text-[13px] leading-none">{icon}</span>
                   <span className="truncate max-w-full leading-tight">{label}</span>
                 </button>
               );
@@ -833,8 +771,6 @@ export default function App() {
           homeId={activeMatch.homeId}
           awayId={activeMatch.awayId}
           isDerby={activeMatch.isDerby}
-          isFullscreen={isFullscreen}
-          onExitFullscreen={exitFullscreenQuick}
           onFinish={handleMatchFinish}
         />
       )}

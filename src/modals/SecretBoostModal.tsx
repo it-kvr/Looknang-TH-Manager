@@ -26,8 +26,8 @@ export const SecretBoostModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[65] bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-md mland:max-w-lg max-h-[92dvh] mland:max-h-[95dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/50 flex flex-col overflow-hidden shadow-2xl">
-        <div className="shrink-0 px-5 py-3.5 mland:px-3 mland:py-1.5 bg-[var(--lamp-soft)]/50 border-b border-[var(--lamp)]/30 flex items-center justify-between">
+      <div className="w-full max-w-2xl max-h-[92dvh] mland:max-h-[95dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/50 flex flex-col overflow-hidden shadow-2xl">
+        <div className="shrink-0 px-5 py-3 mland:px-3 mland:py-1.5 bg-[var(--lamp-soft)]/50 border-b border-[var(--lamp)]/30 flex items-center justify-between">
           <h3 className="font-bold text-base mland:text-xs font-display flex items-center gap-1.5">
             <span>👑</span>
             <span>โหมดลับผู้สนับสนุน (VIP Boost)</span>
@@ -35,7 +35,7 @@ export const SecretBoostModal: React.FC<{
           <button type="button" onClick={onClose} className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] mland:text-xs font-bold cursor-pointer">✕</button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 mland:p-2.5 space-y-3 mland:space-y-2">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-2.5 space-y-3 mland:space-y-2">
           <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between text-xs mland:text-[10.5px] tabular">
             <span>งบสโมสรปัจจุบัน: <b className="text-[var(--g)]">{fmtMoney(state.money)}</b></span>
             {state.mode === 'p' && state.p ? (
@@ -45,7 +45,7 @@ export const SecretBoostModal: React.FC<{
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
+          <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
             <button
               type="button"
               onClick={() => runBoost('money500')}

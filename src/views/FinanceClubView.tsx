@@ -140,9 +140,9 @@ export const FinanceClubView: React.FC<{
     const topEarners = me.sq.slice().sort((a, b) => wagOf(b) - wagOf(a)).slice(0, 3);
 
     return (
-      <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+      <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
         {/* Top 4 Financial KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2.5 mland:gap-1.5 shrink-0">
+        <div className="grid grid-cols-4 gap-2 mland:gap-1.5 shrink-0">
           <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
             <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
             <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
@@ -185,7 +185,7 @@ export const FinanceClubView: React.FC<{
         </div>
 
         {/* Finance Sub-navigation */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {(
             [
               ['overview', '📊 ภาพรวม & บอร์ด'],
@@ -209,8 +209,8 @@ export const FinanceClubView: React.FC<{
 
         {/* Sub-tab 1: Overview & Board */}
         {finTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-sm mland:text-xs">👔 บอร์ดบริหาร &amp; เครดิตกุนซือ</h3>
@@ -260,10 +260,10 @@ export const FinanceClubView: React.FC<{
               </div>
             </div>
 
-            <div className="contents mland:block mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
+            <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
               <h3 className="font-bold text-sm mland:text-xs">💰 ประมาณการกระแสเงินสดต่อแมตช์</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
                   <div className="font-bold text-[var(--g)] flex justify-between">
                     <span>🏠 เกมเหย้า</span>
@@ -288,12 +288,12 @@ export const FinanceClubView: React.FC<{
               </div>
             </div>
 
-            <div className="lg:col-span-2 mland:col-span-1 p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-bold text-sm mland:text-xs">⚡ มาตรการกระตุ้นนัดถัดไป</h3>
                 <span className="text-[11px] text-[var(--mut)]">มีผลทันทีในแมตช์ที่กำลังจะลงแข่ง</span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2.5">
                 <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-2">
                   <div className="font-bold text-xs">🏆 โบนัสอัดฉีดชัยชนะ (จ่ายเฉพาะเมื่อชนะ)</div>
                   <div className="text-[11px] text-[var(--mut)]">เพิ่มความมุ่งมั่นและโอกาสทำผลงานดีในนัดสำคัญ</div>
@@ -369,8 +369,8 @@ export const FinanceClubView: React.FC<{
 
         {/* Sub-tab 2: Sponsors, Partner Deals, Tickets & Merch */}
         {finTab === 'commercial' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-            <div className="space-y-4 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
               <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
                 <h3 className="font-bold text-sm">🤝 สปอนเซอร์หลักคาดอกเสื้อ</h3>
                 <div className="space-y-2">
@@ -449,7 +449,7 @@ export const FinanceClubView: React.FC<{
               </div>
             </div>
 
-            <div className="space-y-4 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
+            <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
               <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-sm">🎫 นโยบายราคาตั๋วเข้าชม</h3>
@@ -510,8 +510,8 @@ export const FinanceClubView: React.FC<{
 
         {/* Sub-tab 3: Facilities, Backroom Staff & Training Focus */}
         {finTab === 'infra' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
               <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร (สูงสุด Lv.5)</h3>
               {(
                 [
@@ -547,7 +547,7 @@ export const FinanceClubView: React.FC<{
               })}
             </div>
 
-            <div className="space-y-4 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
+            <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
               <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-sm">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช (สูงสุด Lv.3)</h3>
@@ -604,7 +604,7 @@ export const FinanceClubView: React.FC<{
                     เข้าเมนู 🏋️ ฝึกซ้อมแบบละเอียด →
                   </button>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['F', 'พักฟื้น']] as const).map(([k, l]) => (
                     <button
                       key={k}
@@ -624,8 +624,8 @@ export const FinanceClubView: React.FC<{
 
         {/* Sub-tab 4: Bank Loans, Wage Structure & Filterable Ledger */}
         {finTab === 'ledger' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-            <div className="space-y-4 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
               <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
                 <h3 className="font-bold text-sm">🏦 ธนาคาร &amp; จัดการหนี้สิน</h3>
                 {state.bankLoan ? (
@@ -747,7 +747,7 @@ export const FinanceClubView: React.FC<{
               </div>
             </div>
 
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:h-full mland:flex mland:flex-col mland:min-h-0">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full flex flex-col min-h-0">
               <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <h3 className="font-bold text-sm mland:text-xs">📒 สมุดบัญชีรายรับ-รายจ่าย</h3>
                 <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--surface-2)] text-[11px]">
@@ -779,7 +779,7 @@ export const FinanceClubView: React.FC<{
                   </div>
                 </div>
               </div>
-              <div className="max-h-80 mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1 pr-1">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
                 {filteredEntries.length === 0 ? (
                   <div className="text-xs text-[var(--mut)] py-8 text-center">ยังไม่มีรายการบัญชีในหมวดนี้</div>
                 ) : (
@@ -832,28 +832,25 @@ export const FinanceClubView: React.FC<{
   ];
 
   return (
-    <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+    <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
       {/* Club Hero Identity Banner (unifies live preview when on identity tab so crests/kits never duplicate) */}
       <div
-        className={`p-4 sm:p-5 mland:p-2 rounded-3xl mland:rounded-2xl border border-[var(--line)] space-y-4 mland:space-y-0 shrink-0 ${
-          clubTab === 'identity' ? 'sticky top-0 z-20 mland:static border-[var(--g)]/35 shadow-md backdrop-blur-md' : ''
+        className={`p-3 mland:p-2 rounded-2xl border border-[var(--line)] shrink-0 ${
+          clubTab === 'identity' ? 'border-[var(--g)]/35 shadow-sm' : ''
         }`}
         style={{ background: `linear-gradient(155deg, color-mix(in srgb, ${k.c1} 18%, var(--surface)), var(--surface) 58%)` }}
       >
-        <div className="flex flex-col md:flex-row mland:flex-row items-center justify-between gap-4 mland:gap-2">
-          <div className="flex flex-col sm:flex-row mland:flex-row items-center gap-4 mland:gap-2.5 text-center sm:text-left mland:text-left min-w-0">
-            <div className="flex items-end gap-3 mland:gap-1.5 shrink-0 mland:[&_svg]:w-10 mland:[&_svg]:h-10">
+        <div className="flex flex-row items-center justify-between gap-3 mland:gap-2">
+          <div className="flex flex-row items-center gap-3 mland:gap-2.5 text-left min-w-0">
+            <div className="flex items-end gap-2 mland:gap-1.5 shrink-0 [&_svg]:w-12 [&_svg]:h-12 mland:[&_svg]:w-10 mland:[&_svg]:h-10">
               <div className="text-center">
-                <ClubCrest name={me.name} size={74} team={me} club={k} isMyClub />
-                <div className="text-[10px] text-[var(--mut)] font-semibold mt-0.5 mland:hidden">ตราสโมสร</div>
+                <ClubCrest name={me.name} size={64} team={me} club={k} isMyClub />
               </div>
               <div className="text-center">
-                <KitJersey club={k} away={false} size={64} />
-                <div className="text-[10px] text-[var(--mut)] font-semibold mt-0.5 mland:hidden">เหย้า</div>
+                <KitJersey club={k} away={false} size={56} />
               </div>
               <div className="text-center">
-                <KitJersey club={k} away={true} size={64} />
-                <div className="text-[10px] text-[var(--mut)] font-semibold mt-0.5 mland:hidden">เยือน</div>
+                <KitJersey club={k} away={true} size={56} />
               </div>
             </div>
             <div className="space-y-1 mland:space-y-0 min-w-0">
@@ -907,22 +904,22 @@ export const FinanceClubView: React.FC<{
               🎲 สุ่มดีไซน์ทั้งหมด
             </button>
           ) : (
-            <div className="grid grid-cols-4 gap-2 mland:gap-1 w-full md:w-auto mland:w-auto text-center shrink-0">
-              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+            <div className="grid grid-cols-4 gap-1.5 mland:gap-1 w-auto text-center shrink-0">
+              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">พลัง XI / ทีม</div>
-                <b className="text-sm mland:text-[10.5px] tabular">{ts.ovXi} / {ts.ovSq}</b>
+                <b className="text-xs mland:text-[10.5px] tabular">{ts.ovXi} / {ts.ovSq}</b>
               </div>
-              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แฟนบอล</div>
-                <b className="text-sm mland:text-[10.5px] tabular">{state.fan ?? 50}%</b>
+                <b className="text-xs mland:text-[10.5px] tabular">{state.fan ?? 50}%</b>
               </div>
-              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">บอร์ด</div>
-                <b className="text-sm mland:text-[10.5px] tabular">{state.bd ?? 50}%</b>
+                <b className="text-xs mland:text-[10.5px] tabular">{state.bd ?? 50}%</b>
               </div>
-              <div className="p-2.5 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
+              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">มูลค่าทีม</div>
-                <b className="text-sm mland:text-[10.5px] tabular">{fmtMoneyNum(totV)}</b>
+                <b className="text-xs mland:text-[10.5px] tabular">{fmtMoneyNum(totV)}</b>
               </div>
             </div>
           )}
@@ -930,7 +927,7 @@ export const FinanceClubView: React.FC<{
       </div>
 
       {/* Club Sub-navigation */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+      <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
         {(
           [
             ['info', '🏛️ ข้อมูล & ทีม'],
@@ -954,10 +951,10 @@ export const FinanceClubView: React.FC<{
 
       {/* Club Tab 1: Basic Info & Squad Key Stats */}
       {clubTab === 'info' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-          <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto">
+        <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
             <h3 className="font-bold text-sm mland:text-xs">✏️ แก้ไขข้อมูลพื้นฐานสโมสร</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-[11px] text-[var(--mut)] block mb-1">ชื่อสโมสร</label>
                 <input
@@ -1012,8 +1009,8 @@ export const FinanceClubView: React.FC<{
                   className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
                 />
               </div>
-              <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="sm:col-span-2">
+              <div className="col-span-2 grid grid-cols-3 gap-2.5">
+                <div className="col-span-2">
                   <label className="text-[11px] text-[var(--mut)] block mb-1">คำขวัญสโมสร</label>
                   <input
                     value={k.motto || ''}
@@ -1044,9 +1041,9 @@ export const FinanceClubView: React.FC<{
             </div>
           </div>
 
-          <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto">
+          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
             <h3 className="font-bold text-sm mland:text-xs">📊 บรรยากาศห้องแต่งตัว &amp; แกนหลักทีม</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div className="grid grid-cols-4 gap-2 text-center">
               <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
                 <div className="text-[10px] text-[var(--mut)]">ขวัญทีม</div>
                 <div className="font-bold text-sm tabular">{state.mor ?? 55}%</div>
@@ -1092,10 +1089,10 @@ export const FinanceClubView: React.FC<{
 
       {/* Club Tab 2: Crest & Jersey Studio */}
       {clubTab === 'identity' && (
-        <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5 mland:overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
             {/* Crest Studio */}
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3.5 mland:space-y-2 mland:h-full mland:overflow-y-auto">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-bold text-sm mland:text-xs">🛡️ สตูดิโอออกแบบตราสโมสร</h3>
                 <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
@@ -1131,7 +1128,7 @@ export const FinanceClubView: React.FC<{
 
               <div>
                 <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">ลวดลายพื้นหลังตรา ({CREST_PATTERNS.length} แบบ)</div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 mland:grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-5 gap-1.5">
                   {CREST_PATTERNS.map((l, i) => {
                     const active = k.pat === i;
                     const shPath = CREST_SHAPES[k.shape % CREST_SHAPES.length]?.d || CREST_SHAPES[0].d;
@@ -1177,7 +1174,7 @@ export const FinanceClubView: React.FC<{
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mland:gap-2">
+              <div className="grid grid-cols-2 gap-2.5 mland:gap-2">
                 <div>
                   <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">สไตล์ขอบตรา</div>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -1261,7 +1258,7 @@ export const FinanceClubView: React.FC<{
                 </div>
 
                 {/* Visual Vector Emblem Grid */}
-                <div className="grid grid-cols-4 sm:grid-cols-6 mland:grid-cols-6 gap-1.5">
+                <div className="grid grid-cols-6 gap-1.5">
                   {Object.keys(CREST_IC).map((ic) => {
                     const active = k.icon === ic;
                     return (
@@ -1296,7 +1293,7 @@ export const FinanceClubView: React.FC<{
             </div>
 
             {/* Jersey Studio */}
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3.5 mland:space-y-2 mland:h-full mland:overflow-y-auto">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-sm mland:text-xs">🎽 สตูดิโอสีชุดแข่ง &amp; ลายเสื้อ</h3>
                 <span className="text-[11px] font-semibold text-[var(--g)]">
@@ -1404,7 +1401,7 @@ export const FinanceClubView: React.FC<{
 
               <div>
                 <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลายเสื้อชุดเหย้า ({KIT_PATTERNS.length} ลาย)</div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-4 gap-1.5">
                   {KIT_PATTERNS.map((l, i) => (
                     <button
                       key={l}
@@ -1418,7 +1415,7 @@ export const FinanceClubView: React.FC<{
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-2 gap-3 pt-1">
                 <div>
                   <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลายเสื้อชุดเยือน (แยกได้)</div>
                   <select
@@ -1474,7 +1471,7 @@ export const FinanceClubView: React.FC<{
 
       {/* Club Tab 3: Club Activities */}
       {clubTab === 'activities' && (
-        <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+        <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div>
               <h3 className="font-bold text-sm mland:text-xs">🤝 กิจกรรมสโมสร &amp; มวลชนสัมพันธ์</h3>
@@ -1485,7 +1482,7 @@ export const FinanceClubView: React.FC<{
             </span>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mland:grid-cols-3 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
+          <div className="grid grid-cols-3 gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-y-auto pr-0.5">
             <button
               type="button"
               disabled={actCool}
@@ -1658,12 +1655,12 @@ export const FinanceClubView: React.FC<{
 
       {/* Club Tab 4: Hall of Fame & Season History */}
       {clubTab === 'legacy' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-          <div className="space-y-4 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-0.5">
-            <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
+        <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+          <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
               <h3 className="font-bold text-sm mland:text-xs">🏆 ตู้โชว์ถ้วยรางวัล ({trophies.length})</h3>
               {trophies.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {trophies.map((tr, i) => (
                     <div key={i} className="p-2.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/40 text-xs font-bold flex items-center justify-between gap-2">
                       <span className="truncate">🏆 {tr.title}</span>
@@ -1699,10 +1696,10 @@ export const FinanceClubView: React.FC<{
             </div>
           </div>
 
-          <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 mland:h-full mland:flex mland:flex-col mland:min-h-0">
+          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full flex flex-col min-h-0">
             <h3 className="font-bold text-sm mland:text-xs shrink-0">📜 ประวัติศาสตร์สโมสรรายฤดูกาล</h3>
             {state.hist && state.hist.length > 0 ? (
-              <div className="max-h-80 mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1.5 pr-1">
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
                 {state.hist
                   .slice()
                   .reverse()

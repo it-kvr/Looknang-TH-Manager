@@ -999,6 +999,7 @@ export function startSeason(s: GameState) {
   }
 
   const mt = s.teams[s.me].tier;
+  s.lg = mt;
   s.fx = doubleRoundRobin(s.teams.filter((t) => t.tier === mt).map((t) => t.id));
   s.fxo = {};
   [0, 1, 2]
@@ -1846,7 +1847,14 @@ export function applyPitchPlayerOutcome(
   }
 }
 
-export function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; playerNames?: string[] }) {
+export function afterMatchDay(
+  s: GameState,
+  liveInjMeta?: {
+    teamIds?: number[];
+    playerNames?: string[];
+    subbedOutByTeam?: Record<number, Record<string, number>>;
+  }
+) {
   const me = s.teams[s.me];
   const mg = s.mode === 'm';
   const lv = s.tr ?? 1;
@@ -1854,6 +1862,7 @@ export function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; 
   const stf = getStaffState(s);
   const skipInjTeams = new Set(liveInjMeta?.teamIds || []);
   const justInjuredNames = new Set(liveInjMeta?.playerNames || []);
+  const subbedOutByTeam = liveInjMeta?.subbedOutByTeam || {};
   const plan = getTeamTrainingPlan(s);
   const progMeta = TEAM_TRAINING_PROGRAMS[plan.program];
   const intMeta = TRAINING_INTENSITY_META[plan.intensity];
@@ -1868,80 +1877,85 @@ export function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; 
   let myFitCount = 0;
   let restedCount = 0;
 
-  s.teams
-    .filter((t) => t.tier === me.tier)
-    .forEach((t) => {
-      const pl = xi(t);
-      const mine = t.id === s.me;
-      const ps = mine ? (t.press ?? 1) + (t.tempo ?? 1) - 1 : 1;
-      t.sq.forEach((q) => {
-        if (q.me) {
-          if ((q.sus || 0) > 0) {
-            q.sus = (q.sus || 0) - 1;
-            if (s.p) s.p.sus = q.sus;
-          }
-          if ((q.inj || 0) > 0 && !justInjuredNames.has(q.n)) {
-            q.inj = Math.max(0, q.inj - 1);
-            if (s.p) s.p.inj = q.inj;
-          }
-          return;
+  s.teams.forEach((t) => {
+    const pl = xi(t);
+    const mine = t.id === s.me;
+    const ps = mine ? (t.press ?? 1) + (t.tempo ?? 1) - 1 : 1;
+    const teamSubsOut = subbedOutByTeam[t.id] || {};
+    const avgAiFit = !mine && t.sq.length
+      ? t.sq.reduce((sum, x) => sum + (x.fit ?? 100), 0) / t.sq.length
+      : 100;
+    const aiRecoveryWeek = !mine && avgAiFit < 80 ? 3 : 0;
+    const aiFacilityBonus = !mine ? ([3, 5, 7][t.tier] ?? 4) : 0;
+    const aiPhysioChance = !mine ? ([0.16, 0.28, 0.38][t.tier] ?? 0.25) : 0;
+
+    t.sq.forEach((q) => {
+      if (q.me) {
+        if ((q.sus || 0) > 0) {
+          q.sus = (q.sus || 0) - 1;
+          if (s.p) s.p.sus = q.sus;
         }
-        const pi = pl.includes(q);
-        const Dq = DT(q, s.p);
-        const isIndivRest = mine && mg && plan.individualFocus?.[q.n] === 'REST';
-        if (isIndivRest) restedCount++;
-        const prevFit = q.fit ?? 100;
-        const trainFitBonus = mine
-          ? lv * 2 +
-            stf.fit * 2 +
-            progMeta.fitMod +
-            (mg ? intMeta.fitDelta : 0) +
-            (mg && plan.restStarters && pi ? 5 : 0) +
-            (isIndivRest ? 10 : 0)
-          : 0;
-        q.fit = clamp(
-          prevFit +
-            (pi
-              ? -Math.round(R(7, 13) * (Dq.tr === 2 ? 0.8 : 1)) - ps * 3 + Math.round((Dq.d.sta - 70) / 8)
-              : R(8, 16) + Math.round((Dq.d.rec - 70) / 8)) +
-            trainFitBonus,
-          30,
-          100
-        );
-        if (mine) {
-          myFitBeforeSum += prevFit;
-          myFitAfterSum += q.fit;
-          myFitCount++;
+        if ((q.inj || 0) > 0 && !justInjuredNames.has(q.n)) {
+          q.inj = Math.max(0, q.inj - 1);
+          if (s.p) s.p.inj = q.inj;
         }
-        if ((q.sus || 0) > 0) q.sus = (q.sus || 0) - 1;
-        if (q.inj > 0) {
-          if (!justInjuredNames.has(q.n)) {
+        return;
+      }
+      const pi = pl.includes(q);
+      const Dq = DT(q, s.p);
+      const isIndivRest = mine && mg && plan.individualFocus?.[q.n] === 'REST';
+      if (isIndivRest) restedCount++;
+      const prevFit = q.fit ?? 100;
+      const subOutMin = teamSubsOut[q.n];
+      const earlySubRest = pi && typeof subOutMin === 'number' && subOutMin < 85
+        ? Math.round(clamp((90 - subOutMin) / 8, 2, 7))
+        : 0;
+      const trainFitBonus = mine
+        ? lv * 2 +
+          stf.fit * 2 +
+          progMeta.fitMod +
+          (mg ? intMeta.fitDelta : 0) +
+          (mg && plan.restStarters && pi ? 5 : 0) +
+          (isIndivRest ? 10 : 0)
+        : (pi ? Math.round(aiFacilityBonus * 0.65) : aiFacilityBonus + (prevFit < 76 ? 4 : prevFit < 86 ? 2 : 0)) + aiRecoveryWeek;
+      const matchOrRestDelta = pi
+        ? -Math.round(R(7, 12) * (Dq.tr === 2 ? 0.8 : 1)) - ps * (mine ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
+        : R(10, 17) + Math.round((Dq.d.rec - 68) / 7);
+      q.fit = clamp(prevFit + matchOrRestDelta + trainFitBonus, 35, 100);
+      if (mine) {
+        myFitBeforeSum += prevFit;
+        myFitAfterSum += q.fit;
+        myFitCount++;
+      }
+      if ((q.sus || 0) > 0) q.sus = (q.sus || 0) - 1;
+      if (q.inj > 0) {
+        if (!justInjuredNames.has(q.n)) {
+          q.inj--;
+          if (
+            q.inj > 0 &&
+            (Dq.d.rec >= 82 || isIndivRest || (!mine && t.tier >= 1) || (mine && (medLv >= 3 || stf.physio >= 2))) &&
+            Math.random() < (mine ? 0.3 + (medLv - 1) * 0.08 + stf.physio * 0.08 + (isIndivRest ? 0.25 : 0) : aiPhysioChance)
+          ) {
             q.inj--;
-            if (
-              q.inj > 0 &&
-              (Dq.d.rec >= 85 || isIndivRest || (mine && (medLv >= 3 || stf.physio >= 2))) &&
-              Math.random() < 0.3 + (mine ? (medLv - 1) * 0.08 + stf.physio * 0.08 + (isIndivRest ? 0.25 : 0) : 0)
-            ) {
-              q.inj--;
-            }
-          }
-        } else if (
-          pi &&
-          !skipInjTeams.has(t.id) &&
-          Math.random() <
-            (q.fit < 60 ? 0.07 : 0.024) *
-              (mine ? progMeta.injMult * (mg ? intMeta.injMult : 1) * (isIndivRest ? 0.5 : 1) : 1) *
-              (mine ? Math.max(0.5, 1 - (medLv - 1) * 0.08 - stf.physio * 0.08) : 1) *
-              ((130 - Dq.d.tol) / 60)
-        ) {
-          q.inj = injD(q, R(1, 5), s.p);
-          if (mine) {
-            s.news = `${q.n} บาดเจ็บ ${q.inj} นัด`;
-            pushFeed(s, 'บาดเจ็บ', `🩹 ${q.n} บาดเจ็บพัก ${q.inj} นัด`, 'urg');
           }
         }
-      });
+      } else if (
+        pi &&
+        !skipInjTeams.has(t.id) &&
+        Math.random() <
+          (q.fit < 60 ? 0.068 : 0.022) *
+            (mine ? progMeta.injMult * (mg ? intMeta.injMult : 1) * (isIndivRest ? 0.5 : 1) : 1) *
+            (mine ? Math.max(0.5, 1 - (medLv - 1) * 0.08 - stf.physio * 0.08) : Math.max(0.65, 1 - t.tier * 0.12)) *
+            ((130 - Dq.d.tol) / 60)
+      ) {
+        q.inj = injD(q, R(1, 5), s.p);
+        if (mine) {
+          s.news = `${q.n} บาดเจ็บ ${q.inj} นัด`;
+          pushFeed(s, 'บาดเจ็บ', `🩹 ${q.n} บาดเจ็บพัก ${q.inj} นัด`, 'urg');
+        }
+      }
     });
+  });
 
   if (mg) {
     const gr: string[] = [];
@@ -2253,6 +2267,7 @@ export function finishSeasonComputation(s: GameState) {
   up.forEach((t) => t.tier++);
   dn.forEach((t) => t.tier--);
   const nt = s.teams[s.me].tier;
+  s.lg = nt;
 
   s.trophies = s.trophies || [];
   s.records = s.records || {};

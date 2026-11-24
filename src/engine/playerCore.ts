@@ -321,12 +321,19 @@ export function xi(t: Team): Player[] {
   t.sq.forEach(fixRo);
   const auto = () => {
     const o: Player[] = [];
+    const rotationReadiness = (q: Player) => {
+      const f = q.fit ?? 100;
+      if (f >= 82) return 1;
+      if (f >= 72) return 0.92 + ((f - 72) / 10) * 0.08;
+      if (f >= 58) return 0.76 + ((f - 58) / 14) * 0.16;
+      return Math.max(0.54, 0.58 + (f - 30) * 0.0064);
+    };
     POS.forEach((p) => {
       const ix = sl.map((z, i) => (z.pos === p ? i : -1)).filter((i) => i >= 0);
       const pr: [number, Player, number][] = [];
       t.sq
         .filter((q) => q.pos === p)
-        .forEach((q) => ix.forEach((i) => pr.push([ef(q) * PM[pen(q.ro, sl[i].sp)], q, i])));
+        .forEach((q) => ix.forEach((i) => pr.push([ef(q) * rotationReadiness(q) * PM[pen(q.ro, sl[i].sp)], q, i])));
       pr.sort((a, b) => b[0] - a[0]);
       const uq = new Set<Player>();
       const ui = new Set<number>();

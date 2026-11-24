@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { POS, FSD, LINE, SPN, AR_C, AR_T, PRE } from '../data/thaiFootballData';
+import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, getFormationCounts, pen, xi, vlu, ensureCon, tc } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { rate, getLeagueTransferContext, getIncomingOffers, removeIncomingOffer, getPlayerSellCheck, canAcceptTransferOffer, acceptTransferOffer, resolveCounterOfferOutcome, applyCounterOfferOutcome, resolvePitchPlayerOutcome, applyPitchPlayerOutcome } from '../engine/simulation';
-import { ClubCrest, PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
+import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { CustomFormationModal, PitchPlayerModal } from '../modals/TacticsModals';
 
@@ -14,9 +14,8 @@ export const SquadTacticsView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
-  onOpenGodBlessing?: () => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onOpenGodBlessing, onToast }) => {
+}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 2 ? 0 : (state.sub ?? 0);
@@ -34,7 +33,6 @@ export const SquadTacticsView: React.FC<{
   const bench = me.sq
     .filter((q) => !starters.includes(q))
     .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov);
-  const offPosCount = starters.filter((q, i) => pen(q.ro, slots[i]?.sp || '') > 0).length;
   const avgFit = Math.round(starters.reduce((s, q) => s + (q.fit ?? 100), 0) / (starters.length || 1));
 
   const dragRef = useRef<{
@@ -56,8 +54,6 @@ export const SquadTacticsView: React.FC<{
   const [pitchDragPreview, setPitchDragPreview] = useState<PitchDragPreview | null>(null);
   const pitchDragPreviewRef = useRef<PitchDragPreview | null>(null);
   const [touchAnchorPt, setTouchAnchorPt] = useState<{ px: number; py: number } | null>(null);
-  const [tapMoveMode, setTapMoveMode] = useState(false);
-  const [tapMoveSource, setTapMoveSource] = useState<{ name: string; slotIdx?: number; ro: SubRole } | null>(null);
 
   const swapAnyPlayers = (nameA: string, nameB: string) => {
     const s = me.sq.find((q) => q.n === nameA);
@@ -93,6 +89,13 @@ export const SquadTacticsView: React.FC<{
   const moveStarterToZone = (slotIdx: number, nx: number, ny: number, newRole: SubRole, zoneLabel: string, playerName: string) => {
     if (slotIdx < 1 || slotIdx >= 11) return;
     SFX.tap();
+    const curSlots = getFormationSlots(me);
+    const previewSlots = curSlots.map((z, idx) =>
+      idx === slotIdx ? { ...z, sp: newRole, pos: LINE[newRole] || z.pos } : z
+    );
+    const df = previewSlots.filter((z) => z.pos === 'DF').length;
+    const mf = previewSlots.filter((z) => z.pos === 'MF').length;
+    const fw = previewSlots.filter((z) => z.pos === 'FW').length;
     onUpdateState((draft) => {
       const t = draft.teams[draft.me];
       const curXi = xi(t).map((q) => q.n);
@@ -105,7 +108,7 @@ export const SquadTacticsView: React.FC<{
       t.form = 'custom';
       t.tacFam = Math.max(45, t.tacFam ?? 65);
     });
-    onToast(`📍 ย้าย ${playerName.split(' ')[0]} → ${newRole} (${zoneLabel})`);
+    onToast(`📍 ${playerName.split(' ')[0]} → ${newRole} (${zoneLabel}) · แผน ${df}-${mf}-${fw}`);
   };
 
   const clientToPitchCoords = (
@@ -191,8 +194,8 @@ export const SquadTacticsView: React.FC<{
     }
     const isTouch = e.pointerType !== 'mouse';
     const targetEl = e.target as HTMLElement | null;
-    const immediate = (slotIdx !== undefined && !tapMoveMode) || Boolean(targetEl?.closest?.('[data-drag-grip="1"]'));
-    if (immediate && isMgr && !tapMoveMode) {
+    const immediate = slotIdx !== undefined || Boolean(targetEl?.closest?.('[data-drag-grip="1"]'));
+    if (immediate && isMgr) {
       try {
         (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
       } catch {
@@ -200,7 +203,7 @@ export const SquadTacticsView: React.FC<{
       }
     }
     let holdTimer: number | undefined;
-    if (!immediate && isMgr && !tapMoveMode) {
+    if (!immediate && isMgr) {
       holdTimer = window.setTimeout(() => {
         const cur = dragRef.current;
         if (!cur || cur.pointerId !== e.pointerId || cur.active) return;
@@ -228,22 +231,9 @@ export const SquadTacticsView: React.FC<{
     };
   };
 
-  const handleTapPlayerAction = (q: Player, slotIdx?: number) => {
+  const handleTapPlayerAction = (q: Player) => {
     SFX.tap();
-    if (!isMgr || !tapMoveMode) {
-      onInspectPlayer(q, me);
-      return;
-    }
-    if (!tapMoveSource) {
-      setTapMoveSource({ name: q.n, slotIdx, ro: q.ro });
-      return;
-    }
-    if (tapMoveSource.name === q.n) {
-      setTapMoveSource(null);
-      return;
-    }
-    swapAnyPlayers(tapMoveSource.name, q.n);
-    setTapMoveSource(null);
+    onInspectPlayer(q, me);
   };
 
   const dragActionsRef = useRef({
@@ -252,7 +242,6 @@ export const SquadTacticsView: React.FC<{
     moveStarterToZone,
     me,
     isMgr,
-    tapMoveMode,
     starters,
     slots
   });
@@ -262,7 +251,6 @@ export const SquadTacticsView: React.FC<{
     moveStarterToZone,
     me,
     isMgr,
-    tapMoveMode,
     starters,
     slots
   };
@@ -284,7 +272,7 @@ export const SquadTacticsView: React.FC<{
     const onMove = (e: PointerEvent) => {
       const d = dragRef.current;
       if (!d || e.pointerId !== d.pointerId) return;
-      if (!dragActionsRef.current.isMgr || dragActionsRef.current.tapMoveMode) return;
+      if (!dragActionsRef.current.isMgr) return;
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
       const dist = Math.hypot(dx, dy);
@@ -374,7 +362,7 @@ export const SquadTacticsView: React.FC<{
 
     const onTouchMove = (e: TouchEvent) => {
       const d = dragRef.current;
-      if (d && (d.active || d.immediate) && dragActionsRef.current.isMgr && !dragActionsRef.current.tapMoveMode) {
+      if (d && (d.active || d.immediate) && dragActionsRef.current.isMgr) {
         if (e.cancelable) e.preventDefault();
       }
     };
@@ -388,7 +376,7 @@ export const SquadTacticsView: React.FC<{
       clearDrag();
 
       if (!wasActive) {
-        dragActionsRef.current.handleTapPlayerAction(d.player, d.fromPitchIdx);
+        dragActionsRef.current.handleTapPlayerAction(d.player);
         return;
       }
       if (preview) {
@@ -426,10 +414,28 @@ export const SquadTacticsView: React.FC<{
     };
   }, []);
 
-  const formName = (t: Team) => {
+  const liveSlots = pitchDragPreview
+    ? slots.map((z, idx) =>
+        idx === pitchDragPreview.slotIdx
+          ? { ...z, sp: pitchDragPreview.sp, pos: LINE[pitchDragPreview.sp] || z.pos }
+          : z
+      )
+    : slots;
+  const offPosCount = starters.filter((q, i) => pen(q.ro, liveSlots[i]?.sp || '') > 0).length;
+
+  const formName = (t: Team, preview?: PitchDragPreview | null) => {
+    if (preview) {
+      const pSlots = getFormationSlots(t).map((z, idx) =>
+        idx === preview.slotIdx ? { ...z, sp: preview.sp, pos: LINE[preview.sp] || z.pos } : z
+      );
+      const df = pSlots.filter((z) => z.pos === 'DF').length;
+      const mf = pSlots.filter((z) => z.pos === 'MF').length;
+      const fw = pSlots.filter((z) => z.pos === 'FW').length;
+      return `${df}-${mf}-${fw}`;
+    }
     if (t.form === 'custom') {
       const cnt = getFormationCounts(t);
-      return `${cnt[1]}-${cnt[2]}-${cnt[3]} (ปรับเอง)`;
+      return `${cnt[1]}-${cnt[2]}-${cnt[3]}`;
     }
     return t.form;
   };
@@ -452,7 +458,7 @@ export const SquadTacticsView: React.FC<{
   const renderPlayerRow = (q: Player, slotSp?: SubRole) => {
     const f = Math.round(q.fit ?? 100);
     const fCol = q.inj > 0 || (q.sus || 0) > 0 ? 'var(--red)' : f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
-    const isSource = dragUi?.player.n === q.n || tapMoveSource?.name === q.n;
+    const isSource = dragUi?.player.n === q.n;
     const isTarget = dropTarget?.name === q.n && dragUi?.player.n !== q.n;
     const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
     const pn = slotSp ? pen(q.ro, slotSp) : 0;
@@ -476,27 +482,25 @@ export const SquadTacticsView: React.FC<{
           }
         }}
         className={`w-full flex items-center gap-1 px-1.5 py-1 mland:py-0.5 rounded-lg border text-left select-none transition-all ${
-          tapMoveSource?.name === q.n
-            ? 'bg-sky-500/15 border-sky-400 ring-2 ring-sky-400/50'
-            : isTarget
-              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)]/40 scale-[1.01]'
-              : isSource
-                ? 'opacity-45 border-dashed border-[var(--lamp)] bg-[var(--surface-2)]'
-                : isMe
-                  ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] ring-1 ring-[var(--lamp)]/45'
-                  : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
+          isTarget
+            ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)]/40 scale-[1.01]'
+            : isSource
+              ? 'opacity-45 border-dashed border-[var(--lamp)] bg-[var(--surface-2)]'
+              : isMe
+                ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] ring-1 ring-[var(--lamp)]/45'
+                : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
         } ${dragUi ? 'cursor-grabbing' : 'cursor-pointer'}`}
       >
         <span
-          data-drag-grip={isMgr && !tapMoveMode ? '1' : undefined}
+          data-drag-grip={isMgr ? '1' : undefined}
           onContextMenu={(e) => e.preventDefault()}
           style={
-            isMgr && !tapMoveMode
+            isMgr
               ? { touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
               : { WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }
           }
-          title={isMgr ? (tapMoveMode ? 'แตะเพื่อเลือก/สลับ' : 'ลากเพื่อเปลี่ยนหรือสลับตำแหน่ง') : 'กด 1 ครั้งเพื่อดูข้อมูล'}
-          className={`flex items-center gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4 ${isMgr && !tapMoveMode ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
+          title={isMgr ? 'ลากเพื่อเปลี่ยนหรือสลับตำแหน่ง' : 'กด 1 ครั้งเพื่อดูข้อมูล'}
+          className={`flex items-center gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4 ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
         >
           <PlayerFace player={q} team={me} state={state} size={20} />
           <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">#{no}</span>
@@ -548,7 +552,7 @@ export const SquadTacticsView: React.FC<{
   };
 
   return (
-    <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+    <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
       {dragUi && (
         <div
           className="fixed z-[100] pointer-events-none flex items-center gap-2 px-3 py-2 rounded-2xl bg-[var(--surface)] border-2 border-[var(--lamp)] shadow-2xl max-w-[210px]"
@@ -567,110 +571,49 @@ export const SquadTacticsView: React.FC<{
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-2 mland:gap-1.5 flex-nowrap overflow-x-auto shrink-0">
-        <div className="flex items-center p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 0 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
-            ⚽ ตัวจริง<span className="hidden lg:inline mland:hidden"> & จัดตำแหน่ง</span>
+      <div className="flex items-center justify-between gap-1.5 flex-nowrap overflow-x-auto shrink-0">
+        <div className="flex items-center p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 0 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            ⚽ ตัวจริง
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 1 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
-            🧭 แผนเกม<span className="hidden lg:inline mland:hidden"> & ยุทธวิธี</span>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 1 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            🧭 แผนเกม
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 2 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 2 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
             📋 ทั้งทีม ({me.sq.length})
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
-          {onOpenGodBlessing && (
-            <button
-              type="button"
-              onClick={() => { SFX.tap(); onOpenGodBlessing(); }}
-              className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap shadow-xs hover:brightness-105"
-            >
-              ✨ พรของพระเจ้า
-            </button>
+        <div className="inline-flex items-center gap-1 text-[11px] mland:text-[9.5px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <span className="font-bold text-[var(--ink)]">แผน {formName(me, pitchDragPreview)}</span>
+          <span className="opacity-35">·</span>
+          <span>{AR_T[me.tac]}</span>
+          <span className="opacity-35">·</span>
+          <span>⚔️{Math.round(r.at)}</span>
+          <span>🛡️{Math.round(r.df)}</span>
+          <span className="opacity-35">·</span>
+          <span>❤️{avgFit}%</span>
+          {offPosCount > 0 && (
+            <>
+              <span className="opacity-35">·</span>
+              <span className="text-[var(--red)] font-bold" title="จำนวนนักเตะที่ลงเล่นนอกตำแหน่งถนัด">⚠️นอก {offPosCount}</span>
+            </>
           )}
-          <div className="flex items-center gap-1.5 mland:gap-1 text-xs mland:text-[10px] font-semibold tabular whitespace-nowrap shrink-0 px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <span>แผน {formName(me)} · {AR_T[me.tac]}</span>
-            <span className="opacity-35">·</span>
-            <span>⚔️ {Math.round(r.at)} · 🛡️ {Math.round(r.df)}</span>
-            <span className="opacity-35">·</span>
-            <span>❤️ {avgFit}%</span>
-            {offPosCount > 0 && (
-              <>
-                <span className="opacity-35">·</span>
-                <span className="text-[var(--red)] font-bold">⚠️ นอกตำแหน่ง {offPosCount}</span>
-              </>
-            )}
-          </div>
         </div>
       </div>
 
       {sub === 0 ? (
         isMgr ? (
-          <div className="grid grid-cols-1 lg:grid-cols-[1.22fr_0.78fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.18fr_0.82fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
-            {/* CENTER STAGE: Full-Size Pitch First + Collapsed 🧭 เปลี่ยนแผน Bar at Bottom */}
-            <div className="relative p-2.5 sm:p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-1.5 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
-              <div className="flex items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-1.5 font-bold text-xs sm:text-sm mland:text-[10.5px] min-w-0">
-                  <ClubCrest name={me.name} size={20} team={me} club={state.club} isMyClub={true} />
-                  <span className="truncate">ตัวจริง 11 · {formName(me)}</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {pitchDragPreview ? (
-                    <span className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap">
-                      📍 {pitchDragPreview.player.n.split(' ')[0]} → {pitchDragPreview.sp} ({pitchDragPreview.zoneLabel})
-                    </span>
-                  ) : (
-                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap hidden sm:inline">
-                      เข้าใจ <b className="text-[var(--g)] tabular">{me.tacFam ?? 65}%</b>
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      setTapMoveMode((v) => !v);
-                      setTapMoveSource(null);
-                    }}
-                    className={`px-2 py-0.5 rounded-lg border text-[10.5px] mland:text-[9px] font-bold transition-colors cursor-pointer whitespace-nowrap ${
-                      tapMoveMode
-                        ? 'bg-sky-500 text-white border-sky-400 shadow-xs'
-                        : 'bg-[var(--surface-2)] hover:border-sky-400 border-[var(--line)] text-[var(--ink)]'
-                    }`}
-                  >
-                    {tapMoveMode ? '👆 แตะย้าย: เปิด' : '👆 แตะย้าย'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateState((d) => { d.sub = 1; })}
-                    className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold transition-colors cursor-pointer whitespace-nowrap"
-                  >
-                    ⚙️ ปรับละเอียด
-                  </button>
-                </div>
-              </div>
-
-              {tapMoveMode && (
-                <div className="px-2.5 py-1 mland:py-0.5 rounded-xl bg-sky-500/12 border border-sky-400/45 flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px] shrink-0">
-                  <span className="font-semibold text-sky-700 dark:text-sky-300 truncate">
-                    {tapMoveSource
-                      ? `📍 เลือก ${tapMoveSource.name.split(' ')[0]} (${tapMoveSource.ro}) — แตะ${tapMoveSource.slotIdx !== undefined && tapMoveSource.slotIdx >= 1 ? 'พื้นที่ว่างเพื่อย้าย หรือ' : ''}นักเตะอื่นเพื่อสลับ`
-                      : '👆 แตะตัวนักเตะที่ต้องการย้าย (ในสนามหรือรายชื่อ)'}
-                  </span>
-                  {tapMoveSource && (
-                    <button
-                      type="button"
-                      onClick={() => setTapMoveSource(null)}
-                      className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-700 dark:text-sky-200 font-bold text-[10px] cursor-pointer shrink-0"
-                    >
-                      ✕ ยกเลิก
-                    </button>
-                  )}
+          <div className="grid grid-cols-[1.18fr_0.82fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+            {/* CENTER STAGE: Full-Size Pitch Only + Collapsed 🧭 เปลี่ยนแผน Bar at Bottom */}
+            <div className="relative p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-1.5 mland:gap-1 h-full min-h-0 overflow-hidden">
+              {pitchDragPreview && (
+                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-2.5 py-0.5 rounded-lg bg-[var(--surface)]/95 border border-[var(--g)]/60 text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shadow-md">
+                  📍 {pitchDragPreview.player.n.split(' ')[0]} → {pitchDragPreview.sp} ({pitchDragPreview.zoneLabel}) · {formName(me, pitchDragPreview)}
                 </div>
               )}
 
-              <div className="w-full max-w-[430px] mland:max-w-none mland:w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
+              <div className="w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
                 <FormationPitch
                   team={me}
                   state={state}
@@ -680,16 +623,6 @@ export const SquadTacticsView: React.FC<{
                   dropTargetName={dropTarget?.name || null}
                   dragPreview={pitchDragPreview}
                   touchPointerPitchPt={touchAnchorPt}
-                  tapMovePlayerName={tapMoveSource?.name || null}
-                  onPitchZoneTap={(nx, ny, sp, zoneLabel) => {
-                    if (!tapMoveSource) return;
-                    if (tapMoveSource.slotIdx !== undefined && tapMoveSource.slotIdx >= 1) {
-                      moveStarterToZone(tapMoveSource.slotIdx, nx, ny, sp, zoneLabel, tapMoveSource.name);
-                      setTapMoveSource(null);
-                    } else {
-                      onToast('หากต้องการส่งตัวสำรองลงสนาม ให้แตะที่ตัวจริงในตำแหน่งนั้นเพื่อสลับ');
-                    }
-                  }}
                   onPlayerPointerDown={handlePlayerPointerDown}
                 />
               </div>
@@ -760,7 +693,7 @@ export const SquadTacticsView: React.FC<{
                   className="w-full flex items-center justify-between gap-2 px-2.5 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:border-[var(--g)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer transition-colors"
                 >
                   <span className="truncate">
-                    🧭 เปลี่ยนแผน · <span className="text-[var(--g)]">{formName(me)}</span> · <span className="text-[var(--mut)]">{AR_T[me.tac]}</span>
+                    🧭 เปลี่ยนแผน · <span className="text-[var(--g)]">{formName(me, pitchDragPreview)}</span> · <span className="text-[var(--mut)]">{AR_T[me.tac]}</span>
                   </span>
                   <span className="text-[10.5px] mland:text-[9px] text-[var(--g)] shrink-0">
                     {showFormationSheet ? 'ซ่อน ▾' : 'เลือกแผน ▲'}
@@ -770,7 +703,7 @@ export const SquadTacticsView: React.FC<{
             </div>
 
             {/* RIGHT: Squad & Bench List */}
-            <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col lg:max-h-[calc(100dvh-215px)] min-h-[260px] mland:min-h-0 mland:max-h-none mland:h-full">
+            <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
               <div className="flex items-center justify-between gap-1.5 mb-1.5 mland:mb-1 shrink-0">
                 <div className="font-bold text-xs mland:text-[10px] truncate">
                   👥 รายชื่อ <span className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)]">({me.lu ? 'จัดเอง' : 'อัตโนมัติ'})</span>
@@ -799,17 +732,9 @@ export const SquadTacticsView: React.FC<{
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.18fr_0.82fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
-            <div className="p-3 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2 mland:gap-1 mland:h-full mland:min-h-0 mland:overflow-hidden">
-              <div className="flex items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-2 mland:gap-1 font-bold text-sm mland:text-[10.5px] min-w-0">
-                  <ClubCrest name={me.name} size={22} team={me} club={state.club} isMyClub={false} />
-                  <span className="truncate">ตัวจริง 11 · {formName(me)}</span>
-                </div>
-                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] shrink-0">เข้าใจ <b className="text-[var(--g)] tabular">{me.tacFam ?? 65}%</b></span>
-              </div>
-
-              <div className="w-full max-w-[400px] mland:max-w-none mland:w-full mx-auto mland:flex-1 mland:min-h-0 mland:h-full mland:flex mland:items-center mland:justify-center">
+          <div className="grid grid-cols-[1.18fr_0.82fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+            <div className="p-2 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-1.5 mland:gap-1 h-full min-h-0 overflow-hidden">
+              <div className="w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
                 <FormationPitch
                   team={me}
                   state={state}
@@ -824,19 +749,18 @@ export const SquadTacticsView: React.FC<{
                 const mySq = me.sq.find((q) => q.me || q.n === state.p?.name);
                 const isBanned = (mySq?.sus || state.p?.sus || 0) > 0;
                 return (
-                  <div className="pt-2 mland:pt-1 border-t border-[var(--line)] text-center space-y-1 shrink-0">
-                    <div className="text-xs mland:text-[10px]">
+                  <div className="pt-1.5 mland:pt-1 border-t border-[var(--line)] text-center space-y-0.5 shrink-0">
+                    <div className="text-[11px] mland:text-[10px]">
                       <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold ${isBanned ? 'bg-[var(--red-soft)] text-[var(--red)]' : mySlot ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
                         {isBanned ? `🟥 ติดโทษแบน (เหลือ ${mySq?.sus || state.p?.sus} นัด)` : mySlot ? `★ ตัวจริง (${mySlot})` : '🪑 ตัวสำรอง (มีโอกาสลงสำรองครึ่งหลัง)'}
                       </span>
                     </div>
-                    <p className="text-[11px] text-[var(--mut)] mland:hidden">💡 กด 1 ครั้งเพื่อดูข้อมูลนักเตะ · โค้ชเลือกตัวจริงจากพลังและพลังกาย (Energy)</p>
                   </div>
                 );
               })()}
             </div>
 
-            <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col lg:max-h-[calc(100dvh-250px)] min-h-[280px] mland:min-h-0 mland:max-h-none mland:h-full">
+            <div className="p-2 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
               <div className="font-bold text-xs mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0">👥 รายชื่อทีม</div>
               <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] mb-1.5 mland:mb-1 shrink-0">
                 {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
@@ -851,23 +775,23 @@ export const SquadTacticsView: React.FC<{
           </div>
         )
       ) : sub === 1 ? (
-        <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-4 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+        <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)] shrink-0">
             <div>
-              <h3 className="font-bold text-base mland:text-xs">🧭 แผนเกม & ยุทธวิธี · {formName(me)}</h3>
-              <p className="text-xs mland:text-[10px] text-[var(--mut)]">ความเข้าใจแผน: <b className="text-[var(--g)]">{me.tacFam ?? 65}%</b> · ยิ่งใช้แผนเดิมนาน ยิ่งได้โบนัสพลังทีม</p>
+              <h3 className="font-bold text-sm mland:text-xs">🧭 แผนเกม & ยุทธวิธี · {formName(me)}</h3>
+              <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ความเข้าใจแผน: <b className="text-[var(--g)]">{me.tacFam ?? 65}%</b> · ยิ่งใช้แผนเดิมนาน ยิ่งได้โบนัสพลังทีม</p>
             </div>
-            <div className="flex flex-wrap gap-1.5 text-xs mland:text-[10px]">
-              <span className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">สไตล์: {AR_T[me.tac]}</span>
-              <span className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">เพรส: {['ต่ำ', 'กลาง', 'สูง'][me.press ?? 1]}</span>
-              <span className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">จังหวะ: {['ช้า', 'กลาง', 'เร็ว'][me.tempo ?? 1]}</span>
+            <div className="flex flex-wrap gap-1.5 text-[11px] mland:text-[10px]">
+              <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">สไตล์: {AR_T[me.tac]}</span>
+              <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">เพรส: {['ต่ำ', 'กลาง', 'สูง'][me.press ?? 1]}</span>
+              <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">จังหวะ: {['ช้า', 'กลาง', 'เร็ว'][me.tempo ?? 1]}</span>
             </div>
           </div>
 
           {isMgr ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-2 gap-4 mland:gap-3 mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-              <div className="space-y-4 mland:space-y-2.5 mland:h-full mland:overflow-y-auto mland:pr-1">
-                <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] mland:grid-cols-[120px_1fr] gap-3 mland:gap-2 items-center">
+            <div className="grid grid-cols-2 gap-3 mland:gap-2.5 flex-1 min-h-0 overflow-hidden">
+              <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-1">
+                <div className="grid grid-cols-[130px_1fr] mland:grid-cols-[115px_1fr] gap-2.5 mland:gap-2 items-center">
                   <TacticsMiniPitch team={me} state={state} />
                   <div>
                     <div className="text-xs font-bold mb-1.5">เลือกระบบการเล่น</div>
@@ -956,7 +880,7 @@ export const SquadTacticsView: React.FC<{
                 </div>
               </div>
 
-              <div className="space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-1">
+              <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-1">
                 <div>
                   <div className="text-xs font-bold mb-1">สไตล์การเล่น (Mentality)</div>
                   <div className="flex flex-wrap gap-1.5">
@@ -1015,7 +939,7 @@ export const SquadTacticsView: React.FC<{
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
                   <div>
                     <label className="text-xs font-bold block mb-1">👑 กัปตันทีม</label>
                     <select
@@ -1111,7 +1035,7 @@ export const SquadTacticsView: React.FC<{
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-4 items-center">
+            <div className="grid grid-cols-[150px_1fr] gap-4 items-center">
               <TacticsMiniPitch team={me} state={state} />
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
@@ -1135,7 +1059,7 @@ export const SquadTacticsView: React.FC<{
           )}
         </div>
       ) : (
-        <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-1.5 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+        <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
           {(() => {
             const tx = getLeagueTransferContext(state, me);
             const posCounts: Record<Position, number> = {
@@ -1158,16 +1082,16 @@ export const SquadTacticsView: React.FC<{
 
             return (
               <>
-                <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1 text-center shrink-0">
-                  <div className="p-2.5 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ขนาดทีม (18–28)</div><div className="font-bold text-base sm:text-lg mland:text-[11px] tabular">{me.sq.length}/28</div></div>
-                  <div className="p-2.5 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ค่าเหนื่อย/เพดาน</div><div className={`font-bold text-base sm:text-lg mland:text-[11px] tabular ${tx.wagePct > 95 ? 'text-[var(--red)]' : ''}`}>{tx.curWage}/{tx.wageCap}k</div></div>
-                  <div className="p-2.5 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">โควตายืมตัว</div><div className="font-bold text-base sm:text-lg mland:text-[11px] tabular">{tx.loansCount}/{tx.maxLoans}</div></div>
-                  <div className="p-2.5 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ตลาดซื้อขาย</div><div className={`font-bold text-xs mland:text-[10px] mt-1 mland:mt-0 ${tx.tw.open ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>{tx.tw.shortLabel}</div></div>
+                <div className="grid grid-cols-4 gap-2 mland:gap-1 text-center shrink-0">
+                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ขนาดทีม (18–28)</div><div className="font-bold text-sm mland:text-[11px] tabular">{me.sq.length}/28</div></div>
+                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ค่าเหนื่อย/เพดาน</div><div className={`font-bold text-sm mland:text-[11px] tabular ${tx.wagePct > 95 ? 'text-[var(--red)]' : ''}`}>{tx.curWage}/{tx.wageCap}k</div></div>
+                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">โควตายืมตัว</div><div className="font-bold text-sm mland:text-[11px] tabular">{tx.loansCount}/{tx.maxLoans}</div></div>
+                  <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ตลาดซื้อขาย</div><div className={`font-bold text-[11px] mland:text-[10px] mt-0.5 mland:mt-0 ${tx.tw.open ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>{tx.tw.shortLabel}</div></div>
                 </div>
 
                 {/* List Filter & Sort Bar */}
-                <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1 pb-2 mland:pb-1 border-b border-[var(--line)] shrink-0">
-                  <div className="flex flex-wrap mland:flex-nowrap mland:overflow-x-auto gap-1 max-w-full">
+                <div className="flex items-center justify-between gap-2 mland:gap-1 pb-1.5 mland:pb-1 border-b border-[var(--line)] shrink-0 overflow-x-auto">
+                  <div className="flex flex-nowrap gap-1 shrink-0">
                     {([
                       ['ALL', `ทั้งหมด (${me.sq.length})`],
                       ['GK', `GK (${posCounts.GK})`],
@@ -1179,14 +1103,14 @@ export const SquadTacticsView: React.FC<{
                         key={k}
                         type="button"
                         onClick={() => setSquadPosFilter(k)}
-                        className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap shrink-0 cursor-pointer ${squadPosFilter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                        className={`px-2 py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold whitespace-nowrap shrink-0 cursor-pointer ${squadPosFilter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
                       >
                         {lbl}
                       </button>
                     ))}
                   </div>
-                  <div className="flex flex-wrap mland:flex-nowrap mland:overflow-x-auto items-center gap-1 text-[11px] mland:text-[9.5px] max-w-full">
-                    <span className="text-[var(--mut)] font-semibold mr-1 shrink-0">เรียง:</span>
+                  <div className="flex flex-nowrap items-center gap-1 text-[10.5px] mland:text-[9.5px] shrink-0">
+                    <span className="text-[var(--mut)] font-semibold mr-0.5 shrink-0">เรียง:</span>
                     {([
                       ['pos', 'ตำแหน่ง'],
                       ['ov', 'OVR'],
@@ -1199,7 +1123,7 @@ export const SquadTacticsView: React.FC<{
                         key={sKey}
                         type="button"
                         onClick={() => setSquadSort(sKey)}
-                        className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg font-semibold whitespace-nowrap shrink-0 cursor-pointer ${squadSort === sKey ? 'bg-[var(--ink)] text-[var(--bg)]' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                        className={`px-2 mland:px-1.5 py-0.5 rounded-lg font-semibold whitespace-nowrap shrink-0 cursor-pointer ${squadSort === sKey ? 'bg-[var(--ink)] text-[var(--bg)]' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
                       >
                         {sLbl}
                       </button>
@@ -1207,7 +1131,7 @@ export const SquadTacticsView: React.FC<{
                   </div>
                 </div>
 
-                <div className="space-y-3 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-1">
+                <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
                 {/* Incoming Club Bids Alert */}
                 {isMgr && (() => {
                   const incomingOffers = getIncomingOffers(state);
@@ -1283,8 +1207,10 @@ export const SquadTacticsView: React.FC<{
                   );
                 })()}
 
-                {/* Squad List Header (Desktop) */}
-                <div className="hidden md:grid grid-cols-[44px_1.7fr_90px_54px_86px_88px_100px_115px_auto] items-center gap-2 px-3 py-1.5 text-[11px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 rounded-xl">
+                {/* Squad List Header (Horizontal Table) */}
+                <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)]">
+                  <div className="min-w-[660px]">
+                <div className="grid grid-cols-[38px_1.6fr_72px_44px_76px_80px_84px_102px_auto] items-center gap-1.5 px-2.5 py-1.5 text-[10.5px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]">
                   <div className="text-center">#</div>
                   <div>นักเตะ</div>
                   <div>ตำแหน่ง</div>
@@ -1293,11 +1219,11 @@ export const SquadTacticsView: React.FC<{
                   <div className="text-center">ฟิต</div>
                   <div className="text-center">ผลงาน</div>
                   <div className="text-right">ค่าเหนื่อย / ค่าตัว</div>
-                  {isMgr && <div className="text-right min-w-[152px]">จัดการขาย</div>}
+                  {isMgr && <div className="text-right min-w-[144px]">จัดการขาย</div>}
                 </div>
 
                 {/* Squad List Rows */}
-                <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-hidden bg-[var(--surface)]">
+                <div className="divide-y divide-[var(--line)]">
                   {listRows.map((q) => {
                     const f = Math.round(q.fit ?? 100);
                     const isStarter = starters.includes(q);
@@ -1311,18 +1237,16 @@ export const SquadTacticsView: React.FC<{
                     return (
                       <div
                         key={q.n}
-                        className={`px-3 py-2 mland:px-2 mland:py-1 flex flex-col md:grid md:grid-cols-[44px_1.7fr_90px_54px_86px_88px_100px_115px_auto] md:items-center gap-2 mland:gap-1 transition-colors hover:bg-[var(--surface-2)]/45 ${
+                        className={`px-2.5 py-1.5 grid grid-cols-[38px_1.6fr_72px_44px_76px_80px_84px_102px_auto] items-center gap-1.5 transition-colors hover:bg-[var(--surface-2)]/45 ${
                           isMe ? 'bg-[var(--lamp-soft)]/50' : q.listed ? 'bg-[var(--lamp-soft)]/25' : ''
                         }`}
                       >
-                        {/* Mobile Top Row / Desktop First Columns */}
-                        <div className="hidden md:flex items-center justify-center text-xs font-bold text-[var(--mut)] tabular">
+                        <div className="flex items-center justify-center text-xs font-bold text-[var(--mut)] tabular">
                           #{no}
                         </div>
 
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="md:hidden text-xs font-bold text-[var(--mut)] tabular w-7 shrink-0">#{no}</span>
-                          <PlayerFace player={q} team={me} state={state} size={32} />
+                        <div className="flex items-center gap-2 min-w-0">
+                          <PlayerFace player={q} team={me} state={state} size={28} />
                           <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
                             <div className="font-bold text-xs truncate flex items-center gap-1">
                               {isMe && (
@@ -1361,36 +1285,29 @@ export const SquadTacticsView: React.FC<{
                               )}
                             </div>
                           </button>
-                          <span className="md:hidden px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                            {q.ov}
-                          </span>
                         </div>
 
-                        {/* Mobile compact info row / Desktop structured columns */}
-                        <div className="flex md:contents flex-wrap items-center justify-between gap-2 text-xs pl-9 md:pl-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[11px]">{q.ro}</span>
-                            <span className="text-[10px] text-[var(--mut)] hidden lg:inline truncate">{SPN[q.ro] || q.pos}</span>
-                          </div>
+                        <div className="flex items-center gap-1">
+                          <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[11px]">{q.ro}</span>
+                        </div>
 
-                          <div className="text-center text-xs tabular font-semibold">
-                            <span className="md:hidden text-[var(--mut)]">อายุ </span>
-                            {q.age}
-                          </div>
+                        <div className="text-center text-xs tabular font-semibold">
+                          {q.age}
+                        </div>
 
-                          <div className="hidden md:flex items-center justify-center gap-1">
-                            <span className="px-2 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>
-                              {q.ov}
-                            </span>
-                            <span className="text-[10px] text-[var(--mut)] tabular">/{q.pot || q.ov}</span>
-                          </div>
+                        <div className="flex items-center justify-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>
+                            {q.ov}
+                          </span>
+                          <span className="text-[10px] text-[var(--mut)] tabular">/{q.pot || q.ov}</span>
+                        </div>
 
-                          <div className="flex items-center gap-1.5 min-w-[74px]">
-                            <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
-                            </div>
-                            <span className="text-[11px] font-bold tabular w-8 text-right" style={{ color: fitBarCol }}>⚡{f}%</span>
+                        <div className="flex items-center gap-1 min-w-[70px]">
+                          <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
                           </div>
+                          <span className="text-[10.5px] font-bold tabular w-8 text-right" style={{ color: fitBarCol }}>⚡{f}%</span>
+                        </div>
 
                           <div className="text-center text-[11px] tabular text-[var(--mut)] flex items-center justify-center gap-1">
                             {q.sg || q.sa || q.ap ? (
@@ -1410,7 +1327,7 @@ export const SquadTacticsView: React.FC<{
                           </div>
 
                           {isMgr && (
-                            <div className="flex items-center justify-end gap-1 shrink-0 min-w-[152px]">
+                            <div className="flex items-center justify-end gap-1 shrink-0 min-w-[144px]">
                               {!q.loan && (
                                 <button
                                   type="button"
@@ -1454,13 +1371,14 @@ export const SquadTacticsView: React.FC<{
                               </button>
                             </div>
                           )}
-                        </div>
                       </div>
                     );
                   })}
                   {!listRows.length && (
                     <div className="p-6 text-center text-xs text-[var(--mut)]">ไม่มีนักเตะในตำแหน่งนี้</div>
                   )}
+                </div>
+                  </div>
                 </div>
                 </div>
               </>

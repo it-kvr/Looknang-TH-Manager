@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
+import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, SIGL, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES } from '../data/thaiFootballData';
-import { SFX } from '../utils/audioTheme';
+import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo } from '../engine/playerCore';
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor } from '../engine/missions';
@@ -245,19 +246,19 @@ export const MainMenu: React.FC<{
     return (
       <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-5xl mland:max-w-none mx-auto px-3 sm:px-5 py-3 mland:py-1 flex flex-wrap items-center justify-between gap-2.5 mland:gap-2">
-            <div className="min-w-0">
-              <h2 className="text-lg sm:text-2xl mland:text-sm font-bold font-display truncate">🏟️ เลือกสโมสรเริ่มต้น</h2>
-              <p className="text-xs text-[var(--mut)] truncate mland:hidden">เริ่มจากลีกระดับจังหวัด · แก้ชื่อ ตรา และสีชุดได้ภายหลัง</p>
+          <div className="max-w-6xl mland:max-w-none mx-auto px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2.5 mland:gap-2">
+            <div className="min-w-0 flex items-baseline gap-2.5">
+              <h2 className="text-lg mland:text-sm font-bold font-display truncate">🏟️ เลือกสโมสรเริ่มต้น</h2>
+              <p className="text-xs text-[var(--mut)] truncate mland:hidden">เริ่มจากลีกระดับจังหวัด · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง</p>
             </div>
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
               <div className="flex items-center gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]">
                 {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
                   <button
                     key={lbl}
                     type="button"
                     onClick={() => { SFX.tap(); setDiff(idx); }}
-                    className={`px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors ${
+                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors ${
                       diff === idx ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                     }`}
                   >
@@ -268,7 +269,7 @@ export const MainMenu: React.FC<{
               <button
                 type="button"
                 onClick={() => setStep('menu')}
-                className="px-3.5 mland:px-2.5 py-1.5 mland:py-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs sm:text-sm mland:text-[10.5px] font-semibold cursor-pointer"
+                className="px-3 mland:px-2.5 py-1.5 mland:py-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10.5px] font-semibold cursor-pointer"
               >
                 ‹ กลับ
               </button>
@@ -276,7 +277,7 @@ export const MainMenu: React.FC<{
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden safe-bottom safe-x">
-          <div className="max-w-5xl mland:max-w-none mx-auto p-3 sm:p-5 mland:p-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 mland:grid-cols-4 gap-2.5 mland:gap-1.5 mland:min-h-full mland:auto-rows-fr">
+          <div className="max-w-6xl mland:max-w-none mx-auto p-3.5 mland:p-1.5 grid grid-cols-4 gap-2.5 mland:gap-1.5 min-h-full auto-rows-fr">
             {previewClubs.t0.map((t, idx) => {
               const avg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length);
               const tierTag = avg >= 42 ? 'เต็งลีก' : avg >= 39 ? 'กลางตาราง' : 'ท้าทาย';
@@ -404,36 +405,36 @@ export const MainMenu: React.FC<{
     return (
       <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-5xl mland:max-w-none mx-auto px-3 sm:px-5 py-2.5 mland:py-1 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl mland:text-sm font-bold font-display truncate">⚽ สร้างนักเตะอาชีพ</h2>
-              <p className="text-[11px] sm:text-xs text-[var(--mut)] truncate mland:hidden">เลือกตำแหน่งและสไตล์ แล้วระบบจะสุ่มแต้มเริ่มต้นให้เข้ากับบทบาท</p>
+          <div className="max-w-6xl mland:max-w-none mx-auto px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2">
+            <div className="min-w-0 flex items-baseline gap-2.5">
+              <h2 className="text-lg mland:text-sm font-bold font-display truncate">⚽ สร้างนักเตะอาชีพ</h2>
+              <p className="text-xs text-[var(--mut)] truncate mland:hidden">เลือกตำแหน่งและสไตล์ แล้วระบบจะสุ่มแต้มเริ่มต้นให้เข้ากับบทบาท</p>
             </div>
-            <button type="button" onClick={() => setStep('menu')} className="px-3.5 mland:px-2.5 py-1.5 mland:py-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs sm:text-sm mland:text-[10.5px] font-semibold shrink-0 cursor-pointer">
+            <button type="button" onClick={() => setStep('menu')} className="px-3 mland:px-2.5 py-1.5 mland:py-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10.5px] font-semibold shrink-0 cursor-pointer">
               ‹ กลับ
             </button>
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden overflow-x-hidden safe-bottom safe-x">
-          <div className="max-w-5xl mland:max-w-none mx-auto p-3 sm:p-5 mland:p-1.5 grid grid-cols-1 lg:grid-cols-[280px_1fr] mland:grid-cols-[190px_1fr] gap-4 mland:gap-2 items-start mland:items-stretch mland:h-full">
-            <div className="lg:sticky lg:top-3 mland:static flex flex-col gap-2.5 mland:gap-1 mland:h-full mland:justify-between">
-              <div className="rounded-3xl mland:rounded-2xl p-4 mland:p-2 text-white border border-white/20" style={{ background: `linear-gradient(155deg, ${ovColor(ov)}, #0b1f15 78%)` }}>
-                <div className="flex items-center justify-between gap-3 mland:gap-1.5 mland:[&_svg]:w-12 mland:[&_svg]:h-12">
+        <div className="flex-1 min-h-0 overflow-hidden safe-x">
+          <div className="max-w-6xl mland:max-w-none mx-auto p-3.5 mland:p-1.5 grid grid-cols-[245px_1fr] mland:grid-cols-[195px_1fr] gap-3.5 mland:gap-2 items-stretch h-full">
+            <div className="flex flex-col gap-2.5 mland:gap-1 h-full justify-between min-h-0">
+              <div className="rounded-3xl mland:rounded-2xl p-3.5 mland:p-2 text-white border border-white/20" style={{ background: `linear-gradient(155deg, ${ovColor(ov)}, #0b1f15 78%)` }}>
+                <div className="flex items-center justify-between gap-2.5 mland:gap-1.5 mland:[&_svg]:w-12 mland:[&_svg]:h-12">
                   <div className="text-center">
-                    <div className="text-4xl mland:text-xl font-bold font-display leading-none">{ov}</div>
+                    <div className="text-3xl mland:text-xl font-bold font-display leading-none">{ov}</div>
                     <div className="text-xs mland:text-[9px] font-bold mt-1 mland:mt-0.5 border-t border-white/40 pt-1 mland:pt-0.5">{cSp} · #{cNo}</div>
                   </div>
-                  <PlayerFace player={previewPlayer} careerProfile={previewProfile} size={68} bare />
+                  <PlayerFace player={previewPlayer} careerProfile={previewProfile} size={62} bare />
                 </div>
-                <div className="text-center font-bold text-lg mland:text-xs border-b border-white/30 py-2 mland:py-0.5 truncate">{cName.trim() || 'ชื่อนักเตะ'}</div>
+                <div className="text-center font-bold text-base mland:text-xs border-b border-white/30 py-1.5 mland:py-0.5 truncate">{cName.trim() || 'ชื่อนักเตะ'}</div>
                 <div className="text-center text-[11px] mland:text-[9px] font-semibold text-white/90 pt-1.5 mland:pt-0.5 truncate">
                   {curArch.icon} {curArch.name} · ⭐ {SIGL[curArch.sig]}
                 </div>
                 <div className="grid grid-cols-5 gap-1 pt-2 mland:pt-1 text-center text-[11px] mland:text-[9px]">
                   {ATT.map(([k, l]) => (
                     <div key={k}>
-                      <div className="text-base mland:text-xs font-bold tabular">{cAttrs[k]}</div>
+                      <div className="text-sm mland:text-xs font-bold tabular">{cAttrs[k]}</div>
                       <div className="opacity-85">{l}</div>
                     </div>
                   ))}
@@ -452,8 +453,8 @@ export const MainMenu: React.FC<{
               </div>
             </div>
 
-          <div className="flex flex-col gap-4 mland:gap-1 mland:h-full mland:min-h-0">
-            <div className="hidden mland:grid mland:grid-cols-4 gap-1 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+          <div className="flex flex-col gap-2.5 mland:gap-1 h-full min-h-0">
+            <div className="grid grid-cols-4 gap-1.5 mland:gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
               {(
                 [
                   ['info', '📝 ข้อมูล & ตำแหน่ง'],
@@ -466,7 +467,7 @@ export const MainMenu: React.FC<{
                   key={tid}
                   type="button"
                   onClick={() => { SFX.tap(); setCrMobTab(tid); }}
-                  className={`py-1 px-1 rounded-lg text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
+                  className={`py-1.5 mland:py-1 px-2 mland:px-1 rounded-lg text-xs mland:text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
                     crMobTab === tid ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                   }`}
                 >
@@ -474,7 +475,7 @@ export const MainMenu: React.FC<{
                 </button>
               ))}
             </div>
-            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] mland:flex-1 mland:min-h-0 mland:overflow-y-auto ${crMobTab === 'info' ? '' : 'mland:hidden'}`}>
+            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 overflow-y-auto ${crMobTab === 'info' ? '' : 'hidden'}`}>
               <h3 className="font-bold text-base mland:text-xs mb-2.5 mland:mb-1.5">ข้อมูล & ตำแหน่ง</h3>
               <div className="flex flex-wrap gap-2 mland:gap-1.5 mb-3 mland:mb-2">
                 <input
@@ -539,7 +540,7 @@ export const MainMenu: React.FC<{
               )}
             </div>
 
-            <div className={`p-4 mland:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] mland:flex-1 mland:min-h-0 mland:overflow-y-auto ${crMobTab === 'face' ? '' : 'mland:hidden'}`}>
+            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 overflow-y-auto ${crMobTab === 'face' ? '' : 'hidden'}`}>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-3 mland:mb-2">
                 <div>
                   <h3 className="font-bold text-base mland:text-sm">รูปลักษณ์ & ใบหน้าแบบสุ่ม</h3>
@@ -553,7 +554,7 @@ export const MainMenu: React.FC<{
                   🎲 สุ่มชุดใบหน้าใหม่
                 </button>
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-6 mland:grid-cols-6 gap-2 mland:gap-1.5 mb-4 mland:mb-2.5">
+              <div className="grid grid-cols-6 gap-2 mland:gap-1.5 mb-4 mland:mb-2.5">
                 {faceChoices.map((f, idx) => {
                   const isPicked =
                     cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey;
@@ -589,7 +590,7 @@ export const MainMenu: React.FC<{
                   );
                 })}
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-3 mland:gap-2 mb-3 mland:mb-2">
+              <div className="grid grid-cols-3 gap-3 mland:gap-2 mb-3 mland:mb-2">
                 {[
                   ['สีชุด', ['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111'], cColor, setCColor],
                   ['สีผิว', SKIN_P, cSkin, setCSkin],
@@ -637,7 +638,7 @@ export const MainMenu: React.FC<{
               </div>
             </div>
 
-            <div className={`p-4 mland:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-4 mland:space-y-2.5 mland:flex-1 mland:min-h-0 mland:overflow-y-auto ${crMobTab === 'arch' ? '' : 'mland:hidden'}`}>
+            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-4 mland:space-y-2.5 flex-1 min-h-0 overflow-y-auto ${crMobTab === 'arch' ? '' : 'hidden'}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-base mland:text-sm">จุดเด่น & แต้มเริ่มต้น (สุ่มอัตโนมัติ)</h3>
@@ -652,7 +653,7 @@ export const MainMenu: React.FC<{
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {posArchs.map((arch) => {
                   const active = curArch.id === arch.id;
                   const coreTags = (Object.entries(arch.coreBonus) as [StatKey, number][]).map(
@@ -720,14 +721,14 @@ export const MainMenu: React.FC<{
               </div>
             </div>
 
-            <div className={`p-4 mland:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto ${crMobTab === 'stats' ? '' : 'mland:hidden'}`}>
+            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 flex-1 min-h-0 overflow-y-auto ${crMobTab === 'stats' ? '' : 'hidden'}`}>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-sm">ค่าพลังหลายด้าน (อัปเดตตามจุดเด่น & สุ่มแต้มเริ่มต้น)</h3>
                   <p className="text-[11px] text-[var(--mut)]">แสดงผลรวมจากพลังหลัก + จุดเด่น (⭐ / สีเขียว) + แต้มสุ่มเฉพาะทาง (+8, สีเหลือง)</p>
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2">
+              <div className="grid grid-cols-2 gap-3 mland:gap-2">
                 {subStats.map((g) => (
                   <div key={g[0]} className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5">
                     <div className="font-bold text-xs mb-1">{g[0]}</div>
@@ -779,11 +780,11 @@ export const MainMenu: React.FC<{
   }
 
   return (
-    <div className="h-full min-h-[100dvh] w-full overflow-y-auto mland:overflow-hidden overflow-x-hidden flex flex-col bg-[var(--bg)] safe-all">
-      <div className="w-full max-w-5xl mland:max-w-none m-auto mland:m-0 mland:h-full p-3 sm:p-5 mland:p-2 grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] mland:grid-cols-[0.74fr_1.26fr] gap-4 lg:gap-6 mland:gap-2.5 items-center mland:items-stretch">
-        <div className="text-center lg:text-left mland:text-left mland:flex mland:flex-col mland:justify-between mland:h-full mland:min-h-0 mland:game-card mland:p-2.5 mland:rounded-xl">
-          <div>
-            <svg viewBox="0 0 320 155" className="w-full max-w-[380px] mland:max-w-full mland:max-h-[84px] mx-auto lg:mx-0 mland:mx-0 rounded-3xl mland:rounded-xl border border-[var(--line)] mb-4 mland:mb-1.5 shadow-xs">
+    <div className="h-full min-h-[100dvh] w-full overflow-hidden flex flex-col bg-[var(--bg)] safe-all">
+      <div className="w-full max-w-6xl mland:max-w-none mx-auto h-full p-3.5 sm:p-5 mland:p-2 grid grid-cols-[0.78fr_1.22fr] mland:grid-cols-[0.74fr_1.26fr] gap-4 mland:gap-2.5 items-stretch">
+        <div className="text-left flex flex-col justify-between h-full min-h-0 game-card p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl">
+          <div className="min-h-0">
+            <svg viewBox="0 0 320 155" className="w-full max-h-[125px] mland:max-h-[82px] mx-0 rounded-2xl mland:rounded-xl border border-[var(--line)] mb-3 mland:mb-1.5 shadow-xs">
               <defs>
                 <linearGradient id="sk_hero" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0" stopColor="#0b2018" />
@@ -807,63 +808,65 @@ export const MainMenu: React.FC<{
               </g>
               <circle cx="160" cy="124" r="8" fill="#fff" stroke="#111" strokeWidth="1.5" />
             </svg>
-            <h1 className="text-4xl md:text-5xl mland:text-xl font-bold font-display tracking-tight mb-2 mland:mb-0.5 leading-none">ลูกหนังไทย</h1>
-            <p className="text-base mland:text-[10.5px] mland:leading-snug text-[var(--mut)] mb-3 mland:mb-1.5">จากลีกระดับจังหวัด สู่ลีกสูงสุดในประเทศ บอลถ้วยประชาชน และเวทีชิงแชมป์ทวีป</p>
+            <div className="flex items-center justify-between gap-2 mb-1.5 mland:mb-0.5">
+              <h1 className="text-3xl lg:text-4xl mland:text-xl font-bold font-display tracking-tight leading-none">ลูกหนังไทย</h1>
+            </div>
+            <p className="text-sm mland:text-[10.5px] leading-snug text-[var(--mut)] mb-2 mland:mb-1">จากลีกระดับจังหวัด สู่ลีกสูงสุดในประเทศ บอลถ้วยประชาชน และเวทีชิงแชมป์ทวีป</p>
             <p className="text-xs mland:text-[9.5px] text-[var(--mut)] leading-relaxed">
               ไต่ 3 ระดับ 48 ทีม · แข่งสด 2 มิติปรับแผนเรียลไทม์ · แมวมองและเส้นทางทีมชาติ
             </p>
           </div>
-          <div className="hidden mland:block mt-auto pt-1.5">
+          <div className="mt-auto pt-2 mland:pt-1.5 shrink-0">
             <PWAInstallButton variant="card" onToast={onToast} />
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 mland:gap-2 mland:h-full mland:min-h-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 shrink-0">
+        <div className="flex flex-col gap-3 mland:gap-2 h-full min-h-0">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 shrink-0">
             <button
               type="button"
-              onClick={() => openManagerSetup(firstEmptySlot('m'))}
-              className="group relative overflow-hidden p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
+              onClick={() => { unlockAudio(); enterAutoMobileFullscreen().catch(() => undefined); openManagerSetup(firstEmptySlot('m')); }}
+              className="group relative overflow-hidden p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
             >
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-black/10 flex items-center justify-center text-xl mland:text-base shrink-0">📋</span>
                 <div className="min-w-0">
-                  <div className="text-base sm:text-lg mland:text-xs font-display leading-tight">โหมดผู้จัดการทีม</div>
-                  <div className="text-xs mland:text-[9px] font-medium opacity-80 mt-0.5 mland:line-clamp-1">คุมแท็กติก แก้เกมสด ซื้อขายนักเตะ อัปเกรดสโมสร</div>
+                  <div className="text-sm sm:text-base mland:text-xs font-display leading-tight">โหมดผู้จัดการทีม</div>
+                  <div className="text-[11px] mland:text-[9px] font-medium opacity-80 mt-0.5 line-clamp-1">คุมแท็กติก แก้เกมสด ซื้อขายนักเตะ อัปเกรดสโมสร</div>
                 </div>
               </div>
               <span className="text-lg mland:text-sm opacity-60 group-hover:translate-x-0.5 transition-transform shrink-0">›</span>
             </button>
             <button
               type="button"
-              onClick={() => openPlayerSetup(firstEmptySlot('p'))}
-              className="group relative overflow-hidden p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
+              onClick={() => { unlockAudio(); enterAutoMobileFullscreen().catch(() => undefined); openPlayerSetup(firstEmptySlot('p')); }}
+              className="group relative overflow-hidden p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
             >
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-white/15 flex items-center justify-center text-xl mland:text-base shrink-0">⚽</span>
                 <div className="min-w-0">
-                  <div className="text-base sm:text-lg mland:text-xs font-display leading-tight">โหมดนักเตะอาชีพ</div>
-                  <div className="text-xs mland:text-[9px] font-medium opacity-85 mt-0.5 mland:line-clamp-1">สร้างตัวละคร ฝึกซ้อม ปลดล็อกสกิล และติดทีมชาติ</div>
+                  <div className="text-sm sm:text-base mland:text-xs font-display leading-tight">โหมดนักเตะอาชีพ</div>
+                  <div className="text-[11px] mland:text-[9px] font-medium opacity-85 mt-0.5 line-clamp-1">สร้างตัวละคร ฝึกซ้อม ปลดล็อกสกิล และติดทีมชาติ</div>
                 </div>
               </div>
               <span className="text-lg mland:text-sm opacity-75 group-hover:translate-x-0.5 transition-transform shrink-0">›</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0">
-            <div className="p-3.5 mland:p-2 game-card rounded-2xl mland:rounded-xl mland:flex mland:flex-col mland:min-h-0">
-              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
+          <div className="grid grid-cols-2 gap-3 mland:gap-2 flex-1 min-h-0">
+            <div className="p-3 mland:p-2 game-card rounded-2xl mland:rounded-xl flex flex-col min-h-0">
+              <div className="font-bold text-xs sm:text-sm mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
                 <span>เซฟโหมดผู้จัดการ</span>
                 <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
               </div>
-              <div className="mland:flex-1 mland:min-h-0 mland:overflow-y-auto pr-0.5">{renderSlotList('m')}</div>
+              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">{renderSlotList('m')}</div>
             </div>
-            <div className="p-3.5 mland:p-2 game-card rounded-2xl mland:rounded-xl mland:flex mland:flex-col mland:min-h-0">
-              <div className="font-bold text-sm mland:text-[10.5px] mb-2 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
+            <div className="p-3 mland:p-2 game-card rounded-2xl mland:rounded-xl flex flex-col min-h-0">
+              <div className="font-bold text-xs sm:text-sm mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
                 <span>เซฟโหมดนักเตะ</span>
                 <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
               </div>
-              <div className="mland:flex-1 mland:min-h-0 mland:overflow-y-auto pr-0.5">{renderSlotList('p')}</div>
+              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">{renderSlotList('p')}</div>
             </div>
           </div>
 
@@ -874,7 +877,7 @@ export const MainMenu: React.FC<{
           </div>
 
           {showImport && (
-            <div className="p-3.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+            <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
               <textarea
                 value={importText}
                 onChange={(e) => setImportText(e.target.value)}
@@ -887,10 +890,6 @@ export const MainMenu: React.FC<{
               </button>
             </div>
           )}
-
-          <div className="mland:hidden">
-            <PWAInstallButton variant="card" onToast={onToast} />
-          </div>
         </div>
       </div>
     </div>

@@ -216,7 +216,7 @@ export const PWAUpdateBanner: React.FC = () => {
   if (!needRefresh || dismissed) return null;
 
   return (
-    <div className="fixed bottom-16 sm:bottom-5 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border-2 border-[var(--g)] shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+    <div className="fixed bottom-3 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border-2 border-[var(--g)] shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
       <span className="text-lg shrink-0">🆕</span>
       <div className="min-w-0 flex-1">
         <div className="font-bold text-xs text-[var(--ink)]">มีอัปเดตเวอร์ชันใหม่แล้ว!</div>
@@ -496,14 +496,14 @@ export const PWAInstallButton: React.FC<{
 
     return createPortal(
       <div
-        className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto mland:overflow-hidden"
+        className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
         onClick={() => setShowGuide(false)}
       >
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="pwa-guide-title"
-          className="w-full max-w-md mland:max-w-2xl mland:max-h-[94dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl my-auto flex flex-col"
+          className="w-full max-w-2xl max-h-[94dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl my-auto flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -529,10 +529,10 @@ export const PWAInstallButton: React.FC<{
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-2.5 text-xs space-y-3.5 mland:space-y-0 mland:grid mland:grid-cols-[0.82fr_1.18fr] mland:gap-2.5 mland:items-start">
-            <div className="space-y-3 mland:space-y-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 text-xs grid grid-cols-[0.82fr_1.18fr] gap-3 mland:gap-2.5 items-start">
+            <div className="space-y-2.5 mland:space-y-1.5">
               {inIframe && (
-                <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 text-[11px] mland:text-[9.5px] leading-snug text-[var(--ink)]">
+                <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 text-[11px] mland:text-[9.5px] leading-snug text-[var(--ink)]">
                   <div className="font-bold mb-0.5">⚠️ กำลังเปิดผ่านหน้าต่างตัวอย่าง (Iframe)</div>
                   <p className="text-[var(--mut)]">
                     เบราว์เซอร์ไม่อนุญาตให้ติดตั้งแอปจากหน้าต่างตัวอย่าง กรุณาเปิดลิงก์แอปโดยตรงใน{' '}
@@ -562,7 +562,7 @@ export const PWAInstallButton: React.FC<{
                 })}
               </div>
 
-              <div className="hidden mland:flex items-center gap-1.5 pt-0.5">
+              <div className="flex items-center gap-1.5 pt-0.5">
                 {isInstallable && (
                   <button
                     type="button"
@@ -573,7 +573,7 @@ export const PWAInstallButton: React.FC<{
                         onToast?.('ติดตั้งแอป "ลูกหนังไทย" ลงหน้าจอหลักแล้ว!');
                       }
                     }}
-                    className="flex-1 py-1.5 rounded-lg bg-[var(--lamp)] text-[#261900] font-bold text-[10.5px] cursor-pointer hover:brightness-105 transition"
+                    className="flex-1 py-2 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] font-bold text-xs mland:text-[10.5px] cursor-pointer hover:brightness-105 transition"
                   >
                     ติดตั้งทันที
                   </button>
@@ -581,7 +581,7 @@ export const PWAInstallButton: React.FC<{
                 <button
                   type="button"
                   onClick={() => setShowGuide(false)}
-                  className="flex-1 py-1.5 rounded-lg bg-[var(--g)] text-white font-bold text-[10.5px] cursor-pointer hover:brightness-105 transition"
+                  className="flex-1 py-2 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--g)] text-white font-bold text-xs mland:text-[10.5px] cursor-pointer hover:brightness-105 transition"
                 >
                   เข้าใจแล้ว
                 </button>
@@ -612,31 +612,6 @@ export const PWAInstallButton: React.FC<{
                   </div>
                 ))}
               </div>
-            </div>
-
-            <div className="flex mland:hidden items-center gap-2 pt-0.5">
-              {isInstallable && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const ok = await install();
-                    if (ok) {
-                      setShowGuide(false);
-                      onToast?.('ติดตั้งแอป "ลูกหนังไทย" ลงหน้าจอหลักแล้ว!');
-                    }
-                  }}
-                  className="flex-1 py-2.5 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-xs cursor-pointer hover:brightness-105 transition"
-                >
-                  ติดตั้งทันที
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => setShowGuide(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--g)] text-white font-bold text-xs cursor-pointer hover:brightness-105 transition"
-              >
-                เข้าใจแล้ว
-              </button>
             </div>
           </div>
         </div>
@@ -748,7 +723,7 @@ export const OfflineIndicator: React.FC = () => {
   if (isOnline) return null;
 
   return (
-    <div className="fixed bottom-16 sm:bottom-4 mland:bottom-2 left-3 mland:left-20 z-50 flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg">
+    <div className="fixed bottom-2.5 left-[82px] z-50 flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg">
       <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
       โหมดออฟไลน์ — เล่นต่อได้ตามปกติ เซฟอยู่ในเครื่อง
     </div>

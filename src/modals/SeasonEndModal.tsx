@@ -23,8 +23,8 @@ export const SeasonEndModal: React.FC<{
   }, [summary]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-xl mland:max-w-[94vw] max-h-[92dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-3xl mland:max-w-[94vw] max-h-[92dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 p-4 sm:p-5 mland:p-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] text-center space-y-2 mland:space-y-0.5">
           <div className="inline-flex items-center gap-2 px-3 py-1 mland:py-0.5 rounded-full bg-[var(--lamp-soft)] text-xs mland:text-[9.5px] font-bold text-[#7a4f00] dark:text-[var(--lamp)]">
             🏁 สรุปจบฤดูกาลที่ {state.season}
@@ -41,7 +41,7 @@ export const SeasonEndModal: React.FC<{
           <div className="text-base sm:text-lg mland:text-[11px] font-bold text-[var(--g)] pt-0.5 mland:pt-0">{summary.stText}</div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-2 space-y-3 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-1.5 mland:items-start">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-2 grid grid-cols-2 gap-3 mland:gap-1.5 items-start">
           <div className="grid grid-cols-2 gap-2 mland:gap-1.5 text-xs mland:text-[10px]">
             <div className="p-3 mland:p-1.5 rounded-xl bg-[var(--surface-2)]">
               <div className="text-[var(--mut)] mland:text-[9px]">ผลงานถ้วยประชาชน</div>
@@ -72,9 +72,9 @@ export const SeasonEndModal: React.FC<{
           )}
 
           {state.mode === 'p' && summary.offers.length > 0 && (
-            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 space-y-2 mland:space-y-1 mland:col-span-2">
+            <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 space-y-2 mland:space-y-1 col-span-2">
               <div className="font-bold text-xs mland:text-[10px]">✉️ ข้อเสนอย้ายทีมจากลีกที่สูงกว่า!</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+              <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
                 {summary.offers.map((club) => (
                   <button
                     key={club.id}

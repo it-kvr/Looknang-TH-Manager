@@ -683,9 +683,9 @@ export const LeagueView: React.FC<{
   };
 
   const renderStandings = () => (
-    <div className="space-y-2.5 lg:space-y-0 mland:space-y-0 lg:flex-1 lg:min-h-0 mland:flex-1 mland:min-h-0 lg:grid lg:grid-cols-[1.46fr_0.84fr] lg:gap-3 mland:grid mland:grid-cols-[1.45fr_0.85fr] mland:gap-2 mland:overflow-hidden">
-      <div className="space-y-2 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
+    <div className="flex-1 min-h-0 grid grid-cols-[1.42fr_0.88fr] gap-2.5 mland:gap-2 overflow-hidden">
+      <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
+        <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
           {/* Compact League Standings Header Strip */}
           <div className="shrink-0 flex items-center justify-between gap-2 px-3 mland:px-2 py-2 mland:py-1 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/70">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -731,7 +731,7 @@ export const LeagueView: React.FC<{
           </div>
 
           {/* Table Body */}
-          <div className="divide-y divide-[var(--line)]/50 mland:flex-1 mland:min-h-0 mland:overflow-y-auto">
+          <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
             {tb.map((t, i) => {
               const isPromo = i < 3 && vt < 2;
               const isRel = i >= tb.length - 3 && vt > 0;
@@ -828,14 +828,13 @@ export const LeagueView: React.FC<{
           <span className="opacity-80">แตะทีมเพื่อส่อง</span>
         </div>
 
-        <div className="lg:hidden mland:hidden">{renderImportantNewsPanel()}</div>
       </div>
 
-      {/* Right Column: Summary + Live League Stats + Recent Results + History */}
-      <div className="space-y-2.5 mland:space-y-1.5 mland:h-full mland:overflow-y-auto mland:pr-0.5">
-        <div className="hidden lg:block mland:block">{renderImportantNewsPanel()}</div>
+      {/* Right Column: Important News + Live League Stats + Recent Results + History */}
+      <div className="space-y-2 mland:space-y-1.5 h-full overflow-y-auto pr-0.5">
+        {renderImportantNewsPanel()}
         {renderSideLeagueStats()}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 mland:grid-cols-1 gap-2.5 mland:gap-1.5">
+        <div className="grid grid-cols-1 gap-2 mland:gap-1.5">
           <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
             <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center justify-between">
               <span>📋 ผลล่าสุดของคุณ</span>
@@ -887,8 +886,8 @@ export const LeagueView: React.FC<{
     const maxV = Math.max(...leagueRows.map((x) => x.st[cmpSort]), minV + 8);
     const sortLabels: Record<'ovSq' | 'ovXi' | 'at' | 'df', string> = { ovSq: 'เฉลี่ยทีม', ovXi: '11 ตัวจริง', at: 'พลังบุก', df: 'พลังรับ' };
     return (
-      <div className="p-3 sm:p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5 mland:mb-1.5 shrink-0">
+      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2 mland:mb-1.5 shrink-0">
           <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📊 เทียบพลังทีม · {TN[vt]}</h3>
           <div className="flex flex-wrap gap-1">
             {(['ovSq', 'ovXi', 'at', 'df'] as const).map((k) => (
@@ -898,7 +897,7 @@ export const LeagueView: React.FC<{
             ))}
           </div>
         </div>
-        <div className="space-y-1.5 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:grid mland:grid-cols-2 mland:gap-1.5 mland:pr-0.5">
+        <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-2 gap-1.5 pr-0.5 content-start">
           {leagueRows.map(({ t, st }, idx) => {
             const val = st[cmpSort];
             const pct = Math.max(8, Math.min(100, Math.round(((val - minV) / (maxV - minV)) * 100)));
@@ -978,7 +977,7 @@ export const LeagueView: React.FC<{
       );
     };
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-3 gap-2.5 mland:gap-1.5 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
+      <div className="grid grid-cols-3 gap-2 mland:gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 content-start">
         {board(<StatIconBadge kind="goal" size="sm" />, 'ดาวซัลโว', (q) => q.sg || 0, (q) => ((q.sg || 0) > 1 ? <StatIconBadge kind="goal" count={q.sg} size="sm" /> : `${q.sg}`))}
         {board(<StatIconBadge kind="assist" size="sm" />, 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => ((q.sa || 0) > 1 ? <StatIconBadge kind="assist" count={q.sa} size="sm" /> : `${q.sa}`))}
         {board('✨', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
@@ -1149,9 +1148,9 @@ export const LeagueView: React.FC<{
     ];
 
     return (
-      <div className="space-y-3 mland:space-y-1.5 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
         {/* Clean Context Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm mland:text-[11px]">
             <span className="font-bold text-[var(--ink)]">🎖️ ทำเนียบรางวัลประจำลีก</span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
@@ -1163,7 +1162,7 @@ export const LeagueView: React.FC<{
         </div>
 
         {/* 3-Column Awards Showcase */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 mland:grid-cols-3 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5 items-stretch">
+        <div className="grid grid-cols-3 gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-y-auto pr-0.5 items-stretch">
           {awards.map((aw) => {
             const leader = aw.entries[0];
             const runners = aw.entries.slice(1);
@@ -1291,10 +1290,10 @@ export const LeagueView: React.FC<{
   };
 
   return (
-    <div className="space-y-2 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mland:flex-row mland:items-center mland:justify-between gap-1.5 shrink-0">
-        {/* Competition Sub-Navigation Menu: Single compact row on mobile, inline pill strip on tablet/desktop/landscape */}
-        <div className="order-1 lg:order-2 mland:order-2 w-full lg:w-auto mland:w-auto mland:max-w-full grid grid-cols-6 sm:inline-flex lg:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:overflow-x-auto">
+    <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
+      <div className="flex flex-row items-center justify-between gap-1.5 shrink-0">
+        {/* Competition Sub-Navigation Menu: Single compact horizontal pill strip */}
+        <div className="order-2 w-auto max-w-full inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-x-auto">
           {(
             [
               ['🏆', 'ตาราง', 'ตาราง'],
@@ -1304,7 +1303,7 @@ export const LeagueView: React.FC<{
               ['🏅', 'ถ้วย', 'บอลถ้วย'],
               ['🎖️', 'รางวัล', 'รางวัล']
             ] as const
-          ).map(([ic, shortLbl, fullLbl], idx) => (
+          ).map(([ic, _shortLbl, fullLbl], idx) => (
             <button
               key={fullLbl}
               type="button"
@@ -1315,22 +1314,21 @@ export const LeagueView: React.FC<{
                   d.tv = idx;
                 });
               }}
-              className={`flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2.5 mland:px-1.5 py-1 sm:py-1 mland:py-0.5 rounded-lg text-[9.5px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${
+              className={`flex flex-row items-center justify-center gap-1 px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${
                 sub === idx
                   ? 'bg-[var(--g)] text-white shadow-xs'
                   : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
               }`}
             >
-              <span className="text-xs sm:text-xs mland:text-[10.5px] leading-none">{ic}</span>
-              <span className="sm:hidden mland:hidden truncate max-w-full leading-tight">{shortLbl}</span>
-              <span className="hidden sm:inline mland:inline truncate">{fullLbl}</span>
+              <span className="text-xs mland:text-[10.5px] leading-none">{ic}</span>
+              <span className="truncate">{fullLbl}</span>
             </button>
           ))}
         </div>
 
         {/* League Tier Switcher (hidden in Cup tab) */}
         {sub !== 4 ? (
-          <div className="order-2 lg:order-1 mland:order-1 w-full lg:w-auto mland:w-auto grid grid-cols-3 lg:inline-flex mland:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
+          <div className="order-1 w-auto inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
             {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
               const isMyTier = idx === me.tier;
               const active = vt === idx;
@@ -1340,7 +1338,7 @@ export const LeagueView: React.FC<{
                   type="button"
                   title={isMyTier ? `${lbl} (ลีกของคุณ)` : lbl}
                   onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
-                  className={`flex items-center justify-center gap-1 px-2 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${
+                  className={`flex items-center justify-center gap-1 px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${
                     active
                       ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs'
                       : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
@@ -1360,7 +1358,7 @@ export const LeagueView: React.FC<{
             })}
           </div>
         ) : (
-          <div className="order-2 lg:order-1 mland:order-1 hidden lg:flex mland:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
+          <div className="order-1 flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
             <span>🏅</span>
             <span>รายการแข่งขันบอลถ้วย</span>
           </div>
@@ -1410,9 +1408,9 @@ export const ScheduleCalendarView: React.FC<{
   const progressPct = Math.round((Math.min(state.md, totalMd) / totalMd) * 100);
 
   return (
-    <div className="grid grid-cols-1 gap-3 mland:grid-cols-[0.88fr_1.12fr] mland:grid-rows-[auto_1fr] mland:gap-2 mland:flex-1 mland:min-h-0 mland:overflow-hidden">
+    <div className="grid grid-cols-[0.88fr_1.12fr] grid-rows-[auto_1fr] gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-hidden">
       {/* Top Season Calendar Overview */}
-      <div className="p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-1 mland:col-start-1 mland:row-start-1">
+      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1 col-start-1 row-start-1">
         <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1">
           <div>
             <h3 className="font-bold text-sm sm:text-base mland:text-[11px] flex items-center gap-1.5">
@@ -1491,7 +1489,7 @@ export const ScheduleCalendarView: React.FC<{
       </div>
 
       {/* Month / View Selector + Calendar Grid */}
-      <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 mland:col-start-2 mland:row-start-1 mland:row-span-2 mland:h-full mland:flex mland:flex-col mland:min-h-0">
+      <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 col-start-2 row-start-1 row-span-2 h-full flex flex-col min-h-0">
         <div className="flex flex-wrap items-center gap-1.5 mland:gap-1 shrink-0">
           {months.map((m) => {
             const isCurMonth = state.md >= m.start && state.md < m.end;
@@ -1500,7 +1498,7 @@ export const ScheduleCalendarView: React.FC<{
                 key={m.idx}
                 type="button"
                 onClick={() => { SFX.tap(); setMonthIdx(m.idx); }}
-                className={`px-2.5 mland:px-2 py-1.5 mland:py-1 rounded-xl text-xs mland:text-[11px] font-semibold cursor-pointer transition-colors border ${
+                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl text-xs mland:text-[10.5px] font-semibold cursor-pointer transition-colors border ${
                   monthIdx === m.idx
                     ? 'bg-[var(--g)] text-white border-[var(--g)]'
                     : isCurMonth
@@ -1515,7 +1513,7 @@ export const ScheduleCalendarView: React.FC<{
           <button
             type="button"
             onClick={() => { SFX.tap(); setMonthIdx(-1); }}
-            className={`px-2.5 mland:px-2 py-1.5 mland:py-1 rounded-xl text-xs mland:text-[11px] font-semibold cursor-pointer border ml-auto ${
+            className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl text-xs mland:text-[10.5px] font-semibold cursor-pointer border ml-auto ${
               monthIdx === -1 ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]' : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'
             }`}
           >
@@ -1523,7 +1521,7 @@ export const ScheduleCalendarView: React.FC<{
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mland:grid-cols-2 gap-2.5 mland:gap-1.5 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
+        <div className="grid grid-cols-2 gap-2 mland:gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 content-start">
           {visibleMdIndices.map((mdIdx) => {
             const mdNum = mdIdx + 1;
             const rd = state.fx[mdIdx];
@@ -1618,9 +1616,9 @@ export const ScheduleCalendarView: React.FC<{
         </div>
       </div>
 
-      {/* Bottom 2 Columns: Weekly League Fixtures & Cup Log */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 mland:grid-cols-1 gap-3 mland:gap-2 mland:col-start-1 mland:row-start-2 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
-        <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+      {/* Bottom Left: Weekly League Fixtures & Cup Log */}
+      <div className="grid grid-cols-1 gap-2.5 mland:gap-2 col-start-1 row-start-2 min-h-0 overflow-y-auto pr-0.5">
+        <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
           <div className="flex items-center justify-between gap-2">
             <h4 className="font-bold text-xs sm:text-sm">📋 โปรแกรมคู่อื่นในลีก · นัดที่ {roundPreview + 1}</h4>
             <div className="flex items-center gap-1">

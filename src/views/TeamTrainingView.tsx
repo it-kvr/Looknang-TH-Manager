@@ -47,9 +47,9 @@ export const TeamTrainingView: React.FC<{
     .sort((a, b) => countReadyMissions(b, null) - countReadyMissions(a, null) || b.ov - a.ov);
 
   return (
-    <div className="space-y-3 mland:space-y-1.5 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+    <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Mode Sub-Navigation */}
-      <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+      <div className="flex items-center justify-between gap-2 shrink-0">
         <div className="inline-flex p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] gap-1">
           <button
             type="button"
@@ -81,10 +81,10 @@ export const TeamTrainingView: React.FC<{
       </div>
 
       {trainingMode === 'missions' && missionTargetPlayer ? (
-        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] mland:grid-cols-[210px_1fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-          <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5 mland:h-full mland:flex mland:flex-col mland:min-h-0">
+        <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[205px_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+          <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5 h-full flex flex-col min-h-0">
             <div className="text-xs mland:text-[10.5px] font-bold px-1 shrink-0">👥 เลือกนักเตะ ({me.sq.length} คน)</div>
-            <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto max-h-[420px] mland:max-h-none mland:flex-1 mland:min-h-0">
+            <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto flex-1 min-h-0">
               {sortedMissionSquad.map((q) => {
                 const ready = countReadyMissions(q, null);
                 const selected = q.n === missionTargetPlayer.n;
@@ -118,7 +118,7 @@ export const TeamTrainingView: React.FC<{
               })}
             </div>
           </div>
-          <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] mland:h-full mland:overflow-y-auto">
+          <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] h-full overflow-y-auto">
             <PlayerMissionsPanel
               player={missionTargetPlayer}
               team={me}
@@ -131,46 +131,46 @@ export const TeamTrainingView: React.FC<{
       ) : (
       <>
       {/* Training Overview Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mland:gap-1 shrink-0">
-        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ฟิต 11 ตัวจริง / ทั้งทีม</div>
+      <div className="grid grid-cols-5 gap-2 mland:gap-1 shrink-0">
+        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ฟิต 11 ตัวจริง / ทั้งทีม</div>
           <div className={`font-bold text-sm mland:text-[11px] tabular ${avgFit < 72 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
             {avgFit}% <span className="text-[var(--mut)] font-normal text-xs">/ {avgAllFit}%</span>
           </div>
         </div>
-        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ความเข้าใจแผน</div>
+        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ความเข้าใจแผน</div>
           <div className="font-bold text-sm mland:text-[11px] tabular text-[var(--g)]">{me.tacFam ?? 65}%</div>
         </div>
-        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">โปรแกรมปัจจุบัน</div>
+        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">โปรแกรมปัจจุบัน</div>
           <div className="font-bold text-xs mland:text-[10px] truncate">{curProg.icon} {curProg.short} · {curInt.icon}</div>
         </div>
-        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ล้า (&lt;72%) / เจ็บ</div>
+        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ล้า (&lt;72%) / เจ็บ</div>
           <div className="font-bold text-sm mland:text-[11px] tabular">
             <span className={tiredCount > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : ''}>{tiredCount}</span>
             <span className="text-[var(--mut)]"> / </span>
             <span className={injuredSq.length > 0 ? 'text-[var(--red)]' : ''}>{injuredSq.length}</span>
           </div>
         </div>
-        <div className="col-span-2 sm:col-span-1 p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ศูนย์ฝึก / สตาฟฟ์</div>
-          <div className="font-bold text-xs mland:text-[10px] tabular">ซ้อม Lv.{trLv} · ฟิต+{trLv * 2 + stf.fit * 2}%</div>
+        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ศูนย์ฝึก / สตาฟฟ์</div>
+          <div className="font-bold text-xs mland:text-[10px] tabular truncate">ซ้อม Lv.{trLv} · ฟิต+{trLv * 2 + stf.fit * 2}%</div>
         </div>
       </div>
 
       {/* Two-Column Realistic Training Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
+      <div className="grid grid-cols-[1.12fr_0.88fr] mland:grid-cols-[1.15fr_0.85fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
         {/* Left: Weekly Program, Intensity, Rest Options & Special Sessions */}
-        <div className="space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-1">
+        <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-1">
           {/* 7 Training Programs */}
-          <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+          <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-bold text-sm mland:text-xs">📅 โปรแกรมซ้อมประจำสัปดาห์</h3>
               <span className="text-[11px] mland:text-[9px] text-[var(--mut)]">มีผลหลังจบการแข่งแต่ละนัด</span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1">
+            <div className="grid grid-cols-2 gap-2 mland:gap-1">
               {(Object.values(TEAM_TRAINING_PROGRAMS) as TrainingProgramMeta[]).map((prog) => {
                 const active = plan.program === prog.id;
                 return (
@@ -271,7 +271,7 @@ export const TeamTrainingView: React.FC<{
                 {sessionUsed ? '⏳ ใช้สิทธิ์นัดนี้แล้ว (รอแข่งนัดถัดไป)' : '✅ พร้อมสั่งซ้อม 1 ครั้ง/นัด'}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1">
+            <div className="grid grid-cols-3 gap-2 mland:gap-1">
               <button
                 type="button"
                 disabled={sessionUsed}
@@ -374,7 +374,7 @@ export const TeamTrainingView: React.FC<{
         </div>
 
         {/* Right: Individual Conditioning & Rest Roster */}
-        <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col space-y-2.5 mland:space-y-1.5 mland:h-full mland:min-h-0 mland:overflow-hidden">
+        <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col space-y-2 mland:space-y-1.5 h-full min-h-0 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
             <div>
               <h3 className="font-bold text-sm mland:text-xs">👥 จัดการรายบุคคล (พักเดี่ยว / ปั้นพิเศษ)</h3>
@@ -426,7 +426,7 @@ export const TeamTrainingView: React.FC<{
             </div>
           </div>
 
-          <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto max-h-[460px] mland:max-h-none mland:flex-1 mland:min-h-0">
+          <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto flex-1 min-h-0">
             {sortedTrainingPlayers.map((q) => {
               const f = Math.round(q.fit ?? 100);
               const isRest = indMap[q.n] === 'REST';

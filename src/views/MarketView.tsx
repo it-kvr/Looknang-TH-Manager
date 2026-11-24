@@ -351,8 +351,8 @@ export const MarketView: React.FC<{
 
     return (
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
-        <div className="w-full max-w-xl mland:max-w-3xl max-h-[92dvh] mland:max-h-[95dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-          <div className="shrink-0 flex items-center gap-3 mland:gap-2 p-3.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+        <div className="w-full max-w-3xl max-h-[92dvh] mland:max-h-[95dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+          <div className="shrink-0 flex items-center gap-3 mland:gap-2 p-3 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
             <PlayerFace player={q} team={sellerTeam} state={state} size={46} />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm sm:text-base mland:text-xs truncate">
@@ -365,7 +365,7 @@ export const MarketView: React.FC<{
             <span className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl text-white font-bold text-sm sm:text-base mland:text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-3 mland:items-start">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 grid grid-cols-2 gap-3.5 mland:gap-3 items-start">
             <div className="space-y-3 mland:space-y-2">
               <div>
                 <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">1) รูปแบบข้อเสนอ</div>
@@ -430,7 +430,7 @@ export const MarketView: React.FC<{
             </div>
 
             <div className="space-y-3 mland:space-y-2">
-              <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-2 gap-2 mland:gap-1.5 text-center p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]">
+              <div className="grid grid-cols-2 gap-2 mland:gap-1.5 text-center p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]">
                 <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">จ่ายทันที</div><b className={`text-sm mland:text-xs tabular ${!canAfford ? 'text-[var(--red)]' : ''}`}>{fmtMoneyNum(E.cashNow)}</b></div>
                 <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">เพดานค่าเหนื่อยหลังดีล</div><b className={`text-sm mland:text-xs tabular ${wageOverCap ? 'text-[var(--red)]' : ''}`}>{fmtMoneyNum(Math.round(tx.curWage - freedWage + E.wg))}/{fmtMoneyNum(tx.wageCap)}</b></div>
                 <div><div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">{E.dueLater ? 'ผ่อนปลายปี' : E.loanOpt ? 'ซื้อขาด' : 'สัญญา'}</div><b className="text-sm mland:text-xs tabular">{E.dueLater ? fmtMoneyNum(E.dueLater) : E.loanOpt ? fmtMoneyNum(E.loanOpt) : `${E.yr} ปี`}</b></div>
@@ -482,47 +482,56 @@ export const MarketView: React.FC<{
 
     return (
       <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
-        <div className="w-full max-w-md mland:max-w-lg max-h-[92dvh] mland:max-h-[96dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-          <div className="shrink-0 flex items-center gap-3 p-3.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
-            <PlayerFace player={q} team={me} state={state} size={46} />
+        <div className="w-full max-w-2xl max-h-[92dvh] mland:max-h-[96dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+          <div className="shrink-0 flex items-center gap-3 p-3 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+            <PlayerFace player={q} team={me} state={state} size={44} />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-sm mland:text-xs truncate">📋 ต่อสัญญา · {q.n}</div>
               <div className="text-xs mland:text-[10.5px] text-[var(--mut)] tabular">เหลือสัญญา <b>{con.yr} ปี</b> · ค่าเหนื่อยเดิม {fmtMoneyNum(con.wg)}</div>
             </div>
             <span className="px-2 py-0.5 rounded-lg text-white font-bold text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
           </div>
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-2">
-            <div>
-              <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ระยะเวลาสัญญาใหม่</div>
-              <div className="flex gap-1.5 mland:gap-1">
-                {[2, 3, 4, 5].map((y) => (
-                  <button key={y} type="button" onClick={() => setRenewYr(y)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewYr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{y} ปี</button>
-                ))}
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 grid grid-cols-2 gap-3 mland:gap-2.5 items-start">
+            <div className="space-y-2.5 mland:space-y-2">
+              <div>
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ระยะเวลาสัญญาใหม่</div>
+                <div className="flex gap-1.5 mland:gap-1">
+                  {[2, 3, 4, 5].map((y) => (
+                    <button key={y} type="button" onClick={() => setRenewYr(y)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewYr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{y} ปี</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">บทบาท</div>
+                <div className="flex gap-1.5 mland:gap-1">
+                  {([['key', '⭐ ตัวหลัก'], ['rot', '🔄 หมุนเวียน'], ['pro', '🌱 ดาวรุ่ง']] as const).map(([k, l]) => (
+                    <button key={k} type="button" onClick={() => setRenewRole(k)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewRole === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                  ))}
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">บทบาท</div>
-              <div className="flex gap-1.5 mland:gap-1">
-                {([['key', '⭐ ตัวหลัก'], ['rot', '🔄 หมุนเวียน'], ['pro', '🌱 ดาวรุ่ง']] as const).map(([k, l]) => (
-                  <button key={k} type="button" onClick={() => setRenewRole(k)} className={`flex-1 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewRole === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-                ))}
+            <div className="space-y-2.5 mland:space-y-2">
+              <div>
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ค่าเหนื่อยที่เสนอ</div>
+                <div className="flex flex-wrap gap-1.5 mland:gap-1">
+                  {([['รัดเข็มขัด (-10%)', 0], ['เพิ่มเล็กน้อย (+5%)', 1], ['จัดเต็ม (+25% +โบนัส)', 2]] as const).map(([l, k]) => (
+                    <button key={k} type="button" onClick={() => setRenewWb(k)} className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewWb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ค่าเหนื่อยที่เสนอ</div>
-              <div className="flex flex-wrap gap-1.5 mland:gap-1">
-                {([['รัดเข็มขัด (-10%)', 0], ['เพิ่มเล็กน้อย (+5%)', 1], ['จัดเต็ม (+25% +โบนัส)', 2]] as const).map(([l, k]) => (
-                  <button key={k} type="button" onClick={() => setRenewWb(k)} className={`px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewWb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
-                ))}
+              <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)] space-y-1.5">
+                <div className="flex items-center gap-2 text-xs mland:text-[10.5px]">
+                  <span className="whitespace-nowrap">โอกาสตกลง</span>
+                  <div className="flex-1 h-2 rounded-full bg-[var(--surface)] overflow-hidden"><div className="h-full rounded-full bg-[var(--g)] transition-all" style={{ width: `${ch}%` }} /></div>
+                  <b className="tabular">{ch}%</b>
+                </div>
+                <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
+                  ค่าเหนื่อยใหม่: <b className="text-[var(--ink)]">{fmtMoneyNum(newWg)}/นัด</b>{bonus ? ` · โบนัสเซ็น ${fmtMoneyNum(bonus)}` : ''}
+                </div>
               </div>
+              {renewOverCap && <p className="text-xs mland:text-[10.5px] text-[var(--red)] font-semibold">⚠️ ค่าเหนื่อยใหม่จะทำให้ทีมเกินเพดาน {fmtMoneyNum(tx.wageCap)}/นัด</p>}
+              {renewMsg && <p className="text-xs mland:text-[10.5px] text-[var(--red)]">{renewMsg}</p>}
             </div>
-            <div className="flex items-center gap-2 text-xs mland:text-[10.5px]">
-              <span className="whitespace-nowrap">โอกาสตกลง</span>
-              <div className="flex-1 h-2 rounded-full bg-[var(--surface-2)] overflow-hidden"><div className="h-full rounded-full bg-[var(--g)] transition-all" style={{ width: `${ch}%` }} /></div>
-              <b className="tabular">{ch}%</b>
-            </div>
-            {renewOverCap && <p className="text-xs mland:text-[10.5px] text-[var(--red)] font-semibold">⚠️ ค่าเหนื่อยใหม่จะทำให้ทีมเกินเพดาน {fmtMoneyNum(tx.wageCap)}/นัด</p>}
-            {renewMsg && <p className="text-xs mland:text-[10.5px] text-[var(--red)]">{renewMsg}</p>}
           </div>
           <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
             <button type="button" onClick={() => setRenewIdx(null)} className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer whitespace-nowrap">ปิด</button>
@@ -553,12 +562,12 @@ export const MarketView: React.FC<{
   };
 
   return (
-    <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+    <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
       {/* Compact Single-Strip Transfer Window & FFP Rules Header */}
-      <div className={`px-3.5 py-2.5 mland:px-3 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 ${tx.tw.open ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+      <div className={`px-3.5 py-2 mland:px-3 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 ${tx.tw.open ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
         <div className="min-w-0 flex items-baseline gap-2">
           <span className="font-bold text-sm mland:text-[11px] truncate">{tx.tw.label}</span>
-          <span className="hidden md:inline mland:hidden text-xs text-[var(--mut)] truncate">
+          <span className="hidden lg:inline mland:hidden text-xs text-[var(--mut)] truncate">
             · {tx.tw.subLabel} {tx.tw.open ? '· ซื้อ-ขาย-ยืมตัวสโมสรอื่นได้เต็มรูปแบบ' : '· เซ็นได้เฉพาะฟรีเอเยนต์และเยาวชน'}
           </span>
         </div>
@@ -587,7 +596,7 @@ export const MarketView: React.FC<{
       </div>
 
       {/* Main Two-Column Transfer Workspace */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.18fr_0.82fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2 items-stretch mland:overflow-hidden">
+      <div className="grid grid-cols-[1.18fr_0.82fr] mland:grid-cols-[1.15fr_0.85fr] flex-1 min-h-0 gap-3 mland:gap-2 items-stretch overflow-hidden">
         {/* LEFT PANE: Market & League Clubs Browser */}
         <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
           {/* Source Segmented Control + Action */}
@@ -691,7 +700,7 @@ export const MarketView: React.FC<{
           </div>
 
           {/* Scrollable Player List (Clean Hairline Rows) */}
-          <div className="flex-1 min-h-0 max-h-[540px] mland:max-h-none overflow-y-auto divide-y divide-[var(--line)]/60">
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
             {marketSource === 'mk' ? (
               marketList.length > 0 ? (
                 marketList.map(({ q, i }) => {
@@ -812,7 +821,7 @@ export const MarketView: React.FC<{
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 max-h-[540px] mland:max-h-none overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
             {/* TAB 1: INCOMING OFFERS & TRANSFER LISTING */}
             {rightTab === 'sell' && (
               <>
@@ -1042,7 +1051,7 @@ export const MarketView: React.FC<{
                       )}
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 mland:grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-3 mland:grid-cols-2 gap-1.5">
                       {([['wonderkid', '🌟 ดาวรุ่ง U20'], ['free', '🆓 ฟรีเอเยนต์'], ['gk', '🧤 ผู้รักษาประตู'], ['defender', '🛡️ กองหลัง'], ['midfielder', '🧭 กองกลาง'], ['striker', '⚽ กองหน้า']] as [ScoutMission['focus'], string][]).map(([focus, lbl]) => (
                         <button
                           key={focus}

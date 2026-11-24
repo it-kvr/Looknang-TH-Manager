@@ -29,26 +29,26 @@ export const CupView: React.FC<{ state: GameState; onInspectTeam: (id: number) =
     }
     const champ = done && ids[0] != null ? state.teams[ids[0]] : null;
     return (
-      <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-        <div className="p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-3 mland:gap-1.5 shrink-0">
+      <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 mland:gap-1.5 shrink-0">
           <div>
-            <h3 className="font-bold text-base mland:text-[11px]">{title}</h3>
-            <p className="text-xs mland:text-[9.5px] text-[var(--mut)]">{subtitle} · รางวัลแชมป์ {prize}</p>
+            <h3 className="font-bold text-sm mland:text-[11px]">{title}</h3>
+            <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">{subtitle} · รางวัลแชมป์ {prize}</p>
           </div>
-          <div className="text-xs mland:text-[10px] font-bold px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl bg-[var(--surface-2)]">
+          <div className="text-[11px] mland:text-[10px] font-bold px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface-2)]">
             {done ? (champ ? `🏆 แชมป์: ${champ.name}` : 'จบการแข่งขันแล้ว') : alive ? `✅ อยู่ในเส้นทาง (${RN[round] || 'รอบถัดไป'})` : `❌ ตกรอบแล้ว (${RN[round] || 'กำลังแข่งขัน'})`}
           </div>
         </div>
 
-        <div className="space-y-4 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:grid mland:grid-cols-2 mland:gap-2 mland:overflow-hidden mland:items-stretch">
+        <div className="flex-1 min-h-0 grid grid-cols-2 gap-2.5 mland:gap-2 overflow-hidden items-stretch">
         {!done && pairs.length > 0 && (
-          <div className="p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-            <h4 className="font-bold text-sm mland:text-[11px] shrink-0">ประกบคู่ {RN[round]} ({pairs.length} คู่)</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-1 gap-2.5 mland:gap-1 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
+          <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1 h-full flex flex-col min-h-0">
+            <h4 className="font-bold text-xs mland:text-[11px] shrink-0">ประกบคู่ {RN[round]} ({pairs.length} คู่)</h4>
+            <div className="grid grid-cols-1 gap-2 mland:gap-1 flex-1 min-h-0 overflow-y-auto pr-0.5 content-start">
               {pairs.map(([h, a], idx) => {
                 const involvesMe = h.id === state.me || a.id === state.me;
                 return (
-                  <div key={idx} className={`flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl border ${involvesMe ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
+                  <div key={idx} className={`flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl border ${involvesMe ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
                     <button type="button" onClick={() => onInspectTeam(h.id)} className="flex items-center gap-2 mland:gap-1.5 min-w-0 flex-1 text-left cursor-pointer">
                       <ClubCrest name={h.name} size={22} team={h} club={state.club} isMyClub={h.id === state.me && state.mode === 'm'} />
                       <span className={`text-xs mland:text-[10.5px] truncate ${h.id === state.me ? 'font-bold' : ''}`}>{h.name}</span>
@@ -65,10 +65,10 @@ export const CupView: React.FC<{ state: GameState; onInspectTeam: (id: number) =
           </div>
         )}
 
-        <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:h-full mland:flex mland:flex-col mland:min-h-0 ${done || pairs.length === 0 ? 'mland:col-span-2' : ''}`}>
-          <h4 className="font-bold text-sm mland:text-xs shrink-0">📜 ผลการแข่งขันในรายการ</h4>
+        <div className={`p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 h-full flex flex-col min-h-0 ${done || pairs.length === 0 ? 'col-span-2' : ''}`}>
+          <h4 className="font-bold text-xs shrink-0">📜 ผลการแข่งขันในรายการ</h4>
           {log.length ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-1 gap-1.5 max-h-64 mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto pr-0.5">
+            <div className="grid grid-cols-1 gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 content-start">
               {log.slice().reverse().map((l, i) => (
                 <div key={i} className={`text-xs p-2 rounded-lg bg-[var(--surface-2)]/70 ${l.includes(state.teams[state.me].name) ? 'font-bold border border-[var(--lamp)]/50' : ''}`}>
                   {l}
@@ -85,12 +85,12 @@ export const CupView: React.FC<{ state: GameState; onInspectTeam: (id: number) =
   };
 
   return (
-    <div className="space-y-3 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      <div className="grid grid-cols-2 sm:inline-flex mland:inline-flex gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] sm:w-fit mland:w-fit max-w-full shrink-0">
-        <button type="button" onClick={() => setCupTab('fa')} className={`px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'fa' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+    <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
+      <div className="inline-flex gap-1 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] w-fit max-w-full shrink-0">
+        <button type="button" onClick={() => setCupTab('fa')} className={`px-3 mland:px-2.5 py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'fa' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
           🏆 ถ้วยประชาชน
         </button>
-        <button type="button" onClick={() => setCupTab('asia')} className={`px-3 sm:px-4 mland:px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'asia' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+        <button type="button" onClick={() => setCupTab('asia')} className={`px-3 mland:px-2.5 py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'asia' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
           🌏 บอลถ้วยทวีป
         </button>
       </div>

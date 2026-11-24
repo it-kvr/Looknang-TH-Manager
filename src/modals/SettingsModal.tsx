@@ -1,8 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { PWAInstallButton, usePWAInstall, usePWAUpdate } from '../pwa.tsx';
-import { enterImmersiveFullscreen, exitFullscreenSafe, getFullscreenElement, isFullscreenSupported, onFullscreenChange } from '../utils/fullscreen';
 import type { GameState, AppSettings } from '../types/game';
-import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX } from '../utils/audioTheme';
+import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
+import { enterImmersiveFullscreen, exitFullscreenSafe, isMobileDevice } from '../utils/fullscreen';
 import { exportSaveCode } from '../engine/saveCodec';
 
 const VIP_UNLOCKED_KEY = 'lk_vip_unlocked';
@@ -25,29 +25,9 @@ export const SettingsModal: React.FC<{
       return false;
     }
   });
-  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(getFullscreenElement()));
-  const canFullscreen = isFullscreenSupported();
   const vipTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
   const { isInstalled } = usePWAInstall();
   const { needRefresh, checkingUpdate, checkForUpdate, applyUpdate } = usePWAUpdate();
-
-  useEffect(() => onFullscreenChange(setIsFullscreen), []);
-
-  const toggleFullscreen = async () => {
-    SFX.tap();
-    try {
-      if (!getFullscreenElement()) {
-        const ok = await enterImmersiveFullscreen();
-        if (!ok) throw new Error('unsupported');
-        setIsFullscreen(true);
-      } else {
-        await exitFullscreenSafe();
-        setIsFullscreen(false);
-      }
-    } catch {
-      onToast('เบราว์เซอร์อุปกรณ์นี้ไม่รองรับการสั่งเต็มจอจากหน้าต่างนี้');
-    }
-  };
 
   const handleSecretVersionTap = () => {
     if (vipUnlocked) {
@@ -81,19 +61,24 @@ export const SettingsModal: React.FC<{
     setSt(next);
     saveSettings(next);
     if ('theme' in patch) applyTheme(next.theme);
+    if ('mute' in patch || 'nocrowd' in patch || 'sfxVolume' in patch || 'crowdVolume' in patch) {
+      refreshAudioSettings();
+    }
     onSettingsChange?.(next);
   };
 
   const curMatchSpeed = getDefaultMatchSpeed(st);
   const godBlessingOn = st.godBlessingEnabled !== false;
+  const autoFsMobileOn = st.preferFullscreen !== false;
+  const onMobile = isMobileDevice();
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-lg mland:max-w-3xl max-h-[92dvh] mland:max-h-[95dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-3xl max-h-[95dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Header */}
-        <div className="shrink-0 px-5 py-3.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
+        <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <h3 className="font-bold text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
+            <h3 className="font-bold text-sm sm:text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
             <button
               type="button"
               onClick={handleSecretVersionTap}
@@ -107,11 +92,11 @@ export const SettingsModal: React.FC<{
               {vipUnlocked ? 'v1.2 · 👑 VIP' : 'v1.2'}
             </button>
           </div>
-          <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] mland:text-xs font-bold cursor-pointer">✕</button>
+          <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="w-7 h-7 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer">✕</button>
         </div>
 
-        {/* Organized Body */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 mland:p-2 space-y-3.5 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-2 mland:items-start">
+        {/* Organized Horizontal 2-Column Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2 grid grid-cols-2 gap-3 mland:gap-2 items-start">
           {/* Left Column: Match & Audio */}
           <div className="space-y-3 mland:space-y-1.5">
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
@@ -160,10 +145,60 @@ export const SettingsModal: React.FC<{
                 </span>
               </button>
 
-              <div className="space-y-1.5 mland:space-y-1">
+              <div className="space-y-2 mland:space-y-1.5 pt-0.5">
+                <div className="p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 space-y-2 mland:space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs mland:text-[10px] font-bold">🎚️ ระดับเสียงเกม</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        unlockAudio();
+                        SFX.whistle();
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer hover:brightness-95"
+                    >
+                      🔊 ทดสอบเสียง
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] mland:text-[9px]">
+                      <span className="text-[var(--mut)] font-semibold">เสียงเอฟเฟกต์ (SFX)</span>
+                      <span className="font-bold tabular">{st.mute ? 'ปิด' : `${st.sfxVolume ?? 85}%`}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      disabled={!!st.mute}
+                      value={st.sfxVolume ?? 85}
+                      onChange={(e) => update({ sfxVolume: Number(e.target.value) })}
+                      className="w-full accent-[var(--g)] h-1.5 cursor-pointer disabled:opacity-40"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] mland:text-[9px]">
+                      <span className="text-[var(--mut)] font-semibold">เสียงเชียร์ในสนาม</span>
+                      <span className="font-bold tabular">{st.mute || st.nocrowd ? 'ปิด' : `${st.crowdVolume ?? 70}%`}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={5}
+                      disabled={!!st.mute || !!st.nocrowd}
+                      value={st.crowdVolume ?? 70}
+                      onChange={(e) => update({ crowdVolume: Number(e.target.value) })}
+                      className="w-full accent-[var(--g)] h-1.5 cursor-pointer disabled:opacity-40"
+                    />
+                  </div>
+                </div>
+
                 {(
                   [
-                    ['mute', '🔇 ปิดเสียงเอฟเฟกต์ทั้งหมด', !!st.mute],
+                    ['mute', '🔇 ปิดเสียงทั้งหมด', !!st.mute],
                     ['nocrowd', '🏟️ ปิดเสียงเชียร์ในสนามแข่ง', !!st.nocrowd],
                     ['novib', '📳 ปิดการสั่นแจ้งเตือน', !!st.novib]
                   ] as [keyof AppSettings, string, boolean][]
@@ -171,7 +206,7 @@ export const SettingsModal: React.FC<{
                   <button
                     key={key}
                     type="button"
-                    onClick={() => { SFX.tap(); update({ [key]: !active }); }}
+                    onClick={() => { unlockAudio(); SFX.tap(); update({ [key]: !active }); }}
                     className="w-full flex items-center justify-between p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 text-xs mland:text-[10px] font-semibold cursor-pointer"
                   >
                     <span>{label}</span>
@@ -207,20 +242,41 @@ export const SettingsModal: React.FC<{
                 ))}
               </div>
 
-              {canFullscreen && (
-                <button
-                  type="button"
-                  onClick={toggleFullscreen}
-                  className={`w-full flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-semibold cursor-pointer ${
-                    isFullscreen ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)]/80'
-                  }`}
-                >
-                  <span className="truncate">🖥️ โหมดเต็มจอ (ซ่อนแถบมือถือ)</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${isFullscreen ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                    {isFullscreen ? 'ออกเต็มจอ' : 'เปิดเต็มจอ'}
-                  </span>
-                </button>
-              )}
+              <button
+                type="button"
+                data-no-auto-fs="1"
+                onClick={() => {
+                  SFX.tap();
+                  const nextVal = !autoFsMobileOn;
+                  update({ preferFullscreen: nextVal });
+                  if (!nextVal) {
+                    exitFullscreenSafe().catch(() => undefined);
+                    onToast('ปิดเต็มจออัตโนมัติบนมือถือแล้ว');
+                  } else if (onMobile) {
+                    enterImmersiveFullscreen().catch(() => undefined);
+                    onToast('📱 เปิดเต็มจออัตโนมัติบนมือถือแล้ว');
+                  } else {
+                    onToast('📱 เปิดเต็มจออัตโนมัติแล้ว (ทำงานเมื่อเล่นบนมือถือ)');
+                  }
+                }}
+                className={`w-full flex items-center justify-between gap-2.5 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer transition-colors ${
+                  autoFsMobileOn ? 'bg-[var(--g-soft)] border-[var(--g)]/50' : 'bg-[var(--surface)] border-[var(--line)]/80'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="text-xs mland:text-[10px] font-bold truncate">📱 เต็มจออัตโนมัติบนมือถือ</div>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                    {autoFsMobileOn
+                      ? onMobile
+                        ? 'เข้าเต็มจอและล็อกแนวนอนอัตโนมัติขณะเล่น'
+                        : 'พร้อมเข้าเต็มจออัตโนมัติเมื่อเปิดเล่นบนมือถือ'
+                      : 'ปิดเต็มจออัตโนมัติ (แสดงแถบเบราว์เซอร์ปกติ)'}
+                  </div>
+                </div>
+                <span className={`px-2.5 mland:px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${autoFsMobileOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                  {autoFsMobileOn ? 'เปิด' : 'ปิด'}
+                </span>
+              </button>
 
               <PWAInstallButton variant="settings" onToast={onToast} />
 

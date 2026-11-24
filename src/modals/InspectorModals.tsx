@@ -50,7 +50,7 @@ export const PlayerInspectorModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-3xl mland:max-w-[96vw] max-h-[92dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-4xl mland:max-w-[96vw] h-[90dvh] mland:h-[96dvh] max-h-[94dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Hero Identity Header */}
         <div
           className="shrink-0 px-4 py-3.5 sm:px-5 sm:py-4 mland:px-3 mland:py-2 text-white flex items-center justify-between gap-3 mland:gap-2"
@@ -224,9 +224,9 @@ export const PlayerInspectorModal: React.FC<{
             />
           </div>
         ) : (
-        <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3.5 sm:p-4 mland:p-2 space-y-3 md:space-y-0 mland:space-y-0 md:grid md:grid-cols-[0.95fr_1.05fr] mland:grid mland:grid-cols-[0.95fr_1.05fr] md:gap-4 mland:gap-2">
+        <div className="flex-1 min-h-0 overflow-hidden p-3.5 mland:p-2 grid grid-cols-[0.95fr_1.05fr] gap-3.5 mland:gap-2">
           {/* Left Column: Core 5, Contract/Status, Season Stats, Rehab & Number */}
-          <div className="space-y-3 mland:space-y-1.5 md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto md:pr-1 mland:pr-1">
+          <div className="space-y-3 mland:space-y-1.5 h-full overflow-y-auto pr-1">
             {/* 5 Core Attributes Showcase */}
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/80 space-y-2 mland:space-y-1">
               <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
@@ -430,8 +430,8 @@ export const PlayerInspectorModal: React.FC<{
           </div>
 
           {/* Right Column: Detailed Sub-Attributes Breakdown */}
-          <div className="md:h-full md:overflow-y-auto mland:h-full mland:overflow-y-auto md:pr-1 mland:pr-1">
-            <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-1.5">
+          <div className="h-full overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-2.5 mland:gap-1.5">
               {info.G.map(([grp, rows]) => (
                 <div key={grp} className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]/75 space-y-1">
                   <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] pb-1.5 mland:pb-1 mb-1 border-b border-[var(--line)]/70">
@@ -492,7 +492,7 @@ export const TeamInspectorModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-3xl mland:max-w-[96vw] max-h-[92dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-4xl mland:max-w-[96vw] h-[90dvh] mland:h-[96dvh] max-h-[94dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 p-3.5 sm:p-4 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-2.5 mland:gap-1.5">
           <div className="flex items-center gap-3 mland:gap-2 min-w-0">
             <div className="shrink-0 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
@@ -538,9 +538,9 @@ export const TeamInspectorModal: React.FC<{
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden p-3.5 sm:p-4 mland:p-2 space-y-3 mland:space-y-1 mland:flex mland:flex-col">
+        <div className="flex-1 min-h-0 overflow-hidden p-3 mland:p-2 space-y-2.5 mland:space-y-1 flex flex-col">
           {/* Team Power + Head-to-Head + Tactical Identity */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1 text-center text-xs mland:text-[10px] shrink-0">
+          <div className="grid grid-cols-4 gap-2 mland:gap-1 text-center text-xs mland:text-[10px] shrink-0">
             {(
               [
                 ['ตัวจริง (XI)', st.ovXi, mySt.ovXi],
@@ -566,29 +566,29 @@ export const TeamInspectorModal: React.FC<{
             })}
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1 text-xs mland:text-[10px] shrink-0">
-            <div className="p-2.5 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
+          <div className="grid grid-cols-4 gap-2 mland:gap-1 text-xs mland:text-[10px] shrink-0">
+            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">ระบบ &amp; แท็กติก</div>
               <div className="font-bold truncate mt-0.5">{team.form} · {AR_T[team.tac]}</div>
             </div>
-            <div className="p-2.5 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
+            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">⚽ ดาวซัลโว</div>
               <div className="font-bold truncate mt-0.5">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</div>
             </div>
-            <div className="p-2.5 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
+            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">🎯 จอมแอสซิสต์</div>
               <div className="font-bold truncate mt-0.5">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</div>
             </div>
-            <div className="p-2.5 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
+            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">💰 มูลค่ารวม</div>
               <div className="font-bold tabular mt-0.5">{fmtMoney(totalVal)}</div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] mland:grid-cols-[1.15fr_0.85fr] gap-4 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
-            <div className="space-y-1.5 mland:space-y-0.5 mland:h-full mland:flex mland:flex-col mland:items-center mland:min-h-0 mland:overflow-hidden">
+          <div className="grid grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            <div className="space-y-1 mland:space-y-0.5 h-full flex flex-col items-center min-h-0 overflow-hidden">
               <div className="text-xs mland:text-[9px] font-bold text-[var(--mut)] text-center shrink-0">ผัง 11 ตัวจริง · แตะเพื่อส่องพลัง</div>
-              <div className="max-w-[330px] mland:max-w-none mland:w-full mland:flex-1 mland:min-h-0 mland:h-full mland:flex mland:items-center mland:justify-center mx-auto">
+              <div className="w-full flex-1 min-h-0 h-full flex items-center justify-center mx-auto">
                 <FormationPitch
                   team={team}
                   state={state}
@@ -601,7 +601,7 @@ export const TeamInspectorModal: React.FC<{
               </div>
             </div>
 
-            <div className="space-y-2 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0 mland:overflow-hidden">
+            <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0 overflow-hidden">
               <div className="flex flex-wrap items-center justify-between gap-1.5 shrink-0">
                 <div className="font-bold text-xs mland:text-[10px] text-[var(--mut)]">ขุมกำลัง ({team.sq.length} คน)</div>
                 <div className="flex flex-wrap gap-1">
@@ -617,7 +617,7 @@ export const TeamInspectorModal: React.FC<{
                   ))}
                 </div>
               </div>
-              <div className="divide-y divide-[var(--line)]/60 max-h-72 mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto rounded-xl border border-[var(--line)]">
+              <div className="divide-y divide-[var(--line)]/60 flex-1 min-h-0 overflow-y-auto rounded-xl border border-[var(--line)]">
                 {filteredSquad.map((q) => {
                   const isStarter = starterNames.has(q.n);
                   const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);

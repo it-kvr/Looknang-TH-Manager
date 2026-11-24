@@ -50,8 +50,8 @@ export const CustomFormationModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-3xl max-h-[92dvh] mland:max-w-[96vw] mland:h-[96dvh] mland:max-h-[96dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-        <div className="shrink-0 flex items-center justify-between px-4 py-3 mland:px-3 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
+      <div className="w-full max-w-3xl h-[90dvh] max-h-[92dvh] mland:max-w-[96vw] mland:h-[96dvh] mland:max-h-[96dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+        <div className="shrink-0 flex items-center justify-between px-4 py-2.5 mland:px-3 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <div>
             <h3 className="font-bold text-sm sm:text-base mland:text-xs">✏️ ปรับผังแผนเอง ({countPos('DF')}-{countPos('MF')}-{countPos('FW')})</h3>
             <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ลากวงกลมในสนามเพื่อวางตำแหน่ง หรือแตะเลือกตำแหน่งด้านข้าง</p>
@@ -59,11 +59,11 @@ export const CustomFormationModal: React.FC<{
           <button type="button" onClick={onClose} className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] font-bold cursor-pointer shrink-0">✕</button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden p-3 sm:p-4 mland:p-2 grid grid-cols-1 md:grid-cols-[260px_1fr] mland:grid-cols-[205px_1fr] gap-4 mland:gap-2.5 items-start mland:items-stretch">
-          <div className="mland:flex mland:flex-col mland:items-center mland:justify-center mland:h-full mland:min-h-0">
+        <div className="flex-1 min-h-0 overflow-hidden p-3 mland:p-2 grid grid-cols-[245px_1fr] mland:grid-cols-[205px_1fr] gap-3.5 mland:gap-2.5 items-stretch">
+          <div className="flex flex-col items-center justify-center h-full min-h-0">
             <svg
               viewBox="0 0 300 340"
-              className="w-full max-w-[260px] mland:h-full mland:max-h-[210px] mland:w-auto mland:max-w-full mx-auto rounded-xl select-none touch-none border border-[var(--line)]"
+              className="h-full max-h-[300px] mland:max-h-[210px] w-auto max-w-full mx-auto rounded-xl select-none touch-none border border-[var(--line)]"
               onPointerMove={handlePointerMove}
               onPointerUp={() => { setDragIdx(-1); setDragIsTouch(false); setFingerSvgPt(null); }}
               onPointerCancel={() => { setDragIdx(-1); setDragIsTouch(false); setFingerSvgPt(null); }}
@@ -105,7 +105,7 @@ export const CustomFormationModal: React.FC<{
             {countPos('FW') < 1 && <p className="text-xs text-[var(--red)] mt-1 text-center">⚠️ ไม่มีกองหน้าตัวเป้าเลย</p>}
           </div>
 
-          <div className="space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-1">
+          <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-1">
             <div>
               <div className="text-xs font-bold mb-1">บทบาทของตำแหน่งที่เลือก: <span className="text-[var(--g)]">{slots[selIdx]?.[0]} · {SPN[slots[selIdx]?.[0]] || ''}</span></div>
               {ROLE_HINT[slots[selIdx]?.[0]] && (
@@ -167,8 +167,8 @@ export const PitchPlayerModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-md mland:max-w-xl mland:max-h-[95dvh] mland:flex mland:flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl">
-        <div className="shrink-0 flex items-center gap-3 p-3.5 mland:p-2.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
+      <div className="w-full max-w-2xl max-h-[94dvh] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl">
+        <div className="shrink-0 flex items-center gap-3 p-3 mland:p-2.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <PlayerFace player={player} team={me} state={state} size={44} />
           <div className="flex-1 min-w-0">
             <div className="font-bold text-sm mland:text-xs truncate">
@@ -183,10 +183,32 @@ export const PitchPlayerModal: React.FC<{
           </span>
         </div>
 
-        <div className="p-4 mland:p-2.5 space-y-3 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto">
-          <p className="text-xs mland:text-[11px] text-[var(--mut)] leading-relaxed mland:leading-snug">
-            ระบบจะขึ้นบัญชีขาย <b>{player.n}</b> ในตลาดและส่งโปรไฟล์ให้สโมสรในระดับใกล้เคียงพิจารณา สโมสรที่สนใจจะยื่นข้อเสนอเข้ามาให้คุณกดตอบรับหรือโก่งราคา
-          </p>
+        <div className="p-3.5 mland:p-2.5 flex-1 min-h-0 overflow-y-auto grid grid-cols-[0.85fr_1.15fr] gap-3.5 mland:gap-2.5 items-start">
+          <div className="space-y-2.5">
+            <p className="text-xs mland:text-[11px] text-[var(--mut)] leading-relaxed mland:leading-snug">
+              ระบบจะขึ้นบัญชีขาย <b>{player.n}</b> ในตลาดและส่งโปรไฟล์ให้สโมสรในระดับใกล้เคียงพิจารณา สโมสรที่สนใจจะยื่นข้อเสนอเข้ามาให้คุณกดตอบรับหรือโก่งราคา
+            </p>
+            <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between text-xs tabular">
+              <span className="text-[var(--mut)]">ราคาเสนอขาย</span>
+              <b className="text-sm text-[var(--g)]">~{fmtMoney(askAmt)}</b>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-2 mland:py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={() => onConfirm(askPct)}
+                className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
+              >
+                📨 เสนอขาย
+              </button>
+            </div>
+          </div>
 
           <div className="space-y-2 mland:space-y-1.5">
             {options.map((opt) => {
@@ -209,23 +231,6 @@ export const PitchPlayerModal: React.FC<{
                 </button>
               );
             })}
-          </div>
-
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
-            >
-              ยกเลิก
-            </button>
-            <button
-              type="button"
-              onClick={() => onConfirm(askPct)}
-              className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
-            >
-              📨 เสนอขายในราคา ~{fmtMoney(askAmt)}
-            </button>
           </div>
         </div>
       </div>

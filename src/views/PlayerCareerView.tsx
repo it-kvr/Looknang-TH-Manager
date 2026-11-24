@@ -34,8 +34,8 @@ export const PlayerCareerView: React.FC<{
   const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] mland:flex-1 mland:min-h-0 mland:grid-cols-[215px_1fr] gap-4 mland:gap-2 items-start mland:items-stretch mland:overflow-hidden">
-      <div className="space-y-4 mland:space-y-1.5 mland:h-full mland:overflow-y-auto mland:pr-0.5">
+    <div className="grid grid-cols-[255px_1fr] mland:grid-cols-[215px_1fr] flex-1 min-h-0 gap-3 mland:gap-2 items-stretch overflow-hidden">
+      <div className="space-y-2.5 mland:space-y-1.5 h-full overflow-y-auto pr-0.5">
         <div className="rounded-3xl mland:rounded-2xl p-4 mland:p-2 text-white border border-white/20" style={{ background: `linear-gradient(155deg, ${ovColor(ov)}, #0b1f15 78%)` }}>
           <div className="flex items-center justify-between gap-3 mland:gap-1.5 mland:[&_svg]:w-14 mland:[&_svg]:h-14">
             <div className="text-center">
@@ -123,8 +123,8 @@ export const PlayerCareerView: React.FC<{
         </div>
       </div>
 
-      <div className="space-y-4 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="hidden mland:grid grid-cols-4 gap-1 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+      <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0">
+        <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {([
             ['plan', '📅 แผนฝึกซ้อม'],
             ['missions', `🎯 ภารกิจ${readyMissionCount ? ` (${readyMissionCount})` : ''}`],
@@ -135,20 +135,20 @@ export const PlayerCareerView: React.FC<{
               key={k}
               type="button"
               onClick={() => setCareerTab(k)}
-              className={`py-1 rounded-lg text-[10px] font-bold cursor-pointer ${careerTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+              className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${careerTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
             >
               {lbl}
             </button>
           ))}
         </div>
 
-        <div className="space-y-4 mland:space-y-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5">
-        <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'plan' ? '' : 'mland:hidden'}`}>
+        <div className="space-y-2.5 mland:space-y-2 flex-1 min-h-0 overflow-y-auto pr-0.5">
+        <div className={`p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'plan' ? '' : 'hidden'}`}>
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm mland:text-xs">📅 แผนฝึกซ้อมประจำสัปดาห์</h3>
             {p.vid ? <span className="text-xs mland:text-[10px] font-bold text-[var(--g)]">📺 มีบัฟวิดีโอนัดหน้า (+0.3 เรตติ้ง)</span> : null}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {PACT.map((ac, idx) => (
               <button
                 key={ac.n}
@@ -173,7 +173,7 @@ export const PlayerCareerView: React.FC<{
           {p.last && <p className="text-xs text-[var(--g)] font-semibold pt-1">สัปดาห์ล่าสุด: {p.last}</p>}
         </div>
 
-        <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'missions' ? '' : 'mland:hidden'}`}>
+        <div className={`p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'missions' ? '' : 'hidden'}`}>
           <PlayerMissionsPanel
             player={fakePlayer}
             team={meTeam}
@@ -183,12 +183,12 @@ export const PlayerCareerView: React.FC<{
           />
         </div>
 
-        <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'perks' ? '' : 'mland:hidden'}`}>
+        <div className={`p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'perks' ? '' : 'hidden'}`}>
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm mland:text-xs">🌟 สกิลติดตัวนักเตะ (Career Perks)</h3>
             <span className="text-xs font-bold text-[var(--lamp)]">ชื่อเสียงคงเหลือ: {p.rep ?? 10}</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {CAREER_PERKS.map((pk) => {
               const owned = perks.includes(pk.id);
               const canBuy = !owned && (p.rep ?? 10) >= pk.cost;
@@ -220,12 +220,12 @@ export const PlayerCareerView: React.FC<{
           </div>
         </div>
 
-        <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'stats' ? '' : 'mland:hidden'}`}>
+        <div className={`p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'stats' ? '' : 'hidden'}`}>
           <div className="flex items-center justify-between gap-2">
             <h3 className="font-bold text-sm mland:text-xs">📊 รายละเอียดค่าพลัง</h3>
             <span className="text-[11px] text-[var(--mut)]">จุดเด่น: <b className="text-[var(--g)]">⭐ {SIGL[details.D0.sig] || details.D0.sig}</b></span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mland:gap-2">
+          <div className="grid grid-cols-2 gap-2.5 mland:gap-2">
             {details.G.map(([grp, items]) => (
               <div key={grp} className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/75 space-y-1">
                 <div className="font-bold text-xs mb-1.5 pb-1 border-b border-[var(--line)]/60">{grp}</div>
