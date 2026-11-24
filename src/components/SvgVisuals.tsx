@@ -948,7 +948,9 @@ export const FormationPitch: React.FC<{
         const isDisabled = Boolean(disableRedPlayers && isRed);
         const isValidDrop = Boolean(validDropHighlight && !isDisabled && !isTarget && dragSourceName !== q.n);
         const efVal = isRed || isSus || isInj ? 0 : Math.max(0, Math.min(100, Math.round(meta?.fitVal ?? q.fit ?? 100)));
-        const efc = efVal >= (subAlertFitTh ? Math.max(70, subAlertFitTh + 12) : 85) ? '#3fcf7f' : efVal >= (subAlertFitTh ?? 65) ? '#f4c63d' : '#ff7a5c';
+        const restTh = subAlertFitTh ?? 65;
+        const warnTh = Math.max(75, restTh + 10);
+        const efc = efVal >= warnTh ? '#22c55e' : efVal >= restTh ? '#f59e0b' : '#ef4444';
         const ed =
           isRed || isInj || isSus
             ? '#ef4444'
@@ -956,9 +958,11 @@ export const FormationPitch: React.FC<{
               ? '#f5c242'
               : isSelected
                 ? '#38bdf8'
-                : subAlertFitTh != null && efVal <= subAlertFitTh
-                  ? '#f59e0b'
-                  : PCOL[pn];
+                : subAlertFitTh != null && efVal < restTh
+                  ? '#ef4444'
+                  : subAlertFitTh != null && efVal < warnTh
+                    ? '#f59e0b'
+                    : PCOL[pn];
         const kc = z.sp === 'GK' ? gkCol : col;
         const rad = isTarget ? 19 : 16;
         const sc = isTarget ? 0.58 : 0.5;
@@ -1193,15 +1197,15 @@ export const FormationPitch: React.FC<{
             {/* Bottom Stamina Bar + Player Name */}
             {showFitBar && !isRed && (
               <>
-                <rect x={cx - 23} y={cy + 18.5} width="28" height="4.5" rx="2.2" fill="#0b2018" stroke="#fff7" strokeWidth="0.6" />
-                <rect x={cx - 23} y={cy + 18.5} width={(28 * efVal) / 100} height="4.5" rx="2.2" fill={efc} />
+                <rect x={cx - 23} y={cy + 18.5} width="28" height="4.8" rx="2.4" fill="#0b2018" stroke={efVal < restTh ? '#ef4444' : '#fff7'} strokeWidth={efVal < restTh ? '0.9' : '0.6'} />
+                <rect x={cx - 23} y={cy + 18.5} width={(28 * efVal) / 100} height="4.8" rx="2.4" fill={efc} />
                 <text
                   x={cx + 7}
-                  y={cy + 23}
+                  y={cy + 23.2}
                   fontSize="8"
-                  fontWeight="700"
+                  fontWeight="800"
                   fontFamily="Sarabun"
-                  fill={efc}
+                  fill={efVal < restTh ? '#fca5a5' : efc}
                   stroke="#0b2018"
                   strokeWidth="2.2"
                   paintOrder="stroke"

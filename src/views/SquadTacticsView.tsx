@@ -40,6 +40,95 @@ export const SquadTacticsView: React.FC<{
     .filter((q) => !starters.includes(q))
     .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov);
   const avgFit = Math.round(starters.reduce((s, q) => s + (q.fit ?? 100), 0) / (starters.length || 1));
+  const restNeededStarters = starters.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) < 65);
+  const tiredWarningStarters = starters.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) >= 65 && Math.round(q.fit ?? 100) < 75);
+
+  const getStaminaMeta = (fitRaw: number | undefined) => {
+    const f = clamp(Math.round(fitRaw ?? 100), 0, 100);
+    if (f < 65) {
+      return {
+        f,
+        label: 'ควรพัก',
+        shortLabel: 'ควรพัก',
+        txtCls: 'text-[#dc2626] dark:text-[#f87171]',
+        pillCls: 'bg-rose-500/15 text-[#dc2626] dark:text-[#fca5a5] border-rose-500/35',
+        rowTint: 'bg-rose-500/[0.08] border-rose-500/45 hover:border-rose-500/75',
+        needRest: true
+      };
+    }
+    if (f < 75) {
+      return {
+        f,
+        label: 'เริ่มล้า',
+        shortLabel: 'ล้า',
+        txtCls: 'text-[#b45309] dark:text-[#fbbf24]',
+        pillCls: 'bg-amber-500/15 text-[#b45309] dark:text-[#fcd34d] border-amber-500/35',
+        rowTint: 'bg-amber-500/[0.06] border-amber-500/35 hover:border-amber-500/70',
+        needRest: false
+      };
+    }
+    if (f < 86) {
+      return {
+        f,
+        label: 'พร้อม',
+        shortLabel: 'พร้อม',
+        txtCls: 'text-[#15803d] dark:text-[#4ade80]',
+        pillCls: 'bg-emerald-500/12 text-[#15803d] dark:text-[#4ade80] border-emerald-500/30',
+        rowTint: '',
+        needRest: false
+      };
+    }
+    return {
+      f,
+      label: 'ฟิตเต็ม',
+      shortLabel: 'ฟิต',
+      txtCls: 'text-[var(--g)]',
+      pillCls: 'bg-emerald-500/15 text-[var(--g)] border-emerald-500/35',
+      rowTint: '',
+      needRest: false
+    };
+  };
+
+  const restTiredStarters = () => {
+    const threshold = restNeededStarters.length > 0 ? 65 : 75;
+    const swappedPairs: string[] = [];
+    SFX.tap();
+    onUpdateState((draft) => {
+      const t = draft.teams[draft.me];
+      const curXi = xi(t);
+      const nextLu = curXi.map((q) => q.n);
+      const usedNames = new Set(nextLu);
+      const freshPool = t.sq
+        .filter((q) => !usedNames.has(q.n) && q.inj === 0 && (q.sus || 0) === 0 && (q.fit ?? 100) >= 75)
+        .sort((a, b) => (b.fit ?? 100) * 0.55 + b.ov - ((a.fit ?? 100) * 0.55 + a.ov));
+
+      curXi.forEach((starter, idx) => {
+        if (starter.inj > 0 || (starter.sus || 0) > 0) return;
+        const sf = Math.round(starter.fit ?? 100);
+        if (sf >= threshold) return;
+        const subIdx = freshPool.findIndex((b) =>
+          starter.pos === 'GK' ? b.pos === 'GK' : b.pos === starter.pos
+        );
+        const fallbackIdx =
+          subIdx >= 0
+            ? subIdx
+            : starter.pos === 'GK'
+              ? -1
+              : freshPool.findIndex((b) => b.pos !== 'GK');
+        if (fallbackIdx >= 0) {
+          const replacement = freshPool.splice(fallbackIdx, 1)[0];
+          nextLu[idx] = replacement.n;
+          swappedPairs.push(`${starter.n.split(' ')[0]}→${replacement.n.split(' ')[0]}`);
+        }
+      });
+      t.lu = nextLu;
+    });
+    if (swappedPairs.length > 0) {
+      onToast(`🛌 พักตัวล้า ${swappedPairs.length} ตำแหน่ง (${swappedPairs.slice(0, 2).join(', ')}${swappedPairs.length > 2 ? '…' : ''})`);
+    } else {
+      onToast('ยังไม่มีตัวสำรองที่ฟิตพอสลับในตำแหน่งที่ล้า');
+    }
+  };
 
   const dragRef = useRef<{
     player: Player;
@@ -462,13 +551,15 @@ export const SquadTacticsView: React.FC<{
   };
 
   const renderPlayerRow = (q: Player, slotSp?: SubRole) => {
-    const f = Math.round(q.fit ?? 100);
-    const fCol = q.inj > 0 || (q.sus || 0) > 0 ? 'var(--red)' : f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
+    const stMeta = getStaminaMeta(q.fit);
+    const f = stMeta.f;
     const isSource = dragUi?.player.n === q.n;
     const isTarget = dropTarget?.name === q.n && dragUi?.player.n !== q.n;
     const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
     const pn = slotSp ? pen(q.ro, slotSp) : 0;
     const no = getShirtNo(me, q);
+    const unavailable = q.inj > 0 || (q.sus || 0) > 0;
+    const starterWarnCls = slotSp && !unavailable ? stMeta.rowTint : '';
 
     return (
       <div
@@ -494,7 +585,7 @@ export const SquadTacticsView: React.FC<{
               ? 'opacity-45 border-dashed border-[var(--lamp)] bg-[var(--surface-2)]'
               : isMe
                 ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] ring-1 ring-[var(--lamp)]/45'
-                : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
+                : starterWarnCls || 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
         } ${dragUi ? 'cursor-grabbing' : 'cursor-pointer'}`}
       >
         <span
@@ -531,22 +622,37 @@ export const SquadTacticsView: React.FC<{
             <span className="ml-1 text-[8.5px] text-[var(--mut)]">({q.ro}{pn === 2 ? ' ⚠️' : ''})</span>
           )}
         </span>
-        {/* Energy Bar + % (Always Visible on All Screens) */}
-        <div className="flex flex-col items-end justify-center gap-0.5 shrink-0 w-10 sm:w-12 mland:w-9" title={`พลังงาน ${f}%`}>
+        {/* Clear Red-to-Green Stamina Gauge & Rotation Status */}
+        <div
+          className="flex flex-col items-stretch justify-center gap-0.5 shrink-0 w-[64px] sm:w-[74px] mland:w-[56px]"
+          title={`ความฟิต ${f}% (${stMeta.label})`}
+        >
           {(q.sus || 0) > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
+            <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
               <StatIconBadge kind="red" count={q.sus} size="xs" />
               {(q.sus || 0) <= 1 && <span>แบน</span>}
             </span>
           ) : q.inj > 0 ? (
-            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">🩹{q.inj}น</span>
+            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular text-right">🩹พัก {q.inj}น</span>
           ) : (
             <>
-              <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular leading-none" style={{ color: fCol }}>
-                ⚡{f}%
-              </span>
-              <div className="w-full h-1.5 mland:h-1 rounded-full bg-[var(--surface)] border border-[var(--line)]/50 overflow-hidden">
-                <div className="h-full rounded-full transition-all" style={{ width: `${clamp(f, 4, 100)}%`, background: fCol }} />
+              <div className="flex items-center justify-between gap-0.5 leading-none tabular">
+                <span className={`text-[8.5px] mland:text-[7.5px] font-extrabold truncate ${stMeta.txtCls}`}>
+                  {stMeta.shortLabel}
+                </span>
+                <span className={`text-[9.5px] mland:text-[8px] font-extrabold ${stMeta.txtCls}`}>
+                  {f}%
+                </span>
+              </div>
+              <div className="w-full h-1.5 mland:h-1 rounded-full bg-gradient-to-r from-rose-500/20 via-amber-400/20 to-emerald-500/20 border border-[var(--line)]/55 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${clamp(f, 6, 100)}%`,
+                    background: 'linear-gradient(90deg, #ef4444 0%, #f59e0b 52%, #10b981 100%)',
+                    backgroundSize: `${10000 / Math.max(f, 8)}% 100%`
+                  }}
+                />
               </div>
             </>
           )}
@@ -602,7 +708,17 @@ export const SquadTacticsView: React.FC<{
           <span>⚔️{Math.round(r.at)}</span>
           <span>🛡️{Math.round(r.df)}</span>
           <span className="opacity-35">·</span>
-          <span>❤️{avgFit}%</span>
+          <span className={`font-bold ${avgFit >= 76 ? 'text-[var(--g)]' : avgFit >= 65 ? 'text-[#b45309] dark:text-[#fbbf24]' : 'text-[var(--red)]'}`}>
+            ⚡{avgFit}%
+          </span>
+          {restNeededStarters.length > 0 && (
+            <>
+              <span className="opacity-35">·</span>
+              <span className="text-[var(--red)] font-bold" title="จำนวนตัวจริงที่ความฟิตต่ำกว่า 65% แนะนำให้พักนัดถัดไป">
+                🔴ควรพัก {restNeededStarters.length}
+              </span>
+            </>
+          )}
           {offPosCount > 0 && (
             <>
               <span className="opacity-35">·</span>
@@ -629,6 +745,7 @@ export const SquadTacticsView: React.FC<{
                   state={state}
                   svgRef={pitchSvgRef}
                   showPositionZones={Boolean(pitchDragPreview)}
+                  subAlertFitTh={65}
                   dragSourceName={dragUi?.player.n || null}
                   dropTargetName={dropTarget?.name || null}
                   dragPreview={pitchDragPreview}
@@ -729,22 +846,53 @@ export const SquadTacticsView: React.FC<{
                     </button>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
-                  onClick={() => {
-                    SFX.tap();
-                    onUpdateState((d) => { d.teams[d.me].lu = null; });
-                    onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
-                  }}
-                  className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 border ${
-                    !me.lu
-                      ? 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
-                      : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
-                  }`}
-                >
-                  {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                    <button
+                      type="button"
+                      onClick={restTiredStarters}
+                      title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
+                      className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap transition-colors cursor-pointer border ${
+                        restNeededStarters.length > 0
+                          ? 'bg-rose-500/15 border-rose-500/45 text-[#dc2626] dark:text-[#fca5a5] hover:bg-rose-500 hover:text-white'
+                          : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                      }`}
+                    >
+                      🛌 พักตัวล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
+                    onClick={() => {
+                      SFX.tap();
+                      onUpdateState((d) => { d.teams[d.me].lu = null; });
+                      onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                    }}
+                    className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 border ${
+                      !me.lu
+                        ? 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
+                        : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
+                    }`}
+                  >
+                    {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
+                  </button>
+                </div>
+              </div>
+              {/* Compact Stamina Spectrum Legend */}
+              <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 mb-1 rounded-md bg-[var(--surface-2)]/70 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] shrink-0">
+                <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
+                <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
+                  <span className="inline-flex items-center gap-1 text-[#dc2626] dark:text-[#f87171] font-bold">
+                    <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[#b45309] dark:text-[#fbbf24] font-bold">
+                    <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[var(--g)] font-bold">
+                    <span className="w-2 h-2 rounded-full bg-[#10b981]" /> ≥75% พร้อม
+                  </span>
+                </div>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
                 {luTab !== 2 && (
@@ -778,6 +926,7 @@ export const SquadTacticsView: React.FC<{
                   team={me}
                   state={state}
                   showPositionZones={false}
+                  subAlertFitTh={65}
                   onPlayerPointerDown={handlePlayerPointerDown}
                 />
               </div>
@@ -1306,15 +1455,15 @@ export const SquadTacticsView: React.FC<{
 
                   <div className="divide-y divide-[var(--line)]">
                     {listRows.map((q) => {
-                      const f = Math.round(q.fit ?? 100);
+                      const stMeta = getStaminaMeta(q.fit);
+                      const f = stMeta.f;
                       const isStarter = starters.includes(q);
                       const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
                       const no = getShirtNo(me, q);
                       const offerCount = isMgr ? getIncomingOffers(state).filter((o) => o.n === q.n).length : 0;
                       const con = ensureCon(q);
                       const wg = con.wg;
-                      const fitBarCol = f >= 75 ? 'var(--g)' : f >= 50 ? 'var(--lamp)' : 'var(--red)';
-                      const fitTxtCls = f >= 75 ? 'text-[var(--g)]' : f >= 50 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--red)]';
+                      const fitTxtCls = stMeta.txtCls;
                       const isSelected = selectedSet.has(q.n);
                       const expiringSoon = !q.loan && con.yr <= 1;
 
@@ -1404,6 +1553,11 @@ export const SquadTacticsView: React.FC<{
                                     · {con.yr <= 0 ? 'หมดสัญญา!' : `สัญญา ${con.yr} ปี`}
                                   </span>
                                 )}
+                                {f < 75 && q.inj === 0 && (q.sus || 0) === 0 && (
+                                  <span className={`sm:hidden mland:hidden px-1 rounded text-[9px] font-bold ${stMeta.pillCls}`}>
+                                    {stMeta.label} {f}%
+                                  </span>
+                                )}
                               </div>
                             </button>
                           </div>
@@ -1423,11 +1577,21 @@ export const SquadTacticsView: React.FC<{
                             <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                           </div>
 
-                          <div className={`items-center gap-1 ${isMgr ? 'hidden sm:flex mland:flex' : 'flex'}`}>
-                            <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
+                          <div className={`flex-col justify-center gap-0.5 ${isMgr ? 'hidden sm:flex mland:flex' : 'flex'}`} title={`ความฟิต ${f}% (${stMeta.label})`}>
+                            <div className="flex items-center justify-between gap-1 text-[9.5px] mland:text-[8px] leading-none tabular">
+                              <span className={`font-bold truncate ${fitTxtCls}`}>{stMeta.shortLabel}</span>
+                              <span className={`font-extrabold ${fitTxtCls}`}>{f}%</span>
                             </div>
-                            <span className={`text-[10px] mland:text-[8.5px] font-bold tabular w-7 text-right ${fitTxtCls}`}>{f}%</span>
+                            <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-rose-500/20 via-amber-400/20 to-emerald-500/20 border border-[var(--line)]/50 overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${clamp(f, 6, 100)}%`,
+                                  background: 'linear-gradient(90deg, #ef4444 0%, #f59e0b 52%, #10b981 100%)',
+                                  backgroundSize: `${10000 / Math.max(f, 8)}% 100%`
+                                }}
+                              />
+                            </div>
                           </div>
 
                           <div className={`text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] items-center justify-center gap-1 ${isMgr ? 'hidden lg:flex mland:hidden' : 'flex'}`}>

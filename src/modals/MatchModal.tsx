@@ -7314,30 +7314,14 @@ export const MatchModal: React.FC<{
 
                             {/* Relocated Halftime Controls & Team Talk Sidebar Beside the Pitch */}
                             <div className="w-[162px] sm:w-[196px] lg:w-[218px] mland:w-[146px] shrink-0 bg-[#082414]/95 border-l border-white/15 p-2 sm:p-2.5 mland:p-1.5 flex flex-col justify-between gap-2 mland:gap-1.5 text-white overflow-y-auto">
-                              {/* Top: Halftime Score & Half Summary */}
+                              {/* Top: First Half Stats Summary (score already shown in top header) */}
                               <div className="space-y-2 mland:space-y-1">
                                 <div className="p-2 mland:p-1.5 rounded-xl bg-white/6 border border-white/12 space-y-1.5 mland:space-y-1">
-                                  <div className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px] font-bold text-[#fde047]">
-                                    <span>☕ จบครึ่งแรก</span>
-                                    <span className="tabular font-black text-xs mland:text-[10px] text-white">{gh} - {ga}</span>
+                                  <div className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px] font-bold text-[#fde047] pb-1 border-b border-white/10">
+                                    <span>📊 สรุปครึ่งแรก</span>
+                                    <span className="text-[9px] mland:text-[7.5px] text-white/60 font-semibold">45&apos;</span>
                                   </div>
-                                  <div className="space-y-1 text-[10px] mland:text-[8.5px] text-white/85">
-                                    <div className="flex items-center justify-between gap-1 min-w-0">
-                                      <span className="inline-flex items-center gap-1 min-w-0 truncate">
-                                        <ClubCrest name={homeOrig.name} size={12} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-                                        <span className="truncate">{homeOrig.name}</span>
-                                      </span>
-                                      <span className="font-extrabold tabular shrink-0">{gh}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-1 min-w-0">
-                                      <span className="inline-flex items-center gap-1 min-w-0 truncate">
-                                        <ClubCrest name={awayOrig.name} size={12} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-                                        <span className="truncate">{awayOrig.name}</span>
-                                      </span>
-                                      <span className="font-extrabold tabular shrink-0">{ga}</span>
-                                    </div>
-                                  </div>
-                                  <div className="pt-1 border-t border-white/10 grid grid-cols-1 gap-0.5 text-[9.5px] mland:text-[8px] text-white/75 tabular">
+                                  <div className="grid grid-cols-1 gap-0.5 text-[9.5px] mland:text-[8px] text-white/75 tabular">
                                     <div className="flex justify-between">
                                       <span>ครองบอล</span>
                                       <span className="font-bold text-white">{matchStats.possH}% - {100 - matchStats.possH}%</span>
@@ -7345,6 +7329,10 @@ export const MatchModal: React.FC<{
                                     <div className="flex justify-between">
                                       <span>โอกาสยิง</span>
                                       <span className="font-bold text-white">{matchStats.shotsH} - {matchStats.shotsA}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span>เข้ากรอบ</span>
+                                      <span className="font-bold text-white">{matchStats.onTargetH} - {matchStats.onTargetA}</span>
                                     </div>
                                     <div className="flex justify-between">
                                       <span>xG</span>
