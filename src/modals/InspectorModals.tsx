@@ -9,7 +9,6 @@ import { sortTable, teamStats } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
-import { PlayerBlessingEditor } from '../components/PlayerBlessingEditor';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -18,8 +17,7 @@ export const PlayerInspectorModal: React.FC<{
   onClose: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-  godBlessingEnabled?: boolean;
-}> = ({ player, team, state, onClose, onUpdateState, onToast, godBlessingEnabled = true }) => {
+}> = ({ player, team, state, onClose, onUpdateState, onToast }) => {
   const liveTeam = team ? state.teams[team.id] || team : null;
   const livePlayer = liveTeam
     ? liveTeam.sq.find((q) => q.n === player.n) || player
@@ -29,8 +27,8 @@ export const PlayerInspectorModal: React.FC<{
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [shirtNo, setShirtNo] = useState(String(currentNo));
-  const [inspectMode, setInspectMode] = useState<'info' | 'missions' | 'blessing'>('info');
-  const effectiveMode = inspectMode === 'blessing' && !godBlessingEnabled ? 'info' : inspectMode;
+  const [inspectMode, setInspectMode] = useState<'info' | 'missions'>('info');
+  const effectiveMode = inspectMode;
   const canDoMissions = isMyTeam || isMePlayer;
   const readyMissionCnt = canDoMissions ? countReadyMissions(livePlayer, isMePlayer ? state.p : null) : 0;
   const isCap = !!liveTeam && liveTeam.cap === livePlayer.n;
@@ -160,7 +158,7 @@ export const PlayerInspectorModal: React.FC<{
         </div>
 
         {/* Clean Segmented Sub-navigation */}
-        {(canDoMissions || godBlessingEnabled) && (
+        {canDoMissions && (
           <div className="shrink-0 px-4 py-2 mland:px-3 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)] flex items-center gap-1.5">
             <button
               type="button"
@@ -173,47 +171,21 @@ export const PlayerInspectorModal: React.FC<{
             >
               📊 ข้อมูล &amp; ค่าพลัง
             </button>
-            {canDoMissions && (
-              <button
-                type="button"
-                onClick={() => { SFX.tap(); setInspectMode('missions'); }}
-                className={`flex-1 sm:flex-initial px-3.5 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                  effectiveMode === 'missions'
-                    ? 'bg-[var(--g)] text-white shadow-xs'
-                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
-              >
-                🎯 ภารกิจ{readyMissionCnt ? ` (${readyMissionCnt})` : ''}
-              </button>
-            )}
-            {godBlessingEnabled && (
-              <button
-                type="button"
-                onClick={() => { SFX.tap(); setInspectMode('blessing'); }}
-                className={`flex-1 sm:flex-initial px-3.5 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
-                  effectiveMode === 'blessing'
-                    ? 'bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] shadow-xs'
-                    : 'text-[#8a5b00] dark:text-[var(--lamp)] hover:bg-[var(--lamp-soft)]'
-                }`}
-              >
-                ✨ พรของพระเจ้า
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setInspectMode('missions'); }}
+              className={`flex-1 sm:flex-initial px-3.5 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                effectiveMode === 'missions'
+                  ? 'bg-[var(--g)] text-white shadow-xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              🎯 ภารกิจ{readyMissionCnt ? ` (${readyMissionCnt})` : ''}
+            </button>
           </div>
         )}
 
-        {effectiveMode === 'blessing' ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
-            <PlayerBlessingEditor
-              player={livePlayer}
-              team={liveTeam}
-              state={state}
-              onUpdateState={onUpdateState}
-              onToast={onToast}
-              onSaved={() => setInspectMode('info')}
-            />
-          </div>
-        ) : effectiveMode === 'missions' ? (
+        {effectiveMode === 'missions' && canDoMissions ? (
           <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
             <PlayerMissionsPanel
               player={livePlayer}

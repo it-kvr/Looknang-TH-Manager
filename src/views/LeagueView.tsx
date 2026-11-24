@@ -21,7 +21,8 @@ export const LeagueView: React.FC<{
 }> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
-  const sub = state.v === 'c' ? 4 : (state.tv ?? 0);
+  const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
+  const sub = rawSub === 5 ? 2 : rawSub;
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
 
@@ -506,66 +507,18 @@ export const LeagueView: React.FC<{
     <div className="flex-1 min-h-0 grid grid-cols-[1.42fr_0.88fr] gap-2.5 mland:gap-2 overflow-hidden">
       <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
-          {/* Compact League Standings Header Strip with Direct League Switcher */}
-          <div className="shrink-0 flex items-center justify-between gap-2 px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/70">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <div className="relative inline-flex items-center min-w-0">
-                <select
-                  aria-label="เลือกลีกในตารางคะแนน"
-                  value={vt}
-                  onChange={(e) => {
-                    const nextTier = Number(e.target.value);
-                    SFX.tap();
-                    onUpdateState((d) => { d.lg = nextTier; });
-                  }}
-                  className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl mland:rounded-lg pl-2.5 pr-7 mland:pl-2 mland:pr-5 py-1 mland:py-0.5 font-bold text-xs sm:text-sm mland:text-[10.5px] text-[var(--ink)] cursor-pointer truncate max-w-[225px] sm:max-w-none transition-colors shadow-2xs"
-                >
-                  {[0, 1, 2].map((tierIdx) => (
-                    <option key={tierIdx} value={tierIdx}>
-                      {TN[tierIdx]}{tierIdx === me.tier ? ' ★' : ''}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--mut)] pointer-events-none absolute right-2 mland:right-1.5 top-1/2 -translate-y-1/2" />
-              </div>
-              {vt === me.tier && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#7a4f00] dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold tabular shrink-0">
-                  <span>★</span>
-                  <span>อันดับ {myRank} · {me.pts} แต้ม</span>
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              {vt !== me.tier && (
-                <button
-                  type="button"
-                  title="กลับลีกของฉัน"
-                  aria-label="กลับลีกของฉัน"
-                  onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer hover:brightness-105"
-                >
-                  <span>↩</span>
-                  <span>กลับลีกฉัน ★</span>
-                </button>
-              )}
-              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular hidden sm:inline mland:hidden">
-                นัดที่ {Math.min(state.md, state.fx.length)}/{state.fx.length}
-              </span>
-            </div>
-          </div>
-
           {/* Table Column Header */}
-          <div className="shrink-0 grid grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 bg-[var(--surface-2)]/90 text-[10px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
+          <div className="shrink-0 grid grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 bg-[var(--surface-2)]/90 text-[9.5px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
             <span className="text-center">#</span>
             <span />
             <span className="truncate">สโมสร</span>
             <span className="text-center text-[9px] sm:text-[11px] mland:text-[8px] whitespace-nowrap" title="ฟอร์ม 5 นัดหลังสุด">5 นัด</span>
-            <span className="text-center" title="แข่ง">น</span>
-            <span className="text-center" title="ชนะ">ช</span>
-            <span className="text-center" title="เสมอ">ส</span>
-            <span className="text-center" title="แพ้">พ</span>
-            <span className="text-center" title="ประตูได้-เสีย">+/-</span>
-            <span className="text-center text-[var(--ink)]">แต้ม</span>
+            <span className="text-center whitespace-nowrap">แข่ง</span>
+            <span className="text-center whitespace-nowrap">ชนะ</span>
+            <span className="text-center whitespace-nowrap">เสมอ</span>
+            <span className="text-center whitespace-nowrap">แพ้</span>
+            <span className="text-center whitespace-nowrap" title="ประตูได้-เสีย">+/-</span>
+            <span className="text-center text-[var(--ink)] whitespace-nowrap">แต้ม</span>
           </div>
 
           {/* Table Body */}
@@ -586,14 +539,12 @@ export const LeagueView: React.FC<{
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
-                  className={`w-full grid grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${
-                    isMe
-                      ? 'bg-[var(--lamp-soft)]/55 hover:bg-[var(--lamp-soft)]/80'
-                      : isPromo
-                        ? 'bg-[var(--g-soft)]/25 hover:bg-[var(--g-soft)]/55'
-                        : isRel
-                          ? 'bg-[var(--red-soft)]/20 hover:bg-[var(--red-soft)]/45'
-                          : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
+                  className={`w-full grid grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${
+                    isPromo
+                      ? 'bg-[var(--g-soft)]/25 hover:bg-[var(--g-soft)]/55'
+                      : isRel
+                        ? 'bg-[var(--red-soft)]/20 hover:bg-[var(--red-soft)]/45'
+                        : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
                   }`}
                 >
                   <span className={`text-center tabular font-bold text-[10px] mland:text-[9px] rounded-md py-0.5 leading-none ${rankBadge}`}>
@@ -655,18 +606,18 @@ export const LeagueView: React.FC<{
             )}
             <span className="inline-flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--lamp)] text-[#261900] text-[7.5px] font-black">★</span>
-              <span>ทีมคุณ</span>
+              <span>ทีมคุณ (อันดับ {myRank} · {me.pts} แต้ม)</span>
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-              <span>ช</span>
+              <span>ชนะ</span>
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block ml-0.5" />
-              <span>ส</span>
+              <span>เสมอ</span>
               <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block ml-0.5" />
-              <span>พ (5 นัด)</span>
+              <span>แพ้ (5 นัด)</span>
             </span>
           </div>
-          <span className="opacity-80">แตะทีมเพื่อส่อง</span>
+          <span className="opacity-80 tabular">นัดที่ {Math.min(state.md, state.fx.length)}/{state.fx.length} · แตะทีมเพื่อส่อง</span>
         </div>
 
       </div>
@@ -767,52 +718,7 @@ export const LeagueView: React.FC<{
     );
   };
 
-  const renderPlayerStats = () => {
-    const ts = state.teams.filter((t) => t.tier === vt);
-    const ps = ts.flatMap((t) => t.sq.map((q) => ({ q, t })));
-    const board = (ic: React.ReactNode, title: string, valFn: (q: Player) => number, fmt: (q: Player) => React.ReactNode, filterFn?: (q: Player) => boolean) => {
-      const list = ps.filter((x) => (!filterFn || filterFn(x.q)) && valFn(x.q) > 0).sort((a, b) => valFn(b.q) - valFn(a.q) || b.q.ov - a.q.ov).slice(0, 5);
-      return (
-        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
-          <h4 className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center gap-1.5">{ic} <span>{title}</span></h4>
-          {list.length ? (
-            <div className="space-y-1">
-              {list.map((x, idx) => (
-                <button
-                  key={`${x.t.id}-${x.q.n}`}
-                  type="button"
-                  onClick={() => onInspectPlayer(x.q, x.t)}
-                  className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
-                >
-                  <span className={`w-4 text-[11px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
-                  <PlayerFace player={x.q} team={x.t} state={state} size={26} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
-                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">{x.t.name} · {x.q.pos}</div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center">{fmt(x.q)}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="text-[11px] text-[var(--mut)]">ยังไม่มีข้อมูล</p>
-          )}
-        </div>
-      );
-    };
-    return (
-      <div className="grid grid-cols-3 gap-2 mland:gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 content-start">
-        {board(<StatIconBadge kind="goal" size="sm" />, 'ดาวซัลโว', (q) => q.sg || 0, (q) => ((q.sg || 0) > 1 ? <StatIconBadge kind="goal" count={q.sg} size="sm" /> : `${q.sg}`))}
-        {board(<StatIconBadge kind="assist" size="sm" />, 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => ((q.sa || 0) > 1 ? <StatIconBadge kind="assist" count={q.sa} size="sm" /> : `${q.sa}`))}
-        {board('✨', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
-        {board(<StatIconBadge kind="save" size="sm" />, 'คลีนชีต (ผู้รักษาประตู)', (q) => q.cs || 0, (q) => ((q.cs || 0) > 1 ? <StatIconBadge kind="save" count={q.cs} size="sm" /> : `${q.cs}`), (q) => q.pos === 'GK')}
-        {board('💎', 'ค่าตัวสูงสุด', vlu, (q) => fmtMoneyNum(vlu(q)))}
-        {board('⭐', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`)}
-      </div>
-    );
-  };
-
-  const renderLeagueAwards = () => {
+  const renderStatsAndAwards = () => {
     const ts = state.teams.filter((t) => t.tier === vt);
     const ps = ts.flatMap((t) => t.sq.map((q) => ({ q, t })));
     const totalPlayedInTier = ts.reduce((s, t) => s + t.p, 0);
@@ -971,12 +877,43 @@ export const LeagueView: React.FC<{
       }
     ];
 
+    const board = (ic: React.ReactNode, title: string, valFn: (q: Player) => number, fmt: (q: Player) => React.ReactNode, filterFn?: (q: Player) => boolean) => {
+      const list = ps.filter((x) => (!filterFn || filterFn(x.q)) && valFn(x.q) > 0).sort((a, b) => valFn(b.q) - valFn(a.q) || b.q.ov - a.q.ov).slice(0, 5);
+      return (
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
+          <h4 className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center gap-1.5">{ic} <span>{title}</span></h4>
+          {list.length ? (
+            <div className="space-y-1">
+              {list.map((x, idx) => (
+                <button
+                  key={`${x.t.id}-${x.q.n}`}
+                  type="button"
+                  onClick={() => onInspectPlayer(x.q, x.t)}
+                  className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
+                >
+                  <span className={`w-4 text-[11px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
+                  <PlayerFace player={x.q} team={x.t} state={state} size={26} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">{x.t.name} · {x.q.pos}</div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center">{fmt(x.q)}</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[11px] text-[var(--mut)]">ยังไม่มีข้อมูล</p>
+          )}
+        </div>
+      );
+    };
+
     return (
       <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-        {/* Clean Context Strip */}
+        {/* Unified Context Strip */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm mland:text-[11px]">
-            <span className="font-bold text-[var(--ink)]">🎖️ ทำเนียบรางวัลประจำลีก</span>
+            <span className="font-bold text-[var(--ink)]">⭐ สถิติและรางวัลส่วนตัวนักเตะ</span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
             <span className="text-[var(--mut)] font-medium">{TN[vt]}</span>
           </div>
@@ -985,129 +922,142 @@ export const LeagueView: React.FC<{
           </div>
         </div>
 
-        {/* 3-Column Awards Showcase */}
-        <div className="grid grid-cols-3 gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-y-auto pr-0.5 items-stretch">
-          {awards.map((aw) => {
-            const leader = aw.entries[0];
-            const runners = aw.entries.slice(1);
-            const leaderIsMe = leader?.t.id === state.me;
+        {/* Unified Scrollable Body: Awards Showcase + Stat Leaderboards */}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-3 mland:space-y-2">
+          {/* 3-Column Awards Showcase */}
+          <div className="grid grid-cols-3 gap-2.5 mland:gap-2 items-stretch">
+            {awards.map((aw) => {
+              const leader = aw.entries[0];
+              const runners = aw.entries.slice(1);
+              const leaderIsMe = leader?.t.id === state.me;
 
-            return (
-              <section
-                key={aw.id}
-                className="p-4 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-3 mland:gap-2"
-              >
-                <div className="space-y-3 mland:space-y-2">
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base mland:text-sm leading-none" aria-hidden="true">{aw.icon}</span>
-                        <h3 className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate">{aw.title}</h3>
-                      </div>
-                      <p className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">{aw.enTitle} · {aw.criteria}</p>
-                    </div>
-                  </div>
-
-                  {/* Current #1 Leader Spotlight */}
-                  {leader ? (
-                    <button
-                      type="button"
-                      onClick={() => { SFX.tap(); onInspectPlayer(leader.q, leader.t); }}
-                      className={`w-full p-3 mland:p-2 rounded-xl border text-left cursor-pointer transition-colors hover:border-[var(--g)] ${
-                        leaderIsMe ? 'bg-[var(--lamp-soft)]/65 border-[var(--lamp)]' : aw.accentBg
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 mland:gap-2">
-                        <div className="shrink-0">
-                          <PlayerFace player={leader.q} team={leader.t} state={state} size={46} />
+              return (
+                <section
+                  key={aw.id}
+                  className="p-3.5 sm:p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2.5 mland:gap-1.5"
+                >
+                  <div className="space-y-2.5 mland:space-y-1.5">
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base mland:text-sm leading-none" aria-hidden="true">{aw.icon}</span>
+                          <h3 className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate">{aw.title}</h3>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1">
-                              <span>อันดับ 1</span>
-                              {leaderIsMe && (
-                                <span
-                                  title="ทีมของคุณ"
-                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black"
-                                >
-                                  ★
-                                </span>
-                              )}
-                            </span>
-                            <span className={`text-sm sm:text-base mland:text-xs font-extrabold tabular-nums shrink-0 ${aw.accentText}`}>
-                              {leader.primaryValue}
-                            </span>
-                          </div>
-                          <div className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate mt-0.5">
-                            {leader.q.n}
-                          </div>
-                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] min-w-0">
-                            <ClubCrest name={leader.t.name} size={14} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
-                            <span className="truncate font-medium text-[var(--ink)]/85">{leader.t.name}</span>
-                            <span aria-hidden="true">·</span>
-                            <span className="shrink-0">{leader.q.ro}</span>
-                          </div>
-                        </div>
+                        <p className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">{aw.enTitle} · {aw.criteria}</p>
                       </div>
-                      <div className="mt-2.5 mland:mt-1.5 pt-2 mland:pt-1 border-t border-[var(--line)]/70 text-[11px] mland:text-[9px] text-[var(--mut)] tabular-nums">
-                        {leader.breakdown}
-                      </div>
-                    </button>
-                  ) : (
-                    <div className="p-4 mland:p-2.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] text-center space-y-1">
-                      <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)]">ยังไม่มีผู้ครองอันดับ 1</div>
-                      <p className="text-[11px] mland:text-[9px] text-[var(--mut)] leading-snug">{aw.emptyText}</p>
                     </div>
-                  )}
-                </div>
 
-                {/* Contenders #2 - #5 */}
-                <div className="border-t border-[var(--line)] pt-2.5 mland:pt-1.5 space-y-1 mland:space-y-0.5">
-                  <div className="text-[11px] mland:text-[9px] font-semibold text-[var(--mut)] mb-1">
-                    ผู้ท้าชิงอันดับถัดไป
-                  </div>
-                  {runners.length ? (
-                    <div className="divide-y divide-[var(--line)]/50">
-                      {runners.map((entry, idx) => {
-                        const isMine = entry.t.id === state.me;
-                        return (
-                          <button
-                            key={`${aw.id}-${entry.t.id}-${entry.q.n}`}
-                            type="button"
-                            onClick={() => { SFX.tap(); onInspectPlayer(entry.q, entry.t); }}
-                            className={`w-full min-h-[40px] mland:min-h-[28px] flex items-center gap-2 mland:gap-1.5 px-2 py-1.5 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
-                              isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/75'
-                            }`}
-                          >
-                            <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-center shrink-0">
-                              {idx + 2}
-                            </span>
-                            <ClubCrest name={entry.t.name} size={16} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] truncate">
-                                {entry.q.n}
-                              </div>
-                              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                                {entry.t.name} · {entry.q.ro}
-                              </div>
+                    {/* Current #1 Leader Spotlight */}
+                    {leader ? (
+                      <button
+                        type="button"
+                        onClick={() => { SFX.tap(); onInspectPlayer(leader.q, leader.t); }}
+                        className={`w-full p-2.5 sm:p-3 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-colors hover:border-[var(--g)] ${
+                          leaderIsMe ? 'bg-[var(--lamp-soft)]/65 border-[var(--lamp)]' : aw.accentBg
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 mland:gap-2">
+                          <div className="shrink-0">
+                            <PlayerFace player={leader.q} team={leader.t} state={state} size={42} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1">
+                                <span>อันดับ 1</span>
+                                {leaderIsMe && (
+                                  <span
+                                    title="ทีมของคุณ"
+                                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black"
+                                  >
+                                    ★
+                                  </span>
+                                )}
+                              </span>
+                              <span className={`text-sm sm:text-base mland:text-xs font-extrabold tabular-nums shrink-0 ${aw.accentText}`}>
+                                {leader.primaryValue}
+                              </span>
                             </div>
-                            <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">
-                              {entry.runnerValue}
-                            </span>
-                          </button>
-                        );
-                      })}
+                            <div className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate mt-0.5">
+                              {leader.q.n}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] min-w-0">
+                              <ClubCrest name={leader.t.name} size={14} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
+                              <span className="truncate font-medium text-[var(--ink)]/85">{leader.t.name}</span>
+                              <span aria-hidden="true">·</span>
+                              <span className="shrink-0">{leader.q.ro}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-2 mland:mt-1 pt-1.5 mland:pt-1 border-t border-[var(--line)]/70 text-[11px] mland:text-[9px] text-[var(--mut)] tabular-nums">
+                          {leader.breakdown}
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="p-3.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] text-center space-y-1">
+                        <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)]">ยังไม่มีผู้ครองอันดับ 1</div>
+                        <p className="text-[11px] mland:text-[9px] text-[var(--mut)] leading-snug">{aw.emptyText}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Contenders #2 - #5 */}
+                  <div className="border-t border-[var(--line)] pt-2 mland:pt-1.5 space-y-1 mland:space-y-0.5">
+                    <div className="text-[11px] mland:text-[9px] font-semibold text-[var(--mut)] mb-1">
+                      ผู้ท้าชิงอันดับถัดไป
                     </div>
-                  ) : (
-                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-2">
-                      {leader ? 'ยังไม่มีผู้ท้าชิงอันดับรอง' : 'รอกรรมการบันทึกสถิติการแข่งขัน'}
-                    </p>
-                  )}
-                </div>
-              </section>
-            );
-          })}
+                    {runners.length ? (
+                      <div className="divide-y divide-[var(--line)]/50">
+                        {runners.map((entry, idx) => {
+                          const isMine = entry.t.id === state.me;
+                          return (
+                            <button
+                              key={`${aw.id}-${entry.t.id}-${entry.q.n}`}
+                              type="button"
+                              onClick={() => { SFX.tap(); onInspectPlayer(entry.q, entry.t); }}
+                              className={`w-full min-h-[36px] mland:min-h-[26px] flex items-center gap-2 mland:gap-1.5 px-2 py-1 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
+                                isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/75'
+                              }`}
+                            >
+                              <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-center shrink-0">
+                                {idx + 2}
+                              </span>
+                              <ClubCrest name={entry.t.name} size={16} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] truncate">
+                                  {entry.q.n}
+                                </div>
+                                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                                  {entry.t.name} · {entry.q.ro}
+                                </div>
+                              </div>
+                              <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">
+                                {entry.runnerValue}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-1.5">
+                        {leader ? 'ยังไม่มีผู้ท้าชิงอันดับรอง' : 'รอกรรมการบันทึกสถิติการแข่งขัน'}
+                      </p>
+                    )}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+
+          {/* 6 Stat Leaderboards */}
+          <div className="grid grid-cols-3 gap-2 mland:gap-1.5 content-start">
+            {board(<StatIconBadge kind="goal" size="sm" />, 'ดาวซัลโว', (q) => q.sg || 0, (q) => ((q.sg || 0) > 1 ? <StatIconBadge kind="goal" count={q.sg} size="sm" /> : `${q.sg}`))}
+            {board(<StatIconBadge kind="assist" size="sm" />, 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => ((q.sa || 0) > 1 ? <StatIconBadge kind="assist" count={q.sa} size="sm" /> : `${q.sa}`))}
+            {board('✨', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
+            {board(<StatIconBadge kind="save" size="sm" />, 'คลีนชีต (ผู้รักษาประตู)', (q) => q.cs || 0, (q) => ((q.cs || 0) > 1 ? <StatIconBadge kind="save" count={q.cs} size="sm" /> : `${q.cs}`), (q) => q.pos === 'GK')}
+            {board('💎', 'ค่าตัวสูงสุด', vlu, (q) => fmtMoneyNum(vlu(q)))}
+            {board('⭐', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`)}
+          </div>
         </div>
       </div>
     );
@@ -1122,10 +1072,9 @@ export const LeagueView: React.FC<{
             [
               ['🏆', 'ตาราง', 'ตาราง'],
               ['📊', 'พลัง', 'พลังทีม'],
-              ['⭐', 'สถิติ', 'สถิติ'],
+              ['⭐', 'สถิติ', 'สถิติ & รางวัล'],
               ['📅', 'ปฏิทิน', 'ปฏิทิน'],
-              ['🏅', 'ถ้วย', 'บอลถ้วย'],
-              ['🎖️', 'รางวัล', 'รางวัล']
+              ['🏅', 'ถ้วย', 'บอลถ้วย']
             ] as const
           ).map(([ic, _shortLbl, fullLbl], idx) => (
             <button
@@ -1150,8 +1099,46 @@ export const LeagueView: React.FC<{
           ))}
         </div>
 
-        {/* League Tier Switcher for stats/comparison/awards; Standings switches directly in its table header */}
-        {sub === 1 || sub === 2 || sub === 5 ? (
+        {/* Left Header Slot: Standings puts Season label in front of League Switcher; Stats/Power use tier pills */}
+        {sub === 0 ? (
+          <div className="order-1 flex items-center gap-1.5 min-w-0 shrink">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0 whitespace-nowrap">
+              <span>🏆</span>
+              <span>ตารางคะแนน · ซีซั่น {state.season}</span>
+            </div>
+            <div className="relative inline-flex items-center min-w-0">
+              <select
+                aria-label="เลือกลีกในตารางคะแนน"
+                value={vt}
+                onChange={(e) => {
+                  const nextTier = Number(e.target.value);
+                  SFX.tap();
+                  onUpdateState((d) => { d.lg = nextTier; });
+                }}
+                className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl pl-2.5 pr-7 mland:pl-2 mland:pr-5 py-1 mland:py-0.5 font-bold text-xs mland:text-[10px] text-[var(--ink)] cursor-pointer truncate max-w-[175px] sm:max-w-none transition-colors shadow-xs"
+              >
+                {[0, 1, 2].map((tierIdx) => (
+                  <option key={tierIdx} value={tierIdx}>
+                    {TN[tierIdx]}{tierIdx === me.tier ? ' ★' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--mut)] pointer-events-none absolute right-2 mland:right-1.5 top-1/2 -translate-y-1/2" />
+            </div>
+            {vt !== me.tier && (
+              <button
+                type="button"
+                title="กลับลีกของฉัน"
+                aria-label="กลับลีกของฉัน"
+                onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
+                className="inline-flex items-center gap-1 px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer hover:brightness-105 whitespace-nowrap shrink-0 shadow-xs"
+              >
+                <span>↩</span>
+                <span>กลับลีกฉัน ★</span>
+              </button>
+            )}
+          </div>
+        ) : sub === 1 || sub === 2 ? (
           <div className="order-1 w-auto inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
             {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
               const isMyTier = idx === me.tier;
@@ -1183,23 +1170,16 @@ export const LeagueView: React.FC<{
           </div>
         ) : (
           <div className="order-1 flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
-            <span>{sub === 4 ? '🏅' : sub === 3 ? '📅' : '🏆'}</span>
-            <span>
-              {sub === 4
-                ? 'รายการแข่งขันบอลถ้วย'
-                : sub === 3
-                  ? 'โปรแกรมการแข่งขัน'
-                  : `ตารางคะแนน · ซีซั่น ${state.season}`}
-            </span>
+            <span>{sub === 4 ? '🏅' : '📅'}</span>
+            <span>{sub === 4 ? 'รายการแข่งขันบอลถ้วย' : 'โปรแกรมการแข่งขัน'}</span>
           </div>
         )}
       </div>
       {sub === 0 && renderStandings()}
       {sub === 1 && renderPowerComparison()}
-      {sub === 2 && renderPlayerStats()}
+      {sub === 2 && renderStatsAndAwards()}
       {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} />}
       {sub === 4 && <CupView state={state} onInspectTeam={onInspectTeam} />}
-      {sub === 5 && renderLeagueAwards()}
     </div>
   );
 };

@@ -444,7 +444,7 @@ export interface AppSettings {
   mute?: boolean;
   novib?: boolean;
   quick?: boolean;
-  matchSpeed?: 0.25 | 0.5 | 1 | 2 | 4;
+  matchSpeed?: 0.25 | 0.5 | 1 | 2 | 5;
   autoSkipMatch?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
@@ -454,7 +454,6 @@ export interface AppSettings {
   subAlertEnabled?: boolean;
   subAlertFitThreshold?: number;
   subAlertFormThreshold?: number;
-  godBlessingEnabled?: boolean;
 }
 
 export interface PlayerArchetype {

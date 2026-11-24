@@ -37,7 +37,6 @@ export default function App() {
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
-  const godBlessingEnabled = appSettings.godBlessingEnabled !== false;
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
 
@@ -86,7 +85,7 @@ export default function App() {
         return;
       }
       d.v = tab;
-      d.tv = tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 5 : 0) : 0;
+      d.tv = tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 2 : 0) : 0;
       d.sub = tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : 0) : 0;
       if (tab === 't') d.lg = d.teams[d.me].tier;
     });
@@ -841,7 +840,6 @@ export default function App() {
           onClose={() => setInspectPlayer(null)}
           onUpdateState={updateState}
           onToast={showToast}
-          godBlessingEnabled={godBlessingEnabled}
         />
       )}
 
@@ -875,12 +873,10 @@ export default function App() {
             setMenuStep('menu');
             setState(null);
           }}
-          onOpenGodBlessing={() => setShowGodBlessing(true)}
           onOpenSecretBoost={() => setShowSecretBoost(true)}
           onToast={showToast}
           onSettingsChange={(next) => {
             setAppSettings(next);
-            if (next.godBlessingEnabled === false) setShowGodBlessing(false);
           }}
         />
       )}
@@ -889,13 +885,13 @@ export default function App() {
         <SecretBoostModal
           state={state}
           onClose={() => setShowSecretBoost(false)}
-          onOpenGodBlessing={godBlessingEnabled ? () => setShowGodBlessing(true) : undefined}
+          onOpenGodBlessing={() => setShowGodBlessing(true)}
           onUpdateState={updateState}
           onToast={showToast}
         />
       )}
 
-      {showGodBlessing && godBlessingEnabled && (
+      {showGodBlessing && (
         <GodBlessingModal
           state={state}
           onClose={() => setShowGodBlessing(false)}

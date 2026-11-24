@@ -70,7 +70,7 @@ export const MatchModal: React.FC<{
   const [halftimeTalkUsed, setHalftimeTalkUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
-  const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 4>(() => getDefaultMatchSpeed(settings));
+  const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 5>(() => getDefaultMatchSpeed(settings));
   const [cineSlowMo, setCineSlowMo] = useState(true);
   const [showRunVectors, setShowRunVectors] = useState(true);
   const [showPositions, setShowPositions] = useState(true);
@@ -4460,7 +4460,7 @@ export const MatchModal: React.FC<{
       if (!w) return;
 
       if (!paused && !done && !simRef.current.done && w.phase !== 'halftime') {
-        const speedMul = speed === 4 ? 2.45 : speed === 2 ? 1.25 : speed === 0.5 ? 0.34 : speed === 0.25 ? 0.15 : 0.65;
+        const speedMul = speed === 5 ? 3.1 : speed === 2 ? 1.25 : speed === 0.5 ? 0.34 : speed === 0.25 ? 0.15 : 0.65;
 
         // Decay FX, banners & dramatic slow-mo timers in real time for key moments
         const isSlowShot =
@@ -4519,7 +4519,7 @@ export const MatchModal: React.FC<{
           });
 
           if (!sh.activeShot) {
-            sh.waitSec -= rawDt * (speedMul > 2 ? 1.15 : 1.0);
+            sh.waitSec -= rawDt * (speedMul > 2.6 ? 1.35 : speedMul > 2 ? 1.15 : 1.0);
             w.ball.x = 88.5;
             w.ball.y = 50;
             w.ball.z = 0;
@@ -4656,7 +4656,7 @@ export const MatchModal: React.FC<{
 
         // Smooth physical player movement + running stride + GK dive (slow-mo dampened during dramatic events)
         const isKickoffResetting = w.pendingSetPiece?.type === 'kickoff' && w.celebrateTimer <= 0;
-        const baseMoveScale = speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
+        const baseMoveScale = speedMul > 2.6 ? 1.85 : speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
         const moveScale = isKickoffResetting
           ? Math.max(1.9, baseMoveScale * 1.9)
           : slowActive
@@ -4715,7 +4715,7 @@ export const MatchModal: React.FC<{
 
         // VAR Review countdown, Set-piece wait countdown, or Ball physics progression
         if (w.varReview) {
-          w.varReview.waitSec = Math.max(0, w.varReview.waitSec - rawDt * (speedMul > 2 ? 1.1 : 1));
+          w.varReview.waitSec = Math.max(0, w.varReview.waitSec - rawDt * (speedMul > 2.6 ? 1.25 : speedMul > 2 ? 1.1 : 1));
           if (w.varReview.waitSec <= 0) {
             resolveVarReview(w, Math.max(1, curIntMin));
           }
@@ -4728,8 +4728,8 @@ export const MatchModal: React.FC<{
             spType === 'corner' ||
             (spType === 'freekick' && (w.pendingSetPiece.wallPlayers?.length || 0) > 0);
           const spRate = isImportantSetPiece
-            ? speedMul > 2.0 ? 0.95 : speedMul < 0.5 ? 0.65 : 0.85
-            : speedMul > 2.0 ? 1.3 : speedMul < 0.5 ? 0.65 : 0.85;
+            ? speedMul > 2.6 ? 1.1 : speedMul > 2.0 ? 0.95 : speedMul < 0.5 ? 0.65 : 0.85
+            : speedMul > 2.6 ? 1.55 : speedMul > 2.0 ? 1.3 : speedMul < 0.5 ? 0.65 : 0.85;
           w.pendingSetPiece.waitSec -= rawDt * spRate;
           if (spType !== 'kickoff') {
             w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec);
@@ -4761,8 +4761,10 @@ export const MatchModal: React.FC<{
           const b = w.ball;
           const ballRate = slowActive
             ? speedMul < 0.22 ? 0.13 : speedMul < 0.5 ? 0.19 : 0.24
-            : speedMul > 2.0
-              ? 1.48
+            : speedMul > 2.6
+              ? 1.8
+              : speedMul > 2.0
+                ? 1.48
               : speedMul > 1.0
                 ? 1.02
                 : speedMul < 0.22
@@ -5176,7 +5178,7 @@ export const MatchModal: React.FC<{
         : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
 
   const cycleMatchSpeed = () => {
-    const order: readonly (0.25 | 0.5 | 1 | 2 | 4)[] = [0.25, 0.5, 1, 2, 4];
+    const order: readonly (0.25 | 0.5 | 1 | 2 | 5)[] = [0.25, 0.5, 1, 2, 5];
     SFX.tap();
     setSpeed((cur) => order[(order.indexOf(cur) + 1) % order.length]);
   };

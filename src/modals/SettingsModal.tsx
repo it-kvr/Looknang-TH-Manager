@@ -11,11 +11,10 @@ export const SettingsModal: React.FC<{
   state: GameState;
   onClose: () => void;
   onExitToMenu: () => void;
-  onOpenGodBlessing: () => void;
   onOpenSecretBoost: () => void;
   onToast: (msg: string) => void;
   onSettingsChange?: (next: AppSettings) => void;
-}> = ({ state, onClose, onExitToMenu, onOpenGodBlessing, onOpenSecretBoost, onToast, onSettingsChange }) => {
+}> = ({ state, onClose, onExitToMenu, onOpenSecretBoost, onToast, onSettingsChange }) => {
   const [st, setSt] = useState<AppSettings>(() => getSettings());
   const [saveCode, setSaveCode] = useState('');
   const [vipUnlocked, setVipUnlocked] = useState<boolean>(() => {
@@ -68,7 +67,6 @@ export const SettingsModal: React.FC<{
   };
 
   const curMatchSpeed = getDefaultMatchSpeed(st);
-  const godBlessingOn = st.godBlessingEnabled !== false;
   const autoFsMobileOn = st.preferFullscreen !== false;
   const onMobile = isMobileDevice();
 
@@ -113,12 +111,12 @@ export const SettingsModal: React.FC<{
                     [0.5, '0.5x'],
                     [1, '1x ปกติ'],
                     [2, '2x เร็ว'],
-                    [4, '4x สูงสุด']
+                    [5, '5x สูงสุด']
                   ] as const).map(([sp, lbl]) => (
                     <button
                       key={sp}
                       type="button"
-                      onClick={() => { SFX.tap(); update({ matchSpeed: sp, quick: sp === 4 }); }}
+                      onClick={() => { SFX.tap(); update({ matchSpeed: sp, quick: sp === 5 }); }}
                       className={`py-2 mland:py-1 px-1 rounded-xl mland:rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors ${
                         curMatchSpeed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)]/70 text-[var(--ink)]'
                       }`}
@@ -314,51 +312,7 @@ export const SettingsModal: React.FC<{
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2 mland:space-y-1.5">
               <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
                 <span>💾</span>
-                <span>เซฟเกม &amp; ตัวช่วยพิเศษ</span>
-              </div>
-
-              <div
-                className={`w-full flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-bold transition-colors ${
-                  godBlessingOn
-                    ? 'bg-gradient-to-r from-[var(--lamp-soft)] to-[var(--surface)] border-[var(--lamp)]/50'
-                    : 'bg-[var(--surface)] border-[var(--line)]'
-                }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    const nextVal = !godBlessingOn;
-                    update({ godBlessingEnabled: nextVal });
-                    onToast(nextVal ? '✨ เปิดใช้งานพรของพระเจ้าแล้ว' : 'ปิดพรของพระเจ้าแล้ว');
-                  }}
-                  className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left cursor-pointer"
-                >
-                  <div className="min-w-0">
-                    <div className={godBlessingOn ? 'text-[#7a4f00] dark:text-[var(--lamp)] truncate' : 'text-[var(--ink)] truncate'}>
-                      ✨ พรของพระเจ้า
-                    </div>
-                    <div className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)] truncate">
-                      {godBlessingOn ? 'แต่งค่าพลังนักเตะรายคน' : 'ซ่อนปุ่มแต่งค่าพลังชั่วคราว'}
-                    </div>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${godBlessingOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                    {godBlessingOn ? 'เปิด' : 'ปิด'}
-                  </span>
-                </button>
-                {godBlessingOn && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      onClose();
-                      onOpenGodBlessing();
-                    }}
-                    className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold shrink-0 cursor-pointer hover:brightness-105"
-                  >
-                    แต่งพลัง ↗
-                  </button>
-                )}
+                <span>จัดการเซฟเกม</span>
               </div>
 
               <div className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 space-y-1.5">

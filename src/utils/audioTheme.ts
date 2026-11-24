@@ -18,8 +18,9 @@ export function saveSettings(s: AppSettings) {
   }
 }
 
-export function getDefaultMatchSpeed(st: AppSettings): 0.25 | 0.5 | 1 | 2 | 4 {
-  if (st.matchSpeed === 0.25 || st.matchSpeed === 0.5 || st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 4) return st.matchSpeed;
+export function getDefaultMatchSpeed(st: AppSettings): 0.25 | 0.5 | 1 | 2 | 5 {
+  if (st.matchSpeed === 0.25 || st.matchSpeed === 0.5 || st.matchSpeed === 1 || st.matchSpeed === 2 || st.matchSpeed === 5) return st.matchSpeed;
+  if ((st.matchSpeed as number | undefined) === 4) return 5;
   return 1;
 }
 
