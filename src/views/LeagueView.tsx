@@ -35,15 +35,18 @@ export const LeagueView: React.FC<{
     .map((t) => ({ t, st: teamStats(t, state) }))
     .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
 
-  const renderFormDots = (fm?: string) => {
+  const renderFormDots = (fm?: string, compact = false) => {
     const chars = (fm || '').slice(-5).split('');
-    if (!chars.length) return <span className="text-[10px] text-[var(--mut)]">—</span>;
+    if (!chars.length) return compact ? null : <span className="text-[10px] text-[var(--mut)]">—</span>;
     return (
-      <div className="flex items-center justify-center gap-0.5" title={`ฟอร์ม 5 นัดหลัง: ${chars.join('')}`}>
+      <div
+        className={`flex items-center ${compact ? 'justify-start gap-0.5' : 'justify-center gap-0.5'}`}
+        title={`ฟอร์ม 5 นัดหลัง: ${chars.join('')}`}
+      >
         {chars.map((c, idx) => (
           <span
             key={idx}
-            className={`w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full shrink-0 ${
+            className={`${compact ? 'w-1.5 h-1.5' : 'w-2 h-2 mland:w-1.5 mland:h-1.5'} rounded-full shrink-0 ${
               c === 'W' ? 'bg-emerald-500' : c === 'D' ? 'bg-amber-400' : 'bg-rose-500'
             }`}
           />
@@ -476,10 +479,13 @@ export const LeagueView: React.FC<{
             {vt !== me.tier && (
               <button
                 type="button"
-                onClick={() => onUpdateState((d) => { d.lg = me.tier; })}
-                className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[10px] mland:text-[8.5px] font-bold cursor-pointer shadow-xs hover:brightness-105"
+                title="กลับลีกของฉัน"
+                aria-label="กลับลีกของฉัน"
+                onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
+                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer shadow-xs hover:brightness-105"
               >
-                ลีกฉัน
+                <span>↩</span>
+                <span>★</span>
               </button>
             )}
           </div>
@@ -678,15 +684,44 @@ export const LeagueView: React.FC<{
   const renderStandings = () => (
     <div className="space-y-2.5 lg:space-y-0 mland:space-y-0 lg:flex-1 lg:min-h-0 mland:flex-1 mland:min-h-0 lg:grid lg:grid-cols-[1.46fr_0.84fr] lg:gap-3 mland:grid mland:grid-cols-[1.45fr_0.85fr] mland:gap-2 mland:overflow-hidden">
       <div className="space-y-2 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="lg:hidden mland:hidden">{renderImportantNewsPanel()}</div>
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden mland:flex-1 mland:min-h-0 mland:flex mland:flex-col">
-          {/* Table Header */}
-          <div className="shrink-0 grid grid-cols-[20px_18px_minmax(0,1fr)_19px_19px_19px_19px_27px_32px] sm:grid-cols-[24px_22px_minmax(0,1fr)_42px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[20px_18px_minmax(0,1fr)_18px_18px_18px_18px_26px_30px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 bg-[var(--surface-2)]/90 text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
+          {/* Compact League Standings Header Strip */}
+          <div className="shrink-0 flex items-center justify-between gap-2 px-3 mland:px-2 py-2 mland:py-1 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/70">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-bold text-xs sm:text-sm mland:text-[10.5px] text-[var(--ink)] truncate">{TN[vt]}</span>
+              {vt === me.tier && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#7a4f00] dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold tabular shrink-0">
+                  <span>★</span>
+                  <span>อันดับ {myRank} · {me.pts} แต้ม</span>
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {vt !== me.tier && (
+                <button
+                  type="button"
+                  title="กลับลีกของฉัน"
+                  aria-label="กลับลีกของฉัน"
+                  onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer hover:brightness-105"
+                >
+                  <span>↩</span>
+                  <span>★</span>
+                </button>
+              )}
+              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular hidden sm:inline mland:hidden">
+                นัดที่ {Math.min(state.md, state.fx.length)}/{state.fx.length}
+              </span>
+            </div>
+          </div>
+
+          {/* Table Column Header */}
+          <div className="shrink-0 grid grid-cols-[20px_18px_minmax(0,1fr)_19px_19px_19px_19px_27px_32px] sm:grid-cols-[24px_22px_minmax(0,1fr)_50px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[20px_18px_minmax(0,1fr)_18px_18px_18px_18px_26px_30px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 bg-[var(--surface-2)]/90 text-[10px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
             <span className="text-center">#</span>
             <span />
-            <span className="truncate text-[var(--ink)]">{TN[vt]}</span>
-            <span className="hidden sm:block mland:hidden text-center">ฟอร์ม</span>
-            <span className="text-center" title="แข่ง">ล</span>
+            <span className="truncate">สโมสร</span>
+            <span className="hidden sm:block mland:hidden text-center">5 นัด</span>
+            <span className="text-center" title="แข่ง">น</span>
             <span className="text-center" title="ชนะ">ช</span>
             <span className="text-center" title="เสมอ">ส</span>
             <span className="text-center" title="แพ้">พ</span>
@@ -701,27 +736,23 @@ export const LeagueView: React.FC<{
               const isRel = i >= tb.length - 3 && vt > 0;
               const isMe = t.id === state.me;
               const gd = t.gf - t.ga;
-              const zoneBorder = isMe
-                ? 'border-l-[var(--lamp)] bg-[var(--lamp-soft)]/85 font-semibold'
-                : isPromo
-                  ? 'border-l-[var(--g)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--g-soft)]/60'
-                  : isRel
-                    ? 'border-l-[var(--red)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--red-soft)]/60'
-                    : 'border-l-transparent even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75';
+              const zoneBorder = isPromo
+                ? 'border-l-[var(--g)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--g-soft)]/55'
+                : isRel
+                  ? 'border-l-[var(--red)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--red-soft)]/55'
+                  : 'border-l-transparent even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75';
               const rankBadge = isPromo
                 ? 'bg-[var(--g-soft)] text-[var(--g)]'
                 : isRel
                   ? 'bg-[var(--red-soft)] text-[var(--red)]'
-                  : isMe
-                    ? 'bg-[var(--lamp)] text-[#261900]'
-                    : 'text-[var(--mut)]';
+                  : 'text-[var(--mut)]';
 
               return (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
-                  className={`w-full grid grid-cols-[20px_18px_minmax(0,1fr)_19px_19px_19px_19px_27px_32px] sm:grid-cols-[24px_22px_minmax(0,1fr)_42px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[20px_18px_minmax(0,1fr)_18px_18px_18px_18px_26px_30px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 border-l-[3px] text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${zoneBorder}`}
+                  className={`w-full grid grid-cols-[20px_18px_minmax(0,1fr)_19px_19px_19px_19px_27px_32px] sm:grid-cols-[24px_22px_minmax(0,1fr)_50px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[20px_18px_minmax(0,1fr)_18px_18px_18px_18px_26px_30px] items-center gap-0.5 sm:gap-1 px-2 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 border-l-[3px] text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${zoneBorder}`}
                 >
                   <span className={`text-center tabular font-bold text-[10px] mland:text-[9px] rounded-md py-0.5 leading-none ${rankBadge}`}>
                     {i + 1}
@@ -729,11 +760,26 @@ export const LeagueView: React.FC<{
                   <div className="flex items-center justify-center mland:[&>svg]:w-4 mland:[&>svg]:h-4">
                     <ClubCrest name={t.name} size={17} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                   </div>
-                  <div className="min-w-0 flex items-center gap-1 pr-0.5">
-                    <span className="whitespace-normal break-words text-[11px] sm:text-[12.5px] mland:text-[10px] leading-[1.18]">
-                      {t.name}
-                    </span>
-                    {isMe && <span className="text-[10px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] shrink-0">★</span>}
+                  <div className="min-w-0 pr-0.5 space-y-0.5">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className={`whitespace-normal break-words text-[11px] sm:text-[12.5px] mland:text-[10px] leading-[1.18] ${isMe ? 'font-bold text-[var(--ink)]' : ''}`}>
+                        {t.name}
+                      </span>
+                      {isMe && (
+                        <span
+                          title="ทีมของคุณ"
+                          aria-label="ทีมของคุณ"
+                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                        >
+                          ★
+                        </span>
+                      )}
+                    </div>
+                    {t.fm && (
+                      <div className="sm:hidden mland:flex items-center">
+                        {renderFormDots(t.fm, true)}
+                      </div>
+                    )}
                   </div>
                   <div className="hidden sm:flex mland:hidden items-center justify-center">
                     {renderFormDots(t.fm)}
@@ -745,7 +791,7 @@ export const LeagueView: React.FC<{
                   <span className={`text-center tabular font-semibold ${gd > 0 ? 'text-[var(--g)]' : gd < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
                     {gd > 0 ? `+${gd}` : gd}
                   </span>
-                  <span className={`text-center tabular font-extrabold text-[11px] sm:text-xs mland:text-[10px] rounded-md py-0.5 leading-none ${isMe ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface-2)]/85 text-[var(--ink)]'}`}>
+                  <span className="text-center tabular font-extrabold text-[11px] sm:text-xs mland:text-[10px] rounded-md py-0.5 leading-none bg-[var(--surface-2)]/85 text-[var(--ink)]">
                     {t.pts}
                   </span>
                 </button>
@@ -754,25 +800,39 @@ export const LeagueView: React.FC<{
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[11px] mland:text-[9.5px] text-[var(--mut)] px-1 shrink-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] px-1 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
             {vt < 2 && (
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
-                <span>อันดับ 1-3 เลื่อนชั้น</span>
+                <span>1-3 เลื่อนชั้น</span>
               </span>
             )}
             {vt > 0 ? (
               <span className="inline-flex items-center gap-1">
                 <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
-                <span>3 อันดับท้ายตกชั้น</span>
+                <span>3 ท้ายตกชั้น</span>
               </span>
             ) : (
-              <span>ลีกระดับจังหวัดไม่มีตกชั้น</span>
+              <span>ลีกจังหวัดไม่ตกชั้น</span>
             )}
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--lamp)] text-[#261900] text-[7.5px] font-black">★</span>
+              <span>ทีมคุณ</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              <span>ช</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block ml-0.5" />
+              <span>ส</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block ml-0.5" />
+              <span>พ (5 นัด)</span>
+            </span>
           </div>
-          <span className="opacity-80">แตะชื่อทีมเพื่อส่องข้อมูล</span>
+          <span className="opacity-80">แตะทีมเพื่อส่อง</span>
         </div>
+
+        <div className="lg:hidden mland:hidden">{renderImportantNewsPanel()}</div>
       </div>
 
       {/* Right Column: Summary + Live League Stats + Recent Results + History */}
@@ -1145,8 +1205,16 @@ export const LeagueView: React.FC<{
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">
-                              อันดับ 1{leaderIsMe ? ' · ทีมของคุณ' : ''}
+                            <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1">
+                              <span>อันดับ 1</span>
+                              {leaderIsMe && (
+                                <span
+                                  title="ทีมของคุณ"
+                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black"
+                                >
+                                  ★
+                                </span>
+                              )}
                             </span>
                             <span className={`text-sm sm:text-base mland:text-xs font-extrabold tabular-nums shrink-0 ${aw.accentText}`}>
                               {leader.primaryValue}
@@ -1227,32 +1295,22 @@ export const LeagueView: React.FC<{
   };
 
   return (
-    <div className="space-y-2.5 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
+    <div className="space-y-2 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mland:flex-row mland:items-center mland:justify-between gap-1.5 shrink-0">
-        {sub !== 4 ? (
-          <div className="w-full lg:w-auto mland:w-auto grid grid-cols-3 lg:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
-            {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => (
-              <button
-                key={lbl}
-                type="button"
-                onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
-                className={`flex items-center justify-center gap-1 px-2 sm:px-3 mland:px-2 py-1.5 sm:py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${vt === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
-              >
-                <span className="truncate">{lbl}</span>
-                {idx === me.tier && <span className="shrink-0">★</span>}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="hidden lg:flex mland:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
-            <span>🏅</span>
-            <span>รายการแข่งขันบอลถ้วย</span>
-          </div>
-        )}
-        <div className="w-full lg:w-auto mland:w-auto mland:max-w-full grid grid-cols-3 sm:grid-cols-6 lg:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:overflow-x-auto">
-          {['🏆 ตาราง', '📊 พลังทีม', '⭐ สถิติ', '📅 ปฏิทิน', '🏅 บอลถ้วย', '🎖️ รางวัล'].map((lbl, idx) => (
+        {/* Competition Sub-Navigation Menu: Single compact row on mobile, inline pill strip on tablet/desktop/landscape */}
+        <div className="order-1 lg:order-2 mland:order-2 w-full lg:w-auto mland:w-auto mland:max-w-full grid grid-cols-6 sm:inline-flex lg:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:overflow-x-auto">
+          {(
+            [
+              ['🏆', 'ตาราง', 'ตาราง'],
+              ['📊', 'พลัง', 'พลังทีม'],
+              ['⭐', 'สถิติ', 'สถิติ'],
+              ['📅', 'ปฏิทิน', 'ปฏิทิน'],
+              ['🏅', 'ถ้วย', 'บอลถ้วย'],
+              ['🎖️', 'รางวัล', 'รางวัล']
+            ] as const
+          ).map(([ic, shortLbl, fullLbl], idx) => (
             <button
-              key={lbl}
+              key={fullLbl}
               type="button"
               onClick={() => {
                 SFX.tap();
@@ -1261,12 +1319,56 @@ export const LeagueView: React.FC<{
                   d.tv = idx;
                 });
               }}
-              className={`flex items-center justify-center px-1.5 sm:px-2.5 mland:px-1.5 py-2 sm:py-1.5 lg:py-1 mland:py-0.5 rounded-lg text-[10.5px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
+              className={`flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1 px-1 sm:px-2.5 mland:px-1.5 py-1 sm:py-1 mland:py-0.5 rounded-lg text-[9.5px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${
+                sub === idx
+                  ? 'bg-[var(--g)] text-white shadow-xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+              }`}
             >
-              <span className="truncate">{lbl}</span>
+              <span className="text-xs sm:text-xs mland:text-[10.5px] leading-none">{ic}</span>
+              <span className="sm:hidden mland:hidden truncate max-w-full leading-tight">{shortLbl}</span>
+              <span className="hidden sm:inline mland:inline truncate">{fullLbl}</span>
             </button>
           ))}
         </div>
+
+        {/* League Tier Switcher (hidden in Cup tab) */}
+        {sub !== 4 ? (
+          <div className="order-2 lg:order-1 mland:order-1 w-full lg:w-auto mland:w-auto grid grid-cols-3 lg:inline-flex mland:inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
+            {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
+              const isMyTier = idx === me.tier;
+              const active = vt === idx;
+              return (
+                <button
+                  key={lbl}
+                  type="button"
+                  title={isMyTier ? `${lbl} (ลีกของคุณ)` : lbl}
+                  onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
+                  className={`flex items-center justify-center gap-1 px-2 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${
+                    active
+                      ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                  }`}
+                >
+                  <span className="truncate">{lbl}</span>
+                  {isMyTier && (
+                    <span
+                      aria-label="ลีกของคุณ"
+                      className={`text-[10px] mland:text-[9px] leading-none shrink-0 ${active ? 'text-[var(--lamp)]' : 'text-[#c98a00] dark:text-[var(--lamp)]'}`}
+                    >
+                      ★
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="order-2 lg:order-1 mland:order-1 hidden lg:flex mland:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
+            <span>🏅</span>
+            <span>รายการแข่งขันบอลถ้วย</span>
+          </div>
+        )}
       </div>
       {sub === 0 && renderStandings()}
       {sub === 1 && renderPowerComparison()}

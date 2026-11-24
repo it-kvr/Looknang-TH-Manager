@@ -5103,73 +5103,91 @@ export const MatchModal: React.FC<{
     });
   };
 
+  const homeGoalsList = useMemo(() => evs.filter((e) => e.t === homeOrig.id), [evs, homeOrig.id]);
+  const awayGoalsList = useMemo(() => evs.filter((e) => e.t === awayOrig.id), [evs, awayOrig.id]);
+
+  const formatScorerSummary = (list: MatchEvent[]) => {
+    if (!list.length) return '';
+    const byPlayer = new Map<string, number[]>();
+    list.forEach((e) => {
+      const arr = byPlayer.get(e.who) || [];
+      arr.push(e.m);
+      byPlayer.set(e.who, arr);
+    });
+    return Array.from(byPlayer.entries())
+      .map(([who, mins]) => `${who.split(' ')[0]} ${mins.map((m) => `${m}'`).join(',')}`)
+      .join(' · ');
+  };
+
   const renderMatchStatsPanel = () => {
     const yH = matchCards.filter((c) => c.t === homeOrig.id && c.type === 'Y').length;
     const yA = matchCards.filter((c) => c.t === awayOrig.id && c.type === 'Y').length;
     const rH = matchCards.filter((c) => c.t === homeOrig.id && (c.type === 'R' || c.type === 'Y2R')).length;
     const rA = matchCards.filter((c) => c.t === awayOrig.id && (c.type === 'R' || c.type === 'Y2R')).length;
-    const statRows: { label: string; hVal: number; aVal: number; hNode: React.ReactNode; aNode: React.ReactNode }[] = [
-      { label: 'ครองบอล', hVal: matchStats.possH, aVal: 100 - matchStats.possH, hNode: `${matchStats.possH}%`, aNode: `${100 - matchStats.possH}%` },
-      { label: 'โอกาสยิง (เข้ากรอบ)', hVal: matchStats.shotsH, aVal: matchStats.shotsA, hNode: `${matchStats.shotsH} (${matchStats.onTargetH})`, aNode: `${matchStats.shotsA} (${matchStats.onTargetA})` },
-      { label: 'ความแม่นยำประตู (xG)', hVal: matchStats.xgH, aVal: matchStats.xgA, hNode: matchStats.xgH.toFixed(2), aNode: matchStats.xgA.toFixed(2) },
-      { label: 'จ่ายบอล · เตะมุม', hVal: matchStats.passesH, aVal: matchStats.passesA, hNode: `${matchStats.passesH} · 🚩${matchStats.cornersH}`, aNode: `🚩${matchStats.cornersA} · ${matchStats.passesA}` },
-      {
-        label: 'ฟาวล์ · ล้ำหน้า · ใบ',
-        hVal: matchStats.foulsH + yH * 2 + rH * 4,
-        aVal: matchStats.foulsA + yA * 2 + rA * 4,
-        hNode: (
-          <span className="inline-flex items-center gap-1 flex-wrap">
-            <span>{matchStats.foulsH} · {matchStats.offsidesH} ·</span>
-            <span className={`inline-flex items-center gap-0.5 ${yH === 0 ? 'opacity-55' : ''}`}>
-              <StatIconBadge kind="yellow" count={Math.max(1, yH)} size="xs" title={`ใบเหลือง ${yH}`} />
-              {yH === 0 && <span>0</span>}
-            </span>
-            {rH > 0 && <StatIconBadge kind="red" count={rH} size="xs" title={`ใบแดง ${rH}`} />}
-          </span>
-        ),
-        aNode: (
-          <span className="inline-flex items-center justify-end gap-1 flex-wrap">
-            {rA > 0 && <StatIconBadge kind="red" count={rA} size="xs" title={`ใบแดง ${rA}`} />}
-            <span className={`inline-flex items-center gap-0.5 ${yA === 0 ? 'opacity-55' : ''}`}>
-              <StatIconBadge kind="yellow" count={Math.max(1, yA)} size="xs" title={`ใบเหลือง ${yA}`} />
-              {yA === 0 && <span>0</span>}
-            </span>
-            <span>· {matchStats.offsidesA} · {matchStats.foulsA}</span>
-          </span>
-        )
-      }
+    const statRows: { label: string; hVal: number; aVal: number; hText: string; aText: string }[] = [
+      { label: 'ครองบอล', hVal: matchStats.possH, aVal: 100 - matchStats.possH, hText: `${matchStats.possH}%`, aText: `${100 - matchStats.possH}%` },
+      { label: 'โอกาสยิง (เข้ากรอบ)', hVal: matchStats.shotsH, aVal: matchStats.shotsA, hText: `${matchStats.shotsH} (${matchStats.onTargetH})`, aText: `${matchStats.shotsA} (${matchStats.onTargetA})` },
+      { label: 'ความแม่นยำประตู (xG)', hVal: matchStats.xgH, aVal: matchStats.xgA, hText: matchStats.xgH.toFixed(2), aText: matchStats.xgA.toFixed(2) },
+      { label: 'จ่ายบอลสำเร็จ', hVal: matchStats.passesH, aVal: matchStats.passesA, hText: `${matchStats.passesH}`, aText: `${matchStats.passesA}` }
     ];
     return (
-      <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
-        <div className="flex items-center justify-between text-[11px] font-bold pb-1 border-b border-[var(--line)]/60">
+      <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 shadow-xs">
+        <div className="flex items-center justify-between text-[11px] font-bold pb-1.5 border-b border-[var(--line)]/70">
           <span className="flex items-center gap-1.5 truncate max-w-[38%]">
-            <span className="w-2.5 h-2.5 rounded-full border border-white/70 shrink-0" style={{ background: homeKit }} />
+            <span className="w-2.5 h-2.5 rounded-full border border-black/15 dark:border-white/50 shrink-0" style={{ background: homeKit }} />
             <span className="truncate">{homeOrig.name}</span>
           </span>
-          <span className="text-[10px] text-[var(--mut)] shrink-0">📊 สถิติในสนาม</span>
+          <span className="text-[10px] text-[var(--mut)] uppercase tracking-wider shrink-0">📊 สถิติ</span>
           <span className="flex items-center justify-end gap-1.5 truncate max-w-[38%]">
             <span className="truncate">{awayOrig.name}</span>
-            <span className="w-2.5 h-2.5 rounded-full border border-white/70 shrink-0" style={{ background: awayKit }} />
+            <span className="w-2.5 h-2.5 rounded-full border border-black/15 dark:border-white/50 shrink-0" style={{ background: awayKit }} />
           </span>
         </div>
-        <div className="space-y-1.5 mland:space-y-1">
+
+        <div className="space-y-2 mland:space-y-1.5">
           {statRows.map((row) => {
             const tot = Math.max(0.01, row.hVal + row.aVal);
-            const hPct = row.hVal === 0 && row.aVal === 0 ? 50 : clamp((row.hVal / tot) * 100, 8, 92);
+            const hPct = row.hVal === 0 && row.aVal === 0 ? 50 : clamp((row.hVal / tot) * 100, 6, 94);
             return (
-              <div key={row.label} className="space-y-0.5 text-[11px] mland:text-[10px]">
-                <div className="flex items-center justify-between gap-2 tabular">
-                  <span className="font-bold text-[var(--ink)]">{row.hNode}</span>
-                  <span className="text-[10px] text-[var(--mut)] font-semibold">{row.label}</span>
-                  <span className="font-bold text-[var(--ink)] text-right">{row.aNode}</span>
+              <div key={row.label} className="space-y-1 mland:space-y-0.5 text-[11px] mland:text-[10px]">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 tabular">
+                  <span className={`font-extrabold ${row.hVal >= row.aVal ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{row.hText}</span>
+                  <span className="text-[10px] text-[var(--mut)] font-semibold text-center">{row.label}</span>
+                  <span className={`font-extrabold text-right ${row.aVal >= row.hVal ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{row.aText}</span>
                 </div>
-                <div className="h-1.5 rounded-full overflow-hidden bg-[var(--surface)] flex">
-                  <div className="h-full transition-all duration-300" style={{ width: `${hPct}%`, backgroundColor: 'var(--g)' }} />
-                  <div className="h-full transition-all duration-300 bg-amber-500/80" style={{ width: `${100 - hPct}%` }} />
+                <div className="h-1.5 rounded-full overflow-hidden bg-[var(--surface-2)] flex gap-0.5">
+                  <div className="h-full rounded-l-full transition-all duration-300" style={{ width: `${hPct}%`, backgroundColor: 'var(--g)' }} />
+                  <div className="h-full rounded-r-full transition-all duration-300 bg-amber-500/85" style={{ width: `${100 - hPct}%` }} />
                 </div>
               </div>
             );
           })}
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5 pt-1 border-t border-[var(--line)]/60 text-[10px] mland:text-[9px] tabular">
+          <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
+            <span className="font-bold">{matchStats.cornersH}</span>
+            <span className="text-[var(--mut)] font-semibold">เตะมุม</span>
+            <span className="font-bold">{matchStats.cornersA}</span>
+          </div>
+          <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
+            <span className="font-bold">{matchStats.foulsH}/{matchStats.offsidesH}</span>
+            <span className="text-[var(--mut)] font-semibold">ฟาวล์/ล้ำ</span>
+            <span className="font-bold">{matchStats.foulsA}/{matchStats.offsidesA}</span>
+          </div>
+          <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
+            <span className="inline-flex items-center gap-0.5 font-bold">
+              <span className={yH === 0 ? 'opacity-45' : ''}><StatIconBadge kind="yellow" count={Math.max(1, yH)} size="xs" /></span>
+              {yH === 0 && <span>0</span>}
+              {rH > 0 && <StatIconBadge kind="red" count={rH} size="xs" />}
+            </span>
+            <span className="text-[var(--mut)] font-semibold">ใบ</span>
+            <span className="inline-flex items-center gap-0.5 font-bold">
+              {rA > 0 && <StatIconBadge kind="red" count={rA} size="xs" />}
+              <span className={yA === 0 ? 'opacity-45' : ''}><StatIconBadge kind="yellow" count={Math.max(1, yA)} size="xs" /></span>
+              {yA === 0 && <span>0</span>}
+            </span>
+          </div>
         </div>
       </div>
     );
@@ -5323,16 +5341,16 @@ export const MatchModal: React.FC<{
           </div>
         )}
 
-        <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
+        <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[10px]">
-            <span className="font-bold">⚡ พลังงาน &amp; ฟอร์ม 11 คนในสนาม ({meTeamOrig.name})</span>
+            <span className="font-bold">⚡ พลังงาน &amp; ฟอร์ม ({meTeamOrig.name})</span>
             <div className="flex flex-wrap items-center gap-2 tabular text-[var(--mut)]">
               <span>
-                เหย้า <b className={fitTextCls(hAvg)}>{hAvg}%</b> · เยือน <b className={fitTextCls(aAvg)}>{aAvg}%</b>
+                เฉลี่ย <b className={fitTextCls(hAvg)}>{hAvg}%</b> / <b className={fitTextCls(aAvg)}>{aAvg}%</b>
               </span>
               {(tiredCount > 0 || lowFormCount > 0) && (
                 <span className="font-bold text-[var(--red)]">
-                  · เตือน {tiredCount > 0 ? `ล้า ${tiredCount}` : ''}{tiredCount > 0 && lowFormCount > 0 ? '/' : ''}{lowFormCount > 0 ? `ฟอร์มตก ${lowFormCount}` : ''}
+                  · เตือน {tiredCount > 0 ? `ล้า ${tiredCount}` : ''}{tiredCount > 0 && lowFormCount > 0 ? '/' : ''}{lowFormCount > 0 ? `ตก ${lowFormCount}` : ''}
                 </span>
               )}
               <button
@@ -5341,18 +5359,18 @@ export const MatchModal: React.FC<{
                 className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
                   showAlertConfig || !subAlertEnabled
                     ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
-                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
                 }`}
               >
-                ⚙️ เกณฑ์เตือน
+                ⚙️ เกณฑ์
               </button>
             </div>
           </div>
 
           {showAlertConfig && (
-            <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 text-[11px]">
+            <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 text-[11px]">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-bold text-[var(--ink)]">🩺 ระบบแจ้งเตือนเปลี่ยนตัว (ป้องกันบาดเจ็บ/ฟอร์มตก)</span>
+                <span className="font-bold text-[var(--ink)]">🩺 แจ้งเตือนเปลี่ยนตัว (กันเจ็บ/ฟอร์มตก)</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -5360,16 +5378,16 @@ export const MatchModal: React.FC<{
                     setSubAlertEnabled(next);
                     persistSubAlertPrefs(next, subAlertFitTh, subAlertFormTh);
                   }}
-                  className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold cursor-pointer ${
-                    subAlertEnabled ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'
+                  className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer ${
+                    subAlertEnabled ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]'
                   }`}
                 >
                   {subAlertEnabled ? 'เปิดเตือน' : 'ปิดเตือน'}
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div className="flex items-center justify-between gap-2 bg-[var(--surface-2)] px-2.5 py-1.5 rounded-lg">
-                  <span className="text-[10px] font-semibold text-[var(--mut)]">เตือนเมื่อพลังงาน ≤</span>
+                <div className="flex items-center justify-between gap-2 bg-[var(--surface)] px-2.5 py-1.5 rounded-lg">
+                  <span className="text-[10px] font-semibold text-[var(--mut)]">ฟิต ≤</span>
                   <div className="flex items-center gap-1">
                     {[50, 55, 58, 65].map((v) => (
                       <button
@@ -5381,7 +5399,7 @@ export const MatchModal: React.FC<{
                           persistSubAlertPrefs(subAlertEnabled, v, subAlertFormTh);
                         }}
                         className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular cursor-pointer ${
-                          subAlertFitTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'
+                          subAlertFitTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'
                         }`}
                       >
                         {v}%
@@ -5389,8 +5407,8 @@ export const MatchModal: React.FC<{
                     ))}
                   </div>
                 </div>
-                <div className="flex items-center justify-between gap-2 bg-[var(--surface-2)] px-2.5 py-1.5 rounded-lg">
-                  <span className="text-[10px] font-semibold text-[var(--mut)]">เตือนเมื่อฟอร์ม ≤</span>
+                <div className="flex items-center justify-between gap-2 bg-[var(--surface)] px-2.5 py-1.5 rounded-lg">
+                  <span className="text-[10px] font-semibold text-[var(--mut)]">ฟอร์ม ≤</span>
                   <div className="flex items-center gap-1">
                     {[5.4, 5.8, 6.0].map((v) => (
                       <button
@@ -5402,7 +5420,7 @@ export const MatchModal: React.FC<{
                           persistSubAlertPrefs(subAlertEnabled, subAlertFitTh, v);
                         }}
                         className={`px-1.5 py-0.5 rounded text-[10px] font-bold tabular cursor-pointer ${
-                          subAlertFormTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'
+                          subAlertFormTh === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'
                         }`}
                       >
                         {v.toFixed(1)}
@@ -5430,45 +5448,46 @@ export const MatchModal: React.FC<{
                   key={name}
                   type="button"
                   disabled={!canSubClick}
-                  onClick={() => {
-                    handleAutoSubstitute(name);
-                  }}
-                  title={canSubClick ? `กดเพื่อเปลี่ยนตัวทันที${nextSub ? ` (${nextSub.n.split(' ')[0]} เข้าแทน)` : ''}` : undefined}
-                  className={`p-1.5 mland:p-1 rounded-xl bg-[var(--surface)] border text-left transition-colors ${
+                  onClick={() => handleAutoSubstitute(name)}
+                  title={canSubClick ? `แตะเพื่อเปลี่ยนตัวทันที${nextSub ? ` (${nextSub.n.split(' ')[0]} เข้าแทน)` : ''}` : undefined}
+                  className={`group p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]/70 border text-left transition-colors ${
                     isRed
                       ? 'opacity-45 border-[var(--red)]/40 cursor-not-allowed'
                       : warnFit
-                        ? 'border-[var(--red)]/80 bg-[var(--red-soft)]/30 hover:bg-[var(--red-soft)]/50 cursor-pointer'
+                        ? 'border-[var(--red)]/75 bg-[var(--red-soft)]/35 hover:bg-[var(--red-soft)]/55 cursor-pointer'
                         : warnForm
-                          ? 'border-[var(--lamp)]/80 bg-[var(--lamp-soft)]/30 hover:bg-[var(--lamp-soft)]/50 cursor-pointer'
-                          : 'border-[var(--line)] hover:border-[var(--g)] cursor-pointer'
+                          ? 'border-[var(--lamp)]/75 bg-[var(--lamp-soft)]/35 hover:bg-[var(--lamp-soft)]/55 cursor-pointer'
+                          : 'border-[var(--line)]/80 hover:border-[var(--g)] cursor-pointer'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1 text-[10px]">
-                    <span className="font-bold truncate">
-                      <span className="text-[var(--mut)]">{pl.ro}</span> {pl.n.split(' ')[0]}
+                  <div className="flex items-center justify-between gap-1 text-[10.5px] mland:text-[9.5px]">
+                    <span className="font-bold truncate flex items-center gap-1 min-w-0">
+                      <span className="px-1 py-0.2 rounded bg-[var(--surface)] text-[8.5px] font-extrabold text-[var(--mut)] shrink-0">
+                        {pl.ro}
+                      </span>
+                      <span className="truncate">{pl.n.split(' ')[0]}</span>
                     </span>
-                    <span className={`font-extrabold tabular shrink-0 flex items-center gap-0.5 ${isRed ? 'text-[var(--red)]' : fitTextCls(fitVal)}`}>
+                    <span className={`font-extrabold tabular shrink-0 ${isRed ? 'text-[var(--red)]' : fitTextCls(fitVal)}`}>
                       {isRed ? <StatIconBadge kind="red" size="xs" /> : `${fitVal}%`}
                     </span>
                   </div>
-                  <div className="mt-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div className="mt-1.5 mland:mt-1 h-1.5 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-300"
                       style={{ width: `${isRed ? 0 : clamp(fitVal, 0, 100)}%`, background: fitColor(fitVal) }}
                     />
                   </div>
                   {!isRed && (
-                    <div className="mt-1 flex items-center justify-between gap-1 text-[9px] tabular">
-                      <span className={warnForm ? 'font-extrabold text-[#b45309] dark:text-[var(--lamp)]' : formVal >= 7.2 ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)]'}>
-                        {warnForm ? `📉 ${formVal.toFixed(1)}` : `★ ${formVal.toFixed(1)}`}
+                    <div className="mt-1 flex items-center justify-between gap-1 text-[9.5px] mland:text-[8.5px] tabular">
+                      <span className={warnForm ? 'font-extrabold text-[#b45309] dark:text-[var(--lamp)]' : formVal >= 7.2 ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)] font-semibold'}>
+                        ฟอร์ม {formVal.toFixed(1)}
                       </span>
                       {warnFit ? (
-                        <span className="font-extrabold text-[var(--red)]">🔄 เปลี่ยน</span>
+                        <span className="font-extrabold text-[var(--red)]">เปลี่ยน</span>
                       ) : warnForm ? (
-                        <span className="font-bold text-[#b45309] dark:text-[var(--lamp)]">🔄 เปลี่ยน</span>
+                        <span className="font-bold text-[#b45309] dark:text-[var(--lamp)]">เปลี่ยน</span>
                       ) : canSubClick ? (
-                        <span className="text-[var(--mut)] opacity-75">🔄</span>
+                        <span className="text-[var(--g)] opacity-0 group-hover:opacity-100 transition-opacity font-bold">เปลี่ยน</span>
                       ) : null}
                     </div>
                   )}
@@ -5476,6 +5495,11 @@ export const MatchModal: React.FC<{
               );
             })}
           </div>
+          {subsUsed.length < 5 && benchList.length > 0 && (
+            <div className="text-[10px] text-[var(--mut)] text-right">
+              แตะที่การ์ดนักเตะเพื่อเปลี่ยนตัวอัตโนมัติทันที (เหลือ {5 - subsUsed.length} โควตา)
+            </div>
+          )}
         </div>
       </div>
     );
@@ -5694,9 +5718,9 @@ export const MatchModal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-5xl mland:max-w-[98vw] max-h-[95dvh] mland:h-[97dvh] mland:max-h-[97dvh] rounded-2xl sm:rounded-3xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-        {/* Pinned Top Scoreboard Header */}
-        <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)]">
-          <div className="flex items-center justify-between text-xs mland:text-[9.5px] text-[var(--mut)] mb-1 mland:mb-0.5 gap-2">
+        {/* Pinned Top Broadcast Scoreboard */}
+        <div className="shrink-0 px-3 sm:px-5 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)]">
+          <div className="flex items-center justify-between text-[11px] mland:text-[9.5px] text-[var(--mut)] mb-1.5 mland:mb-0.5 gap-2">
             <span className="font-semibold truncate">{compTitle}</span>
             <div className="flex items-center gap-1.5 shrink-0">
               {isFullscreen && onExitFullscreen && (
@@ -5708,45 +5732,82 @@ export const MatchModal: React.FC<{
                   ✕ ย่อจอ
                 </button>
               )}
-              {done && (
-                <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px] shrink-0">
-                  FT
+              {done ? (
+                <span className="px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[10.5px] mland:text-[9px] tracking-wide">
+                  FT · จบเกม
+                </span>
+              ) : matchPhaseUi === 'halftime' ? (
+                <span className="px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[10.5px] mland:text-[9px]">
+                  HT · พักครึ่ง
+                </span>
+              ) : paused ? (
+                <span className="px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-bold tabular text-[10.5px] mland:text-[9px]">
+                  ⏸ พัก · {clockLabel}
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2 mland:px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-extrabold tabular text-[10.5px] mland:text-[9px]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
+                  <span>{clockLabel}{stoppageBadge > 0 ? ` +${stoppageBadge}'` : ''}</span>
                 </span>
               )}
             </div>
           </div>
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3 mland:gap-2">
-            <div className="flex items-center justify-end gap-2 mland:gap-1.5 min-w-0">
+
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 mland:gap-2">
+            {/* Home Team */}
+            <div className="flex items-center justify-end gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0">
               <div className="text-right min-w-0">
-                <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center justify-end gap-1 ${homeId === state.me ? 'text-[var(--g)]' : ''}`}>
-                  {goalFlashSide === 'H' && <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">⚽ +1</span>}
+                <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center justify-end gap-1.5 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  {goalFlashSide === 'H' && (
+                    <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">
+                      GOAL!
+                    </span>
+                  )}
                   <span className="truncate">{homeOrig.name}</span>
                 </div>
-                <div className="text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] flex items-center justify-end gap-1">
-                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/80 shrink-0" style={{ background: homeKit }} />
-                  <span>เหย้า {homeId === state.me ? '★' : ''}</span>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] flex items-center justify-end gap-1.5 truncate">
+                  {homeGoalsList.length > 0 ? (
+                    <span className="truncate font-semibold text-[var(--ink)]/75">⚽ {formatScorerSummary(homeGoalsList)}</span>
+                  ) : (
+                    <span>เหย้า{homeId === state.me ? ' · ทีมคุณ' : ''}</span>
+                  )}
+                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-black/15 dark:border-white/60 shrink-0" style={{ background: homeKit }} />
                 </div>
               </div>
               <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                <ClubCrest name={homeOrig.name} size={30} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                <ClubCrest name={homeOrig.name} size={34} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
               </div>
             </div>
-            <div className={`px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-2xl mland:rounded-xl border text-center min-w-[74px] sm:min-w-[88px] mland:min-w-[62px] transition-all duration-300 ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
-              <div className="text-xl sm:text-3xl mland:text-lg font-bold font-display tabular leading-none">{gh} - {ga}</div>
-              {penResult && <div className="text-[10px] font-bold text-[var(--lamp)] mt-0.5">{penResult.text}</div>}
+
+            {/* Center Score Box */}
+            <div className={`px-3.5 sm:px-5 mland:px-3 py-1.5 mland:py-0.5 rounded-2xl mland:rounded-xl border text-center min-w-[82px] sm:min-w-[104px] mland:min-w-[68px] transition-all duration-300 shadow-xs ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+              <div className="text-2xl sm:text-3xl mland:text-lg font-extrabold font-display tabular leading-none tracking-tight">
+                {gh} <span className="text-[var(--mut)]/50 mx-0.5">:</span> {ga}
+              </div>
+              {penResult && <div className="text-[10px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5">{penResult.text}</div>}
             </div>
-            <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+
+            {/* Away Team */}
+            <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0">
               <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                <ClubCrest name={awayOrig.name} size={30} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+                <ClubCrest name={awayOrig.name} size={34} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
               </div>
               <div className="min-w-0">
-                <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center gap-1 ${awayId === state.me ? 'text-[var(--g)]' : ''}`}>
+                <div className={`font-bold text-xs sm:text-base mland:text-xs truncate flex items-center gap-1.5 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                   <span className="truncate">{awayOrig.name}</span>
-                  {goalFlashSide === 'A' && <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">⚽ +1</span>}
+                  {goalFlashSide === 'A' && (
+                    <span className="px-1.5 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold shrink-0">
+                      GOAL!
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10px] sm:text-[11px] mland:text-[9px] text-[var(--mut)] flex items-center gap-1">
-                  <span>เยือน {awayId === state.me ? '★' : ''}</span>
-                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-white/80 shrink-0" style={{ background: awayKit }} />
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-1.5 truncate">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full border border-black/15 dark:border-white/60 shrink-0" style={{ background: awayKit }} />
+                  {awayGoalsList.length > 0 ? (
+                    <span className="truncate font-semibold text-[var(--ink)]/75">⚽ {formatScorerSummary(awayGoalsList)}</span>
+                  ) : (
+                    <span>เยือน{awayId === state.me ? ' · ทีมคุณ' : ''}</span>
+                  )}
                 </div>
               </div>
             </div>
@@ -6591,6 +6652,11 @@ export const MatchModal: React.FC<{
                 </div>
               )}
 
+              {/* Manager Live Tactics & Substitutions Drawer directly under pitch on Desktop / Mobile Portrait */}
+              {state.mode === 'm' && showTacticsDrawer && !done && (
+                <div className="mland:hidden">{renderLiveTacticsPanel()}</div>
+              )}
+
               {/* Portrait Match Stats (shown before Events on < lg) + Live Pitch Energy & Alerts (hide energy panel after FT) */}
               <div className="space-y-2.5 mland:hidden">
                 <div className="lg:hidden">{renderMatchStatsPanel()}</div>
@@ -6640,12 +6706,12 @@ export const MatchModal: React.FC<{
                 <div className="hidden lg:block mland:hidden shrink-0">
                   {renderMatchStatsPanel()}
                 </div>
-                <div className={`p-2.5 sm:p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-2 mland:space-y-1 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col ${mlandMatchTab === 'events' ? '' : 'mland:hidden'}`}>
-                  <div className="flex items-center justify-between gap-1 pb-1.5 mland:pb-1 border-b border-[var(--line)]/60 shrink-0 overflow-x-auto">
+                <div className={`p-3 sm:p-3.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1 shadow-xs mland:flex-1 mland:min-h-0 mland:flex mland:flex-col ${mlandMatchTab === 'events' ? '' : 'mland:hidden'}`}>
+                  <div className="flex items-center justify-between gap-1.5 pb-2 mland:pb-1 border-b border-[var(--line)]/70 shrink-0 overflow-x-auto">
                     <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] uppercase tracking-wide whitespace-nowrap shrink-0">
-                      🎙️ เหตุการณ์
+                      🎙️ เหตุการณ์ในสนาม
                     </span>
-                    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
+                    <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
                       {(
                         [
                           ['all', 'ทั้งหมด'],
@@ -6658,8 +6724,8 @@ export const MatchModal: React.FC<{
                           key={k}
                           type="button"
                           onClick={() => setEventFilter(k)}
-                          className={`px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
-                            eventFilter === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                          className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                            eventFilter === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                           }`}
                         >
                           {lbl}
@@ -6668,7 +6734,7 @@ export const MatchModal: React.FC<{
                     </div>
                   </div>
 
-                  <div className="max-h-56 lg:max-h-[340px] mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1 pr-0.5">
+                  <div className="max-h-60 lg:max-h-[340px] mland:max-h-none mland:flex-1 mland:min-h-0 overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
                     {eventFilter === 'sub' ? (
                       subLog.length === 0 ? (
                         <div className="text-xs text-[var(--mut)] py-6 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>
@@ -6679,13 +6745,13 @@ export const MatchModal: React.FC<{
                           .map((sb, i) => {
                             const tObj = sb.t === homeOrig.id ? homeOrig : awayOrig;
                             return (
-                              <div key={i} className="text-xs mland:text-[10.5px] flex items-start gap-2 py-1 px-1.5 rounded-lg bg-blue-500/8">
-                                <span className="w-7 shrink-0 tabular font-bold text-blue-600 dark:text-blue-400">{sb.m}&apos;</span>
-                                <div className="min-w-0">
+                              <div key={i} className="text-xs mland:text-[10.5px] flex items-start gap-2 py-1.5 px-2 rounded-xl bg-sky-500/8 border-l-2 border-sky-500">
+                                <span className="px-1.5 py-0.2 rounded bg-sky-500/15 tabular font-extrabold text-[10.5px] text-sky-700 dark:text-sky-300 shrink-0">{sb.m}&apos;</span>
+                                <div className="min-w-0 leading-snug">
                                   <span className="font-bold text-[var(--ink)]">{tObj.name}: </span>
-                                  <span className="font-semibold text-[var(--g)]">🟢 {sb.inPlayer}</span>
-                                  <span className="text-[var(--mut)]"> แทน </span>
-                                  <span className="text-[var(--red)]">🔴 {sb.outPlayer}</span>
+                                  <span className="font-semibold text-[var(--g)]">เข้า {sb.inPlayer}</span>
+                                  <span className="text-[var(--mut)]"> · ออก </span>
+                                  <span className="text-[var(--red)]">{sb.outPlayer}</span>
                                 </div>
                               </div>
                             );
@@ -6703,20 +6769,28 @@ export const MatchModal: React.FC<{
                       return filteredLogs.map((l, i) => (
                         <div
                           key={i}
-                          className={`text-xs mland:text-[10.5px] flex items-start gap-2 rounded-lg transition-colors ${
+                          className={`text-xs mland:text-[10.5px] flex items-start gap-2 rounded-xl transition-colors leading-snug ${
                             l.tone === 'goal'
-                              ? 'px-2 py-1 bg-[var(--g-soft)] border border-[var(--g)]/25 font-bold text-[var(--g)]'
+                              ? 'px-2.5 py-1.5 bg-[var(--g-soft)] border-l-3 border-[var(--g)] font-bold text-[var(--g)]'
                               : l.tone === 'card'
-                                ? 'px-2 py-1 bg-[var(--red-soft)] border border-[var(--red)]/20 font-semibold text-[var(--red)]'
+                                ? 'px-2.5 py-1.5 bg-[var(--red-soft)] border-l-3 border-[var(--red)] font-semibold text-[var(--red)]'
                                 : l.tone === 'sub'
-                                  ? 'px-2 py-0.5 bg-blue-500/8 font-semibold text-blue-600 dark:text-blue-400'
+                                  ? 'px-2.5 py-1 bg-sky-500/8 border-l-2 border-sky-500 font-semibold text-sky-700 dark:text-sky-300'
                                   : l.tone === 'sys'
-                                    ? 'px-1 py-0.5 font-semibold text-[var(--ink)]'
-                                    : 'px-1 py-0.5 text-[var(--mut)]'
+                                    ? 'px-2 py-1 bg-[var(--surface-2)]/70 font-semibold text-[var(--ink)]'
+                                    : 'px-2 py-0.5 text-[var(--mut)]'
                           }`}
                         >
-                          <span className="w-7 shrink-0 tabular font-bold">{l.m}&apos;</span>
-                          <span>{l.text}</span>
+                          <span className={`px-1.5 py-0.2 rounded tabular font-bold text-[10.5px] shrink-0 ${
+                            l.tone === 'goal'
+                              ? 'bg-[var(--g)] text-white'
+                              : l.tone === 'card'
+                                ? 'bg-[var(--red)] text-white'
+                                : 'bg-black/8 dark:bg-white/10'
+                          }`}>
+                            {l.m}&apos;
+                          </span>
+                          <span className="min-w-0">{l.text}</span>
                         </div>
                       ));
                     })()}
@@ -6770,24 +6844,23 @@ export const MatchModal: React.FC<{
               </div>
             </div>
           </div>
-
-          {/* Manager Live Tactics & Substitutions Drawer (Desktop / Mobile Portrait) */}
-          {state.mode === 'm' && showTacticsDrawer && !done && (
-            <div className="mland:hidden">{renderLiveTacticsPanel()}</div>
-          )}
         </div>
 
         {/* Pinned Bottom Match Action Dock */}
-        <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-t border-[var(--line)]">
+        <div className="shrink-0 px-2.5 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-t border-[var(--line)]">
           {!done ? (
-            <div className="flex items-center justify-between gap-1.5 sm:gap-2 mland:gap-1.5 flex-nowrap overflow-x-auto">
-              <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-1.5 sm:gap-2 mland:gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap sm:flex-nowrap mland:flex-nowrap min-w-0">
                 <button
                   type="button"
                   onClick={() => setPaused((p) => !p)}
-                  className="min-h-[34px] mland:min-h-[30px] px-2.5 sm:px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+                  className={`min-h-[32px] mland:min-h-[28px] px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${
+                    paused
+                      ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                      : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                  }`}
                 >
-                  {paused ? '▶ เล่นต่อ' : '⏸ พักเกม'}
+                  {paused ? '▶ เล่นต่อ' : '⏸ พัก'}
                 </button>
                 <div className="inline-flex items-center p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
                   {([0.25, 0.5, 1, 2, 4] as const).map((sp) => (
@@ -6795,33 +6868,38 @@ export const MatchModal: React.FC<{
                       key={sp}
                       type="button"
                       onClick={() => setSpeed(sp)}
-                      className={`min-h-[28px] mland:min-h-[24px] px-1.5 sm:px-2 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                      className={`min-h-[26px] mland:min-h-[22px] px-1.5 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer tabular transition-colors whitespace-nowrap ${speed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                     >
                       {sp}x
                     </button>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setShowRunVectors((v) => !v)}
-                  className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
-                >
-                  {showRunVectors ? '↗️ เส้น: เปิด' : '↗️ เส้น: ปิด'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPositions((v) => !v)}
-                  className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${showPositions ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
-                >
-                  {showPositions ? '🏷️ ตำแหน่ง: เปิด' : '🏷️ ตำแหน่ง: ปิด'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCineSlowMo((v) => !v)}
-                  className={`min-h-[34px] mland:min-h-[30px] px-2 sm:px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-semibold border cursor-pointer whitespace-nowrap shrink-0 ${cineSlowMo ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'}`}
-                >
-                  {cineSlowMo ? '🎬 สโลว์: เปิด' : '🎬 สโลว์: ปิด'}
-                </button>
+                <div className="inline-flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    title="แสดง/ซ่อนเส้นวิ่งทำทาง"
+                    onClick={() => setShowRunVectors((v) => !v)}
+                    className={`min-h-[32px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer whitespace-nowrap transition-colors ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-75'}`}
+                  >
+                    ↗️ เส้น
+                  </button>
+                  <button
+                    type="button"
+                    title="แสดง/ซ่อนป้ายตำแหน่งบนหัวนักเตะ"
+                    onClick={() => setShowPositions((v) => !v)}
+                    className={`min-h-[32px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer whitespace-nowrap transition-colors ${showPositions ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-75'}`}
+                  >
+                    🏷️ ตำแหน่ง
+                  </button>
+                  <button
+                    type="button"
+                    title="เปิด/ปิดภาพช้าสโลว์โมชันจังหวะสำคัญ"
+                    onClick={() => setCineSlowMo((v) => !v)}
+                    className={`min-h-[32px] mland:min-h-[28px] px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer whitespace-nowrap transition-colors ${cineSlowMo ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-75'}`}
+                  >
+                    🎬 สโลว์
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center gap-1.5 mland:gap-1 ml-auto shrink-0">
@@ -6833,7 +6911,11 @@ export const MatchModal: React.FC<{
                       setMlandMatchTab((prev) => (prev === 'tactics' ? 'events' : 'tactics'));
                       setPaused(true);
                     }}
-                    className="min-h-[34px] mland:min-h-[30px] px-2.5 sm:px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g-soft)] border border-[var(--g)] text-[var(--g)] text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap"
+                    className={`min-h-[32px] mland:min-h-[28px] px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
+                      showTacticsDrawer
+                        ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                        : 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] hover:brightness-95'
+                    }`}
                   >
                     🔄 แก้เกม ({subsUsed.length}/5)
                   </button>
@@ -6842,7 +6924,7 @@ export const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={() => handleStartSecondHalf()}
-                    className="min-h-[34px] mland:min-h-[30px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs whitespace-nowrap"
+                    className="min-h-[32px] mland:min-h-[28px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs whitespace-nowrap"
                   >
                     ▶ เริ่มครึ่งหลัง
                   </button>
@@ -6850,7 +6932,7 @@ export const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={skipToEnd}
-                    className="min-h-[34px] mland:min-h-[30px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold cursor-pointer shadow-xs whitespace-nowrap"
+                    className="min-h-[32px] mland:min-h-[28px] px-3 mland:px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
                   >
                     {matchPhaseUi === 'shootout' ? '⏩ ข้ามดวลจุดโทษ' : '⏩ ข้ามจบเกม'}
                   </button>

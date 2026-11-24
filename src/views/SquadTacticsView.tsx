@@ -505,7 +505,15 @@ export const SquadTacticsView: React.FC<{
           </span>
         </span>
         <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">
-          {isMe && <span className="inline-block px-1 mr-1 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold">ฉัน</span>}
+          {isMe && (
+            <span
+              title="ตัวคุณ"
+              aria-label="ตัวคุณ"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 mr-1 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black align-middle"
+            >
+              ★
+            </span>
+          )}
           {me.cap === q.n && <span className="inline-block px-1 mr-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-bold">C</span>}
           {q.n}
           {slotSp && slotSp !== q.ro && (
@@ -819,7 +827,7 @@ export const SquadTacticsView: React.FC<{
                   <div className="pt-2 mland:pt-1 border-t border-[var(--line)] text-center space-y-1 shrink-0">
                     <div className="text-xs mland:text-[10px]">
                       <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold ${isBanned ? 'bg-[var(--red-soft)] text-[var(--red)]' : mySlot ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                        {isBanned ? `🟥 ติดโทษแบน (เหลือ ${mySq?.sus || state.p?.sus} นัด)` : mySlot ? `★ ฉัน: ตัวจริง (${mySlot})` : '🪑 ฉัน: ตัวสำรอง (มีโอกาสลงสำรองครึ่งหลัง)'}
+                        {isBanned ? `🟥 ติดโทษแบน (เหลือ ${mySq?.sus || state.p?.sus} นัด)` : mySlot ? `★ ตัวจริง (${mySlot})` : '🪑 ตัวสำรอง (มีโอกาสลงสำรองครึ่งหลัง)'}
                       </span>
                     </div>
                     <p className="text-[11px] text-[var(--mut)] mland:hidden">💡 กด 1 ครั้งเพื่อดูข้อมูลนักเตะ · โค้ชเลือกตัวจริงจากพลังและพลังกาย (Energy)</p>
@@ -1317,7 +1325,15 @@ export const SquadTacticsView: React.FC<{
                           <PlayerFace player={q} team={me} state={state} size={32} />
                           <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
                             <div className="font-bold text-xs truncate flex items-center gap-1">
-                              {isMe && <span className="px-1.5 rounded bg-[var(--lamp)] text-[#261900] text-[9px] font-extrabold shrink-0">ฉัน</span>}
+                              {isMe && (
+                                <span
+                                  title="ตัวคุณ"
+                                  aria-label="ตัวคุณ"
+                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                                >
+                                  ★
+                                </span>
+                              )}
                               {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
                               {me.cap === q.n && <span className="text-[var(--lamp)] shrink-0">[C]</span>}
                               <span className="truncate">{q.n}</span>

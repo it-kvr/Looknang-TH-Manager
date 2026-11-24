@@ -639,9 +639,9 @@ export const FormationPitch: React.FC<{
             <ellipse cx={cx} cy={cy + 16} rx="13" ry="3.8" fill="#0005" />
             {isMe ? (
               <g transform={`translate(${cx},${cy - (isTarget ? 27 : 24)})`}>
-                <rect x="-24" y="-9.5" width="48" height="12.5" rx="6" fill="#f5c242" stroke="#111" strokeWidth="0.9" />
-                <text x="0" y="-0.6" textAnchor="middle" fontSize="8.3" fontWeight="800" fontFamily="Sarabun" fill="#1a1200">
-                  ★ ฉัน · {z.sp}
+                <rect x="-18" y="-9.5" width="36" height="12.5" rx="6" fill="#f5c242" stroke="#111" strokeWidth="0.9" />
+                <text x="0" y="-0.6" textAnchor="middle" fontSize="8.5" fontWeight="800" fontFamily="Sarabun" fill="#1a1200">
+                  ★ {z.sp}
                 </text>
               </g>
             ) : (

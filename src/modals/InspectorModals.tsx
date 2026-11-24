@@ -77,8 +77,12 @@ export const PlayerInspectorModal: React.FC<{
                   {livePlayer.n}
                 </h3>
                 {isMePlayer && (
-                  <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold shrink-0">
-                    ฉัน
+                  <span
+                    title="ตัวคุณ"
+                    aria-label="ตัวคุณ"
+                    className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--lamp)] text-[#261900] text-[11px] font-black shrink-0"
+                  >
+                    ★
                   </span>
                 )}
                 {livePlayer.blessed && (
@@ -497,7 +501,15 @@ export const TeamInspectorModal: React.FC<{
             <div className="min-w-0">
               <div className="font-bold text-base sm:text-lg mland:text-xs truncate flex items-center gap-1.5">
                 <span>{team.name}</span>
-                {isMeTeam && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold shrink-0">ทีมฉัน</span>}
+                {isMeTeam && (
+                  <span
+                    title="ทีมของคุณ"
+                    aria-label="ทีมของคุณ"
+                    className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--lamp)] text-[#261900] text-[9.5px] font-black shrink-0"
+                  >
+                    ★
+                  </span>
+                )}
               </div>
               <div className="text-xs mland:text-[9.5px] text-[var(--mut)] flex flex-wrap items-center gap-x-2">
                 <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
@@ -624,7 +636,15 @@ export const TeamInspectorModal: React.FC<{
                         </div>
                         <div className="min-w-0">
                           <div className="font-semibold truncate flex items-center gap-1">
-                            {isMe && <span className="px-1 rounded bg-[var(--lamp)] text-[#261900] text-[9px] font-extrabold shrink-0">ฉัน</span>}
+                            {isMe && (
+                              <span
+                                title="ตัวคุณ"
+                                aria-label="ตัวคุณ"
+                                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                              >
+                                ★
+                              </span>
+                            )}
                             <span className="text-[var(--mut)] tabular shrink-0">#{getShirtNo(team, q)}</span>
                             {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
                             {team.cap === q.n && <span className="text-[var(--lamp)] font-bold shrink-0">©</span>}
