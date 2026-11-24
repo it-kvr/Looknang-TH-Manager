@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
-import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, SIGL, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES } from '../data/thaiFootballData';
@@ -9,14 +8,23 @@ import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, dele
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 
 export const MainMenu: React.FC<{
   onStartManager: (slot: number, names: string[][], t0: Team[], pick: number, diff: number) => void;
   onStartPlayer: (slot: number, profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>) => void;
   onLoadSave: (mode: GameMode, slot: number, state: GameState) => void;
   onToast: (msg: string) => void;
-}> = ({ onStartManager, onStartPlayer, onLoadSave, onToast }) => {
+  onStepChange?: (step: 'menu' | 'ms' | 'cr') => void;
+}> = ({ onStartManager, onStartPlayer, onLoadSave, onToast, onStepChange }) => {
   const [step, setStep] = useState<'menu' | 'ms' | 'cr'>('menu');
+  const goStep = (next: 'menu' | 'ms' | 'cr') => {
+    setStep(next);
+    onStepChange?.(next);
+    if (next !== 'menu') {
+      enterAutoMobileFullscreen().catch(() => undefined);
+    }
+  };
   const [targetSlot, setTargetSlot] = useState<number>(1);
   const [previewClubs, setPreviewClubs] = useState<{ names: string[][]; t0: Team[] } | null>(null);
   const [diff, setDiff] = useState<number>(1);
@@ -25,6 +33,14 @@ export const MainMenu: React.FC<{
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
+  const countSaves = (m: GameMode) => {
+    let n = 0;
+    for (let k = 1; k <= NSL; k++) {
+      const d = loadGameFromSlot(m, k);
+      if (d && Array.isArray(d.teams) && (m === 'm' || d.p)) n++;
+    }
+    return n;
+  };
 
   const rollFaceTraits = () => ({
     c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111']),
@@ -127,7 +143,7 @@ export const MainMenu: React.FC<{
     const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
     setTargetSlot(slot);
     setPreviewClubs({ names, t0 });
-    setStep('ms');
+    goStep('ms');
   };
 
   const applyFaceTraits = (f: ReturnType<typeof rollFaceTraits>) => {
@@ -159,7 +175,7 @@ export const MainMenu: React.FC<{
     setCBase(rolled.base);
     setCAttrs(rolled.attrs);
     setCSubMap(rolled.subMap);
-    setStep('cr');
+    goStep('cr');
   };
 
   const handleDeleteSlot = (mode: GameMode, k: number) => {
@@ -197,30 +213,30 @@ export const MainMenu: React.FC<{
         const delKey = `${m}_${k}`;
         const isConfirm = confirmDel === delKey;
         rows.push(
-          <div key={k} className="flex items-center gap-1.5">
+          <div key={k} className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => {
                 SFX.tap();
                 onLoadSave(m, k, d);
               }}
-              className="flex-1 min-w-0 text-left px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer"
+              className="flex-1 min-w-0 min-h-[42px] text-left px-2 py-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer"
             >
-              <div className="font-semibold text-sm mland:text-[10.5px] truncate">▶ สล็อต {k} · {name}</div>
-              <div className="text-xs mland:text-[9px] text-[var(--mut)] truncate tabular">
-                ซีซั่น {d.season} · นัด {d.md}/{d.fx?.length || 30}
-                {m === 'p' && d.p ? ` · ${d.p.pos} · ${d.p.ap} นัด` : ''}
+              <div className="font-semibold text-[11px] truncate leading-tight">▶ #{k} {name}</div>
+              <div className="text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                ซ.{d.season} · น.{d.md}/{d.fx?.length || 30}
+                {m === 'p' && d.p ? ` · ${d.p.pos}` : ''}
               </div>
             </button>
             <button
               type="button"
               onClick={() => handleDeleteSlot(m, k)}
               aria-label="ลบเซฟ"
-              className={`min-h-[42px] mland:min-h-[34px] px-3 mland:px-2.5 rounded-xl border text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors shrink-0 ${
+              className={`min-h-[42px] px-1.5 rounded-xl border text-[10px] font-semibold cursor-pointer transition-colors shrink-0 ${
                 isConfirm ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]' : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)]'
               }`}
             >
-              {isConfirm ? 'ยืนยันลบ?' : '🗑'}
+              {isConfirm ? 'ลบ?' : '🗑'}
             </button>
           </div>
         );
@@ -231,35 +247,37 @@ export const MainMenu: React.FC<{
             key={k}
             type="button"
             onClick={() => (m === 'm' ? openManagerSetup(k) : openPlayerSetup(k))}
-            className="w-full text-left px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/40 transition-colors cursor-pointer"
+            className="w-full min-h-[42px] text-left px-2 py-1.5 rounded-xl border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/40 transition-colors cursor-pointer"
           >
-            <div className="font-semibold text-sm mland:text-[10.5px]">＋ สล็อต {k} · ว่าง</div>
-            <div className="text-xs mland:text-[9px] text-[var(--mut)]">เริ่มเกมใหม่</div>
+            <div className="font-semibold text-[11px] truncate leading-tight">＋ ช่อง {k} ว่าง</div>
+            <div className="text-[9.5px] text-[var(--mut)] leading-tight mt-0.5">เริ่มเกมใหม่</div>
           </button>
         );
       }
     }
-    return <div className="flex flex-col gap-1.5 mland:gap-1">{rows}</div>;
+    return <div className="flex flex-col gap-1.5">{rows}</div>;
   };
 
   if (step === 'ms' && previewClubs) {
     return (
-      <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+      <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-6xl mland:max-w-none mx-auto px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2.5 mland:gap-2">
-            <div className="min-w-0 flex items-baseline gap-2.5">
-              <h2 className="text-lg mland:text-sm font-bold font-display truncate">🏟️ เลือกสโมสรเริ่มต้น</h2>
-              <p className="text-xs text-[var(--mut)] truncate mland:hidden">เริ่มจากลีกระดับจังหวัด · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง</p>
+          <div className="max-w-5xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base mland:text-sm font-bold font-display truncate">🏟️ เลือกสโมสรเริ่มต้น</h2>
+              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
+                เริ่มจากลีกระดับจังหวัด · แก้ไขชื่อ ตรา และชุดได้ภายหลัง
+              </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              <div className="flex items-center gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]">
+            <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+              <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
                 {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
                   <button
                     key={lbl}
                     type="button"
                     onClick={() => { SFX.tap(); setDiff(idx); }}
-                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold cursor-pointer transition-colors ${
-                      diff === idx ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10.5px] font-semibold cursor-pointer transition-colors ${
+                      diff === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                     }`}
                   >
                     {lbl}
@@ -268,16 +286,16 @@ export const MainMenu: React.FC<{
               </div>
               <button
                 type="button"
-                onClick={() => setStep('menu')}
-                className="px-3 mland:px-2.5 py-1.5 mland:py-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10.5px] font-semibold cursor-pointer"
+                onClick={() => goStep('menu')}
+                className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[11px] font-semibold cursor-pointer hover:border-[var(--g)]"
               >
                 ‹ กลับ
               </button>
             </div>
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden safe-bottom safe-x">
-          <div className="max-w-6xl mland:max-w-none mx-auto p-3.5 mland:p-1.5 grid grid-cols-4 gap-2.5 mland:gap-1.5 min-h-full auto-rows-fr">
+        <div className="flex-1 min-h-0 overflow-y-auto safe-bottom safe-x flex items-center justify-center p-3 sm:p-4 mland:p-2">
+          <div className="w-full max-w-5xl grid grid-cols-4 gap-2 mland:gap-1.5 my-auto">
             {previewClubs.t0.map((t, idx) => {
               const avg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length);
               const tierTag = avg >= 42 ? 'เต็งลีก' : avg >= 39 ? 'กลางตาราง' : 'ท้าทาย';
@@ -287,22 +305,26 @@ export const MainMenu: React.FC<{
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onStartManager(targetSlot, previewClubs.names, previewClubs.t0, idx, diff); }}
-                  style={{ borderLeftColor: accent }}
-                  className="group flex items-center gap-3 mland:gap-2 p-3 mland:p-1.5 rounded-2xl mland:rounded-xl border border-[var(--line)] border-l-4 bg-[var(--surface)] hover:border-[var(--g)] hover:shadow-md hover:-translate-y-0.5 active:scale-[0.99] text-left transition-all cursor-pointer shadow-xs min-w-0"
+                  className="group flex items-center gap-2.5 mland:gap-1.5 p-2.5 mland:px-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)] hover:shadow-md active:scale-[0.985] text-left transition-all cursor-pointer shadow-xs min-w-0"
                 >
-                  <div className="p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/60 shrink-0 mland:[&_svg]:w-6 mland:[&_svg]:h-6 group-hover:scale-105 transition-transform">
-                    <ClubCrest name={t.name} size={36} team={t} />
+                  <div className="relative p-1 mland:p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/60 shrink-0 [&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                    <ClubCrest name={t.name} size={32} team={t} />
+                    <span
+                      className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 mland:w-2 mland:h-2 rounded-full border border-white dark:border-slate-900"
+                      style={{ background: accent }}
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-bold text-sm mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">{t.name}</div>
-                    <div className="flex items-center gap-1 mt-0.5">
-                      <span className={`px-1.5 py-0.2 rounded text-[9.5px] mland:text-[8.5px] font-bold ${avg >= 42 ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]' : avg >= 39 ? 'bg-[var(--g-soft)] text-[var(--g)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                    <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">{t.name}</div>
+                    <div className="flex items-center gap-1 mt-0.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
+                      <span className={`font-bold ${avg >= 42 ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : avg >= 39 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                         {tierTag}
                       </span>
-                      <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">{t.sq.length} คน</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="tabular">{t.sq.length} คน</span>
                     </div>
                   </div>
-                  <span className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0 shadow-xs" style={{ background: ovColor(avg) }}>
+                  <span className="px-2 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-white text-xs mland:text-[10px] font-bold tabular shrink-0 shadow-xs" style={{ background: ovColor(avg) }}>
                     {avg}
                   </span>
                 </button>
@@ -403,71 +425,107 @@ export const MainMenu: React.FC<{
     };
 
     return (
-      <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+      <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+        {/* Compact Landscape Header Bar */}
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-6xl mland:max-w-none mx-auto px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2">
-            <div className="min-w-0 flex items-baseline gap-2.5">
-              <h2 className="text-lg mland:text-sm font-bold font-display truncate">⚽ สร้างนักเตะอาชีพ</h2>
-              <p className="text-xs text-[var(--mut)] truncate mland:hidden">เลือกตำแหน่งและสไตล์ แล้วระบบจะสุ่มแต้มเริ่มต้นให้เข้ากับบทบาท</p>
+          <div className="max-w-5xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm sm:text-base mland:text-sm font-bold font-display truncate">⚽ สร้างนักเตะอาชีพ</h2>
+              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">เลือกตำแหน่งและจุดเด่น ระบบสุ่มแต้มเริ่มต้นให้เข้ากับสไตล์การเล่น</p>
             </div>
-            <button type="button" onClick={() => setStep('menu')} className="px-3 mland:px-2.5 py-1.5 mland:py-0.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10.5px] font-semibold shrink-0 cursor-pointer">
-              ‹ กลับ
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={randomizeFaceOnly}
+                className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] font-semibold text-xs mland:text-[10.5px] cursor-pointer hover:border-[var(--g)] whitespace-nowrap"
+              >
+                🎭 สุ่มหน้า
+              </button>
+              <button
+                type="button"
+                onClick={randomizeAll}
+                className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] font-semibold text-xs mland:text-[10.5px] cursor-pointer hover:border-[var(--g)] whitespace-nowrap"
+              >
+                🔄 สุ่มทั้งหมด
+              </button>
+              <button
+                type="button"
+                onClick={() => goStep('menu')}
+                className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10.5px] font-semibold cursor-pointer hover:border-[var(--g)] whitespace-nowrap"
+              >
+                ‹ กลับ
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-hidden safe-x">
-          <div className="max-w-6xl mland:max-w-none mx-auto p-3.5 mland:p-1.5 grid grid-cols-[245px_1fr] mland:grid-cols-[195px_1fr] gap-3.5 mland:gap-2 items-stretch h-full">
-            <div className="flex flex-col gap-2.5 mland:gap-1 h-full justify-between min-h-0">
-              <div className="rounded-3xl mland:rounded-2xl p-3.5 mland:p-2 text-white border border-white/20" style={{ background: `linear-gradient(155deg, ${ovColor(ov)}, #0b1f15 78%)` }}>
-                <div className="flex items-center justify-between gap-2.5 mland:gap-1.5 mland:[&_svg]:w-12 mland:[&_svg]:h-12">
-                  <div className="text-center">
-                    <div className="text-3xl mland:text-xl font-bold font-display leading-none">{ov}</div>
-                    <div className="text-xs mland:text-[9px] font-bold mt-1 mland:mt-0.5 border-t border-white/40 pt-1 mland:pt-0.5">{cSp} · #{cNo}</div>
-                  </div>
-                  <PlayerFace player={previewPlayer} careerProfile={previewProfile} size={62} bare />
+        {/* Two-Column Landscape Studio Body */}
+        <div className="flex-1 min-h-0 max-w-5xl w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 grid grid-cols-[205px_1fr] md:grid-cols-[248px_1fr] mland:grid-cols-[205px_1fr] gap-3 mland:gap-2.5 overflow-hidden safe-bottom safe-x">
+          {/* Left Column: Live Player Card + Primary CTA */}
+          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0">
+            <div
+              className="flex-1 min-h-0 rounded-2xl p-3 mland:p-2 text-white border border-white/15 shadow-md flex flex-col justify-between gap-2 mland:gap-1 overflow-hidden"
+              style={{ background: `linear-gradient(155deg, ${ovColor(ov)}, #0b1f15 78%)` }}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="px-2 py-0.5 rounded-lg bg-black/25 border border-white/15 text-[11px] mland:text-[9.5px] font-bold tracking-wide">
+                  {cSp} · #{cNo}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-lg bg-black/30 border border-white/20 text-lg mland:text-base font-extrabold font-display tabular leading-tight">
+                  {ov}
+                </span>
+              </div>
+
+              <div className="flex flex-col items-center text-center gap-1 mland:gap-0.5 my-auto">
+                <div className="shrink-0 [&>svg]:w-[68px] [&>svg]:h-[68px] mland:[&>svg]:w-[48px] mland:[&>svg]:h-[48px]">
+                  <PlayerFace player={previewPlayer} careerProfile={previewProfile} size={68} bare />
                 </div>
-                <div className="text-center font-bold text-base mland:text-xs border-b border-white/30 py-1.5 mland:py-0.5 truncate">{cName.trim() || 'ชื่อนักเตะ'}</div>
-                <div className="text-center text-[11px] mland:text-[9px] font-semibold text-white/90 pt-1.5 mland:pt-0.5 truncate">
-                  {curArch.icon} {curArch.name} · ⭐ {SIGL[curArch.sig]}
+                <div className="font-bold text-base mland:text-xs truncate w-full leading-tight">
+                  {cName.trim() || 'นักเตะใหม่'}
                 </div>
-                <div className="grid grid-cols-5 gap-1 pt-2 mland:pt-1 text-center text-[11px] mland:text-[9px]">
-                  {ATT.map(([k, l]) => (
-                    <div key={k}>
-                      <div className="text-sm mland:text-xs font-bold tabular">{cAttrs[k]}</div>
-                      <div className="opacity-85">{l}</div>
-                    </div>
-                  ))}
+                <div className="text-[11px] mland:text-[9.5px] text-white/90 font-semibold truncate w-full">
+                  {curArch.icon} {curArch.name} · อายุ 17 ปี
+                </div>
+                <div className="text-[10px] mland:text-[8.5px] text-white/75 truncate w-full">
+                  ⭐ {SIGL[curArch.sig]}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 mland:gap-1 text-center">
-                <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-                  <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">อายุเริ่มต้น</div>
-                  <div className="font-bold text-sm mland:text-[10.5px]">17 ปี</div>
-                </div>
-                <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-                  <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">แต้มสุ่ม</div>
-                  <div className="font-bold text-sm mland:text-[10.5px] text-[var(--g)]">+12 หลัก · +8 ย่อย</div>
-                </div>
+              <div className="grid grid-cols-5 gap-1 pt-2 mland:pt-1 border-t border-white/20 text-center">
+                {ATT.map(([k, l]) => (
+                  <div key={k}>
+                    <div className="text-sm mland:text-xs font-extrabold tabular leading-tight">{cAttrs[k]}</div>
+                    <div className="text-[9.5px] mland:text-[8px] opacity-80">{l}</div>
+                  </div>
+                ))}
               </div>
             </div>
 
-          <div className="flex flex-col gap-2.5 mland:gap-1 h-full min-h-0">
-            <div className="grid grid-cols-4 gap-1.5 mland:gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+            <button
+              type="button"
+              onClick={startCareerNow}
+              className="shrink-0 w-full py-2.5 mland:py-2 px-3 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-xs sm:text-sm mland:text-[11px] hover:brightness-105 transition-all cursor-pointer shadow-sm truncate"
+            >
+              ⚽ เริ่มอาชีพ ({cSp} · OVR {ov})
+            </button>
+          </div>
+
+          {/* Right Column: 4-Tab Workspace */}
+          <div className="flex flex-col min-h-0 gap-2 mland:gap-1.5">
+            <div className="shrink-0 grid grid-cols-4 gap-1 p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
               {(
                 [
-                  ['info', '📝 ข้อมูล & ตำแหน่ง'],
-                  ['face', '🎭 หน้าตา & ชุด'],
-                  ['arch', '⭐ จุดเด่น & แต้ม'],
-                  ['stats', '📊 ค่าพลังละเอียด']
+                  ['info', '📝 ข้อมูล'],
+                  ['face', '🎭 หน้าตา'],
+                  ['arch', '⭐ จุดเด่น'],
+                  ['stats', '📊 พลัง']
                 ] as const
               ).map(([tid, tlbl]) => (
                 <button
                   key={tid}
                   type="button"
                   onClick={() => { SFX.tap(); setCrMobTab(tid); }}
-                  className={`py-1.5 mland:py-1 px-2 mland:px-1 rounded-lg text-xs mland:text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
+                  className={`py-1.5 mland:py-1 px-2 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer truncate transition-colors ${
                     crMobTab === tid ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                   }`}
                 >
@@ -475,304 +533,280 @@ export const MainMenu: React.FC<{
                 </button>
               ))}
             </div>
-            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 overflow-y-auto ${crMobTab === 'info' ? '' : 'hidden'}`}>
-              <h3 className="font-bold text-base mland:text-xs mb-2.5 mland:mb-1.5">ข้อมูล & ตำแหน่ง</h3>
-              <div className="flex flex-wrap gap-2 mland:gap-1.5 mb-3 mland:mb-2">
-                <input
-                  value={cName}
-                  onChange={(e) => setCName(e.target.value.replace(/["'<>`]/g, ''))}
-                  placeholder="กรอกชื่อนักเตะ (เว้นว่างจะสุ่มให้)"
-                  maxLength={22}
-                  className="flex-1 min-w-[160px] px-3 py-2.5 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-sm mland:text-xs"
-                />
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)]">
-                  <span className="text-xs text-[var(--mut)] font-semibold">#</span>
+
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl bg-[var(--surface)] border border-[var(--line)] p-3.5 mland:p-2.5">
+              {/* Tab 1: Info & Position */}
+              <div className={`space-y-3 mland:space-y-2 ${crMobTab === 'info' ? '' : 'hidden'}`}>
+                <div className="flex items-center gap-2">
                   <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    aria-label="หมายเลขเสื้อ"
-                    value={cNo}
-                    onChange={(e) => setCNo(clamp(parseInt(e.target.value, 10) || 1, 1, 99))}
-                    className="w-11 bg-transparent text-sm font-bold text-center tabular focus:outline-none"
+                    value={cName}
+                    onChange={(e) => setCName(e.target.value.replace(/["'<>`]/g, ''))}
+                    placeholder="กรอกชื่อนักเตะ (เว้นว่างจะสุ่มให้)"
+                    maxLength={22}
+                    className="flex-1 min-w-0 px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-sm mland:text-xs"
                   />
-                </div>
-                <button type="button" onClick={() => { SFX.tap(); setCName(genPlayerName()); }} className="px-3.5 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-sm font-semibold shrink-0 cursor-pointer">
-                  🔄 สุ่มชื่อ
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2.5">
-                {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['GK', 'ผู้รักษาประตู']] as [Position, string][]).map(([p, l]) => (
+                  <div className="flex items-center gap-1 px-2.5 py-1.5 mland:py-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] shrink-0">
+                    <span className="text-xs text-[var(--mut)] font-semibold">#</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      aria-label="หมายเลขเสื้อ"
+                      value={cNo}
+                      onChange={(e) => setCNo(clamp(parseInt(e.target.value, 10) || 1, 1, 99))}
+                      className="w-10 bg-transparent text-sm mland:text-xs font-bold text-center tabular focus:outline-none"
+                    />
+                  </div>
                   <button
-                    key={p}
                     type="button"
-                    onClick={() => changePosition(p)}
-                    className={`py-2 px-3 rounded-xl text-sm font-semibold cursor-pointer transition-colors ${
-                      cPos === p ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]'
-                    }`}
+                    onClick={() => { SFX.tap(); setCName(genPlayerName()); }}
+                    className="px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold shrink-0 cursor-pointer hover:border-[var(--g)]"
                   >
-                    {l}
+                    🔄 สุ่มชื่อ
                   </button>
-                ))}
-              </div>
-              {SPX[cPos].length > 1 && (
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap gap-1.5">
-                    {SPX[cPos].map((s) => (
+                </div>
+
+                <div>
+                  <div className="text-xs mland:text-[10.5px] font-semibold text-[var(--mut)] mb-1.5 mland:mb-1">ตำแหน่งหลัก</div>
+                  <div className="grid grid-cols-4 gap-2 mland:gap-1.5">
+                    {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['GK', 'ผู้รักษาประตู']] as [Position, string][]).map(([p, l]) => (
                       <button
-                        key={s}
+                        key={p}
                         type="button"
-                        onClick={() => changeSubRole(s)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                          cSp === s ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        onClick={() => changePosition(p)}
+                        className={`py-2 mland:py-1.5 px-2 rounded-xl text-xs sm:text-sm mland:text-xs font-semibold cursor-pointer transition-colors ${
+                          cPos === p ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]'
                         }`}
                       >
-                        {s} · {SPN[s]}
+                        {l}
                       </button>
                     ))}
                   </div>
-                  {ROLE_HINT[cSp] && (
-                    <p className="text-[11px] text-[var(--g)] font-semibold bg-[var(--g-soft)] px-2.5 py-1 rounded-lg">
-                      💡 {cSp}: {ROLE_HINT[cSp]}
-                    </p>
-                  )}
                 </div>
-              )}
-            </div>
 
-            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 overflow-y-auto ${crMobTab === 'face' ? '' : 'hidden'}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-3 mland:mb-2">
-                <div>
-                  <h3 className="font-bold text-base mland:text-sm">รูปลักษณ์ & ใบหน้าแบบสุ่ม</h3>
-                  <p className="text-xs text-[var(--mut)] mland:hidden">เลือกใบหน้าที่สุ่มมาให้หรือปรับแต่งทรงผม สีผิว และแววตาได้ตามใจ</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={rerollFaceGallery}
-                  className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer hover:border-[var(--g)]"
-                >
-                  🎲 สุ่มชุดใบหน้าใหม่
-                </button>
-              </div>
-              <div className="grid grid-cols-6 gap-2 mland:gap-1.5 mb-4 mland:mb-2.5">
-                {faceChoices.map((f, idx) => {
-                  const isPicked =
-                    cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey;
-                  const sampleProfile: PlayerCareerProfile = {
-                    ...previewProfile,
-                    c: f.c,
-                    k: f.k,
-                    h: f.h,
-                    hs: f.hs,
-                    fh: f.fh,
-                    fs: f.fs,
-                    ey: f.ey
-                  };
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        applyFaceTraits(f);
-                      }}
-                      className={`p-2 rounded-xl border flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                        isPicked
-                          ? 'bg-[var(--g-soft)] border-[var(--g)] ring-2 ring-[var(--g)]/30'
-                          : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
-                      }`}
-                    >
-                      <PlayerFace player={previewPlayer} careerProfile={sampleProfile} size={48} />
-                      <span className="text-[10px] font-semibold text-[var(--mut)] truncate w-full text-center">
-                        {HS_N[f.hs]}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="grid grid-cols-3 gap-3 mland:gap-2 mb-3 mland:mb-2">
-                {[
-                  ['สีชุด', ['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111'], cColor, setCColor],
-                  ['สีผิว', SKIN_P, cSkin, setCSkin],
-                  ['สีผม', HAIR_P, cHair, setCHair]
-                ].map(([lbl, cols, cur, setter]) => (
-                  <div key={lbl as string}>
-                    <div className="text-xs text-[var(--mut)] mb-1.5">{lbl as string}</div>
-                    <div className="flex flex-wrap gap-2">
-                      {(cols as string[]).map((col) => (
+                {SPX[cPos].length > 1 && (
+                  <div className="space-y-2 mland:space-y-1.5">
+                    <div className="text-xs mland:text-[10.5px] font-semibold text-[var(--mut)]">บทบาทเฉพาะทาง</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {SPX[cPos].map((s) => (
                         <button
-                          key={col}
+                          key={s}
                           type="button"
-                          onClick={() => (setter as React.Dispatch<React.SetStateAction<string>>)(col)}
-                          className={`w-7 h-7 rounded-full border-2 border-white cursor-pointer ${cur === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
-                          style={{ background: col }}
-                        />
+                          onClick={() => changeSubRole(s)}
+                          className={`px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[11px] font-semibold cursor-pointer ${
+                            cSp === s ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          {s} · {SPN[s]}
+                        </button>
                       ))}
                     </div>
+                    {ROLE_HINT[cSp] && (
+                      <p className="text-xs mland:text-[10.5px] text-[var(--g)] font-semibold bg-[var(--g-soft)] px-3 py-1.5 mland:py-1 rounded-lg leading-snug">
+                        💡 {cSp}: {ROLE_HINT[cSp]}
+                      </p>
+                    )}
                   </div>
-                ))}
+                )}
               </div>
-              <div className="space-y-2 text-xs">
-                {[
-                  ['รูปหน้า', FS_N, cFs, setCFs],
-                  ['แววตา', EY_N, cEy, setCEy],
-                  ['ทรงผม', HS_N, cHs, setCHs],
-                  ['หนวดเครา', FH_N, cFh, setCFh]
-                ].map(([lbl, arr, cur, setter]) => (
-                  <div key={lbl as string}>
-                    <span className="text-[var(--mut)]">{lbl as string}:</span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
+
+              {/* Tab 2: Face & Kit */}
+              <div className={`space-y-3 mland:space-y-2 ${crMobTab === 'face' ? '' : 'hidden'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs sm:text-sm mland:text-xs">ใบหน้าแบบสุ่ม & ปรับแต่งรูปลักษณ์</span>
+                  <button
+                    type="button"
+                    onClick={rerollFaceGallery}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold cursor-pointer hover:border-[var(--g)]"
+                  >
+                    🎲 สุ่มชุดใบหน้าใหม่
+                  </button>
+                </div>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {faceChoices.map((f, idx) => {
+                    const isPicked =
+                      cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey;
+                    const sampleProfile: PlayerCareerProfile = {
+                      ...previewProfile,
+                      c: f.c,
+                      k: f.k,
+                      h: f.h,
+                      hs: f.hs,
+                      fh: f.fh,
+                      fs: f.fs,
+                      ey: f.ey
+                    };
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          applyFaceTraits(f);
+                        }}
+                        className={`p-1.5 mland:p-1 rounded-xl border flex flex-col items-center gap-0.5 cursor-pointer transition-all ${
+                          isPicked
+                            ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]'
+                            : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
+                        }`}
+                      >
+                        <PlayerFace player={previewPlayer} careerProfile={sampleProfile} size={38} />
+                        <span className="text-[9.5px] mland:hidden font-semibold text-[var(--mut)] truncate w-full text-center">
+                          {HS_N[f.hs]}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid grid-cols-3 gap-2.5 mland:gap-2">
+                  {[
+                    ['สีชุด', ['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111'], cColor, setCColor],
+                    ['สีผิว', SKIN_P, cSkin, setCSkin],
+                    ['สีผม', HAIR_P, cHair, setCHair]
+                  ].map(([lbl, cols, cur, setter]) => (
+                    <div key={lbl as string}>
+                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] mb-1">{lbl as string}</div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(cols as string[]).map((col) => (
+                          <button
+                            key={col}
+                            type="button"
+                            onClick={() => (setter as React.Dispatch<React.SetStateAction<string>>)(col)}
+                            className={`w-6 h-6 mland:w-5 mland:h-5 rounded-full border border-white cursor-pointer ${cur === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
+                            style={{ background: col }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1.5 text-xs mland:text-[10.5px]">
+                  {[
+                    ['รูปหน้า', FS_N, cFs, setCFs],
+                    ['แววตา', EY_N, cEy, setCEy],
+                    ['ทรงผม', HS_N, cHs, setCHs],
+                    ['หนวดเครา', FH_N, cFh, setCFh]
+                  ].map(([lbl, arr, cur, setter]) => (
+                    <div key={lbl as string} className="flex items-center gap-1 flex-wrap">
+                      <span className="text-[var(--mut)] text-[11px] mland:text-[9.5px] w-14 mland:w-12 shrink-0">{lbl as string}:</span>
                       {(arr as string[]).map((l, i) => (
                         <button
                           key={l}
                           type="button"
                           onClick={() => (setter as React.Dispatch<React.SetStateAction<number>>)(i)}
-                          className={`px-2.5 py-1 rounded-lg font-semibold cursor-pointer ${cur === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                          className={`px-2 py-0.5 rounded-md font-semibold cursor-pointer ${cur === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
                         >
                           {l}
                         </button>
                       ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-4 mland:space-y-2.5 flex-1 min-h-0 overflow-y-auto ${crMobTab === 'arch' ? '' : 'hidden'}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="font-bold text-base mland:text-sm">จุดเด่น & แต้มเริ่มต้น (สุ่มอัตโนมัติ)</h3>
-                  <p className="text-xs text-[var(--mut)]">เลือกจุดเด่นที่ชอบ ระบบจะสุ่มอัปเกรดแต้มเริ่มต้นให้เข้ากับตำแหน่งและสายการเล่น</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={rerollStartingPoints}
-                  className="px-3 py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs font-bold cursor-pointer hover:brightness-105"
-                >
-                  🎲 สุ่มแต้มเริ่มต้นใหม่
-                </button>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                {posArchs.map((arch) => {
-                  const active = curArch.id === arch.id;
-                  const coreTags = (Object.entries(arch.coreBonus) as [StatKey, number][]).map(
-                    ([k, v]) => `${ATT.find((x) => x[0] === k)?.[1]} +${v}`
-                  );
-                  const subTags = [
-                    `${SIGL[arch.sig]} +8`,
-                    ...Object.entries(arch.sbBonus).map(([k, v]) => `${SIGL[k] || k} +${v}`)
-                  ];
-                  return (
-                    <button
-                      key={arch.id}
-                      type="button"
-                      onClick={() => changeArchetype(arch)}
-                      className={`p-3 rounded-xl text-left border cursor-pointer transition-all ${
-                        active ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-sm' : 'bg-[var(--surface-2)] border-[var(--line)] hover:border-[var(--g)]'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-bold text-sm">{arch.icon} {arch.name}</span>
-                        {active && <span className="text-[11px] font-bold bg-white/20 px-2 py-0.5 rounded-full">เลือกอยู่</span>}
-                      </div>
-                      <div className={`text-[11px] mt-1 ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>{arch.desc}</div>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {coreTags.map((tg) => (
-                          <span key={tg} className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-[var(--g-soft)] text-[var(--g)]'}`}>
-                            {tg}
-                          </span>
-                        ))}
-                        {subTags.map((tg) => (
-                          <span key={tg} className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${active ? 'bg-black/20 text-white/95' : 'bg-[var(--surface)] text-[var(--mut)] border border-[var(--line)]'}`}>
-                            {tg}
-                          </span>
-                        ))}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold">พลังหลักหลังสุ่มแต้มเริ่มต้น</span>
-                  <span className="text-xs text-[var(--mut)]">สุ่มเพิ่ม +12 แต้มตามสาย</span>
-                </div>
-                <div className="space-y-2">
-                  {ATT.map(([k, l]) => {
-                    const rolledAdd = cAttrs[k] - cBase[k];
-                    const archCoreAdd = curArch.coreBonus[k] || 0;
-                    return (
-                      <div key={k} className="flex items-center gap-3">
-                        <span className="w-24 text-sm flex items-center gap-1">
-                          <span>{l}</span>
-                          {archCoreAdd > 0 && <span className="text-[10px] font-bold text-[var(--g)]">+{archCoreAdd}</span>}
-                          {rolledAdd > 0 && <span className="text-[10px] font-bold text-[var(--lamp)]">+{rolledAdd}</span>}
-                        </span>
-                        <div className="flex-1 h-2.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${cAttrs[k]}%`, background: rolledAdd > 0 ? 'var(--lamp)' : 'var(--g)' }} />
-                        </div>
-                        <span className="w-8 text-right font-bold tabular text-sm">{cAttrs[k]}</span>
-                      </div>
-                    );
-                  })}
+                  ))}
                 </div>
               </div>
-            </div>
 
-            <div className={`p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 flex-1 min-h-0 overflow-y-auto ${crMobTab === 'stats' ? '' : 'hidden'}`}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <h3 className="font-bold text-sm">ค่าพลังหลายด้าน (อัปเดตตามจุดเด่น & สุ่มแต้มเริ่มต้น)</h3>
-                  <p className="text-[11px] text-[var(--mut)]">แสดงผลรวมจากพลังหลัก + จุดเด่น (⭐ / สีเขียว) + แต้มสุ่มเฉพาะทาง (+8, สีเหลือง)</p>
+              {/* Tab 3: Archetype & Rolled Stats */}
+              <div className={`space-y-3 mland:space-y-2 ${crMobTab === 'arch' ? '' : 'hidden'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs sm:text-sm mland:text-xs">เลือกสไตล์การเล่น & สุ่มแต้มเริ่มต้น (+12 หลัก / +8 ย่อย)</span>
+                  <button
+                    type="button"
+                    onClick={rerollStartingPoints}
+                    className="px-2.5 py-1 rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10.5px] font-bold cursor-pointer hover:brightness-105 shrink-0"
+                  >
+                    🎲 สุ่มแต้มใหม่
+                  </button>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3 mland:gap-2">
-                {subStats.map((g) => (
-                  <div key={g[0]} className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5">
-                    <div className="font-bold text-xs mb-1">{g[0]}</div>
-                    {g[1].map(([lbl, val, statKey]) => {
-                      const isSig = statKey && statKey === curArch.sig;
-                      const archBonus = statKey ? curArch.sbBonus[statKey] || 0 : 0;
-                      const rolledSub = statKey ? cSubMap[statKey] || 0 : 0;
+
+                <div className="grid grid-cols-[1.25fr_0.95fr] gap-3 mland:gap-2 items-start">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {posArchs.map((arch) => {
+                      const active = curArch.id === arch.id;
+                      const coreTags = (Object.entries(arch.coreBonus) as [StatKey, number][]).map(
+                        ([k, v]) => `${ATT.find((x) => x[0] === k)?.[1]} +${v}`
+                      );
+                      const subTags = [
+                        `${SIGL[arch.sig]} +8`,
+                        ...Object.entries(arch.sbBonus).map(([k, v]) => `${SIGL[k] || k} +${v}`)
+                      ];
                       return (
-                        <div key={lbl} className="flex items-center justify-between gap-2 text-xs py-0.5">
-                          <span className="truncate flex items-center gap-1 min-w-0">
-                            <span className={isSig ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)]'}>{isSig ? '⭐ ' : ''}{lbl}</span>
-                            {archBonus > 0 && <span className="text-[10px] font-bold text-[var(--g)]">+{archBonus}</span>}
-                            {rolledSub > 0 && <span className="text-[10px] font-bold text-[var(--lamp)]">+{rolledSub}</span>}
+                        <button
+                          key={arch.id}
+                          type="button"
+                          onClick={() => changeArchetype(arch)}
+                          className={`p-2 mland:p-1.5 rounded-xl text-left border cursor-pointer transition-all ${
+                            active ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs' : 'bg-[var(--surface-2)] border-[var(--line)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          <div className="font-bold text-xs mland:text-[10.5px] truncate">{arch.icon} {arch.name}</div>
+                          <div className={`text-[10.5px] mland:text-[9px] mt-0.5 line-clamp-1 ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>{arch.desc}</div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {[...coreTags, ...subTags].slice(0, 3).map((tg) => (
+                              <span key={tg} className={`px-1 py-0.5 rounded text-[9.5px] mland:text-[8.5px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-[var(--surface)] text-[var(--g)]'}`}>
+                                {tg}
+                              </span>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-1.5 mland:space-y-1">
+                    <div className="flex items-center justify-between text-xs mland:text-[10.5px]">
+                      <span className="font-bold">พลังหลักหลังสุ่ม</span>
+                      <span className="text-[10px] text-[var(--mut)]">+12 แต้มตามสาย</span>
+                    </div>
+                    {ATT.map(([k, l]) => {
+                      const rolledAdd = cAttrs[k] - cBase[k];
+                      const archCoreAdd = curArch.coreBonus[k] || 0;
+                      return (
+                        <div key={k} className="flex items-center gap-2 text-xs mland:text-[10.5px]">
+                          <span className="w-20 flex items-center gap-1 truncate">
+                            <span>{l}</span>
+                            {archCoreAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--g)]">+{archCoreAdd}</span>}
+                            {rolledAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--lamp)]">+{rolledAdd}</span>}
                           </span>
-                          <b className="tabular">{val}</b>
+                          <div className="flex-1 h-2 rounded-full bg-[var(--surface)] overflow-hidden">
+                            <div className="h-full rounded-full transition-all" style={{ width: `${cAttrs[k]}%`, background: rolledAdd > 0 ? 'var(--lamp)' : 'var(--g)' }} />
+                          </div>
+                          <span className="w-6 text-right font-bold tabular">{cAttrs[k]}</span>
                         </div>
                       );
                     })}
                   </div>
-                ))}
+                </div>
+              </div>
+
+              {/* Tab 4: Sub-stats Breakdown */}
+              <div className={`space-y-2.5 mland:space-y-1.5 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs sm:text-sm mland:text-xs">ค่าพลังเฉพาะด้าน</span>
+                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">พลังหลัก + จุดเด่น (⭐/เขียว) + แต้มสุ่ม (เหลือง)</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
+                  {subStats.map((g) => (
+                    <div key={g[0]} className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] space-y-1">
+                      <div className="font-bold text-xs mland:text-[10px]">{g[0]}</div>
+                      {g[1].map(([lbl, val, statKey]) => {
+                        const isSig = statKey && statKey === curArch.sig;
+                        const archBonus = statKey ? curArch.sbBonus[statKey] || 0 : 0;
+                        const rolledSub = statKey ? cSubMap[statKey] || 0 : 0;
+                        return (
+                          <div key={lbl} className="flex items-center justify-between gap-1 text-[11px] mland:text-[9.5px]">
+                            <span className="truncate flex items-center gap-0.5 min-w-0">
+                              <span className={isSig ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)]'}>{isSig ? '⭐ ' : ''}{lbl}</span>
+                              {archBonus > 0 && <span className="text-[9px] font-bold text-[var(--g)]">+{archBonus}</span>}
+                              {rolledSub > 0 && <span className="text-[9px] font-bold text-[var(--lamp)]">+{rolledSub}</span>}
+                            </span>
+                            <b className="tabular">{val}</b>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-        </div>
-
-        {/* Pinned Bottom Action Bar inside Screen */}
-        <div className="shrink-0 border-t border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
-          <div className="max-w-5xl mland:max-w-none mx-auto px-3 sm:px-5 py-2.5 mland:py-1 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <button type="button" onClick={randomizeFaceOnly} className="px-3 py-2 mland:px-2.5 mland:py-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] font-semibold text-xs mland:text-[10.5px] cursor-pointer hover:border-[var(--g)]">
-                🎭 สุ่มใบหน้า
-              </button>
-              <button type="button" onClick={randomizeAll} className="px-3 py-2 mland:px-2.5 mland:py-1 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] font-semibold text-xs mland:text-[10.5px] cursor-pointer hover:border-[var(--g)]">
-                🔄 สุ่มทั้งหมด
-              </button>
-            </div>
-            <button
-              type="button"
-              onClick={startCareerNow}
-              className="flex-1 sm:flex-initial sm:min-w-[220px] py-2.5 mland:py-1 px-5 mland:px-4 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm mland:text-[11px] hover:brightness-105 transition-all cursor-pointer shadow-sm"
-            >
-              ⚽ เริ่มอาชีพนักเตะ ({cSp} · OVR {ov})
-            </button>
           </div>
         </div>
       </div>
@@ -780,118 +814,177 @@ export const MainMenu: React.FC<{
   }
 
   return (
-    <div className="h-full min-h-[100dvh] w-full overflow-hidden flex flex-col bg-[var(--bg)] safe-all">
-      <div className="w-full max-w-6xl mland:max-w-none mx-auto h-full p-3.5 sm:p-5 mland:p-2 grid grid-cols-[0.78fr_1.22fr] mland:grid-cols-[0.74fr_1.26fr] gap-4 mland:gap-2.5 items-stretch">
-        <div className="text-left flex flex-col justify-between h-full min-h-0 game-card p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl">
-          <div className="min-h-0">
-            <svg viewBox="0 0 320 155" className="w-full max-h-[125px] mland:max-h-[82px] mx-0 rounded-2xl mland:rounded-xl border border-[var(--line)] mb-3 mland:mb-1.5 shadow-xs">
+    <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] safe-all">
+      <div className="flex-1 min-h-0 w-full max-w-lg mx-auto px-3 py-2.5 flex flex-col gap-2 overflow-hidden">
+        {/* Compact Portrait Stadium Hero Bar */}
+        <div className="relative shrink-0 overflow-hidden rounded-2xl px-3.5 py-2 border border-emerald-950/25 dark:border-emerald-500/25 bg-gradient-to-r from-[#091f14] via-[#103322] to-[#174a31] text-white shadow-sm flex items-center gap-3">
+          {/* Subtle integrated stadium pitch markings backdrop */}
+          <svg
+            viewBox="0 0 240 64"
+            aria-hidden="true"
+            className="pointer-events-none absolute right-0 top-0 h-full w-48 opacity-20"
+            preserveAspectRatio="xMaxYMid slice"
+          >
+            <g fill="none" stroke="#d8f5e3" strokeWidth="1.2">
+              <line x1="120" y1="0" x2="120" y2="64" />
+              <circle cx="120" cy="32" r="20" />
+              <rect x="172" y="10" width="68" height="44" rx="2" />
+              <rect x="206" y="20" width="34" height="24" rx="1" />
+            </g>
+          </svg>
+
+          {/* Compact Stadium Emblem */}
+          <div className="relative z-10 w-10 h-10 rounded-xl bg-black/30 border border-white/15 flex items-center justify-center shrink-0">
+            <svg viewBox="0 0 40 40" className="w-8 h-8" aria-hidden="true">
               <defs>
-                <linearGradient id="sk_hero" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#0b2018" />
-                  <stop offset="1" stopColor="#1d6b42" />
+                <linearGradient id="pitch_crest" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#123a26" />
+                  <stop offset="1" stopColor="#22794b" />
                 </linearGradient>
-                <radialGradient id="gw_hero">
-                  <stop offset="0" stopColor="#fff7c2" stopOpacity="0.9" />
-                  <stop offset="1" stopColor="#fff7c2" stopOpacity="0" />
+                <radialGradient id="flood_crest" cx="0.5" cy="0.15" r="0.65">
+                  <stop offset="0" stopColor="#fde68a" stopOpacity="0.65" />
+                  <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
                 </radialGradient>
               </defs>
-              <rect width="320" height="155" fill="url(#sk_hero)" />
-              <circle cx="48" cy="34" r="44" fill="url(#gw_hero)" />
-              <circle cx="272" cy="34" r="44" fill="url(#gw_hero)" />
-              <path d="M48 34v70M272 34v70" stroke="#9fb3a5" strokeWidth="3" />
-              <path d="M38 28h20v12H38zM262 28h20v12h-20z" fill="#fffbe0" />
-              <path d="M60 90h200l60 65H0z" fill="#2a8f58" />
-              <path d="M110 90h25l-15 65H40zM185 90h25l50 65h-40z" fill="#33a063" />
-              <g fill="none" stroke="#eef2e6" strokeWidth="2" opacity="0.85">
-                <path d="M160 90v65" />
-                <ellipse cx="160" cy="124" rx="42" ry="12" />
+              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#pitch_crest)" />
+              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#flood_crest)" />
+              <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.85">
+                <path d="M5 24h30" />
+                <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
               </g>
-              <circle cx="160" cy="124" r="8" fill="#fff" stroke="#111" strokeWidth="1.5" />
+              <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
             </svg>
-            <div className="flex items-center justify-between gap-2 mb-1.5 mland:mb-0.5">
-              <h1 className="text-3xl lg:text-4xl mland:text-xl font-bold font-display tracking-tight leading-none">ลูกหนังไทย</h1>
-            </div>
-            <p className="text-sm mland:text-[10.5px] leading-snug text-[var(--mut)] mb-2 mland:mb-1">จากลีกระดับจังหวัด สู่ลีกสูงสุดในประเทศ บอลถ้วยประชาชน และเวทีชิงแชมป์ทวีป</p>
-            <p className="text-xs mland:text-[9.5px] text-[var(--mut)] leading-relaxed">
-              ไต่ 3 ระดับ 48 ทีม · แข่งสด 2 มิติปรับแผนเรียลไทม์ · แมวมองและเส้นทางทีมชาติ
+          </div>
+
+          <div className="relative z-10 flex-1 min-w-0">
+            <h1 className="text-[19px] font-bold font-display tracking-wide leading-tight text-white">
+              ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
+            </h1>
+            <p className="text-[11px] font-medium text-emerald-100/85 truncate mt-0.5">
+              ปั้นสโมสรสู่แชมป์ลีกและเวทีทีมชาติ
             </p>
           </div>
-          <div className="mt-auto pt-2 mland:pt-1.5 shrink-0">
-            <PWAInstallButton variant="card" onToast={onToast} />
+
+          <div className="relative z-10 shrink-0">
+            <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 mland:gap-2 h-full min-h-0">
-          <div className="grid grid-cols-2 gap-3 mland:gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => { unlockAudio(); enterAutoMobileFullscreen().catch(() => undefined); openManagerSetup(firstEmptySlot('m')); }}
-              className="group relative overflow-hidden p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.03] transition-all cursor-pointer flex items-center justify-between gap-2.5"
-            >
-              <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-                <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-black/10 flex items-center justify-center text-xl mland:text-base shrink-0">📋</span>
-                <div className="min-w-0">
-                  <div className="text-sm sm:text-base mland:text-xs font-display leading-tight">โหมดผู้จัดการทีม</div>
-                  <div className="text-[11px] mland:text-[9px] font-medium opacity-80 mt-0.5 line-clamp-1">คุมแท็กติก แก้เกมสด ซื้อขายนักเตะ อัปเกรดสโมสร</div>
+        {/* Mode Launchers Side-by-Side (Portrait Fit) */}
+        <div className="shrink-0 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={() => { unlockAudio(); openManagerSetup(firstEmptySlot('m')); }}
+            className="p-2.5 rounded-2xl bg-gradient-to-br from-[#fad05a] via-[#f5c242] to-[#e5ac24] text-[#261900] font-bold text-left shadow-xs hover:brightness-[1.03] transition-all cursor-pointer flex items-center gap-2 min-w-0"
+          >
+            <span className="w-9 h-9 rounded-xl bg-black/10 flex items-center justify-center text-lg shrink-0">📋</span>
+            <div className="min-w-0">
+              <div className="text-xs sm:text-sm font-display leading-tight truncate">ผู้จัดการทีม</div>
+              <div className="text-[10px] font-medium opacity-80 truncate">คุมแผน & ซื้อขาย</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { unlockAudio(); openPlayerSetup(firstEmptySlot('p')); }}
+            className="p-2.5 rounded-2xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-xs hover:brightness-[1.05] transition-all cursor-pointer flex items-center gap-2 min-w-0"
+          >
+            <span className="w-9 h-9 rounded-xl bg-white/15 flex items-center justify-center text-lg shrink-0">⚽</span>
+            <div className="min-w-0">
+              <div className="text-xs sm:text-sm font-display leading-tight truncate">นักเตะอาชีพ</div>
+              <div className="text-[10px] font-medium opacity-85 truncate">ปั้นตัว & ทีมชาติ</div>
+            </div>
+          </button>
+        </div>
+
+        {/* 2-Column Side-by-Side Save Slots (Manager | Player) */}
+        {(() => {
+          const mCount = countSaves('m');
+          const pCount = countSaves('p');
+          return (
+            <div className="flex-1 min-h-0 grid grid-cols-2 gap-2">
+              <div className="min-h-0 flex flex-col p-2 game-card rounded-2xl gap-1.5">
+                <div className="shrink-0 font-bold text-[11px] flex items-center justify-between gap-1 text-[var(--ink)] px-0.5">
+                  <span className="truncate">📋 ผู้จัดการ</span>
+                  <span className="px-1.5 py-0.5 rounded-md bg-[var(--lamp-soft)] text-[var(--ink)] text-[9.5px] font-bold tabular shrink-0">
+                    {mCount}/{NSL}
+                  </span>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  {renderSlotList('m')}
                 </div>
               </div>
-              <span className="text-lg mland:text-sm opacity-60 group-hover:translate-x-0.5 transition-transform shrink-0">›</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => { unlockAudio(); enterAutoMobileFullscreen().catch(() => undefined); openPlayerSetup(firstEmptySlot('p')); }}
-              className="group relative overflow-hidden p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-br from-[#1b9958] via-[#158049] to-[#0f6338] text-white font-bold text-left shadow-sm hover:shadow-md hover:brightness-[1.05] transition-all cursor-pointer flex items-center justify-between gap-2.5"
-            >
-              <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-                <span className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg bg-white/15 flex items-center justify-center text-xl mland:text-base shrink-0">⚽</span>
-                <div className="min-w-0">
-                  <div className="text-sm sm:text-base mland:text-xs font-display leading-tight">โหมดนักเตะอาชีพ</div>
-                  <div className="text-[11px] mland:text-[9px] font-medium opacity-85 mt-0.5 line-clamp-1">สร้างตัวละคร ฝึกซ้อม ปลดล็อกสกิล และติดทีมชาติ</div>
+
+              <div className="min-h-0 flex flex-col p-2 game-card rounded-2xl gap-1.5">
+                <div className="shrink-0 font-bold text-[11px] flex items-center justify-between gap-1 text-[var(--ink)] px-0.5">
+                  <span className="truncate">⚽ นักเตะ</span>
+                  <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[9.5px] font-bold tabular shrink-0">
+                    {pCount}/{NSL}
+                  </span>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  {renderSlotList('p')}
                 </div>
               </div>
-              <span className="text-lg mland:text-sm opacity-75 group-hover:translate-x-0.5 transition-transform shrink-0">›</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mland:gap-2 flex-1 min-h-0">
-            <div className="p-3 mland:p-2 game-card rounded-2xl mland:rounded-xl flex flex-col min-h-0">
-              <div className="font-bold text-xs sm:text-sm mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
-                <span>เซฟโหมดผู้จัดการ</span>
-                <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">{renderSlotList('m')}</div>
             </div>
-            <div className="p-3 mland:p-2 game-card rounded-2xl mland:rounded-xl flex flex-col min-h-0">
-              <div className="font-bold text-xs sm:text-sm mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0 flex items-center justify-between text-[var(--ink)]">
-                <span>เซฟโหมดนักเตะ</span>
-                <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">3 ช่อง</span>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">{renderSlotList('p')}</div>
+          );
+        })()}
+
+        {/* Save Code Import Trigger (Opens Modal Overlay so Page Never Grows) */}
+        <button
+          type="button"
+          onClick={() => setShowImport(true)}
+          className="shrink-0 w-full py-2.5 px-3.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-xs font-semibold text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)] transition-colors cursor-pointer"
+        >
+          📥 นำเข้าโค้ดเซฟจากเครื่องอื่น
+        </button>
+      </div>
+
+      {showImport && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setShowImport(false)}
+        >
+          <div
+            className="w-full max-w-md p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-bold text-sm font-display">📥 นำเข้าโค้ดเซฟ</h3>
+              <button
+                type="button"
+                onClick={() => setShowImport(false)}
+                className="w-7 h-7 rounded-full bg-[var(--surface-2)] text-xs font-bold cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
-          </div>
-
-          <div className="flex justify-end shrink-0">
-            <button type="button" onClick={() => setShowImport(!showImport)} className="text-xs mland:text-[10px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer">
-              📥 นำเข้าโค้ดเซฟจากเครื่องอื่น
-            </button>
-          </div>
-
-          {showImport && (
-            <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-              <textarea
-                value={importText}
-                onChange={(e) => setImportText(e.target.value)}
-                placeholder="วางโค้ดเซฟที่นี่..."
-                rows={1}
-                className="w-full p-2 mland:p-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10px] font-mono mb-1.5 mland:mb-1"
-              />
-              <button type="button" onClick={handleImport} className="px-4 py-1.5 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer">
+            <textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder="วางโค้ดเซฟที่นี่..."
+              rows={4}
+              className="w-full p-2.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-mono"
+            />
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowImport(false)}
+                className="px-4 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                onClick={handleImport}
+                className="flex-1 py-2 px-4 rounded-xl bg-[var(--g)] text-white text-xs font-bold cursor-pointer hover:brightness-105"
+              >
                 ยืนยันนำเข้าเซฟ
               </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

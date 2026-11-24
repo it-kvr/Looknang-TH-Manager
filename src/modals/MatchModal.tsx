@@ -5,6 +5,10 @@ import { RN, TN, SIGL, AR_T } from '../data/thaiFootballData';
 import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, vibrate, triggerConfetti } from '../utils/audioTheme';
 
 type TimelineKind =
+  | 'kickoff'
+  | 'first_half'
+  | 'second_half'
+  | 'full_time'
   | 'goal'
   | 'pen_goal'
   | 'pen_awarded'
@@ -17,15 +21,16 @@ type TimelineKind =
 
 interface MatchTimelineItem {
   id: string;
+  seq: number;
   m: number;
-  side: 'H' | 'A';
+  side: 'H' | 'A' | 'N';
   kind: TimelineKind;
   who: string;
   detail?: string;
 }
-import { getShirtNo, getFormationSlots, pen, xi, DT, injD, matchKits, pickGK } from '../engine/playerCore';
+import { getShirtNo, xi, DT, injD, matchKits, pickGK } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf } from '../engine/simulation';
-import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
@@ -142,7 +147,9 @@ export const MatchModal: React.FC<{
   const subAlertEnabled = settings.subAlertEnabled ?? true;
   const subAlertFitTh = clamp(settings.subAlertFitThreshold ?? 58, 45, 75);
   const subAlertFormTh = clamp(settings.subAlertFormThreshold ?? 5.8, 5.0, 6.4);
-  const [timelineEvents, setTimelineEvents] = useState<MatchTimelineItem[]>([]);
+  const [timelineEvents, setTimelineEvents] = useState<MatchTimelineItem[]>(() => [
+    { id: 'phase-kickoff-0', seq: 1, m: 0, side: 'N', kind: 'kickoff', who: 'เริ่มเกม', detail: 'เขี่ยบอลครึ่งแรก' }
+  ]);
   const [matchYellows, setMatchYellows] = useState<Record<string, number>>({});
   const [matchCards, setMatchCards] = useState<MatchCardEvent[]>([]);
   const [sentOff, setSentOff] = useState<string[]>([]);
@@ -196,7 +203,10 @@ export const MatchModal: React.FC<{
     gh: 0,
     ga: 0,
     evs: [] as MatchEvent[],
-    timeline: [] as MatchTimelineItem[],
+    timeline: [
+      { id: 'phase-kickoff-0', seq: 1, m: 0, side: 'N' as const, kind: 'kickoff' as const, who: 'เริ่มเกม', detail: 'เขี่ยบอลครึ่งแรก' }
+    ] as MatchTimelineItem[],
+    timelineSeq: 1,
     done: false
   });
 
@@ -439,8 +449,15 @@ export const MatchModal: React.FC<{
     ps[playerName] = cur;
   };
 
-  const pushTimeline = (m: number, side: 'H' | 'A', kind: TimelineKind, who: string, detail?: string) => {
-    const tl = simRef.current.timeline;
+  const pushTimeline = (m: number, side: 'H' | 'A' | 'N', kind: TimelineKind, who: string, detail?: string) => {
+    const sr = simRef.current;
+    const tl = sr.timeline;
+    if (
+      (kind === 'kickoff' || kind === 'first_half' || kind === 'second_half' || kind === 'full_time') &&
+      tl.some((t) => t.kind === kind)
+    ) {
+      return;
+    }
     if ((kind === 'pen_goal' || kind === 'pen_miss') && tl.length > 0) {
       for (let i = tl.length - 1; i >= 0; i--) {
         if (tl[i].side === side && tl[i].kind === 'pen_awarded' && Math.abs(m - tl[i].m) <= 2) {
@@ -449,8 +466,10 @@ export const MatchModal: React.FC<{
         }
       }
     }
+    sr.timelineSeq += 1;
     const item: MatchTimelineItem = {
-      id: `${m}-${side}-${kind}-${tl.length + 1}-${Math.random().toString(36).slice(2, 6)}`,
+      id: `${m}-${side}-${kind}-${sr.timelineSeq}-${Math.random().toString(36).slice(2, 6)}`,
+      seq: sr.timelineSeq,
       m,
       side,
       kind,
@@ -4350,6 +4369,7 @@ export const MatchModal: React.FC<{
     setStoppageBadge(0);
     setLiveFitMap({ ...sr.liveFit });
     pushLog(46, `▶️ กรรมการเป่าเริ่มครึ่งหลัง!`, 'sys');
+    pushTimeline(46, 'N', 'second_half', 'เริ่มครึ่งหลัง', 'ครึ่งหลัง');
   };
 
   const finalizeMatch = (precomputedWinnerHome?: boolean, precomputedPenText?: string) => {
@@ -4409,17 +4429,20 @@ export const MatchModal: React.FC<{
 
     const finalGh = sr.gh;
     const finalGa = sr.ga;
+    let finalPenText: string | undefined = precomputedPenText;
     if (kind !== 'league' && finalGh === finalGa) {
       if (precomputedWinnerHome !== undefined && precomputedPenText) {
         setPenResult({ winnerHome: precomputedWinnerHome, text: precomputedPenText });
       } else {
         const pen = computePenWinnerInstant();
+        finalPenText = pen.text;
         setPenResult(pen);
         pushLog(90, `🎯 ${pen.text}`, 'sys');
       }
     } else {
       pushLog(90, `🏁 จบเกม! ${homeOrig.name} ${finalGh}-${finalGa} ${awayOrig.name}`, 'sys');
     }
+    pushTimeline(90, 'N', 'full_time', 'จบเกม', finalPenText || `${finalGh} - ${finalGa}`);
     setActionBanner({ label: `🏁 จบเกม ${finalGh} - ${finalGa}`, tone: 'normal' });
   };
 
@@ -4809,6 +4832,7 @@ export const MatchModal: React.FC<{
           w.phase = 'halftime';
           SFX.halfWhistle();
           pushLog(45, `☕ พักครึ่งเวลา: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
+          pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
           w.phaseLabel = `☕ พักครึ่งเวลา (${simRef.current.gh} - ${simRef.current.ga})`;
           w.phaseTone = 'normal';
           syncUiStatsFromWorld(w, 45);
@@ -4866,10 +4890,19 @@ export const MatchModal: React.FC<{
       return;
     }
     const startMin = Math.floor(w.minuteFloat);
+    if (startMin >= 45) {
+      pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
+    }
     for (let m = startMin + 1; m <= 90; m++) {
-      if (m === 46) w.secondHalf = true;
+      if (m === 46) {
+        w.secondHalf = true;
+        pushTimeline(46, 'N', 'second_half', 'เริ่มครึ่งหลัง', 'ครึ่งหลัง');
+      }
       stepInstantMinute(m, liveTacticsRef.current.tac);
-      if (m === 45) pushLog(45, `⏱️ จบครึ่งแรก: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
+      if (m === 45) {
+        pushLog(45, `⏱️ จบครึ่งแรก: ${homeOrig.name} ${simRef.current.gh}-${simRef.current.ga} ${awayOrig.name}`, 'sys');
+        pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
+      }
     }
     w.minuteFloat = 90;
     w.lastTickedMin = 90;
@@ -5276,6 +5309,14 @@ export const MatchModal: React.FC<{
   const renderMatchTimelinePanel = () => {
     const iconForKind = (kind: TimelineKind) => {
       switch (kind) {
+        case 'kickoff':
+          return <span className="text-[11px] leading-none shrink-0">🚩</span>;
+        case 'first_half':
+          return <span className="text-[11px] leading-none shrink-0">☕</span>;
+        case 'second_half':
+          return <span className="text-[11px] leading-none shrink-0">▶️</span>;
+        case 'full_time':
+          return <span className="text-[11px] leading-none shrink-0">🏁</span>;
         case 'goal':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">⚽</span>;
         case 'pen_goal':
@@ -5301,6 +5342,14 @@ export const MatchModal: React.FC<{
     const labelForKind = (kind: TimelineKind, detail?: string) => {
       if (detail) return detail;
       switch (kind) {
+        case 'kickoff':
+          return 'เริ่มครึ่งแรก';
+        case 'first_half':
+          return 'จบครึ่งแรก';
+        case 'second_half':
+          return 'เริ่มครึ่งหลัง';
+        case 'full_time':
+          return 'จบเกม';
         case 'goal':
           return 'ประตู';
         case 'pen_goal':
@@ -5322,7 +5371,8 @@ export const MatchModal: React.FC<{
       }
     };
 
-    const sortedTimeline = timelineEvents.slice().sort((a, b) => a.m - b.m);
+    const sortedTimeline = timelineEvents.slice().sort((a, b) => (b.m - a.m) || (b.seq - a.seq));
+    const keyEventCount = sortedTimeline.filter((t) => t.side !== 'N').length;
 
     return (
       <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 shadow-xs">
@@ -5331,80 +5381,103 @@ export const MatchModal: React.FC<{
             <span>⏱️ ไทม์ไลน์การแข่งขัน</span>
           </span>
           <span className="text-[10px] font-semibold text-[var(--mut)] tabular">
-            {sortedTimeline.length > 0 ? `${sortedTimeline.length} จังหวะสำคัญ` : 'กำลังรอจังหวะสำคัญ'}
+            {keyEventCount > 0 ? `${keyEventCount} จังหวะสำคัญ` : 'ล่าสุดขึ้นก่อน'}
           </span>
         </div>
 
-        {sortedTimeline.length === 0 ? (
-          <div className="py-5 text-center text-[11px] text-[var(--mut)]">
-            ยังไม่มีประตู จุดโทษ ใบเหลือง-แดง อาการบาดเจ็บ หรือจังหวะพลาดสำคัญ
-          </div>
-        ) : (
-          <div className="relative py-1">
-            {/* Central Vertical Minute Spine */}
-            <div className="pointer-events-none absolute top-1 bottom-1 left-1/2 -translate-x-1/2 w-px bg-[var(--line)]" />
+        <div className="relative py-1">
+          {/* Central Vertical Minute Spine */}
+          <div className="pointer-events-none absolute top-1 bottom-1 left-1/2 -translate-x-1/2 w-px bg-[var(--line)]" />
 
-            <div className="space-y-1.5">
-              {sortedTimeline.map((item) => {
-                const isHomeSide = item.side === 'H';
-                const shortWho = item.who.split(' ')[0] || item.who;
-                const isGoal = item.kind === 'goal' || item.kind === 'pen_goal';
-                const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss';
-                const titleCls = isGoal
-                  ? 'text-[var(--g)] font-extrabold'
-                  : isNeg
-                    ? 'text-[var(--red)] font-bold'
-                    : 'text-[var(--ink)] font-bold';
-                const subText = labelForKind(item.kind, item.detail);
-
+          <div className="space-y-1.5">
+            {sortedTimeline.map((item) => {
+              if (item.side === 'N') {
+                const isFt = item.kind === 'full_time';
+                const isHt = item.kind === 'first_half';
                 return (
-                  <div key={item.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] relative">
-                    {/* Home Event (Left Side) */}
-                    <div className={`min-w-0 ${isHomeSide ? 'flex items-center justify-end gap-1.5 text-right pr-1' : ''}`}>
-                      {isHomeSide && (
-                        <>
-                          <div className="min-w-0 leading-tight">
-                            <div className={`truncate ${titleCls}`}>{shortWho}</div>
-                            <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
-                          </div>
-                          {iconForKind(item.kind)}
-                        </>
-                      )}
-                    </div>
-
-                    {/* Center Minute Node */}
+                  <div key={item.id} className="relative flex justify-center py-0.5">
                     <div
-                      className={`z-10 min-w-[30px] h-5 px-1.5 rounded-full border text-[9.5px] mland:text-[8.5px] font-extrabold tabular flex items-center justify-center shadow-2xs ${
-                        isGoal
+                      className={`z-10 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] mland:text-[9px] font-extrabold tabular shadow-2xs ${
+                        isFt
                           ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                          : isNeg
-                            ? 'bg-[var(--red)] border-[var(--red)] text-white'
-                            : item.kind === 'yellow'
-                              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
-                              : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)]'
+                          : isHt
+                            ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#7a4f00] dark:text-[var(--lamp)]'
+                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)]'
                       }`}
                     >
-                      {item.m}&apos;
-                    </div>
-
-                    {/* Away Event (Right Side) */}
-                    <div className={`min-w-0 ${!isHomeSide ? 'flex items-center justify-start gap-1.5 text-left pl-1' : ''}`}>
-                      {!isHomeSide && (
+                      {iconForKind(item.kind)}
+                      <span>{item.m}&apos;</span>
+                      <span>·</span>
+                      <span>{item.who}</span>
+                      {item.detail && (
                         <>
-                          {iconForKind(item.kind)}
-                          <div className="min-w-0 leading-tight">
-                            <div className={`truncate ${titleCls}`}>{shortWho}</div>
-                            <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
-                          </div>
+                          <span className="opacity-60">·</span>
+                          <span>{item.detail}</span>
                         </>
                       )}
                     </div>
                   </div>
                 );
-              })}
-            </div>
+              }
+
+              const isHomeSide = item.side === 'H';
+              const shortWho = item.who.split(' ')[0] || item.who;
+              const isGoal = item.kind === 'goal' || item.kind === 'pen_goal';
+              const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss';
+              const titleCls = isGoal
+                ? 'text-[var(--g)] font-extrabold'
+                : isNeg
+                  ? 'text-[var(--red)] font-bold'
+                  : 'text-[var(--ink)] font-bold';
+              const subText = labelForKind(item.kind, item.detail);
+
+              return (
+                <div key={item.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] relative">
+                  {/* Home Event (Left Side) */}
+                  <div className={`min-w-0 ${isHomeSide ? 'flex items-center justify-end gap-1.5 text-right pr-1' : ''}`}>
+                    {isHomeSide && (
+                      <>
+                        <div className="min-w-0 leading-tight">
+                          <div className={`truncate ${titleCls}`}>{shortWho}</div>
+                          <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
+                        </div>
+                        {iconForKind(item.kind)}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Center Minute Node */}
+                  <div
+                    className={`z-10 min-w-[30px] h-5 px-1.5 rounded-full border text-[9.5px] mland:text-[8.5px] font-extrabold tabular flex items-center justify-center shadow-2xs ${
+                      isGoal
+                        ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                        : isNeg
+                          ? 'bg-[var(--red)] border-[var(--red)] text-white'
+                          : item.kind === 'yellow'
+                            ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)]'
+                    }`}
+                  >
+                    {item.m}&apos;
+                  </div>
+
+                  {/* Away Event (Right Side) */}
+                  <div className={`min-w-0 ${!isHomeSide ? 'flex items-center justify-start gap-1.5 text-left pl-1' : ''}`}>
+                    {!isHomeSide && (
+                      <>
+                        {iconForKind(item.kind)}
+                        <div className="min-w-0 leading-tight">
+                          <div className={`truncate ${titleCls}`}>{shortWho}</div>
+                          <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -5433,7 +5506,8 @@ export const MatchModal: React.FC<{
                 ) : (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-extrabold tabular text-[9.5px] mland:text-[8.5px] shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
-                    <span>{clockLabel}{stoppageBadge > 0 ? `+${stoppageBadge}'` : ''}</span>
+                    <span>{clockLabel}</span>
+                    {stoppageBadge > 0 && <span className="opacity-75">(+{stoppageBadge}&apos;)</span>}
                   </span>
                 )}
               </div>
@@ -5504,107 +5578,57 @@ export const MatchModal: React.FC<{
               </div>
             </div>
 
-            {/* Right: Abbreviated Match Control Buttons */}
+            {/* Right: Essential Match Playback Controls Only */}
             <div className="flex items-center justify-end gap-1 shrink-0 ml-auto">
               {!done ? (
-                <>
+                matchPhaseUi === 'halftime' ? (
                   <button
                     type="button"
-                    title={paused ? 'เล่นต่อ' : 'พักเกม'}
-                    aria-label={paused ? 'เล่นต่อ' : 'พักเกม'}
-                    onClick={() => setPaused((p) => !p)}
-                    className={`h-7 mland:h-6 min-w-[28px] px-1.5 rounded-lg border text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
-                      paused
-                        ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
-                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                    }`}
+                    title="ข้ามครึ่งหลังไปจบเกม"
+                    aria-label="ข้ามครึ่งหลังไปจบเกม"
+                    onClick={skipToEnd}
+                    className="h-7 mland:h-6 px-2.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
                   >
-                    {paused ? '▶' : '⏸'}
+                    ⏩ ข้าม
                   </button>
-                  <button
-                    type="button"
-                    title="ปรับความเร็วการแข่งขัน"
-                    onClick={cycleMatchSpeed}
-                    className="h-7 mland:h-6 min-w-[34px] px-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] mland:text-[9px] font-extrabold tabular cursor-pointer whitespace-nowrap"
-                  >
-                    {speed}x
-                  </button>
-                  <button
-                    type="button"
-                    title="แสดง/ซ่อนเส้นวิ่งทำทาง"
-                    aria-label="แสดง/ซ่อนเส้นวิ่งทำทาง"
-                    onClick={() => setShowRunVectors((v) => !v)}
-                    className={`h-7 mland:h-6 w-7 mland:w-6 rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer flex items-center justify-center transition-colors ${showRunVectors ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'}`}
-                  >
-                    ↗️
-                  </button>
-                  <button
-                    type="button"
-                    title="แสดง/ซ่อนป้ายตำแหน่งบนหัวนักเตะ"
-                    aria-label="แสดง/ซ่อนป้ายตำแหน่ง"
-                    onClick={() => setShowPositions((v) => !v)}
-                    className={`h-7 mland:h-6 w-7 mland:w-6 rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer flex items-center justify-center transition-colors ${showPositions ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'}`}
-                  >
-                    🏷️
-                  </button>
-                  <button
-                    type="button"
-                    title="เปิด/ปิดภาพช้าสโลว์โมชันจังหวะสำคัญ"
-                    aria-label="สโลว์โมชัน"
-                    onClick={() => setCineSlowMo((v) => !v)}
-                    className={`h-7 mland:h-6 w-7 mland:w-6 rounded-lg text-[11px] mland:text-[9.5px] font-bold border cursor-pointer flex items-center justify-center transition-colors ${cineSlowMo ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'}`}
-                  >
-                    🎬
-                  </button>
-                  {state.mode === 'm' && (
+                ) : (
+                  <>
                     <button
                       type="button"
-                      title="แก้เกมและเปลี่ยนตัว"
-                      onClick={() => {
-                        if (mlandMatchTab !== 'tactics') {
-                          openTacticsStudio();
-                        } else {
-                          setMlandMatchTab('stats');
-                        }
-                      }}
-                      className={`h-7 mland:h-6 px-1.5 rounded-lg border text-[10.5px] mland:text-[9px] font-bold cursor-pointer whitespace-nowrap tabular transition-colors ${
-                        mlandMatchTab === 'tactics'
+                      title={paused ? 'เล่นต่อ' : 'พักเกม'}
+                      aria-label={paused ? 'เล่นต่อ' : 'พักเกม'}
+                      onClick={() => setPaused((p) => !p)}
+                      className={`h-7 mland:h-6 min-w-[30px] px-2 rounded-lg border text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
+                        paused
                           ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
-                          : 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] hover:brightness-95'
+                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
                       }`}
                     >
-                      🔄{subsUsed.length}/5
+                      {paused ? '▶' : '⏸'}
                     </button>
-                  )}
-                  {matchPhaseUi === 'halftime' ? (
                     <button
                       type="button"
-                      title="เริ่มครึ่งหลัง"
-                      onClick={() => handleStartSecondHalf()}
-                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap"
+                      title="ปรับความเร็วการแข่งขัน"
+                      onClick={cycleMatchSpeed}
+                      className="h-7 mland:h-6 min-w-[36px] px-2 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] mland:text-[9px] font-extrabold tabular cursor-pointer whitespace-nowrap"
                     >
-                      ▶2H
+                      {speed}x
                     </button>
-                  ) : (
                     <button
                       type="button"
                       title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       onClick={skipToEnd}
-                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
+                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
                     >
-                      ⏩
+                      ⏩<span className="hidden sm:inline mland:hidden ml-0.5">ข้าม</span>
                     </button>
-                  )}
-                </>
+                  </>
+                )
               ) : (
-                <button
-                  type="button"
-                  onClick={handleConfirmFinish}
-                  className="h-7 mland:h-6 px-2.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9.5px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-105"
-                >
-                  ✅ ต่อ
-                </button>
+                <span className="text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] whitespace-nowrap px-1">
+                  🏁 จบเกม
+                </span>
               )}
             </div>
           </div>
@@ -5681,21 +5705,57 @@ export const MatchModal: React.FC<{
             <div className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
               {!(done && fullTimeAnalysis) ? (
                 <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
-                  {/* Live Match Event & Clock Bar Mounted Directly on Pitch */}
+                  {/* Live Match Event Banner + 2D Pitch Display Toggles */}
                   <div className="px-2.5 sm:px-3 py-1.5 mland:px-2.5 mland:py-1 bg-[#072113]/95 border-b border-white/15 flex items-center justify-between gap-2 text-white shrink-0">
                     <span className={`px-2.5 mland:px-2 py-0.5 rounded-lg border text-[11px] sm:text-xs mland:text-[10.5px] font-bold truncate min-w-0 ${bannerCls}`}>
                       {actionBanner.label}
                     </span>
-                    <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
-                      {stoppageBadge > 0 && (
-                        <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[11px] mland:text-[10px]">
-                          +{stoppageBadge}&apos;
-                        </span>
-                      )}
-                      <span className="px-2.5 mland:px-2 py-0.5 rounded-lg bg-[var(--g)] text-white font-extrabold tabular text-xs sm:text-sm mland:text-[11px] shadow-xs">
-                        {done ? 'FT' : clockLabel}
-                      </span>
-                    </div>
+                    {matchPhaseUi !== 'halftime' && !done && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          title="แสดง/ซ่อนเส้นวิ่งทำทาง"
+                          aria-label="แสดง/ซ่อนเส้นวิ่งทำทาง"
+                          onClick={() => setShowRunVectors((v) => !v)}
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[9px] font-bold border cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
+                            showRunVectors
+                              ? 'bg-amber-400/20 border-amber-400/55 text-amber-200'
+                              : 'bg-white/8 border-white/15 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          <span>↗️</span>
+                          <span className="hidden sm:inline mland:hidden">เส้นวิ่ง</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="แสดง/ซ่อนชื่อตำแหน่งบนสนาม"
+                          aria-label="แสดง/ซ่อนป้ายตำแหน่ง"
+                          onClick={() => setShowPositions((v) => !v)}
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[9px] font-bold border cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
+                            showPositions
+                              ? 'bg-emerald-500/25 border-emerald-400/55 text-emerald-200'
+                              : 'bg-white/8 border-white/15 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          <span>🏷️</span>
+                          <span className="hidden sm:inline mland:hidden">ตำแหน่ง</span>
+                        </button>
+                        <button
+                          type="button"
+                          title="เปิด/ปิดภาพช้าสโลว์โมชันจังหวะสำคัญ"
+                          aria-label="สโลว์โมชัน"
+                          onClick={() => setCineSlowMo((v) => !v)}
+                          className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[9px] font-bold border cursor-pointer inline-flex items-center gap-1 transition-colors whitespace-nowrap ${
+                            cineSlowMo
+                              ? 'bg-amber-400/20 border-amber-400/55 text-amber-200'
+                              : 'bg-white/8 border-white/15 text-white/60 hover:text-white'
+                          }`}
+                        >
+                          <span>🎬</span>
+                          <span className="hidden sm:inline mland:hidden">สโลว์</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {injuryAlert && !done && (
                     <div className="px-2.5 sm:px-3 py-1.5 mland:px-2 mland:py-1 bg-rose-950/95 border-b border-rose-400/50 flex flex-wrap items-center justify-between gap-2 text-white shrink-0">
@@ -5741,70 +5801,40 @@ export const MatchModal: React.FC<{
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
 
-                    {/* Halftime Tactical Pitch Stage: Live Formation, Player Ratings & Energy */}
+                    {/* Halftime Tactical Pitch Stage: Unified SVG Formation Pitch */}
                     {matchPhaseUi === 'halftime' && !done && (() => {
-                      const hSlots = getFormationSlots(homeOrig);
-                      const aSlots = getFormationSlots(awayOrig);
                       const curHomeLu = meIsHome ? liveLu : liveOppLu;
                       const curAwayLu = meIsHome ? liveOppLu : liveLu;
 
-                      const buildHtNodes = (
-                        team: Team,
-                        xiNames: string[],
-                        slots: ReturnType<typeof getFormationSlots>,
-                        side: 'H' | 'A',
-                        kit: string,
-                        gkKit: string
-                      ) =>
-                        xiNames.map((name, i) => {
-                          const pl = team.sq.find((q) => q.n === name) || team.sq[i];
-                          const slot = slots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
-                          const no = pl ? getShirtNo(team, pl) : i + 1;
-                          const rt = liveFormMap[name] ?? 6.5;
+                      const buildHtMeta = (team: Team, xiNames: string[]): Record<string, PitchPlayerMeta> => {
+                        const out: Record<string, PitchPlayerMeta> = {};
+                        xiNames.forEach((name, idx) => {
+                          const pl = team.sq.find((q) => q.n === name) || team.sq[idx];
+                          const rt = Number((liveFormMap[name] ?? 6.5).toFixed(1));
                           const fitVal = Math.round(liveFitMap[name] ?? pl?.fit ?? 100);
                           const goals = evs.filter((e) => e.t === team.id && e.who === name).length;
                           const assists = evs.filter((e) => e.t === team.id && e.as === name).length;
                           const pCards = matchCards.filter((c) => c.t === team.id && c.who === name);
-                          const hasRed = sentOff.includes(name) || pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
-                          const hasYellow = !hasRed && pCards.some((c) => c.type === 'Y');
+                          const isRed = sentOff.includes(name) || pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
+                          const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
                           const subInEv = subLog.find((s) => s.t === team.id && s.inPlayer === name);
-                          const isMe = Boolean(pl?.me || (isPlayerMode && name === myPlayerName));
-                          let xPct = 50;
-                          let yPct = 50;
-                          if (htPitchMode === 'all') {
-                            xPct = side === 'H' ? clamp(7.5 + ((92 - slot.y) / 78) * 36.5, 7.5, 44) : clamp(92.5 - ((92 - slot.y) / 78) * 36.5, 56, 92.5);
-                            yPct = side === 'H' ? clamp(14 + (slot.x / 100) * 72, 14, 86) : clamp(86 - (slot.x / 100) * 72, 14, 86);
-                          } else {
-                            xPct = clamp(10 + ((92 - slot.y) / 78) * 80, 10, 90);
-                            yPct = clamp(15 + (slot.x / 100) * 70, 15, 85);
-                          }
-                          return {
-                            name,
-                            shortName: name.split(' ')[0] || name,
-                            player: pl,
-                            team,
-                            side,
-                            no,
-                            role: slot.sp,
-                            rt,
+                          out[name] = {
+                            rating: rt,
                             fitVal,
                             goals,
                             assists,
-                            hasRed,
-                            hasYellow,
-                            subInEv,
-                            isMe,
-                            xPct,
-                            yPct,
-                            kit: slot.pos === 'GK' ? gkKit : kit,
-                            trim: slot.pos === 'GK' ? '#ffffff' : side === 'H' ? homeTrim : awayTrim
+                            isRed,
+                            yellowCards,
+                            isInjured: injuredNamesUi.includes(name),
+                            subInMin: subInEv?.m
                           };
                         });
+                        return out;
+                      };
 
-                      const hNodes = buildHtNodes(homeOrig, curHomeLu, hSlots, 'H', homeKit, homeGkKit);
-                      const aNodes = buildHtNodes(awayOrig, curAwayLu, aSlots, 'A', awayKit, awayGkKit);
-                      const visibleNodes = htPitchMode === 'H' ? hNodes : htPitchMode === 'A' ? aNodes : [...hNodes, ...aNodes];
-                      const activeTeam = htPitchMode === 'A' ? awayOrig : homeOrig;
+                      const hMeta = buildHtMeta(liveHome, curHomeLu);
+                      const aMeta = buildHtMeta(liveAway, curAwayLu);
+                      const activeTeam = htPitchMode === 'A' ? liveAway : liveHome;
                       const formLabel = activeTeam.cf ? 'กำหนดเอง' : activeTeam.form;
                       const htPickedInfo = htPickedPlayer
                         ? (() => {
@@ -5820,74 +5850,44 @@ export const MatchModal: React.FC<{
                             return { name: htPickedPlayer, team: t, role: p?.ro || 'CM', no, rt, fitVal, gl, as, cards, hasRed };
                           })()
                         : null;
-                      const htRatingCls = (rt: number) =>
-                        rt >= 7.8
-                          ? 'bg-[#facc15] text-[#1c1300] border-[#fef08a]'
-                          : rt >= 7.0
-                            ? 'bg-emerald-500 text-white border-emerald-200/80'
-                            : rt >= 6.2
-                              ? 'bg-slate-900/95 text-white border-slate-400/50'
-                              : 'bg-rose-600 text-white border-rose-200/80';
 
                       return (
-                        <div className="flex flex-col bg-[#0b2e1b]">
+                        <div className="flex flex-col bg-[var(--surface)] text-[var(--ink)]">
                           {/* Top Team & Formation Header */}
-                          <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[#072113] border-b border-white/15 flex flex-wrap items-center justify-between gap-1.5 text-white">
+                          <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-1.5">
                             <div className="flex items-center gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold min-w-0">
                               <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] mland:text-[8px] font-extrabold shrink-0">☕ พักครึ่ง</span>
-                              <span className="truncate">แผน {htPitchMode === 'all' ? `${homeOrig.cf ? 'กำหนดเอง' : homeOrig.form} vs ${awayOrig.cf ? 'กำหนดเอง' : awayOrig.form}` : `${formLabel}${activeTeam.id === meTeamOrig.id ? ` · ${AR_T[liveTac]}` : ''}`}</span>
+                              <span className="truncate">
+                                แผน {htPitchMode === 'all' ? `${liveHome.cf ? 'กำหนดเอง' : liveHome.form} vs ${liveAway.cf ? 'กำหนดเอง' : liveAway.form}` : `${formLabel}${activeTeam.id === meTeamOrig.id ? ` · ${AR_T[liveTac]}` : ''}`}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/10 text-[10px] mland:text-[8.5px]">
+                            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px]">
                               <button
                                 type="button"
                                 onClick={() => setHtPitchMode('all')}
-                                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap ${htPitchMode === 'all' ? 'bg-emerald-500 text-white' : 'text-white/75 hover:text-white'}`}
+                                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap ${htPitchMode === 'all' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                               >
                                 ทั้งหมด
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setHtPitchMode('H')}
-                                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[88px] truncate ${htPitchMode === 'H' ? 'bg-white text-slate-900' : 'text-white/75 hover:text-white'}`}
+                                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[88px] truncate ${htPitchMode === 'H' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                               >
                                 {homeOrig.name}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setHtPitchMode('A')}
-                                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[88px] truncate ${htPitchMode === 'A' ? 'bg-white text-slate-900' : 'text-white/75 hover:text-white'}`}
+                                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[88px] truncate ${htPitchMode === 'A' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                               >
                                 {awayOrig.name}
                               </button>
                             </div>
                           </div>
 
-                          {/* Live Halftime Turf Pitch */}
-                          <div
-                            className="relative w-full aspect-[16/8.8] max-h-[calc(96dvh-195px)] mland:min-h-[165px] mland:max-h-[calc(97dvh-205px)] select-none overflow-hidden"
-                            style={{
-                              backgroundImage:
-                                'repeating-linear-gradient(90deg, #175c36 0%, #175c36 8.333%, #1d6b40 8.333%, #1d6b40 16.666%)'
-                            }}
-                          >
-                            <div
-                              className="absolute inset-0 pointer-events-none"
-                              style={{ background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.3) 100%)' }}
-                            />
-                            <svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
-                              <g stroke="rgba(240,253,244,0.55)" strokeWidth="2.2" fill="none">
-                                <rect x="26" y="20" width="948" height="520" />
-                                <line x1="500" y1="20" x2="500" y2="540" />
-                                <circle cx="500" cy="280" r="76" />
-                                <circle cx="500" cy="280" r="3.5" fill="rgba(240,253,244,0.8)" />
-                                <rect x="26" y="130" width="145" height="300" />
-                                <rect x="26" y="205" width="52" height="150" />
-                                <rect x="829" y="130" width="145" height="300" />
-                                <rect x="922" y="205" width="52" height="150" />
-                              </g>
-                            </svg>
-
-                            {/* Selected Halftime Player Popover */}
+                          {/* Unified SVG Formation Pitch Container */}
+                          <div className="relative w-full p-2 mland:p-1.5 h-[335px] sm:h-[380px] mland:h-[calc(97dvh-205px)] mland:min-h-[170px] select-none overflow-hidden flex items-center justify-center">
                             {htPickedInfo && (
                               <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 backdrop-blur-md border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                                 <div className="min-w-0 space-y-0.5">
@@ -5929,85 +5929,71 @@ export const MatchModal: React.FC<{
                               </div>
                             )}
 
-                            {/* Halftime Player Nodes with Rating + Energy Bar */}
-                            {visibleNodes.map((n) => {
-                              const isAll = htPitchMode === 'all';
-                              const sizeCls = isAll ? 'w-7 h-7 sm:w-8 sm:h-8 mland:w-5 mland:h-5' : 'w-9 h-9 sm:w-10.5 sm:h-10.5 mland:w-6.5 mland:h-6.5';
-                              const faceSize = isAll ? 32 : 42;
-                              const isPicked = htPickedPlayer === n.name;
-                              const fitCol = n.fitVal >= 70 ? '#34d399' : n.fitVal >= subAlertFitTh ? '#fbbf24' : '#f87171';
-                              const hasEvent = n.goals > 0 || n.assists > 0 || n.hasRed || n.hasYellow || n.subInEv;
-                              return (
-                                <button
-                                  key={`ht-${n.side}-${n.name}`}
-                                  type="button"
-                                  onClick={() => setHtPickedPlayer((prev) => (prev === n.name ? null : n.name))}
-                                  style={{ left: `${n.xPct}%`, top: `${n.yPct}%` }}
-                                  className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer focus:outline-none ${isPicked ? 'z-20' : 'z-10 hover:z-20'}`}
-                                >
-                                  <div className="relative">
-                                    <div
-                                      className={`${sizeCls} rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-110 mland:[&_svg]:w-full mland:[&_svg]:h-full ${
-                                        n.hasRed
-                                          ? 'opacity-45 grayscale border border-rose-400'
-                                          : isPicked
-                                            ? 'ring-2 ring-sky-300 border-2 border-white shadow-lg scale-105'
-                                            : n.isMe
-                                              ? 'ring-2 ring-amber-300 border-2 border-white shadow-md'
-                                              : 'border-[1.5px] border-white/90 shadow-md'
-                                      }`}
-                                      style={{ backgroundColor: n.kit }}
-                                    >
-                                      <PlayerFace
-                                        player={n.player || { n: n.name, no: n.no, pos: n.role === 'GK' ? 'GK' : 'MF' }}
-                                        team={n.team}
-                                        state={state}
-                                        careerProfile={state.p}
-                                        size={faceSize}
-                                        kitColor={n.kit}
-                                        trimColor={n.trim}
-                                        bare
-                                      />
-                                    </div>
-                                    <span className="absolute -top-1 -left-2 mland:-left-1.5 px-1 py-0.2 rounded bg-slate-950/90 border border-white/25 text-white text-[7px] sm:text-[7.5px] mland:text-[6px] font-extrabold leading-none">
-                                      {n.role}
-                                    </span>
-                                    <span className={`absolute -top-1 -right-2 mland:-right-1.5 px-1 mland:px-0.5 py-0.2 rounded-md border text-[7.5px] sm:text-[8.5px] mland:text-[6px] font-black tabular leading-none shadow-sm ${htRatingCls(n.rt)}`}>
-                                      {n.rt.toFixed(1)}
-                                    </span>
-                                    {!isAll && (
-                                      <span className="absolute -bottom-1 -left-1.5 px-1 py-0.2 rounded bg-[#0b2018]/95 border border-white/25 text-[#ffd75e] text-[7px] sm:text-[7.5px] mland:text-[6px] font-extrabold tabular leading-none">
-                                        {n.no}
-                                      </span>
-                                    )}
-                                    {hasEvent && (
-                                      <div className="absolute -bottom-1 -right-2 mland:-right-1.5 px-0.5 rounded-full bg-slate-950/85 border border-white/20 flex items-center gap-0.5 leading-none shadow-xs">
-                                        {n.goals > 0 && <StatIconBadge kind="goal" count={n.goals} size="xs" />}
-                                        {n.assists > 0 && <StatIconBadge kind="assist" count={n.assists} size="xs" />}
-                                        {n.hasRed && <StatIconBadge kind="red" size="xs" />}
-                                        {n.hasYellow && <StatIconBadge kind="yellow" size="xs" />}
-                                        {n.subInEv && <StatIconBadge kind="subIn" size="xs" />}
-                                      </div>
-                                    )}
+                            {htPitchMode === 'all' ? (
+                              <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1.5 items-stretch">
+                                <div className="flex flex-col min-h-0 items-center gap-1">
+                                  <div className="flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-full shrink-0">
+                                    <ClubCrest name={homeOrig.name} size={14} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                    <span className="truncate">{homeOrig.name}</span>
+                                    <span className="text-[var(--mut)] shrink-0">({liveHome.cf ? 'กำหนดเอง' : liveHome.form})</span>
                                   </div>
-
-                                  {/* Name + Stamina Bar */}
-                                  <div className={`mt-0.5 px-1.5 py-0.2 rounded-md text-[7.5px] sm:text-[9px] mland:text-[6.5px] font-bold leading-tight truncate max-w-[60px] sm:max-w-[82px] mland:max-w-[50px] ${n.isMe ? 'bg-amber-300 text-[#1c1300]' : 'bg-[#05120b]/85 text-white/95'}`}>
-                                    {isAll ? n.shortName : n.name}
+                                  <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                                    <FormationPitch
+                                      team={liveHome}
+                                      state={state}
+                                      lineupNames={curHomeLu}
+                                      kitOverride={homeKit}
+                                      gkKitOverride={homeGkKit}
+                                      trimOverride={homeTrim}
+                                      matchMeta={hMeta}
+                                      statMode="rating"
+                                      showFitBar={true}
+                                      subAlertFitTh={subAlertFitTh}
+                                      selectedPlayerName={htPickedPlayer}
+                                      onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                    />
                                   </div>
-                                  {!n.hasRed && (
-                                    <div className="mt-0.5 flex items-center gap-0.5 px-1 py-0.2 rounded bg-[#05120b]/85">
-                                      <div className="w-6 sm:w-8 mland:w-5 h-1 rounded-full bg-white/20 overflow-hidden">
-                                        <div className="h-full rounded-full" style={{ width: `${clamp(n.fitVal, 0, 100)}%`, backgroundColor: fitCol }} />
-                                      </div>
-                                      <span className="text-[7px] sm:text-[7.5px] mland:text-[5.5px] font-extrabold tabular leading-none" style={{ color: fitCol }}>
-                                        {n.fitVal}%
-                                      </span>
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })}
+                                </div>
+                                <div className="flex flex-col min-h-0 items-center gap-1">
+                                  <div className="flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-full shrink-0">
+                                    <ClubCrest name={awayOrig.name} size={14} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                    <span className="truncate">{awayOrig.name}</span>
+                                    <span className="text-[var(--mut)] shrink-0">({liveAway.cf ? 'กำหนดเอง' : liveAway.form})</span>
+                                  </div>
+                                  <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                                    <FormationPitch
+                                      team={liveAway}
+                                      state={state}
+                                      lineupNames={curAwayLu}
+                                      kitOverride={awayKit}
+                                      gkKitOverride={awayGkKit}
+                                      trimOverride={awayTrim}
+                                      matchMeta={aMeta}
+                                      statMode="rating"
+                                      showFitBar={true}
+                                      subAlertFitTh={subAlertFitTh}
+                                      selectedPlayerName={htPickedPlayer}
+                                      onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            ) : (
+                              <FormationPitch
+                                team={htPitchMode === 'H' ? liveHome : liveAway}
+                                state={state}
+                                lineupNames={htPitchMode === 'H' ? curHomeLu : curAwayLu}
+                                kitOverride={htPitchMode === 'H' ? homeKit : awayKit}
+                                gkKitOverride={htPitchMode === 'H' ? homeGkKit : awayGkKit}
+                                trimOverride={htPitchMode === 'H' ? homeTrim : awayTrim}
+                                matchMeta={htPitchMode === 'H' ? hMeta : aMeta}
+                                statMode="rating"
+                                showFitBar={true}
+                                subAlertFitTh={subAlertFitTh}
+                                selectedPlayerName={htPickedPlayer}
+                                onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                              />
+                            )}
                           </div>
 
                           {/* Compact Halftime Team Talk & Start 2nd Half Bar */}
@@ -6020,49 +6006,44 @@ export const MatchModal: React.FC<{
                                 ครองบอล {matchStats.possH}% · ยิง {matchStats.shotsH}-{matchStats.shotsA} · xG {matchStats.xgH.toFixed(2)}-{matchStats.xgA.toFixed(2)}
                               </span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-1.5 mland:gap-1">
-                              {!halftimeTalkUsed && (
-                                state.mode === 'm' ? (
-                                  <>
-                                    <button type="button" onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('attack'); }} className="px-2 py-1 mland:py-0.5 rounded-lg bg-rose-500/25 border border-rose-400/50 text-rose-200 text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:brightness-110">
-                                      🔥 บุกแหลก
+                            <div className="flex flex-wrap items-center justify-between gap-1.5 mland:gap-1">
+                              <div className="flex flex-wrap items-center gap-1.5 mland:gap-1">
+                                {!halftimeTalkUsed && (
+                                  state.mode === 'm' ? (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('attack'); }}
+                                        className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-rose-500/25 border border-rose-400/50 text-rose-200 text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:brightness-110 whitespace-nowrap"
+                                      >
+                                        🔥 บุกครึ่งหลัง
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('defend'); }}
+                                        className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-white/10 border border-white/25 text-white text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:bg-white/20 whitespace-nowrap"
+                                      >
+                                        🛡️ รับรัดกุม
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('fit'); }}
+                                      className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:brightness-110 whitespace-nowrap"
+                                    >
+                                      💪 วอร์มเติมฟิต (+6%) &amp; ลุยต่อ
                                     </button>
-                                    <button type="button" onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('balanced'); }} className="px-2 py-1 mland:py-0.5 rounded-lg bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:brightness-110">
-                                      ⚖️ คงทรงเกม
-                                    </button>
-                                    <button type="button" onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('defend'); }} className="px-2 py-1 mland:py-0.5 rounded-lg bg-white/10 border border-white/25 text-white text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:bg-white/20">
-                                      🛡️ แน่นไว้
-                                    </button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <button type="button" onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('fit'); }} className="px-2 py-1 mland:py-0.5 rounded-lg bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 text-[10.5px] mland:text-[9px] font-bold cursor-pointer">
-                                      💪 วอร์มเติมฟิต (+6%)
-                                    </button>
-                                    <button type="button" onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('balanced'); }} className="px-2 py-1 mland:py-0.5 rounded-lg bg-white/10 border border-white/25 text-white text-[10.5px] mland:text-[9px] font-bold cursor-pointer">
-                                      🎯 ลุยครึ่งหลังเลย
-                                    </button>
-                                  </>
-                                )
-                              )}
-                              <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                                {state.mode === 'm' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => openTacticsStudio()}
-                                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-white/10 border border-white/25 text-white text-[10.5px] mland:text-[9px] font-bold cursor-pointer hover:bg-white/20"
-                                  >
-                                    ⚙️ ปรับแท็กติก
-                                  </button>
+                                  )
                                 )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartSecondHalf()}
-                                  className="px-3 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer hover:brightness-105"
-                                >
-                                  ▶ เริ่มครึ่งหลัง
-                                </button>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => handleStartSecondHalf()}
+                                className="ml-auto px-3.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer hover:brightness-105 whitespace-nowrap shrink-0"
+                              >
+                                ▶ เริ่มครึ่งหลัง
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -6071,59 +6052,33 @@ export const MatchModal: React.FC<{
                   </div>
                 </div>
               ) : (() => {
-                const hSlots = getFormationSlots(homeOrig);
-                const aSlots = getFormationSlots(awayOrig);
-                const buildPitchNodes = (team: Team, xiNames: string[], slots: ReturnType<typeof getFormationSlots>, side: 'H' | 'A', kit: string, gkKit: string) =>
-                  xiNames.map((name, i) => {
-                    const pl = team.sq.find((q) => q.n === name) || team.sq[i];
-                    const slot = slots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
-                    const no = pl ? getShirtNo(team, pl) : i + 1;
+                const buildFtMeta = (team: Team, xiNames: string[]): Record<string, PitchPlayerMeta> => {
+                  const out: Record<string, PitchPlayerMeta> = {};
+                  xiNames.forEach((name) => {
                     const rt = fullTimeAnalysis.ratings[name] ?? 6.5;
                     const goals = evs.filter((e) => e.t === team.id && e.who === name).length;
                     const assists = evs.filter((e) => e.t === team.id && e.as === name).length;
                     const pCards = fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name);
-                    const hasRed = pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
-                    const hasYellow = !hasRed && pCards.some((c) => c.type === 'Y');
+                    const isRed = pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
+                    const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
                     const subOutEv = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name);
                     const isMotm = fullTimeAnalysis.motm === name;
-                    const isMe = Boolean(pl?.me || (isPlayerMode && name === myPlayerName));
-                    let xPct = 50;
-                    let yPct = 50;
-                    if (ftPitchMode === 'all') {
-                      xPct = side === 'H' ? clamp(7.5 + ((92 - slot.y) / 78) * 36.5, 7.5, 44) : clamp(92.5 - ((92 - slot.y) / 78) * 36.5, 56, 92.5);
-                      yPct = side === 'H' ? clamp(14 + (slot.x / 100) * 72, 14, 86) : clamp(86 - (slot.x / 100) * 72, 14, 86);
-                    } else {
-                      xPct = clamp(10 + ((92 - slot.y) / 78) * 80, 10, 90);
-                      yPct = clamp(15 + (slot.x / 100) * 70, 15, 85);
-                    }
-                    const nodeKit = slot.pos === 'GK' ? gkKit : kit;
-                    const nodeTrim = slot.pos === 'GK' ? '#ffffff' : side === 'H' ? homeTrim : awayTrim;
-                    return {
-                      name,
-                      shortName: name.split(' ')[0] || name,
-                      player: pl,
-                      team,
-                      side,
-                      no,
-                      role: slot.sp,
-                      rt,
+                    out[name] = {
+                      rating: rt,
                       goals,
                       assists,
-                      hasRed,
-                      hasYellow,
-                      subOutEv,
-                      isMotm,
-                      isMe,
-                      xPct,
-                      yPct,
-                      kit: nodeKit,
-                      trim: nodeTrim
+                      isRed,
+                      yellowCards,
+                      isInjured: injuredNamesUi.includes(name),
+                      subOutMin: subOutEv?.m,
+                      isMotm
                     };
                   });
+                  return out;
+                };
 
-                const homeNodes = buildPitchNodes(homeOrig, initialHomeXi, hSlots, 'H', homeKit, homeGkKit);
-                const awayNodes = buildPitchNodes(awayOrig, initialAwayXi, aSlots, 'A', awayKit, awayGkKit);
-                const visibleNodes = ftPitchMode === 'H' ? homeNodes : ftPitchMode === 'A' ? awayNodes : [...homeNodes, ...awayNodes];
+                const homeFtMeta = buildFtMeta(liveHome, initialHomeXi);
+                const awayFtMeta = buildFtMeta(liveAway, initialAwayXi);
 
                 const motmHome = homeOrig.sq.find((q) => q.n === fullTimeAnalysis.motm);
                 const motmAway = awayOrig.sq.find((q) => q.n === fullTimeAnalysis.motm);
@@ -6149,81 +6104,40 @@ export const MatchModal: React.FC<{
                     })()
                   : null;
 
-                const ratingBadgeCls = (rt: number, isMotm: boolean) =>
-                  isMotm || rt >= 8.5
-                    ? 'bg-[#facc15] text-[#1c1300] border-[#fef08a]'
-                    : rt >= 7.4
-                      ? 'bg-emerald-500 text-white border-emerald-200/80'
-                      : rt >= 6.4
-                        ? 'bg-slate-900/95 text-white border-slate-400/50'
-                        : 'bg-rose-600 text-white border-rose-200/80';
-
                 return (
-                  <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0b2e1b] shadow-lg w-full flex flex-col">
+                  <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-xs w-full flex flex-col">
                     {/* Compact Pitch Top Bar */}
-                    <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[#072113] border-b border-white/15 flex items-center justify-between gap-2 text-white shrink-0">
+                    <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-2 text-[var(--ink)] shrink-0">
                       <span className="text-[11px] sm:text-xs mland:text-[9.5px] font-bold flex items-center gap-1 whitespace-nowrap">
                         <span>🏟️ เรตติ้งในสนาม</span>
                       </span>
-                      <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/10 text-[10px] mland:text-[8.5px] min-w-0">
+                      <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] min-w-0">
                         <button
                           type="button"
                           onClick={() => setFtPitchMode('all')}
-                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap ${ftPitchMode === 'all' ? 'bg-emerald-500 text-white shadow-xs' : 'text-white/75 hover:text-white'}`}
+                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap ${ftPitchMode === 'all' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                         >
                           ทั้งหมด
                         </button>
                         <button
                           type="button"
                           onClick={() => setFtPitchMode('H')}
-                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[92px] truncate ${ftPitchMode === 'H' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/75 hover:text-white'}`}
+                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[92px] truncate ${ftPitchMode === 'H' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                         >
                           {homeOrig.name}
                         </button>
                         <button
                           type="button"
                           onClick={() => setFtPitchMode('A')}
-                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[92px] truncate ${ftPitchMode === 'A' ? 'bg-white text-slate-900 shadow-xs' : 'text-white/75 hover:text-white'}`}
+                          className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer transition-colors whitespace-nowrap max-w-[92px] truncate ${ftPitchMode === 'A' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
                         >
                           {awayOrig.name}
                         </button>
                       </div>
                     </div>
 
-                    {/* Full-Time Turf Stage */}
-                    <div
-                      className="relative w-full aspect-[16/8.6] max-h-[calc(96dvh-185px)] mland:min-h-[175px] mland:max-h-[calc(97dvh-175px)] select-none overflow-hidden"
-                      style={{
-                        backgroundImage:
-                          'repeating-linear-gradient(90deg, #175c36 0%, #175c36 8.333%, #1d6b40 8.333%, #1d6b40 16.666%)'
-                      }}
-                    >
-                      {/* Subtle Stadium Vignette */}
-                      <div
-                        className="absolute inset-0 pointer-events-none"
-                        style={{ background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.32) 100%)' }}
-                      />
-
-                      {/* Pitch Line Markings SVG */}
-                      <svg viewBox="0 0 1000 560" preserveAspectRatio="none" className="absolute inset-0 w-full h-full pointer-events-none">
-                        <g stroke="rgba(240,253,244,0.58)" strokeWidth="2.2" fill="none">
-                          <rect x="26" y="20" width="948" height="520" />
-                          <line x1="500" y1="20" x2="500" y2="540" />
-                          <circle cx="500" cy="280" r="76" />
-                          <circle cx="500" cy="280" r="3.5" fill="rgba(240,253,244,0.8)" />
-                          <rect x="26" y="130" width="145" height="300" />
-                          <rect x="26" y="205" width="52" height="150" />
-                          <circle cx="122" cy="280" r="3" fill="rgba(240,253,244,0.8)" />
-                          <path d="M 171 214 A 72 72 0 0 1 171 346" />
-                          <rect x="829" y="130" width="145" height="300" />
-                          <rect x="922" y="205" width="52" height="150" />
-                          <circle cx="878" cy="280" r="3" fill="rgba(240,253,244,0.8)" />
-                          <path d="M 829 214 A 72 72 0 0 0 829 346" />
-                          <rect x="10" y="232" width="16" height="96" strokeWidth="2" />
-                          <rect x="974" y="232" width="16" height="96" strokeWidth="2" />
-                        </g>
-                      </svg>
-
+                    {/* Unified Full-Time SVG Formation Pitch Stage */}
+                    <div className="relative w-full p-2 mland:p-1.5 h-[335px] sm:h-[380px] mland:h-[calc(97dvh-195px)] mland:min-h-[175px] select-none overflow-hidden flex items-center justify-center">
                       {/* Selected Player Detail Inspector Popover */}
                       {pickedInfo && (
                         <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[290px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 backdrop-blur-md border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
@@ -6251,123 +6165,68 @@ export const MatchModal: React.FC<{
                         </div>
                       )}
 
-                      {/* 22 (or 11) Clean Player Nodes on Pitch */}
-                      {visibleNodes.map((n) => {
-                        const isAll = ftPitchMode === 'all';
-                        const sizeCls = isAll ? 'w-7 h-7 sm:w-8 sm:h-8 mland:w-5.5 mland:h-5.5' : 'w-10 h-10 sm:w-11 sm:h-11 mland:w-7 mland:h-7';
-                        const faceSize = isAll ? 32 : 43;
-                        const isPicked = ftPickedPlayer === n.name;
-                        const hasEvent = n.goals > 0 || n.assists > 0 || n.hasRed || n.hasYellow || n.subOutEv;
-                        return (
-                          <button
-                            key={`${n.side}-${n.name}`}
-                            type="button"
-                            onClick={() => setFtPickedPlayer((prev) => (prev === n.name ? null : n.name))}
-                            style={{ left: `${n.xPct}%`, top: `${n.yPct}%` }}
-                            className={`absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center group cursor-pointer focus:outline-none ${
-                              n.isMotm || isPicked ? 'z-20' : 'z-10 hover:z-20'
-                            }`}
-                          >
-                            <div className="relative">
-                              <div
-                                className={`${sizeCls} rounded-full overflow-hidden flex items-center justify-center transition-transform group-hover:scale-110 mland:[&_svg]:w-full mland:[&_svg]:h-full ${
-                                  isPicked
-                                    ? 'ring-2 ring-sky-300 border-2 border-white shadow-lg scale-105'
-                                    : n.isMotm
-                                      ? 'ring-2 ring-[#facc15] shadow-[0_0_14px_rgba(250,204,21,0.85)] border-2 border-white'
-                                      : n.isMe
-                                        ? 'ring-2 ring-amber-300 border-2 border-white shadow-md'
-                                        : 'border-[1.5px] mland:border border-white/90 shadow-md'
-                                }`}
-                                style={{ backgroundColor: n.kit }}
-                              >
-                                <PlayerFace
-                                  player={n.player || { n: n.name, no: n.no, pos: n.role === 'GK' ? 'GK' : 'MF' }}
-                                  team={n.team}
-                                  state={state}
-                                  careerProfile={state.p}
-                                  size={faceSize}
-                                  kitColor={n.kit}
-                                  trimColor={n.trim}
-                                  bare
-                                />
-                              </div>
-
-                              {/* MOTM Crown (Clean Top-Left Corner) */}
-                              {n.isMotm && (
-                                <span
-                                  title="Man of the Match"
-                                  className="absolute -top-1.5 -left-1.5 mland:-top-1 mland:-left-1 w-4 h-4 mland:w-3 mland:h-3 rounded-full bg-[#facc15] border border-white flex items-center justify-center text-[9px] mland:text-[7px] leading-none shadow-sm"
-                                >
-                                  👑
-                                </span>
-                              )}
-
-                              {/* Position Tag (Always visible cleanly across 11v11, single-team & MOTM) */}
-                              {!isAll && !n.isMotm && (
-                                <span className="absolute -top-1 -left-2 mland:-left-1.5 px-1 py-0.2 rounded bg-slate-950/90 border border-white/30 text-white text-[7.5px] sm:text-[8px] mland:text-[6.5px] font-extrabold leading-none">
-                                  {n.role}
-                                </span>
-                              )}
-
-                              {/* Rating Badge (Top-Right) */}
-                              <span
-                                className={`absolute -top-1 -right-2 mland:-right-1.5 px-1 mland:px-0.5 py-0.2 rounded-md border text-[8px] sm:text-[9px] mland:text-[6.5px] font-black tabular leading-none shadow-sm ${ratingBadgeCls(
-                                  n.rt,
-                                  n.isMotm
-                                )}`}
-                              >
-                                {n.rt.toFixed(1)}
-                              </span>
-
-                              {/* Bottom-Left: Position tag in 11v11 (or Shirt No + Role on MOTM in single-team) */}
-                              {isAll ? (
-                                <span
-                                  className={`absolute -bottom-1 -left-2 mland:-left-1.5 px-1 py-0.2 rounded bg-slate-950/92 border border-white/25 text-[6.5px] sm:text-[7.5px] mland:text-[5.5px] font-extrabold leading-none ${
-                                    n.role === 'GK'
-                                      ? 'text-amber-300'
-                                      : ['CB', 'LB', 'RB', 'LWB', 'RWB'].includes(n.role)
-                                        ? 'text-sky-300'
-                                        : ['ST', 'CF', 'LW', 'RW'].includes(n.role)
-                                          ? 'text-rose-300'
-                                          : 'text-emerald-300'
-                                  }`}
-                                >
-                                  {n.role}
-                                </span>
-                              ) : (
-                                <span className="absolute -bottom-1 -left-1.5 px-1 py-0.2 rounded bg-[#0b2018]/95 border border-white/25 text-[#ffd75e] text-[7.5px] sm:text-[8px] mland:text-[6.5px] font-extrabold tabular leading-none whitespace-nowrap">
-                                  {n.isMotm ? `#${n.no} ${n.role}` : n.no}
-                                </span>
-                              )}
-
-                              {/* Compact Event Badges (Bottom-Right) */}
-                              {hasEvent && (
-                                <div className="absolute -bottom-1 -right-2 mland:-right-1.5 px-0.5 rounded-full bg-slate-950/85 border border-white/20 flex items-center gap-0.5 leading-none shadow-xs">
-                                  {n.goals > 0 && <StatIconBadge kind="goal" count={n.goals} size="xs" />}
-                                  {n.assists > 0 && <StatIconBadge kind="assist" count={n.assists} size="xs" />}
-                                  {n.hasRed && <StatIconBadge kind="red" size="xs" />}
-                                  {n.hasYellow && <StatIconBadge kind="yellow" size="xs" />}
-                                  {n.subOutEv && <StatIconBadge kind="subOut" size="xs" />}
-                                </div>
-                              )}
+                      {ftPitchMode === 'all' ? (
+                        <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1.5 items-stretch">
+                          <div className="flex flex-col min-h-0 items-center gap-1">
+                            <div className="flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-full shrink-0">
+                              <ClubCrest name={homeOrig.name} size={14} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                              <span className="truncate">{homeOrig.name}</span>
+                              <span className="text-[var(--mut)] shrink-0">({liveHome.cf ? 'กำหนดเอง' : liveHome.form})</span>
                             </div>
-
-                            {/* Clean Unified Nameplate */}
-                            <div
-                              className={`mt-0.5 mland:mt-0 px-1.5 mland:px-1 py-0.2 rounded-md text-[8px] sm:text-[9.5px] mland:text-[7px] font-bold leading-tight truncate max-w-[64px] sm:max-w-[88px] mland:max-w-[52px] shadow-xs ${
-                                n.isMotm
-                                  ? 'bg-gradient-to-r from-[#fde047] to-[#eab308] text-[#1c1300] font-extrabold'
-                                  : n.isMe
-                                    ? 'bg-amber-300 text-[#1c1300]'
-                                    : 'bg-[#05120b]/85 text-white/95'
-                              }`}
-                            >
-                              {isAll ? n.shortName : n.name}
+                            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                              <FormationPitch
+                                team={liveHome}
+                                state={state}
+                                lineupNames={initialHomeXi}
+                                kitOverride={homeKit}
+                                gkKitOverride={homeGkKit}
+                                trimOverride={homeTrim}
+                                matchMeta={homeFtMeta}
+                                statMode="rating"
+                                showFitBar={false}
+                                selectedPlayerName={ftPickedPlayer}
+                                onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                              />
                             </div>
-                          </button>
-                        );
-                      })}
+                          </div>
+                          <div className="flex flex-col min-h-0 items-center gap-1">
+                            <div className="flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-full shrink-0">
+                              <ClubCrest name={awayOrig.name} size={14} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                              <span className="truncate">{awayOrig.name}</span>
+                              <span className="text-[var(--mut)] shrink-0">({liveAway.cf ? 'กำหนดเอง' : liveAway.form})</span>
+                            </div>
+                            <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                              <FormationPitch
+                                team={liveAway}
+                                state={state}
+                                lineupNames={initialAwayXi}
+                                kitOverride={awayKit}
+                                gkKitOverride={awayGkKit}
+                                trimOverride={awayTrim}
+                                matchMeta={awayFtMeta}
+                                statMode="rating"
+                                showFitBar={false}
+                                selectedPlayerName={ftPickedPlayer}
+                                onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <FormationPitch
+                          team={ftPitchMode === 'H' ? liveHome : liveAway}
+                          state={state}
+                          lineupNames={ftPitchMode === 'H' ? initialHomeXi : initialAwayXi}
+                          kitOverride={ftPitchMode === 'H' ? homeKit : awayKit}
+                          gkKitOverride={ftPitchMode === 'H' ? homeGkKit : awayGkKit}
+                          trimOverride={ftPitchMode === 'H' ? homeTrim : awayTrim}
+                          matchMeta={ftPitchMode === 'H' ? homeFtMeta : awayFtMeta}
+                          statMode="rating"
+                          showFitBar={false}
+                          selectedPlayerName={ftPickedPlayer}
+                          onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                        />
+                      )}
                     </div>
 
                     {/* Substitutes Touchline Strip (Compact Single-Row Scroll) */}

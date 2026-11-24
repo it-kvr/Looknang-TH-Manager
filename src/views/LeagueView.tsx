@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { MainTab, Player, Team, GameState } from '../types/game';
-import { RN, TN, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
+import { RN, TN, PACT, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon } from '../engine/playerCore';
@@ -22,8 +23,7 @@ export const LeagueView: React.FC<{
   const vt = state.lg ?? me.tier;
   const sub = state.v === 'c' ? 4 : (state.tv ?? 0);
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
-  const [sideStatTab, setSideStatTab] = useState<'sg' | 'sa' | 'cs' | 'ov'>('sg');
-  const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'deal' | 'act' | 'train'>('all');
+  const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
 
   const tb = sortTable(state.teams.filter((t) => t.tier === vt));
   const myTierTable = vt === me.tier ? tb : sortTable(state.teams.filter((t) => t.tier === me.tier));
@@ -56,12 +56,130 @@ export const LeagueView: React.FC<{
     );
   };
 
+  const renderNextMatchCard = () => {
+    let kind: 'league' | 'cup' | 'asia' = 'league';
+    let homeId = -1;
+    let awayId = -1;
+    let isDerby = false;
+
+    if (state.pa && state.ac && state.ac.alive && !state.ac.done) {
+      const idx = state.ac.ids.indexOf(state.me);
+      if (idx >= 0) {
+        const pairIdx = Math.floor(idx / 2) * 2;
+        kind = 'asia';
+        homeId = state.ac.ids[pairIdx];
+        awayId = state.ac.ids[pairIdx + 1];
+      }
+    } else if (state.pc && state.cup && state.cup.alive && !state.cup.done) {
+      const idx = state.cup.ids.indexOf(state.me);
+      if (idx >= 0) {
+        const pairIdx = Math.floor(idx / 2) * 2;
+        kind = 'cup';
+        homeId = state.cup.ids[pairIdx];
+        awayId = state.cup.ids[pairIdx + 1];
+      }
+    } else if (state.md < state.fx.length) {
+      const pair = state.fx[state.md].find((p) => p.includes(state.me));
+      if (pair) {
+        homeId = pair[0];
+        awayId = pair[1];
+        isDerby = (pair[0] ^ 1) === pair[1];
+      }
+    }
+
+    if (homeId < 0 || awayId < 0 || !state.teams[homeId] || !state.teams[awayId]) {
+      return (
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-center space-y-1">
+          <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[#7a4f00] dark:text-[var(--lamp)]">
+            🏁 จบโปรแกรมลีกฤดูกาลที่ {state.season} แล้ว
+          </div>
+          <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
+            กดปุ่ม &ldquo;สรุปจบฤดูกาล&rdquo; ด้านขวาบนเพื่อรับรางวัลและขึ้นฤดูกาลใหม่
+          </p>
+        </div>
+      );
+    }
+
+    const H = state.teams[homeId];
+    const A = state.teams[awayId];
+    const oppId = homeId === state.me ? awayId : homeId;
+    const oppTeam = state.teams[oppId];
+    const oppSt = teamStats(oppTeam, state);
+    const isHome = homeId === state.me;
+    const compLabel =
+      kind === 'asia'
+        ? `🌏 ถ้วยทวีป · ${state.ac ? RN[state.ac.r] || `รอบ ${state.ac.r + 1}` : ''}`
+        : kind === 'cup'
+          ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
+          : `⚽ นัดที่ ${state.md + 1}/${state.fx.length} · ${isHome ? 'เกมเหย้า' : 'เกมเยือน'}`;
+
+    return (
+      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2.5 mland:space-y-1.5">
+        <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
+          <span className="font-bold text-[var(--g)] truncate">{compLabel}</span>
+          {isDerby && <span className="font-bold text-[var(--red)] shrink-0">🔥 ดาร์บี้แมตช์</span>}
+        </div>
+
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mland:gap-1.5 py-1 mland:py-0.5 px-2 rounded-xl bg-[var(--surface-2)]/70">
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); onInspectTeam(H.id); }}
+            className="flex flex-col items-center gap-1 min-w-0 cursor-pointer group"
+          >
+            <div className="mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+              <ClubCrest name={H.name} size={32} team={H} club={state.club} isMyClub={H.id === state.me && state.mode === 'm'} />
+            </div>
+            <span className={`text-[11px] mland:text-[9.5px] text-center truncate max-w-full leading-tight group-hover:text-[var(--g)] ${H.id === state.me ? 'font-bold text-[var(--ink)]' : 'font-semibold text-[var(--mut)]'}`}>
+              {H.name}
+            </span>
+          </button>
+
+          <div className="text-center px-1 shrink-0">
+            <div className="text-xs mland:text-[10px] font-black text-[var(--mut)] tracking-wider">VS</div>
+            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5">
+              XI {ms.ovXi} : {oppSt.ovXi}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); onInspectTeam(A.id); }}
+            className="flex flex-col items-center gap-1 min-w-0 cursor-pointer group"
+          >
+            <div className="mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+              <ClubCrest name={A.name} size={32} team={A} club={state.club} isMyClub={A.id === state.me && state.mode === 'm'} />
+            </div>
+            <span className={`text-[11px] mland:text-[9.5px] text-center truncate max-w-full leading-tight group-hover:text-[var(--g)] ${A.id === state.me ? 'font-bold text-[var(--ink)]' : 'font-semibold text-[var(--mut)]'}`}>
+              {A.name}
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-1.5">
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); onInspectTeam(oppId); }}
+            className="py-1.5 mland:py-1 px-2 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+          >
+            🔍 ส่องคู่แข่ง
+          </button>
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); onNavigate?.('q'); }}
+            className="py-1.5 mland:py-1 px-2 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 transition-all whitespace-nowrap"
+          >
+            ⚽ จัดทัพ 11 ตัวจริง
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderImportantNewsPanel = () => {
-    type NewsCat = 'deal' | 'act' | 'train' | 'news';
     type NewsTone = 'urg' | 'warn' | 'ok' | 'info';
-    interface ImportantNewsItem {
+    interface InboxItem {
       id: string;
-      cat: NewsCat;
+      kind: 'alert' | 'feed';
       tone: NewsTone;
       icon: string;
       tag: string;
@@ -70,10 +188,9 @@ export const LeagueView: React.FC<{
       urgent?: boolean;
       actionLabel?: string;
       onAction?: () => void;
-      quickTraining?: boolean;
     }
 
-    const items: ImportantNewsItem[] = [];
+    const items: InboxItem[] = [];
     const isMgr = state.mode === 'm';
 
     if (isMgr) {
@@ -82,46 +199,37 @@ export const LeagueView: React.FC<{
       const tiredStarters = starters.filter((q) => (q.fit ?? 100) < 74);
       const lowFitAll = me.sq.filter((q) => !q.inj && (q.fit ?? 100) < 62);
       const injuredList = me.sq.filter((q) => q.inj > 0);
-      const suspendedList = me.sq.filter((q) => (q.sus || 0) > 0);
-
-      // 1. สัญญานักเตะ & สัญญาสปอนเซอร์ & ข้อเสนอ
       const ownPlayers = me.sq.filter((q) => !q.loan);
       const expiredCon = ownPlayers.filter((q) => ensureCon(q).yr <= 0);
       const expiringSoon = ownPlayers.filter((q) => ensureCon(q).yr === 1);
       const incomingOffers = getIncomingOffers(state);
+      const curPlan = getTeamTrainingPlan(state);
 
-      if (expiredCon.length > 0 || expiringSoon.length > 0) {
-        const namesPreview = [...expiredCon, ...expiringSoon]
-          .slice(0, 2)
-          .map((q) => q.n.split(' ')[0])
-          .join(', ');
-        const totalNeed = expiredCon.length + expiringSoon.length;
+      if (state.dilemma) {
         items.push({
-          id: 'contracts-expiring',
-          cat: 'deal',
-          tone: expiredCon.length > 0 ? 'urg' : 'warn',
+          id: 'active-dilemma',
+          kind: 'alert',
+          tone: 'urg',
           urgent: true,
-          icon: '📄',
-          tag: 'สัญญา',
-          title:
-            expiredCon.length > 0
-              ? `มีนักเตะหมดสัญญา ${expiredCon.length} คน${expiringSoon.length ? ` · ใกล้หมด ${expiringSoon.length} คน` : ''}`
-              : `สัญญาเหลือ ≤ 1 ปี (${expiringSoon.length} คน)`,
-          detail: `${namesPreview}${totalNeed > 2 ? ` +อีก ${totalNeed - 2} คน` : ''} · รีบต่อก่อนค่าเหนื่อยพุ่ง +25%`,
-          actionLabel: 'ต่อสัญญา',
-          onAction: () => onNavigate?.('k', 'con')
+          icon: '📌',
+          tag: 'เหตุการณ์ด่วน',
+          title: state.dilemma.title,
+          detail: `${state.dilemma.category} · รอการตัดสินใจ`,
         });
-      } else {
+      }
+
+      if (state.money < 0 || (state.bd ?? 55) < 35) {
         items.push({
-          id: 'contracts-ok',
-          cat: 'deal',
-          tone: 'ok',
-          icon: '📄',
-          tag: 'สัญญา',
-          title: `สัญญานักเตะมั่นคง (${ownPlayers.length} คนเหลือ ≥ 2 ปี)`,
-          detail: 'ยังไม่พบผู้เล่นที่เสี่ยงหมดสัญญาในฤดูกาลนี้',
-          actionLabel: 'ดูสัญญา',
-          onAction: () => onNavigate?.('k', 'con')
+          id: 'club-alert-fin-bd',
+          kind: 'alert',
+          tone: 'urg',
+          urgent: true,
+          icon: '⚠️',
+          tag: 'แจ้งเตือนด่วน',
+          title: state.money < 0 ? `งบติดลบ (${fmtMoney(state.money)})` : `ความเชื่อมั่นบอร์ดต่ำ (${state.bd ?? 55}%)`,
+          detail: state.money < 0 ? 'ตลาดถูกระงับชั่วคราว ควรปรับสมดุลงบ' : 'เร่งทำผลงานเพื่อเรียกศรัทธาบอร์ด',
+          actionLabel: state.money < 0 ? 'ดูการเงิน' : 'ดูบอร์ด',
+          onAction: () => onNavigate?.(state.money < 0 ? 'f' : 'u')
         });
       }
 
@@ -129,288 +237,159 @@ export const LeagueView: React.FC<{
         const topOff = incomingOffers[0];
         items.push({
           id: 'transfer-offers',
-          cat: 'deal',
+          kind: 'alert',
           tone: 'warn',
           urgent: true,
           icon: '💼',
-          tag: 'ข้อเสนอ',
-          title: `มี ${incomingOffers.length} ข้อเสนอซื้อตัวรอพิจารณา`,
+          tag: 'ข้อเสนอซื้อตัว',
+          title: `${incomingOffers.length} ข้อเสนอรอพิจารณา`,
           detail: `${topOff.t} ยื่นซื้อ ${topOff.n} (${fmtMoney(topOff.p)})`,
           actionLabel: 'เปิดดู',
           onAction: () => onNavigate?.('k', 'sell')
         });
       }
 
-      // 2. สปอนเซอร์ที่ไม่ได้เลือก & ดีลสปอนเซอร์ปัจจุบัน
-      const tierMult = 1 + me.tier * 0.45;
-      const availableDeals = [
-        { name: 'เครื่องดื่มเกลือแร่', perMatch: Math.round(5 * tierMult), signBonus: Math.round(12 * tierMult), ok: true },
-        { name: 'ชุดกีฬาลูกหนังไทย', perMatch: Math.round(7 * tierMult), signBonus: Math.round(15 * tierMult), ok: (state.fan ?? 55) >= 45 },
-        { name: 'เครือข่าย & ถ่ายทอดสด', perMatch: Math.round(10 * tierMult), signBonus: Math.round(22 * tierMult), ok: me.tier >= 1 || (state.fan ?? 55) >= 65 }
-      ].filter((d) => d.ok);
-
-      if (!state.sponsorDeal) {
-        const bestDeal = availableDeals[availableDeals.length - 1] || availableDeals[0];
-        items.push({
-          id: 'sponsor-unselected',
-          cat: 'deal',
-          tone: 'warn',
-          urgent: true,
-          icon: '🤝',
-          tag: 'สปอนเซอร์',
-          title: `ยังไม่ได้เลือกดีลพาร์ทเนอร์ (ว่าง ${availableDeals.length} ดีล)`,
-          detail: bestDeal
-            ? `พร้อมเซ็นรับสูงสุด +${fmtMoneyNum(bestDeal.perMatch)}/นัด + โบนัสเซ็น +${fmtMoney(bestDeal.signBonus)}`
-            : 'เข้าไปเลือกเซ็นสัญญาเพิ่มรายได้ทุกแมตช์',
-          actionLabel: 'เลือกสปอน',
-          onAction: () => onNavigate?.('f', 'commercial')
-        });
-      } else {
-        const lowLeft = state.sponsorDeal.left <= 2;
-        items.push({
-          id: 'sponsor-active',
-          cat: 'deal',
-          tone: lowLeft ? 'warn' : 'ok',
-          urgent: lowLeft,
-          icon: '🤝',
-          tag: 'สปอนเซอร์',
-          title: `ดีล ${state.sponsorDeal.name} (+${fmtMoneyNum(state.sponsorDeal.perMatch)}/นัด)`,
-          detail: lowLeft
-            ? `ใกล้ครบกำหนด! เหลืออีกเพียง ${state.sponsorDeal.left} นัด`
-            : `เหลืออายุสัญญาอีก ${state.sponsorDeal.left} นัด · สปอนหลัก ${['แพ็กเกจมั่นคง', 'โบนัสชัยชนะ', 'บิ๊กแมตช์'][state.sp ?? 0]}`,
-          actionLabel: 'จัดการ',
-          onAction: () => onNavigate?.('f', 'commercial')
-        });
-      }
-
-      if (!state.promo && state.money >= 15) {
-        items.push({
-          id: 'promo-unselected',
-          cat: 'deal',
-          tone: 'info',
-          icon: '📣',
-          tag: 'โปรโมต',
-          title: 'ยังไม่ได้เลือกแคมเปญวันแข่งนัดถัดไป',
-          detail: 'สามารถเปิดโปรโมตตั๋ว (+35%) หรือบูสต์สปอนเซอร์ (+35%) ได้',
-          actionLabel: 'ตั้งค่า',
-          onAction: () => onNavigate?.('f', 'overview')
-        });
-      }
-
-      // 3. กิจกรรมต่างๆ & เหตุการณ์ & แมวมอง
-      if (state.dilemma) {
-        items.push({
-          id: 'active-dilemma',
-          cat: 'act',
-          tone: 'urg',
-          urgent: true,
-          icon: '📌',
-          tag: 'เหตุการณ์ด่วน',
-          title: state.dilemma.title,
-          detail: `${state.dilemma.category} · มีหน้าต่างเหตุการณ์รอการตัดสินใจ`,
-        });
-      }
-
-      const curTurn = state.season * 40 + state.md;
-      const actCool = state.clubActMd != null && curTurn - state.clubActMd < 3;
-      const remCd = state.clubActMd != null ? Math.max(0, 3 - (curTurn - state.clubActMd)) : 0;
-      if (!actCool) {
-        items.push({
-          id: 'club-activity-ready',
-          cat: 'act',
-          tone: 'ok',
-          urgent: true,
-          icon: '🎉',
-          tag: 'กิจกรรม',
-          title: 'กิจกรรมสโมสรพร้อมจัดรอบใหม่แล้ว!',
-          detail: 'พบปะแฟนบอล · Open House · แคมป์ทีม · ติวแท็กติก · การกุศล',
-          actionLabel: 'จัดกิจกรรม',
-          onAction: () => onNavigate?.('u', 'activities')
-        });
-      } else {
-        items.push({
-          id: 'club-activity-cd',
-          cat: 'act',
-          tone: 'info',
-          icon: '⏳',
-          tag: 'กิจกรรม',
-          title: `กิจกรรมสโมสรรอคูลดาวน์อีก ${remCd} นัด`,
-          detail: 'จัดได้ทุก 3 นัด เพื่อปลุกขวัญทีมและแฟนบอล',
-          actionLabel: 'ดูกิจกรรม',
-          onAction: () => onNavigate?.('u', 'activities')
-        });
-      }
-
       if (state.scout?.results) {
         items.push({
           id: 'scout-ready',
-          cat: 'act',
+          kind: 'alert',
           tone: 'ok',
           urgent: true,
           icon: '🔍',
           tag: 'แมวมอง',
-          title: `รายงานแมวมอง "${state.scout.label}" ส่งมาแล้ว`,
-          detail: `พบเป้าหมาย ${state.scout.results.length} รายพร้อมยื่นซื้อ`,
+          title: `รายงาน "${state.scout.label}" พร้อมแล้ว`,
+          detail: `พบนักเตะเป้าหมาย ${state.scout.results.length} ราย`,
           actionLabel: 'ดูรายงาน',
           onAction: () => onNavigate?.('k', 'scout')
         });
       }
 
-      // 4. การซ้อมทีม
-      const curPlan = getTeamTrainingPlan(state);
-      const curProg = TEAM_TRAINING_PROGRAMS[curPlan.program];
-      const curInt = TRAINING_INTENSITY_META[curPlan.intensity];
-      items.push({
-        id: 'team-training',
-        cat: 'train',
-        tone: 'info',
-        icon: curProg.icon,
-        tag: 'การซ้อมทีม',
-        title: `${curProg.name} · ${curInt.icon} ${curInt.label} (ศูนย์ฝึก Lv.${state.tr ?? 1})`,
-        detail: state.focusPlayer
-          ? `โฟกัสปั้นพิเศษ: ${state.focusPlayer} (2.2x)`
-          : curProg.effectTag,
-        quickTraining: true,
-        actionLabel: 'ห้องซ้อมทีม',
-        onAction: () => onNavigate?.('r')
-      });
+      if (expiredCon.length > 0 || expiringSoon.length > 0) {
+        const namesPreview = [...expiredCon, ...expiringSoon].slice(0, 2).map((q) => q.n.split(' ')[0]).join(', ');
+        const totalNeed = expiredCon.length + expiringSoon.length;
+        items.push({
+          id: 'contracts-expiring',
+          kind: 'alert',
+          tone: expiredCon.length > 0 ? 'urg' : 'warn',
+          urgent: true,
+          icon: '📄',
+          tag: 'สัญญาใกล้หมด',
+          title: expiredCon.length > 0 ? `หมดสัญญา ${expiredCon.length} คน` : `สัญญาเหลือ 1 ปี (${expiringSoon.length} คน)`,
+          detail: `${namesPreview}${totalNeed > 2 ? ` +${totalNeed - 2}` : ''}`,
+          actionLabel: 'ต่อสัญญา',
+          onAction: () => onNavigate?.('k', 'con')
+        });
+      }
 
-      // 5. การพักผ่อน & สภาพร่างกาย
-      const needRest = (tiredStarters.length > 0 || lowFitAll.length > 0 || avgXiFit < 78) && curPlan.program !== 'recovery';
+      if (!state.sponsorDeal) {
+        items.push({
+          id: 'sponsor-unselected',
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '🤝',
+          tag: 'สปอนเซอร์',
+          title: 'ยังไม่ได้เซ็นดีลพาร์ทเนอร์',
+          detail: 'เลือกเซ็นสัญญาเพื่อรับรายได้เสริมทุกนัด',
+          actionLabel: 'เลือกดีล',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      } else if (state.sponsorDeal.left <= 2) {
+        items.push({
+          id: 'sponsor-expiring',
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '🤝',
+          tag: 'สปอนเซอร์',
+          title: `ดีล ${state.sponsorDeal.name} เหลือ ${state.sponsorDeal.left} นัด`,
+          detail: 'เตรียมต่อสัญญาใหม่หลังครบกำหนด',
+          actionLabel: 'ดูดีล',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      }
+
+      const curTurn = state.season * 40 + state.md;
+      const actCool = state.clubActMd != null && curTurn - state.clubActMd < 3;
+      if (!actCool) {
+        items.push({
+          id: 'club-activity-ready',
+          kind: 'alert',
+          tone: 'ok',
+          urgent: true,
+          icon: '🎉',
+          tag: 'กิจกรรมสโมสร',
+          title: 'พร้อมจัดกิจกรรมกระตุ้นทีม',
+          detail: 'เพิ่มขวัญแฟนบอลและกำลังใจในห้องแต่งตัว',
+          actionLabel: 'จัดเลย',
+          onAction: () => onNavigate?.('u', 'activities')
+        });
+      }
+
+      const needRest = (tiredStarters.length > 0 || lowFitAll.length > 0 || avgXiFit < 76) && curPlan.program !== 'recovery';
       if (needRest) {
         items.push({
           id: 'rest-needed',
-          cat: 'train',
+          kind: 'alert',
           tone: avgXiFit < 68 || lowFitAll.length >= 3 ? 'urg' : 'warn',
           urgent: true,
           icon: '😴',
-          tag: 'การพักผ่อน',
-          title: `ทีมเริ่มล้า ควรสลับพักผ่อน (ฟิตตัวจริง ${avgXiFit}%)`,
-          detail: `ตัวจริงล้า ${tiredStarters.length} คน${injuredList.length ? ` · เจ็บ ${injuredList.length}` : ''}${suspendedList.length ? ` · แบน ${suspendedList.length}` : ''}`,
+          tag: 'ความฟิตทีม',
+          title: `นักเตะเริ่มล้า (ฟิตตัวจริง ${avgXiFit}%)`,
+          detail: `ตัวจริงล้า ${tiredStarters.length} คน · แนะนำพักฟื้น`,
           actionLabel: 'สลับพักฟื้น',
           onAction: () => {
             SFX.tap();
-            onUpdateState((d) => {
-              syncTrainingFocusToPlan(d, 'F');
-            });
-            onToast?.('สลับโปรแกรมเป็น "😴 พักผ่อน & ฟื้นฟูร่างกาย" แล้ว (ฟิต +10%/นัด ลดเสี่ยงเจ็บ 55%)');
+            onUpdateState((d) => { syncTrainingFocusToPlan(d, 'F'); });
+            onToast?.('สลับโปรแกรมซ้อมเป็น "😴 พักผ่อน & ฟื้นฟู" แล้ว');
           }
-        });
-      } else if (curPlan.program === 'recovery') {
-        items.push({
-          id: 'rest-active',
-          cat: 'train',
-          tone: 'ok',
-          icon: '😴',
-          tag: 'การพักผ่อน',
-          title: `กำลังเข้าโปรแกรมพักผ่อน/ฟื้นร่าง (ฟิตตัวจริง ${avgXiFit}%)`,
-          detail: `ฟื้นฟูความฟิต +10% และลดโอกาสเจ็บ 55%${injuredList.length ? ` · เจ็บ ${injuredList.length} คน` : ''}`,
-          actionLabel: avgXiFit >= 88 ? 'กลับมาซ้อม' : 'ห้องซ้อมทีม',
-          onAction:
-            avgXiFit >= 88
-              ? () => {
-                  SFX.tap();
-                  onUpdateState((d) => {
-                    syncTrainingFocusToPlan(d, 'MF');
-                  });
-                  onToast?.('ร่างกายฟื้นเต็มที่แล้ว! สลับกลับสู่โหมดซ้อมสมดุล');
-                }
-              : () => onNavigate?.('r')
-        });
-      } else {
-        items.push({
-          id: 'rest-ok',
-          cat: 'train',
-          tone: 'ok',
-          icon: '💪',
-          tag: 'การพักผ่อน',
-          title: `สภาพร่างกายพร้อมลุย (ฟิตตัวจริง ${avgXiFit}%)`,
-          detail:
-            injuredList.length || suspendedList.length
-              ? `${injuredList.length ? `🩹 บาดเจ็บ ${injuredList.length} คน` : ''}${injuredList.length && suspendedList.length ? ' · ' : ''}${suspendedList.length ? `🟥 ติดแบน ${suspendedList.length} คน` : ''}`
-              : 'ไม่มีนักเตะบาดเจ็บหรือติดโทษแบน',
-          actionLabel: 'เช็กทีม',
-          onAction: () => onNavigate?.('q', 'squad')
         });
       }
 
       if (injuredList.length > 0) {
-        const injNames = injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj}นัด)`).join(', ');
         items.push({
           id: 'club-injured-rehab',
-          cat: 'train',
+          kind: 'alert',
           tone: 'urg',
           urgent: true,
           icon: '🩹',
-          tag: 'กายภาพฟื้นฟู',
-          title: `มีนักเตะบาดเจ็บ ${injuredList.length} คน — กดทำกายภาพเร่งหายได้`,
-          detail: `${injNames}${injuredList.length > 2 ? ` +${injuredList.length - 2} คน` : ''} · คลิกดูรายชื่อหรือจัดคลินิกกายภาพ`,
+          tag: 'ห้องพยาบาล',
+          title: `นักเตะบาดเจ็บ ${injuredList.length} คน`,
+          detail: injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj}นัด)`).join(', '),
           actionLabel: 'ฟื้นฟูทีม',
-          onAction: () => onNavigate?.('q', 'squad')
-        });
-      }
-
-      // 6. การเงิน / บอร์ด / บอลถ้วย / ฟีดข่าวสารล่าสุด
-      if (state.money < 0 || (state.bd ?? 55) < 35) {
-        items.push({
-          id: 'club-alert-fin-bd',
-          cat: 'news',
-          tone: 'urg',
-          urgent: true,
-          icon: '⚠️',
-          tag: 'แจ้งเตือนด่วน',
-          title: state.money < 0 ? `งบสโมสรติดลบ (${fmtMoney(state.money)})` : `ความเชื่อมั่นบอร์ดต่ำ (${state.bd ?? 55}%)`,
-          detail: state.money < 0 ? 'ตลาดซื้อตัวถูกล็อกชั่วคราว ควรปรับสมดุลงบหรือกู้หมุนเวียน' : 'เร่งเก็บชัยชนะเพื่อเรียกศรัทธาบอร์ดบริหาร',
-          actionLabel: 'ดูการเงิน',
-          onAction: () => onNavigate?.('f', 'overview')
+          onAction: () => onNavigate?.('r')
         });
       }
     } else if (state.p) {
-      // โหมดนักเตะอาชีพ
       const p = state.p;
-      const curPlan = PACT[p.plan ?? 1] || PACT[1];
       if ((p.en ?? 100) < 70 && (p.plan ?? 1) !== 3) {
         items.push({
           id: 'player-rest-warn',
-          cat: 'train',
+          kind: 'alert',
           tone: p.en < 52 ? 'urg' : 'warn',
           urgent: true,
           icon: '😴',
-          tag: 'การพักผ่อน',
+          tag: 'พลังกาย',
           title: `พลังกายเหลือ ${p.en}% — แนะนำพักผ่อน`,
-          detail: 'หากพลังกายต่ำกว่า 58% โค้ชอาจดรอปเป็นสำรองหรือเปลี่ยนออก',
+          detail: 'ต่ำกว่า 58% โค้ชอาจดรอปเป็นสำรอง',
           actionLabel: 'ตั้งพักผ่อน',
           onAction: () => {
             SFX.tap();
-            onUpdateState((d) => {
-              if (d.p) d.p.plan = 3;
-            });
+            onUpdateState((d) => { if (d.p) d.p.plan = 3; });
             onToast?.('ปรับแผนสัปดาห์นี้เป็น "พักผ่อน" แล้ว');
           }
-        });
-      } else {
-        items.push({
-          id: 'player-plan-info',
-          cat: 'train',
-          tone: 'ok',
-          icon: curPlan.i,
-          tag: 'การซ้อม/พัก',
-          title: `แผนสัปดาห์นี้: ${curPlan.n} (พลังกาย ${p.en}%)`,
-          detail: curPlan.d,
-          actionLabel: 'เปลี่ยนแผน',
-          onAction: () => onNavigate?.('p')
         });
       }
       if ((p.inj || 0) > 0) {
         items.push({
           id: 'player-inj-warn',
-          cat: 'train',
+          kind: 'alert',
           tone: 'urg',
           urgent: true,
           icon: '🩹',
-          tag: 'ฟื้นฟูอาการเจ็บ',
-          title: `คุณบาดเจ็บพักอีก ${p.inj} นัด — ตั้ง "😴 พักผ่อน" หายไวขึ้น (-2 นัด/สัปดาห์)`,
-          detail: 'สามารถกดทำกายภาพส่วนตัวได้ที่หน้าอาชีพนักเตะเพื่อลดวันพักทันที',
+          tag: 'อาการเจ็บ',
+          title: `บาดเจ็บพักอีก ${p.inj} นัด`,
+          detail: 'ทำกายภาพส่วนตัวได้ที่หน้าอาชีพนักเตะ',
           actionLabel: 'ไปฟื้นฟู',
           onAction: () => onNavigate?.('p')
         });
@@ -418,22 +397,21 @@ export const LeagueView: React.FC<{
       if ((p.sus || 0) > 0 || (p.yc || 0) >= 2) {
         items.push({
           id: 'player-card-warn',
-          cat: 'news',
+          kind: 'alert',
           tone: (p.sus || 0) > 0 ? 'urg' : 'warn',
           urgent: true,
           icon: (p.sus || 0) > 0 ? '🟥' : '🟨',
           tag: 'วินัยสนาม',
           title: (p.sus || 0) > 0 ? `ติดโทษแบน ${p.sus} นัด` : `สะสมใบเหลือง ${p.yc}/3 ใบ`,
-          detail: (p.sus || 0) > 0 ? 'รอชดใช้โทษแบนให้ครบก่อนลงสนาม' : 'อีก 1 ใบเหลืองจะโดนแบนอัตโนมัติ 1 นัด'
+          detail: (p.sus || 0) > 0 ? 'รอชดใช้โทษแบนให้ครบ' : 'อีก 1 เหลืองจะโดนแบน 1 นัด'
         });
       }
     }
 
-    // Add recent state.feed news items
-    (state.feed || []).slice(0, 5).forEach((f, idx) => {
+    (state.feed || []).slice(0, 6).forEach((f, idx) => {
       items.push({
         id: `feed-${idx}-${f.m}`,
-        cat: f.cat === 'ฝึกซ้อม' ? 'train' : f.cat === 'การเงิน' || f.cat === 'ข้อเสนอ' ? 'deal' : 'news',
+        kind: 'feed',
         tone: f.tone === 'urg' ? 'urg' : f.tone === 'offer' ? 'warn' : f.tone === 'ok' ? 'ok' : 'info',
         urgent: f.tone === 'urg' || f.tone === 'offer',
         icon: f.tone === 'urg' ? '🚨' : f.tone === 'offer' ? '💼' : f.tone === 'ok' ? '✨' : '📰',
@@ -447,143 +425,74 @@ export const LeagueView: React.FC<{
     const filteredItems = items.filter((it) => {
       if (newsFilter === 'all') return true;
       if (newsFilter === 'urg') return !!it.urgent;
-      return it.cat === newsFilter;
+      return it.kind === 'feed';
     });
 
     const toneCls: Record<NewsTone, string> = {
-      urg: 'border-l-[var(--red)] bg-[var(--red-soft)]/45 border-[var(--red)]/25',
-      warn: 'border-l-[var(--lamp)] bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/30',
-      ok: 'border-l-[var(--g)] bg-[var(--g-soft)]/45 border-[var(--g)]/25',
-      info: 'border-l-[var(--mut)]/50 bg-[var(--surface-2)]/65 border-[var(--line)]/70'
-    };
-
-    const tagCls: Record<NewsTone, string> = {
-      urg: 'bg-[var(--red)] text-white',
-      warn: 'bg-[var(--lamp)] text-[#261900]',
-      ok: 'bg-[var(--g)] text-white',
-      info: 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]'
+      urg: 'bg-[var(--red-soft)]/35 border-[var(--red)]/30',
+      warn: 'bg-[var(--lamp-soft)]/45 border-[var(--lamp)]/40',
+      ok: 'bg-[var(--g-soft)]/35 border-[var(--g)]/30',
+      info: 'bg-[var(--surface-2)]/65 border-[var(--line)]/70'
     };
 
     return (
       <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1.5">
-        {/* Header */}
-        <div className="flex flex-wrap items-center justify-between gap-1.5">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">📰 ข่าวสารสำคัญ</span>
-            {urgentCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full bg-[var(--red)] text-white text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0">
-                {urgentCount} เรื่องต้องดู
-              </span>
-            )}
+        <div className="flex items-center justify-between gap-2">
+          <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+            📬 งานด่วน &amp; ข่าวสโมสร
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {vt !== me.tier && (
+          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 shrink-0">
+            {(
+              [
+                ['all', 'ทั้งหมด'],
+                ['urg', `ด่วน (${urgentCount})`],
+                ['feed', 'ข่าวทีม']
+              ] as const
+            ).map(([fid, flbl]) => (
               <button
+                key={fid}
                 type="button"
-                title="กลับลีกของฉัน"
-                aria-label="กลับลีกของฉัน"
-                onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
-                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer shadow-xs hover:brightness-105"
+                onClick={() => { SFX.tap(); setNewsFilter(fid); }}
+                className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                  newsFilter === fid ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
               >
-                <span>↩</span>
-                <span>★</span>
+                {flbl}
               </button>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* Category Filter Pills */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 mland:pb-0">
-          {(
-            [
-              ['all', 'ทั้งหมด'],
-              ['urg', `สำคัญ (${urgentCount})`],
-              ['deal', 'สัญญา·สปอน'],
-              ['act', 'กิจกรรม'],
-              ['train', 'ซ้อม·พัก']
-            ] as const
-          ).map(([fid, flbl]) => (
-            <button
-              key={fid}
-              type="button"
-              onClick={() => { SFX.tap(); setNewsFilter(fid); }}
-              className={`px-2 py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                newsFilter === fid
-                  ? 'bg-[var(--g)] text-white shadow-xs'
-                  : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
-              }`}
-            >
-              {flbl}
-            </button>
-          ))}
-        </div>
-
-        {/* News Items List */}
-        <div className="max-h-[240px] sm:max-h-[270px] mland:max-h-[168px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
+        <div className="max-h-[210px] sm:max-h-[240px] mland:max-h-[148px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
           {filteredItems.length === 0 ? (
             <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-3 text-center">
-              ไม่มีข่าวสารเร่งด่วนในหมวดนี้
+              ไม่มีเรื่องเร่งด่วนในขณะนี้ ทีมพร้อมลงสนาม!
             </div>
           ) : (
             filteredItems.map((it) => (
               <div
                 key={it.id}
-                className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border border-l-[3px] space-y-1 mland:space-y-0.5 ${toneCls[it.tone]}`}
+                className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 mland:gap-1.5 ${toneCls[it.tone]}`}
               >
-                <div className="flex items-start justify-between gap-2 mland:gap-1.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className={`px-1.5 py-0.2 rounded text-[9px] mland:text-[7.5px] font-extrabold leading-tight shrink-0 ${tagCls[it.tone]}`}>
-                        {it.icon} {it.tag}
-                      </span>
-                      <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate">
-                        {it.title}
-                      </span>
-                    </div>
-                    <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug mt-0.5 mland:mt-0 truncate">
-                      {it.detail}
-                    </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] truncate">
+                    {it.icon} {it.tag}
                   </div>
-                  {it.actionLabel && it.onAction && (
-                    <button
-                      type="button"
-                      onClick={() => { SFX.tap(); it.onAction?.(); }}
-                      className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold shrink-0 cursor-pointer transition-colors"
-                    >
-                      {it.actionLabel}
-                    </button>
-                  )}
+                  <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate">
+                    {it.title}
+                  </div>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug truncate">
+                    {it.detail}
+                  </div>
                 </div>
-
-                {it.quickTraining && (
-                  <div className="flex items-center gap-1 pt-0.5">
-                    <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] font-semibold shrink-0">สลับเร็ว:</span>
-                    {(
-                      [
-                        ['FW', 'หน้า'],
-                        ['MF', 'กลาง'],
-                        ['DF', 'หลัง'],
-                        ['F', 'พักฟื้น']
-                      ] as const
-                    ).map(([tk, tl]) => (
-                      <button
-                        key={tk}
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          onUpdateState((d) => { syncTrainingFocusToPlan(d, tk); });
-                          onToast?.(`เปลี่ยนโปรแกรมซ้อมทีมเป็น "${tk === 'F' ? 'พักผ่อน/ฟื้นร่าง' : `โฟกัส${tl}`}"`);
-                        }}
-                        className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors ${
-                          (state.tf || 'MF') === tk
-                            ? 'bg-[var(--g)] text-white shadow-xs'
-                            : 'bg-[var(--surface)] border border-[var(--line)]/80 text-[var(--mut)] hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        {tl}
-                      </button>
-                    ))}
-                  </div>
+                {it.actionLabel && it.onAction && (
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); it.onAction?.(); }}
+                    className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold shrink-0 cursor-pointer whitespace-nowrap transition-colors"
+                  >
+                    {it.actionLabel}
+                  </button>
                 )}
               </div>
             ))
@@ -593,103 +502,32 @@ export const LeagueView: React.FC<{
     );
   };
 
-  const renderSideLeagueStats = () => {
-    const tierTeams = state.teams.filter((t) => t.tier === vt);
-    const tierPlayers = tierTeams.flatMap((t) => t.sq.map((q) => ({ q, t })));
-    const topBy = (fn: (q: Player) => number, filterFn?: (q: Player) => boolean) =>
-      tierPlayers
-        .filter((x) => (!filterFn || filterFn(x.q)) && fn(x.q) > 0)
-        .sort((a, b) => fn(b.q) - fn(a.q) || b.q.ov - a.q.ov);
-
-    const cfg: Record<typeof sideStatTab, { label: string; fn: (q: Player) => number; fmt: (q: Player) => string; filter?: (q: Player) => boolean }> = {
-      sg: { label: '⚽ ยิง', fn: (q) => q.sg || 0, fmt: (q) => `${q.sg} ลูก` },
-      sa: { label: '🎯 จ่าย', fn: (q) => q.sa || 0, fmt: (q) => `${q.sa} ครั้ง` },
-      cs: { label: '🧤 คลีนชีต', fn: (q) => q.cs || 0, fmt: (q) => `${q.cs} นัด`, filter: (q) => q.pos === 'GK' },
-      ov: { label: '⭐ OVR', fn: (q) => q.ov, fmt: (q) => `${q.ov}` }
-    };
-    const active = cfg[sideStatTab];
-    const list = topBy(active.fn, active.filter).slice(0, 5);
-    const topScorer = topBy((q) => q.sg || 0)[0];
-    const topAssist = topBy((q) => q.sa || 0)[0];
-
-    return (
-      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1">
-        <div className="flex flex-wrap items-center justify-between gap-1.5">
-          <div className="font-bold text-xs sm:text-sm mland:text-[11px] flex items-center gap-1">
-            <span>⭐ สถิติลีก</span>
-            <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]">· {TN[vt]}</span>
-          </div>
-          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70">
-            {(['sg', 'sa', 'cs', 'ov'] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                onClick={() => { SFX.tap(); setSideStatTab(k); }}
-                className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors ${
-                  sideStatTab === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
-              >
-                {cfg[k].label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {(topScorer || topAssist) && (
-          <div className="grid grid-cols-2 gap-1 text-[10px] mland:text-[9px]">
-            <div className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 truncate flex items-center gap-1">
-              <StatIconBadge kind="goal" count={topScorer ? Math.max(1, topScorer.q.sg || 0) : 1} size="xs" />
-              <span className="text-[var(--mut)] shrink-0">ดาวซัลโว:</span>
-              <b className="text-[var(--ink)] truncate">{topScorer ? `${topScorer.q.n}${(topScorer.q.sg || 0) <= 1 ? ` (${topScorer.q.sg})` : ''}` : '—'}</b>
-            </div>
-            <div className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 truncate flex items-center gap-1">
-              <StatIconBadge kind="assist" count={topAssist ? Math.max(1, topAssist.q.sa || 0) : 1} size="xs" />
-              <span className="text-[var(--mut)] shrink-0">แอสซิสต์:</span>
-              <b className="text-[var(--ink)] truncate">{topAssist ? `${topAssist.q.n}${(topAssist.q.sa || 0) <= 1 ? ` (${topAssist.q.sa})` : ''}` : '—'}</b>
-            </div>
-          </div>
-        )}
-
-        {list.length ? (
-          <div className="space-y-1 mland:space-y-0.5">
-            {list.map((x, idx) => (
-              <button
-                key={`${x.t.id}-${x.q.n}`}
-                type="button"
-                onClick={() => onInspectPlayer(x.q, x.t)}
-                className={`w-full flex items-center gap-2 mland:gap-1.5 px-2 py-1 mland:py-0.5 rounded-xl mland:rounded-lg text-left cursor-pointer transition-colors ${
-                  x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]/80'
-                }`}
-              >
-                <span className={`w-3.5 text-[10.5px] mland:text-[9px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>
-                  {idx + 1}
-                </span>
-                <PlayerFace player={x.q} team={x.t} state={state} size={22} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-[11px] mland:text-[9.5px] truncate leading-tight">{x.q.n}</div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate leading-tight">{x.t.name} · {x.q.pos}</div>
-                </div>
-                <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold tabular shrink-0">
-                  {active.fmt(x.q)}
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-1">ยังไม่มีข้อมูลสถิติในหมวดนี้</p>
-        )}
-      </div>
-    );
-  };
-
   const renderStandings = () => (
     <div className="flex-1 min-h-0 grid grid-cols-[1.42fr_0.88fr] gap-2.5 mland:gap-2 overflow-hidden">
       <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
-          {/* Compact League Standings Header Strip */}
-          <div className="shrink-0 flex items-center justify-between gap-2 px-3 mland:px-2 py-2 mland:py-1 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/70">
+          {/* Compact League Standings Header Strip with Direct League Switcher */}
+          <div className="shrink-0 flex items-center justify-between gap-2 px-3 mland:px-2 py-1.5 mland:py-1 bg-[var(--surface-2)]/65 border-b border-[var(--line)]/70">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-bold text-xs sm:text-sm mland:text-[10.5px] text-[var(--ink)] truncate">{TN[vt]}</span>
+              <div className="relative inline-flex items-center min-w-0">
+                <select
+                  aria-label="เลือกลีกในตารางคะแนน"
+                  value={vt}
+                  onChange={(e) => {
+                    const nextTier = Number(e.target.value);
+                    SFX.tap();
+                    onUpdateState((d) => { d.lg = nextTier; });
+                  }}
+                  className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl mland:rounded-lg pl-2.5 pr-7 mland:pl-2 mland:pr-5 py-1 mland:py-0.5 font-bold text-xs sm:text-sm mland:text-[10.5px] text-[var(--ink)] cursor-pointer truncate max-w-[225px] sm:max-w-none transition-colors shadow-2xs"
+                >
+                  {[0, 1, 2].map((tierIdx) => (
+                    <option key={tierIdx} value={tierIdx}>
+                      {TN[tierIdx]}{tierIdx === me.tier ? ' ★' : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--mut)] pointer-events-none absolute right-2 mland:right-1.5 top-1/2 -translate-y-1/2" />
+              </div>
               {vt === me.tier && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#7a4f00] dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold tabular shrink-0">
                   <span>★</span>
@@ -707,7 +545,7 @@ export const LeagueView: React.FC<{
                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer hover:brightness-105"
                 >
                   <span>↩</span>
-                  <span>★</span>
+                  <span>กลับลีกฉัน ★</span>
                 </button>
               )}
               <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular hidden sm:inline mland:hidden">
@@ -737,15 +575,10 @@ export const LeagueView: React.FC<{
               const isRel = i >= tb.length - 3 && vt > 0;
               const isMe = t.id === state.me;
               const gd = t.gf - t.ga;
-              const zoneBorder = isPromo
-                ? 'border-l-[var(--g)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--g-soft)]/55'
-                : isRel
-                  ? 'border-l-[var(--red)] even:bg-[var(--surface-2)]/25 hover:bg-[var(--red-soft)]/55'
-                  : 'border-l-transparent even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75';
               const rankBadge = isPromo
-                ? 'bg-[var(--g-soft)] text-[var(--g)]'
+                ? 'bg-[var(--g)] text-white'
                 : isRel
-                  ? 'bg-[var(--red-soft)] text-[var(--red)]'
+                  ? 'bg-[var(--red)] text-white'
                   : 'text-[var(--mut)]';
 
               return (
@@ -753,7 +586,15 @@ export const LeagueView: React.FC<{
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
-                  className={`w-full grid grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 border-l-[3px] text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${zoneBorder}`}
+                  className={`w-full grid grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_22px_22px_22px_22px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_17px_17px_17px_17px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${
+                    isMe
+                      ? 'bg-[var(--lamp-soft)]/55 hover:bg-[var(--lamp-soft)]/80'
+                      : isPromo
+                        ? 'bg-[var(--g-soft)]/25 hover:bg-[var(--g-soft)]/55'
+                        : isRel
+                          ? 'bg-[var(--red-soft)]/20 hover:bg-[var(--red-soft)]/45'
+                          : 'even:bg-[var(--surface-2)]/30 hover:bg-[var(--surface-2)]/75'
+                  }`}
                 >
                   <span className={`text-center tabular font-bold text-[10px] mland:text-[9px] rounded-md py-0.5 leading-none ${rankBadge}`}>
                     {i + 1}
@@ -830,52 +671,35 @@ export const LeagueView: React.FC<{
 
       </div>
 
-      {/* Right Column: Important News + Live League Stats + Recent Results + History */}
+      {/* Right Column: Matchday Command Hub (Next Match + Actionable Inbox + Recent Form) */}
       <div className="space-y-2 mland:space-y-1.5 h-full overflow-y-auto pr-0.5">
+        {renderNextMatchCard()}
         {renderImportantNewsPanel()}
-        {renderSideLeagueStats()}
-        <div className="grid grid-cols-1 gap-2 mland:gap-1.5">
-          <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
-            <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center justify-between">
-              <span>📋 ผลล่าสุดของคุณ</span>
-              {me.fm && <div className="flex items-center gap-1">{renderFormDots(me.fm)}</div>}
-            </div>
-            {(state.res || []).length ? (
-              <div className="space-y-1">
-                {state.res!.map((r, i) => {
-                  const isWin = r.includes('ชนะ') || r.startsWith('W');
-                  const isDraw = r.includes('เสมอ') || r.startsWith('D');
-                  const toneCls = isWin
-                    ? 'border-l-emerald-500 bg-emerald-500/8'
-                    : isDraw
-                      ? 'border-l-amber-400 bg-amber-400/8'
-                      : 'border-l-rose-500 bg-rose-500/8';
-                  return (
-                    <div key={i} className={`text-[11px] mland:text-[10px] px-2 py-1 mland:py-0.5 rounded-lg border-l-2 leading-snug ${toneCls}`}>
-                      {r}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ยังไม่มีการแข่งขัน</p>
-            )}
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
+          <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center justify-between">
+            <span>📋 ผลล่าสุดของคุณ</span>
+            {me.fm && <div className="flex items-center gap-1">{renderFormDots(me.fm)}</div>}
           </div>
-
-          <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
-            <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1">🏅 ประวัติสโมสร/อาชีพ</div>
-            {state.hist.length ? (
-              <div className="space-y-1 max-h-36 mland:max-h-28 overflow-y-auto pr-0.5">
-                {state.hist.slice().reverse().map((h, i) => (
-                  <div key={i} className="text-[11px] mland:text-[10px] text-[var(--mut)] pl-2 border-l-2 border-[var(--g)]/40 py-0.5 leading-snug">
-                    {h}
+          {(state.res || []).length ? (
+            <div className="space-y-1">
+              {state.res!.map((r, i) => {
+                const isWin = r.includes('ชนะ') || r.startsWith('W');
+                const isDraw = r.includes('เสมอ') || r.startsWith('D');
+                const toneCls = isWin
+                  ? 'bg-emerald-500/10 border-emerald-500/25'
+                  : isDraw
+                    ? 'bg-amber-400/12 border-amber-500/25'
+                    : 'bg-rose-500/10 border-rose-500/25';
+                return (
+                  <div key={i} className={`text-[11px] mland:text-[10px] px-2.5 py-1 mland:py-0.5 rounded-lg border leading-snug tabular ${toneCls}`}>
+                    {r}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ยังไม่มีประวัติจบซีซั่น</p>
-            )}
-          </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ยังไม่มีการแข่งขัน</p>
+          )}
         </div>
       </div>
     </div>
@@ -1326,8 +1150,8 @@ export const LeagueView: React.FC<{
           ))}
         </div>
 
-        {/* League Tier Switcher (hidden in Cup tab) */}
-        {sub !== 4 ? (
+        {/* League Tier Switcher for stats/comparison/awards; Standings switches directly in its table header */}
+        {sub === 1 || sub === 2 || sub === 5 ? (
           <div className="order-1 w-auto inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
             {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
               const isMyTier = idx === me.tier;
@@ -1358,9 +1182,15 @@ export const LeagueView: React.FC<{
             })}
           </div>
         ) : (
-          <div className="order-1 flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
-            <span>🏅</span>
-            <span>รายการแข่งขันบอลถ้วย</span>
+          <div className="order-1 flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
+            <span>{sub === 4 ? '🏅' : sub === 3 ? '📅' : '🏆'}</span>
+            <span>
+              {sub === 4
+                ? 'รายการแข่งขันบอลถ้วย'
+                : sub === 3
+                  ? 'โปรแกรมการแข่งขัน'
+                  : `ตารางคะแนน · ซีซั่น ${state.season}`}
+            </span>
           </div>
         )}
       </div>

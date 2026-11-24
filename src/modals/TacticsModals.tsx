@@ -166,21 +166,29 @@ export const PitchPlayerModal: React.FC<{
   ];
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-2xl max-h-[94dvh] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 mland:p-1.5 overflow-hidden" onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[94dvh] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="shrink-0 flex items-center gap-3 p-3 mland:p-2.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <PlayerFace player={player} team={me} state={state} size={44} />
           <div className="flex-1 min-w-0">
             <div className="font-bold text-sm mland:text-xs truncate">
               เสนอขาย {player.n} <span className="text-xs text-[var(--g)]">({player.ro})</span>
             </div>
-            <div className="text-[11px] text-[var(--mut)]">
+            <div className="text-[11px] text-[var(--mut)] tabular">
               อายุ {player.age} ปี · ประเมินตลาด {fmtMoney(baseVal)} · ค่าเหนื่อย {fmtMoneyNum(ensureCon(player).wg)}/นัด
             </div>
           </div>
           <span className="px-2.5 py-1 rounded-xl text-white font-bold text-sm tabular shrink-0" style={{ background: ovColor(player.ov) }}>
             {player.ov}
           </span>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="ปิดหน้าต่างเสนอขาย"
+            className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer shrink-0 hover:border-[var(--g)]"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="p-3.5 mland:p-2.5 flex-1 min-h-0 overflow-y-auto grid grid-cols-[0.85fr_1.15fr] gap-3.5 mland:gap-2.5 items-start">

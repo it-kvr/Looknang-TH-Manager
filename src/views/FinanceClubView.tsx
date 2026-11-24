@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import type { Position, MainTab, GameState } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
-import { TN, KIT_P, KIT_SW, syncTrainingFocusToPlan } from '../data/thaiFootballData';
+import { TN, KIT_P, KIT_SW } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity } from '../engine/playerCore';
 import { sortTable, getStaffState, getLeagueTransferContext, calcMatchdayFinanceEstimate, teamStats } from '../engine/simulation';
@@ -15,80 +15,78 @@ export const FinanceClubView: React.FC<{
   onToast: (msg: string) => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
 }> = ({ tab, state, onUpdateState, onToast, navIntent }) => {
-  const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'infra' | 'ledger'>('overview');
-  const [clubTab, setClubTab] = useState<'info' | 'identity' | 'activities' | 'legacy'>('info');
+  const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'ledger'>('overview');
+  const [clubTab, setClubTab] = useState<'info' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
 
   useEffect(() => {
-    if (navIntent?.tab === 'f' && (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'infra' || navIntent.sub === 'ledger')) {
+    if (navIntent?.tab === 'f' && (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'ledger')) {
       setFinTab(navIntent.sub);
-    } else if (navIntent?.tab === 'u' && (navIntent.sub === 'info' || navIntent.sub === 'identity' || navIntent.sub === 'activities' || navIntent.sub === 'legacy')) {
+    } else if (
+      navIntent?.tab === 'u' &&
+      (navIntent.sub === 'info' || navIntent.sub === 'infra' || navIntent.sub === 'identity' || navIntent.sub === 'activities' || navIntent.sub === 'legacy')
+    ) {
       setClubTab(navIntent.sub);
+    } else if (navIntent?.tab === 'f' && navIntent.sub === 'infra') {
+      setClubTab('infra');
     }
   }, [navIntent]);
 
   const me = state.teams[state.me];
+  const est = calcMatchdayFinanceEstimate(state, me);
+  const stf = getStaffState(state);
+
+  const upgradeFac = (key: 'st' | 'tr' | 'ya' | 'med' | 'merchLv', title: string, baseCost: number) => {
+    const lv = state[key] ?? 1;
+    const cost = lv * baseCost;
+    if (lv >= 5 || state.money < cost) {
+      onToast(lv >= 5 ? 'ระดับสูงสุดแล้ว' : 'งบสโมสรไม่พอ');
+      return;
+    }
+    SFX.tap();
+    onUpdateState((d) => {
+      d.money -= cost;
+      d[key] = (d[key] ?? 1) + 1;
+      logFin(d, `อัปเกรด${title} Lv.${d[key]}`, -cost);
+    });
+    onToast(`อัปเกรด${title}เป็น Lv.${lv + 1} สำเร็จ!`);
+  };
+
+  const hireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
+    const cur = stf[role];
+    if (cur >= 3) {
+      onToast(`${title} ระดับสูงสุดแล้ว`);
+      return;
+    }
+    const cost = [45, 75, 110][cur];
+    if (state.money < cost) {
+      onToast(`งบไม่พอ (ต้องการ ${fmtMoney(cost)})`);
+      return;
+    }
+    SFX.tap();
+    onUpdateState((d) => {
+      d.money -= cost;
+      d.staff = { ...getStaffState(d), [role]: cur + 1 };
+      logFin(d, `จ้าง/อัปเกรด${title} Lv.${cur + 1}`, -cost);
+    });
+    onToast(`จ้าง${title} Lv.${cur + 1} เรียบร้อย`);
+  };
+
+  const fireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
+    const cur = stf[role];
+    if (cur <= 0) return;
+    SFX.tap();
+    onUpdateState((d) => {
+      d.staff = { ...getStaffState(d), [role]: cur - 1 };
+    });
+    onToast(`ลดระดับ${title}เหลือ Lv.${cur - 1} (ประหยัดค่าจ้าง ${fmtMoneyNum(1.5)}/นัด)`);
+  };
 
   if (tab === 'f') {
-    const est = calcMatchdayFinanceEstimate(state, me);
     const tx = getLeagueTransferContext(state, me);
-    const stf = getStaffState(state);
-    const bd = clamp(state.bd ?? 50, 0, 100);
-    const rep = state.mgrRep ?? 50;
-    const repRank =
-      rep >= 180 ? 'ตำนานลูกหนังไทย' : rep >= 130 ? 'ยอดกุนซือระดับทวีป' : rep >= 90 ? 'กุนซือมือทอง' : rep >= 65 ? 'โค้ชฝีมือดี' : 'กุนซือหน้าใหม่';
-    const tierTbl = sortTable(state.teams.filter((t) => t.tier === me.tier));
-    const curRank = Math.max(1, tierTbl.findIndex((t) => t.id === me.id) + 1);
-    const targetRank = state.obj || 8;
     const bankRemain = state.bankLoan ? state.bankLoan.left * state.bankLoan.per : 0;
     const totalDebt = bankRemain + (state.payDue || 0);
     const tierMult = 1 + me.tier * 0.45;
-
-    const upgradeFac = (key: 'st' | 'tr' | 'ya' | 'med' | 'merchLv', title: string, baseCost: number) => {
-      const lv = state[key] ?? 1;
-      const cost = lv * baseCost;
-      if (lv >= 5 || state.money < cost) {
-        onToast(lv >= 5 ? 'ระดับสูงสุดแล้ว' : 'งบสโมสรไม่พอ');
-        return;
-      }
-      SFX.tap();
-      onUpdateState((d) => {
-        d.money -= cost;
-        d[key] = (d[key] ?? 1) + 1;
-        logFin(d, `อัปเกรด${title} Lv.${d[key]}`, -cost);
-      });
-      onToast(`อัปเกรด${title}เป็น Lv.${lv + 1} สำเร็จ!`);
-    };
-
-    const hireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
-      const cur = stf[role];
-      if (cur >= 3) {
-        onToast(`${title} ระดับสูงสุดแล้ว`);
-        return;
-      }
-      const cost = [45, 75, 110][cur];
-      if (state.money < cost) {
-        onToast(`งบไม่พอ (ต้องการ ${fmtMoney(cost)})`);
-        return;
-      }
-      SFX.tap();
-      onUpdateState((d) => {
-        d.money -= cost;
-        d.staff = { ...getStaffState(d), [role]: cur + 1 };
-        logFin(d, `จ้าง/อัปเกรด${title} Lv.${cur + 1}`, -cost);
-      });
-      onToast(`จ้าง${title} Lv.${cur + 1} เรียบร้อย`);
-    };
-
-    const fireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
-      const cur = stf[role];
-      if (cur <= 0) return;
-      SFX.tap();
-      onUpdateState((d) => {
-        d.staff = { ...getStaffState(d), [role]: cur - 1 };
-      });
-      onToast(`ลดระดับ${title}เหลือ Lv.${cur - 1} (ประหยัดค่าจ้าง ${fmtMoneyNum(1.5)}/นัด)`);
-    };
 
     const partnerDeals = [
       {
@@ -175,7 +173,7 @@ export const FinanceClubView: React.FC<{
 
           <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
             <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ภาระหนี้คงค้างรวม</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${totalDebt > 0 ? 'text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${totalDebt > 0 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
               {fmtMoney(totalDebt)}
             </div>
             <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
@@ -184,21 +182,20 @@ export const FinanceClubView: React.FC<{
           </div>
         </div>
 
-        {/* Finance Sub-navigation */}
-        <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        {/* Finance Sub-navigation (3 Focused Commercial & Cashflow Tabs) */}
+        <div className="grid grid-cols-3 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {(
             [
-              ['overview', '📊 ภาพรวม & บอร์ด'],
+              ['overview', '📊 กระแสเงิน & แคมเปญ'],
               ['commercial', '💼 สปอนเซอร์ & ตั๋ว'],
-              ['infra', '🏟️ สนาม & ทีมงาน'],
-              ['ledger', '📒 บัญชี & สินเชื่อ']
+              ['ledger', '📒 ธนาคาร & บัญชี']
             ] as const
           ).map(([id, label]) => (
             <button
               key={id}
               type="button"
               onClick={() => setFinTab(id)}
-              className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors ${
+              className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors whitespace-nowrap ${
                 finTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
               }`}
             >
@@ -207,93 +204,80 @@ export const FinanceClubView: React.FC<{
           ))}
         </div>
 
-        {/* Sub-tab 1: Overview & Board */}
+        {/* Sub-tab 1: Cashflow & Matchday Boosters */}
         {finTab === 'overview' && (
           <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="font-bold text-sm mland:text-xs">👔 บอร์ดบริหาร &amp; เครดิตกุนซือ</h3>
-                  <p className="text-xs text-[var(--mut)]">
-                    อันดับปัจจุบัน: <b className="text-[var(--ink)] tabular">#{curRank}/{tierTbl.length}</b> · เป้าหมายบอร์ด: <b className="text-[var(--g)] tabular">อันดับ {targetRank} ขึ้นไป</b>
-                  </p>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs font-bold text-[var(--lamp)] tabular">ชื่อเสียง {rep}</div>
-                  <div className="text-[11px] text-[var(--mut)]">{repRank}</div>
+            <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                <h3 className="font-bold text-sm mland:text-xs">💰 ประมาณการกระแสเงินสดต่อแมตช์</h3>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
+                    <div className="font-bold text-[var(--g)] flex justify-between">
+                      <span>🏠 เกมเหย้า</span>
+                      <span className="tabular">{est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}</span>
+                    </div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าตั๋วเข้าชม (~{est.estAtt.toLocaleString()} คน)</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estTicket)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ขายของที่ระลึก (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>รายจ่ายรวม/นัด</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.totalOut)}</b></div>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
+                    <div className="font-bold flex justify-between">
+                      <span>✈️ เกมเยือน</span>
+                      <span className={`tabular ${est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{est.awayNet >= 0 ? `+${fmtMoneyNum(est.awayNet)}` : fmtMoneyNum(est.awayNet)}</span>
+                    </div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ดีลพาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.dealIncome)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าเหนื่อยนักเตะ + สตาฟฟ์</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.wageCost + est.staffCost)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>ผ่อนเงินกู้ธนาคาร</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.loanCost)}</b></div>
+                  </div>
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-xs">
-                  <span className="text-[var(--mut)]">ความเชื่อมั่นบอร์ดบริหาร</span>
-                  <b className={`tabular ${bd < 30 ? 'text-[var(--red)]' : bd >= 70 ? 'text-[var(--g)]' : ''}`}>{bd}%</b>
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold">⚖️ สรุปเสถียรภาพการเงิน &amp; เพดาน FFP</span>
+                  <span className={`font-bold tabular ${tx.wagePct >= 95 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                    เพดานค่าเหนื่อย {tx.wagePct}%
+                  </span>
                 </div>
-                <div className="h-2.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all"
-                    style={{ width: `${bd}%`, background: bd < 30 ? 'var(--red)' : bd < 55 ? 'var(--lamp)' : 'var(--g)' }}
+                    style={{
+                      width: `${clamp(tx.wagePct, 4, 100)}%`,
+                      background: tx.wagePct >= 95 ? 'var(--red)' : tx.wagePct >= 80 ? 'var(--lamp)' : 'var(--g)'
+                    }}
                   />
                 </div>
-                <div className="text-[11px] text-[var(--mut)]">
-                  {bd < 30
-                    ? '⚠️ ความเชื่อมั่นวิกฤติ! ต้องรีบทำผลงานและคุมงบไม่ให้ติดลบ มิฉะนั้นอาจถูกปลดกลางคัน'
-                    : curRank <= targetRank
-                      ? '✅ ผลงานเป็นไปตามเป้าหมายบอร์ดบริหาร'
-                      : '📌 อันดับยังต่ำกว่าเป้าหมายบอร์ด — เร่งเก็บแต้มในลีก'}
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-[var(--line)]/60 grid grid-cols-3 gap-2 text-center">
-                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
-                  <div className="text-[10px] text-[var(--mut)]">ขวัญแฟนบอล</div>
-                  <div className="font-bold text-sm tabular">{state.fan ?? 55}%</div>
-                </div>
-                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
-                  <div className="text-[10px] text-[var(--mut)]">ขวัญห้องแต่งตัว</div>
-                  <div className="font-bold text-sm tabular">{state.mor ?? 55}%</div>
-                </div>
-                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
-                  <div className="text-[10px] text-[var(--mut)]">ความจุสนาม</div>
-                  <div className="font-bold text-sm tabular">{est.cap.toLocaleString()}</div>
+                <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                  <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                    <div className="text-[10px] text-[var(--mut)]">เฉลี่ยสุทธิเหย้า/เยือน</div>
+                    <div className={`font-bold text-xs tabular ${Math.round((est.homeNet + est.awayNet) / 2) >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                      {Math.round((est.homeNet + est.awayNet) / 2) >= 0
+                        ? `+${fmtMoneyNum(Math.round((est.homeNet + est.awayNet) / 2))}`
+                        : fmtMoneyNum(Math.round((est.homeNet + est.awayNet) / 2))}
+                    </div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                    <div className="text-[10px] text-[var(--mut)]">อัตราเข้าชมเหย้า</div>
+                    <div className="font-bold text-xs tabular">{est.attPct}%</div>
+                  </div>
+                  <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                    <div className="text-[10px] text-[var(--mut)]">สปอนเซอร์พาร์ทเนอร์</div>
+                    <div className="font-bold text-xs tabular">{state.sponsorDeal ? `เหลือ ${state.sponsorDeal.left}น` : 'ว่าง'}</div>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
-              <h3 className="font-bold text-sm mland:text-xs">💰 ประมาณการกระแสเงินสดต่อแมตช์</h3>
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
-                  <div className="font-bold text-[var(--g)] flex justify-between">
-                    <span>🏠 เกมเหย้า</span>
-                    <span className="tabular">{est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}</span>
-                  </div>
-                  <div className="flex justify-between text-[var(--mut)]"><span>ค่าตั๋วเข้าชม (~{est.estAtt.toLocaleString()} คน)</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estTicket)}</b></div>
-                  <div className="flex justify-between text-[var(--mut)]"><span>ขายของที่ระลึก (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</b></div>
-                  <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
-                  <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>รายจ่ายรวม/นัด</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.totalOut)}</b></div>
-                </div>
-
-                <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
-                  <div className="font-bold flex justify-between">
-                    <span>✈️ เกมเยือน</span>
-                    <span className={`tabular ${est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{est.awayNet >= 0 ? `+${fmtMoneyNum(est.awayNet)}` : fmtMoneyNum(est.awayNet)}</span>
-                  </div>
-                  <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor)}</b></div>
-                  <div className="flex justify-between text-[var(--mut)]"><span>ดีลพาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.dealIncome)}</b></div>
-                  <div className="flex justify-between text-[var(--mut)]"><span>ค่าเหนื่อยนักเตะ + สตาฟฟ์</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.wageCost + est.staffCost)}</b></div>
-                  <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>ผ่อนเงินกู้ธนาคาร</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.loanCost)}</b></div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-bold text-sm mland:text-xs">⚡ มาตรการกระตุ้นนัดถัดไป</h3>
                 <span className="text-[11px] text-[var(--mut)]">มีผลทันทีในแมตช์ที่กำลังจะลงแข่ง</span>
               </div>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="space-y-2.5">
                 <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-2">
                   <div className="font-bold text-xs">🏆 โบนัสอัดฉีดชัยชนะ (จ่ายเฉพาะเมื่อชนะ)</div>
                   <div className="text-[11px] text-[var(--mut)]">เพิ่มความมุ่งมั่นและโอกาสทำผลงานดีในนัดสำคัญ</div>
@@ -362,7 +346,6 @@ export const FinanceClubView: React.FC<{
                   )}
                 </div>
               </div>
-            </div>
             </div>
           </div>
         )}
@@ -508,121 +491,7 @@ export const FinanceClubView: React.FC<{
           </div>
         )}
 
-        {/* Sub-tab 3: Facilities, Backroom Staff & Training Focus */}
-        {finTab === 'infra' && (
-          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-              <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร (สูงสุด Lv.5)</h3>
-              {(
-                [
-                  ['st', 'สนามกีฬา', `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มตั๋ว & เพดานค่าจ้าง +10%/Lv`, 100],
-                  ['tr', 'ศูนย์ฝึกซ้อม', 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นความฟิต +2%/Lv', 80],
-                  ['ya', 'อะคาเดมี่เยาวชน', 'สร้างเยาวชน OVR สูงขึ้น & เพิ่มคุณภาพแมวมอง', 80],
-                  ['med', 'ศูนย์การแพทย์ & ฟื้นฟู', 'ลดโอกาสบาดเจ็บ -8%/Lv และเร่งฟื้นฟูอาการเจ็บ', 75]
-                ] as const
-              ).map(([k, title, desc, baseCost]) => {
-                const lv = state[k] ?? 1;
-                const cost = lv * baseCost;
-                return (
-                  <div key={k} className="flex items-center justify-between gap-3 py-2 border-b border-[var(--line)]/60 last:border-0">
-                    <div className="min-w-0">
-                      <div className="font-bold text-xs">{title} · Lv.{lv}/5</div>
-                      <div className="text-[11px] text-[var(--mut)]">{desc}</div>
-                      <div className="flex gap-1 mt-1.5">
-                        {[1, 2, 3, 4, 5].map((x) => (
-                          <span key={x} className={`h-1.5 w-5 rounded-full ${x <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
-                        ))}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={lv >= 5 || state.money < cost}
-                      onClick={() => upgradeFac(k, title, baseCost)}
-                      className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
-                    >
-                      {lv >= 5 ? 'เต็มแล้ว' : `อัป ${fmtMoneyNum(cost)}`}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
-              <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช (สูงสุด Lv.3)</h3>
-                  <span className="text-xs font-bold text-[var(--red)] tabular">ค่าจ้างรวม -{fmtMoneyNum(est.staffCost)}/นัด</span>
-                </div>
-                {(
-                  [
-                    ['asst', 'ผู้ช่วยโค้ช', 'เพิ่มความคุ้นเคยแท็กติก & โอกาสซ้อมพัฒนา +2%/Lv'],
-                    ['fit', 'โค้ชฟิตเนส', 'ฟื้นฟูความฟิตทั้งทีมหลังจบแมตช์ +2%/Lv'],
-                    ['scout', 'หัวหน้าแมวมอง', 'เพิ่มคุณภาพ & จำนวนนักเตะจากภารกิจแมวมอง'],
-                    ['physio', 'นักกายภาพบำบัด', 'ลดความเสี่ยงบาดเจ็บ -8%/Lv & หายเจ็บไวขึ้น']
-                  ] as const
-                ).map(([role, title, desc]) => {
-                  const lv = stf[role];
-                  const nextCost = [45, 75, 110][lv] ?? 0;
-                  return (
-                    <div key={role} className="flex items-center justify-between gap-2 py-2 border-b border-[var(--line)]/60 last:border-0">
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs">{title} · Lv.{lv}/3</div>
-                        <div className="text-[11px] text-[var(--mut)]">{desc}</div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {lv > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => fireStaff(role, title)}
-                            className="px-2 py-1.5 rounded-lg bg-[var(--surface-2)] text-[11px] font-semibold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
-                          >
-                            ลด
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          disabled={lv >= 3 || state.money < nextCost}
-                          onClick={() => hireStaff(role, title)}
-                          className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
-                        >
-                          {lv >= 3 ? 'เต็ม' : `จ้าง ${fmtMoneyNum(nextCost)}`}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-sm">🏋️ โฟกัสโปรแกรมซ้อมประจำสัปดาห์</h3>
-                  <button
-                    type="button"
-                    onClick={() => onUpdateState((d) => { d.v = 'r'; d.sub = 0; })}
-                    className="text-[11px] font-bold text-[var(--g)] underline cursor-pointer"
-                  >
-                    เข้าเมนู 🏋️ ฝึกซ้อมแบบละเอียด →
-                  </button>
-                </div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['F', 'พักฟื้น']] as const).map(([k, l]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => onUpdateState((d) => { syncTrainingFocusToPlan(d, k); })}
-                      className={`py-2 rounded-lg text-xs font-bold cursor-pointer ${state.tf === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-[var(--mut)]">ปรับโปรแกรมซ้อมละเอียด (7 รูปแบบ, ความหนัก, พักตัวจริงแยก, สั่งพักเดี่ยว) ได้ที่เมนู <b>🏋️ ฝึกซ้อม</b></p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sub-tab 4: Bank Loans, Wage Structure & Filterable Ledger */}
+        {/* Bank Loans, Wage Structure & Filterable Ledger */}
         {finTab === 'ledger' && (
           <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
             <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
@@ -803,10 +672,17 @@ export const FinanceClubView: React.FC<{
     );
   }
 
-  // Club Identity & Legacy View (tab === 'u')
+  // Club Identity, Board, Facilities & Legacy View (tab === 'u')
   const k = ensureClubIdentity(state);
   const ts = teamStats(me, state);
-  const cap = [3500, 8000, 15000, 26000, 42000][(state.st ?? 1) - 1] || 3500;
+  const bd = clamp(state.bd ?? 50, 0, 100);
+  const rep = state.mgrRep ?? 50;
+  const repRank =
+    rep >= 180 ? 'ตำนานลูกหนังไทย' : rep >= 130 ? 'ยอดกุนซือระดับทวีป' : rep >= 90 ? 'กุนซือมือทอง' : rep >= 65 ? 'โค้ชฝีมือดี' : 'กุนซือหน้าใหม่';
+  const tierTbl = sortTable(state.teams.filter((t) => t.tier === me.tier));
+  const curRank = Math.max(1, tierTbl.findIndex((t) => t.id === me.id) + 1);
+  const targetRank = state.obj || 8;
+  const cap = est.cap;
   const totV = me.sq.reduce((a, q) => a + Math.round((q.ov * q.ov) / 40), 0);
   const avgAge = (me.sq.reduce((a, q) => a + q.age, 0) / Math.max(1, me.sq.length)).toFixed(1);
   const trophies = state.trophies || [];
@@ -926,21 +802,22 @@ export const FinanceClubView: React.FC<{
         </div>
       </div>
 
-      {/* Club Sub-navigation */}
-      <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+      {/* Club HQ Sub-navigation (5 Tabs) */}
+      <div className="grid grid-cols-5 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
         {(
           [
-            ['info', '🏛️ ข้อมูล & ทีม'],
+            ['info', '🏛️ ข้อมูล & บอร์ด'],
+            ['infra', '🏗️ สนาม & ทีมงาน'],
             ['identity', '🎨 ตรา & ชุดแข่ง'],
-            ['activities', '🤝 กิจกรรมสโมสร'],
-            ['legacy', '🏆 เกียรติยศ & ประวัติ']
+            ['activities', '🤝 กิจกรรม'],
+            ['legacy', '🏆 เกียรติยศ']
           ] as const
         ).map(([id, label]) => (
           <button
             key={id}
             type="button"
             onClick={() => setClubTab(id)}
-            className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors ${
+            className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors whitespace-nowrap ${
               clubTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
             }`}
           >
@@ -949,7 +826,7 @@ export const FinanceClubView: React.FC<{
         ))}
       </div>
 
-      {/* Club Tab 1: Basic Info & Squad Key Stats */}
+      {/* Club Tab 1: Basic Info + Board Confidence & Dressing Room */}
       {clubTab === 'info' && (
         <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
           <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
@@ -1041,48 +918,172 @@ export const FinanceClubView: React.FC<{
             </div>
           </div>
 
+          <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+            {/* Board & Manager Reputation (Moved from Finance) */}
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-sm mland:text-xs">👔 บอร์ดบริหาร &amp; เครดิตกุนซือ</h3>
+                  <p className="text-[11px] text-[var(--mut)]">
+                    อันดับ <b className="text-[var(--ink)] tabular">#{curRank}/{tierTbl.length}</b> · เป้าหมายบอร์ด <b className="text-[var(--g)] tabular">อันดับ {targetRank}+</b>
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-xs font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular">ชื่อเสียง {rep}</div>
+                  <div className="text-[10.5px] text-[var(--mut)]">{repRank}</div>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="text-[var(--mut)]">ความเชื่อมั่นบอร์ดบริหาร</span>
+                  <b className={`tabular ${bd < 30 ? 'text-[var(--red)]' : bd >= 70 ? 'text-[var(--g)]' : ''}`}>{bd}%</b>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${bd}%`, background: bd < 30 ? 'var(--red)' : bd < 55 ? 'var(--lamp)' : 'var(--g)' }}
+                  />
+                </div>
+                <div className="text-[10.5px] text-[var(--mut)]">
+                  {bd < 30
+                    ? '⚠️ ความเชื่อมั่นวิกฤติ! ต้องรีบทำผลงานและคุมงบไม่ให้ติดลบ'
+                    : curRank <= targetRank
+                      ? '✅ ผลงานเป็นไปตามเป้าหมายบอร์ดบริหาร'
+                      : '📌 อันดับยังต่ำกว่าเป้าหมายบอร์ด — เร่งเก็บแต้มในลีก'}
+                </div>
+              </div>
+            </div>
+
+            {/* Dressing Room & Key Leaders */}
+            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+              <h3 className="font-bold text-sm mland:text-xs">📊 บรรยากาศห้องแต่งตัว &amp; แกนหลักทีม</h3>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">ขวัญทีม</div>
+                  <div className="font-bold text-sm tabular">{state.mor ?? 55}%</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">คุ้นเคยแผน</div>
+                  <div className="font-bold text-sm tabular">{me.tacFam ?? 65}%</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">อายุเฉลี่ย</div>
+                  <div className="font-bold text-sm tabular">{avgAge} ปี</div>
+                </div>
+                <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                  <div className="text-[10px] text-[var(--mut)]">จำนวนนักเตะ</div>
+                  <div className="font-bold text-sm tabular">{me.sq.length} คน</div>
+                </div>
+              </div>
+              <div className="space-y-1 text-xs pt-0.5">
+                <div className="flex justify-between py-1 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">กัปตันทีม</span>
+                  <b>{me.cap || topO?.n || '-'}</b>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">ดาวเด่นพลังสูงสุด</span>
+                  <b>{topO ? `${topO.n} (${topO.ro} · OVR ${topO.ov})` : '-'}</b>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">ดาวซัลโวซีซั่นนี้</span>
+                  <b>{bs && bs.sg ? `${bs.n} (${bs.sg} ประตู)` : 'ยังไม่มีประตู'}</b>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[var(--line)]/60">
+                  <span className="text-[var(--mut)]">จอมแอสซิสต์ซีซั่นนี้</span>
+                  <b>{ba && ba.sa ? `${ba.n} (${ba.sa} ครั้ง)` : 'ยังไม่มีข้อมูล'}</b>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-[var(--mut)]">ลงสนามมากที่สุด</span>
+                  <b>{bm && bm.ap ? `${bm.n} (${bm.ap} นัด)` : 'ยังไม่มีข้อมูล'}</b>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Club Tab 2: Facilities & Backroom Staff (Moved from Finance, zero training duplicate) */}
+      {clubTab === 'infra' && (
+        <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
           <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-            <h3 className="font-bold text-sm mland:text-xs">📊 บรรยากาศห้องแต่งตัว &amp; แกนหลักทีม</h3>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
-                <div className="text-[10px] text-[var(--mut)]">ขวัญทีม</div>
-                <div className="font-bold text-sm tabular">{state.mor ?? 55}%</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
-                <div className="text-[10px] text-[var(--mut)]">คุ้นเคยแผน</div>
-                <div className="font-bold text-sm tabular">{me.tacFam ?? 65}%</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
-                <div className="text-[10px] text-[var(--mut)]">อายุเฉลี่ย</div>
-                <div className="font-bold text-sm tabular">{avgAge} ปี</div>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
-                <div className="text-[10px] text-[var(--mut)]">จำนวนนักเตะ</div>
-                <div className="font-bold text-sm tabular">{me.sq.length} คน</div>
-              </div>
+            <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร (สูงสุด Lv.5)</h3>
+            {(
+              [
+                ['st', 'สนามกีฬา', `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มตั๋ว & เพดานค่าจ้าง +10%/Lv`, 100],
+                ['tr', 'ศูนย์ฝึกซ้อม', 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นความฟิต +2%/Lv', 80],
+                ['ya', 'อะคาเดมี่เยาวชน', 'สร้างเยาวชน OVR สูงขึ้น & เพิ่มคุณภาพแมวมอง', 80],
+                ['med', 'ศูนย์การแพทย์ & ฟื้นฟู', 'ลดโอกาสบาดเจ็บ -8%/Lv และเร่งฟื้นฟูอาการเจ็บ', 75]
+              ] as const
+            ).map(([facKey, title, desc, baseCost]) => {
+              const lv = state[facKey] ?? 1;
+              const cost = lv * baseCost;
+              return (
+                <div key={facKey} className="flex items-center justify-between gap-3 py-2 border-b border-[var(--line)]/60 last:border-0">
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs">{title} · Lv.{lv}/5</div>
+                    <div className="text-[11px] text-[var(--mut)]">{desc}</div>
+                    <div className="flex gap-1 mt-1.5">
+                      {[1, 2, 3, 4, 5].map((x) => (
+                        <span key={x} className={`h-1.5 w-5 rounded-full ${x <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={lv >= 5 || state.money < cost}
+                    onClick={() => upgradeFac(facKey, title, baseCost)}
+                    className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0 whitespace-nowrap"
+                  >
+                    {lv >= 5 ? 'เต็มแล้ว' : `อัป ${fmtMoneyNum(cost)}`}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm mland:text-xs">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช (สูงสุด Lv.3)</h3>
+              <span className="text-xs font-bold text-[var(--red)] tabular">ค่าจ้างรวม -{fmtMoneyNum(est.staffCost)}/นัด</span>
             </div>
-            <div className="space-y-1 text-xs pt-1">
-              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
-                <span className="text-[var(--mut)]">กัปตันทีม</span>
-                <b>{me.cap || topO?.n || '-'}</b>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
-                <span className="text-[var(--mut)]">ดาวเด่นพลังสูงสุด</span>
-                <b>{topO ? `${topO.n} (${topO.ro} · OVR ${topO.ov})` : '-'}</b>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
-                <span className="text-[var(--mut)]">ดาวซัลโวซีซั่นนี้</span>
-                <b>{bs && bs.sg ? `${bs.n} (${bs.sg} ประตู)` : 'ยังไม่มีประตู'}</b>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-[var(--line)]/60">
-                <span className="text-[var(--mut)]">จอมแอสซิสต์ซีซั่นนี้</span>
-                <b>{ba && ba.sa ? `${ba.n} (${ba.sa} ครั้ง)` : 'ยังไม่มีข้อมูล'}</b>
-              </div>
-              <div className="flex justify-between py-1.5">
-                <span className="text-[var(--mut)]">ลงสนามมากที่สุด</span>
-                <b>{bm && bm.ap ? `${bm.n} (${bm.ap} นัด)` : 'ยังไม่มีข้อมูล'}</b>
-              </div>
-            </div>
+            {(
+              [
+                ['asst', 'ผู้ช่วยโค้ช', 'เพิ่มความคุ้นเคยแท็กติก & โอกาสซ้อมพัฒนา +2%/Lv'],
+                ['fit', 'โค้ชฟิตเนส', 'ฟื้นฟูความฟิตทั้งทีมหลังจบแมตช์ +2%/Lv'],
+                ['scout', 'หัวหน้าแมวมอง', 'เพิ่มคุณภาพ & จำนวนนักเตะจากภารกิจแมวมอง'],
+                ['physio', 'นักกายภาพบำบัด', 'ลดความเสี่ยงบาดเจ็บ -8%/Lv & หายเจ็บไวขึ้น']
+              ] as const
+            ).map(([role, title, desc]) => {
+              const lv = stf[role];
+              const nextCost = [45, 75, 110][lv] ?? 0;
+              return (
+                <div key={role} className="flex items-center justify-between gap-2 py-2 border-b border-[var(--line)]/60 last:border-0">
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs">{title} · Lv.{lv}/3</div>
+                    <div className="text-[11px] text-[var(--mut)]">{desc}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {lv > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => fireStaff(role, title)}
+                        className="px-2 py-1.5 rounded-lg bg-[var(--surface-2)] text-[11px] font-semibold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
+                      >
+                        ลด
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={lv >= 3 || state.money < nextCost}
+                      onClick={() => hireStaff(role, title)}
+                      className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                    >
+                      {lv >= 3 ? 'เต็ม' : `จ้าง ${fmtMoneyNum(nextCost)}`}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1477,7 +1478,7 @@ export const FinanceClubView: React.FC<{
               <h3 className="font-bold text-sm mland:text-xs">🤝 กิจกรรมสโมสร &amp; มวลชนสัมพันธ์</h3>
               <p className="text-xs mland:text-[10px] text-[var(--mut)]">จัดกิจกรรมเพื่อปลุกขวัญนักเตะ ดึงดูดแฟนบอล และเสริมความเชื่อมั่นบอร์ด (คูลดาวน์ 3 นัดต่อครั้ง)</p>
             </div>
-            <span className={`text-xs mland:text-[11px] font-bold ${actCool ? 'text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+            <span className={`text-xs mland:text-[11px] font-bold ${actCool ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
               {actCool ? `⏳ รออีก ${remCd} นัด` : '✅ พร้อมจัดกิจกรรม'}
             </span>
           </div>
@@ -1620,34 +1621,6 @@ export const FinanceClubView: React.FC<{
                 <span className="tabular">12k</span>
               </div>
               <div className="text-[11px] text-[var(--mut)]">แฟน +7% · กระตุ้นดาวรุ่งในทีม</div>
-            </button>
-
-            <button
-              type="button"
-              disabled={actCool || state.money < 22}
-              onClick={() => {
-                let healed = 0;
-                onUpdateState((d) => {
-                  d.money -= 22;
-                  logFin(d, 'คลินิกกายภาพ & ฟื้นฟูทีม', -22);
-                  d.teams[d.me].sq.forEach((q) => {
-                    if (q.inj > 0) {
-                      q.inj = Math.max(0, q.inj - 1);
-                      healed++;
-                    }
-                    q.fit = clamp((q.fit ?? 100) + 10, 35, 100);
-                  });
-                  d.clubActMd = curTurn;
-                });
-                onToast(healed > 0 ? `🏥 คลินิกกายภาพสำเร็จ! ลดวันพักผู้บาดเจ็บ ${healed} คน (-1 นัด) · ฟิตทั้งทีม +10%` : '🏥 คลินิกฟื้นฟูสำเร็จ! ความฟิตทั้งทีม +10%');
-              }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
-            >
-              <div className="flex justify-between font-bold text-xs">
-                <span>🏥 คลินิกกายภาพทีม</span>
-                <span className="tabular">22k</span>
-              </div>
-              <div className="text-[11px] text-[var(--mut)]">ลดเจ็บทุกคน -1 นัด · ฟิตทั้งทีม +10%</div>
             </button>
           </div>
         </div>

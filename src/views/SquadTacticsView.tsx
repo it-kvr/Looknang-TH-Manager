@@ -1,21 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
-import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
+import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
+import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, getFormationCounts, pen, xi, vlu, ensureCon, tc } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { rate, getLeagueTransferContext, getIncomingOffers, removeIncomingOffer, getPlayerSellCheck, canAcceptTransferOffer, acceptTransferOffer, resolveCounterOfferOutcome, applyCounterOfferOutcome, resolvePitchPlayerOutcome, applyPitchPlayerOutcome } from '../engine/simulation';
+import { rate, getLeagueTransferContext, getIncomingOffers } from '../engine/simulation';
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
-import { CustomFormationModal, PitchPlayerModal } from '../modals/TacticsModals';
+import { CustomFormationModal } from '../modals/TacticsModals';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
+  onNavigate?: (tab: MainTab, sub?: string) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
+}> = ({ state, onUpdateState, onInspectPlayer, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 2 ? 0 : (state.sub ?? 0);
@@ -24,7 +25,6 @@ export const SquadTacticsView: React.FC<{
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
   const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
-  const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
   const pitchSvgRef = useRef<SVGSVGElement | null>(null);
 
   const starters = xi(me);
@@ -704,30 +704,59 @@ export const SquadTacticsView: React.FC<{
 
             {/* RIGHT: Squad & Bench List */}
             <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
-              <div className="flex items-center justify-between gap-1.5 mb-1.5 mland:mb-1 shrink-0">
-                <div className="font-bold text-xs mland:text-[10px] truncate">
-                  👥 รายชื่อ <span className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)]">({me.lu ? 'จัดเอง' : 'อัตโนมัติ'})</span>
+              <div className="flex items-center justify-between gap-1 mb-1.5 mland:mb-1 shrink-0">
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] min-w-0">
+                  {([['ทั้งหมด', 0], ['ตัวจริง 11', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setLuTab(k)}
+                      className={`px-2 mland:px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
+                        luTab === k ? 'bg-[var(--g)] text-white shadow-2xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      {l}
+                    </button>
+                  ))}
                 </div>
                 <button
                   type="button"
+                  title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
                   onClick={() => {
                     SFX.tap();
                     onUpdateState((d) => { d.teams[d.me].lu = null; });
                     onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
                   }}
-                  className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-[10.5px] mland:text-[9px] font-semibold hover:bg-[var(--g)] hover:text-white transition-colors cursor-pointer shrink-0"
+                  className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 border ${
+                    !me.lu
+                      ? 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
+                      : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
+                  }`}
                 >
-                  จัดอัตโนมัติ
+                  {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
                 </button>
               </div>
-              <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] mb-1.5 mland:mb-1 shrink-0">
-                {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
-                  <button key={k} type="button" onClick={() => setLuTab(k)} className={`py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-semibold cursor-pointer truncate ${luTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>{l}</button>
-                ))}
-              </div>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
-                {luTab !== 2 && (<><div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] pt-0.5">ตัวจริง (11 คน)</div>{starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}</>)}
-                {luTab !== 1 && (<><div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">ตัวสำรอง ({bench.length} คน)</div>{bench.map((q) => renderPlayerRow(q))}</>)}
+                {luTab !== 2 && (
+                  <>
+                    {luTab === 0 && (
+                      <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] pt-0.5">
+                        <span>ตัวจริง (11 คน)</span>
+                      </div>
+                    )}
+                    {starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}
+                  </>
+                )}
+                {luTab !== 1 && (
+                  <>
+                    {luTab === 0 && (
+                      <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">
+                        <span>ตัวสำรอง ({bench.length} คน)</span>
+                      </div>
+                    )}
+                    {bench.map((q) => renderPlayerRow(q))}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -939,41 +968,25 @@ export const SquadTacticsView: React.FC<{
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
-                  <div>
-                    <label className="text-xs font-bold block mb-1">👑 กัปตันทีม</label>
-                    <select
-                      value={me.cap || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        onUpdateState((d) => { d.teams[d.me].cap = val; });
-                        onToast('อัปเดตกัปตันทีมแล้ว');
-                      }}
-                      className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
-                    >
-                      <option value="">ไม่ระบุ</option>
-                      {me.sq.slice().sort((a, b) => b.ov - a.ov).slice(0, 10).map((q) => (
-                        <option key={q.n} value={q.n}>{q.n} (OVR {q.ov})</option>
-                      ))}
-                    </select>
+                <div className="pt-1">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="text-xs font-bold">👑 กัปตันทีม</label>
+                    <span className="text-[10.5px] text-[var(--mut)]">ช่วยประคองขวัญทีมในเกมสำคัญ</span>
                   </div>
-                  <div>
-                    <label className="text-xs font-bold block mb-1">🌟 โฟกัสปั้นพิเศษ (ซ้อมเร็ว 2.2x)</label>
-                    <select
-                      value={state.focusPlayer || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        onUpdateState((d) => { d.focusPlayer = val || null; });
-                        onToast(val ? `โฟกัสฝึกซ้อมพิเศษให้ ${val}` : 'ยกเลิกโฟกัสรายบุคคล');
-                      }}
-                      className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
-                    >
-                      <option value="">ไม่เจาะจง</option>
-                      {me.sq.filter((q) => q.age < 28).sort((a, b) => (b.pot || b.ov) - (a.pot || a.ov)).slice(0, 12).map((q) => (
-                        <option key={q.n} value={q.n}>{q.n} ({q.age} ปี · {q.ov}→{q.pot})</option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    value={me.cap || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      onUpdateState((d) => { d.teams[d.me].cap = val; });
+                      onToast('อัปเดตกัปตันทีมแล้ว');
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                  >
+                    <option value="">ไม่ระบุ</option>
+                    {me.sq.slice().sort((a, b) => b.ov - a.ov).slice(0, 10).map((q) => (
+                      <option key={q.n} value={q.n}>{q.n} (OVR {q.ov})</option>
+                    ))}
+                  </select>
                 </div>
 
                 <div className="pt-2 border-t border-[var(--line)]">
@@ -1131,187 +1144,132 @@ export const SquadTacticsView: React.FC<{
                   </div>
                 </div>
 
-                <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-1">
-                {/* Incoming Club Bids Alert */}
+                <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
                 {isMgr && (() => {
                   const incomingOffers = getIncomingOffers(state);
                   if (!incomingOffers.length) return null;
                   return (
-                    <div className="p-3 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="font-bold text-xs">💼 ข้อเสนอซื้อนักเตะจากสโมสรอื่น ({incomingOffers.length})</div>
-                        <button
-                          type="button"
-                          onClick={() => onUpdateState((d) => { d.v = 'k'; })}
-                          className="text-[11px] font-bold text-[#9a6300] dark:text-[var(--lamp)] underline cursor-pointer"
-                        >
-                          ไปที่หน้าตลาด →
-                        </button>
-                      </div>
-                      <div className="space-y-1.5">
-                        {incomingOffers.map((off) => {
-                          const targetQ = me.sq.find((z) => z.n === off.n);
-                          if (!targetQ) return null;
-                          return (
-                            <div key={`${off.n}__${off.t}`} className="flex flex-wrap items-center justify-between gap-2 p-2 rounded-lg bg-[var(--surface)] border border-[var(--line)]">
-                              <div className="text-xs min-w-0">
-                                <b>{off.t}</b> ยื่นซื้อ <b>{off.n}</b> ({targetQ.ro} · {targetQ.ov}) ราคา <b className="text-[var(--g)] tabular">{fmtMoney(off.p)}</b>
-                              </div>
-                              <div className="flex flex-wrap gap-1.5">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const res = canAcceptTransferOffer(state, off);
-                                    if (!res.ok) { onToast(res.err || 'ขายไม่สำเร็จ'); return; }
-                                    onUpdateState((d) => { acceptTransferOffer(d, off); });
-                                    SFX.win();
-                                    onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
-                                  }}
-                                  className="px-2.5 py-1 rounded-lg bg-[var(--g)] text-white text-[11px] font-bold cursor-pointer"
-                                >
-                                  ✅ ตอบรับขาย
-                                </button>
-                                {!off.cnt && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      const out = resolveCounterOfferOutcome(state, off);
-                                      onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
-                                      onToast(
-                                        out.accepted
-                                          ? `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
-                                          : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
-                                      );
-                                    }}
-                                    className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
-                                  >
-                                    💰 โก่ง +15%
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
-                                    onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
-                                  }}
-                                  className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+                    <div className="px-3 py-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs">
+                      <span className="font-semibold truncate">
+                        💼 มี <b className="tabular">{incomingOffers.length}</b> ข้อเสนอซื้อนักเตะรอเจรจาในตลาดซื้อขาย
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          if (onNavigate) onNavigate('k', 'sell');
+                          else onUpdateState((d) => { d.v = 'k'; });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+                      >
+                        เปิดหน้าตลาด →
+                      </button>
                     </div>
                   );
                 })()}
 
-                {/* Squad List Header (Horizontal Table) */}
-                <div className="overflow-x-auto rounded-xl border border-[var(--line)] bg-[var(--surface)]">
-                  <div className="min-w-[660px]">
-                <div className="grid grid-cols-[38px_1.6fr_72px_44px_76px_80px_84px_102px_auto] items-center gap-1.5 px-2.5 py-1.5 text-[10.5px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]">
-                  <div className="text-center">#</div>
-                  <div>นักเตะ</div>
-                  <div>ตำแหน่ง</div>
-                  <div className="text-center">อายุ</div>
-                  <div className="text-center">OVR / ศักย</div>
-                  <div className="text-center">ฟิต</div>
-                  <div className="text-center">ผลงาน</div>
-                  <div className="text-right">ค่าเหนื่อย / ค่าตัว</div>
-                  {isMgr && <div className="text-right min-w-[144px]">จัดการขาย</div>}
-                </div>
+                {/* Responsive 100%-Width Squad Roster Table (Zero Horizontal Overflow) */}
+                <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden">
+                  <div className="grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]">
+                    <div className="text-center">#</div>
+                    <div>นักเตะ</div>
+                    <div>ตำแหน่ง</div>
+                    <div className="text-center">อายุ</div>
+                    <div className="text-center">OVR</div>
+                    <div className="text-center">ฟิต</div>
+                    <div className="text-center">ผลงาน</div>
+                    <div className="text-right">ค่าเหนื่อย / ค่าตัว</div>
+                  </div>
 
-                {/* Squad List Rows */}
-                <div className="divide-y divide-[var(--line)]">
-                  {listRows.map((q) => {
-                    const f = Math.round(q.fit ?? 100);
-                    const isStarter = starters.includes(q);
-                    const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
-                    const no = getShirtNo(me, q);
-                    const chk = getPlayerSellCheck(state, me, q);
-                    const offerCount = getIncomingOffers(state).filter((o) => o.n === q.n).length;
-                    const wg = ensureCon(q).wg;
-                    const fitBarCol = f >= 75 ? 'var(--g)' : f >= 50 ? 'var(--lamp)' : 'var(--red)';
+                  <div className="divide-y divide-[var(--line)]">
+                    {listRows.map((q) => {
+                      const f = Math.round(q.fit ?? 100);
+                      const isStarter = starters.includes(q);
+                      const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
+                      const no = getShirtNo(me, q);
+                      const offerCount = isMgr ? getIncomingOffers(state).filter((o) => o.n === q.n).length : 0;
+                      const wg = ensureCon(q).wg;
+                      const fitBarCol = f >= 75 ? 'var(--g)' : f >= 50 ? 'var(--lamp)' : 'var(--red)';
+                      const fitTxtCls = f >= 75 ? 'text-[var(--g)]' : f >= 50 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--red)]';
 
-                    return (
-                      <div
-                        key={q.n}
-                        className={`px-2.5 py-1.5 grid grid-cols-[38px_1.6fr_72px_44px_76px_80px_84px_102px_auto] items-center gap-1.5 transition-colors hover:bg-[var(--surface-2)]/45 ${
-                          isMe ? 'bg-[var(--lamp-soft)]/50' : q.listed ? 'bg-[var(--lamp-soft)]/25' : ''
-                        }`}
-                      >
-                        <div className="flex items-center justify-center text-xs font-bold text-[var(--mut)] tabular">
-                          #{no}
-                        </div>
-
-                        <div className="flex items-center gap-2 min-w-0">
-                          <PlayerFace player={q} team={me} state={state} size={28} />
-                          <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                            <div className="font-bold text-xs truncate flex items-center gap-1">
-                              {isMe && (
-                                <span
-                                  title="ตัวคุณ"
-                                  aria-label="ตัวคุณ"
-                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
-                                >
-                                  ★
-                                </span>
-                              )}
-                              {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
-                              {me.cap === q.n && <span className="text-[var(--lamp)] shrink-0">[C]</span>}
-                              <span className="truncate">{q.n}</span>
-                              {q.loan ? <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
-                              {q.listed ? <span className="text-[10px] text-[#b45309] dark:text-[var(--lamp)] font-bold shrink-0">[ในตลาด {fmtMoneyNum(q.askPrice || vlu(q))}]</span> : null}
-                              {offerCount > 0 ? <span className="px-1.5 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} ข้อเสนอ</span> : null}
-                            </div>
-                            <div className="text-[10px] text-[var(--mut)] truncate flex items-center gap-1">
-                              {(q.sus || 0) > 0 ? (
-                                <span className="inline-flex items-center gap-1 text-[var(--red)] font-bold">
-                                  <StatIconBadge kind="red" count={q.sus} size="xs" />
-                                  <span>ติดโทษแบน {q.sus} นัด</span>
-                                </span>
-                              ) : q.inj > 0 ? (
-                                <span>🩹 บาดเจ็บ {q.inj} นัด</span>
-                              ) : (q.yc || 0) > 0 ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />
-                                  <span>ใบเหลือง {q.yc}/3</span>
-                                </span>
-                              ) : isStarter ? (
-                                '11 ตัวจริง'
-                              ) : (
-                                'ตัวสำรอง'
-                              )}
-                            </div>
-                          </button>
-                        </div>
-
-                        <div className="flex items-center gap-1">
-                          <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[11px]">{q.ro}</span>
-                        </div>
-
-                        <div className="text-center text-xs tabular font-semibold">
-                          {q.age}
-                        </div>
-
-                        <div className="flex items-center justify-center gap-1">
-                          <span className="px-1.5 py-0.5 rounded-lg text-white text-xs font-bold tabular" style={{ background: ovColor(q.ov) }}>
-                            {q.ov}
-                          </span>
-                          <span className="text-[10px] text-[var(--mut)] tabular">/{q.pot || q.ov}</span>
-                        </div>
-
-                        <div className="flex items-center gap-1 min-w-[70px]">
-                          <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
+                      return (
+                        <div
+                          key={q.n}
+                          className={`px-2.5 mland:px-2 py-1.5 mland:py-1 grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px] items-center gap-1.5 mland:gap-1 transition-colors hover:bg-[var(--surface-2)]/45 ${
+                            isMe ? 'bg-[var(--lamp-soft)]/50' : q.listed ? 'bg-[var(--lamp-soft)]/20' : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-center text-xs mland:text-[10px] font-bold text-[var(--mut)] tabular">
+                            #{no}
                           </div>
-                          <span className="text-[10.5px] font-bold tabular w-8 text-right" style={{ color: fitBarCol }}>⚡{f}%</span>
-                        </div>
 
-                          <div className="text-center text-[11px] tabular text-[var(--mut)] flex items-center justify-center gap-1">
+                          <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+                            <PlayerFace player={q} team={me} state={state} size={26} />
+                            <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                              <div className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1">
+                                {isMe && (
+                                  <span
+                                    title="ตัวคุณ"
+                                    aria-label="ตัวคุณ"
+                                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                                  >
+                                    ★
+                                  </span>
+                                )}
+                                {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
+                                {me.cap === q.n && <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">[C]</span>}
+                                <span className="truncate">{q.n}</span>
+                                {q.loan ? <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
+                                {q.listed ? <span className="text-[10px] text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">[ในตลาด {fmtMoneyNum(q.askPrice || vlu(q))}]</span> : null}
+                                {offerCount > 0 ? <span className="px-1.5 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}
+                              </div>
+                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1">
+                                {(q.sus || 0) > 0 ? (
+                                  <span className="inline-flex items-center gap-1 text-[var(--red)] font-bold">
+                                    <StatIconBadge kind="red" count={q.sus} size="xs" />
+                                    <span>แบน {q.sus} นัด</span>
+                                  </span>
+                                ) : q.inj > 0 ? (
+                                  <span>🩹 เจ็บ {q.inj} นัด</span>
+                                ) : (q.yc || 0) > 0 ? (
+                                  <span className="inline-flex items-center gap-1">
+                                    <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />
+                                    <span>เหลือง {q.yc}/3</span>
+                                  </span>
+                                ) : isStarter ? (
+                                  '11 ตัวจริง'
+                                ) : (
+                                  'ตัวสำรอง'
+                                )}
+                              </div>
+                            </button>
+                          </div>
+
+                          <div className="flex items-center">
+                            <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[10.5px] mland:text-[9px]">{q.ro}</span>
+                          </div>
+
+                          <div className="text-center text-xs mland:text-[10px] tabular font-semibold">
+                            {q.age}
+                          </div>
+
+                          <div className="flex items-center justify-center gap-0.5">
+                            <span className="px-1.5 py-0.5 rounded-lg text-white text-[11px] mland:text-[9.5px] font-bold tabular" style={{ background: ovColor(q.ov) }}>
+                              {q.ov}
+                            </span>
+                            <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">/{q.pot || q.ov}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
+                            </div>
+                            <span className={`text-[10px] mland:text-[8.5px] font-bold tabular w-7 text-right ${fitTxtCls}`}>{f}%</span>
+                          </div>
+
+                          <div className="text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] flex items-center justify-center gap-0.5">
                             {q.sg || q.sa || q.ap ? (
-                              <span className="inline-flex items-center gap-1">
+                              <span className="inline-flex items-center gap-0.5">
                                 {q.ap ? <span>{q.ap}น</span> : null}
                                 {q.sg ? <StatIconBadge kind="goal" count={q.sg} size="xs" /> : null}
                                 {q.sa ? <StatIconBadge kind="assist" count={q.sa} size="xs" /> : null}
@@ -1321,63 +1279,16 @@ export const SquadTacticsView: React.FC<{
                             )}
                           </div>
 
-                          <div className="text-right text-[11px] tabular">
+                          <div className="text-right text-[10.5px] mland:text-[9px] tabular whitespace-nowrap">
                             <span className="font-bold text-[var(--ink)]">{fmtMoneyNum(wg)}</span>
                             <span className="text-[var(--mut)]"> · {fmtMoneyNum(vlu(q))}</span>
                           </div>
-
-                          {isMgr && (
-                            <div className="flex items-center justify-end gap-1 shrink-0 min-w-[144px]">
-                              {!q.loan && (
-                                <button
-                                  type="button"
-                                  title={q.listed ? 'ถอดออกจากบัญชีขาย' : 'ขึ้นบัญชีขายในตลาด (รอทีมอื่นยื่นซื้อ)'}
-                                  onClick={() => {
-                                    SFX.tap();
-                                    onUpdateState((d) => {
-                                      const target = d.teams[d.me].sq.find((z) => z.n === q.n);
-                                      if (!target) return;
-                                      if (target.listed) {
-                                        target.listed = 0;
-                                        delete target.askPrice;
-                                      } else {
-                                        target.listed = 1;
-                                        target.askPrice = Math.max(5, vlu(target));
-                                      }
-                                    });
-                                    onToast(q.listed ? `ถอด ${q.n} ออกจากบัญชีขายแล้ว` : `ขึ้นบัญชีขาย ${q.n} แล้ว ทีมอื่นสามารถยื่นข้อเสนอได้`);
-                                  }}
-                                  className={`px-2 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${q.listed ? 'bg-[var(--lamp)] text-[#261900] border-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
-                                >
-                                  {q.listed ? '🏷️ ในตลาด' : '🏷️ ขึ้นตลาด'}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้สโมสรอื่นยื่นราคา' : chk.reason}
-                                onClick={() => {
-                                  if (!chk.canPitch) { onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้'); return; }
-                                  if (chk.pitchedThisTurn) { onToast('เสนอขายนักเตะคนนี้ไปแล้วในนัดนี้ รอหลังจบแมตช์หน้าหรือรอข้อเสนอจากทีมอื่น'); return; }
-                                  SFX.tap();
-                                  setPitchTargetName(q.n);
-                                }}
-                                className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold cursor-pointer ${
-                                  chk.canPitch && !chk.pitchedThisTurn
-                                    ? 'bg-[var(--surface)] border-[var(--g)] text-[var(--g)] hover:bg-[var(--g-soft)]'
-                                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] opacity-65'
-                                }`}
-                              >
-                                {!tx.tw.open ? '🔒' : chk.pitchedThisTurn ? '⏳ เสนอแล้ว' : '📨 เสนอขาย'}
-                              </button>
-                            </div>
-                          )}
-                      </div>
-                    );
-                  })}
-                  {!listRows.length && (
-                    <div className="p-6 text-center text-xs text-[var(--mut)]">ไม่มีนักเตะในตำแหน่งนี้</div>
-                  )}
-                </div>
+                        </div>
+                      );
+                    })}
+                    {!listRows.length && (
+                      <div className="p-6 text-center text-xs text-[var(--mut)]">ไม่มีนักเตะในตำแหน่งนี้</div>
+                    )}
                   </div>
                 </div>
                 </div>
@@ -1404,33 +1315,6 @@ export const SquadTacticsView: React.FC<{
           }}
         />
       )}
-
-      {isMgr && pitchTargetName && (() => {
-        const pitchPlayer = me.sq.find((z) => z.n === pitchTargetName);
-        if (!pitchPlayer) return null;
-        return (
-          <PitchPlayerModal
-            state={state}
-            player={pitchPlayer}
-            onClose={() => setPitchTargetName(null)}
-            onConfirm={(askPct) => {
-              const result = resolvePitchPlayerOutcome(state, pitchPlayer.n, askPct);
-              setPitchTargetName(null);
-              if (!result.ok) {
-                onToast(result.err || 'เสนอขายไม่สำเร็จ');
-                return;
-              }
-              onUpdateState((d) => applyPitchPlayerOutcome(d, pitchPlayer.n, result));
-              if (result.offers.length > 0) {
-                SFX.win();
-                onToast(`มี ${result.offers.length} สโมสรยื่นข้อเสนอซื้อ ${pitchPlayer.n} แล้ว! ดูด้านบนหรือแท็บตลาด`);
-              } else {
-                onToast(`ขึ้นบัญชีขาย ${pitchPlayer.n} แล้ว แต่รอบนี้ยังไม่มีทีมยื่นซื้อเข้ามาทันที`);
-              }
-            }}
-          />
-        );
-      })()}
     </div>
   );
 };

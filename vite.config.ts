@@ -54,7 +54,7 @@ export default defineConfig(({command}) => {
           background_color: '#06100b',
           display: 'fullscreen',
           display_override: ['fullscreen', 'standalone', 'minimal-ui'],
-          orientation: 'landscape',
+          orientation: 'any',
           start_url: base,
           scope: base,
           icons: [

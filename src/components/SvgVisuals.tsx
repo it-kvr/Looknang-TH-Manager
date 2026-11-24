@@ -480,6 +480,21 @@ export const getPitchZoneAt = (x: number, y: number): PitchPositionZone => {
 };
 
 
+export interface PitchPlayerMeta {
+  rating?: number;
+  goals?: number;
+  assists?: number;
+  yellowCards?: number;
+  isRed?: boolean;
+  isInjured?: boolean;
+  subInMin?: number;
+  subOutMin?: number;
+  isMotm?: boolean;
+  fitVal?: number;
+  offPosPen?: number;
+  dim?: boolean;
+}
+
 export const FormationPitch: React.FC<{
   team: Team;
   state: GameState;
@@ -489,7 +504,21 @@ export const FormationPitch: React.FC<{
   dropTargetName?: string | null;
   dragPreview?: PitchDragPreview | null;
   touchPointerPitchPt?: { px: number; py: number } | null;
-  onPlayerPointerDown: (e: React.PointerEvent, player: Player, slotSp: SubRole, slotIdx?: number) => void;
+  onPlayerPointerDown?: (e: React.PointerEvent, player: Player, slotSp: SubRole, slotIdx?: number) => void;
+  onPlayerClick?: (player: Player, slotSp: SubRole, slotIdx: number) => void;
+  lineupNames?: string[];
+  kitOverride?: string;
+  gkKitOverride?: string;
+  trimOverride?: string;
+  matchMeta?: Record<string, PitchPlayerMeta>;
+  statMode?: 'ovr' | 'rating';
+  showFitBar?: boolean;
+  selectedPlayerName?: string | null;
+  validDropHighlight?: boolean;
+  subAlertFitTh?: number;
+  disableRedPlayers?: boolean;
+  dropAttrPrefix?: 'default' | 'tactics';
+  className?: string;
 }> = ({
   team,
   state,
@@ -499,14 +528,31 @@ export const FormationPitch: React.FC<{
   dropTargetName,
   dragPreview,
   touchPointerPitchPt,
-  onPlayerPointerDown
+  onPlayerPointerDown,
+  onPlayerClick,
+  lineupNames,
+  kitOverride,
+  gkKitOverride,
+  trimOverride,
+  matchMeta,
+  statMode = 'ovr',
+  showFitBar = true,
+  selectedPlayerName,
+  validDropHighlight = false,
+  subAlertFitTh,
+  disableRedPlayers = false,
+  dropAttrPrefix = 'default',
+  className
 }) => {
   const uid = React.useId().replace(/:/g, '');
-  const starters = xi(team);
+  const baseStarters = xi(team);
+  const starters = lineupNames
+    ? lineupNames.map((n, idx) => team.sq.find((q) => q.n === n) || baseStarters[idx] || team.sq[idx]).filter(Boolean)
+    : baseStarters;
   const slots = getFormationSlots(team);
-  const col = tc(team, state);
-  const trCol = tc(team, state, true);
-  const gkCol = pickGK(col);
+  const col = kitOverride || tc(team, state);
+  const trCol = trimOverride || tc(team, state, true);
+  const gkCol = gkKitOverride || pickGK(col);
   const zoneLineColors: Record<Position, { stroke: string; fill: string; text: string }> = {
     FW: { stroke: 'rgba(110, 231, 183, 0.55)', fill: 'rgba(16, 185, 129, 0.08)', text: 'rgba(209, 250, 229, 0.85)' },
     MF: { stroke: 'rgba(252, 211, 77, 0.55)', fill: 'rgba(245, 158, 11, 0.08)', text: 'rgba(254, 243, 199, 0.85)' },
@@ -518,8 +564,8 @@ export const FormationPitch: React.FC<{
     <svg
       ref={svgRef}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ touchAction: 'none', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-      className="aspect-[300/340] h-full max-h-full w-auto max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none"
+      style={{ touchAction: onPlayerPointerDown ? 'none' : 'manipulation', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
+      className={className || 'aspect-[300/340] h-full max-h-full w-auto max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none'}
       viewBox="0 0 300 340"
     >
       <defs>
@@ -580,43 +626,111 @@ export const FormationPitch: React.FC<{
         const z = slots[i] || { sp: 'CM', x: 50, y: 50 };
         const cx = 18 + z.x * 2.64;
         const cy = 24 + z.y * 2.9;
-        const pn = pen(q.ro, z.sp);
+        const meta = matchMeta?.[q.n];
+        const pn = meta?.offPosPen ?? pen(q.ro, z.sp);
         const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
-        const isSource = dragSourceName === q.n;
+        const isSelected = selectedPlayerName === q.n;
         const isMovingSelf = dragPreview?.slotIdx === i;
         const isTarget = dropTargetName === q.n && dragSourceName !== q.n;
-        const ed = q.inj > 0 || (q.sus || 0) > 0 ? '#ef4444' : isTarget || isMe ? '#f5c242' : PCOL[pn];
+        const isRed = Boolean(meta?.isRed);
+        const isSus = (q.sus || 0) > 0;
+        const isInj = Boolean(meta?.isInjured || (!matchMeta && q.inj > 0));
+        const isDisabled = Boolean(disableRedPlayers && isRed);
+        const isValidDrop = Boolean(validDropHighlight && !isDisabled && !isTarget && dragSourceName !== q.n);
+        const efVal = isRed || isSus || isInj ? 0 : Math.max(0, Math.min(100, Math.round(meta?.fitVal ?? q.fit ?? 100)));
+        const efc = efVal >= (subAlertFitTh ? Math.max(70, subAlertFitTh + 12) : 85) ? '#3fcf7f' : efVal >= (subAlertFitTh ?? 65) ? '#f4c63d' : '#ff7a5c';
+        const ed =
+          isRed || isInj || isSus
+            ? '#ef4444'
+            : isTarget || meta?.isMotm || isMe
+              ? '#f5c242'
+              : isSelected
+                ? '#38bdf8'
+                : subAlertFitTh != null && efVal <= subAlertFitTh
+                  ? '#f59e0b'
+                  : PCOL[pn];
         const kc = z.sp === 'GK' ? gkCol : col;
         const rad = isTarget ? 19 : 16;
         const sc = isTarget ? 0.58 : 0.5;
         const no = getShirtNo(team, q);
-        const efVal = q.inj > 0 || (q.sus || 0) > 0 ? 0 : Math.max(0, Math.min(100, Math.round(q.fit ?? 100)));
-        const efc = efVal >= 85 ? '#3fcf7f' : efVal >= 65 ? '#f4c63d' : '#ff7a5c';
+
+        const ratingVal = meta?.rating;
+        const useRating = statMode === 'rating' && ratingVal != null;
+        const rtBg = !useRating
+          ? '#0b2018'
+          : meta?.isMotm || ratingVal >= 8.2
+            ? '#facc15'
+            : ratingVal >= 7.1
+              ? '#10b981'
+              : ratingVal >= 6.2
+                ? '#0f172a'
+                : '#e11d48';
+        const rtFg = !useRating ? '#fff' : meta?.isMotm || ratingVal >= 8.2 ? '#1c1300' : '#ffffff';
+        const rtStroke = !useRating ? ed : meta?.isMotm || ratingVal >= 8.2 ? '#fef08a' : ratingVal >= 7.1 ? '#a7f3d0' : ratingVal >= 6.2 ? '#94a3b8' : '#fecdd3';
+
+        const hasCard = isRed || isSus || (meta?.yellowCards || 0) > 0;
+        const goalsCount = meta?.goals || 0;
+        const assistsCount = meta?.assists || 0;
+        const hasSubIn = meta?.subInMin != null;
+        const hasSubOut = !hasSubIn && meta?.subOutMin != null;
+        const isCaptain = team.cap === q.n;
+        const nodeOpacity = isDisabled || meta?.dim ? 0.44 : isMovingSelf ? 0.24 : dragSourceName === q.n ? 0.45 : 1;
+
+        const dropAttrs =
+          dropAttrPrefix === 'tactics'
+            ? {
+                'data-tactics-drop-player': q.n,
+                'data-tactics-drop-slot': z.sp,
+                'data-tactics-drop-idx': String(i),
+                'data-tactics-disabled': isDisabled ? '1' : '0'
+              }
+            : {
+                'data-drop-player': q.n,
+                'data-drop-slot': z.sp
+              };
 
         return (
           <g
             key={`${q.n}-${i}`}
-            data-drop-player={q.n}
-            data-drop-slot={z.sp}
-            onPointerDown={(e) => onPlayerPointerDown(e, q, z.sp, i)}
+            {...dropAttrs}
+            onPointerDown={onPlayerPointerDown ? (e) => onPlayerPointerDown(e, q, z.sp, i) : undefined}
+            onClick={
+              onPlayerClick
+                ? (e) => {
+                    e.stopPropagation();
+                    onPlayerClick(q, z.sp, i);
+                  }
+                : undefined
+            }
             onContextMenu={(e) => e.preventDefault()}
             style={{
-              touchAction: 'none',
+              touchAction: onPlayerPointerDown ? 'none' : 'manipulation',
               WebkitTouchCallout: 'none',
               WebkitUserSelect: 'none',
               userSelect: 'none',
-              opacity: isMovingSelf ? 0.24 : dragSourceName === q.n ? 0.45 : 1
+              opacity: nodeOpacity
             }}
-            className={dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}
+            className={isDisabled ? 'cursor-default' : dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}
           >
             <circle cx={cx} cy={cy} r={24} fill="transparent" />
-            {isMe && !isTarget && (
+            {isMe && !isTarget && !isSelected && (
               <circle cx={cx} cy={cy} r={22.5} fill="#f5c2422e" stroke="#fde047" strokeWidth="2.2" />
+            )}
+            {meta?.isMotm && !isTarget && !isSelected && (
+              <circle cx={cx} cy={cy} r={21} fill="#facc1528" stroke="#facc15" strokeWidth="1.9" />
+            )}
+            {isSelected && !isTarget && (
+              <circle cx={cx} cy={cy} r={22.5} fill="#38bdf828" stroke="#38bdf8" strokeWidth="2.2" />
+            )}
+            {isValidDrop && (
+              <circle cx={cx} cy={cy} r={21} fill="none" stroke="#6ee7b7" strokeWidth="1.7" strokeDasharray="3.5 2" />
             )}
             {isTarget && (
               <circle cx={cx} cy={cy} r={24} fill="#f5c24228" stroke="#f5c242" strokeWidth="2.2" strokeDasharray="4 2" />
             )}
             <ellipse cx={cx} cy={cy + 16} rx="13" ry="3.8" fill="#0005" />
+
+            {/* Top Center: Role Tag */}
             {isMe ? (
               <g transform={`translate(${cx},${cy - (isTarget ? 27 : 24)})`}>
                 <rect x="-18" y="-9.5" width="36" height="12.5" rx="6" fill="#f5c242" stroke="#111" strokeWidth="0.9" />
@@ -640,64 +754,138 @@ export const FormationPitch: React.FC<{
                 {z.sp}
               </text>
             )}
+
+            {/* Player Avatar Circle */}
             <circle cx={cx} cy={cy} r={rad} fill={kc} stroke={ed} strokeWidth="2.8" />
             <g
               transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
               clipPath={`url(#fc-${uid})`}
               dangerouslySetInnerHTML={{ __html: faceBodySvg(visOf(q, state.p), kc, trCol, 32, '#10281d', true, false) }}
             />
-            <rect x={cx + 4} y={cy + 6} width="18" height="11" rx="4.5" fill="#0b2018" stroke={ed} strokeWidth="1.1" />
-            <text x={cx + 13} y={cy + 14.2} textAnchor="middle" fontSize="8.5" fontWeight="700" fontFamily="Sarabun" fill="#fff">
-              {q.ov}
-            </text>
+
+            {/* Bottom-Left: Shirt Number */}
             <rect x={cx - 22} y={cy + 6} width="18" height="11" rx="4.5" fill="#0b2018" stroke={ed} strokeWidth="1.1" />
             <text x={cx - 13} y={cy + 14.2} textAnchor="middle" fontSize="8.5" fontWeight="700" fontFamily="Sarabun" fill="#ffd75e">
               {no}
             </text>
-            {team.cap === q.n && (
-              <g transform={`translate(${cx - 12},${cy - 15})`}>
-                <circle r="6" fill="#f4c63d" stroke="#111" strokeWidth="1" />
-                <text y="3" textAnchor="middle" fontSize="8" fontWeight="700" fontFamily="Sarabun" fill="#111">
+
+            {/* Bottom-Right: OVR or Match Rating */}
+            <rect x={cx + 3.5} y={cy + 6} width={useRating ? '19.5' : '18'} height="11" rx="4.5" fill={rtBg} stroke={rtStroke} strokeWidth="1.1" />
+            <text x={cx + (useRating ? 13.2 : 12.5)} y={cy + 14.2} textAnchor="middle" fontSize="8.2" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
+              {useRating ? ratingVal.toFixed(1) : q.ov}
+            </text>
+
+            {/* Top-Left: MOTM Crown and/or Captain Badge */}
+            {meta?.isMotm && (
+              <g transform={`translate(${cx - 13.5},${cy - 14})`}>
+                <circle r="6" fill="#facc15" stroke="#fff" strokeWidth="1.1" />
+                <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#1c1300" />
+              </g>
+            )}
+            {isCaptain && (
+              <g transform={`translate(${meta?.isMotm ? cx - 21 : cx - 12.5},${meta?.isMotm ? cy - 5.5 : cy - 14.5})`}>
+                <circle r="5.5" fill="#f4c63d" stroke="#111" strokeWidth="1" />
+                <text y="2.8" textAnchor="middle" fontSize="7.8" fontWeight="800" fontFamily="Sarabun" fill="#111">
                   C
                 </text>
               </g>
             )}
-            {(q.sus || 0) > 0 ? (
-              <rect x={cx + 9} y={cy - 20} width="7" height="10" rx="1.5" fill="#e5484d" stroke="#fff" strokeWidth="1.2" />
-            ) : q.inj > 0 ? (
-              <g transform={`translate(${cx + 12},${cy - 15})`}>
-                <circle r="6" fill="#fff" stroke="#e5484d" strokeWidth="1.2" />
-                <path d="M-3 0h6M0-3v6" stroke="#e5484d" strokeWidth="2" strokeLinecap="round" />
-              </g>
+
+            {/* Top-Right: Cards & Injury (non-overlapping) */}
+            {(isRed || isSus) ? (
+              <rect x={cx + 9.5} y={cy - 19} width="7" height="10" rx="1.5" fill="#e5484d" stroke="#fff" strokeWidth="1.1" />
+            ) : (meta?.yellowCards || 0) > 0 ? (
+              <rect x={cx + 9.5} y={cy - 19} width="7" height="10" rx="1.5" fill="#facc15" stroke="#111" strokeWidth="0.9" />
             ) : null}
+            {isInj && (
+              <g transform={`translate(${hasCard ? cx + 20 : cx + 12.5},${hasCard ? cy - 9 : cy - 14.5})`}>
+                <circle r="5.8" fill="#fff" stroke="#e5484d" strokeWidth="1.2" />
+                <path d="M-2.8 0h5.6M0-2.8v5.6" stroke="#e5484d" strokeWidth="1.9" strokeLinecap="round" />
+              </g>
+            )}
+
+            {/* Mid-Left Edge: Sub In / Sub Out Arrow Badge */}
+            {hasSubIn && (
+              <g transform={`translate(${cx - 19.5},${cy - 2.5})`}>
+                <circle r="5.2" fill="#10b981" stroke="#fff" strokeWidth="0.9" />
+                <path d="M0 -2.5 L2.7 2 L-2.7 2 Z" fill="#fff" />
+              </g>
+            )}
+            {hasSubOut && (
+              <g transform={`translate(${cx - 19.5},${cy - 2.5})`}>
+                <circle r="5.2" fill="#f97316" stroke="#fff" strokeWidth="0.9" />
+                <path d="M0 2.5 L2.7 -2 L-2.7 -2 Z" fill="#fff" />
+              </g>
+            )}
+
+            {/* Mid-Right Edge: Goals & Assists Badges (Side-by-side if both) */}
+            {goalsCount > 0 && (
+              <g transform={`translate(${cx + 19.5},${cy - 2.5})`}>
+                <circle r="5.2" fill="#ffffff" stroke="#0b2018" strokeWidth="1" />
+                <polygon points="0,-2.4 2.3,-0.7 1.4,2 -1.4,2 -2.3,-0.7" fill="#0b2018" />
+                <line x1="0" y1="-2.4" x2="0" y2="-5" stroke="#0b2018" strokeWidth="0.8" />
+                <line x1="2.3" y1="-0.7" x2="4.6" y2="-1.5" stroke="#0b2018" strokeWidth="0.8" />
+                <line x1="-2.3" y1="-0.7" x2="-4.6" y2="-1.5" stroke="#0b2018" strokeWidth="0.8" />
+                {goalsCount > 1 && (
+                  <g transform="translate(4.5,-4.5)">
+                    <circle r="3.6" fill="#10b981" stroke="#fff" strokeWidth="0.7" />
+                    <text y="2.2" textAnchor="middle" fontSize="5.8" fontWeight="800" fontFamily="Sarabun" fill="#fff">
+                      {goalsCount}
+                    </text>
+                  </g>
+                )}
+              </g>
+            )}
+            {assistsCount > 0 && (
+              <g transform={`translate(${goalsCount > 0 ? cx + 29 : cx + 19.5},${cy - 2.5})`}>
+                <circle r="5.2" fill="#0ea5e9" stroke="#fff" strokeWidth="0.9" />
+                <text y="2.5" textAnchor="middle" fontSize="6.8" fontWeight="900" fontFamily="Sarabun" fill="#fff">
+                  A
+                </text>
+                {assistsCount > 1 && (
+                  <g transform="translate(4.5,-4.5)">
+                    <circle r="3.6" fill="#0284c7" stroke="#fff" strokeWidth="0.7" />
+                    <text y="2.2" textAnchor="middle" fontSize="5.8" fontWeight="800" fontFamily="Sarabun" fill="#fff">
+                      {assistsCount}
+                    </text>
+                  </g>
+                )}
+              </g>
+            )}
+
+            {/* Bottom Stamina Bar + Player Name */}
+            {showFitBar && !isRed && (
+              <>
+                <rect x={cx - 23} y={cy + 18.5} width="28" height="4.5" rx="2.2" fill="#0b2018" stroke="#fff7" strokeWidth="0.6" />
+                <rect x={cx - 23} y={cy + 18.5} width={(28 * efVal) / 100} height="4.5" rx="2.2" fill={efc} />
+                <text
+                  x={cx + 7}
+                  y={cy + 23}
+                  fontSize="8"
+                  fontWeight="700"
+                  fontFamily="Sarabun"
+                  fill={efc}
+                  stroke="#0b2018"
+                  strokeWidth="2.2"
+                  paintOrder="stroke"
+                >
+                  {efVal}%
+                </text>
+              </>
+            )}
             <text
               x={clamp(cx, 26, 274)}
-              y={cy + 31.5}
+              y={showFitBar && !isRed ? cy + 31.5 : cy + 27.5}
               textAnchor="middle"
-              fontSize={isMe ? '8.8' : '8.4'}
-              fontWeight={isMe ? '800' : '600'}
+              fontSize={isMe || meta?.isMotm ? '8.8' : '8.4'}
+              fontWeight={isMe || meta?.isMotm ? '800' : '600'}
               fontFamily="Sarabun"
-              fill={isMe ? '#fde047' : '#fff'}
+              fill={meta?.isMotm || isMe ? '#fde047' : '#fff'}
               stroke="#0b2018"
               strokeWidth="2.3"
               paintOrder="stroke"
             >
               {q.n.split(' ')[0]}
-            </text>
-            <rect x={cx - 23} y={cy + 18.5} width="28" height="4.5" rx="2.2" fill="#0b2018" stroke="#fff7" strokeWidth="0.6" />
-            <rect x={cx - 23} y={cy + 18.5} width={(28 * efVal) / 100} height="4.5" rx="2.2" fill={efc} />
-            <text
-              x={cx + 7}
-              y={cy + 23}
-              fontSize="8"
-              fontWeight="700"
-              fontFamily="Sarabun"
-              fill={efc}
-              stroke="#0b2018"
-              strokeWidth="2.2"
-              paintOrder="stroke"
-            >
-              {efVal}%
             </text>
           </g>
         );

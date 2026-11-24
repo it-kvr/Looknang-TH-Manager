@@ -1,20 +1,68 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0f2d1e" />
-      <stop offset="100%" stop-color="#17804a" />
+      <stop offset="0%" stop-color="#0b2819" />
+      <stop offset="55%" stop-color="#0f3d26" />
+      <stop offset="100%" stop-color="#071a10" />
     </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#ffe07d" />
-      <stop offset="100%" stop-color="#e5a91a" />
+    <radialGradient id="flood" cx="0.5" cy="0.18" r="0.62">
+      <stop offset="0%" stop-color="#279259" stop-opacity="0.55" />
+      <stop offset="100%" stop-color="#071a10" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="goldFrame" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe793" />
+      <stop offset="48%" stop-color="#eab63c" />
+      <stop offset="100%" stop-color="#b87e14" />
     </linearGradient>
+    <linearGradient id="innerShield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#145835" />
+      <stop offset="100%" stop-color="#092718" />
+    </linearGradient>
+    <clipPath id="shieldClip">
+      <path d="M256 104 L388 150 V252 C388 332 330 390 256 420 C182 390 124 332 124 252 V150 Z" />
+    </clipPath>
   </defs>
-  <rect width="512" height="512" rx="108" fill="url(#bg)" />
-  <circle cx="256" cy="256" r="205" fill="none" stroke="url(#gold)" stroke-width="10" opacity="0.25" />
-  <path d="M256 72 L404 128 V248 C404 342 338 408 256 444 C174 408 108 342 108 248 V128 Z" fill="#0b2018" stroke="url(#gold)" stroke-width="18" stroke-linejoin="round" />
-  <path d="M256 96 L380 144 V246 C380 326 324 382 256 414 C188 382 132 326 132 246 V144 Z" fill="#136b3e" opacity="0.9" />
-  <circle cx="256" cy="248" r="82" fill="#ffffff" stroke="#0b2018" stroke-width="10" />
-  <polygon points="256,204 294,232 280,276 232,276 218,232" fill="#0f2218" />
-  <path d="M256 204 V168 M294 232 L330 218 M280 276 L306 312 M232 276 L206 312 M218 232 L182 218" stroke="#0f2218" stroke-width="8" stroke-linecap="round" />
-  <polygon points="256,112 264,132 286,132 268,145 275,166 256,153 237,166 244,145 226,132 248,132" fill="url(#gold)" />
+
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <rect width="512" height="512" rx="112" fill="url(#flood)" />
+
+  <!-- Outer Beveled Gold Shield -->
+  <path
+    d="M256 76 L414 132 V254 C414 348 344 416 256 452 C168 416 98 348 98 254 V132 Z"
+    fill="#092114"
+    stroke="url(#goldFrame)"
+    stroke-width="20"
+    stroke-linejoin="round"
+  />
+
+  <!-- Inner Emerald Shield with Subtle Pitch Stripes -->
+  <g clip-path="url(#shieldClip)">
+    <rect x="120" y="100" width="272" height="328" fill="url(#innerShield)" />
+    <rect x="150" y="100" width="34" height="328" fill="#196c41" opacity="0.38" />
+    <rect x="218" y="100" width="34" height="328" fill="#196c41" opacity="0.38" />
+    <rect x="286" y="100" width="34" height="328" fill="#196c41" opacity="0.38" />
+  </g>
+
+  <!-- Championship Star cleanly above the ball -->
+  <polygon
+    points="256,128 263,149 285,149 267,162 274,183 256,170 238,183 245,162 227,149 249,149"
+    fill="url(#goldFrame)"
+  />
+
+  <!-- Crisp Centered Football -->
+  <g transform="translate(256 286)">
+    <circle r="78" fill="#f8faf9" stroke="#081c11" stroke-width="10" />
+    <polygon points="0,-24 23,-7 14,20 -14,20 -23,-7" fill="#0d2618" />
+    <path
+      d="M0,-24 V-54 M23,-7 L52,-16 M14,20 L34,47 M-14,20 L-34,47 M-23,-7 L-52,-16"
+      stroke="#0d2618"
+      stroke-width="7.5"
+      stroke-linecap="round"
+    />
+    <polygon points="0,-78 -16,-56 16,-56" fill="#0d2618" />
+    <polygon points="74,-22 50,-16 62,8" fill="#0d2618" />
+    <polygon points="-74,-22 -50,-16 -62,8" fill="#0d2618" />
+    <polygon points="48,60 32,46 14,72" fill="#0d2618" />
+    <polygon points="-48,60 -32,46 -14,72" fill="#0d2618" />
+  </g>
 </svg>

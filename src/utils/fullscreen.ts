@@ -139,6 +139,25 @@ export async function exitFullscreenSafe(): Promise<void> {
   }
 }
 
+export async function unlockOrientationSafe(): Promise<void> {
+  if (typeof window === 'undefined' || typeof screen === 'undefined') return;
+  try {
+    const orientation = (
+      screen as Screen & { orientation?: { unlock?: () => void; lock?: (mode: string) => Promise<void> } }
+    ).orientation;
+    orientation?.unlock?.();
+  } catch {
+    // Ignore unsupported orientation unlock
+  }
+}
+
+export async function exitFullscreenAndUnlockOrientation(): Promise<void> {
+  await unlockOrientationSafe();
+  if (getFullscreenElement()) {
+    await exitFullscreenSafe().catch(() => undefined);
+  }
+}
+
 export async function toggleImmersiveFullscreen(): Promise<boolean> {
   if (getFullscreenElement()) {
     await exitFullscreenSafe();

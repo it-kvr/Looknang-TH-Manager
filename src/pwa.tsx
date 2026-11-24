@@ -391,12 +391,13 @@ const GUIDE_STEPS: Record<
 
 export const PWAInstallButton: React.FC<{
   variant?: 'compact' | 'card' | 'settings';
+  tone?: 'default' | 'stadium';
   onToast?: (msg: string) => void;
-}> = ({ variant = 'compact', onToast }) => {
+}> = ({ variant = 'compact', tone = 'default', onToast }) => {
   const { isInstallable, isInstalled, isIOS, isAndroid, inIframe, install } = usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
   const [tab, setTab] = useState<GuidePlatform>('android');
-  const iconUrl = `${import.meta.env.BASE_URL}icon.svg`;
+  const iconUrl = `${import.meta.env.BASE_URL}pwa-192x192.png`;
 
   useEffect(() => {
     setTab(isIOS ? 'ios' : isAndroid ? 'android' : 'desktop');
@@ -621,13 +622,17 @@ export const PWAInstallButton: React.FC<{
   };
 
   if (variant === 'compact') {
+    const compactToneClass =
+      tone === 'stadium'
+        ? 'bg-white/12 border border-white/25 text-white hover:bg-white/22'
+        : 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] hover:bg-[var(--g)] hover:text-white';
     return (
       <>
         <button
           type="button"
           onClick={handleClick}
           title="ติดตั้งแอปลงมือถือ"
-          className="px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] font-bold text-[11px] flex items-center gap-1 cursor-pointer shrink-0 hover:bg-[var(--g)] hover:text-white transition-colors"
+          className={`px-2.5 py-1.5 mland:py-1 rounded-xl font-bold text-[11px] flex items-center gap-1 cursor-pointer shrink-0 transition-colors whitespace-nowrap ${compactToneClass}`}
         >
           <span>📲</span>
           <span className="hidden sm:inline mland:hidden">ติดตั้งแอป</span>

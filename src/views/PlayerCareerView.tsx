@@ -186,7 +186,7 @@ export const PlayerCareerView: React.FC<{
         <div className={`p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'perks' ? '' : 'hidden'}`}>
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-sm mland:text-xs">🌟 สกิลติดตัวนักเตะ (Career Perks)</h3>
-            <span className="text-xs font-bold text-[var(--lamp)]">ชื่อเสียงคงเหลือ: {p.rep ?? 10}</span>
+            <span className="text-xs font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular">ชื่อเสียงคงเหลือ: {p.rep ?? 10}</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             {CAREER_PERKS.map((pk) => {

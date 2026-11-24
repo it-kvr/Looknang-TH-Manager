@@ -130,33 +130,31 @@ export const TeamTrainingView: React.FC<{
         </div>
       ) : (
       <>
-      {/* Training Overview Strip */}
-      <div className="grid grid-cols-5 gap-2 mland:gap-1 shrink-0">
-        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ฟิต 11 ตัวจริง / ทั้งทีม</div>
-          <div className={`font-bold text-sm mland:text-[11px] tabular ${avgFit < 72 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-            {avgFit}% <span className="text-[var(--mut)] font-normal text-xs">/ {avgAllFit}%</span>
-          </div>
+      {/* Compact Training Camp HUD Strip */}
+      <div className="flex items-center justify-between gap-2 px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] shrink-0 overflow-x-auto whitespace-nowrap">
+        <div className="flex items-center gap-2 shrink-0">
+          <span>
+            ฟิต 11 ตัวจริง{' '}
+            <b className={`tabular ${avgFit < 72 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>{avgFit}%</b>
+            <span className="text-[var(--mut)] tabular"> (ทั้งทีม {avgAllFit}%)</span>
+          </span>
+          <span className="opacity-30">·</span>
+          <span>
+            เข้าใจแผน <b className="text-[var(--g)] tabular">{me.tacFam ?? 65}%</b>
+          </span>
+          <span className="opacity-30">·</span>
+          <span>
+            โปรแกรม <b className="text-[var(--ink)]">{curProg.icon} {curProg.short}</b> · <b>{curInt.icon}</b>
+          </span>
         </div>
-        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ความเข้าใจแผน</div>
-          <div className="font-bold text-sm mland:text-[11px] tabular text-[var(--g)]">{me.tacFam ?? 65}%</div>
-        </div>
-        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">โปรแกรมปัจจุบัน</div>
-          <div className="font-bold text-xs mland:text-[10px] truncate">{curProg.icon} {curProg.short} · {curInt.icon}</div>
-        </div>
-        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ล้า (&lt;72%) / เจ็บ</div>
-          <div className="font-bold text-sm mland:text-[11px] tabular">
-            <span className={tiredCount > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : ''}>{tiredCount}</span>
-            <span className="text-[var(--mut)]"> / </span>
-            <span className={injuredSq.length > 0 ? 'text-[var(--red)]' : ''}>{injuredSq.length}</span>
-          </div>
-        </div>
-        <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">ศูนย์ฝึก / สตาฟฟ์</div>
-          <div className="font-bold text-xs mland:text-[10px] tabular truncate">ซ้อม Lv.{trLv} · ฟิต+{trLv * 2 + stf.fit * 2}%</div>
+        <div className="flex items-center gap-2 shrink-0 tabular">
+          <span>
+            ล้า <b className={tiredCount > 0 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}>{tiredCount}</b>
+            {' · '}
+            เจ็บ <b className={injuredSq.length > 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>{injuredSq.length}</b>
+          </span>
+          <span className="opacity-30">·</span>
+          <span className="text-[var(--mut)]">ฟื้นหลังเกม +{trLv * 2 + stf.fit * 2}%</span>
         </div>
       </div>
 
@@ -433,6 +431,7 @@ export const TeamTrainingView: React.FC<{
               const isFocus = state.focusPlayer === q.n;
               const isStarter = starters.some((s) => s.n === q.n);
               const fCol = f >= 75 ? 'var(--g)' : f >= 55 ? 'var(--lamp)' : 'var(--red)';
+              const fTextCls = f >= 75 ? 'text-[var(--g)]' : f >= 55 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--red)]';
 
               return (
                 <div key={q.n} className={`px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 ${isRest ? 'bg-emerald-500/8' : isFocus ? 'bg-[var(--lamp-soft)]/35' : ''}`}>
@@ -448,7 +447,7 @@ export const TeamTrainingView: React.FC<{
                         <div className="w-16 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden shrink-0">
                           <div className="h-full rounded-full" style={{ width: `${f}%`, background: fCol }} />
                         </div>
-                        <span className="text-[10px] mland:text-[8.5px] font-bold tabular" style={{ color: fCol }}>{f}%</span>
+                        <span className={`text-[10px] mland:text-[8.5px] font-bold tabular ${fTextCls}`}>{f}%</span>
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
                           {q.inj > 0 ? `🩹${q.inj}นัด` : `OVR ${q.ov}/${q.pot}`}
                         </span>

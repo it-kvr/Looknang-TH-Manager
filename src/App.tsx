@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
-import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen } from './utils/fullscreen';
+import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen, exitFullscreenAndUnlockOrientation } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers } from './engine/simulation';
+import { countReadyMissions } from './engine/missions';
 import { ClubCrest } from './components/SvgVisuals';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -40,7 +41,16 @@ export default function App() {
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
 
-  useEffect(() => bindAutoLandscapeFullscreen(), []);
+  const [menuStep, setMenuStep] = useState<'menu' | 'ms' | 'cr'>('menu');
+
+  const shouldBeLandscape = Boolean(state) || menuStep !== 'menu';
+  useEffect(() => {
+    if (!shouldBeLandscape) {
+      exitFullscreenAndUnlockOrientation().catch(() => undefined);
+      return;
+    }
+    return bindAutoLandscapeFullscreen();
+  }, [shouldBeLandscape]);
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -52,7 +62,8 @@ export default function App() {
   };
 
   const navigateToTab = (tab: MainTab, sub?: string) => {
-    setNavIntent({ tab, sub, ts: Date.now() });
+    const resolvedTab: MainTab = tab === 'f' && sub === 'infra' ? 'u' : tab;
+    setNavIntent({ tab: resolvedTab, sub, ts: Date.now() });
     setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     updateState((d) => {
@@ -64,6 +75,12 @@ export default function App() {
       }
       if (tab === 'q' && sub === 'training') {
         d.v = 'r';
+        d.tv = 0;
+        d.sub = 0;
+        return;
+      }
+      if (tab === 'f' && sub === 'infra') {
+        d.v = 'u';
         d.tv = 0;
         d.sub = 0;
         return;
@@ -98,6 +115,12 @@ export default function App() {
     enterAutoMobileFullscreen().catch(() => undefined);
     const fresh = createNewGame('m', { names, t0, pick });
     fresh.diff = diff;
+    fresh.v = 't';
+    fresh.tv = 0;
+    fresh.sub = 0;
+    fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
+    setNavIntent(null);
+    setNavResetSeq((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
@@ -111,7 +134,12 @@ export default function App() {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     const fresh = createNewGame('p', { player: profile });
-    fresh.v = 'p';
+    fresh.v = 't';
+    fresh.tv = 0;
+    fresh.sub = 0;
+    fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
+    setNavIntent(null);
+    setNavResetSeq((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
@@ -121,8 +149,11 @@ export default function App() {
   const handleLoadSave = (_mode: GameMode, targetSlot: number, loaded: GameState) => {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
+    const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
+    setNavIntent(null);
+    setNavResetSeq((n) => n + 1);
     setSlot(targetSlot);
-    setState(loaded);
+    setState({ ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier });
     showToast('โหลดเซฟเรียบร้อย');
   };
 
@@ -489,9 +520,10 @@ export default function App() {
           onStartPlayer={handleStartPlayer}
           onLoadSave={handleLoadSave}
           onToast={showToast}
+          onStepChange={setMenuStep}
         />
         {toast && (
-          <div className="fixed bottom-4 right-4 z-50 px-4 py-2.5 rounded-xl bg-[var(--ink)] text-[var(--bg)] text-xs font-bold shadow-lg">
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/92 backdrop-blur-md text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
             {toast}
           </div>
         )}
@@ -513,8 +545,8 @@ export default function App() {
           ['u', '🏟️', 'สโมสร']
         ]
       : [
-          ['p', '🌟', 'อาชีพ'],
           ['t', '🏆', 'การแข่งขัน'],
+          ['p', '🌟', 'อาชีพ'],
           ['q', '⚽', 'ทีม & แผน']
         ];
 
@@ -562,7 +594,7 @@ export default function App() {
                   {state.mode === 'p' && state.p ? `${state.p.name} · ` : ''}
                   {me.name}
                 </span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-bold text-[10px] mland:text-[9px] tabular shrink-0">
+                <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--g)] tabular shrink-0">
                   {state.mode === 'm' ? fmtMoney(state.money) : `OVR ${state.p ? ovMe(state.p) : 60}`}
                 </span>
               </div>
@@ -575,8 +607,9 @@ export default function App() {
                 {state.mode === 'm' ? (
                   <>
                     <span className="opacity-40 shrink-0">·</span>
-                    <span className="shrink-0">❤️{state.fan ?? 55}%</span>
-                    <span className="shrink-0">👔{state.bd ?? 55}%</span>
+                    <span className="shrink-0">แฟน {state.fan ?? 55}%</span>
+                    <span className="opacity-40 shrink-0">·</span>
+                    <span className="shrink-0">บอร์ด {state.bd ?? 55}%</span>
                   </>
                 ) : (
                   <>
@@ -588,12 +621,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Center Next Match Pill */}
-          <div className="flex items-center justify-center min-w-0 flex-1 max-w-[440px] mland:max-w-[330px]">
+          {/* Center Next Match Broadcast Strip */}
+          <div className="flex items-center justify-center min-w-0 flex-1 max-w-[440px] mland:max-w-[340px]">
             {nextMatchInfo ? (
-              <div className="w-full flex items-center justify-between gap-1.5 mland:gap-1 px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/85 border border-[var(--line)] min-w-0">
+              <div className="w-full flex items-center justify-between gap-1.5 mland:gap-1 px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)] min-w-0">
                 <div className="flex items-center gap-1.5 mland:gap-1 min-w-0 flex-1">
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)]/70 text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap">
+                  <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0 whitespace-nowrap">
                     {nextMatchInfo.kind === 'asia' ? '🌏 ทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 ถ้วย' : '⚽ นัดหน้า'}
                     {nextMatchInfo.isDerby && <span className="ml-0.5 text-[var(--red)]">🔥</span>}
                   </span>
@@ -689,6 +722,7 @@ export default function App() {
               state={state}
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onNavigate={navigateToTab}
               onToast={showToast}
             />
           )}
@@ -727,11 +761,19 @@ export default function App() {
           </div>
         </main>
 
-        {/* Pinned Left-Rail Navigation Dock */}
+        {/* Pinned Left-Rail Game Console Dock */}
         <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-r border-[var(--line)] pl-[env(safe-area-inset-left,0px)] order-first w-[calc(70px+env(safe-area-inset-left,0px))] mland:w-[calc(62px+env(safe-area-inset-left,0px))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
           <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
+              let badgeCount = 0;
+              if (state.mode === 'm') {
+                if (key === 'k') badgeCount = getIncomingOffers(state).length + (state.scout?.results ? 1 : 0);
+                else if (key === 'r') badgeCount = me.sq.reduce((sum, q) => sum + countReadyMissions(q, null), 0);
+              } else if (key === 'p' && state.p) {
+                const meSq = me.sq.find((q) => q.me);
+                if (meSq) badgeCount = countReadyMissions(meSq, state.p);
+              }
               return (
                 <button
                   key={key}
@@ -754,6 +796,11 @@ export default function App() {
                       : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/85'
                   }`}
                 >
+                  {badgeCount > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black leading-[15px] text-center tabular shadow-2xs">
+                      {badgeCount > 9 ? '9+' : badgeCount}
+                    </span>
+                  )}
                   <span className="text-base mland:text-[13px] leading-none">{icon}</span>
                   <span className="truncate max-w-full leading-tight">{label}</span>
                 </button>
@@ -823,7 +870,11 @@ export default function App() {
         <SettingsModal
           state={state}
           onClose={() => setShowSettings(false)}
-          onExitToMenu={() => setState(null)}
+          onExitToMenu={() => {
+            setShowSettings(false);
+            setMenuStep('menu');
+            setState(null);
+          }}
           onOpenGodBlessing={() => setShowGodBlessing(true)}
           onOpenSecretBoost={() => setShowSecretBoost(true)}
           onToast={showToast}
