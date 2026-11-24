@@ -4,7 +4,7 @@ import { clamp, fmtMoney } from '../utils/math';
 import { TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { xi, logFin } from '../engine/playerCore';
-import { PERSONAL_MISSIONS, getPlayerMissionView, getPlayerTalent, talentTierMeta } from '../engine/missions';
+import { getPlayerMissionView, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -70,7 +70,7 @@ export const TeamTrainingView: React.FC<{
           </button>
         </div>
         <span className="text-[11px] mland:text-[9px] text-[var(--mut)]">
-          {trainingMode === 'missions' ? 'สะสม 15 ภารกิจพร้อมกัน อัปขั้นอัตโนมัติตามค่าพรสวรรค์' : `ศูนย์ฝึก Lv.${trLv} · สตาฟฟ์ฟิต +${stf.fit * 2}%`}
+          {trainingMode === 'missions' ? 'สะสมทุกภารกิจพร้อมกัน อัปขั้นอัตโนมัติตามค่าพรสวรรค์' : `ศูนย์ฝึก Lv.${trLv} · สตาฟฟ์ฟิต +${stf.fit * 2}%`}
         </span>
       </div>
 
@@ -81,9 +81,8 @@ export const TeamTrainingView: React.FC<{
             <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto flex-1 min-h-0">
               {sortedMissionSquad.map((q) => {
                 const selected = q.n === missionTargetPlayer.n;
-                const { mState, talent, passedStages } = getPlayerMissionView(q, null, state);
+                const { talent, passedStages } = getPlayerMissionView(q, null, state);
                 const tlMeta = talentTierMeta(talent);
-                const focusDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
                 return (
                   <button
                     key={q.n}
@@ -98,7 +97,7 @@ export const TeamTrainingView: React.FC<{
                       <div className="min-w-0">
                         <div className="text-xs mland:text-[10px] font-bold truncate">{q.n}</div>
                         <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                          {q.ro} · OVR {q.ov} {focusDef ? `· ${focusDef.icon}` : ''} {passedStages > 0 ? `· ✓${passedStages}` : ''}
+                          {q.ro} · OVR {q.ov} {passedStages > 0 ? `· ✓${passedStages}` : ''}
                         </div>
                       </div>
                     </div>

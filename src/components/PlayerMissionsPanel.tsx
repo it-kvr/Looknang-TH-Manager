@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Player, Team, GameState } from '../types/game';
-import { SFX } from '../utils/audioTheme';
-import { statTierMeta, ensurePlayerMissions, getPlayerMissionView, formatMissionRewardText, talentTierMeta } from '../engine/missions';
+import { statTierMeta, getPlayerMissionView, formatMissionRewardText, talentTierMeta } from '../engine/missions';
 
 export const StatBarRow: React.FC<{ label: string; value: number; compact?: boolean }> = ({
   label,
@@ -31,7 +30,7 @@ export const PlayerMissionsPanel: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ player, team, state, onUpdateState, onToast }) => {
+}> = ({ player, state }) => {
   const isMe = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
   const careerP = isMe ? state.p : null;
   const { mState, items, talent, passedStages, failedStages } = getPlayerMissionView(player, careerP, state);
@@ -86,14 +85,10 @@ export const PlayerMissionsPanel: React.FC<{
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mland:gap-1.5">
-        {items.map(({ def, stage, maxStage, completedAll, target, curVal, pct, isFocused, nextRewards, nextCoreAmt, successChance, stageOutcomes }) => (
+        {items.map(({ def, stage, maxStage, completedAll, target, curVal, pct, nextRewards, nextCoreAmt, successChance, stageOutcomes }) => (
           <div
             key={def.id}
-            className={`p-3 mland:p-2 rounded-2xl mland:rounded-xl border flex flex-col justify-between gap-2 mland:gap-1.5 transition-colors ${
-              isFocused
-                ? 'bg-[var(--g-soft)]/50 border-[var(--g)]/60'
-                : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
-            }`}
+            className="p-3 mland:p-2 rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/70 flex flex-col justify-between gap-2 mland:gap-1.5 transition-colors"
           >
             <div className="space-y-1.5 mland:space-y-1">
               <div className="flex items-start justify-between gap-2">
@@ -153,39 +148,18 @@ export const PlayerMissionsPanel: React.FC<{
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-1.5 pt-0.5">
+            <div className="flex items-center justify-between gap-1.5 pt-0.5 text-[10px] mland:text-[8.5px] font-bold tabular text-[var(--mut)]">
               {!completedAll ? (
                 <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      onUpdateState((d) => {
-                        const t = team ? d.teams[team.id] : d.teams[d.me];
-                        const pl = t?.sq.find((x) => x.n === player.n);
-                        if (!pl) return;
-                        const cp = pl.me && d.p ? d.p : null;
-                        const ms = ensurePlayerMissions(pl, cp);
-                        ms.focusId = def.id;
-                        pl.missions = ms;
-                        if (cp) cp.missions = ms;
-                      });
-                      onToast(`🎯 ตั้ง "${def.name}" เป็นภารกิจโฟกัส (+50% ความคืบหน้า & +6% โอกาสผ่าน)`);
-                    }}
-                    className={`px-2.5 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold border cursor-pointer shrink-0 ${
-                      isFocused
-                        ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                    }`}
-                  >
-                    {isFocused ? '🎯 โฟกัสอยู่' : 'ตั้งโฟกัส'}
-                  </button>
-                  <span className="text-[10px] mland:text-[8.5px] font-bold tabular text-[var(--mut)]">
+                  <span>
+                    ขั้นที่ {stage + 1}/{maxStage} · อัปพลังอัตโนมัติ
+                  </span>
+                  <span>
                     โอกาสสำเร็จ: <b className="text-[var(--ink)]">{successChance}%</b>
                   </span>
                 </>
               ) : (
-                <span className="ml-auto text-[10px] mland:text-[8.5px] font-bold text-[var(--g)]">
+                <span className="ml-auto text-[var(--g)]">
                   🏆 จบครบทั้ง {maxStage} ขั้นแล้ว
                 </span>
               )}

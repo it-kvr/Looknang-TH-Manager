@@ -472,36 +472,29 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
 
 export const ensurePlayerMissions = (q: Player, careerP?: PlayerCareerProfile | null): PlayerMissionsState => {
   const src = (q.me && careerP?.missions) || q.missions;
-  const normalized: PlayerMissionsState = {
+  return {
     stats: { ...(src?.stats || {}) },
     claimed: { ...(src?.claimed || {}) },
     outcomes: src?.outcomes ? { ...src.outcomes } : {},
-    recentLogs: src?.recentLogs ? [...src.recentLogs] : [],
-    focusId: src?.focusId
+    recentLogs: src?.recentLogs ? [...src.recentLogs] : []
   };
-  if (!normalized.focusId) {
-    normalized.focusId = q.pos === 'GK' ? 'goalkeeper' : q.pos === 'DF' ? 'defender' : q.pos === 'FW' ? 'finishing' : 'passing';
-  }
-  return normalized;
 };
 
 export function calcMissionSuccessChance(
   q: Player,
   careerP: PlayerCareerProfile | null | undefined,
-  def: PersonalMissionDef,
+  _def: PersonalMissionDef,
   stage: number,
   state?: Pick<GameState, 'tr' | 'staff'> | null
 ): number {
   const talent = getPlayerTalent(q, careerP);
-  const mState = ensurePlayerMissions(q, careerP);
-  const isFocused = mState.focusId === def.id;
   const isProdigy = Boolean(q.me && careerP?.perks?.includes('prodigy'));
   const age = q.age || 24;
   const pot = q.pot || q.ov;
 
   // Base success probability scales strongly with talent (25-99)
   // Stage difficulty increases each tier (0..4)
-  let chance = 26 + talent * 0.62 - stage * 7.5;
+  let chance = 28 + talent * 0.62 - stage * 7.5;
   if (age <= 21) chance += 5;
   else if (age >= 30) chance -= (age - 29) * 3.5;
 
@@ -509,7 +502,6 @@ export function calcMissionSuccessChance(
   if (q.ov >= pot) chance -= 10;
   else if (pot - q.ov >= 15) chance += 4;
 
-  if (isFocused) chance += 6;
   if (isProdigy) chance += 8;
   if (state?.tr) chance += (state.tr - 1) * 1.5;
   if (state?.staff?.asst) chance += state.staff.asst * 1.5;
@@ -545,7 +537,6 @@ export const getPlayerMissionView = (
       curVal,
       pct,
       canClaim,
-      isFocused: mState.focusId === def.id,
       nextRewards,
       nextCoreAmt,
       successChance,
@@ -781,10 +772,7 @@ export const addMissionStat = (
 ) => {
   if (rawDelta <= 0) return;
   const mState = ensurePlayerMissions(q, careerP);
-  const focusedDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
-  const isFocusedMetric = focusedDef?.metric === metric;
-  const delta = isFocusedMetric ? Math.max(rawDelta + 1, Math.round(rawDelta * 1.4)) : rawDelta;
-  mState.stats[metric] = (mState.stats[metric] || 0) + delta;
+  mState.stats[metric] = (mState.stats[metric] || 0) + rawDelta;
   q.missions = mState;
   if (careerP) careerP.missions = mState;
 };
@@ -801,66 +789,41 @@ export const applyTrainingMissionProgress = (
 ): { notes: string[]; summary: MissionResolveSummary } => {
   const notes: string[] = [];
   const mState = ensurePlayerMissions(q, opts.careerP);
-  const focusDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
   const mult = opts.isTeamFocus ? 2 : 1;
 
-  // Simultaneous multi-mission progress from training drills
+  // Simultaneous multi-mission progress from training drills (no focus required)
   const addSimultaneous = (metric: PersonalMissionMetric, base: number, label?: string) => {
     if (base <= 0) return;
-    const bonus = focusDef?.metric === metric ? Math.max(1, Math.round(base * 0.4)) : 0;
-    const total = (base + bonus) * mult;
+    const total = base * mult;
     mState.stats[metric] = (mState.stats[metric] || 0) + total;
-    if (label && bonus > 0) notes.push(`${label} +${total}`);
+    if (label && opts.isTeamFocus) notes.push(`${label} +${total}`);
   };
 
   if (q.pos === 'GK') {
-    addSimultaneous('saves', opts.teamProgram === 'defense' ? 3 : 1);
-    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 10 : 4);
+    addSimultaneous('saves', opts.teamProgram === 'defense' ? 4 : 2, 'เซฟประตู');
+    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 12 : 6);
   } else {
-    // Baseline simultaneous training drills for outfielders
-    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 14 : 6);
-    addSimultaneous('dribbles', opts.teamProgram === 'fitness' || opts.teamProgram === 'setpiece' ? 3 : 1);
+    // Baseline simultaneous training drills across all eligible areas for outfielders
+    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 16 : 8, 'จ่ายบอล');
+    addSimultaneous('dribbles', opts.teamProgram === 'fitness' || opts.teamProgram === 'setpiece' ? 4 : 2);
 
     if (q.pos === 'FW' || q.pos === 'MF') {
       const attMult = opts.teamProgram === 'attack' ? 2 : 1;
-      addSimultaneous('shots', 2 * attMult);
-      addSimultaneous('onTarget', 1 * attMult);
-      addSimultaneous('crossAssists', 1 * attMult);
-      addSimultaneous('setpieces', opts.teamProgram === 'attack' || focusDef?.id === 'setpiece' ? 1 : 0);
+      addSimultaneous('shots', 3 * attMult, 'ยิงประตู');
+      addSimultaneous('onTarget', 2 * attMult);
+      addSimultaneous('crossAssists', 2 * attMult);
+      addSimultaneous('setpieces', opts.teamProgram === 'setpiece' ? 2 : opts.teamProgram === 'attack' ? 1 : 0);
     }
     if (q.pos === 'DF' || q.pos === 'MF') {
       const defMult = opts.teamProgram === 'defense' ? 2 : 1;
-      addSimultaneous('tackles', 2 * defMult);
-      addSimultaneous('blocks', opts.teamProgram === 'defense' ? 1 : 0);
-      addSimultaneous('headers', 1 * defMult);
+      addSimultaneous('tackles', 3 * defMult, 'เข้าสกัด');
+      addSimultaneous('blocks', opts.teamProgram === 'defense' ? 2 : q.pos === 'DF' ? 1 : 0);
+      addSimultaneous('headers', 2 * defMult);
+      if (q.pos === 'DF' && opts.teamProgram === 'setpiece') {
+        addSimultaneous('setpieces', 1);
+      }
     } else if (q.pos === 'FW') {
-      addSimultaneous('headers', 1);
-    }
-  }
-
-  // Extra focus drill boost
-  if (focusDef) {
-    const drillAmt: Record<PersonalMissionMetric, number> = {
-      setpieces: 1,
-      passes: 8,
-      shots: 2,
-      onTarget: 1,
-      goals: 0,
-      crossAssists: 2,
-      dribbles: 3,
-      tackles: 2,
-      blocks: 1,
-      headers: 2,
-      saves: 2,
-      cleanSheets: 0,
-      wins: 0,
-      highRatings: 0,
-      matches: 0
-    };
-    const addAmt = (drillAmt[focusDef.metric] || 0) * mult;
-    if (addAmt > 0) {
-      mState.stats[focusDef.metric] = (mState.stats[focusDef.metric] || 0) + addAmt;
-      notes.unshift(`${focusDef.name} +${addAmt}`);
+      addSimultaneous('headers', 2);
     }
   }
 
