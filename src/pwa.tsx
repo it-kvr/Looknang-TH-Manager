@@ -14,6 +14,24 @@ let listenersInitialized = false;
 const promptSubscribers = new Set<(ev: BeforeInstallPromptEvent | null) => void>();
 const installedSubscribers = new Set<(installed: boolean) => void>();
 
+let updateSWFn: ((reloadPage?: boolean) => Promise<void>) | null = null;
+let swRegistration: ServiceWorkerRegistration | null = null;
+let cachedNeedRefresh = false;
+let cachedCheckingUpdate = false;
+let reloadingForSwUpdate = false;
+const needRefreshSubscribers = new Set<(need: boolean) => void>();
+const checkingUpdateSubscribers = new Set<(checking: boolean) => void>();
+
+function setNeedRefresh(val: boolean) {
+  cachedNeedRefresh = val;
+  needRefreshSubscribers.forEach((cb) => cb(val));
+}
+
+function setCheckingUpdate(val: boolean) {
+  cachedCheckingUpdate = val;
+  checkingUpdateSubscribers.forEach((cb) => cb(val));
+}
+
 function ensureGlobalPWAListeners() {
   if (listenersInitialized || typeof window === 'undefined') return;
   listenersInitialized = true;
@@ -29,6 +47,24 @@ function ensureGlobalPWAListeners() {
     promptSubscribers.forEach((cb) => cb(null));
     installedSubscribers.forEach((cb) => cb(true));
   });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloadingForSwUpdate) return;
+      reloadingForSwUpdate = true;
+      window.location.reload();
+    });
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && navigator.onLine) {
+      swRegistration?.update().catch(() => undefined);
+    }
+  });
+
+  window.addEventListener('online', () => {
+    swRegistration?.update().catch(() => undefined);
+  });
 }
 
 let swRegistered = false;
@@ -37,10 +73,31 @@ export function registerPWA() {
   swRegistered = true;
   ensureGlobalPWAListeners();
   try {
-    registerSW({
+    updateSWFn = registerSW({
       immediate: true,
+      onNeedRefresh() {
+        setNeedRefresh(true);
+      },
       onOfflineReady() {
         // Cached assets ready for offline play
+      },
+      onRegisteredSW(_swUrl, reg) {
+        if (!reg) return;
+        swRegistration = reg;
+        if (reg.waiting) setNeedRefresh(true);
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              setNeedRefresh(true);
+            }
+          });
+        });
+        reg.update().catch(() => undefined);
+        window.setInterval(() => {
+          if (navigator.onLine) reg.update().catch(() => undefined);
+        }, 20 * 60 * 1000);
       },
       onRegisterError() {
         // Ignore service worker registration errors in unsupported/restricted environments
@@ -50,6 +107,140 @@ export function registerPWA() {
     // Ignore registration exceptions
   }
 }
+
+export async function applyPWAUpdate(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  setCheckingUpdate(true);
+  try {
+    if (swRegistration?.waiting) {
+      swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+    if (updateSWFn) {
+      await updateSWFn(true);
+    }
+  } catch {
+    // fallback reload below
+  } finally {
+    window.setTimeout(() => {
+      if (!reloadingForSwUpdate) {
+        reloadingForSwUpdate = true;
+        window.location.reload();
+      }
+    }, 450);
+  }
+}
+
+export async function checkForPWAUpdate(): Promise<'updated' | 'latest' | 'offline' | 'unsupported'> {
+  if (typeof navigator === 'undefined') return 'unsupported';
+  if (!navigator.onLine) return 'offline';
+  if (!('serviceWorker' in navigator)) return 'unsupported';
+  setCheckingUpdate(true);
+  try {
+    const reg = swRegistration || (await navigator.serviceWorker.getRegistration()) || null;
+    if (!reg) return 'unsupported';
+    swRegistration = reg;
+    await reg.update();
+    if (reg.installing) {
+      await new Promise<void>((resolve) => {
+        const nw = reg.installing!;
+        const timer = window.setTimeout(resolve, 2500);
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' || nw.state === 'redundant' || nw.state === 'activated') {
+            window.clearTimeout(timer);
+            resolve();
+          }
+        });
+      });
+    }
+    if (reg.waiting || cachedNeedRefresh) {
+      setNeedRefresh(true);
+      return 'updated';
+    }
+    return 'latest';
+  } catch {
+    return 'latest';
+  } finally {
+    setCheckingUpdate(false);
+  }
+}
+
+export async function forceRefreshAppCache(): Promise<void> {
+  if (typeof window === 'undefined') return;
+  setCheckingUpdate(true);
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.update().catch(() => undefined)));
+    }
+  } catch {
+    // ignore
+  } finally {
+    window.location.reload();
+  }
+}
+
+export function usePWAUpdate() {
+  const [needRefresh, setLocalNeedRefresh] = useState<boolean>(() => cachedNeedRefresh);
+  const [checkingUpdate, setLocalChecking] = useState<boolean>(() => cachedCheckingUpdate);
+
+  useEffect(() => {
+    const onRefresh = (v: boolean) => setLocalNeedRefresh(v);
+    const onChecking = (v: boolean) => setLocalChecking(v);
+    needRefreshSubscribers.add(onRefresh);
+    checkingUpdateSubscribers.add(onChecking);
+    setLocalNeedRefresh(cachedNeedRefresh);
+    setLocalChecking(cachedCheckingUpdate);
+    return () => {
+      needRefreshSubscribers.delete(onRefresh);
+      checkingUpdateSubscribers.delete(onChecking);
+    };
+  }, []);
+
+  return {
+    needRefresh,
+    checkingUpdate,
+    checkForUpdate: checkForPWAUpdate,
+    applyUpdate: applyPWAUpdate,
+    forceRefresh: forceRefreshAppCache,
+  };
+}
+
+export const PWAUpdateBanner: React.FC = () => {
+  const { needRefresh, checkingUpdate, applyUpdate } = usePWAUpdate();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!needRefresh || dismissed) return null;
+
+  return (
+    <div className="fixed bottom-16 sm:bottom-5 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border-2 border-[var(--g)] shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+      <span className="text-lg shrink-0">🆕</span>
+      <div className="min-w-0 flex-1">
+        <div className="font-bold text-xs text-[var(--ink)]">มีอัปเดตเวอร์ชันใหม่แล้ว!</div>
+        <div className="text-[10.5px] text-[var(--mut)] leading-tight">กดอัปเดตได้ทันทีโดยไม่ต้องลบแอป (เซฟไม่หาย)</div>
+      </div>
+      <button
+        type="button"
+        disabled={checkingUpdate}
+        onClick={() => applyUpdate()}
+        className="px-2.5 py-1.5 rounded-xl bg-[var(--g)] text-white text-[11px] font-bold shrink-0 cursor-pointer hover:brightness-105 disabled:opacity-60"
+      >
+        {checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setDismissed(true)}
+        aria-label="ปิดการแจ้งเตือนอัปเดต"
+        className="w-6 h-6 rounded-full bg-[var(--surface-2)] text-[10px] font-bold text-[var(--mut)] shrink-0 cursor-pointer"
+      >
+        ✕
+      </button>
+    </div>
+  );
+};
 
 function detectStandalone(): boolean {
   if (typeof window === 'undefined') return false;
@@ -220,12 +411,63 @@ export const PWAInstallButton: React.FC<{
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showGuide]);
 
+  const { needRefresh, checkingUpdate, checkForUpdate, applyUpdate, forceRefresh } = usePWAUpdate();
+
   if (isInstalled) {
     if (variant === 'settings') {
       return (
-        <div className="p-3 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-xs font-semibold text-[var(--g)] flex items-center gap-2">
-          <span>✅</span>
-          <span>ติดตั้งเป็นแอปบนเครื่องแล้ว (โหมดเต็มหน้าจอ)</span>
+        <div className="p-3 mland:p-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-xs space-y-2 mland:space-y-1">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-bold text-[var(--g)] mland:text-[10.5px] flex items-center gap-1.5">
+                <span>{needRefresh ? '🆕' : '✅'}</span>
+                <span className="truncate">{needRefresh ? 'มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง' : 'ติดตั้งเป็นแอปบนเครื่องแล้ว'}</span>
+              </div>
+              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                อัปเดตเวอร์ชันใหม่ได้ทันทีโดยเซฟเกมในเครื่องยังอยู่ครบ
+              </div>
+            </div>
+            {needRefresh ? (
+              <button
+                type="button"
+                disabled={checkingUpdate}
+                onClick={() => applyUpdate()}
+                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold shrink-0 cursor-pointer shadow-xs"
+              >
+                {checkingUpdate ? 'กำลังอัปเดต...' : '🔄 อัปเดตเลย'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={checkingUpdate}
+                onClick={async () => {
+                  const res = await checkForUpdate();
+                  if (res === 'updated') {
+                    onToast?.('🆕 พบเวอร์ชันใหม่! กดปุ่ม "อัปเดตเลย" เพื่อใช้งาน');
+                  } else if (res === 'offline') {
+                    onToast?.('⚠️ กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่อตรวจสอบอัปเดต');
+                  } else if (res === 'latest') {
+                    onToast?.('✅ ตัวเกมเป็นเวอร์ชันล่าสุดแล้ว');
+                  } else {
+                    await forceRefresh();
+                  }
+                }}
+                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold shrink-0 cursor-pointer disabled:opacity-60"
+              >
+                {checkingUpdate ? 'กำลังเช็ก...' : '🔄 เช็กอัปเดต'}
+              </button>
+            )}
+          </div>
+          {!needRefresh && (
+            <button
+              type="button"
+              disabled={checkingUpdate}
+              onClick={() => forceRefresh()}
+              className="w-full py-1 rounded-lg bg-[var(--surface)]/80 hover:bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer transition-colors"
+            >
+              ↻ ล้างแคชตัวเกม & โหลดแพตช์ล่าสุด (ข้อมูลเซฟไม่หาย)
+            </button>
+          )}
         </div>
       );
     }

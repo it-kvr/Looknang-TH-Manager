@@ -1,0 +1,366 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { PWAInstallButton, usePWAInstall, usePWAUpdate } from '../pwa.tsx';
+import { enterImmersiveFullscreen, exitFullscreenSafe, getFullscreenElement, isFullscreenSupported, onFullscreenChange } from '../utils/fullscreen';
+import type { GameState, AppSettings } from '../types/game';
+import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX } from '../utils/audioTheme';
+import { exportSaveCode } from '../engine/saveCodec';
+
+const VIP_UNLOCKED_KEY = 'lk_vip_unlocked';
+
+export const SettingsModal: React.FC<{
+  state: GameState;
+  onClose: () => void;
+  onExitToMenu: () => void;
+  onOpenGodBlessing: () => void;
+  onOpenSecretBoost: () => void;
+  onToast: (msg: string) => void;
+  onSettingsChange?: (next: AppSettings) => void;
+}> = ({ state, onClose, onExitToMenu, onOpenGodBlessing, onOpenSecretBoost, onToast, onSettingsChange }) => {
+  const [st, setSt] = useState<AppSettings>(() => getSettings());
+  const [saveCode, setSaveCode] = useState('');
+  const [vipUnlocked, setVipUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem(VIP_UNLOCKED_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(getFullscreenElement()));
+  const canFullscreen = isFullscreenSupported();
+  const vipTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
+  const { isInstalled } = usePWAInstall();
+  const { needRefresh, checkingUpdate, checkForUpdate, applyUpdate } = usePWAUpdate();
+
+  useEffect(() => onFullscreenChange(setIsFullscreen), []);
+
+  const toggleFullscreen = async () => {
+    SFX.tap();
+    try {
+      if (!getFullscreenElement()) {
+        const ok = await enterImmersiveFullscreen();
+        if (!ok) throw new Error('unsupported');
+        setIsFullscreen(true);
+      } else {
+        await exitFullscreenSafe();
+        setIsFullscreen(false);
+      }
+    } catch {
+      onToast('เบราว์เซอร์อุปกรณ์นี้ไม่รองรับการสั่งเต็มจอจากหน้าต่างนี้');
+    }
+  };
+
+  const handleSecretVersionTap = () => {
+    if (vipUnlocked) {
+      SFX.tap();
+      onOpenSecretBoost();
+      return;
+    }
+    const now = Date.now();
+    const ref = vipTapRef.current;
+    ref.count = now - ref.lastTs > 2400 ? 1 : ref.count + 1;
+    ref.lastTs = now;
+    if (ref.count >= 5) {
+      ref.count = 0;
+      SFX.win();
+      setVipUnlocked(true);
+      try {
+        sessionStorage.setItem(VIP_UNLOCKED_KEY, '1');
+      } catch {
+        // ignore
+      }
+      onToast('🔓 ปลดล็อกโหมดลับผู้สนับสนุน (VIP) แล้ว!');
+      onOpenSecretBoost();
+    } else if (ref.count >= 3) {
+      SFX.tap();
+      onToast(`แตะอีก ${5 - ref.count} ครั้ง...`);
+    }
+  };
+
+  const update = (patch: Partial<AppSettings>) => {
+    const next = { ...st, ...patch };
+    setSt(next);
+    saveSettings(next);
+    if ('theme' in patch) applyTheme(next.theme);
+    onSettingsChange?.(next);
+  };
+
+  const curMatchSpeed = getDefaultMatchSpeed(st);
+  const godBlessingOn = st.godBlessingEnabled !== false;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-lg mland:max-w-3xl max-h-[92dvh] mland:max-h-[95dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+        {/* Header */}
+        <div className="shrink-0 px-5 py-3.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="font-bold text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
+            <button
+              type="button"
+              onClick={handleSecretVersionTap}
+              title="เวอร์ชันแอปพลิเคชัน"
+              className={`px-2 py-0.5 rounded-md text-[10px] mland:text-[9px] font-bold transition-colors cursor-pointer select-none ${
+                vipUnlocked
+                  ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] border border-[var(--lamp)]/45 hover:brightness-105'
+                  : 'text-[var(--mut)]/65 hover:text-[var(--mut)]'
+              }`}
+            >
+              {vipUnlocked ? 'v1.2 · 👑 VIP' : 'v1.2'}
+            </button>
+          </div>
+          <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] mland:text-xs font-bold cursor-pointer">✕</button>
+        </div>
+
+        {/* Organized Body */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 mland:p-2 space-y-3.5 mland:space-y-0 mland:grid mland:grid-cols-2 mland:gap-2 mland:items-start">
+          {/* Left Column: Match & Audio */}
+          <div className="space-y-3 mland:space-y-1.5">
+            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+              <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
+                <span>⚽</span>
+                <span>การแข่งขัน &amp; เสียง</span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ความเร็วการแข่งเริ่มต้น</div>
+                <div className="grid grid-cols-5 gap-1">
+                  {([
+                    [0.25, '0.25x'],
+                    [0.5, '0.5x'],
+                    [1, '1x ปกติ'],
+                    [2, '2x เร็ว'],
+                    [4, '4x สูงสุด']
+                  ] as const).map(([sp, lbl]) => (
+                    <button
+                      key={sp}
+                      type="button"
+                      onClick={() => { SFX.tap(); update({ matchSpeed: sp, quick: sp === 4 }); }}
+                      className={`py-2 mland:py-1 px-1 rounded-xl mland:rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors ${
+                        curMatchSpeed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)]/70 text-[var(--ink)]'
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); update({ autoSkipMatch: !st.autoSkipMatch }); }}
+                className={`w-full flex items-center justify-between gap-2.5 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer ${
+                  st.autoSkipMatch ? 'bg-[var(--g-soft)] border-[var(--g)]/50' : 'bg-[var(--surface)] border-[var(--line)]/80'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="text-xs mland:text-[10px] font-bold">⏭️ ข้ามแข่งอัตโนมัติ</div>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">จำลองผลทันทีโดยไม่เปิดหน้าต่างสนาม 2D</div>
+                </div>
+                <span className={`px-2.5 mland:px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${st.autoSkipMatch ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                  {st.autoSkipMatch ? 'เปิด' : 'ปิด'}
+                </span>
+              </button>
+
+              <div className="space-y-1.5 mland:space-y-1">
+                {(
+                  [
+                    ['mute', '🔇 ปิดเสียงเอฟเฟกต์ทั้งหมด', !!st.mute],
+                    ['nocrowd', '🏟️ ปิดเสียงเชียร์ในสนามแข่ง', !!st.nocrowd],
+                    ['novib', '📳 ปิดการสั่นแจ้งเตือน', !!st.novib]
+                  ] as [keyof AppSettings, string, boolean][]
+                ).map(([key, label, active]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => { SFX.tap(); update({ [key]: !active }); }}
+                    className="w-full flex items-center justify-between p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 text-xs mland:text-[10px] font-semibold cursor-pointer"
+                  >
+                    <span>{label}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold ${active ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                      {active ? 'เปิด' : 'ปิด'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Display, App Update & Helpers */}
+          <div className="space-y-3 mland:space-y-1.5">
+            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+              <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
+                <span>🎨</span>
+                <span>หน้าจอ &amp; แอปพลิเคชัน</span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
+                {([['', 'ตามระบบ'], ['light', '☀️ สว่าง'], ['dark', '🌙 มืด']] as const).map(([val, lbl]) => (
+                  <button
+                    key={lbl}
+                    type="button"
+                    onClick={() => { SFX.tap(); update({ theme: val }); }}
+                    className={`py-2 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${
+                      (st.theme || '') === val ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)]/70'
+                    }`}
+                  >
+                    {lbl}
+                  </button>
+                ))}
+              </div>
+
+              {canFullscreen && (
+                <button
+                  type="button"
+                  onClick={toggleFullscreen}
+                  className={`w-full flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-semibold cursor-pointer ${
+                    isFullscreen ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]' : 'bg-[var(--surface)] border-[var(--line)]/80'
+                  }`}
+                >
+                  <span className="truncate">🖥️ โหมดเต็มจอ (ซ่อนแถบมือถือ)</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${isFullscreen ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                    {isFullscreen ? 'ออกเต็มจอ' : 'เปิดเต็มจอ'}
+                  </span>
+                </button>
+              )}
+
+              <PWAInstallButton variant="settings" onToast={onToast} />
+
+              {!isInstalled && (
+                <button
+                  type="button"
+                  disabled={checkingUpdate}
+                  onClick={async () => {
+                    SFX.tap();
+                    if (needRefresh) {
+                      await applyUpdate();
+                      return;
+                    }
+                    const res = await checkForUpdate();
+                    if (res === 'updated') {
+                      onToast('🆕 พบเวอร์ชันใหม่แล้ว กดอีกครั้งเพื่ออัปเดต!');
+                    } else if (res === 'offline') {
+                      onToast('⚠️ กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่อเช็กอัปเดต');
+                    } else {
+                      onToast('✅ ตัวเกมเป็นเวอร์ชันล่าสุดแล้ว');
+                    }
+                  }}
+                  className={`w-full flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-semibold cursor-pointer ${
+                    needRefresh ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]' : 'bg-[var(--surface)] border-[var(--line)]/80'
+                  }`}
+                >
+                  <span>{needRefresh ? '🆕 มีแพตช์อัปเดตใหม่' : '🔄 ตรวจสอบอัปเดตตัวเกม'}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] mland:text-[9px] font-bold shrink-0 ${needRefresh ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                    {checkingUpdate ? 'กำลังเช็ก...' : needRefresh ? 'อัปเดตเลย' : 'เช็กอัปเดต'}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+              <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
+                <span>💾</span>
+                <span>เซฟเกม &amp; ตัวช่วยพิเศษ</span>
+              </div>
+
+              <div
+                className={`w-full flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-bold transition-colors ${
+                  godBlessingOn
+                    ? 'bg-gradient-to-r from-[var(--lamp-soft)] to-[var(--surface)] border-[var(--lamp)]/50'
+                    : 'bg-[var(--surface)] border-[var(--line)]'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    const nextVal = !godBlessingOn;
+                    update({ godBlessingEnabled: nextVal });
+                    onToast(nextVal ? '✨ เปิดใช้งานพรของพระเจ้าแล้ว' : 'ปิดพรของพระเจ้าแล้ว');
+                  }}
+                  className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left cursor-pointer"
+                >
+                  <div className="min-w-0">
+                    <div className={godBlessingOn ? 'text-[#7a4f00] dark:text-[var(--lamp)] truncate' : 'text-[var(--ink)] truncate'}>
+                      ✨ พรของพระเจ้า
+                    </div>
+                    <div className="text-[10px] mland:text-[8.5px] font-normal text-[var(--mut)] truncate">
+                      {godBlessingOn ? 'แต่งค่าพลังนักเตะรายคน' : 'ซ่อนปุ่มแต่งค่าพลังชั่วคราว'}
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${godBlessingOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+                    {godBlessingOn ? 'เปิด' : 'ปิด'}
+                  </span>
+                </button>
+                {godBlessingOn && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      onClose();
+                      onOpenGodBlessing();
+                    }}
+                    className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold shrink-0 cursor-pointer hover:brightness-105"
+                  >
+                    แต่งพลัง ↗
+                  </button>
+                )}
+              </div>
+
+              <div className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-xs mland:text-[10px] font-bold truncate">📤 ส่งออกโค้ดเซฟ</div>
+                    {saveCode && (
+                      <div className="text-[10px] mland:text-[8.5px] text-[var(--g)] font-semibold tabular">
+                        ขนาด {saveCode.length.toLocaleString()} ตัวอักษร · คัดลอกแล้ว
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      const code = exportSaveCode(state);
+                      setSaveCode(code);
+                      navigator.clipboard?.writeText(code).catch(() => undefined);
+                      onToast(`สร้างและคัดลอกโค้ดเซฟแบบย่อ (${code.length.toLocaleString()} ตัวอักษร) แล้ว`);
+                    }}
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[9.5px] font-bold cursor-pointer shrink-0"
+                  >
+                    สร้างโค้ด
+                  </button>
+                </div>
+                {saveCode && (
+                  <textarea
+                    readOnly
+                    value={saveCode}
+                    rows={2}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="w-full p-2 mland:p-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] font-mono"
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 p-3.5 sm:p-4 mland:p-1.5 bg-[var(--surface-2)] border-t border-[var(--line)] flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onExitToMenu();
+            }}
+            className="flex-1 py-2.5 mland:py-1 rounded-xl bg-[var(--red-soft)] text-[var(--red)] font-bold text-xs mland:text-[10.5px] cursor-pointer"
+          >
+            🏠 กลับหน้าเมนูหลัก
+          </button>
+          <button type="button" onClick={onClose} className="flex-1 py-2.5 mland:py-1 rounded-xl bg-[var(--g)] text-white font-bold text-xs mland:text-[10.5px] cursor-pointer">
+            ตกลง
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
