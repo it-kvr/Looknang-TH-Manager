@@ -1,7 +1,7 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, squadWage, logFin, pushFeed, ensureClubIdentity, hasTrait, rollPlayerTraits } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, hasTrait, rollPlayerTraits, recordPlayerSeasonProgress } from './playerCore';
 import { applyTrainingMissionProgress } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers } from './history';
 
@@ -160,9 +160,11 @@ export function rate(
     df += d;
   }
   if (s && s.mode === 'm' && t.id === s.me) {
-    const mo = ((s.mor ?? 50) - 50) / 25 + (s.winBonus === 25 ? 1.5 : s.winBonus === 10 ? 0.8 : 0);
-    at += mo;
-    df += mo;
+    const bMods = getActiveBoardModifiers(s);
+    const effMor = clamp((s.mor ?? 50) + bMods.mor, 0, 100);
+    const mo = (effMor - 50) / 25 + (s.winBonus === 25 ? 1.5 : s.winBonus === 10 ? 0.8 : 0);
+    at += mo + bMods.att;
+    df += mo + bMods.df;
   }
   if (sentOffNames && sentOffNames.length) {
     at -= sentOffNames.length * 4.5;
@@ -829,7 +831,8 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const cap = [3500, 8000, 15000, 26000, 42000][stLv - 1] || 3500;
   const tpIdx = s.tp ?? 1;
   const spIdx = s.sp ?? 0;
-  const fanVal = s.fan ?? 55;
+  const bMods = getActiveBoardModifiers(s);
+  const fanVal = clamp((s.fan ?? 55) + bMods.fan, 5, 100);
   const attRate = clamp((0.36 + (fanVal / 100) * 0.56) * [1.15, 1.0, 0.8][tpIdx] * (s.promo === 1 ? 1.15 : 1), 0.2, 0.98);
   const estAtt = Math.round(cap * attRate);
   const ticketPriceMult = [0.82, 1.0, 1.24][tpIdx];
@@ -1086,6 +1089,9 @@ export function startSeason(s: GameState) {
       q.tyc = 0;
     });
     assignTeamShirtNumbers(t);
+    t.sq.forEach((q) => {
+      recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
+    });
   });
 
   if (s.p) {
@@ -1126,7 +1132,24 @@ export function startSeason(s: GameState) {
   mkMarket(s);
   s.schedRes = {};
   s.cupLog = [];
-  if (s.mode === 'm') setBoardObjective(s);
+  if (s.mode === 'm') {
+    setBoardObjective(s);
+    s.boardDirective = null;
+    s.boardDirectiveCd = 1;
+    s.boardEffects = [];
+    s.boardFeedbackLog = s.boardFeedbackLog || [];
+    const targetRank = s.obj || 8;
+    s.boardFeedbackLog.unshift({
+      season: s.season ?? 1,
+      md: 0,
+      tone: 'warn',
+      msg: `บอร์ดบริหารตั้งเป้าหมายฤดูกาลที่ ${s.season}: จบอย่างน้อยอันดับ ${targetRank} พร้อมรักษาเสถียรภาพการเงิน`
+    });
+    if (s.boardFeedbackLog.length > 8) s.boardFeedbackLog.length = 8;
+  }
+  s.finPendIn = 0;
+  s.finPendOut = 0;
+  recordFinanceSnapshot(s);
 }
 
 export function sTeamSafe(h: Team, a: Team, id: number): Team | null {
@@ -1676,6 +1699,9 @@ export function applyDilemmaChoice(s: GameState, optIndex: number): string {
   const opt = tmpl?.options[optIndex];
   const msg = opt ? opt.apply(s) : '';
   s.dilemma = null;
+  s.teams[s.me]?.sq.forEach((q) => {
+    recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, q.me ? s.p : null);
+  });
   if (msg) pushFeed(s, 'เหตุการณ์', msg, 'ok');
   return msg;
 }
@@ -2009,6 +2035,373 @@ export function applyPitchPlayerOutcome(
   }
 }
 
+export function getPlayerReleaseCheck(s: GameState, me: Team, q: Player) {
+  const tx = getLeagueTransferContext(s, me);
+  const con = ensureCon(q);
+  const isLoan = !!q.loan;
+  const savedWage = Number((con.wg || wagOf(q)).toFixed(1));
+  const releaseCost = isLoan || con.yr <= 0 ? 0 : Math.max(1, Math.round(savedWage * con.yr * 1.5));
+  let reason = '';
+  if (q.me) reason = 'ไม่สามารถปลดนักเตะตัวหลักของคุณได้';
+  else if (me.sq.length <= tx.minSquad) reason = `ขนาดทีมต้องมีอย่างน้อย ${tx.minSquad} คนตามกฎลีก`;
+  else if (tx.posCounts[q.pos] <= tx.minPos[q.pos]) reason = `ต้องเหลือนักเตะ ${q.pos} อย่างน้อย ${tx.minPos[q.pos]} คน`;
+  else if (s.money < releaseCost) reason = `งบสโมสรไม่พอจ่ายค่าชดเชย (${fmtMoney(releaseCost)})`;
+  return {
+    canRelease: !reason,
+    reason,
+    releaseCost,
+    isLoan,
+    savedWage
+  };
+}
+
+export interface BatchRemovalValidation {
+  eligiblePlayers: Player[];
+  blockedPlayers: { player: Player; reason: string }[];
+  squadErrors: string[];
+  afterSquadCount: number;
+  afterPosCounts: Record<Position, number>;
+  totalMarketValue: number;
+  totalQuickSellValue: number;
+  totalReleaseCost: number;
+  totalSavedWage: number;
+  twOpen: boolean;
+  canConfirm: boolean;
+}
+
+export function validateBatchSquadRemoval(
+  s: GameState,
+  me: Team,
+  playerNames: string[],
+  mode: 'sell' | 'release',
+  quickPricePct = 85
+): BatchRemovalValidation {
+  const tx = getLeagueTransferContext(s, me);
+  const uniqueNames = Array.from(new Set(playerNames));
+  const eligiblePlayers: Player[] = [];
+  const blockedPlayers: { player: Player; reason: string }[] = [];
+  const offers = getIncomingOffers(s);
+
+  uniqueNames.forEach((name) => {
+    const q = me.sq.find((p) => p.n === name);
+    if (!q) return;
+    if (q.me) {
+      blockedPlayers.push({ player: q, reason: 'ตัวละครหลักของโหมดนี้' });
+      return;
+    }
+    if (mode === 'sell') {
+      const sameDayLock = q.signedSeason === s.season && q.signedMd === s.md;
+      if (q.loan) {
+        blockedPlayers.push({ player: q, reason: 'นักเตะยืมตัวขายไม่ได้ (ปลด/คืนยืมได้)' });
+        return;
+      }
+      if (q.inj > 0) {
+        blockedPlayers.push({ player: q, reason: `บาดเจ็บอีก ${q.inj} นัด` });
+        return;
+      }
+      if (sameDayLock) {
+        blockedPlayers.push({ player: q, reason: 'เพิ่งเซ็นนัดนี้ ขายต่อทันทีไม่ได้' });
+        return;
+      }
+    }
+    eligiblePlayers.push(q);
+  });
+
+  const posRemoved: Record<Position, number> = { GK: 0, DF: 0, MF: 0, FW: 0 };
+  let totalMarketValue = 0;
+  let totalQuickSellValue = 0;
+  let totalReleaseCost = 0;
+  let totalSavedWage = 0;
+
+  eligiblePlayers.forEach((q) => {
+    posRemoved[q.pos] += 1;
+    const val = Math.max(5, vlu(q));
+    const baseQuick = Math.max(4, Math.round((val * quickPricePct) / 100));
+    const bestBid = offers.filter((o) => o.n === q.n).sort((a, b) => b.p - a.p)[0];
+    const effQuick = bestBid && bestBid.p > baseQuick ? bestBid.p : baseQuick;
+    const con = ensureCon(q);
+    const wg = con.wg || wagOf(q);
+    const relCost = q.loan || con.yr <= 0 ? 0 : Math.max(1, Math.round(wg * con.yr * 1.5));
+
+    totalMarketValue += val;
+    totalQuickSellValue += effQuick;
+    totalReleaseCost += relCost;
+    totalSavedWage += wg * (con.yr <= 0 ? 1.25 : 1);
+  });
+
+  const afterSquadCount = me.sq.length - eligiblePlayers.length;
+  const afterPosCounts: Record<Position, number> = {
+    GK: tx.posCounts.GK - posRemoved.GK,
+    DF: tx.posCounts.DF - posRemoved.DF,
+    MF: tx.posCounts.MF - posRemoved.MF,
+    FW: tx.posCounts.FW - posRemoved.FW
+  };
+
+  const squadErrors: string[] = [];
+  if (afterSquadCount < tx.minSquad) {
+    squadErrors.push(`ต้องเหลือนักเตะในทีมอย่างน้อย ${tx.minSquad} คน (หลังปล่อยจะเหลือ ${afterSquadCount} คน)`);
+  }
+  (['GK', 'DF', 'MF', 'FW'] as Position[]).forEach((pos) => {
+    if (afterPosCounts[pos] < tx.minPos[pos]) {
+      squadErrors.push(`ตำแหน่ง ${pos} ต้องเหลืออย่างน้อย ${tx.minPos[pos]} คน (จะเหลือ ${afterPosCounts[pos]} คน)`);
+    }
+  });
+  if (mode === 'release' && s.money < totalReleaseCost) {
+    squadErrors.push(`งบสโมสรไม่พอจ่ายค่าชดเชยรวม ${fmtMoney(totalReleaseCost)}`);
+  }
+
+  return {
+    eligiblePlayers,
+    blockedPlayers,
+    squadErrors,
+    afterSquadCount,
+    afterPosCounts,
+    totalMarketValue,
+    totalQuickSellValue,
+    totalReleaseCost,
+    totalSavedWage: Number(totalSavedWage.toFixed(1)),
+    twOpen: tx.tw.open,
+    canConfirm:
+      eligiblePlayers.length > 0 &&
+      squadErrors.length === 0 &&
+      (mode === 'release' || tx.tw.open)
+  };
+}
+
+export function releaseSquadPlayers(
+  d: GameState,
+  playerNames: string[]
+): { ok: boolean; count: number; cost: number; err?: string; releasedNames: string[] } {
+  const me = d.teams[d.me];
+  if (!me) return { ok: false, count: 0, cost: 0, err: 'ไม่พบข้อมูลทีม', releasedNames: [] };
+  const check = validateBatchSquadRemoval(d, me, playerNames, 'release');
+  if (!check.canConfirm) {
+    return {
+      ok: false,
+      count: 0,
+      cost: check.totalReleaseCost,
+      err: check.squadErrors[0] || check.blockedPlayers[0]?.reason || 'ไม่สามารถปลดนักเตะที่เลือกได้',
+      releasedNames: []
+    };
+  }
+
+  const targetNames = new Set(check.eligiblePlayers.map((q) => q.n));
+  const removedList: Player[] = [];
+  me.sq = me.sq.filter((q) => {
+    if (targetNames.has(q.n)) {
+      removedList.push(q);
+      return false;
+    }
+    return true;
+  });
+
+  me.lu = null;
+  if (me.cap && targetNames.has(me.cap)) me.cap = '';
+  if (d.focusPlayer && targetNames.has(d.focusPlayer)) d.focusPlayer = null;
+
+  let loanReturnedCount = 0;
+  removedList.forEach((pl) => {
+    removeIncomingOffer(d, pl.n);
+    if (pl.loan) {
+      loanReturnedCount += 1;
+      return;
+    }
+    delete pl.listed;
+    delete pl.askPrice;
+    delete pl.offerCoolMd;
+    pl.no = undefined;
+    pl.free = 1;
+    pl.price = 0;
+    pl.askWg = wagOf(pl);
+    pl.tries = 0;
+    pl.locked = 0;
+    pl.con = undefined;
+    appendPlayerCareerLog(pl, `🔓 ถูกปล่อยตัวเป็นฟรีเอเยนต์จาก ${me.name} ซีซั่น ${d.season}`);
+    d.mk = d.mk || [];
+    if (d.mk.length < 75) {
+      d.mk.unshift(pl);
+    }
+  });
+
+  if (check.totalReleaseCost > 0) {
+    d.money -= check.totalReleaseCost;
+    const finLabel =
+      removedList.length === 1
+        ? `ปลดสัญญา ${removedList[0].n}`
+        : `ค่าชดเชยปลดนักเตะ ${removedList.length} ราย`;
+    logFin(d, finLabel, -check.totalReleaseCost);
+  }
+
+  const releasedNames = removedList.map((q) => q.n);
+  if (removedList.length === 1) {
+    const one = removedList[0];
+    pushFeed(
+      d,
+      'บริหารทีม',
+      one.loan
+        ? `↩️ ยกเลิกสัญญายืมตัว ${one.n} ส่งกลับต้นสังกัดแล้ว`
+        : `🔓 ปลด ${one.n} (${one.ro}) ออกจากสโมสร${check.totalReleaseCost > 0 ? ` (ค่าชดเชย ${fmtMoney(check.totalReleaseCost)})` : ''}`,
+      ''
+    );
+  } else {
+    pushFeed(
+      d,
+      'บริหารทีม',
+      `🔓 ปล่อยตัวนักเตะ ${removedList.length} ราย${loanReturnedCount > 0 ? ` (คืนยืม ${loanReturnedCount})` : ''}${check.totalReleaseCost > 0 ? ` · ค่าชดเชยรวม ${fmtMoney(check.totalReleaseCost)}` : ''}`,
+      ''
+    );
+  }
+
+  return { ok: true, count: removedList.length, cost: check.totalReleaseCost, releasedNames };
+}
+
+export function quickSellSquadPlayers(
+  d: GameState,
+  playerNames: string[],
+  pricePct = 85
+): { ok: boolean; count: number; totalGain: number; err?: string; soldNames: string[] } {
+  const me = d.teams[d.me];
+  if (!me) return { ok: false, count: 0, totalGain: 0, err: 'ไม่พบข้อมูลทีม', soldNames: [] };
+  const check = validateBatchSquadRemoval(d, me, playerNames, 'sell', pricePct);
+  if (!check.twOpen) {
+    const tx = getLeagueTransferContext(d, me);
+    return { ok: false, count: 0, totalGain: 0, err: `ตลาดซื้อขายปิดอยู่ (${tx.tw.rangeText})`, soldNames: [] };
+  }
+  if (!check.canConfirm) {
+    return {
+      ok: false,
+      count: 0,
+      totalGain: 0,
+      err: check.squadErrors[0] || check.blockedPlayers[0]?.reason || 'ไม่สามารถขายนักเตะที่เลือกได้',
+      soldNames: []
+    };
+  }
+
+  const offers = getIncomingOffers(d);
+  const targetNames = new Set(check.eligiblePlayers.map((q) => q.n));
+  const soldPlayers: Player[] = [];
+  me.sq = me.sq.filter((q) => {
+    if (targetNames.has(q.n)) {
+      soldPlayers.push(q);
+      return false;
+    }
+    return true;
+  });
+
+  me.lu = null;
+  if (me.cap && targetNames.has(me.cap)) me.cap = '';
+  if (d.focusPlayer && targetNames.has(d.focusPlayer)) d.focusPlayer = null;
+
+  let totalGain = 0;
+  const soldDetails: { name: string; buyerName: string; price: number }[] = [];
+
+  soldPlayers.forEach((sold) => {
+    const baseQuick = Math.max(4, Math.round((Math.max(5, vlu(sold)) * pricePct) / 100));
+    const bestBid = offers.filter((o) => o.n === sold.n).sort((a, b) => b.p - a.p)[0];
+    const useBid = !!(bestBid && bestBid.p >= baseQuick);
+    const salePrice = useBid ? bestBid.p : baseQuick;
+
+    let buyer: Team | undefined = useBid
+      ? (bestBid.teamId != null ? d.teams.find((tm) => tm.id === bestBid.teamId) : undefined) ||
+        d.teams.find((tm) => tm.name === bestBid.t)
+      : undefined;
+
+    if (!buyer || buyer.id === d.me || buyer.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) {
+      buyer = d.teams
+        .filter((tm) => tm.id !== d.me && tm.sq.length < LEAGUE_TRANSFER_RULES.maxSquad)
+        .sort((a, b) => Math.abs(a.tier - me.tier) - Math.abs(b.tier - me.tier) || a.sq.length - b.sq.length)[0];
+    }
+
+    delete sold.listed;
+    delete sold.askPrice;
+    delete sold.offerCoolMd;
+    sold.no = undefined;
+    sold.signedSeason = d.season;
+    sold.signedMd = d.md;
+    removeIncomingOffer(d, sold.n);
+
+    const buyerName = buyer ? buyer.name : useBid ? bestBid.t : 'ตลาดซื้อขายกลาง';
+    appendPlayerCareerLog(sold, `🤝 ย้ายซบ ${buyerName} ค่าตัว ${fmtMoney(salePrice)} (ซีซั่น ${d.season})`);
+
+    if (buyer) {
+      buyer.sq.push(sold);
+      buyer.lu = null;
+      assignTeamShirtNumbers(buyer);
+    } else {
+      d.mk = d.mk || [];
+      if (d.mk.length < 75) {
+        sold.free = 0;
+        sold.price = Math.max(5, vlu(sold));
+        sold.askWg = wagOf(sold);
+        d.mk.unshift(sold);
+      }
+    }
+
+    totalGain += salePrice;
+    soldDetails.push({ name: sold.n, buyerName, price: salePrice });
+  });
+
+  d.money += totalGain;
+  if (soldDetails.length === 1) {
+    const one = soldDetails[0];
+    logFin(d, `ขาย ${one.name} ให้ ${one.buyerName}`, one.price);
+    pushFeed(d, 'ตลาดซื้อขาย', `✅ ขาย ${one.name} ให้ ${one.buyerName} รับค่าตัว +${fmtMoney(one.price)}`, 'ok');
+  } else {
+    logFin(d, `ขายนักเตะแบบกลุ่ม ${soldDetails.length} ราย`, totalGain);
+    pushFeed(
+      d,
+      'ตลาดซื้อขาย',
+      `✅ ขายนักเตะ ${soldDetails.length} ราย (${soldDetails.slice(0, 2).map((x) => x.name.split(' ')[0]).join(', ')}${soldDetails.length > 2 ? '…' : ''}) รับรวม +${fmtMoney(totalGain)}`,
+      'ok'
+    );
+  }
+
+  return {
+    ok: true,
+    count: soldDetails.length,
+    totalGain,
+    soldNames: soldDetails.map((x) => x.name)
+  };
+}
+
+export function batchListOrPitchPlayers(
+  d: GameState,
+  playerNames: string[],
+  askPct: number,
+  pitchNow: boolean
+): { listedCount: number; pitchedCount: number; offerCount: number } {
+  const me = d.teams[d.me];
+  if (!me) return { listedCount: 0, pitchedCount: 0, offerCount: 0 };
+  const tx = getLeagueTransferContext(d, me);
+  let listedCount = 0;
+  let pitchedCount = 0;
+  let offerCount = 0;
+
+  Array.from(new Set(playerNames)).forEach((name) => {
+    const q = me.sq.find((p) => p.n === name);
+    if (!q || q.loan || q.me) return;
+    const baseVal = Math.max(5, vlu(q));
+    q.listed = 1;
+    q.askPrice = Math.max(5, Math.round((baseVal * askPct) / 100));
+    listedCount += 1;
+
+    if (pitchNow && tx.tw.open) {
+      const outcome = resolvePitchPlayerOutcome(d, q.n, askPct);
+      if (outcome.ok) {
+        applyPitchPlayerOutcome(d, q.n, outcome);
+        pitchedCount += 1;
+        offerCount += outcome.offers.length;
+      }
+    }
+  });
+
+  if (listedCount > 0 && (!pitchNow || !tx.tw.open)) {
+    pushFeed(d, 'ตลาดซื้อขาย', `🏷️ ขึ้นบัญชีขายนักเตะ ${listedCount} รายในตลาดสโมสรแล้ว`, '');
+  }
+
+  return { listedCount, pitchedCount, offerCount };
+}
+
 export function afterMatchDay(
   s: GameState,
   liveInjMeta?: {
@@ -2241,6 +2634,10 @@ export function afterMatchDay(
     if (s.p?.last) pushFeed(s, 'ฝึกซ้อม', s.p.last, /เพิ่มเป็น|ได้ \+1|พัฒนา/.test(s.p.last) ? 'ok' : '');
   }
 
+  me.sq.forEach((q) => {
+    recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, q.me ? s.p : null);
+  });
+
   if (mg) {
     const l = (me.fm || '').slice(-1);
     let d = l === 'W' ? 3 : l === 'L' ? -4 : 0;
@@ -2345,6 +2742,531 @@ export function afterMatchDay(
   }
 
   maybeTriggerDilemma(s);
+  if (mg) evaluateAndIssueBoardDirectives(s);
+}
+
+export function getActiveBoardEffects(s: Pick<GameState, 'boardEffects' | 'season' | 'md'>): BoardTempEffect[] {
+  const curSeason = s.season ?? 1;
+  const curMd = s.md ?? 0;
+  return (s.boardEffects || []).filter((e) => e.season === curSeason && curMd < e.expiresMd);
+}
+
+export function getActiveBoardModifiers(s: Pick<GameState, 'boardEffects' | 'season' | 'md'>) {
+  const out = { att: 0, df: 0, mor: 0, fan: 0, tacFam: 0 };
+  getActiveBoardEffects(s).forEach((e) => {
+    if (e.stat === 'att') out.att += e.delta;
+    else if (e.stat === 'def') out.df += e.delta;
+    else if (e.stat === 'mor') out.mor += e.delta;
+    else if (e.stat === 'fan') out.fan += e.delta;
+    else if (e.stat === 'tacFam') out.tacFam += e.delta;
+  });
+  return out;
+}
+
+const getYouthDevMetric = (s: GameState, me: Team) => {
+  const u22Apps = me.sq.filter((q) => q.age <= 22).reduce((sum, q) => sum + (q.sp || 0), 0);
+  const youthSigned = me.sq.filter((q) => q.age <= 20 && q.signedSeason === s.season).length;
+  return u22Apps + (s.ya ?? 1) * 3 + youthSigned * 2;
+};
+
+export function getBoardDirectiveProgress(s: GameState, dir: BoardDirective) {
+  const me = s.teams[s.me];
+  if (!me) {
+    return { current: 0, target: 1, ratio: 0, isComplete: false, progressText: '0/1' };
+  }
+  const tx = getLeagueTransferContext(s, me);
+
+  if (dir.kind === 'reduce_wages') {
+    const curWage = tx.curWage;
+    const target = dir.targetValue;
+    const isComplete = curWage <= target;
+    const startGap = Math.max(1, dir.startValue - target);
+    const ratio = isComplete ? 1 : clamp((dir.startValue - curWage) / startGap, 0, 0.99);
+    return {
+      current: curWage,
+      target,
+      ratio,
+      isComplete,
+      progressText: `ค่าเหนื่อย ${fmtMoneyNum(curWage)} / เป้า ≤ ${fmtMoneyNum(target)}`
+    };
+  }
+
+  if (dir.kind === 'youth_focus') {
+    const curMetric = getYouthDevMetric(s, me);
+    const gained = Math.max(0, curMetric - dir.startValue);
+    const targetGain = Math.max(1, dir.targetValue - dir.startValue);
+    const isComplete = gained >= targetGain;
+    return {
+      current: gained,
+      target: targetGain,
+      ratio: clamp(gained / targetGain, 0, 1),
+      isComplete,
+      progressText: `แต้มปั้นดาวรุ่ง ${gained}/${targetGain} (ส่ง U22 ลง/เซ็นเยาวชน/อัปอะคาเดมี่)`
+    };
+  }
+
+  if (dir.kind === 'tighten_defense') {
+    const conceded = Math.max(0, me.ga - dir.startValue);
+    const maxAllowed = dir.targetValue;
+    const matchesElapsed = Math.max(0, (s.md ?? 0) - dir.issuedMd);
+    const totalWindow = Math.max(1, dir.dueMd - dir.issuedMd);
+    const isComplete = conceded <= maxAllowed && (s.md ?? 0) >= dir.dueMd;
+    const ratio = conceded > maxAllowed ? 0 : clamp(matchesElapsed / totalWindow, 0.15, 1);
+    return {
+      current: conceded,
+      target: maxAllowed,
+      ratio,
+      isComplete,
+      progressText: `เสียไปแล้ว ${conceded} ประตู (ต้องไม่เกิน ${maxAllowed} ลูก)`
+    };
+  }
+
+  if (dir.kind === 'attack_spark') {
+    const scored = Math.max(0, me.gf - dir.startValue);
+    const target = Math.max(1, dir.targetValue);
+    return {
+      current: scored,
+      target,
+      ratio: clamp(scored / target, 0, 1),
+      isComplete: scored >= target,
+      progressText: `ยิงได้ ${scored}/${target} ประตู`
+    };
+  }
+
+  if (dir.kind === 'boost_finances') {
+    const curMoney = Math.round(s.money);
+    const target = dir.targetValue;
+    const isComplete = curMoney >= target;
+    const span = Math.max(1, target - dir.startValue);
+    const ratio = isComplete ? 1 : clamp((curMoney - dir.startValue) / span, 0, 0.99);
+    return {
+      current: curMoney,
+      target,
+      ratio,
+      isComplete,
+      progressText: `งบปัจจุบัน ${fmtMoney(curMoney)} / เป้า ${fmtMoney(target)}`
+    };
+  }
+
+  // win_form
+  const gainedPts = Math.max(0, me.pts - dir.startValue);
+  const targetPts = Math.max(1, dir.targetValue);
+  return {
+    current: gainedPts,
+    target: targetPts,
+    ratio: clamp(gainedPts / targetPts, 0, 1),
+    isComplete: gainedPts >= targetPts,
+    progressText: `เก็บได้ ${gainedPts}/${targetPts} แต้ม`
+  };
+}
+
+function pushBoardFeedback(s: GameState, tone: BoardFeedbackEntry['tone'], msg: string) {
+  s.boardFeedbackLog = s.boardFeedbackLog || [];
+  if (s.boardFeedbackLog[0]?.msg === msg) return;
+  s.boardFeedbackLog.unshift({
+    season: s.season ?? 1,
+    md: s.md ?? 0,
+    tone,
+    msg
+  });
+  if (s.boardFeedbackLog.length > 8) s.boardFeedbackLog.length = 8;
+}
+
+function addBoardTempEffect(
+  s: GameState,
+  label: string,
+  tone: 'bonus' | 'penalty',
+  stat: BoardTempEffect['stat'],
+  delta: number,
+  durationMatches: number
+) {
+  s.boardEffects = (s.boardEffects || []).filter((e) => e.season === (s.season ?? 1) && (s.md ?? 0) < e.expiresMd);
+  s.boardEffects.push({
+    id: `${stat}-${Date.now()}-${Math.floor(Math.random() * 999)}`,
+    label,
+    tone,
+    stat,
+    delta,
+    expiresMd: (s.md ?? 0) + durationMatches,
+    season: s.season ?? 1
+  });
+  if (s.boardEffects.length > 4) {
+    s.boardEffects = s.boardEffects.slice(-4);
+  }
+}
+
+export function issueBoardDirective(s: GameState, preferredKind?: BoardDirectiveKind): BoardDirective | null {
+  if (s.mode !== 'm') return null;
+  const me = s.teams[s.me];
+  if (!me) return null;
+  const curMd = s.md ?? 0;
+  const totalMd = s.fx?.length || 30;
+  if (curMd >= totalMd - 1) return null;
+
+  const tx = getLeagueTransferContext(s, me);
+  const windowLen = Math.min(4, Math.max(2, totalMd - curMd));
+  const dueMd = curMd + windowLen;
+
+  let kind: BoardDirectiveKind = preferredKind || 'win_form';
+  if (!preferredKind) {
+    if (tx.wagePct >= 82) kind = 'reduce_wages';
+    else if (s.money < 20) kind = 'boost_finances';
+    else if ((s.ya ?? 1) <= 2 && Math.random() < 0.45) kind = 'youth_focus';
+    else if (me.p >= 3 && me.ga > me.p * 1.35) kind = 'tighten_defense';
+    else if (me.p >= 3 && me.gf < me.p * 1.1) kind = 'attack_spark';
+    else {
+      const pool: BoardDirectiveKind[] = ['youth_focus', 'win_form', 'tighten_defense', 'attack_spark'];
+      if (tx.wagePct >= 65) pool.push('reduce_wages');
+      kind = P(pool);
+    }
+  }
+
+  let dir: BoardDirective;
+  if (kind === 'reduce_wages') {
+    const cutTarget = Math.max(8, Math.min(Math.round(tx.wageCap * 0.85), Math.max(8, tx.curWage - Math.max(3, Math.round(tx.curWage * 0.1)))));
+    dir = {
+      id: `dir-${s.season}-${curMd}-wages`,
+      kind,
+      title: 'ลดภาระค่าเหนื่อยในทีม',
+      feedback: `บอร์ดเห็นว่าค่าเหนื่อยใช้ไป ${tx.wagePct}% ของเพดานแล้ว ควรปล่อย/ขายตัวสำรองที่ไม่ใช้งานเพื่อลดรายจ่าย`,
+      targetLabel: `ลดค่าเหนื่อยรวมลงเหลือ ≤ ${fmtMoneyNum(cutTarget)}/นัด ภายใน ${windowLen} นัด`,
+      rewardText: 'ขวัญทีม +6 · พลังทีม +2 (5 นัด) · เชื่อมั่น +6%',
+      penaltyText: 'ขวัญทีม -4 · พลังทีม -2 (4 นัด) · เชื่อมั่น -6%',
+      issuedSeason: s.season,
+      issuedMd: curMd,
+      dueMd,
+      startValue: tx.curWage,
+      targetValue: cutTarget,
+      status: 'active'
+    };
+  } else if (kind === 'youth_focus') {
+    const curMetric = getYouthDevMetric(s, me);
+    const needGain = 4;
+    dir = {
+      id: `dir-${s.season}-${curMd}-youth`,
+      kind,
+      title: 'ยกระดับการปั้นนักเตะเยาวชน',
+      feedback: 'บอร์ดต้องการเห็นอนาคตของสโมสร จงให้โอกาสนักเตะ U22 ลงสนาม เซ็นเด็กอะคาเดมี่ หรืออัปเกรดศูนย์เยาวชน',
+      targetLabel: `สะสมแต้มพัฒนาดาวรุ่ง +${needGain} แต้ม ภายใน ${windowLen} นัด`,
+      rewardText: 'พลังบุก & รับ +2 · ขวัญทีม +5 (5 นัด) · เชื่อมั่น +6%',
+      penaltyText: 'แฟนบอล -4% · พลังทีม -1 (4 นัด) · เชื่อมั่น -6%',
+      issuedSeason: s.season,
+      issuedMd: curMd,
+      dueMd,
+      startValue: curMetric,
+      targetValue: curMetric + needGain,
+      status: 'active'
+    };
+  } else if (kind === 'tighten_defense') {
+    const maxConcede = Math.max(2, windowLen);
+    dir = {
+      id: `dir-${s.season}-${curMd}-def`,
+      kind,
+      title: 'ขันเกมรับให้เหนียวแน่น',
+      feedback: 'บอร์ดกังวลสถิติการเสียประตูช่วงที่ผ่านมา ต้องปรับวินัยแนวรับให้รัดกุมขึ้นทันที',
+      targetLabel: `เสียประตูไม่เกิน ${maxConcede} ลูก ตลอด ${windowLen} นัดข้างหน้า`,
+      rewardText: 'พลังเกมรับ +3 · ขวัญทีม +4 (5 นัด) · เชื่อมั่น +6%',
+      penaltyText: 'พลังเกมรับ -3 (4 นัด) · เชื่อมั่น -6%',
+      issuedSeason: s.season,
+      issuedMd: curMd,
+      dueMd,
+      startValue: me.ga,
+      targetValue: maxConcede,
+      status: 'active'
+    };
+  } else if (kind === 'attack_spark') {
+    const goalTarget = Math.max(4, Math.round(windowLen * 1.4));
+    dir = {
+      id: `dir-${s.season}-${curMd}-att`,
+      kind,
+      title: 'ปลุกเกมรุกให้ดุดันขึ้น',
+      feedback: 'แฟนบอลและบอร์ดอยากเห็นเกมรุกที่เร้าใจและจบสกอร์เด็ดขาดกว่านี้ในสัปดาห์ต่อๆ ไป',
+      targetLabel: `ยิงประตูรวมให้ได้ ≥ ${goalTarget} ลูก ภายใน ${windowLen} นัด`,
+      rewardText: 'พลังเกมรุก +3 · แฟนบอล +4% (5 นัด) · เชื่อมั่น +6%',
+      penaltyText: 'พลังเกมรุก -3 (4 นัด) · เชื่อมั่น -6%',
+      issuedSeason: s.season,
+      issuedMd: curMd,
+      dueMd,
+      startValue: me.gf,
+      targetValue: goalTarget,
+      status: 'active'
+    };
+  } else if (kind === 'boost_finances') {
+    const moneyTarget = s.money < 0 ? 15 : Math.round(s.money + 25);
+    dir = {
+      id: `dir-${s.season}-${curMd}-fin`,
+      kind,
+      title: 'ฟื้นฟูสภาพคล่องสโมสร',
+      feedback: 'บอร์ดกังวลกระแสเงินสดของสโมสร ควรเพิ่มรายได้แมตช์เหย้า เซ็นสปอนเซอร์ หรือขายนักเตะเพื่อพยุงงบ',
+      targetLabel: `ทำงบสโมสรให้ถึง ≥ ${fmtMoney(moneyTarget)} ภายใน ${windowLen} นัด`,
+      rewardText: 'ขวัญทีม +5 · แฟนบอล +5% (5 นัด) · เชื่อมั่น +6%',
+      penaltyText: 'ขวัญทีม -5 · แฟนบอล -4% (4 นัด) · เชื่อมั่น -6%',
+      issuedSeason: s.season,
+      issuedMd: curMd,
+      dueMd,
+      startValue: Math.round(s.money),
+      targetValue: moneyTarget,
+      status: 'active'
+    };
+  } else {
+    const ptTarget = Math.max(4, windowLen * 2 - 1);
+    dir = {
+      id: `dir-${s.season}-${curMd}-form`,
+      kind: 'win_form',
+      title: 'เร่งเก็บแต้มตามเป้าหมายลีก',
+      feedback: 'บอร์ดคาดหวังผลงานที่สม่ำเสมอในช่วงโปรแกรมถัดไปเพื่อรักษาโมเมนตัมของสโมสร',
+      targetLabel: `เก็บอย่างน้อย ${ptTarget} แต้ม ภายใน ${windowLen} นัด`,
+      rewardText: 'พลังทีม +2 · ขวัญทีม +5 (5 นัด) · เชื่อมั่น +6%',
+      penaltyText: 'ขวัญทีม -5 (4 นัด) · เชื่อมั่น -6%',
+      issuedSeason: s.season,
+      issuedMd: curMd,
+      dueMd,
+      startValue: me.pts,
+      targetValue: ptTarget,
+      status: 'active'
+    };
+  }
+
+  s.boardDirective = dir;
+  pushBoardFeedback(s, 'warn', `คำสั่งบอร์ด: ${dir.title} — ${dir.targetLabel}`);
+  pushFeed(s, 'บอร์ดบริหาร', `📋 คำสั่งบอร์ดใหม่: ${dir.title} (${dir.targetLabel})`, 'offer');
+  return dir;
+}
+
+export function evaluateAndIssueBoardDirectives(s: GameState) {
+  if (s.mode !== 'm') return;
+  const me = s.teams[s.me];
+  if (!me) return;
+
+  // Prune expired temporary board effects
+  s.boardEffects = getActiveBoardEffects(s);
+
+  const curMd = s.md ?? 0;
+  const activeDir = s.boardDirective;
+
+  if (activeDir && activeDir.status === 'active') {
+    const prog = getBoardDirectiveProgress(s, activeDir);
+    const earlyFailDefense = activeDir.kind === 'tighten_defense' && prog.current > activeDir.targetValue;
+    const deadlineHit = curMd >= activeDir.dueMd;
+
+    if (prog.isComplete && !earlyFailDefense) {
+      activeDir.status = 'passed';
+      activeDir.evaluatedMd = curMd;
+      s.bd = clamp((s.bd ?? 50) + 6, 0, 100);
+      s.mgrRep = (s.mgrRep ?? 50) + 5;
+      s.boardDirectiveCd = curMd + 3;
+
+      if (activeDir.kind === 'reduce_wages') {
+        addBoardTempEffect(s, 'โบนัสบอร์ด: วินัยการเงินเยี่ยม (+6 ขวัญทีม)', 'bonus', 'mor', 6, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ทีมลงตัว (+2 เกมรุก)', 'bonus', 'att', 2, 5);
+      } else if (activeDir.kind === 'youth_focus') {
+        addBoardTempEffect(s, 'โบนัสบอร์ด: พลังหนุ่มคึกคัก (+2 เกมรุก)', 'bonus', 'att', 2, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: พลังหนุ่มช่วยรับ (+2 เกมรับ)', 'bonus', 'def', 2, 5);
+      } else if (activeDir.kind === 'tighten_defense') {
+        addBoardTempEffect(s, 'โบนัสบอร์ด: วินัยเกมรับแน่น (+3 เกมรับ)', 'bonus', 'def', 3, 5);
+      } else if (activeDir.kind === 'attack_spark') {
+        addBoardTempEffect(s, 'โบนัสบอร์ด: เกมรุกมั่นใจ (+3 เกมรุก)', 'bonus', 'att', 3, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: แฟนบอลคึกคัก (+4% แฟนบอล)', 'bonus', 'fan', 4, 5);
+      } else if (activeDir.kind === 'boost_finances') {
+        addBoardTempEffect(s, 'โบนัสบอร์ด: การเงินมั่นคง (+5 ขวัญทีม)', 'bonus', 'mor', 5, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ศรัทธาแฟนบอล (+5% แฟนบอล)', 'bonus', 'fan', 5, 5);
+      } else {
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ฟอร์มร้อนแรง (+2 เกมรุก)', 'bonus', 'att', 2, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ห้องแต่งตัวคึกคัก (+5 ขวัญทีม)', 'bonus', 'mor', 5, 5);
+      }
+
+      pushBoardFeedback(s, 'ok', `✅ บอร์ดพอใจภารกิจ "${activeDir.title}" สำเร็จ! รับโบนัสชั่วคราว 5 นัด`);
+      pushFeed(s, 'บอร์ดบริหาร', `✅ ผ่านคำสั่งบอร์ด "${activeDir.title}"! (${activeDir.rewardText})`, 'ok');
+    } else if (earlyFailDefense || deadlineHit) {
+      activeDir.status = 'failed';
+      activeDir.evaluatedMd = curMd;
+      s.bd = clamp((s.bd ?? 50) - 6, 0, 100);
+      s.boardDirectiveCd = curMd + 3;
+
+      if (activeDir.kind === 'reduce_wages') {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: งบค่าเหนื่อยตึง (-4 ขวัญทีม)', 'penalty', 'mor', -4, 4);
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: สมาธิลดลง (-2 เกมรุก)', 'penalty', 'att', -2, 4);
+      } else if (activeDir.kind === 'youth_focus') {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: แฟนบอลผิดหวัง (-4% แฟนบอล)', 'penalty', 'fan', -4, 4);
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: พลังทีมแผ่ว (-1 เกมรุก)', 'penalty', 'att', -1, 4);
+      } else if (activeDir.kind === 'tighten_defense') {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: แนวรับขาดความมั่นใจ (-3 เกมรับ)', 'penalty', 'def', -3, 4);
+      } else if (activeDir.kind === 'attack_spark') {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: กองหน้ากดดัน (-3 เกมรุก)', 'penalty', 'att', -3, 4);
+      } else if (activeDir.kind === 'boost_finances') {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: วิกฤติการเงิน (-5 ขวัญทีม)', 'penalty', 'mor', -5, 4);
+      } else {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: ฟอร์มต่ำกว่าเป้า (-5 ขวัญทีม)', 'penalty', 'mor', -5, 4);
+      }
+
+      pushBoardFeedback(s, 'urg', `⚠️ ไม่ผ่านคำสั่ง "${activeDir.title}" — บอร์ดคาดโทษชั่วคราว 4 นัด`);
+      pushFeed(s, 'บอร์ดบริหาร', `⚠️ ไม่ผ่านคำสั่งบอร์ด "${activeDir.title}" (${activeDir.penaltyText})`, 'urg');
+    }
+  } else if (activeDir && curMd >= (activeDir.evaluatedMd ?? curMd) + 2) {
+    s.boardDirective = null;
+  }
+
+  // Clear finished directive before issuing a fresh one if cooldown passed
+  if (!s.boardDirective && curMd >= 2 && curMd <= (s.fx?.length || 30) - 3 && curMd >= (s.boardDirectiveCd ?? 0)) {
+    const shouldIssue = curMd === 2 || Math.random() < 0.42;
+    if (shouldIssue) {
+      issueBoardDirective(s);
+      return;
+    }
+  }
+
+  // Occasional ambient board feedback on streaks / finances
+  const fm = me.fm || '';
+  if (curMd >= 3 && curMd % 3 === 0) {
+    if (fm.endsWith('WWW')) {
+      addBoardTempEffect(s, 'คำชมจากบอร์ด: ชนะรวด 3 นัด (+4 ขวัญทีม)', 'bonus', 'mor', 4, 3);
+      pushBoardFeedback(s, 'ok', '👏 บอร์ดชื่นชมผลงานชนะ 3 นัดติด มอบขวัญทีมชั่วคราว +4 เป็นเวลา 3 นัด');
+    } else if (fm.endsWith('LLL')) {
+      addBoardTempEffect(s, 'คำเตือนบอร์ด: แพ้ 3 นัดติด (-4 ขวัญทีม)', 'penalty', 'mor', -4, 3);
+      pushBoardFeedback(s, 'urg', '📢 บอร์ดเรียกเตือนหลังแพ้ 3 นัดรวด กระทบขวัญทีมชั่วคราว -4 เป็นเวลา 3 นัด');
+    }
+  }
+}
+
+export function recordFinanceSnapshot(s: GameState) {
+  if (s.mode !== 'm') return;
+  const curSeason = s.season ?? 1;
+  const curMd = Math.max(0, Math.round(s.md ?? 0));
+  const inc = curMd === 0 ? 0 : Math.round(s.finPendIn || 0);
+  const exp = curMd === 0 ? 0 : Math.round(s.finPendOut || 0);
+
+  const list = (s.finHist || []).filter((pt) => pt.s === curSeason);
+  const existingIdx = list.findIndex((pt) => pt.md === curMd);
+  const snap: FinanceHistoryPoint = {
+    s: curSeason,
+    md: curMd,
+    bal: Math.round(s.money),
+    inc,
+    exp
+  };
+  if (existingIdx >= 0) {
+    list[existingIdx] = snap;
+  } else {
+    list.push(snap);
+  }
+  list.sort((a, b) => a.md - b.md);
+  s.finHist = list.slice(-34);
+  if (curMd > 0) {
+    s.finPendIn = 0;
+    s.finPendOut = 0;
+  }
+}
+
+export interface ClubFinanceChartPoint {
+  label: string;
+  md: number;
+  bal: number | null;
+  projBal: number | null;
+  inc: number;
+  exp: number;
+  net: number;
+  isProjection: boolean;
+}
+
+export function getClubFinanceChartData(
+  s: GameState,
+  est: ReturnType<typeof calcMatchdayFinanceEstimate>,
+  includeProjection = true
+): ClubFinanceChartPoint[] {
+  const curSeason = s.season ?? 1;
+  const curMd = Math.max(0, Math.round(s.md ?? 0));
+  const recorded = (s.finHist || [])
+    .filter((pt) => pt.s === curSeason)
+    .slice()
+    .sort((a, b) => a.md - b.md);
+
+  const byMd = new Map<number, FinanceHistoryPoint>();
+  recorded.forEach((pt) => byMd.set(pt.md, { ...pt }));
+
+  // Backfill from finLog if loaded from an older save before finHist existed
+  if (byMd.size === 0 && curMd > 0 && (s.finLog || []).length > 0) {
+    let runningBal = Math.round(s.money);
+    byMd.set(curMd, { s: curSeason, md: curMd, bal: runningBal, inc: 0, exp: 0 });
+    for (let m = curMd; m >= 1; m--) {
+      const mLogs = (s.finLog || []).filter((e) => e.s === curSeason && (e.m === m || (m === curMd && e.m === curMd + 1)));
+      const inc = Math.round(mLogs.filter((e) => e.amt > 0).reduce((a, e) => a + e.amt, 0));
+      const exp = Math.round(mLogs.filter((e) => e.amt < 0).reduce((a, e) => a + Math.abs(e.amt), 0));
+      const curPt = byMd.get(m);
+      if (curPt) {
+        curPt.inc = inc;
+        curPt.exp = exp;
+      }
+      runningBal -= inc - exp;
+      if (!byMd.has(m - 1)) {
+        byMd.set(m - 1, { s: curSeason, md: m - 1, bal: runningBal, inc: 0, exp: 0 });
+      }
+    }
+  }
+
+  if (byMd.size === 0) {
+    byMd.set(curMd, { s: curSeason, md: curMd, bal: Math.round(s.money), inc: 0, exp: 0 });
+  }
+
+  const actualPts: ClubFinanceChartPoint[] = Array.from(byMd.values())
+    .sort((a, b) => a.md - b.md)
+    .map((pt) => ({
+      label: pt.md === 0 ? 'เริ่ม' : `น.${pt.md}`,
+      md: pt.md,
+      bal: pt.bal,
+      projBal: null,
+      inc: pt.inc,
+      exp: pt.exp,
+      net: pt.inc - pt.exp,
+      isProjection: false
+    }));
+
+  const pendIn = Math.round(s.finPendIn || 0);
+  const pendOut = Math.round(s.finPendOut || 0);
+  const lastSaved = actualPts[actualPts.length - 1];
+  const curMoneyRound = Math.round(s.money);
+  if (lastSaved && (pendIn > 0 || pendOut > 0 || lastSaved.bal !== curMoneyRound)) {
+    actualPts.push({
+      label: 'ตอนนี้',
+      md: curMd,
+      bal: curMoneyRound,
+      projBal: null,
+      inc: pendIn,
+      exp: pendOut,
+      net: pendIn - pendOut,
+      isProjection: false
+    });
+  }
+
+  if (!includeProjection || !actualPts.length) return actualPts;
+
+  const totalMd = s.fx?.length || 30;
+  const horizon = Math.min(5, Math.max(0, totalMd - curMd));
+  if (horizon <= 0) return actualPts;
+
+  const lastActual = actualPts[actualPts.length - 1];
+  lastActual.projBal = lastActual.bal;
+
+  let simBal = curMoneyRound;
+  for (let i = 1; i <= horizon; i++) {
+    const mIdx = curMd + i - 1;
+    const pair = s.fx?.[mIdx]?.find((p) => p.includes(s.me));
+    const isHome = pair ? pair[0] === s.me : i % 2 === 1;
+    const mInc = Math.round(isHome ? est.homeIn : est.awayIn);
+    const mExp = Math.round(est.totalOut);
+    simBal += mInc - mExp;
+    actualPts.push({
+      label: `คาด น.${curMd + i}`,
+      md: curMd + i,
+      bal: null,
+      projBal: simBal,
+      inc: mInc,
+      exp: mExp,
+      net: mInc - mExp,
+      isProjection: true
+    });
+  }
+
+  return actualPts;
 }
 
 export function growPlayers(s: GameState) {

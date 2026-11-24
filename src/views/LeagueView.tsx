@@ -6,7 +6,7 @@ import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers } from '../engine/simulation';
+import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { CupView } from './CupView';
 
@@ -232,6 +232,41 @@ export const LeagueView: React.FC<{
           actionLabel: state.money < 0 ? 'ดูการเงิน' : 'ดูบอร์ด',
           onAction: () => onNavigate?.(state.money < 0 ? 'f' : 'u')
         });
+      }
+
+      if (state.boardDirective && state.boardDirective.status === 'active') {
+        const dir = state.boardDirective;
+        const prog = getBoardDirectiveProgress(state, dir);
+        const remMd = Math.max(0, dir.dueMd - (state.md ?? 0));
+        items.push({
+          id: 'board-directive-active',
+          kind: 'alert',
+          tone: prog.isComplete ? 'ok' : remMd <= 1 ? 'urg' : 'warn',
+          urgent: true,
+          icon: '📋',
+          tag: `คำสั่งบอร์ด · อีก ${remMd} นัด`,
+          title: dir.title,
+          detail: `${prog.progressText} (${Math.round(prog.ratio * 100)}%)`,
+          actionLabel: 'ดูรายละเอียด',
+          onAction: () => onNavigate?.('u', 'info')
+        });
+      } else {
+        const activeBoardFx = getActiveBoardEffects(state);
+        if (activeBoardFx.length > 0) {
+          const topFx = activeBoardFx[0];
+          items.push({
+            id: 'board-effect-active',
+            kind: 'alert',
+            tone: topFx.tone === 'bonus' ? 'ok' : 'urg',
+            urgent: false,
+            icon: topFx.tone === 'bonus' ? '✨' : '📢',
+            tag: 'ผลกระทบบอร์ด',
+            title: topFx.label,
+            detail: `มีผลอีก ${Math.max(1, topFx.expiresMd - (state.md ?? 0))} นัด`,
+            actionLabel: 'ดูบอร์ด',
+            onAction: () => onNavigate?.('u', 'info')
+          });
+        }
       }
 
       if (incomingOffers.length > 0) {

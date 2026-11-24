@@ -70,6 +70,12 @@ export const packSavePlayer = (q: Player): unknown[] => {
     ]);
   }
   if (q.careerLog && q.careerLog.length) ex.cl = q.careerLog;
+  if (q.seasonProg && q.seasonProg.pts.length) {
+    ex.spg = [
+      q.seasonProg.s,
+      q.seasonProg.pts.map((pt) => [pt.md, pt.ov, pt.a.sh, pt.a.ps, pt.a.dr, pt.a.tk, pt.a.ph])
+    ];
+  }
 
   const base: unknown[] = [
     q.n,
@@ -171,6 +177,25 @@ export const unpackSavePlayer = (raw: unknown): Player => {
     });
   }
   if (Array.isArray(ex.cl)) p.careerLog = ex.cl.map((x) => String(x));
+  if (Array.isArray(ex.spg) && Array.isArray(ex.spg[1])) {
+    p.seasonProg = {
+      s: Number(ex.spg[0] || 1),
+      pts: (ex.spg[1] as unknown[]).map((row) => {
+        const r = Array.isArray(row) ? row : [];
+        return {
+          md: Number(r[0] || 0),
+          ov: Number(r[1] || p.ov),
+          a: {
+            sh: Number(r[2] || 50),
+            ps: Number(r[3] || 50),
+            dr: Number(r[4] || 50),
+            tk: Number(r[5] || 50),
+            ph: Number(r[6] || 50)
+          }
+        };
+      })
+    };
+  }
   return p;
 };
 

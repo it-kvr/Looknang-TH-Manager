@@ -48,6 +48,17 @@ export interface PlayerContract {
   role: 'key' | 'rot' | 'pro';
 }
 
+export interface PlayerSeasonProgressPoint {
+  md: number;
+  ov: number;
+  a: CoreAttrs;
+}
+
+export interface PlayerSeasonProgression {
+  s: number;
+  pts: PlayerSeasonProgressPoint[];
+}
+
 export interface Player {
   id?: string;
   n: string;
@@ -101,6 +112,7 @@ export interface Player {
   tyc?: number;
   history?: PlayerSeasonHistoryRecord[];
   careerLog?: string[];
+  seasonProg?: PlayerSeasonProgression;
 }
 
 export type PersonalMissionMetric =
@@ -509,6 +521,56 @@ export interface SeasonArchiveRecord {
   players: SeasonPlayerStatRecord[];
 }
 
+export type BoardDirectiveKind =
+  | 'reduce_wages'
+  | 'youth_focus'
+  | 'tighten_defense'
+  | 'attack_spark'
+  | 'boost_finances'
+  | 'win_form';
+
+export interface BoardDirective {
+  id: string;
+  kind: BoardDirectiveKind;
+  title: string;
+  feedback: string;
+  targetLabel: string;
+  rewardText: string;
+  penaltyText: string;
+  issuedSeason: number;
+  issuedMd: number;
+  dueMd: number;
+  startValue: number;
+  targetValue: number;
+  status: 'active' | 'passed' | 'failed';
+  evaluatedMd?: number;
+}
+
+export interface BoardTempEffect {
+  id: string;
+  label: string;
+  tone: 'bonus' | 'penalty';
+  stat: 'mor' | 'fan' | 'att' | 'def' | 'tacFam';
+  delta: number;
+  expiresMd: number;
+  season: number;
+}
+
+export interface BoardFeedbackEntry {
+  season: number;
+  md: number;
+  tone: 'ok' | 'warn' | 'urg';
+  msg: string;
+}
+
+export interface FinanceHistoryPoint {
+  s: number;
+  md: number;
+  bal: number;
+  inc: number;
+  exp: number;
+}
+
 export interface GameState {
   ver: number;
   mode: GameMode;
@@ -565,6 +627,9 @@ export interface GameState {
   news?: string;
   feed?: FeedItem[];
   finLog?: FinLogItem[];
+  finHist?: FinanceHistoryPoint[];
+  finPendIn?: number;
+  finPendOut?: number;
   esd?: number;
   mgrRep?: number;
   trophies?: TrophyRecord[];
@@ -572,6 +637,10 @@ export interface GameState {
   scout?: ScoutMission | null;
   dilemma?: ActiveDilemma | null;
   dilemmaCd?: number;
+  boardDirective?: BoardDirective | null;
+  boardDirectiveCd?: number;
+  boardEffects?: BoardTempEffect[];
+  boardFeedbackLog?: BoardFeedbackEntry[];
   schedRes?: Record<number, { h: number; a: number; gh: number; ga: number }>;
   cupLog?: { md: number; comp: 'cup' | 'asia'; r: number; h: number; a: number; gh: number; ga: number; penText?: string }[];
   med?: number;

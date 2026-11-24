@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import type { Position, Player, Team, GameState } from '../types/game';
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import type { Position, Player, Team, GameState, StatKey } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
+import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin, tc, getPlayerSeasonProgression } from '../engine/playerCore';
 import { ovColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { sortTable, teamStats } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
@@ -11,6 +12,58 @@ import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
+
+type ChartMetricKey = 'ov' | StatKey;
+
+const CHART_SERIES_META: Record<ChartMetricKey, { label: string; color: string; width: number }> = {
+  ov: { label: 'OVR', color: '#10b981', width: 2.4 },
+  sh: { label: 'ยิง', color: '#ef4444', width: 1.6 },
+  ps: { label: 'ส่ง', color: '#3b82f6', width: 1.6 },
+  dr: { label: 'เลี้ยง', color: '#f59e0b', width: 1.6 },
+  tk: { label: 'รับ', color: '#8b5cf6', width: 1.6 },
+  ph: { label: 'กาย', color: '#06b6d4', width: 1.6 }
+};
+
+const KEY_STATS_BY_POS: Record<Position, StatKey[]> = {
+  FW: ['sh', 'dr', 'ps'],
+  MF: ['ps', 'dr', 'sh'],
+  DF: ['tk', 'ph', 'ps'],
+  GK: ['ph', 'tk', 'ps']
+};
+
+interface TooltipEntry {
+  dataKey?: string | number;
+  name?: string;
+  value?: number;
+  color?: string;
+  payload?: { md?: number; label?: string };
+}
+
+const SeasonProgressTooltip: React.FC<{
+  active?: boolean;
+  payload?: TooltipEntry[];
+}> = ({ active, payload }) => {
+  if (!active || !payload || !payload.length) return null;
+  const md = payload[0]?.payload?.md ?? 0;
+  return (
+    <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1.5 shadow-lg text-[10.5px] space-y-1">
+      <div className="font-bold text-[var(--ink)] border-b border-[var(--line)]/60 pb-0.5 tabular">
+        {md === 0 ? 'เปิดซีซั่น (ก่อนนัดแรก)' : `หลังจบแมตช์ที่ ${md}`}
+      </div>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular">
+        {payload.map((entry) => (
+          <div key={String(entry.dataKey)} className="flex items-center justify-between gap-1.5">
+            <span className="flex items-center gap-1 text-[var(--mut)] font-medium">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: entry.color }} />
+              {entry.name}
+            </span>
+            <b className="text-[var(--ink)] font-extrabold">{entry.value}</b>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -30,9 +83,27 @@ export const PlayerInspectorModal: React.FC<{
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [shirtNo, setShirtNo] = useState(String(currentNo));
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>('info');
+  const [showProgChart, setShowProgChart] = useState(false);
+  const [chartScope, setChartScope] = useState<'key' | 'all'>('key');
+  const [hiddenMetrics, setHiddenMetrics] = useState<Partial<Record<ChartMetricKey, boolean>>>({});
   const effectiveMode = inspectMode === 'missions' && !(isMyTeam || isMePlayer) ? 'info' : inspectMode;
   const canDoMissions = isMyTeam || isMePlayer;
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
+  const seasonSeries = useMemo(
+    () => getPlayerSeasonProgression(livePlayer, state, isMePlayer ? state.p : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [livePlayer.n, livePlayer.ov, livePlayer.seasonProg, state.season, state.md, isMePlayer ? state.p?.a : null]
+  );
+  const chartKeys: ChartMetricKey[] = useMemo(
+    () =>
+      chartScope === 'all'
+        ? ['ov', 'sh', 'ps', 'dr', 'tk', 'ph']
+        : ['ov', ...(KEY_STATS_BY_POS[livePlayer.pos] || ['sh', 'ps', 'dr'])],
+    [chartScope, livePlayer.pos]
+  );
+  const startOv = seasonSeries[0]?.ov ?? livePlayer.ov;
+  const endOv = seasonSeries[seasonSeries.length - 1]?.ov ?? livePlayer.ov;
+  const ovDiff = endOv - startOv;
   const tlMeta = talentTierMeta(playerTalent);
   const isCap = !!liveTeam && liveTeam.cap === livePlayer.n;
   const con = liveTeam ? ensureCon(livePlayer) : null;
@@ -343,7 +414,7 @@ export const PlayerInspectorModal: React.FC<{
               )}
             </div>
 
-            {/* Right Column: Modular Status Cards & Attribute Breakdown Cards (Fit-to-Screen) */}
+            {/* Right Column: Modular Status Cards, Compact Season Bar & Attribute Breakdown Cards */}
             <div className="min-h-0 flex flex-col gap-2 mland:gap-1.5 md:overflow-hidden mland:overflow-hidden">
               {/* Row 1: 3 Modular Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5 shrink-0">
@@ -451,6 +522,194 @@ export const PlayerInspectorModal: React.FC<{
                   </div>
                 );
               })()}
+
+              {/* Compact Collapsible Season Progression Bar (No Layout Shift) */}
+              <div className="relative shrink-0">
+                <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1.5 mland:px-2 mland:py-1 shadow-xs flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 flex-1 text-[10.5px] mland:text-[8.5px] tabular">
+                    <span className="font-bold text-[var(--ink)] shrink-0">
+                      📈 พัฒนาการซ.{state.season}
+                    </span>
+                    <span className="font-bold text-[var(--mut)] shrink-0">
+                      OVR {startOv}→{endOv}
+                      {ovDiff !== 0 && (
+                        <span className={`ml-0.5 font-extrabold ${ovDiff > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                          ({ovDiff > 0 ? `+${ovDiff}` : ovDiff})
+                        </span>
+                      )}
+                    </span>
+                    <span className="hidden sm:inline text-[var(--mut)] truncate">
+                      {(KEY_STATS_BY_POS[livePlayer.pos] || ['sh', 'ps', 'dr']).map((k, idx) => {
+                        const meta = CHART_SERIES_META[k];
+                        const curV = seasonSeries[seasonSeries.length - 1]?.[k] ?? 0;
+                        const initV = seasonSeries[0]?.[k] ?? curV;
+                        const d = curV - initV;
+                        return (
+                          <span key={k}>
+                            {idx > 0 ? ' · ' : ''}
+                            {meta.label} {curV}
+                            {d !== 0 && (
+                              <span className={d > 0 ? 'text-[var(--g)] font-bold' : 'text-[var(--red)] font-bold'}>
+                                {d > 0 ? `+${d}` : d}
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setShowProgChart((v) => !v);
+                    }}
+                    className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold cursor-pointer transition-colors shrink-0 ${
+                      showProgChart
+                        ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                        : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                    }`}
+                  >
+                    {showProgChart ? 'ย่อกราฟ ▴' : 'ดูกราฟ ▾'}
+                  </button>
+                </div>
+
+                {showProgChart && (
+                  <div className="absolute inset-x-0 top-full mt-1.5 z-30 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--g)]/55 px-3 py-2.5 mland:px-2.5 mland:py-2 shadow-2xl space-y-1.5 mland:space-y-1">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
+                          📈 กราฟพัฒนาการซีซั่น {state.season}
+                        </span>
+                        <span className="text-[10.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] shrink-0">
+                          OVR {startOv} → {endOv}
+                          {ovDiff !== 0 && (
+                            <span className={`ml-1 ${ovDiff > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                              ({ovDiff > 0 ? `+${ovDiff}` : ovDiff})
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                          <button
+                            type="button"
+                            onClick={() => { SFX.tap(); setChartScope('key'); }}
+                            className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors ${
+                              chartScope === 'key'
+                                ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                                : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                            }`}
+                          >
+                            จุดเด่น
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { SFX.tap(); setChartScope('all'); }}
+                            className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors ${
+                              chartScope === 'all'
+                                ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                                : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                            }`}
+                          >
+                            ครบ 5 ค่า
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => { SFX.tap(); setShowProgChart(false); }}
+                          className="px-1.5 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] mland:text-[8px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                        >
+                          ✕ ย่อ
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="h-[132px] mland:h-[105px] w-full min-w-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={seasonSeries} margin={{ top: 6, right: 8, left: -6, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" opacity={0.45} vertical={false} />
+                          <XAxis
+                            dataKey="label"
+                            tick={{ fontSize: 9, fill: 'var(--mut)' }}
+                            axisLine={false}
+                            tickLine={false}
+                            minTickGap={14}
+                          />
+                          <YAxis
+                            width={28}
+                            domain={[(min: number) => Math.max(1, min - 2), (max: number) => Math.min(99, max + 2)]}
+                            allowDecimals={false}
+                            tick={{ fontSize: 9, fill: 'var(--mut)' }}
+                            axisLine={false}
+                            tickLine={false}
+                          />
+                          <Tooltip content={<SeasonProgressTooltip />} />
+                          {chartKeys.map((k) => {
+                            if (hiddenMetrics[k]) return null;
+                            const meta = CHART_SERIES_META[k];
+                            return (
+                              <Line
+                                key={k}
+                                type="monotone"
+                                dataKey={k}
+                                name={meta.label}
+                                stroke={meta.color}
+                                strokeWidth={meta.width}
+                                dot={seasonSeries.length <= 2 ? { r: 3, strokeWidth: 1.5 } : { r: 1.5, strokeWidth: 1 }}
+                                activeDot={{ r: 4 }}
+                                animationDuration={250}
+                              />
+                            );
+                          })}
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
+                      <div className="flex flex-wrap items-center gap-2 mland:gap-1.5">
+                        {chartKeys.map((k) => {
+                          const meta = CHART_SERIES_META[k];
+                          const isHidden = !!hiddenMetrics[k];
+                          const curVal = seasonSeries[seasonSeries.length - 1]?.[k] ?? 0;
+                          const initVal = seasonSeries[0]?.[k] ?? curVal;
+                          const diff = curVal - initVal;
+                          return (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() =>
+                                setHiddenMetrics((prev) => ({
+                                  ...prev,
+                                  [k]: !prev[k]
+                                }))
+                              }
+                              title={`คลิกเพื่อ${isHidden ? 'แสดง' : 'ซ่อน'}เส้น ${meta.label}`}
+                              className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold tabular cursor-pointer transition-opacity ${
+                                isHidden ? 'opacity-35 line-through' : 'opacity-100'
+                              }`}
+                            >
+                              <span className="w-2.5 h-[2.5px] rounded-full shrink-0" style={{ background: meta.color }} />
+                              <span className="text-[var(--ink)]">{meta.label}</span>
+                              <span className="text-[var(--mut)]">{curVal}</span>
+                              {diff !== 0 && (
+                                <span className={diff > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                                  {diff > 0 ? `+${diff}` : diff}
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {state.md === 0 && (
+                        <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">
+                          เริ่มต้นซีซั่น · กราฟจะอัปเดตทุกนัด
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Section Header: Sub-Attributes & Football Traits */}
               <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 px-0.5">
@@ -785,13 +1044,13 @@ export const TeamInspectorModal: React.FC<{
                           <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1">
                             <span>{q.ro} · อายุ {q.age} ·</span>
                             <span className="inline-flex items-center gap-0.5 tabular">
-                              <StatIconBadge kind="goal" count={Math.max(1, q.sg || 0)} size="xs" />
                               {(q.sg || 0) <= 1 && <span>{q.sg || 0}</span>}
+                              <StatIconBadge kind="goal" count={Math.max(1, q.sg || 0)} size="xs" />
                             </span>
                             <span>·</span>
                             <span className="inline-flex items-center gap-0.5 tabular">
-                              <StatIconBadge kind="assist" count={Math.max(1, q.sa || 0)} size="xs" />
                               {(q.sa || 0) <= 1 && <span>{q.sa || 0}</span>}
+                              <StatIconBadge kind="assist" count={Math.max(1, q.sa || 0)} size="xs" />
                             </span>
                             {(q.sus || 0) > 0 ? (
                               <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">

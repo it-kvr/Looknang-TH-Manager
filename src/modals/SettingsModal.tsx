@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { PWAInstallButton, usePWAInstall, usePWAUpdate } from '../pwa.tsx';
+import { PWAInstallButton } from '../pwa.tsx';
 import type { GameState, AppSettings } from '../types/game';
 import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
 import { enterImmersiveFullscreen, exitFullscreenSafe, isMobileDevice } from '../utils/fullscreen';
@@ -25,8 +25,6 @@ export const SettingsModal: React.FC<{
     }
   });
   const vipTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
-  const { isInstalled } = usePWAInstall();
-  const { checkingUpdate, forceRefresh } = usePWAUpdate();
 
   const handleSecretVersionTap = () => {
     if (vipUnlocked) {
@@ -276,23 +274,6 @@ export const SettingsModal: React.FC<{
               </button>
 
               <PWAInstallButton variant="settings" onToast={onToast} />
-
-              {!isInstalled && (
-                <button
-                  type="button"
-                  disabled={checkingUpdate}
-                  onClick={() => {
-                    SFX.tap();
-                    forceRefresh();
-                  }}
-                  className="w-full flex items-center justify-between gap-2 p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10px] font-semibold cursor-pointer bg-[var(--surface)] border-[var(--line)]/80 hover:border-[var(--g)]"
-                >
-                  <span>↻ ล้างแคชตัวเกม & โหลดแพตช์ล่าสุด</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] mland:text-[9px] font-bold shrink-0 bg-[var(--surface-2)] text-[var(--mut)]">
-                    {checkingUpdate ? 'กำลังโหลด...' : 'รีเฟรช'}
-                  </span>
-                </button>
-              )}
             </div>
 
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2 mland:space-y-1.5">

@@ -708,16 +708,16 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-2 text-[var(--ink)]">
             <div className="flex items-center gap-1.5 min-w-0 text-[11px] mland:text-[9.5px] font-bold">
               <span className="truncate">
-                แผน {activeLiveTeam.cf ? 'กำหนดเอง' : activeLiveTeam.form}
+                📋 แผน {activeLiveTeam.cf ? 'กำหนดเอง' : activeLiveTeam.form}
                 {isMeView ? ` · ${AR_T[liveTac]}` : ''}
               </span>
               <span className="text-[var(--mut)]/50">·</span>
-              <span className="tabular text-[var(--g)] shrink-0">⚡{teamPitchStats.avgFit}%</span>
+              <span className="tabular text-[var(--g)] shrink-0">{teamPitchStats.avgFit}% ⚡</span>
               <span className="text-[var(--mut)]/50">·</span>
-              <span className="tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">★{teamPitchStats.avgRt.toFixed(1)}</span>
+              <span className="tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">{teamPitchStats.avgRt.toFixed(1)} ⭐</span>
               {teamPitchStats.offPosCount > 0 && (
-                <span className="text-[10px] mland:text-[8.5px] text-amber-600 dark:text-amber-300 font-bold shrink-0">
-                  · ⚠️{teamPitchStats.offPosCount}
+                <span className="text-[10px] mland:text-[8.5px] text-amber-600 dark:text-amber-300 font-bold tabular shrink-0">
+                  · {teamPitchStats.offPosCount} ⚠️
                 </span>
               )}
             </div>
@@ -814,24 +814,27 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           </button>
           <button
             type="button"
-            className="min-h-[28px] mland:min-h-[26px] py-0.5 px-1.5 rounded-lg font-bold cursor-pointer whitespace-nowrap truncate bg-[var(--g)] text-white shadow-xs"
+            className="min-h-[28px] mland:min-h-[26px] py-0.5 px-1.5 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap truncate bg-[var(--g)] text-white shadow-xs"
           >
-            ⚡ แผน ({5 - subsUsed.length})
+            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/15 dark:bg-white/20 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+              {5 - subsUsed.length}
+            </span>
+            <span>📋 แผน</span>
           </button>
         </div>
 
         {/* Sub Quota & Resume Match Action Bar */}
         <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-1.5">
           <div className="min-w-0 flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-bold">
-            <span className="truncate">⚡ แก้เกม &amp; เปลี่ยนตัว</span>
             <span className="px-1.5 py-0.2 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0">
-              เหลือ {5 - subsUsed.length}/5
+              {5 - subsUsed.length}/5
             </span>
+            <span className="truncate">📋 แก้เกม &amp; 🔄 เปลี่ยนตัว</span>
           </div>
           <button
             type="button"
             onClick={onCloseAndResume}
-            className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9.5px] font-extrabold cursor-pointer shadow-xs hover:brightness-110 whitespace-nowrap shrink-0"
+            className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs hover:brightness-110 whitespace-nowrap shrink-0"
           >
             {matchPhaseUi === 'halftime' ? '✅ บันทึก & กลับพักครึ่ง' : '✅ ใช้แผน & เล่นต่อ ▶'}
           </button>
@@ -843,7 +846,8 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-1.5 mland:space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] mland:text-[9.5px]">
               <span className="font-bold text-[var(--g)] flex items-center gap-1 shrink-0">
-                <span>🪑 ตัวสำรอง ({benchList.length})</span>
+                <span className="tabular font-extrabold">{benchList.length}</span>
+                <span>🪑 ตัวสำรอง</span>
               </span>
               <div className="flex items-center gap-1.5 flex-wrap justify-end">
                 {onToggleAutoSub && (
@@ -985,7 +989,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                       <div className="flex items-center gap-1.5 shrink-0 tabular">
                         <div className="flex flex-col items-end gap-0.5 w-9 mland:w-8" title={`พลังงาน ${f}%`}>
                           <span className="text-[9px] mland:text-[8px] font-extrabold leading-none" style={{ color: fCol }}>
-                            ⚡{f}%
+                            {f}% ⚡
                           </span>
                           <div className="w-full h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
                             <div className="h-full rounded-full" style={{ width: `${clamp(f, 4, 100)}%`, backgroundColor: fCol }} />
@@ -1030,45 +1034,58 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           {/* Live Tactical Controls */}
           <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-2 mland:space-y-1">
             <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] flex items-center justify-between">
-              <span>⚙️ คำสั่งแท็กติกสด</span>
+              <span>📋 คำสั่งแท็กติกสด</span>
               <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">มีผลทันทีในสนาม</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 text-[10.5px] mland:text-[9px]">
               <div>
-                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">สไตล์ (Mentality)</div>
+                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">🎯 สไตล์ (Mentality)</div>
                 <div className="flex flex-wrap gap-1">
-                  {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((m) => (
+                  {([
+                    { m: 'X' as Mentality, icon: '🔥' },
+                    { m: 'A' as Mentality, icon: '⚔️' },
+                    { m: 'B' as Mentality, icon: '⚖️' },
+                    { m: 'D' as Mentality, icon: '🛡️' },
+                    { m: 'Z' as Mentality, icon: '🧱' }
+                  ]).map(({ m, icon }) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => onSetTac(m)}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer border ${
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer border inline-flex items-center gap-1 ${
                         liveTac === m
                           ? 'bg-[var(--g)] border-[var(--g)] text-white'
                           : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
                       }`}
                     >
-                      {AR_T[m]}
+                      <span>{icon}</span>
+                      <span>{AR_T[m]}</span>
                     </button>
                   ))}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">สไตล์จ่ายบอล</div>
+                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">⚽ สไตล์จ่ายบอล</div>
                 <div className="flex flex-wrap gap-1">
-                  {['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'].map((lbl, idx) => (
+                  {[
+                    { lbl: 'บอลสั้น', icon: '🎯' },
+                    { lbl: 'ผสม', icon: '🔀' },
+                    { lbl: 'บอลยาว', icon: '↗️' },
+                    { lbl: 'เกมสวน', icon: '💨' }
+                  ].map(({ lbl, icon }, idx) => (
                     <button
                       key={lbl}
                       type="button"
                       onClick={() => onSetPass(idx)}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer border ${
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer border inline-flex items-center gap-1 ${
                         livePass === idx
                           ? 'bg-[var(--g)] border-[var(--g)] text-white'
                           : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)]'
                       }`}
                     >
-                      {lbl}
+                      <span>{icon}</span>
+                      <span>{lbl}</span>
                     </button>
                   ))}
                 </div>
@@ -1077,7 +1094,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
 
             <div className="grid grid-cols-2 gap-1.5 text-[10px] mland:text-[8.5px]">
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">เพรสซิ่ง</div>
+                <div className="font-bold text-[var(--mut)] mb-0.5">🏃 เพรสซิ่ง</div>
                 <div className="flex gap-1">
                   {['ต่ำ', 'กลาง', 'สูง'].map((lbl, k) => (
                     <button
@@ -1096,7 +1113,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">จังหวะเกม</div>
+                <div className="font-bold text-[var(--mut)] mb-0.5">⏱️ จังหวะเกม</div>
                 <div className="flex gap-1">
                   {['ช้า', 'กลาง', 'เร็ว'].map((lbl, k) => (
                     <button
@@ -1115,7 +1132,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">แนวรับ</div>
+                <div className="font-bold text-[var(--mut)] mb-0.5">🚧 แนวรับ</div>
                 <div className="flex gap-1">
                   {['ลึก', 'กลาง', 'สูง'].map((lbl, k) => (
                     <button
@@ -1134,7 +1151,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="font-bold text-[var(--mut)] mb-0.5">ความกว้าง</div>
+                <div className="font-bold text-[var(--mut)] mb-0.5">↔️ ความกว้าง</div>
                 <div className="flex gap-1">
                   {['แคบ', 'กลาง', 'กว้าง'].map((lbl, k) => (
                     <button

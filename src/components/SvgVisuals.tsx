@@ -234,23 +234,46 @@ export const ClubCrest: React.FC<{
   );
 };
 
-export const KitJersey: React.FC<{ club: ClubIdentity; away?: boolean; size?: number; team?: Team | null; hideNumber?: boolean }> = ({
+export const KitJersey: React.FC<{
+  club: ClubIdentity;
+  away?: boolean;
+  size?: number;
+  team?: Team | null;
+  hideNumber?: boolean;
+  shirtNo?: number | string;
+  isGK?: boolean;
+}> = ({
   club,
   away = false,
   size = 84,
   team = null,
-  hideNumber = false
+  hideNumber = false,
+  shirtNo = '10',
+  isGK = false
 }) => {
   const uid = React.useId().replace(/:/g, '');
-  const c = away ? club.c2 : club.c1;
-  const d = away ? club.c1 : club.c2;
-  const accent = club.c3 || (colDist(d, '#ffffff') < 100 ? '#f4c63d' : '#ffffff');
-  const p = ((away && club.awayKit != null ? club.awayKit : club.kit) || 0) % KIT_PATTERNS.length;
+  const gkBase = isGK ? pickGK(club.c1, club.c2) : null;
+  const c = gkBase || (away ? club.c2 : club.c1);
+  const d = gkBase ? (colDist(gkBase, '#111827') > 160 ? '#111827' : '#ffffff') : (away ? club.c1 : club.c2);
+  const accent = gkBase ? '#ffffff' : (club.c3 || (colDist(d, '#ffffff') < 100 ? '#f4c63d' : '#ffffff'));
+  const gkPatterns = [0, 4, 6, 10, 12, 13];
+  const rawPat = ((away && club.awayKit != null ? club.awayKit : club.kit) || 0) % KIT_PATTERNS.length;
+  const p = isGK ? gkPatterns[(rawPat + 2) % gkPatterns.length] : rawPat;
   const collar = (club.collar ?? 0) % 4;
   const cuffTrim = club.cuffTrim ?? true;
   const J = 'M30 10l-22 14 8 18 10-5v48h48V37l10 5 8-18-22-14c-4 8-10 10-20 10s-16-2-20-10z';
   const numLightBg = colDist(c, '#ffffff') < 130 && [0, 5, 6, 10, 12, 13].includes(p);
-  const numFill = numLightBg ? '#111827' : p === 4 || p === 5 || p === 8 || p === 9 || p === 11 ? '#ffffff' : d;
+  const numFill = gkBase
+    ? colLum(c) > 0.55
+      ? '#111827'
+      : '#ffffff'
+    : numLightBg
+      ? '#111827'
+      : p === 4 || p === 5 || p === 8 || p === 9 || p === 11
+        ? '#ffffff'
+        : d;
+  const numText = String(shirtNo ?? '10');
+  const numFontSize = numText.length >= 2 ? 21 : 23;
 
   return (
     <svg width={size} viewBox="0 0 100 100" aria-hidden="true">
@@ -364,14 +387,14 @@ export const KitJersey: React.FC<{ club: ClubIdentity; away?: boolean; size?: nu
           x="50"
           y="71"
           textAnchor="middle"
-          fontSize="23"
+          fontSize={numFontSize}
           fontWeight="800"
           fontFamily="Sarabun"
           fill={numFill}
           stroke="#0008"
           strokeWidth="1.1"
         >
-          {team ? '10' : '10'}
+          {numText}
         </text>
       )}
     </svg>
@@ -977,14 +1000,14 @@ export const FormationPitch: React.FC<{
             />
 
             {/* Bottom-Left: Shirt Number */}
-            <rect x={cx - 22} y={cy + 6} width="18" height="11" rx="4.5" fill="#0b2018" stroke={ed} strokeWidth="1.1" />
-            <text x={cx - 13} y={cy + 14.2} textAnchor="middle" fontSize="8.5" fontWeight="700" fontFamily="Sarabun" fill="#ffd75e">
+            <rect x={cx - 23} y={cy + 5.5} width="19" height="12.5" rx="4.5" fill="#0b2018" stroke={ed} strokeWidth="1.1" />
+            <text x={cx - 13.5} y={cy + 14.8} textAnchor="middle" fontSize="9.2" fontWeight="700" fontFamily="Sarabun" fill="#ffd75e">
               {no}
             </text>
 
             {/* Bottom-Right: OVR or Match Rating */}
-            <rect x={cx + 3.5} y={cy + 6} width={useRating ? '19.5' : '18'} height="11" rx="4.5" fill={rtBg} stroke={rtStroke} strokeWidth="1.1" />
-            <text x={cx + (useRating ? 13.2 : 12.5)} y={cy + 14.2} textAnchor="middle" fontSize="8.2" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
+            <rect x={cx + 3} y={cy + 5.5} width={useRating ? '21.5' : '19'} height="12.5" rx="4.5" fill={rtBg} stroke={rtStroke} strokeWidth="1.1" />
+            <text x={cx + (useRating ? 13.8 : 12.5)} y={cy + 14.8} textAnchor="middle" fontSize="9" fontWeight="800" fontFamily="Sarabun" fill={rtFg}>
               {useRating ? ratingVal.toFixed(1) : q.ov}
             </text>
 
@@ -1031,40 +1054,50 @@ export const FormationPitch: React.FC<{
               </g>
             )}
 
-            {/* Mid-Right Edge: Goals & Assists Badges (Side-by-side if both) */}
-            {goalsCount > 0 && (
-              <g transform={`translate(${cx + 19.5},${cy - 2.5})`}>
-                <circle r="5.2" fill="#ffffff" stroke="#0b2018" strokeWidth="1" />
-                <polygon points="0,-2.4 2.3,-0.7 1.4,2 -1.4,2 -2.3,-0.7" fill="#0b2018" />
-                <line x1="0" y1="-2.4" x2="0" y2="-5" stroke="#0b2018" strokeWidth="0.8" />
-                <line x1="2.3" y1="-0.7" x2="4.6" y2="-1.5" stroke="#0b2018" strokeWidth="0.8" />
-                <line x1="-2.3" y1="-0.7" x2="-4.6" y2="-1.5" stroke="#0b2018" strokeWidth="0.8" />
-                {goalsCount > 1 && (
-                  <g transform="translate(4.5,-4.5)">
-                    <circle r="3.6" fill="#10b981" stroke="#fff" strokeWidth="0.7" />
-                    <text y="2.2" textAnchor="middle" fontSize="5.8" fontWeight="800" fontFamily="Sarabun" fill="#fff">
-                      {goalsCount}
-                    </text>
-                  </g>
-                )}
-              </g>
-            )}
-            {assistsCount > 0 && (
-              <g transform={`translate(${goalsCount > 0 ? cx + 29 : cx + 19.5},${cy - 2.5})`}>
-                <circle r="5.2" fill="#0ea5e9" stroke="#fff" strokeWidth="0.9" />
-                <text y="2.5" textAnchor="middle" fontSize="6.8" fontWeight="900" fontFamily="Sarabun" fill="#fff">
-                  A
-                </text>
-                {assistsCount > 1 && (
-                  <g transform="translate(4.5,-4.5)">
-                    <circle r="3.6" fill="#0284c7" stroke="#fff" strokeWidth="0.7" />
-                    <text y="2.2" textAnchor="middle" fontSize="5.8" fontWeight="800" fontFamily="Sarabun" fill="#fff">
-                      {assistsCount}
-                    </text>
-                  </g>
-                )}
-              </g>
-            )}
+            {/* Mid-Right Edge: Goals & Assists Badges (Number in front, non-overlapping) */}
+            {goalsCount > 0 && (() => {
+              const gW = goalsCount > 1 ? 19.5 : 12.5;
+              const gx = cx + 15;
+              const gy = cy - 8;
+              return (
+                <g transform={`translate(${gx},${gy})`}>
+                  <rect width={gW} height="11" rx="5.5" fill="#0b2018" stroke="#34d399" strokeWidth="0.95" />
+                  <text
+                    x={gW / 2}
+                    y="8.1"
+                    textAnchor="middle"
+                    fontSize="7.4"
+                    fontWeight="800"
+                    fontFamily="Kanit, Sarabun, sans-serif"
+                    fill="#ffffff"
+                  >
+                    {goalsCount > 1 ? `${goalsCount}⚽` : '⚽'}
+                  </text>
+                </g>
+              );
+            })()}
+            {assistsCount > 0 && (() => {
+              const aW = assistsCount > 1 ? 19.5 : 12.5;
+              const gap = goalsCount > 0 ? (goalsCount > 1 ? 21 : 14) : 0;
+              const ax = cx + 15 + gap;
+              const ay = cy - 8;
+              return (
+                <g transform={`translate(${ax},${ay})`}>
+                  <rect width={aW} height="11" rx="5.5" fill="#0c4a6e" stroke="#7dd3fc" strokeWidth="0.95" />
+                  <text
+                    x={aW / 2}
+                    y="8.1"
+                    textAnchor="middle"
+                    fontSize="7.4"
+                    fontWeight="800"
+                    fontFamily="Kanit, Sarabun, sans-serif"
+                    fill="#ffffff"
+                  >
+                    {assistsCount > 1 ? `${assistsCount}👟` : '👟'}
+                  </text>
+                </g>
+              );
+            })()}
 
             {/* Bottom Stamina Bar + Player Name */}
             {showFitBar && !isRed && (
@@ -1088,14 +1121,14 @@ export const FormationPitch: React.FC<{
             )}
             <text
               x={clamp(cx, 26, 274)}
-              y={showFitBar && !isRed ? cy + 31.5 : cy + 27.5}
+              y={showFitBar && !isRed ? cy + 32 : cy + 28.5}
               textAnchor="middle"
-              fontSize={isMe || meta?.isMotm ? '8.8' : '8.4'}
+              fontSize={isMe || meta?.isMotm ? '9.6' : '9.2'}
               fontWeight={isMe || meta?.isMotm ? '800' : '600'}
               fontFamily="Sarabun"
               fill={meta?.isMotm || isMe ? '#fde047' : '#fff'}
               stroke="#0b2018"
-              strokeWidth="2.3"
+              strokeWidth="2.5"
               paintOrder="stroke"
             >
               {q.n.split(' ')[0]}

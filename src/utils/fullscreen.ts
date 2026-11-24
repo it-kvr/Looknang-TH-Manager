@@ -115,12 +115,6 @@ export async function enterImmersiveFullscreen(): Promise<boolean> {
     await lockLandscapeOrientation();
     return false;
   }
-  // Fallback for mobile browsers without Fullscreen API (e.g. iOS Safari): nudge address bar
-  try {
-    window.scrollTo(0, 1);
-  } catch {
-    // ignore
-  }
   await lockLandscapeOrientation();
   return false;
 }
@@ -283,8 +277,22 @@ export function bindAutoLandscapeFullscreen(): () => void {
       });
   };
 
+  let touchStartPos: { x: number; y: number } | null = null;
+  const onTouchStart = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (t) touchStartPos = { x: t.clientX, y: t.clientY };
+  };
   const onClick = (e: MouseEvent) => tryEngage(e.target);
-  const onTouchEnd = (e: TouchEvent) => tryEngage(e.target);
+  const onTouchEnd = (e: TouchEvent) => {
+    const t = e.changedTouches[0];
+    if (t && touchStartPos) {
+      const dx = Math.abs(t.clientX - touchStartPos.x);
+      const dy = Math.abs(t.clientY - touchStartPos.y);
+      touchStartPos = null;
+      if (dx > 12 || dy > 12) return;
+    }
+    tryEngage(e.target);
+  };
   const onKeyDown = (e: KeyboardEvent) => tryEngage(e.target);
   const onVisibilityChange = () => {
     if (document.visibilityState === 'visible') {
@@ -318,6 +326,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
   const screenOrient = (screen as Screen & { orientation?: EventTarget }).orientation;
 
   window.addEventListener('click', onClick, { capture: true, passive: true });
+  window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
   window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
   window.addEventListener('keydown', onKeyDown, { capture: true, passive: true });
   window.addEventListener('focus', onWindowReturn);
@@ -335,6 +344,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
   return () => {
     clearRetryTimers();
     window.removeEventListener('click', onClick, { capture: true });
+    window.removeEventListener('touchstart', onTouchStart, { capture: true });
     window.removeEventListener('touchend', onTouchEnd, { capture: true });
     window.removeEventListener('keydown', onKeyDown, { capture: true });
     window.removeEventListener('focus', onWindowReturn);

@@ -14,7 +14,7 @@ import type {
 } from '../types/game';
 import { R, clamp } from '../utils/math';
 import { ATT, SIGL } from '../data/thaiFootballData';
-import { OVF, xi, DT, ovMe, syncMe } from './playerCore';
+import { OVF, xi, DT, ovMe, syncMe, recordPlayerSeasonProgress } from './playerCore';
 
 const grayShadeHex = (v: number, minRgb: [number, number, number], maxRgb: [number, number, number]): string => {
   const t = clamp((v - 10) / 39, 0, 1);
@@ -611,6 +611,9 @@ const applyStageRewardToPlayer = (
       q.ov = clamp(q.ov + 1, 1, 99);
     }
     if (q.ov > (q.pot || q.ov)) q.pot = q.ov;
+  }
+  if (s) {
+    recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, careerP);
   }
 
   return formatMissionRewardText(rewards, def.coreReward, coreAmt);

@@ -42,6 +42,15 @@ if (typeof document !== 'undefined') {
       e.preventDefault();
     }
   });
+  window.addEventListener(
+    'scroll',
+    () => {
+      if (window.scrollX !== 0 || window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
+    },
+    { passive: true }
+  );
 }
 
 class RootErrorBoundary extends React.Component<

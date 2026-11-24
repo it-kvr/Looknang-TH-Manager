@@ -6,7 +6,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers } from './engine/simulation';
 import { applyMatchMissionProgress } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
@@ -82,7 +82,7 @@ export default function App() {
       }
       d.v = tab;
       d.tv = tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 2 : 0) : 0;
-      d.sub = tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : 0) : 0;
+      d.sub = tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : sub === 'locker' ? 3 : 0) : 0;
       if (tab === 't') d.lg = d.teams[d.me].tier;
     });
   };
@@ -465,11 +465,12 @@ export default function App() {
         const tpIdx = d.tp ?? 1;
         const spIdx = d.sp ?? 0;
         const ticketMult = [0.82, 1.0, 1.24][tpIdx];
+        const fanEff = clamp((d.fan ?? 55) + getActiveBoardModifiers(d).fan, 5, 100);
         const ticket = isHomeMatch
-          ? Math.round((8 + (d.st ?? 1) * 7) * ((d.fan ?? 55) / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1))
+          ? Math.round((8 + (d.st ?? 1) * 7) * (fanEff / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1))
           : 0;
         const merch = isHomeMatch
-          ? Math.round((2 + (d.merchLv ?? 1) * 3) * ((d.fan ?? 55) / 55))
+          ? Math.round((2 + (d.merchLv ?? 1) * 3) * (fanEff / 55))
           : 0;
         const baseSp = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
         const winSpBonus = spIdx === 1 && diff > 0 ? 10 + me.tier * 6 : 0;
@@ -503,6 +504,7 @@ export default function App() {
       afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam });
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
       recordMatchMissions();
+      recordFinanceSnapshot(d);
     });
   };
 
@@ -621,16 +623,11 @@ export default function App() {
           ['q', '⚽', 'ทีม & แผน']
         ];
 
-  const resolvedView: MainTab =
-    state.v === 'c'
-      ? 't'
-      : state.v === 'q' && state.mode === 'm' && state.sub === 3
-        ? 'r'
-        : state.v;
+  const resolvedView: MainTab = state.v === 'c' ? 't' : state.v;
   const curTab: MainTab = tabs.some(([k]) => k === resolvedView) ? resolvedView : tabs[0][0];
 
   return (
-    <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
+    <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
       {/* Pinned Single-Row Horizontal Top HUD Bar */}
       <header className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)] safe-top safe-x">
         <div className="max-w-7xl mland:max-w-none mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">

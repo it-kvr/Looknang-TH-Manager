@@ -32,45 +32,11 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
     return (
       <span
         title={title || (n > 1 ? `ทำประตู ${n} ลูก` : 'ทำประตู')}
-        className="inline-flex items-center justify-center shrink-0 select-none leading-none align-middle"
-        style={{ width: px, height: px }}
+        className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular"
+        style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
-        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
-          <circle cx="10" cy="10" r="8.8" fill="#ffffff" stroke="#0f172a" strokeWidth="1.5" />
-          {showNum ? (
-            <>
-              <path
-                d="M10 1.4 L12.3 3.4 M10 1.4 L7.7 3.4 M18.6 10 L16.5 11.9 M18.6 10 L16.5 8.1 M1.4 10 L3.5 11.9 M1.4 10 L3.5 8.1 M10 18.6 L12.3 16.6 M10 18.6 L7.7 16.6"
-                stroke="#334155"
-                strokeWidth="1.15"
-                strokeLinecap="round"
-                opacity="0.72"
-              />
-              <text
-                x="10"
-                y="10.6"
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill="#0f172a"
-                fontSize={numFont}
-                fontWeight="900"
-                fontFamily="Kanit, Sarabun, system-ui, sans-serif"
-              >
-                {numText}
-              </text>
-            </>
-          ) : (
-            <>
-              <polygon points="10,5.8 13.6,8.4 12.2,12.6 7.8,12.6 6.4,8.4" fill="#0f172a" />
-              <path
-                d="M10 1.4 V5.8 M13.6 8.4 L17.9 7.1 M12.2 12.6 L15.2 16.5 M7.8 12.6 L4.8 16.5 M6.4 8.4 L2.1 7.1"
-                stroke="#0f172a"
-                strokeWidth="1.25"
-                strokeLinecap="round"
-              />
-            </>
-          )}
-        </svg>
+        {showNum && <span className="font-extrabold">{numText}</span>}
+        <span aria-hidden="true" style={{ fontSize: px * 0.92, lineHeight: 1 }}>⚽</span>
       </span>
     );
   }
@@ -79,31 +45,11 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
     return (
       <span
         title={title || (n > 1 ? `แอสซิสต์ ${n} ครั้ง` : 'แอสซิสต์')}
-        className="inline-flex items-center justify-center shrink-0 select-none leading-none align-middle"
-        style={{ width: px, height: px }}
+        className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular"
+        style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
-        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
-          <circle cx="10" cy="10" r="8.8" fill="#0284c7" stroke="#e0f2fe" strokeWidth="1.25" />
-          {showNum ? (
-            <text
-              x="10"
-              y="10.6"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#ffffff"
-              fontSize={numFont}
-              fontWeight="900"
-              fontFamily="Kanit, Sarabun, system-ui, sans-serif"
-            >
-              {numText}
-            </text>
-          ) : (
-            <>
-              <circle cx="10" cy="10" r="5.6" fill="none" stroke="#ffffff" strokeWidth="1.5" />
-              <circle cx="10" cy="10" r="2.3" fill="#fde047" />
-            </>
-          )}
-        </svg>
+        {showNum && <span className="font-extrabold">{numText}</span>}
+        <span aria-hidden="true" style={{ fontSize: px * 0.92, lineHeight: 1 }}>👟</span>
       </span>
     );
   }

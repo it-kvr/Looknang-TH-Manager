@@ -1,13 +1,79 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  Area,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceLine
+} from 'recharts';
 import type { Position, MainTab, Player, Team, GameState } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
 import { TN, KIT_P, KIT_SW } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity } from '../engine/playerCore';
-import { sortTable, getStaffState, getLeagueTransferContext, calcMatchdayFinanceEstimate, teamStats } from '../engine/simulation';
+import {
+  sortTable,
+  getStaffState,
+  getLeagueTransferContext,
+  calcMatchdayFinanceEstimate,
+  teamStats,
+  getActiveBoardEffects,
+  getBoardDirectiveProgress,
+  issueBoardDirective,
+  getClubFinanceChartData,
+  type ClubFinanceChartPoint
+} from '../engine/simulation';
 import { renderCrestPattern, ClubCrest, KitJersey } from '../components/SvgVisuals';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
+
+interface FinTooltipProps {
+  active?: boolean;
+  payload?: { payload?: ClubFinanceChartPoint }[];
+}
+
+const ClubFinanceTooltip: React.FC<FinTooltipProps> = ({ active, payload }) => {
+  const pt = payload?.[0]?.payload;
+  if (!active || !pt) return null;
+  const displayBal = pt.isProjection ? pt.projBal : pt.bal;
+  return (
+    <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-2 shadow-lg text-[10.5px] space-y-1 min-w-[148px]">
+      <div className="font-bold text-[var(--ink)] border-b border-[var(--line)]/60 pb-0.5 flex items-center justify-between gap-2 tabular">
+        <span>{pt.label === 'เริ่ม' ? 'เปิดซีซั่น' : pt.label === 'ตอนนี้' ? 'สถานะล่าสุด' : pt.isProjection ? `คาดการณ์นัดที่ ${pt.md}` : `หลังจบนัดที่ ${pt.md}`}</span>
+        {pt.isProjection && <span className="text-[9.5px] font-semibold text-[#b47b00] dark:text-[var(--lamp)]">คาดการณ์</span>}
+      </div>
+      {displayBal != null && (
+        <div className="flex items-center justify-between gap-2 tabular">
+          <span className="text-[var(--mut)]">งบคงคลัง</span>
+          <b className={displayBal < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>{fmtMoney(displayBal)}</b>
+        </div>
+      )}
+      {(pt.inc > 0 || pt.exp > 0) && (
+        <>
+          <div className="flex items-center justify-between gap-2 tabular">
+            <span className="text-[var(--mut)]">รายรับ</span>
+            <b className="text-[var(--g)]">+{fmtMoneyNum(pt.inc)}</b>
+          </div>
+          <div className="flex items-center justify-between gap-2 tabular">
+            <span className="text-[var(--mut)]">รายจ่าย</span>
+            <b className="text-[var(--red)]">-{fmtMoneyNum(pt.exp)}</b>
+          </div>
+          <div className="flex items-center justify-between gap-2 tabular border-t border-[var(--line)]/50 pt-0.5">
+            <span className="text-[var(--mut)]">ดุลสุทธิ</span>
+            <b className={pt.net >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+              {pt.net >= 0 ? `+${fmtMoneyNum(pt.net)}` : fmtMoneyNum(pt.net)}
+            </b>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 export const FinanceClubView: React.FC<{
   tab: 'f' | 'u';
@@ -19,6 +85,7 @@ export const FinanceClubView: React.FC<{
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
 }> = ({ tab, state, onUpdateState, onToast, onInspectPlayer, onOpenSeasonStats, navIntent }) => {
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'ledger'>('overview');
+  const [finChartMode, setFinChartMode] = useState<'balance' | 'cashflow'>('balance');
   const [clubTab, setClubTab] = useState<'info' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
 
@@ -38,6 +105,15 @@ export const FinanceClubView: React.FC<{
   const me = state.teams[state.me];
   const est = calcMatchdayFinanceEstimate(state, me);
   const stf = getStaffState(state);
+  const chartData = useMemo(
+    () => getClubFinanceChartData(state, est, true),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.season, state.md, state.money, state.finHist, state.finPendIn, state.finPendOut, est.homeIn, est.awayIn, est.totalOut]
+  );
+  const chartLatestProj = chartData.length ? (chartData[chartData.length - 1].projBal ?? chartData[chartData.length - 1].bal ?? Math.round(state.money)) : Math.round(state.money);
+  const seasonStartBal = chartData[0]?.bal ?? Math.round(state.money);
+  const seasonBalDelta = Math.round(state.money) - seasonStartBal;
+  const activeBoardEffects = getActiveBoardEffects(state);
 
   const upgradeFac = (key: 'st' | 'tr' | 'ya' | 'med' | 'merchLv', title: string, baseCost: number) => {
     const lv = state[key] ?? 1;
@@ -275,11 +351,154 @@ export const FinanceClubView: React.FC<{
               </div>
             </div>
 
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-bold text-sm mland:text-xs">⚡ มาตรการกระตุ้นนัดถัดไป</h3>
-                <span className="text-[11px] text-[var(--mut)]">มีผลทันทีในแมตช์ที่กำลังจะลงแข่ง</span>
+            <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+              {/* Club Finance Chart Card */}
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-sm mland:text-xs">📈 กราฟการเงินของสโมสร</h3>
+                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
+                      เทียบเปิดซีซั่น:{' '}
+                      <b className={seasonBalDelta >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                        {seasonBalDelta >= 0 ? `+${fmtMoneyNum(seasonBalDelta)}` : fmtMoneyNum(seasonBalDelta)}
+                      </b>
+                      {' · '}คาด 5 นัด:{' '}
+                      <b className={chartLatestProj < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                        {fmtMoney(chartLatestProj)}
+                      </b>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--surface-2)] text-[10.5px] mland:text-[9.5px]">
+                    <button
+                      type="button"
+                      onClick={() => setFinChartMode('balance')}
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors ${
+                        finChartMode === 'balance' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      ยอดเงินคงคลัง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFinChartMode('cashflow')}
+                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors ${
+                        finChartMode === 'cashflow' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      รายรับ-รายจ่าย
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-[170px] mland:h-[132px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {finChartMode === 'balance' ? (
+                      <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="clubBalGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.32} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" opacity={0.5} vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fontSize: 10, fill: 'var(--mut)' }}
+                          tickLine={false}
+                          axisLine={{ stroke: 'var(--line)' }}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: 'var(--mut)' }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={46}
+                          tickFormatter={(v: number) => (Math.abs(v) >= 1000 ? `${(v / 1000).toFixed(1)}M` : `${v}k`)}
+                        />
+                        <Tooltip content={<ClubFinanceTooltip />} />
+                        <ReferenceLine y={0} stroke="var(--red)" strokeDasharray="3 3" strokeOpacity={0.75} />
+                        <Area
+                          type="monotone"
+                          dataKey="bal"
+                          name="งบจริง"
+                          stroke="#10b981"
+                          strokeWidth={2.2}
+                          fill="url(#clubBalGrad)"
+                          dot={{ r: 2.5, fill: '#10b981', strokeWidth: 0 }}
+                          activeDot={{ r: 4 }}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="projBal"
+                          name="คาดการณ์"
+                          stroke="#eab308"
+                          strokeWidth={2}
+                          strokeDasharray="4 4"
+                          dot={{ r: 2.2, fill: '#eab308', strokeWidth: 0 }}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                        />
+                      </ComposedChart>
+                    ) : (
+                      <ComposedChart data={chartData} margin={{ top: 6, right: 8, left: -12, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" opacity={0.5} vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tick={{ fontSize: 10, fill: 'var(--mut)' }}
+                          tickLine={false}
+                          axisLine={{ stroke: 'var(--line)' }}
+                          interval="preserveStartEnd"
+                        />
+                        <YAxis
+                          tick={{ fontSize: 10, fill: 'var(--mut)' }}
+                          tickLine={false}
+                          axisLine={false}
+                          width={46}
+                          tickFormatter={(v: number) => `${v}k`}
+                        />
+                        <Tooltip content={<ClubFinanceTooltip />} />
+                        <ReferenceLine y={0} stroke="var(--line)" />
+                        <Bar dataKey="inc" name="รายรับ" fill="#10b981" radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
+                        <Bar dataKey="exp" name="รายจ่าย" fill="#ef4444" radius={[3, 3, 0, 0]} maxBarSize={18} isAnimationActive={false} />
+                        <Line
+                          type="monotone"
+                          dataKey="net"
+                          name="สุทธิ"
+                          stroke="#3b82f6"
+                          strokeWidth={1.8}
+                          dot={{ r: 2, fill: '#3b82f6', strokeWidth: 0 }}
+                          isAnimationActive={false}
+                        />
+                      </ComposedChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-[var(--mut)] pt-0.5 border-t border-[var(--line)]/50">
+                  {finChartMode === 'balance' ? (
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-[#10b981] inline-block" /> งบจริง</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 border-t-2 border-dashed border-[#eab308] inline-block" /> คาดการณ์ 5 นัด</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 border-t border-dashed border-[var(--red)] inline-block" /> เส้นวิกฤติ 0฿</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#10b981] inline-block" /> รายรับ</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-xs bg-[#ef4444] inline-block" /> รายจ่าย</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-[#3b82f6] inline-block" /> ดุลสุทธิ</span>
+                    </div>
+                  )}
+                  <span className="tabular">ซีซั่นที่ {state.season} · นัดที่ {state.md}</span>
+                </div>
               </div>
+
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-bold text-sm mland:text-xs">⚡ มาตรการกระตุ้นนัดถัดไป</h3>
+                  <span className="text-[11px] text-[var(--mut)]">มีผลทันทีในแมตช์ที่กำลังจะลงแข่ง</span>
+                </div>
               <div className="space-y-2.5">
                 <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-2">
                   <div className="font-bold text-xs">🏆 โบนัสอัดฉีดชัยชนะ (จ่ายเฉพาะเมื่อชนะ)</div>
@@ -348,6 +567,7 @@ export const FinanceClubView: React.FC<{
                     </div>
                   )}
                 </div>
+              </div>
               </div>
             </div>
           </div>
@@ -954,6 +1174,125 @@ export const FinanceClubView: React.FC<{
                       ? '✅ ผลงานเป็นไปตามเป้าหมายบอร์ดบริหาร'
                       : '📌 อันดับยังต่ำกว่าเป้าหมายบอร์ด — เร่งเก็บแต้มในลีก'}
                 </div>
+              </div>
+
+              {/* Board Directives & Feedback */}
+              <div className="pt-2 border-t border-[var(--line)]/60 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold">📋 คำสั่ง &amp; ความเห็นบอร์ดบริหาร</span>
+                  {(!state.boardDirective || state.boardDirective.status !== 'active') && (state.md ?? 0) < (state.fx?.length || 30) - 2 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        onUpdateState((d) => {
+                          issueBoardDirective(d);
+                        });
+                        onToast('รับคำสั่งประเมินรอบใหม่จากบอร์ดบริหารแล้ว');
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] font-bold cursor-pointer transition-colors"
+                    >
+                      + ขอคำสั่งบอร์ด
+                    </button>
+                  )}
+                </div>
+
+                {state.boardDirective ? (() => {
+                  const dir = state.boardDirective;
+                  const prog = getBoardDirectiveProgress(state, dir);
+                  const remMd = Math.max(0, dir.dueMd - (state.md ?? 0));
+                  const statusColor =
+                    dir.status === 'passed'
+                      ? 'text-[var(--g)] border-[var(--g)]/40 bg-[var(--g-soft)]'
+                      : dir.status === 'failed'
+                        ? 'text-[var(--red)] border-[var(--red)]/40 bg-[var(--red)]/10'
+                        : 'text-[var(--ink)] border-[var(--line)] bg-[var(--surface-2)]';
+                  return (
+                    <div className={`p-2.5 rounded-xl border space-y-1.5 ${statusColor}`}>
+                      <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                        <span className="truncate">
+                          {dir.status === 'passed' ? '✅ ' : dir.status === 'failed' ? '⚠️ ' : '📌 '}
+                          {dir.title}
+                        </span>
+                        <span className="text-[10.5px] tabular shrink-0 text-[var(--mut)]">
+                          {dir.status === 'active'
+                            ? `ครบกำหนด น.${dir.dueMd} (อีก ${remMd} นัด)`
+                            : dir.status === 'passed'
+                              ? 'ผ่านภารกิจ'
+                              : 'ไม่ผ่านเกณฑ์'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[var(--mut)] leading-snug">{dir.feedback}</p>
+                      <div className="text-[11px] font-semibold text-[var(--ink)]">🎯 {dir.targetLabel}</div>
+                      {dir.status === 'active' && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10.5px] text-[var(--mut)] tabular">
+                            <span>{prog.progressText}</span>
+                            <b className={prog.isComplete ? 'text-[var(--g)]' : 'text-[var(--ink)]'}>{Math.round(prog.ratio * 100)}%</b>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all"
+                              style={{
+                                width: `${Math.max(4, Math.round(prog.ratio * 100))}%`,
+                                background: prog.isComplete ? 'var(--g)' : 'var(--lamp)'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-2 gap-1.5 text-[10px] pt-0.5">
+                        <div className="text-[var(--g)] truncate" title={dir.rewardText}>ผลสำเร็จ: {dir.rewardText}</div>
+                        <div className="text-[var(--red)] truncate text-right" title={dir.penaltyText}>หากพลาด: {dir.penaltyText}</div>
+                      </div>
+                    </div>
+                  );
+                })() : (
+                  <div className="p-2.5 rounded-xl bg-[var(--surface-2)] text-[11px] text-[var(--mut)]">
+                    ยังไม่มีคำสั่งพิเศษในขณะนี้ บอร์ดจะประเมินผลงานและส่งคำสั่งเป็นระยะตามสถานการณ์ทีม
+                  </div>
+                )}
+
+                {activeBoardEffects.length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[10.5px] font-bold text-[var(--mut)]">⚡ ผลกระทบบอร์ดที่มีผลอยู่ขณะนี้</div>
+                    <div className="space-y-1">
+                      {activeBoardEffects.map((ef) => {
+                        const rem = Math.max(1, ef.expiresMd - (state.md ?? 0));
+                        const isBonus = ef.tone === 'bonus';
+                        return (
+                          <div
+                            key={ef.id}
+                            className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg border text-[11px] ${
+                              isBonus
+                                ? 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
+                                : 'bg-[var(--red)]/10 border-[var(--red)]/35 text-[var(--red)]'
+                            }`}
+                          >
+                            <span className="font-semibold truncate">{ef.label}</span>
+                            <span className="text-[10px] font-bold tabular shrink-0">เหลือ {rem} นัด</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {(state.boardFeedbackLog || []).length > 0 && (
+                  <div className="space-y-1">
+                    <div className="text-[10.5px] font-bold text-[var(--mut)]">🗂️ บันทึกความเห็นล่าสุดจากบอร์ด</div>
+                    <div className="space-y-1 max-h-24 overflow-y-auto pr-0.5">
+                      {(state.boardFeedbackLog || []).slice(0, 3).map((fb, idx) => (
+                        <div key={idx} className="flex items-start justify-between gap-2 text-[10.5px] py-1 border-b border-[var(--line)]/40 last:border-0">
+                          <span className={fb.tone === 'ok' ? 'text-[var(--g)]' : fb.tone === 'urg' ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>
+                            {fb.msg}
+                          </span>
+                          <span className="text-[9.5px] text-[var(--mut)] tabular shrink-0">น.{fb.md}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

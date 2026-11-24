@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
 import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID } from '../data/thaiFootballData';
@@ -128,6 +128,94 @@ export function getShirtNo(team: Team | null | undefined, q: Partial<Player>): n
     }
   }
   return n || 10;
+}
+
+const ROLE_PREFERRED_NOS: Record<SubRole, number[]> = {
+  GK: [1, 13, 23, 30, 31, 12],
+  RB: [2, 12, 15, 22, 24],
+  RWB: [2, 12, 22, 15, 24],
+  LB: [3, 12, 16, 21, 26],
+  LWB: [3, 12, 16, 21, 26],
+  CB: [4, 5, 6, 15, 16, 22, 24, 25],
+  CDM: [6, 4, 16, 14, 18, 21],
+  LDM: [6, 16, 14, 4, 18],
+  RDM: [6, 14, 16, 4, 18],
+  CM: [8, 6, 14, 18, 20, 21],
+  LCM: [8, 14, 18, 20, 6],
+  RCM: [8, 18, 14, 20, 6],
+  CAM: [10, 7, 20, 14, 21],
+  RM: [7, 11, 17, 14, 27],
+  LM: [11, 7, 17, 20, 28],
+  RW: [7, 11, 17, 19, 27],
+  LW: [11, 7, 17, 19, 28],
+  ST: [9, 10, 19, 11, 29],
+  CF: [9, 10, 11, 19, 29]
+};
+
+export function autoAssignAllTeamShirtNumbers(
+  team: Team,
+  careerP?: PlayerCareerProfile | null
+): number {
+  const starters = xi(team);
+  const starterSlotMap = new Map<string, SubRole>();
+  const slots = getFormationSlots(team);
+  starters.forEach((q, idx) => {
+    starterSlotMap.set(q.n, slots[idx]?.sp || q.ro);
+  });
+
+  const starterSet = new Set(starters.map((q) => q.n));
+  const sortedStarters = starters
+    .slice()
+    .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov);
+  const sortedReserves = team.sq
+    .filter((q) => !starterSet.has(q.n))
+    .slice()
+    .sort((a, b) => b.ov - a.ov || POS.indexOf(a.pos) - POS.indexOf(b.pos));
+
+  const prevNos = new Map<string, number | undefined>();
+  team.sq.forEach((q) => prevNos.set(q.n, q.no));
+
+  const used = new Set<number>();
+  const pickNextNo = (q: Player, isStarter: boolean): number => {
+    const slotRole = starterSlotMap.get(q.n) || q.ro;
+    const rolePool = ROLE_PREFERRED_NOS[slotRole] || [];
+    const posPool = NOP[q.pos] || [];
+    const candidates = isStarter
+      ? [...rolePool, ...posPool]
+      : [
+          ...(q.pos === 'GK' ? [13, 23, 30, 31, 12] : []),
+          ...posPool.filter((n) => n >= 12),
+          ...rolePool.filter((n) => n >= 12)
+        ];
+
+    for (const n of candidates) {
+      if (!used.has(n)) return n;
+    }
+    for (let i = 12; i <= 99; i++) {
+      if (!used.has(i)) return i;
+    }
+    for (let i = 1; i <= 11; i++) {
+      if (!used.has(i)) return i;
+    }
+    return 10;
+  };
+
+  let changed = 0;
+  [...sortedStarters.map((q) => [q, true] as const), ...sortedReserves.map((q) => [q, false] as const)].forEach(
+    ([q, isStarter]) => {
+      const nextNo = pickNextNo(q, isStarter);
+      used.add(nextNo);
+      if (prevNos.get(q.n) !== nextNo) changed++;
+      q.no = nextNo;
+      if (Array.isArray(q.vis) && q.vis.length >= 6) {
+        q.vis[5] = nextNo;
+      }
+      if (q.me && careerP) {
+        careerP.no = nextNo;
+      }
+    }
+  );
+  return changed;
 }
 
 export function assignTeamShirtNumbers(team: Team) {
@@ -662,7 +750,130 @@ export function syncMe(s: GameState) {
       if (q.age && (!s.p.age || s.p.age < q.age)) s.p.age = q.age;
       else if (s.p.age) q.age = s.p.age;
     }
+    recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, s.p);
   }
+}
+
+export interface PlayerSeasonChartPoint {
+  md: number;
+  label: string;
+  ov: number;
+  sh: number;
+  ps: number;
+  dr: number;
+  tk: number;
+  ph: number;
+}
+
+const sameCoreAttrs = (x: CoreAttrs, y: CoreAttrs) =>
+  x.sh === y.sh && x.ps === y.ps && x.dr === y.dr && x.tk === y.tk && x.ph === y.ph;
+
+export function recordPlayerSeasonProgress(
+  q: Player,
+  season: number,
+  md: number,
+  careerP?: PlayerCareerProfile | null,
+  reset = false
+) {
+  const curMd = Math.max(0, Math.round(md || 0));
+  const curOv = q.me && careerP ? ovMe(careerP) : q.ov;
+  const curA = DT(q, q.me ? careerP : null).a;
+  const snap: PlayerSeasonProgressPoint = {
+    md: curMd,
+    ov: curOv,
+    a: { sh: curA.sh, ps: curA.ps, dr: curA.dr, tk: curA.tk, ph: curA.ph }
+  };
+
+  if (reset || !q.seasonProg || q.seasonProg.s !== season) {
+    q.seasonProg = { s: season, pts: [snap] };
+    return;
+  }
+
+  const pts = q.seasonProg.pts;
+  if (!pts.length) {
+    pts.push(snap);
+    return;
+  }
+
+  const last = pts[pts.length - 1];
+  if (curMd <= last.md) {
+    if (last.md === curMd) {
+      last.ov = snap.ov;
+      last.a = snap.a;
+    }
+    return;
+  }
+
+  if (last.ov !== snap.ov || !sameCoreAttrs(last.a, snap.a)) {
+    pts.push(snap);
+    if (pts.length > 40) {
+      q.seasonProg.pts = [pts[0], ...pts.slice(-39)];
+    }
+  }
+}
+
+export function getPlayerSeasonProgression(
+  q: Player,
+  state: Pick<GameState, 'season' | 'md'>,
+  careerP?: PlayerCareerProfile | null
+): PlayerSeasonChartPoint[] {
+  const curSeason = state.season ?? 1;
+  const curMd = Math.max(0, Math.round(state.md ?? 0));
+  const curOv = q.me && careerP ? ovMe(careerP) : q.ov;
+  const curA = DT(q, q.me ? careerP : null).a;
+  const liveSnap: PlayerSeasonProgressPoint = {
+    md: curMd,
+    ov: curOv,
+    a: { sh: curA.sh, ps: curA.ps, dr: curA.dr, tk: curA.tk, ph: curA.ph }
+  };
+
+  const rawPts =
+    q.seasonProg && q.seasonProg.s === curSeason && q.seasonProg.pts.length > 0
+      ? q.seasonProg.pts
+          .slice()
+          .sort((a, b) => a.md - b.md)
+          .map((pt) => ({ md: pt.md, ov: pt.ov, a: { ...pt.a } }))
+      : [{ md: 0, ov: liveSnap.ov, a: { ...liveSnap.a } }];
+
+  if (rawPts[0].md > 0) {
+    rawPts.unshift({ md: 0, ov: rawPts[0].ov, a: { ...rawPts[0].a } });
+  }
+
+  const last = rawPts[rawPts.length - 1];
+  if (curMd > last.md) {
+    rawPts.push(liveSnap);
+  } else if (curMd === last.md) {
+    rawPts[rawPts.length - 1] = liveSnap;
+  }
+
+  const expanded: PlayerSeasonProgressPoint[] = [];
+  rawPts.forEach((pt) => {
+    const prev = expanded[expanded.length - 1];
+    if (prev && pt.md - prev.md > 1) {
+      const changed = prev.ov !== pt.ov || !sameCoreAttrs(prev.a, pt.a);
+      if (changed) {
+        expanded.push({ md: pt.md - 1, ov: prev.ov, a: { ...prev.a } });
+      } else if (pt.md - prev.md >= 6) {
+        expanded.push({ md: Math.round((prev.md + pt.md) / 2), ov: prev.ov, a: { ...prev.a } });
+      }
+    }
+    if (prev && prev.md === pt.md) {
+      expanded[expanded.length - 1] = pt;
+    } else {
+      expanded.push(pt);
+    }
+  });
+
+  return expanded.map((pt) => ({
+    md: pt.md,
+    label: pt.md === 0 ? 'เริ่ม' : `น.${pt.md}`,
+    ov: pt.ov,
+    sh: pt.a.sh,
+    ps: pt.a.ps,
+    dr: pt.a.dr,
+    tk: pt.a.tk,
+    ph: pt.a.ph
+  }));
 }
 
 export const vlu = (q: Player) => Math.round((q.ov * q.ov) / 40);
@@ -691,9 +902,14 @@ export const squadWage = (t: Team) =>
 
 export function logFin(s: GameState, t: string, amt: number) {
   if (!amt) return;
+  const rounded = Math.round(amt);
   s.finLog = s.finLog || [];
-  s.finLog.unshift({ t, amt: Math.round(amt), m: s.md + 1, s: s.season });
+  s.finLog.unshift({ t, amt: rounded, m: s.md + 1, s: s.season });
   if (s.finLog.length > 40) s.finLog.length = 40;
+  if (s.mode === 'm') {
+    if (rounded > 0) s.finPendIn = (s.finPendIn || 0) + rounded;
+    else s.finPendOut = (s.finPendOut || 0) + Math.abs(rounded);
+  }
 }
 
 export function pushFeed(s: GameState, cat: string, txt: string, tone: '' | 'urg' | 'offer' | 'ok' = '') {
@@ -788,6 +1004,28 @@ export function pickGK(c1: string, c2 = '', c3 = '') {
       const sb = Math.min(colDist(b, c1), c2 ? colDist(b, c2) : 999, c3 ? colDist(b, c3) : 999);
       return sb - sa;
     })[0];
+}
+
+export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity {
+  if (s?.mode === 'm' && t.id === s.me && s.club) {
+    return s.club;
+  }
+  const h = ([...(t.name || 'T')].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
+  const icKeys = Object.keys(CREST_IC);
+  const [c1, c2] = teamKits(t, s);
+  return {
+    name: t.name,
+    nick: '',
+    std: 'สนาม' + t.name,
+    c1,
+    c2,
+    shape: h % CREST_SHAPES.length,
+    pat: (h >> 4) % CREST_PATTERNS.length,
+    icon: icKeys[h % icKeys.length] || '⚽',
+    iconColor: '',
+    crestBorder: (h >> 6) % 4,
+    kit: (h >> 3) % KIT_PATTERNS.length
+  };
 }
 
 export function ensureClubIdentity(s: GameState): ClubIdentity {

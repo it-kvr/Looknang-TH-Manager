@@ -5,10 +5,12 @@ import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, getFormationCounts, pen, xi, vlu, ensureCon, tc } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { rate, getLeagueTransferContext, getIncomingOffers } from '../engine/simulation';
+import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { LockerRoomPanel } from '../components/LockerRoomPanel';
 import { CustomFormationModal } from '../modals/TacticsModals';
+import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
@@ -19,12 +21,16 @@ export const SquadTacticsView: React.FC<{
 }> = ({ state, onUpdateState, onInspectPlayer, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
-  const sub = (state.sub ?? 0) > 2 ? 0 : (state.sub ?? 0);
+  const sub = (state.sub ?? 0) > 3 ? 0 : (state.sub ?? 0);
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
   const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
+  const [selectedSquadNames, setSelectedSquadNames] = useState<string[]>([]);
+  const [renewTargetName, setRenewTargetName] = useState<string | null>(null);
+  const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
+  const [releaseModalNames, setReleaseModalNames] = useState<string[] | null>(null);
   const pitchSvgRef = useRef<SVGSVGElement | null>(null);
 
   const starters = xi(me);
@@ -582,6 +588,9 @@ export const SquadTacticsView: React.FC<{
           <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 2 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
             📋 ทั้งทีม ({me.sq.length})
           </button>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 3; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 3 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+            👕 ล็อกเกอร์
+          </button>
         </div>
 
         <div className="inline-flex items-center gap-1 text-[11px] mland:text-[9.5px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
@@ -1071,6 +1080,14 @@ export const SquadTacticsView: React.FC<{
             </div>
           )}
         </div>
+      ) : sub === 3 ? (
+        <LockerRoomPanel
+          state={state}
+          team={me}
+          onUpdateState={onUpdateState}
+          onInspectPlayer={onInspectPlayer}
+          onToast={onToast}
+        />
       ) : (
         <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
           {(() => {
@@ -1092,6 +1109,38 @@ export const SquadTacticsView: React.FC<{
                 if (squadSort === 'goals') return (b.sg || 0) - (a.sg || 0) || (b.sa || 0) - (a.sa || 0) || b.ov - a.ov;
                 return POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
               });
+
+            const activeSelected = isMgr
+              ? selectedSquadNames.filter((name) => me.sq.some((q) => q.n === name && !q.me))
+              : [];
+            const selectedSet = new Set(activeSelected);
+            const selectableRows = isMgr ? listRows.filter((q) => !q.me) : [];
+            const allVisibleSelected =
+              selectableRows.length > 0 && selectableRows.every((q) => selectedSet.has(q.n));
+            const batchPreview =
+              isMgr && activeSelected.length > 0
+                ? validateBatchSquadRemoval(state, me, activeSelected, 'sell', 85)
+                : null;
+
+            const toggleSelectPlayer = (playerName: string) => {
+              SFX.tap();
+              setSelectedSquadNames((prev) => {
+                const cleaned = prev.filter((n) => me.sq.some((q) => q.n === n && !q.me));
+                return cleaned.includes(playerName)
+                  ? cleaned.filter((n) => n !== playerName)
+                  : [...cleaned, playerName];
+              });
+            };
+
+            const toggleSelectAllVisible = () => {
+              SFX.tap();
+              const visibleNames = selectableRows.map((q) => q.n);
+              if (allVisibleSelected) {
+                setSelectedSquadNames((prev) => prev.filter((n) => !visibleNames.includes(n)));
+              } else {
+                setSelectedSquadNames((prev) => Array.from(new Set([...prev, ...visibleNames])));
+              }
+            };
 
             return (
               <>
@@ -1144,12 +1193,66 @@ export const SquadTacticsView: React.FC<{
                   </div>
                 </div>
 
+                {/* Multi-select Bulk Action Bar */}
+                {isMgr && activeSelected.length > 0 && batchPreview && (
+                  <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--lamp-soft)]/80 border border-[var(--lamp)]/70 flex flex-wrap items-center justify-between gap-2 mland:gap-1.5">
+                    <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs mland:text-[10px] tabular">
+                      <span className="font-extrabold text-[var(--ink)]">
+                        ☑ เลือก {activeSelected.length} คน
+                      </span>
+                      <span className="text-[var(--mut)]">
+                        · ขายด่วนรวม <b className="text-[var(--g)]">+{fmtMoneyNum(batchPreview.totalQuickSellValue)}</b>
+                      </span>
+                      <span className="text-[var(--mut)] hidden sm:inline mland:inline">
+                        · ลดค่าเหนื่อย <b className="text-[var(--ink)]">-{fmtMoneyNum(batchPreview.totalSavedWage)}/นัด</b>
+                      </span>
+                      {batchPreview.squadErrors.length > 0 && (
+                        <span className="text-[var(--red)] font-bold">
+                          · ⚠️ {batchPreview.squadErrors[0]}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setSellModalNames(activeSelected);
+                        }}
+                        className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap"
+                      >
+                        💰 ขายที่เลือก ({activeSelected.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setReleaseModalNames(activeSelected);
+                        }}
+                        className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--red)]/45 text-[var(--red)] text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap hover:bg-[var(--red-soft)]"
+                      >
+                        🔓 ปลด ({activeSelected.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setSelectedSquadNames([]);
+                        }}
+                        className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer whitespace-nowrap"
+                      >
+                        ล้าง
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
                 {isMgr && (() => {
                   const incomingOffers = getIncomingOffers(state);
                   if (!incomingOffers.length) return null;
                   return (
-                    <div className="px-3 py-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs">
+                    <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs mland:text-[10.5px]">
                       <span className="font-semibold truncate">
                         💼 มี <b className="tabular">{incomingOffers.length}</b> ข้อเสนอซื้อนักเตะรอเจรจาในตลาดซื้อขาย
                       </span>
@@ -1160,7 +1263,7 @@ export const SquadTacticsView: React.FC<{
                           if (onNavigate) onNavigate('k', 'sell');
                           else onUpdateState((d) => { d.v = 'k'; });
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+                        className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap shrink-0"
                       >
                         เปิดหน้าตลาด →
                       </button>
@@ -1170,15 +1273,34 @@ export const SquadTacticsView: React.FC<{
 
                 {/* Responsive 100%-Width Squad Roster Table (Zero Horizontal Overflow) */}
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden">
-                  <div className="grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]">
+                  <div
+                    className={
+                      isMgr
+                        ? 'grid grid-cols-[24px_26px_minmax(0,1.5fr)_38px_46px_108px] sm:grid-cols-[26px_30px_minmax(0,1.6fr)_44px_32px_54px_56px_78px_132px] lg:grid-cols-[28px_32px_minmax(0,1.65fr)_48px_36px_60px_64px_62px_86px_146px] mland:grid-cols-[24px_26px_minmax(0,1.5fr)_40px_28px_48px_50px_70px_116px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        : 'grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                    }
+                  >
+                    {isMgr && (
+                      <div className="flex items-center justify-center">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleSelectAllVisible}
+                          aria-label="เลือกนักเตะทั้งหมดที่แสดง"
+                          title={allVisibleSelected ? 'ยกเลิกเลือกทั้งหมด' : 'เลือกทั้งหมดเพื่อขาย/ปลด'}
+                          className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded"
+                        />
+                      </div>
+                    )}
                     <div className="text-center">#</div>
                     <div>นักเตะ</div>
                     <div>ตำแหน่ง</div>
-                    <div className="text-center">อายุ</div>
+                    <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>อายุ</div>
                     <div className="text-center">OVR</div>
-                    <div className="text-center">ฟิต</div>
-                    <div className="text-center">ผลงาน</div>
-                    <div className="text-right">ค่าเหนื่อย / ค่าตัว</div>
+                    <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>ฟิต</div>
+                    <div className={`text-center ${isMgr ? 'hidden lg:block mland:hidden' : ''}`}>ผลงาน</div>
+                    <div className={`text-right ${isMgr ? 'hidden sm:block mland:block' : ''}`}>ค่าเหนื่อย / ค่าตัว</div>
+                    {isMgr && <div className="text-right">จัดการ</div>}
                   </div>
 
                   <div className="divide-y divide-[var(--line)]">
@@ -1188,17 +1310,43 @@ export const SquadTacticsView: React.FC<{
                       const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
                       const no = getShirtNo(me, q);
                       const offerCount = isMgr ? getIncomingOffers(state).filter((o) => o.n === q.n).length : 0;
-                      const wg = ensureCon(q).wg;
+                      const con = ensureCon(q);
+                      const wg = con.wg;
                       const fitBarCol = f >= 75 ? 'var(--g)' : f >= 50 ? 'var(--lamp)' : 'var(--red)';
                       const fitTxtCls = f >= 75 ? 'text-[var(--g)]' : f >= 50 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--red)]';
+                      const isSelected = selectedSet.has(q.n);
+                      const expiringSoon = !q.loan && con.yr <= 1;
 
                       return (
                         <div
                           key={q.n}
-                          className={`px-2.5 mland:px-2 py-1.5 mland:py-1 grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px] items-center gap-1.5 mland:gap-1 transition-colors hover:bg-[var(--surface-2)]/45 ${
-                            isMe ? 'bg-[var(--lamp-soft)]/50' : q.listed ? 'bg-[var(--lamp-soft)]/20' : ''
+                          className={`px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 items-center gap-1 sm:gap-1.5 mland:gap-1 transition-colors hover:bg-[var(--surface-2)]/45 ${
+                            isMgr
+                              ? 'grid grid-cols-[24px_26px_minmax(0,1.5fr)_38px_46px_108px] sm:grid-cols-[26px_30px_minmax(0,1.6fr)_44px_32px_54px_56px_78px_132px] lg:grid-cols-[28px_32px_minmax(0,1.65fr)_48px_36px_60px_64px_62px_86px_146px] mland:grid-cols-[24px_26px_minmax(0,1.5fr)_40px_28px_48px_50px_70px_116px]'
+                              : 'grid grid-cols-[34px_minmax(0,1.7fr)_52px_36px_68px_72px_72px_94px] mland:grid-cols-[28px_minmax(0,1.7fr)_44px_30px_58px_62px_60px_80px]'
+                          } ${
+                            isSelected
+                              ? 'bg-[var(--g-soft)]/55'
+                              : isMe
+                                ? 'bg-[var(--lamp-soft)]/50'
+                                : q.listed
+                                  ? 'bg-[var(--lamp-soft)]/20'
+                                  : ''
                           }`}
                         >
+                          {isMgr && (
+                            <div className="flex items-center justify-center">
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                disabled={!!q.me}
+                                onChange={() => toggleSelectPlayer(q.n)}
+                                aria-label={`เลือก ${q.n}`}
+                                className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded disabled:opacity-30"
+                              />
+                            </div>
+                          )}
+
                           <div className="flex items-center justify-center text-xs mland:text-[10px] font-bold text-[var(--mut)] tabular">
                             #{no}
                           </div>
@@ -1206,7 +1354,7 @@ export const SquadTacticsView: React.FC<{
                           <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
                             <PlayerFace player={q} team={me} state={state} size={26} />
                             <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                              <div className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1">
+                              <div className="font-bold text-xs mland:text-[10px] truncate flex items-center gap-1">
                                 {isMe && (
                                   <span
                                     title="ตัวคุณ"
@@ -1219,11 +1367,11 @@ export const SquadTacticsView: React.FC<{
                                 {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
                                 {me.cap === q.n && <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">[C]</span>}
                                 <span className="truncate">{q.n}</span>
-                                {q.loan ? <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
-                                {q.listed ? <span className="text-[10px] text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">[ในตลาด {fmtMoneyNum(q.askPrice || vlu(q))}]</span> : null}
-                                {offerCount > 0 ? <span className="px-1.5 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}
+                                {q.loan ? <span className="text-[10px] mland:text-[8.5px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
+                                {q.listed ? <span className="text-[10px] mland:text-[8.5px] text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">[ขาย {fmtMoneyNum(q.askPrice || vlu(q))}]</span> : null}
+                                {offerCount > 0 ? <span className="px-1 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}
                               </div>
-                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1">
+                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular">
                                 {(q.sus || 0) > 0 ? (
                                   <span className="inline-flex items-center gap-1 text-[var(--red)] font-bold">
                                     <StatIconBadge kind="red" count={q.sus} size="xs" />
@@ -1237,44 +1385,49 @@ export const SquadTacticsView: React.FC<{
                                     <span>เหลือง {q.yc}/3</span>
                                   </span>
                                 ) : isStarter ? (
-                                  '11 ตัวจริง'
+                                  'ตัวจริง'
                                 ) : (
-                                  'ตัวสำรอง'
+                                  'สำรอง'
+                                )}
+                                {!q.loan && (
+                                  <span className={expiringSoon ? 'text-[var(--red)] font-bold' : ''}>
+                                    · {con.yr <= 0 ? 'หมดสัญญา!' : `สัญญา ${con.yr} ปี`}
+                                  </span>
                                 )}
                               </div>
                             </button>
                           </div>
 
                           <div className="flex items-center">
-                            <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[10.5px] mland:text-[9px]">{q.ro}</span>
+                            <span className="px-1.5 mland:px-1 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[10.5px] mland:text-[9px]">{q.ro}</span>
                           </div>
 
-                          <div className="text-center text-xs mland:text-[10px] tabular font-semibold">
+                          <div className={`text-center text-xs mland:text-[10px] tabular font-semibold ${isMgr ? 'hidden sm:block mland:block' : ''}`}>
                             {q.age}
                           </div>
 
                           <div className="flex items-center justify-center gap-0.5">
-                            <span className="px-1.5 py-0.5 rounded-lg text-white text-[11px] mland:text-[9.5px] font-bold tabular" style={{ background: ovColor(q.ov) }}>
+                            <span className="px-1.5 mland:px-1 py-0.5 rounded-lg text-white text-[11px] mland:text-[9.5px] font-bold tabular" style={{ background: ovColor(q.ov) }}>
                               {q.ov}
                             </span>
-                            <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">/{q.pot || q.ov}</span>
+                            <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                           </div>
 
-                          <div className="flex items-center gap-1">
+                          <div className={`items-center gap-1 ${isMgr ? 'hidden sm:flex mland:flex' : 'flex'}`}>
                             <div className="flex-1 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                               <div className="h-full rounded-full" style={{ width: `${f}%`, background: fitBarCol }} />
                             </div>
                             <span className={`text-[10px] mland:text-[8.5px] font-bold tabular w-7 text-right ${fitTxtCls}`}>{f}%</span>
                           </div>
 
-                          <div className="text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] flex items-center justify-center gap-1">
+                          <div className={`text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] items-center justify-center gap-1 ${isMgr ? 'hidden lg:flex mland:hidden' : 'flex'}`}>
                             {q.sg || q.sa || q.cs || q.sp || q.ap ? (
                               <span className="inline-flex items-center gap-1.5">
                                 {q.sp || q.ap ? <span className="font-semibold text-[var(--ink)]">{q.sp || q.ap}น</span> : null}
                                 {q.sg ? (
                                   <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`ยิง ${q.sg} ประตู`}>
-                                    <StatIconBadge kind="goal" count={1} size="xs" />
                                     <span>{q.sg}</span>
+                                    <StatIconBadge kind="goal" count={1} size="xs" />
                                   </span>
                                 ) : null}
                                 {q.pos === 'GK' ? (
@@ -1286,8 +1439,8 @@ export const SquadTacticsView: React.FC<{
                                   ) : null
                                 ) : q.sa ? (
                                   <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`แอสซิสต์ ${q.sa} ครั้ง`}>
-                                    <StatIconBadge kind="assist" count={1} size="xs" />
                                     <span>{q.sa}</span>
+                                    <StatIconBadge kind="assist" count={1} size="xs" />
                                   </span>
                                 ) : null}
                               </span>
@@ -1296,10 +1449,55 @@ export const SquadTacticsView: React.FC<{
                             )}
                           </div>
 
-                          <div className="text-right text-[10.5px] mland:text-[9px] tabular whitespace-nowrap">
+                          <div className={`text-right text-[10.5px] mland:text-[9px] tabular whitespace-nowrap ${isMgr ? 'hidden sm:block mland:block' : ''}`}>
                             <span className="font-bold text-[var(--ink)]">{fmtMoneyNum(wg)}</span>
                             <span className="text-[var(--mut)]"> · {fmtMoneyNum(vlu(q))}</span>
                           </div>
+
+                          {isMgr && (
+                            <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
+                              <button
+                                type="button"
+                                disabled={!!q.loan}
+                                title={q.loan ? 'นักเตะยืมตัวต่อสัญญาไม่ได้' : 'ต่อสัญญาฉบับใหม่'}
+                                onClick={() => {
+                                  SFX.tap();
+                                  setRenewTargetName(q.n);
+                                }}
+                                className={`px-1.5 mland:px-1 py-1 mland:py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap disabled:opacity-35 disabled:cursor-not-allowed ${
+                                  expiringSoon
+                                    ? 'bg-[var(--g)] text-white'
+                                    : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                                }`}
+                              >
+                                <span className="hidden lg:inline">ต่อสัญญา</span>
+                                <span className="lg:hidden">ต่อ</span>
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!!q.loan}
+                                title={q.loan ? 'นักเตะยืมตัวขายไม่ได้' : 'ขายหรือขึ้นบัญชีขาย'}
+                                onClick={() => {
+                                  SFX.tap();
+                                  setSellModalNames([q.n]);
+                                }}
+                                className="px-1.5 mland:px-1 py-1 mland:py-0.5 rounded-md bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[#7c5300] dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap hover:brightness-95 disabled:opacity-35 disabled:cursor-not-allowed"
+                              >
+                                ขาย
+                              </button>
+                              <button
+                                type="button"
+                                title={q.loan ? 'ยกเลิกยืมตัว (ส่งกลับต้นสังกัด)' : 'ปลดนักเตะออกจากสโมสร'}
+                                onClick={() => {
+                                  SFX.tap();
+                                  setReleaseModalNames([q.n]);
+                                }}
+                                className="px-1.5 mland:px-1 py-1 mland:py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50 text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap"
+                              >
+                                {q.loan ? 'คืนยืม' : 'ปลด'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1330,6 +1528,49 @@ export const SquadTacticsView: React.FC<{
             setShowCustomEditor(false);
             onToast('บันทึกแผนที่ปรับเองแล้ว!');
           }}
+        />
+      )}
+
+      {isMgr && renewTargetName && (() => {
+        const target = me.sq.find((q) => q.n === renewTargetName);
+        if (!target) return null;
+        return (
+          <SquadRenewModal
+            state={state}
+            team={me}
+            player={target}
+            onClose={() => setRenewTargetName(null)}
+            onUpdateState={onUpdateState}
+            onToast={onToast}
+          />
+        );
+      })()}
+
+      {isMgr && sellModalNames && sellModalNames.length > 0 && (
+        <SquadSellModal
+          state={state}
+          team={me}
+          playerNames={sellModalNames}
+          onClose={() => setSellModalNames(null)}
+          onUpdateState={onUpdateState}
+          onClearSelection={(soldNames) =>
+            setSelectedSquadNames((prev) => prev.filter((n) => !soldNames.includes(n)))
+          }
+          onToast={onToast}
+        />
+      )}
+
+      {isMgr && releaseModalNames && releaseModalNames.length > 0 && (
+        <SquadReleaseModal
+          state={state}
+          team={me}
+          playerNames={releaseModalNames}
+          onClose={() => setReleaseModalNames(null)}
+          onUpdateState={onUpdateState}
+          onClearSelection={(releasedNames) =>
+            setSelectedSquadNames((prev) => prev.filter((n) => !releasedNames.includes(n)))
+          }
+          onToast={onToast}
         />
       )}
     </div>

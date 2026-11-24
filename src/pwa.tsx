@@ -79,11 +79,7 @@ export function registerPWA() {
     updateSWFn = registerSW({
       immediate: true,
       onNeedRefresh() {
-        if (detectStandalone()) {
-          setNeedRefresh(true);
-        } else {
-          swRegistration?.waiting?.postMessage({ type: 'SKIP_WAITING' });
-        }
+        setNeedRefresh(true);
       },
       onOfflineReady() {
         // Cached assets ready for offline play
@@ -92,16 +88,21 @@ export function registerPWA() {
         if (!reg) return;
         swRegistration = reg;
         if (reg.waiting) {
-          if (detectStandalone()) {
-            setNeedRefresh(true);
-          } else {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
+          setNeedRefresh(true);
         }
+        reg.addEventListener('updatefound', () => {
+          const nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', () => {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              setNeedRefresh(true);
+            }
+          });
+        });
         reg.update().catch(() => undefined);
         window.setInterval(() => {
           if (navigator.onLine) reg.update().catch(() => undefined);
-        }, 20 * 60 * 1000);
+        }, 5 * 60 * 1000);
       },
       onRegisterError() {
         // Ignore service worker registration errors in unsupported/restricted environments
@@ -221,14 +222,14 @@ export const PWAUpdateBanner: React.FC = () => {
   const { needRefresh, checkingUpdate, applyUpdate } = usePWAUpdate();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!needRefresh || dismissed || !detectStandalone()) return null;
+  if (!needRefresh || dismissed) return null;
 
   return (
     <div className="fixed bottom-3 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border-2 border-[var(--g)] shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
       <span className="text-lg shrink-0">🆕</span>
       <div className="min-w-0 flex-1">
         <div className="font-bold text-xs text-[var(--ink)]">มีอัปเดตเวอร์ชันใหม่แล้ว!</div>
-        <div className="text-[10.5px] text-[var(--mut)] leading-tight">กดอัปเดตได้ทันทีโดยไม่ต้องลบแอป (เซฟไม่หาย)</div>
+        <div className="text-[10.5px] text-[var(--mut)] leading-tight">กดอัปเดตได้ทันที (ข้อมูลเซฟไม่หาย)</div>
       </div>
       <button
         type="button"
@@ -255,6 +256,7 @@ function detectStandalone(): boolean {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.matchMedia('(display-mode: minimal-ui)').matches ||
     (window.navigator as unknown as { standalone?: boolean }).standalone === true
   );
 }
@@ -291,17 +293,20 @@ export function usePWAInstall() {
 
     const mqStandalone = window.matchMedia('(display-mode: standalone)');
     const mqFullscreen = window.matchMedia('(display-mode: fullscreen)');
+    const mqMinimalUi = window.matchMedia('(display-mode: minimal-ui)');
     const onMqChange = () => {
       setIsInstalled(detectStandalone());
     };
     mqStandalone.addEventListener?.('change', onMqChange);
     mqFullscreen.addEventListener?.('change', onMqChange);
+    mqMinimalUi.addEventListener?.('change', onMqChange);
 
     return () => {
       promptSubscribers.delete(onPrompt);
       installedSubscribers.delete(onInstalled);
       mqStandalone.removeEventListener?.('change', onMqChange);
       mqFullscreen.removeEventListener?.('change', onMqChange);
+      mqMinimalUi.removeEventListener?.('change', onMqChange);
     };
   }, []);
 
@@ -420,75 +425,9 @@ export const PWAInstallButton: React.FC<{
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [showGuide]);
 
-  const { needRefresh, checkingUpdate, checkForUpdate, applyUpdate, forceRefresh } = usePWAUpdate();
+  const { needRefresh, checkingUpdate, applyUpdate } = usePWAUpdate();
 
-  if (isInstalled) {
-    if (variant === 'settings') {
-      return (
-        <div className="p-3 mland:p-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-xs space-y-2 mland:space-y-1">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-bold text-[var(--g)] mland:text-[10.5px] flex items-center gap-1.5">
-                <span>{needRefresh ? '🆕' : '✅'}</span>
-                <span className="truncate">{needRefresh ? 'มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง' : 'ติดตั้งเป็นแอปบนเครื่องแล้ว'}</span>
-              </div>
-              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                อัปเดตเวอร์ชันใหม่ได้ทันทีโดยเซฟเกมในเครื่องยังอยู่ครบ
-              </div>
-            </div>
-            {needRefresh ? (
-              <button
-                type="button"
-                disabled={checkingUpdate}
-                onClick={() => applyUpdate()}
-                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold shrink-0 cursor-pointer shadow-xs"
-              >
-                {checkingUpdate ? 'กำลังอัปเดต...' : '🔄 อัปเดตเลย'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={checkingUpdate}
-                onClick={async () => {
-                  const res = await checkForUpdate();
-                  if (res === 'updated') {
-                    onToast?.('🆕 พบเวอร์ชันใหม่! กดปุ่ม "อัปเดตเลย" เพื่อใช้งาน');
-                  } else if (res === 'offline') {
-                    onToast?.('⚠️ กรุณาเชื่อมต่ออินเทอร์เน็ตเพื่อตรวจสอบอัปเดต');
-                  } else if (res === 'latest') {
-                    onToast?.('✅ ตัวเกมเป็นเวอร์ชันล่าสุดแล้ว');
-                  } else {
-                    await forceRefresh();
-                  }
-                }}
-                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold shrink-0 cursor-pointer disabled:opacity-60"
-              >
-                {checkingUpdate ? 'กำลังเช็ก...' : '🔄 เช็กอัปเดต'}
-              </button>
-            )}
-          </div>
-          {!needRefresh && (
-            <button
-              type="button"
-              disabled={checkingUpdate}
-              onClick={() => forceRefresh()}
-              className="w-full py-1 rounded-lg bg-[var(--surface)]/80 hover:bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer transition-colors"
-            >
-              ↻ ล้างแคชตัวเกม & โหลดแพตช์ล่าสุด (ข้อมูลเซฟไม่หาย)
-            </button>
-          )}
-        </div>
-      );
-    }
-    return null;
-  }
-
-  // In compact top HUD, only display when Chromium prompt is ready or on iOS
-  if (variant === 'compact' && !isInstallable && !isIOS) {
-    return null;
-  }
-
-  const handleClick = async () => {
+  const handleInstallClick = async () => {
     if (isInstallable) {
       const ok = await install();
       if (ok) {
@@ -630,21 +569,38 @@ export const PWAInstallButton: React.FC<{
   };
 
   if (variant === 'compact') {
+    if (isInstalled && !needRefresh) return null;
+
     const compactToneClass =
       tone === 'stadium'
         ? 'bg-white/12 border border-white/25 text-white hover:bg-white/22'
         : 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] hover:bg-[var(--g)] hover:text-white';
+
     return (
       <>
-        <button
-          type="button"
-          onClick={handleClick}
-          title="ติดตั้งแอปลงมือถือ"
-          className={`px-2.5 py-1.5 mland:py-1 rounded-xl font-bold text-[11px] flex items-center gap-1 cursor-pointer shrink-0 transition-colors whitespace-nowrap ${compactToneClass}`}
-        >
-          <span>📲</span>
-          <span className="hidden sm:inline mland:hidden">ติดตั้งแอป</span>
-        </button>
+        {needRefresh && (
+          <button
+            type="button"
+            disabled={checkingUpdate}
+            onClick={() => applyUpdate()}
+            title="อัปเดตตัวเกมเวอร์ชันใหม่"
+            className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 font-extrabold text-[11px] mland:text-[10px] flex items-center gap-1 cursor-pointer shrink-0 shadow-xs hover:brightness-105 disabled:opacity-60 whitespace-nowrap"
+          >
+            <span>🆕</span>
+            <span>{checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดต'}</span>
+          </button>
+        )}
+        {!isInstalled && (
+          <button
+            type="button"
+            onClick={handleInstallClick}
+            title="ติดตั้งแอปลงเครื่อง"
+            className={`px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg font-bold text-[11px] mland:text-[10px] flex items-center gap-1 cursor-pointer shrink-0 transition-colors whitespace-nowrap ${compactToneClass}`}
+          >
+            <span>📲</span>
+            <span>ติดตั้งแอป</span>
+          </button>
+        )}
         {renderGuideModal()}
       </>
     );
@@ -653,57 +609,114 @@ export const PWAInstallButton: React.FC<{
   if (variant === 'settings') {
     return (
       <>
-        <button
-          type="button"
-          onClick={handleClick}
-          className="w-full flex items-center justify-between gap-3 p-3 mland:p-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-left cursor-pointer hover:brightness-95 transition"
-        >
-          <div className="flex items-center gap-2.5 min-w-0">
-            <img src={iconUrl} alt="ลูกหนังไทย" className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl shrink-0" />
-            <div className="min-w-0">
-              <div className="text-xs font-bold text-[var(--g)]">
-                {isInstallable ? '📲 ติดตั้งแอปลงเครื่องทันที' : '📲 วิธีติดตั้งแอปบนมือถือ / คอมพิวเตอร์'}
-              </div>
-              <div className="text-[11px] text-[var(--mut)] truncate">
-                เล่นเต็มจอ ไม่มีแถบเบราว์เซอร์ และเล่นออฟไลน์ได้
+        {!isInstalled && (
+          <button
+            type="button"
+            onClick={handleInstallClick}
+            className="w-full flex items-center justify-between gap-3 p-3 mland:p-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-left cursor-pointer hover:brightness-95 transition"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img src={iconUrl} alt="ลูกหนังไทย" className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl shrink-0" />
+              <div className="min-w-0">
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--g)] truncate">
+                  {isInstallable ? '📲 ติดตั้งแอปลงเครื่องทันที' : '📲 ติดตั้งแอปลงเครื่อง'}
+                </div>
+                <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                  เล่นเต็มจอ ไม่มีแถบเบราว์เซอร์ และเล่นออฟไลน์ได้
+                </div>
               </div>
             </div>
+            <span className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold shrink-0">
+              {isInstallable ? 'ติดตั้ง' : 'ดูวิธี'}
+            </span>
+          </button>
+        )}
+
+        {needRefresh ? (
+          <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 text-xs flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-bold text-[#7a4f00] dark:text-[var(--lamp)] mland:text-[10.5px] flex items-center gap-1.5">
+                <span>🆕</span>
+                <span className="truncate">มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง</span>
+              </div>
+              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                กดอัปเดตได้ทันทีโดยข้อมูลเซฟในเครื่องยังอยู่ครบ
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={checkingUpdate}
+              onClick={() => applyUpdate()}
+              className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold shrink-0 cursor-pointer shadow-xs disabled:opacity-60"
+            >
+              {checkingUpdate ? 'กำลังอัปเดต...' : '🔄 อัปเดตเลย'}
+            </button>
           </div>
-          <span className="px-2.5 py-1 rounded-lg bg-[var(--g)] text-white text-[11px] font-bold shrink-0">
-            {isInstallable ? 'ติดตั้ง' : 'ดูวิธี'}
-          </span>
-        </button>
+        ) : isInstalled ? (
+          <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 text-xs flex items-center gap-2">
+            <span className="shrink-0">✅</span>
+            <div className="min-w-0">
+              <div className="font-bold text-[var(--g)] mland:text-[10.5px] truncate">ติดตั้งแอปลงเครื่องแล้ว</div>
+              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">ตัวเกมเป็นเวอร์ชันล่าสุด</div>
+            </div>
+          </div>
+        ) : null}
+
         {renderGuideModal()}
       </>
     );
   }
 
+  if (isInstalled && !needRefresh) return null;
+
   return (
     <>
-      <button
-        type="button"
-        onClick={handleClick}
-        className="w-full p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--g)]/45 hover:border-[var(--g)] flex items-center justify-between gap-3 mland:gap-2 text-left cursor-pointer transition-all shadow-xs"
-      >
-        <div className="flex items-center gap-3 mland:gap-2 min-w-0">
-          <img src={iconUrl} alt="ลูกหนังไทย" className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl shrink-0" />
+      {needRefresh && (
+        <button
+          type="button"
+          disabled={checkingUpdate}
+          onClick={() => applyUpdate()}
+          className="w-full p-3 mland:p-2 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 flex items-center justify-between gap-3 mland:gap-2 text-left cursor-pointer transition-all shadow-xs"
+        >
           <div className="min-w-0">
-            <div className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] truncate">
-              {isInstallable ? '📲 ติดตั้ง "ลูกหนังไทย" ลงมือถือ' : '📱 เล่นในมือถือ? ติดตั้งเป็นแอปได้'}
+            <div className="font-bold text-xs sm:text-sm mland:text-xs text-[#7a4f00] dark:text-[var(--lamp)] truncate">
+              🆕 มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง
             </div>
             <div className="text-[11px] mland:text-[10px] text-[var(--mut)] truncate">
-              {isInstallable
-                ? 'กดเพื่อติดตั้งลงหน้าจอโฮม เล่นเต็มจอและออฟไลน์ได้'
-                : isIOS
-                  ? 'กดดูวิธีเพิ่มลงหน้าจอโฮมบน iPhone / iPad (Safari)'
-                  : 'กดดูขั้นตอนติดตั้งสำหรับ Android, iOS และคอมพิวเตอร์'}
+              กดอัปเดตได้ทันทีโดยข้อมูลเซฟไม่หาย
             </div>
           </div>
-        </div>
-        <span className="px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[11px] font-bold shrink-0">
-          {isInstallable ? 'ติดตั้งเลย' : 'วิธีติดตั้ง'}
-        </span>
-      </button>
+          <span className="px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-xs mland:text-[11px] font-bold shrink-0">
+            {checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}
+          </span>
+        </button>
+      )}
+      {!isInstalled && (
+        <button
+          type="button"
+          onClick={handleInstallClick}
+          className="w-full p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--g)]/45 hover:border-[var(--g)] flex items-center justify-between gap-3 mland:gap-2 text-left cursor-pointer transition-all shadow-xs"
+        >
+          <div className="flex items-center gap-3 mland:gap-2 min-w-0">
+            <img src={iconUrl} alt="ลูกหนังไทย" className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl shrink-0" />
+            <div className="min-w-0">
+              <div className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] truncate">
+                {isInstallable ? '📲 ติดตั้ง "ลูกหนังไทย" ลงมือถือ' : '📱 เล่นในมือถือ? ติดตั้งเป็นแอปได้'}
+              </div>
+              <div className="text-[11px] mland:text-[10px] text-[var(--mut)] truncate">
+                {isInstallable
+                  ? 'กดเพื่อติดตั้งลงหน้าจอโฮม เล่นเต็มจอและออฟไลน์ได้'
+                  : isIOS
+                    ? 'กดดูวิธีเพิ่มลงหน้าจอโฮมบน iPhone / iPad (Safari)'
+                    : 'กดดูขั้นตอนติดตั้งสำหรับ Android, iOS และคอมพิวเตอร์'}
+              </div>
+            </div>
+          </div>
+          <span className="px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[11px] font-bold shrink-0">
+            {isInstallable ? 'ติดตั้งเลย' : 'วิธีติดตั้ง'}
+          </span>
+        </button>
+      )}
       {renderGuideModal()}
     </>
   );

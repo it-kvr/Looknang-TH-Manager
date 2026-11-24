@@ -450,7 +450,7 @@ export const MainMenu: React.FC<{
 
   if (step === 'ms' && previewClubs) {
     return (
-      <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+      <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)]">
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
           <div className="max-w-5xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
             <div className="min-w-0">
@@ -646,7 +646,7 @@ export const MainMenu: React.FC<{
     };
 
     return (
-      <div className="h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)]">
+      <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)]">
         {/* Compact Landscape Header Bar */}
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
           <div className="max-w-5xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
@@ -1095,7 +1095,7 @@ export const MainMenu: React.FC<{
   };
 
   return (
-    <div className="relative h-[100dvh] w-full flex flex-col justify-center overflow-hidden bg-[#040c08] safe-all">
+    <div className="relative h-full w-full flex flex-col justify-center overflow-hidden bg-[#040c08] safe-all">
       {/* Full-Bleed Stadium Artwork Canvas — Blurred & Dark Moody Night Atmosphere */}
       <div
         aria-hidden="true"

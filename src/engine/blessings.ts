@@ -1,7 +1,7 @@
 import type { StatKey, Player, Team, GameState, GodBlessingPatch } from '../types/game';
 import { clamp, fmtMoney } from '../utils/math';
 import { LINE } from '../data/thaiFootballData';
-import { ovMe, syncMe, logFin } from './playerCore';
+import { ovMe, syncMe, logFin, recordPlayerSeasonProgress } from './playerCore';
 
 export const findMutablePlayerInState = (d: GameState, playerName: string, teamId: number | null): { pl: Player | null; team: Team | null } => {
   if (teamId !== null && d.teams[teamId]) {
@@ -67,6 +67,7 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
     d.p.sus = pl.sus;
     syncMe(d);
   }
+  recordPlayerSeasonProgress(pl, d.season ?? 1, d.md ?? 0, pl.me ? d.p : null);
   return true;
 };
 
@@ -81,6 +82,7 @@ export const resetGodBlessingOnPlayer = (d: GameState, playerName: string, teamI
     delete d.p.customD;
     syncMe(d);
   }
+  recordPlayerSeasonProgress(pl, d.season ?? 1, d.md ?? 0, pl.me ? d.p : null);
   return true;
 };
 
@@ -137,6 +139,7 @@ export function applySecretBoost(
       q.fit = 100;
       q.inj = 0;
       q.sus = 0;
+      recordPlayerSeasonProgress(q, d.season ?? 1, d.md ?? 0, q.me ? d.p : null);
     });
     t.tacFam = clamp((t.tacFam ?? 65) + delta * 2, 0, 100);
   }

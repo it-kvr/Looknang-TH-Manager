@@ -87,6 +87,8 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
   return { type, yr, role, wb, wg, sgBonus, swapQ, swapVal, cashNow, dueLater, loanOpt, chance, p0 };
 }
 
+type MarketTab = 'buy' | 'sell' | 'scout' | 'con';
+
 export const MarketView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
@@ -96,26 +98,34 @@ export const MarketView: React.FC<{
 }> = ({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
   const me = state.teams[state.me];
   const tx = getLeagueTransferContext(state, me);
+
+  const [activeTab, setActiveTab] = useState<MarketTab>('buy');
   const [marketSource, setMarketSource] = useState<'mk' | 'club'>('mk');
   const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
   const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
   const [sortBy, setSortBy] = useState<'default' | 'ov_desc' | 'price_asc' | 'age_asc'>('default');
   const [searchQuery, setSearchQuery] = useState('');
   const [clubTierFilter, setClubTierFilter] = useState<'ALL' | 'MY_TIER'>('MY_TIER');
+
   const [scoutRole, setScoutRole] = useState<SubRole | ''>('');
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
   const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
   const [quickListName, setQuickListName] = useState('');
+  const [contractFilter, setContractFilter] = useState<'all' | 'expiring'>('all');
+
   const [renewIdx, setRenewIdx] = useState<number | null>(null);
   const [renewYr, setRenewYr] = useState(3);
   const [renewRole, setRenewRole] = useState<'key' | 'rot' | 'pro'>('rot');
   const [renewWb, setRenewWb] = useState<0 | 1 | 2>(1);
   const [renewMsg, setRenewMsg] = useState('');
-  const [rightTab, setRightTab] = useState<'sell' | 'scout' | 'con'>('sell');
 
   useEffect(() => {
-    if (navIntent?.tab === 'k' && (navIntent.sub === 'sell' || navIntent.sub === 'scout' || navIntent.sub === 'con')) {
-      setRightTab(navIntent.sub);
+    if (navIntent?.tab !== 'k') return;
+    if (navIntent.sub === 'sell' || navIntent.sub === 'scout' || navIntent.sub === 'con' || navIntent.sub === 'buy') {
+      setActiveTab(navIntent.sub);
+    } else if (navIntent.sub === 'club') {
+      setActiveTab('buy');
+      setMarketSource('club');
     }
   }, [navIntent]);
 
@@ -176,6 +186,7 @@ export const MarketView: React.FC<{
     .map((q, i) => ({ q, i, c: ensureCon(q) }))
     .filter(({ q }) => !q.loan)
     .sort((a, b) => a.c.yr - b.c.yr || b.q.ov - a.q.ov);
+  const displayedContracts = contractFilter === 'expiring' ? contractList.filter(({ c }) => c.yr <= 1) : contractList;
 
   const incomingOffers = getIncomingOffers(state);
   const listedPlayers = me.sq.filter((q) => q.listed && !q.loan);
@@ -183,8 +194,16 @@ export const MarketView: React.FC<{
     .filter((q) => !q.listed && !q.loan)
     .slice()
     .sort((a, b) => b.ov - a.ov);
-  const expiringCount = me.sq.filter((q) => !q.loan && ensureCon(q).yr <= 1).length;
+  const expiringCount = contractList.filter(({ c }) => c.yr <= 1).length;
   const activeCount = marketSource === 'mk' ? marketList.length : clubMarketList.length;
+  const hasBuyFilters = filter !== 'ALL' || subFilter !== 'ALL' || sortBy !== 'default' || searchQuery.trim() !== '';
+
+  const resetBuyFilters = () => {
+    setFilter('ALL');
+    setSubFilter('ALL');
+    setSortBy('default');
+    setSearchQuery('');
+  };
 
   const getDraftTarget = (draft: OfferDraft, s: GameState): { q: Player | undefined; sellerTeam?: Team } => {
     if (draft.source === 'club' && draft.clubTeamId != null) {
@@ -712,9 +731,16 @@ export const MarketView: React.FC<{
     );
   };
 
+  const marketTabs: { id: MarketTab; label: string; count?: string }[] = [
+    { id: 'buy', label: '🛒 ซื้อ & ยืมนักเตะ', count: `${activeCount}` },
+    { id: 'sell', label: '🏷️ ขายออก & ข้อเสนอ', count: incomingOffers.length > 0 ? `${incomingOffers.length} ดีลเข้า` : listedPlayers.length > 0 ? `${listedPlayers.length} ตั้งขาย` : undefined },
+    { id: 'scout', label: '🔍 แมวมองสโมสร', count: state.scout?.results ? 'รายงานพร้อม' : state.scout ? `รอ ${state.scout.turnsLeft} นัด` : undefined },
+    { id: 'con', label: '📋 สัญญา & เยาวชน', count: expiringCount + loanPlayers.length > 0 ? `${expiringCount + loanPlayers.length} ใกล้หมด` : undefined }
+  ];
+
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      {/* Compact Executive Transfer Status Strip */}
+      {/* Top Transfer Window Status & Club Budget Strip */}
       <div className={`px-3.5 py-2 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl border shrink-0 flex items-center justify-between gap-3 ${tx.tw.open ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
         <div className="min-w-0 flex items-baseline gap-2">
           <span className="font-bold text-xs sm:text-sm mland:text-[11px] whitespace-nowrap">
@@ -726,7 +752,7 @@ export const MarketView: React.FC<{
           </span>
         </div>
 
-        <div className="flex items-center gap-x-2 mland:gap-x-1.5 text-xs mland:text-[10px] text-[var(--mut)] tabular whitespace-nowrap overflow-x-auto">
+        <div className="flex items-center gap-x-2.5 mland:gap-x-1.5 text-xs mland:text-[10px] text-[var(--mut)] tabular whitespace-nowrap overflow-x-auto">
           <span>
             ทีม <b className="text-[var(--ink)]">{me.sq.length}/{tx.maxSquad}</b>
           </span>
@@ -751,59 +777,170 @@ export const MarketView: React.FC<{
         </div>
       </div>
 
-      {/* Main Two-Column Transfer Workspace */}
-      <div className="grid grid-cols-[1.15fr_0.85fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
-        {/* LEFT PANE: Market & League Clubs Browser */}
-        <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
-          <div className="shrink-0 p-2.5 mland:p-2 border-b border-[var(--line)] space-y-2 mland:space-y-1.5 bg-[var(--surface-2)]/30">
-            {/* Row 1: Source Switcher + Quick Search + Context Action */}
-            <div className="flex items-center gap-1.5">
-              <div className="grid grid-cols-2 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setMarketSource('mk')}
-                  className={`px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  🏪 ตลาดกลาง
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMarketSource('club');
-                    if (filter === 'FREE') setFilter('ALL');
-                  }}
-                  className={`px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  🏟️ สโมสรในลีก
-                </button>
-              </div>
+      {/* Divided 4-Section Market Sub-Navigation */}
+      <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        {marketTabs.map((t) => {
+          const active = activeTab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setActiveTab(t.id);
+              }}
+              className={`px-2 mland:px-1.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5 min-w-0 ${
+                active
+                  ? 'bg-[var(--g)] text-white shadow-xs'
+                  : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <span className="truncate whitespace-nowrap">{t.label}</span>
+              {t.count && (
+                <span className={`hidden sm:inline mland:inline text-[10px] mland:text-[8.5px] font-semibold tabular shrink-0 whitespace-nowrap ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
+                  · {t.count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-              <div className="relative flex-1 min-w-0">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={marketSource === 'club' ? 'ค้นชื่อนักเตะ หรือสโมสร...' : 'ค้นชื่อ หรือตำแหน่ง...'}
-                  aria-label="ค้นหานักเตะ"
-                  className="w-full pl-2.5 pr-6 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] focus:outline-none focus:border-[var(--g)]"
-                />
-                {searchQuery && (
+      {/* SECTION 1: BUY & LOAN PLAYERS (Filter Sidebar + Spacious Player List) */}
+      {activeTab === 'buy' && (
+        <div className="grid grid-cols-[245px_1fr] mland:grid-cols-[210px_1fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+          {/* Left Filter & Source Panel */}
+          <aside className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
+              <div className="space-y-1.5 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">แหล่งนักเตะ</div>
+                <div className="grid grid-cols-2 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
-                    aria-label="ล้างคำค้นหา"
-                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                    onClick={() => setMarketSource('mk')}
+                    className={`py-1.5 mland:py-1 px-1.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                      marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
                   >
-                    ✕
+                    🏪 ตลาดกลาง
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMarketSource('club');
+                      if (filter === 'FREE') setFilter('ALL');
+                    }}
+                    className={`py-1.5 mland:py-1 px-1.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                      marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    🏟️ สโมสรอื่น
+                  </button>
+                </div>
               </div>
 
-              {marketSource === 'mk' ? (
+              <div className="space-y-1.5 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">ค้นหา</div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={marketSource === 'club' ? 'ชื่อนักเตะ / สโมสร...' : 'ชื่อนักเตะ / ตำแหน่ง...'}
+                    aria-label="ค้นหานักเตะ"
+                    className="w-full pl-2.5 pr-6 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] focus:outline-none focus:border-[var(--g)]"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchQuery('')}
+                      aria-label="ล้างคำค้นหา"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">ตำแหน่งหลัก</div>
+                <div className="grid grid-cols-3 gap-1">
+                  {([['ALL', 'ทั้งหมด'], ['GK', 'GK'], ['DF', 'หลัง'], ['MF', 'กลาง'], ['FW', 'หน้า'], ...(marketSource === 'mk' ? [['FREE', 'ฟรี'] as const] : [])] as const).map(([k, l]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => {
+                        setFilter(k);
+                        setSubFilter('ALL');
+                      }}
+                      className={`py-1.5 mland:py-1 px-1 rounded-lg text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
+                        filter === k ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">บทบาท &amp; การเรียงลำดับ</div>
+                <select
+                  aria-label="กรองตำแหน่งย่อย"
+                  value={subFilter}
+                  onChange={(e) => setSubFilter(e.target.value as 'ALL' | SubRole)}
+                  className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer"
+                >
+                  <option value="ALL">บทบาท: ทั้งหมด</option>
+                  {availableSubRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role} · {SPN[role] || role}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="เรียงลำดับนักเตะ"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as 'default' | 'ov_desc' | 'price_asc' | 'age_asc')}
+                  className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer"
+                >
+                  <option value="default">เรียง: แนะนำ</option>
+                  <option value="ov_desc">เรียง: OVR สูงสุด</option>
+                  <option value="price_asc">เรียง: ค่าตัวถูกสุด</option>
+                  <option value="age_asc">เรียง: อายุน้อยสุด</option>
+                </select>
+              </div>
+
+              {marketSource === 'club' && (
+                <div className="space-y-1.5 mland:space-y-1">
+                  <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">ขอบเขตลีก</div>
+                  <div className="grid grid-cols-2 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                    <button
+                      type="button"
+                      onClick={() => setClubTierFilter('MY_TIER')}
+                      className={`py-1 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
+                        clubTierFilter === 'MY_TIER' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
+                      }`}
+                    >
+                      ลีกใกล้เคียง
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setClubTierFilter('ALL')}
+                      className={`py-1 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
+                        clubTierFilter === 'ALL' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
+                      }`}
+                    >
+                      ทุกลีก
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 p-2.5 mland:p-2 border-t border-[var(--line)] bg-[var(--surface-2)]/40 space-y-1.5">
+              {marketSource === 'mk' && (
                 <button
                   type="button"
                   disabled={state.money < 15}
@@ -816,441 +953,407 @@ export const MarketView: React.FC<{
                     });
                     onToast('อัปเดตรายชื่อตลาดใหม่ครบทุกตำแหน่งแล้ว');
                   }}
-                  className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-semibold whitespace-nowrap disabled:opacity-40 cursor-pointer shrink-0 transition-colors"
+                  className="w-full py-1.5 mland:py-1 px-2.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
                 >
-                  🔄 หาใหม่ {fmtMoneyNum(15)}
+                  🔄 หาชุดใหม่ ({fmtMoneyNum(15)})
                 </button>
-              ) : (
-                <div className="flex p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setClubTierFilter('MY_TIER')}
-                    className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                      clubTierFilter === 'MY_TIER' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
-                    }`}
-                  >
-                    ลีกใกล้เคียง
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setClubTierFilter('ALL')}
-                    className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                      clubTierFilter === 'ALL' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
-                    }`}
-                  >
-                    ทุกลีก
-                  </button>
-                </div>
+              )}
+              {hasBuyFilters && (
+                <button
+                  type="button"
+                  onClick={resetBuyFilters}
+                  className="w-full py-1 px-2 rounded-lg text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                >
+                  ล้างตัวกรองทั้งหมด
+                </button>
+              )}
+            </div>
+          </aside>
+
+          {/* Right Spacious Player List */}
+          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                  {marketSource === 'mk' ? '🏪 รายชื่อนักเตะในตลาดกลาง' : '🏟️ นักเตะจากสโมสรในลีก'}
+                </h3>
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
+                  · {activeCount} คน
+                </span>
+              </div>
+              {!tx.tw.open && (
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap shrink-0">
+                  {marketSource === 'mk' ? 'ช่วงปิดตลาดเซ็นได้เฉพาะฟรีเอเยนต์' : '🔒 รอเปิดตลาดซื้อขาย'}
+                </span>
               )}
             </div>
 
-            {/* Row 2: Line Tabs + SubRole Select + Sort Select + Count */}
-            <div className="flex items-center justify-between gap-1.5">
-              <div className="flex items-center gap-1 overflow-x-auto min-w-0 flex-1">
-                {([['ALL', 'ทั้งหมด'], ['GK', 'GK'], ['DF', 'หลัง'], ['MF', 'กลาง'], ['FW', 'หน้า'], ...(marketSource === 'mk' ? [['FREE', 'ฟรี'] as const] : [])] as const).map(([k, l]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => {
-                      setFilter(k);
-                      setSubFilter('ALL');
-                    }}
-                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                      filter === k ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                    }`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-1 shrink-0">
-                <select
-                  aria-label="กรองตำแหน่งย่อย"
-                  value={subFilter}
-                  onChange={(e) => setSubFilter(e.target.value as 'ALL' | SubRole)}
-                  className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer max-w-[110px]"
-                >
-                  <option value="ALL">บทบาท: ทั้งหมด</option>
-                  {availableSubRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role} · {SPN[role] || role}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  aria-label="เรียงลำดับนักเตะ"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as 'default' | 'ov_desc' | 'price_asc' | 'age_asc')}
-                  className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold cursor-pointer"
-                >
-                  <option value="default">แนะนำ</option>
-                  <option value="ov_desc">OVR สูง</option>
-                  <option value="price_asc">ค่าตัวถูก</option>
-                  <option value="age_asc">อายุน้อย</option>
-                </select>
-
-                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap pl-0.5">
-                  {activeCount} คน
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Scrollable Player List */}
-          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
-            {marketSource === 'mk' ? (
-              marketList.length > 0 ? (
-                marketList.map(({ q, i }) => {
-                  const blockedByWindow = !tx.tw.open && !q.free;
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+              {marketSource === 'mk' ? (
+                marketList.length > 0 ? (
+                  marketList.map(({ q, i }) => {
+                    const blockedByWindow = !tx.tw.open && !q.free;
+                    return (
+                      <div
+                        key={`${q.n}-${i}`}
+                        className={`flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
+                      >
+                        <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                          <PlayerFace player={q} size={40} />
+                        </div>
+                        <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight">
+                            <span className="text-[var(--g)] mr-1.5">{q.ro}</span>
+                            {q.n}
+                            {q.free ? (
+                              <span className="ml-1.5 text-[11px] mland:text-[9.5px] text-[var(--g)] font-bold">· ฟรีเอเยนต์</span>
+                            ) : q.age <= 19 ? (
+                              <span className="ml-1.5 text-[11px] mland:text-[9.5px] text-[#9a6700] dark:text-[var(--lamp)] font-bold">· ดาวรุ่ง</span>
+                            ) : null}
+                          </div>
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                            {SPN[q.ro] || q.pos} · อายุ {q.age} ปี · ศักยภาพ {q.pot || q.ov} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด
+                          </div>
+                        </button>
+                        <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                          {q.ov}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={!!q.locked || blockedByWindow}
+                          onClick={() => openNegotiation('mk', i, q)}
+                          className={`min-w-[92px] mland:min-w-[78px] px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
+                            blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
+                          }`}
+                        >
+                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เซ็นฟรี' : `ยื่น ${fmtMoneyNum(q.price || 0)}`}
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center space-y-2">
+                    <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะตามเงื่อนไขที่เลือก</p>
+                    <button
+                      type="button"
+                      onClick={resetBuyFilters}
+                      className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+                    >
+                      ล้างตัวกรอง
+                    </button>
+                  </div>
+                )
+              ) : clubMarketList.length > 0 ? (
+                clubMarketList.map(({ q, team, idx, price }) => {
+                  const blockedByWindow = !tx.tw.open;
                   return (
                     <div
-                      key={`${q.n}-${i}`}
-                      className={`flex items-center gap-2.5 mland:gap-2 px-3 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
+                      key={`${team.id}-${q.n}-${idx}`}
+                      className={`flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
                     >
-                      <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
-                        <PlayerFace player={q} size={36} />
+                      <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                        <PlayerFace player={q} team={team} state={state} size={40} />
                       </div>
-                      <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs mland:text-[11px] truncate leading-tight">
-                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                      <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight">
+                          <span className="text-[var(--g)] mr-1.5">{q.ro}</span>
                           {q.n}
-                          {q.free ? (
-                            <span className="ml-1.5 text-[10.5px] mland:text-[9.5px] text-[var(--g)] font-bold">· ฟรีเอเยนต์</span>
-                          ) : q.age <= 19 ? (
-                            <span className="ml-1.5 text-[10.5px] mland:text-[9.5px] text-[#9a6700] dark:text-[var(--lamp)] font-bold">· ดาวรุ่ง</span>
-                          ) : null}
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                          {SPN[q.ro] || q.pos} · อายุ {q.age} · ศักยภาพ {q.pot || q.ov} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}
+                          {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age} ปี
                         </div>
                       </button>
-                      <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                      <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                         {q.ov}
                       </span>
                       <button
                         type="button"
                         disabled={!!q.locked || blockedByWindow}
-                        onClick={() => openNegotiation('mk', i, q)}
-                        className={`min-w-[84px] mland:min-w-[72px] px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
+                        onClick={() => openNegotiation('club', idx, q, team)}
+                        className={`min-w-[92px] mland:min-w-[78px] px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
                           blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
                         }`}
                       >
-                        {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เซ็นฟรี' : `ยื่น ${fmtMoneyNum(q.price || 0)}`}
+                        {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${fmtMoneyNum(price)}`}
                       </button>
                     </div>
                   );
                 })
               ) : (
-                <div className="p-6 text-center space-y-2">
-                  <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะตามเงื่อนไขที่เลือก</p>
+                <div className="p-8 text-center space-y-2">
+                  <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในสโมสรอื่นตามตัวกรอง</p>
                   <button
                     type="button"
                     onClick={() => {
-                      setFilter('ALL');
-                      setSubFilter('ALL');
-                      setSortBy('default');
-                      setSearchQuery('');
+                      resetBuyFilters();
+                      setClubTierFilter('ALL');
                     }}
                     className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
                   >
-                    ล้างตัวกรอง
+                    ดูทุกลีกทั้งหมด
                   </button>
                 </div>
-              )
-            ) : clubMarketList.length > 0 ? (
-              clubMarketList.map(({ q, team, idx, price }) => {
-                const blockedByWindow = !tx.tw.open;
-                return (
-                  <div
-                    key={`${team.id}-${q.n}-${idx}`}
-                    className={`flex items-center gap-2.5 mland:gap-2 px-3 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
-                  >
-                    <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
-                      <PlayerFace player={q} team={team} state={state} size={36} />
-                    </div>
-                    <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
-                      <div className="font-bold text-xs mland:text-[11px] truncate leading-tight">
-                        <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                        {q.n}
-                      </div>
-                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                        {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age}
-                      </div>
-                    </button>
-                    <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                      {q.ov}
-                    </span>
-                    <button
-                      type="button"
-                      disabled={!!q.locked || blockedByWindow}
-                      onClick={() => openNegotiation('club', idx, q, team)}
-                      className={`min-w-[84px] mland:min-w-[72px] px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
-                        blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
-                      }`}
-                    >
-                      {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${fmtMoneyNum(price)}`}
-                    </button>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="p-6 text-center space-y-2">
-                <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในสโมสรอื่นตามตัวกรอง</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFilter('ALL');
-                    setSubFilter('ALL');
-                    setClubTierFilter('ALL');
-                    setSearchQuery('');
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
-                >
-                  ดูทุกลีกทั้งหมด
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* RIGHT PANE: Unified Tabbed Club Deals, Scouting & Contracts */}
-        <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
-          <div className="shrink-0 p-2 mland:p-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30">
-            <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]">
-              {([
-                ['sell', `🏷️ ขาย/ดีล${incomingOffers.length ? ` (${incomingOffers.length})` : ''}`],
-                ['scout', `🔍 แมวมอง${state.scout?.results ? ' (พร้อม)' : state.scout ? ' (...)' : ''}`],
-                ['con', `📋 สัญญา${expiringCount + loanPlayers.length ? ` (${expiringCount + loanPlayers.length})` : ''}`]
-              ] as const).map(([k, lbl]) => (
-                <button
-                  key={k}
-                  type="button"
-                  onClick={() => setRightTab(k)}
-                  className={`py-1.5 mland:py-1 px-1.5 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap truncate cursor-pointer transition-colors ${
-                    rightTab === k ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  {lbl}
-                </button>
-              ))}
+              )}
             </div>
-          </div>
+          </section>
+        </div>
+      )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
-            {/* TAB 1: INCOMING OFFERS & TRANSFER LISTING */}
-            {rightTab === 'sell' && (
-              <>
-                {incomingOffers.length > 0 && (
-                  <div className="rounded-xl border border-[var(--lamp)]/80 bg-[var(--lamp-soft)]/55 overflow-hidden">
-                    <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--lamp)]/40 flex items-center justify-between text-xs sm:text-sm mland:text-[11px] font-bold">
-                      <span>💼 ข้อเสนอซื้อนักเตะเข้าทีม</span>
-                      <span className="tabular text-[#8a5b00] dark:text-[var(--lamp)]">{incomingOffers.length} รายการ</span>
-                    </div>
-                    <div className="divide-y divide-[var(--line)]/70 bg-[var(--surface)]">
-                      {incomingOffers.map((off) => {
-                        const targetQ = me.sq.find((q) => q.n === off.n);
-                        if (!targetQ) return null;
-                        const marketVal = vlu(targetQ);
-                        const buyerTeam =
-                          (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
-                          state.teams.find((t) => t.name === off.t);
-                        return (
-                          <div key={`${off.n}__${off.t}`} className="p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <PlayerFace player={targetQ} team={me} state={state} size={32} />
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs mland:text-[10.5px] font-bold truncate leading-tight">
-                                  {off.t}
-                                  {buyerTeam ? ` (${TN[buyerTeam.tier] || ''})` : ''}
-                                </div>
-                                <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                                  ซื้อ <b className="text-[var(--ink)]">{off.n}</b> ({targetQ.ro} · {targetQ.ov}) · ยื่น <b className="text-[var(--g)]">{fmtMoney(off.p)}</b> (ประเมิน {fmtMoneyNum(marketVal)})
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex flex-wrap gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const res = canAcceptTransferOffer(state, off);
-                                  if (!res.ok) {
-                                    onToast(res.err || 'ขายไม่สำเร็จ');
-                                    return;
-                                  }
-                                  onUpdateState((d) => {
-                                    acceptTransferOffer(d, off);
-                                  });
-                                  SFX.win();
-                                  onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
-                                }}
-                                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer hover:brightness-105"
-                              >
-                                ✅ ตอบรับขาย
-                              </button>
-                              {!off.cnt && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const out = resolveCounterOfferOutcome(state, off);
-                                    onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
-                                    onToast(
-                                      out.accepted
-                                        ? `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
-                                        : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
-                                    );
-                                  }}
-                                  className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer hover:border-[var(--g)]"
-                                >
-                                  💰 โก่ง +15%
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
-                                  onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
-                                }}
-                                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
-                              >
-                                ✕ ปฏิเสธ
-                              </button>
-                            </div>
+      {/* SECTION 2: OUTGOING TRANSFERS & INCOMING BIDS (Balanced 2-Column Workspace) */}
+      {activeTab === 'sell' && (
+        <div className="grid grid-cols-2 flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+          {/* Left: Incoming Offers */}
+          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className={`shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] flex items-center justify-between gap-2 ${incomingOffers.length > 0 ? 'bg-[var(--lamp-soft)]/55' : 'bg-[var(--surface-2)]/30'}`}>
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">💼 ข้อเสนอซื้อนักเตะเข้าทีม</h3>
+              <span className={`text-[11px] mland:text-[9.5px] font-bold tabular whitespace-nowrap ${incomingOffers.length > 0 ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>
+                {incomingOffers.length} รายการ
+              </span>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+              {incomingOffers.length > 0 ? (
+                incomingOffers.map((off) => {
+                  const targetQ = me.sq.find((q) => q.n === off.n);
+                  if (!targetQ) return null;
+                  const marketVal = vlu(targetQ);
+                  const buyerTeam =
+                    (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
+                    state.teams.find((t) => t.name === off.t);
+                  return (
+                    <div key={`${off.n}__${off.t}`} className="p-3 mland:p-2 space-y-2 mland:space-y-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <PlayerFace player={targetQ} team={me} state={state} size={36} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs sm:text-[13px] mland:text-[10.5px] font-bold truncate leading-tight">
+                            {off.t}
+                            {buyerTeam ? ` (${TN[buyerTeam.tier] || ''})` : ''}
                           </div>
-                        );
-                      })}
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                            ขอซื้อ <b className="text-[var(--ink)]">{off.n}</b> ({targetQ.ro} · OVR {targetQ.ov}) · ยื่น <b className="text-[var(--g)]">{fmtMoney(off.p)}</b> · ประเมิน {fmtMoneyNum(marketVal)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const res = canAcceptTransferOffer(state, off);
+                            if (!res.ok) {
+                              onToast(res.err || 'ขายไม่สำเร็จ');
+                              return;
+                            }
+                            onUpdateState((d) => {
+                              acceptTransferOffer(d, off);
+                            });
+                            SFX.win();
+                            onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
+                          }}
+                          className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer hover:brightness-105"
+                        >
+                          ✅ ตอบรับขาย
+                        </button>
+                        {!off.cnt && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const out = resolveCounterOfferOutcome(state, off);
+                              onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
+                              onToast(
+                                out.accepted
+                                  ? `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
+                                  : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
+                              );
+                            }}
+                            className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer hover:border-[var(--g)]"
+                          >
+                            💰 โก่ง +15%
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
+                            onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
+                          }}
+                          className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
+                        >
+                          ✕ ปฏิเสธ
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                  <div className="text-2xl opacity-75">💼</div>
+                  <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีข้อเสนอซื้อนักเตะเข้ามา</div>
+                  <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                    นำนักเตะขึ้นบัญชีขายทางด้านขวา แล้วกด &ldquo;📨 เสนอขาย&rdquo; เพื่อเรียกข้อเสนอจากสโมสรอื่น
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
 
-                <div className="space-y-2 mland:space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">🏷️ บัญชีขายของทีม ({listedPlayers.length})</h3>
-                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap">
-                      {tx.tw.open ? 'ยื่นเสนอขายทีมอื่นได้' : 'รอตลาดเปิด'}
-                    </span>
-                  </div>
+          {/* Right: Transfer List */}
+          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 p-3 mland:p-2 border-b border-[var(--line)] bg-[var(--surface-2)]/30 space-y-2 mland:space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">🏷️ บัญชีขายของทีม ({listedPlayers.length})</h3>
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap">
+                  {tx.tw.open ? 'ยื่นเสนอขายทีมอื่นได้' : '🔒 รอตลาดเปิด'}
+                </span>
+              </div>
 
-                  {unlistedEligible.length > 0 && (
-                    <div className="flex gap-1.5">
-                      <select
-                        aria-label="เลือกนักเตะขึ้นบัญชีขาย"
-                        value={quickListName}
-                        onChange={(e) => setQuickListName(e.target.value)}
-                        className="flex-1 min-w-0 px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold"
-                      >
-                        <option value="">+ เลือกนักเตะขึ้นบัญชีขาย...</option>
-                        {unlistedEligible.map((q) => (
-                          <option key={q.n} value={q.n}>
-                            {q.ro} · {q.n} (OVR {q.ov} · {fmtMoneyNum(vlu(q))})
-                          </option>
-                        ))}
-                      </select>
+              {unlistedEligible.length > 0 && (
+                <div className="flex gap-1.5">
+                  <select
+                    aria-label="เลือกนักเตะขึ้นบัญชีขาย"
+                    value={quickListName}
+                    onChange={(e) => setQuickListName(e.target.value)}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold"
+                  >
+                    <option value="">+ เลือกนักเตะขึ้นบัญชีขาย...</option>
+                    {unlistedEligible.map((q) => (
+                      <option key={q.n} value={q.n}>
+                        {q.ro} · {q.n} (OVR {q.ov} · {fmtMoneyNum(vlu(q))})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!quickListName}
+                    onClick={() => {
+                      const targetName = quickListName;
+                      if (!targetName) return;
+                      SFX.tap();
+                      onUpdateState((d) => {
+                        const target = d.teams[d.me].sq.find((z) => z.n === targetName);
+                        if (target) {
+                          target.listed = 1;
+                          target.askPrice = Math.max(5, vlu(target));
+                        }
+                      });
+                      setQuickListName('');
+                      onToast(`ขึ้นบัญชีขาย ${targetName} แล้ว`);
+                    }}
+                    className="px-3 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-40 shrink-0"
+                  >
+                    ขึ้นตลาด
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+              {listedPlayers.length > 0 ? (
+                listedPlayers.map((q) => {
+                  const chk = getPlayerSellCheck(state, me, q);
+                  const ask = q.askPrice || vlu(q);
+                  return (
+                    <div key={q.n} className="flex items-center gap-2.5 px-3 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
+                      <PlayerFace player={q} team={me} state={state} size={34} />
+                      <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
+                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                          {q.n} <span className="text-[var(--mut)] tabular">· OVR {q.ov}</span>
+                        </div>
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                          ตั้งขาย {fmtMoney(ask)} · ประเมิน {fmtMoneyNum(vlu(q))}
+                        </div>
+                      </button>
                       <button
                         type="button"
-                        disabled={!quickListName}
+                        title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้ทีมอื่น' : chk.reason}
                         onClick={() => {
-                          const targetName = quickListName;
-                          if (!targetName) return;
+                          if (!chk.canPitch) {
+                            onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้');
+                            return;
+                          }
+                          if (chk.pitchedThisTurn) {
+                            onToast('เสนอขายคนนี้ไปแล้วในนัดนี้');
+                            return;
+                          }
                           SFX.tap();
+                          setPitchTargetName(q.n);
+                        }}
+                        className={`px-2.5 py-1.5 mland:py-1 rounded-lg border text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer ${
+                          chk.canPitch && !chk.pitchedThisTurn
+                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] opacity-75'
+                        }`}
+                      >
+                        {!tx.tw.open ? '🔒 รอตลาด' : chk.pitchedThisTurn ? 'รอนัดหน้า' : '📨 เสนอขาย'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
                           onUpdateState((d) => {
-                            const target = d.teams[d.me].sq.find((z) => z.n === targetName);
-                            if (target) {
-                              target.listed = 1;
-                              target.askPrice = Math.max(5, vlu(target));
+                            const t = d.teams[d.me].sq.find((z) => z.n === q.n);
+                            if (t) {
+                              t.listed = 0;
+                              delete t.askPrice;
                             }
                           });
-                          setQuickListName('');
-                          onToast(`ขึ้นบัญชีขาย ${targetName} แล้ว`);
+                          onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
                         }}
-                        className="px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-40 shrink-0"
+                        className="px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
                       >
-                        ขึ้นตลาด
+                        ถอด
                       </button>
                     </div>
-                  )}
+                  );
+                })
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                  <div className="text-2xl opacity-75">🏷️</div>
+                  <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีนักเตะในบัญชีขาย</div>
+                  <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                    เลือกนักเตะจากช่องด้านบนแล้วกด &ldquo;ขึ้นตลาด&rdquo; เพื่อเริ่มเสนอขายสโมสรอื่น
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
 
-                  {listedPlayers.length > 0 ? (
-                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
-                      {listedPlayers.map((q) => {
-                        const chk = getPlayerSellCheck(state, me, q);
-                        const ask = q.askPrice || vlu(q);
-                        return (
-                          <div key={q.n} className="flex items-center gap-2 px-2.5 py-2 mland:p-1.5 bg-[var(--surface-2)]/30">
-                            <PlayerFace player={q} team={me} state={state} size={32} />
-                            <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                              <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                                <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                                {q.n} <span className="text-[var(--mut)] tabular">({q.ov})</span>
-                              </div>
-                              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                                ตั้งขาย {fmtMoney(ask)} · ประเมิน {fmtMoneyNum(vlu(q))}
-                              </div>
-                            </button>
-                            <button
-                              type="button"
-                              title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้ทีมอื่น' : chk.reason}
-                              onClick={() => {
-                                if (!chk.canPitch) {
-                                  onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้');
-                                  return;
-                                }
-                                if (chk.pitchedThisTurn) {
-                                  onToast('เสนอขายคนนี้ไปแล้วในนัดนี้');
-                                  return;
-                                }
-                                SFX.tap();
-                                setPitchTargetName(q.n);
-                              }}
-                              className={`px-2.5 py-1.5 mland:py-1 rounded-lg border text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer ${
-                                chk.canPitch && !chk.pitchedThisTurn
-                                  ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                                  : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] opacity-70'
-                              }`}
-                            >
-                              {!tx.tw.open ? '🔒 รอตลาด' : chk.pitchedThisTurn ? 'รอนัดหน้า' : '📨 เสนอขาย'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onUpdateState((d) => {
-                                  const t = d.teams[d.me].sq.find((z) => z.n === q.n);
-                                  if (t) {
-                                    t.listed = 0;
-                                    delete t.askPrice;
-                                  }
-                                });
-                                onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
-                              }}
-                              className="px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
-                            >
-                              ถอด
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="p-4 rounded-xl border border-dashed border-[var(--line)] text-center text-xs mland:text-[10.5px] text-[var(--mut)]">
-                      ยังไม่มีนักเตะในบัญชีขาย เลือกนักเตะด้านบนเพื่อตั้งขายและส่งเสนอสโมสรอื่น
-                    </div>
+      {/* SECTION 3: SCOUTING DEPARTMENT (Mission Dispatch + Scout Report) */}
+      {activeTab === 'scout' && (
+        <div className="grid grid-cols-[0.92fr_1.08fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+          {/* Left: Send Scout Mission */}
+          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">🔍 ส่งแมวมองหานักเตะ</h3>
+              <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
+                ค่าส่ง {fmtMoneyNum(20)} · รอ 2 นัด
+              </span>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 space-y-3 mland:space-y-2">
+              {state.scout ? (
+                <div className="p-3 mland:p-2.5 rounded-xl bg-[var(--lamp-soft)]/70 border border-[var(--lamp)]/50 text-xs mland:text-[10.5px] space-y-1.5">
+                  <div className="font-bold flex items-center justify-between gap-2">
+                    <span>{state.scout.results ? '✅ รายงานแมวมองพร้อมแล้ว' : '⏳ แมวมองกำลังออกเดินทาง'}</span>
+                    {!state.scout.results && (
+                      <span className="tabular text-[#8a5b00] dark:text-[var(--lamp)]">เหลือ {state.scout.turnsLeft} นัด</span>
+                    )}
+                  </div>
+                  <p className="text-[var(--mut)]">
+                    ภารกิจปัจจุบัน: <b className="text-[var(--ink)]">{state.scout.label}</b>
+                  </p>
+                  {state.scout.results && (
+                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
+                      ตรวจสอบรายชื่อที่พบในช่องรายงานด้านขวา หรือกดปิดรายงานเพื่อส่งภารกิจใหม่
+                    </p>
                   )}
                 </div>
-              </>
-            )}
-
-            {/* TAB 2: SCOUTING HUB */}
-            {rightTab === 'scout' && (
-              <div className="space-y-3 mland:space-y-2">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">🔍 แมวมองหานักเตะ</h3>
-                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">ค่าส่ง {fmtMoneyNum(20)} · รอ 2 นัด · ใช้ได้ตลอดปี</span>
-                </div>
-
-                {!state.scout ? (
-                  <div className="space-y-2.5 mland:space-y-2">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 mland:grid-cols-2 gap-1.5">
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">เลือกเป้าหมายด่วน</div>
+                    <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
                       {([['wonderkid', '🌟 ดาวรุ่ง U20'], ['free', '🆓 ฟรีเอเยนต์'], ['gk', '🧤 ผู้รักษาประตู'], ['defender', '🛡️ กองหลัง'], ['midfielder', '🧭 กองกลาง'], ['striker', '⚽ กองหน้า']] as [ScoutMission['focus'], string][]).map(([focus, lbl]) => (
                         <button
                           key={focus}
@@ -1265,255 +1368,321 @@ export const MarketView: React.FC<{
                             });
                             onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
                           }}
-                          className="px-2.5 py-2 mland:py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10.5px] font-semibold text-left whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
+                          className="px-3 py-2.5 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10.5px] font-semibold text-left whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
                         >
                           {lbl}
                         </button>
                       ))}
                     </div>
+                  </div>
 
-                    <div className="pt-2 border-t border-[var(--line)]/70 space-y-1.5">
-                      <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">หรือระบุตำแหน่งย่อยเจาะจง</div>
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          aria-label="เลือกตำแหน่งเจาะจงให้แมวมอง"
-                          value={scoutRole}
-                          onChange={(e) => setScoutRole(e.target.value as SubRole | '')}
-                          className="flex-1 min-w-0 px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold"
-                        >
-                          <option value="">เลือกตำแหน่งที่ต้องการ...</option>
-                          {ALL_SUB_ROLES.map((r) => (
-                            <option key={r} value={r}>
-                              {r} — {SPN[r] || r}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          disabled={!scoutRole || state.money < 20}
-                          onClick={() => {
-                            if (!scoutRole) return;
-                            SFX.tap();
-                            const lineFocus: ScoutMission['focus'] =
-                              LINE[scoutRole] === 'GK' ? 'gk' : LINE[scoutRole] === 'DF' ? 'defender' : LINE[scoutRole] === 'MF' ? 'midfielder' : 'striker';
-                            onUpdateState((d) => {
-                              d.money -= 20;
-                              logFin(d, `ส่งแมวมองหาตำแหน่ง ${scoutRole}`, -20);
-                              d.scout = createScoutMission(lineFocus, scoutRole);
-                            });
-                            onToast(`ส่งแมวมองหาตำแหน่ง ${scoutRole} แล้ว! รอรายงานในอีก 2 นัด`);
-                          }}
-                          className="px-3 py-1.5 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[10.5px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer shrink-0"
-                        >
-                          ส่งเจาะจง
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : !state.scout.results ? (
-                  <div className="p-3 mland:p-2.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-xs mland:text-[10.5px] space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 font-bold">
-                      <span>⏳ แมวมองกำลังปฏิบัติภารกิจ</span>
-                      <span className="tabular text-[#8a5b00] dark:text-[var(--lamp)]">เหลือ {state.scout.turnsLeft} นัด</span>
-                    </div>
-                    <p className="text-[var(--mut)]">
-                      เป้าหมาย: <b className="text-[var(--ink)]">{state.scout.label}</b>
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs mland:text-[10.5px]">
-                      <span className="font-bold text-[var(--g)] truncate">รายงาน: {state.scout.label}</span>
+                  <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/70 space-y-1.5">
+                    <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">หรือระบุตำแหน่งย่อยเจาะจง</div>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        aria-label="เลือกตำแหน่งเจาะจงให้แมวมอง"
+                        value={scoutRole}
+                        onChange={(e) => setScoutRole(e.target.value as SubRole | '')}
+                        className="flex-1 min-w-0 px-2.5 py-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10.5px] font-semibold"
+                      >
+                        <option value="">เลือกตำแหน่งที่ต้องการ...</option>
+                        {ALL_SUB_ROLES.map((r) => (
+                          <option key={r} value={r}>
+                            {r} — {SPN[r] || r}
+                          </option>
+                        ))}
+                      </select>
                       <button
                         type="button"
-                        onClick={() => onUpdateState((d) => { d.scout = null; })}
-                        className="text-[var(--mut)] hover:text-[var(--ink)] font-semibold whitespace-nowrap cursor-pointer"
+                        disabled={!scoutRole || state.money < 20}
+                        onClick={() => {
+                          if (!scoutRole) return;
+                          SFX.tap();
+                          const lineFocus: ScoutMission['focus'] =
+                            LINE[scoutRole] === 'GK' ? 'gk' : LINE[scoutRole] === 'DF' ? 'defender' : LINE[scoutRole] === 'MF' ? 'midfielder' : 'striker';
+                          onUpdateState((d) => {
+                            d.money -= 20;
+                            logFin(d, `ส่งแมวมองหาตำแหน่ง ${scoutRole}`, -20);
+                            d.scout = createScoutMission(lineFocus, scoutRole);
+                          });
+                          onToast(`ส่งแมวมองหาตำแหน่ง ${scoutRole} แล้ว! รอรายงานในอีก 2 นัด`);
+                        }}
+                        className="px-3.5 py-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10.5px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer shrink-0"
                       >
-                        ✕ ปิดรายงาน
+                        ส่งเจาะจง
                       </button>
                     </div>
-                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--g)]/35 overflow-hidden">
-                      {state.scout.results.map((q, i) => {
-                        const blockedByWindow = !tx.tw.open && !q.free;
-                        return (
-                          <div key={`${q.n}-${i}`} className="flex items-center gap-2 px-2.5 py-2 mland:p-1.5 bg-[var(--surface-2)]/30">
-                            <PlayerFace player={q} size={32} />
-                            <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                              <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                                <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                                {q.n}
-                              </div>
-                              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                                {SPN[q.ro] || q.pos} · อายุ {q.age} · ศักยภาพ {q.pot} · {q.free ? 'ฟรี' : fmtMoneyNum(q.price || 0)}
-                              </div>
-                            </button>
-                            <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                              {q.ov}
-                            </span>
-                            <button
-                              type="button"
-                              disabled={!!q.locked || blockedByWindow}
-                              onClick={() => openNegotiation('scout', i, q)}
-                              className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 ${
-                                blockedByWindow ? 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'
-                              }`}
-                            >
-                              {q.locked ? 'ล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
                   </div>
-                )}
-              </div>
-            )}
+                </>
+              )}
+            </div>
+          </section>
 
-            {/* TAB 3: CONTRACTS, LOAN BUYOUTS & YOUTH ACADEMY */}
-            {rightTab === 'con' && (
-              <div className="space-y-3 mland:space-y-2">
-                {loanPlayers.length > 0 && (
-                  <div className="space-y-1.5">
-                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📌 ออปชันซื้อขาดนักเตะยืมตัว</h3>
-                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
-                      {loanPlayers.map(({ q, i }) => (
-                        <div key={q.n} className="flex items-center gap-2 px-2.5 py-2 mland:p-1.5 bg-[var(--surface-2)]/30">
-                          <PlayerFace player={q} team={me} state={state} size={32} />
-                          <div className="flex-1 min-w-0">
-                            <div className="font-bold text-xs mland:text-[10.5px] truncate">{q.pos} · {q.n}</div>
-                            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">ค่าฉีกซื้อขาด {fmtMoney(q.loanOpt || 0)}</div>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={!tx.tw.open || state.money < (q.loanOpt || 0)}
-                            onClick={() => {
-                              const cost = q.loanOpt || 0;
-                              onUpdateState((d) => {
-                                d.money -= cost;
-                                logFin(d, `ใช้ออปชันซื้อขาด ${q.n}`, -cost);
-                                const target = d.teams[d.me].sq[i];
-                                delete target.loan;
-                                delete target.loanOpt;
-                                target.signedSeason = d.season;
-                                target.signedMd = d.md;
-                                target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
-                                appendPlayerCareerLog(target, `🤝 เซ็นสัญญาถาวรกับ ${d.teams[d.me].name} ซีซั่น ${d.season}`);
-                              });
-                              onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
-                            }}
-                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer"
-                          >
-                            {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${fmtMoneyNum(q.loanOpt || 0)}`}
-                          </button>
+          {/* Right: Scout Report */}
+          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+              <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                {state.scout?.results ? `📋 รายงาน: ${state.scout.label}` : '📋 รายงานผลการส่อง'}
+              </h3>
+              {state.scout?.results && (
+                <button
+                  type="button"
+                  onClick={() => onUpdateState((d) => { d.scout = null; })}
+                  className="text-xs mland:text-[10px] text-[var(--mut)] hover:text-[var(--ink)] font-semibold whitespace-nowrap cursor-pointer"
+                >
+                  ✕ ปิดรายงาน
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+              {state.scout?.results ? (
+                state.scout.results.map((q, i) => {
+                  const blockedByWindow = !tx.tw.open && !q.free;
+                  return (
+                    <div key={`${q.n}-${i}`} className="flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors">
+                      <PlayerFace player={q} size={36} />
+                      <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight">
+                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                          {q.n}
                         </div>
-                      ))}
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                          {SPN[q.ro] || q.pos} · อายุ {q.age} ปี · ศักยภาพ {q.pot} · {q.free ? 'ฟรีเอเยนต์' : fmtMoneyNum(q.price || 0)}
+                        </div>
+                      </button>
+                      <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                        {q.ov}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={!!q.locked || blockedByWindow}
+                        onClick={() => openNegotiation('scout', i, q)}
+                        className={`px-3 py-1.5 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 ${
+                          blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'
+                        }`}
+                      >
+                        {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
+                      </button>
                     </div>
-                  </div>
-                )}
+                  );
+                })
+              ) : state.scout ? (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                  <div className="text-2xl opacity-75">⏳</div>
+                  <div className="text-xs sm:text-sm mland:text-xs font-bold">กำลังติดตามฟอร์มนักเตะ ({state.scout.label})</div>
+                  <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs tabular">
+                    รายงานจะพร้อมในอีก {state.scout.turnsLeft} นัด · ใช้ได้ตลอดปีแม้ช่วงปิดตลาด
+                  </p>
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                  <div className="text-2xl opacity-75">🔎</div>
+                  <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีรายงานแมวมอง</div>
+                  <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                    เลือกเป้าหมายหรือตำแหน่งที่ต้องการทางด้านซ้าย เพื่อส่งแมวมองไปค้นหานักเตะศักยภาพสูง
+                  </p>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
 
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-1">
-                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📋 สัญญานักเตะ ({contractList.length})</h3>
-                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">≤ 1 ปี ควรรีบต่อก่อนหมด</span>
-                  </div>
-                  <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
-                    {contractList.map(({ q, i, c }) => (
-                      <div key={q.n} className="flex items-center gap-2 px-2.5 py-2 mland:p-1.5 bg-[var(--surface-2)]/20">
-                        <PlayerFace player={q} team={me} state={state} size={32} />
-                        <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                          <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                            <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                            {q.n}{' '}
-                            <span className={c.yr <= 1 ? 'text-[var(--red)] font-bold' : 'text-[#9a6700] dark:text-[var(--lamp)] font-semibold'}>
-                              · {c.yr <= 0 ? 'หมดสัญญา!' : `${c.yr} ปี`}
-                            </span>
-                          </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                            {ROLE_L[c.role]} · ค่าเหนื่อย {fmtMoneyNum(c.wg)}/นัด
-                          </div>
-                        </button>
-                        <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                          {q.ov}
+      {/* SECTION 4: CONTRACTS, LOAN BUYOUTS & YOUTH ACADEMY (Clean 2-Column Layout) */}
+      {activeTab === 'con' && (
+        <div className="grid grid-cols-[1.08fr_0.92fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+          {/* Left: First-Team Contracts */}
+          <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+            <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+              <div className="flex items-baseline gap-2 min-w-0">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">📋 สัญญานักเตะ ({displayedContracts.length})</h3>
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] hidden sm:inline mland:inline truncate">
+                  ≤ 1 ปี ควรรีบต่อก่อนหมด
+                </span>
+              </div>
+
+              <div className="flex p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setContractFilter('all')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
+                    contractFilter === 'all' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'
+                  }`}
+                >
+                  ทั้งหมด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setContractFilter('expiring')}
+                  className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer tabular ${
+                    contractFilter === 'expiring' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
+                  }`}
+                >
+                  ใกล้หมด ({expiringCount})
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+              {displayedContracts.length > 0 ? (
+                displayedContracts.map(({ q, i, c }) => (
+                  <div key={q.n} className="flex items-center gap-2.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
+                    <PlayerFace player={q} team={me} state={state} size={34} />
+                    <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                      <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
+                        <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                        {q.n}{' '}
+                        <span className={c.yr <= 1 ? 'text-[var(--red)] font-bold' : 'text-[#9a6700] dark:text-[var(--lamp)] font-semibold'}>
+                          · {c.yr <= 0 ? 'หมดสัญญา!' : `เหลือ ${c.yr} ปี`}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRenewIdx(i);
-                            setRenewYr(Math.max(2, c.yr + 2 > 5 ? 3 : c.yr + 2));
-                            setRenewRole(c.role);
-                            setRenewWb(1);
-                            setRenewMsg('');
-                          }}
-                          className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                            c.yr <= 1 ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)]'
-                          }`}
-                        >
-                          ต่อสัญญา
-                        </button>
                       </div>
-                    ))}
+                      <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                        {ROLE_L[c.role]} · ค่าเหนื่อย {fmtMoneyNum(c.wg)}/นัด
+                      </div>
+                    </button>
+                    <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                      {q.ov}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRenewIdx(i);
+                        setRenewYr(Math.max(2, c.yr + 2 > 5 ? 3 : c.yr + 2));
+                        setRenewRole(c.role);
+                        setRenewWb(1);
+                        setRenewMsg('');
+                      }}
+                      className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
+                        c.yr <= 1 ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)]'
+                      }`}
+                    >
+                      ต่อสัญญา
+                    </button>
                   </div>
+                ))
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                  <div className="text-2xl opacity-75">✅</div>
+                  <div className="text-xs font-bold">ไม่มีนักเตะที่สัญญาใกล้หมด</div>
+                  <button
+                    type="button"
+                    onClick={() => setContractFilter('all')}
+                    className="px-3 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
+                  >
+                    แสดงสัญญาทั้งหมด
+                  </button>
                 </div>
+              )}
+            </div>
+          </section>
 
-                <div className="space-y-1.5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-1">
-                    <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">🌱 เด็กเยาวชนอะคาเดมี่ ({state.yth?.length || 0})</h3>
-                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">เซ็นฟรี · ดันขึ้นชุดใหญ่ได้ตลอดปี</span>
-                  </div>
-                  {(state.yth || []).length ? (
-                    <div className="divide-y divide-[var(--line)]/60 rounded-xl border border-[var(--line)] overflow-hidden">
-                      {state.yth.map((q, i) => (
-                        <div key={q.n} className="flex items-center gap-2 px-2.5 py-2 mland:p-1.5 bg-[var(--surface-2)]/20">
-                          <PlayerFace player={q} team={me} state={state} size={32} />
-                          <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                            <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                              <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                              {q.n}
-                            </div>
-                            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                              อายุ {q.age} ปี · ศักยภาพ {q.pot} · ค่าเหนื่อย ~{fmtMoneyNum(wagOf(q))}
-                            </div>
-                          </button>
-                          <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                            {q.ov}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={me.sq.length >= tx.maxSquad || tx.curWage + wagOf(q) > tx.wageCap}
-                            onClick={() => {
-                              onUpdateState((d) => {
-                                const t = d.teams[d.me];
-                                const y = d.yth[i];
-                                if (!y || t.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) return;
-                                y.con = { yr: 3, wg: wagOf(y), role: 'pro' };
-                                y.no = undefined;
-                                y.signedSeason = d.season;
-                                y.signedMd = d.md;
-                                appendPlayerCareerLog(y, `🎓 เลื่อนชั้นจากอะคาเดมี่สู่ชุดใหญ่ ${t.name} ซีซั่น ${d.season}`);
-                                t.sq.push(y);
-                                assignTeamShirtNumbers(t);
-                                d.yth.splice(i, 1);
-                              });
-                              onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
-                            }}
-                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
-                          >
-                            เซ็น 3 ปี
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-3 rounded-xl border border-dashed border-[var(--line)] text-center text-xs mland:text-[10.5px] text-[var(--mut)]">
-                      ปลายซีซั่นจะมีเด็กเยาวชนชุดใหม่เข้ามา (อัปเกรดอะคาเดมี่เพื่อรับเด็กฝีเท้าดีขึ้น)
-                    </div>
-                  )}
+          {/* Right: Loan Buyouts & Youth Academy */}
+          <div className="flex flex-col min-h-0 gap-2.5 mland:gap-2 overflow-hidden">
+            {loanPlayers.length > 0 && (
+              <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col shrink-0 max-h-[42%] overflow-hidden">
+                <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📌 ออปชันซื้อขาดนักเตะยืมตัว</h3>
+                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">{loanPlayers.length} คน</span>
                 </div>
-              </div>
+                <div className="overflow-y-auto divide-y divide-[var(--line)]/60">
+                  {loanPlayers.map(({ q, i }) => (
+                    <div key={q.n} className="flex items-center gap-2.5 px-3 py-2 mland:px-2.5 mland:py-1.5">
+                      <PlayerFace player={q} team={me} state={state} size={32} />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate">{q.ro} · {q.n}</div>
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">ค่าฉีกซื้อขาด {fmtMoney(q.loanOpt || 0)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!tx.tw.open || state.money < (q.loanOpt || 0)}
+                        onClick={() => {
+                          const cost = q.loanOpt || 0;
+                          onUpdateState((d) => {
+                            d.money -= cost;
+                            logFin(d, `ใช้ออปชันซื้อขาด ${q.n}`, -cost);
+                            const target = d.teams[d.me].sq[i];
+                            delete target.loan;
+                            delete target.loanOpt;
+                            target.signedSeason = d.season;
+                            target.signedMd = d.md;
+                            target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
+                            appendPlayerCareerLog(target, `🤝 เซ็นสัญญาถาวรกับ ${d.teams[d.me].name} ซีซั่น ${d.season}`);
+                          });
+                          onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
+                        }}
+                        className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer"
+                      >
+                        {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${fmtMoneyNum(q.loanOpt || 0)}`}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
+
+            <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col flex-1 min-h-0 overflow-hidden">
+              <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">🌱 เด็กเยาวชนอะคาเดมี่ ({state.yth?.length || 0})</h3>
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap">เซ็นฟรีตลอดปี</span>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
+                {(state.yth || []).length ? (
+                  state.yth.map((q, i) => (
+                    <div key={q.n} className="flex items-center gap-2.5 px-3 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
+                      <PlayerFace player={q} team={me} state={state} size={34} />
+                      <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
+                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
+                          {q.n}
+                        </div>
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
+                          อายุ {q.age} ปี · ศักยภาพ {q.pot} · ค่าเหนื่อย ~{fmtMoneyNum(wagOf(q))}
+                        </div>
+                      </button>
+                      <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                        {q.ov}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={me.sq.length >= tx.maxSquad || tx.curWage + wagOf(q) > tx.wageCap}
+                        onClick={() => {
+                          onUpdateState((d) => {
+                            const t = d.teams[d.me];
+                            const y = d.yth[i];
+                            if (!y || t.sq.length >= LEAGUE_TRANSFER_RULES.maxSquad) return;
+                            y.con = { yr: 3, wg: wagOf(y), role: 'pro' };
+                            y.no = undefined;
+                            y.signedSeason = d.season;
+                            y.signedMd = d.md;
+                            appendPlayerCareerLog(y, `🎓 เลื่อนชั้นจากอะคาเดมี่สู่ชุดใหญ่ ${t.name} ซีซั่น ${d.season}`);
+                            t.sq.push(y);
+                            assignTeamShirtNumbers(t);
+                            d.yth.splice(i, 1);
+                          });
+                          onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
+                        }}
+                        className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
+                      >
+                        เซ็น 3 ปี
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
+                    <div className="text-2xl opacity-75">🌱</div>
+                    <div className="text-xs font-bold">ยังไม่มีเยาวชนชุดใหม่ในรอบนี้</div>
+                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
+                      ปลายซีซั่นจะมีเด็กเยาวชนชุดใหม่เข้ามา (อัปเกรดอะคาเดมี่เพื่อรับเด็กฝีเท้าดีขึ้น)
+                    </p>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
+        </div>
+      )}
 
       {renderNegotiationModal()}
       {renderRenewModal()}

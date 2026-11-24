@@ -32,11 +32,21 @@
   --red-soft: rgba(248, 113, 113, 0.15);
 }
 
-html,
-body {
+html {
   width: 100%;
   height: 100%;
-  min-height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background-color: var(--bg);
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -47,8 +57,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
   -webkit-touch-callout: none;
-  overscroll-behavior: contain;
-  touch-action: pan-x pan-y;
+  overscroll-behavior: none;
+  touch-action: manipulation;
 }
 
 .dark body {
@@ -58,7 +68,8 @@ body {
 #root {
   width: 100%;
   height: 100%;
-  min-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 :fullscreen,
@@ -67,10 +78,11 @@ html.is-fullscreen,
 html.is-fullscreen body,
 html.is-fullscreen #root {
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
+  height: 100%;
   margin: 0;
   padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
   background-color: var(--bg);
 }
 
@@ -120,6 +132,28 @@ select,
 input,
 textarea {
   touch-action: manipulation;
+}
+
+input[type='range'] {
+  touch-action: none;
+}
+
+.overflow-y-auto {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overflow-x-auto {
+  overscroll-behavior: contain;
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+}
+
+.overflow-auto {
+  overscroll-behavior: contain;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 button:focus-visible,
