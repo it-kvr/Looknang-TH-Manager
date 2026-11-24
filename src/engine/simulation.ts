@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, recordPlayerSeasonProgress, OVF } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
 import { applyTrainingMissionProgress } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers } from './history';
 
@@ -507,6 +507,31 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   let ga = pois(lamA);
   let evs = [...genMatchGoals(h, H.x, gh, s?.p), ...genMatchGoals(a, G.x, ga, s?.p)].sort((x, y) => x.m - y.m);
 
+  // Realistic Own Goal ("ทำเข้าประตูตัวเอง") conversion on deflected/chaotic moments
+  if (evs.length > 0 && Math.random() < (bg ? 0.075 : 0.055)) {
+    const ogIdx = R(0, evs.length - 1);
+    const targetEv = evs[ogIdx];
+    const concPool = targetEv.t === h.id ? G.x : H.x;
+    const concTeam = targetEv.t === h.id ? a : h;
+    const ogCandidates = concPool.filter((q) => q.pos === 'DF' || q.pos === 'MF' || q.pos === 'GK');
+    const ogCulprit = ogCandidates.length ? P(ogCandidates) : concPool[0];
+    if (ogCulprit) {
+      evs[ogIdx] = {
+        ...targetEv,
+        who: ogCulprit.n,
+        as: '',
+        style: 'own_goal',
+        og: true
+      };
+      incidents.push({
+        m: targetEv.m,
+        t: targetEv.t,
+        kind: 'own_goal',
+        text: `🤦 เข้าประตูตัวเอง! ${ogCulprit.n} (${concTeam.name}) สกัดบอลพลาดแฉลบเข้าประตูตัวเอง`
+      });
+    }
+  }
+
   // Miracle rapid comeback ("ปาฏิหาริย์พลิกนรก") when trailing by 2+ goals
   const deficitAbs = Math.abs(gh - ga);
   if (deficitAbs >= 2) {
@@ -593,6 +618,32 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
       text: `📺 ดราม่า VAR! ผู้ตัดสินเช็กจังหวะล้ำหน้า/ฟาวล์เขตโทษของ ${varSide.name} อย่างละเอียด`
     });
   }
+  if (Math.random() < (bg ? 0.14 : 0.09)) {
+    const slipTeam = Math.random() < 0.5 ? h : a;
+    const slipPool = (slipTeam.id === h.id ? H.x : G.x).filter((q) => q.pos !== 'GK');
+    const slipPlayer = slipPool.length ? P(slipPool) : slipTeam.sq[0];
+    if (slipPlayer) {
+      incidents.push({
+        m: R(14, 86),
+        t: slipTeam.id,
+        kind: 'slip',
+        text: `💦 จังหวะเสียว! ${slipPlayer.n} (${slipTeam.name}) ลื่นล้มเสียหลักบนพื้นหญ้ากลางจังหวะสำคัญ`
+      });
+    }
+  }
+  if (Math.random() < (bg ? 0.14 : 0.10)) {
+    const whiffTeam = Math.random() < 0.5 ? h : a;
+    const whiffPool = (whiffTeam.id === h.id ? H.x : G.x).filter((q) => q.pos === 'FW' || q.pos === 'MF');
+    const whiffPlayer = whiffPool.length ? P(whiffPool) : whiffTeam.sq[0];
+    if (whiffPlayer) {
+      incidents.push({
+        m: R(16, 88),
+        t: whiffTeam.id,
+        kind: 'whiff',
+        text: `💨 พลาดโอกาสทอง! ${whiffPlayer.n} (${whiffTeam.name}) ง้างเท้ายิงจ่อๆ แต่เตะวืดลมอย่างน่าเสียดาย`
+      });
+    }
+  }
 
   return { gh, ga, evs, xgH, xgA, cards, subs, playedNames, playedSlots, incidents };
 }
@@ -633,6 +684,8 @@ export function extractMatchHighlights(
         return 'ซัดฟรีคิกสุดคม';
       case 'penalty':
         return 'สังหารจุดโทษไม่พลาด';
+      case 'own_goal':
+        return 'ทำเข้าประตูตัวเอง (OG)';
       default:
         return 'ยิงประตู';
     }
@@ -659,8 +712,6 @@ export function extractMatchHighlights(
     if (runH < runA) homeEverTrailed = true;
     if (runA < runH) awayEverTrailed = true;
 
-    goalTallies[ev.who] = (goalTallies[ev.who] || 0) + 1;
-    const count = goalTallies[ev.who];
     const tags: string[] = [];
     if (ev.m >= 86 && (runH === runA || Math.abs(runH - runA) === 1)) {
       tags.push('ประตูนาทีบาป!');
@@ -669,18 +720,26 @@ export function extractMatchHighlights(
     } else if (idx === 0) {
       tags.push('เบิกร่อง');
     }
-    if (count === 3) tags.push('แฮตทริก!!');
-    else if (count === 2) tags.push('เบิ้ล');
+    if (!ev.og) {
+      goalTallies[ev.who] = (goalTallies[ev.who] || 0) + 1;
+      const count = goalTallies[ev.who];
+      if (count === 3) tags.push('แฮตทริก!!');
+      else if (count === 2) tags.push('เบิ้ล');
+    } else {
+      tags.push('OG');
+    }
 
     const tName = teamName(ev.t);
     const verb = styleDesc(ev.style);
-    const asTxt = ev.as ? ` · แอสซิสต์ ${ev.as}` : '';
+    const asTxt = !ev.og && ev.as ? ` · แอสซิสต์ ${ev.as}` : '';
     const tagTxt = tags.length ? ` [${tags.join(' · ')}]` : '';
     lines.push({
       m: ev.m,
       kind: 'goal',
       teamId: ev.t,
-      text: `⚽ ${ev.who} (${tName}) ${verb} (${runH}-${runA})${asTxt}${tagTxt}`
+      text: ev.og
+        ? `🤦 ${ev.who} ทำเข้าประตูตัวเอง! (${tName} ได้ประตู ${runH}-${runA})${tagTxt}`
+        : `⚽ ${ev.who} (${tName}) ${verb} (${runH}-${runA})${asTxt}${tagTxt}`
     });
   });
 
@@ -743,7 +802,10 @@ export function extractMatchHighlights(
         lg.text.includes('คนัคเคิล') ||
         lg.text.includes('ปาเนนก้า') ||
         lg.text.includes('ปาฏิหาริย์') ||
-        lg.text.includes('สิ่งศักดิ์สิทธิ์');
+        lg.text.includes('สิ่งศักดิ์สิทธิ์') ||
+        lg.text.includes('ลื่นล้ม') ||
+        lg.text.includes('เตะวืด') ||
+        lg.text.includes('เข้าประตูตัวเอง');
       if (isDramaLog && !(r.incidents || []).some((inc) => Math.abs(inc.m - lg.m) <= 1)) {
         pushDrama(lg.m, lg.text);
       }
@@ -867,8 +929,9 @@ export function computePlayerRatings(
     const diff = (gf as number) - (ga as number);
     x.forEach((q) => {
       const D = DT(q, careerP);
-      const gl = r.evs.filter((e) => e.t === team.id && e.who === q.n).length;
-      const as = r.evs.filter((e) => e.t === team.id && e.as === q.n).length;
+      const gl = r.evs.filter((e) => !e.og && e.t === team.id && e.who === q.n).length;
+      const ogCount = r.evs.filter((e) => e.og && e.t !== team.id && e.who === q.n).length;
+      const as = r.evs.filter((e) => !e.og && e.t === team.id && e.as === q.n).length;
       const csBonus = (q.pos === 'GK' || q.pos === 'DF') && (ga as number) === 0 ? 0.65 : 0;
       const concedePenalty = (q.pos === 'GK' || q.pos === 'DF') && (ga as number) >= 3 ? -0.35 : 0;
       const roleScore =
@@ -889,7 +952,8 @@ export function computePlayerRatings(
       const raw =
         6.2 +
         (diff > 0 ? 0.45 : diff < 0 ? -0.35 : 0) +
-        gl * 1.1 +
+        gl * 1.1 -
+        ogCount * 1.15 +
         as * 0.7 +
         csBonus +
         concedePenalty +
@@ -897,7 +961,7 @@ export function computePlayerRatings(
         defWorkBonus +
         ((q.ov - 55) / 90) +
         (Math.random() - 0.5) * 0.7;
-      const rt = clamp(Math.round(raw * 10) / 10, 4.8, 10.0);
+      const rt = clamp(Math.round(raw * 10) / 10, 4.2, 10.0);
       ratings[q.n] = rt;
       if (rt > bestR) {
         bestR = rt;
@@ -1287,8 +1351,15 @@ export function createNewGame(
     const careerTalent = clamp(Math.round(p.talent ?? R(60, 92)), 40, 96);
     const careerTraits = p.traits && p.traits.length ? p.traits.slice(0, 5) : rollPlayerTraits(p.pos, p.sp, R(45, 58), careerTalent);
     const startLog = `🌱 เริ่มเส้นทางอาชีพกับ ${teams[meId].name} (${TN[teams[meId].tier]}) ในซีซั่น 1`;
+    const fallbackBio = rollPlayerBio(p.pos, p.sp, p.name);
+    const startHt = clamp(Math.round(p.ht ?? fallbackBio.ht), 155, 205);
+    const startWt = clamp(Math.round(p.wt ?? fallbackBio.wt), 50, 110);
+    const startFoot = p.foot === 'L' || p.foot === 'R' || p.foot === 'B' ? p.foot : fallbackBio.foot;
     s.p = {
       ...p,
+      ht: startHt,
+      wt: startWt,
+      foot: startFoot,
       talent: careerTalent,
       traits: careerTraits,
       no: chosenNo,
@@ -1321,6 +1392,9 @@ export function createNewGame(
       sp: 0,
       ov,
       age: startAge,
+      ht: startHt,
+      wt: startWt,
+      foot: startFoot,
       pot: clamp(Math.max(R(87, 95), careerTalent + 6), ov + 18, 96),
       talent: careerTalent,
       traits: careerTraits,
@@ -1459,6 +1533,7 @@ export function tallyMatchPlayers(h: Team, a: Team, r: MatchResult) {
   r.evs.forEach((e) => {
     const t = sTeamSafe(h, a, e.t);
     if (!t) return;
+    if (e.og) return;
     const q = t.sq.find((z) => z.n === e.who);
     if (q) q.sg = (q.sg || 0) + 1;
     const w = e.as && t.sq.find((z) => z.n === e.as);
@@ -1762,8 +1837,9 @@ export function calcPlayerPerf(
   const op = home ? r.ga : r.gh;
   const played = meta ? meta.played : true;
   const mins = meta ? meta.mins : 90;
-  const gl = r.evs.filter((e) => e.t === s.me && e.who === p.name).length;
-  const as = r.evs.filter((e) => e.t === s.me && e.as === p.name).length;
+  const gl = r.evs.filter((e) => !e.og && e.t === s.me && e.who === p.name).length;
+  const as = r.evs.filter((e) => !e.og && e.t === s.me && e.as === p.name).length;
+  const ogPenalty = r.evs.filter((e) => e.og && e.t !== s.me && e.who === p.name).length * 1.1;
   const en = p.en ?? 100;
   const vid = p.vid || 0;
 
@@ -1808,7 +1884,8 @@ export function calcPlayerPerf(
       ? matchRatings[p.name]
       : 6.2 +
         (my > op ? 0.5 : my < op ? -0.4 : 0) +
-        gl * 0.9 +
+        gl * 0.9 -
+        ogPenalty +
         as * 0.6 +
         (bk ? (op === 0 ? 0.6 : op >= 3 ? -0.5 : 0) : 0) +
         clamp((ovMe(p) - 60) / 70, -0.4, 0.5) +
@@ -4318,8 +4395,8 @@ export function simulateInstantMatchPayload(
   meTeam.sq.forEach((q) => {
     if (!myPlayedList.includes(q.n)) return;
     if (s.mode === 'p' && q.me && pf && pf.played === false) return;
-    const qGoals = r.evs.filter((e) => e.t === s.me && e.who === q.n).length;
-    const qAssists = r.evs.filter((e) => e.t === s.me && e.as === q.n).length;
+    const qGoals = r.evs.filter((e) => !e.og && e.t === s.me && e.who === q.n).length;
+    const qAssists = r.evs.filter((e) => !e.og && e.t === s.me && e.as === q.n).length;
     const qRt = ratings[q.n] || 6.5;
     const act: Partial<Record<PersonalMissionMetric, number>> = {
       matches: 1,

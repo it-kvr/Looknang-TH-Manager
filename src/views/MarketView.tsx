@@ -3,7 +3,7 @@ import type { SubRole, MainTab, Player, Team, ScoutMission, GameState } from '..
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { assignTeamShirtNumbers, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, type CreatedPlayerCandidate } from '../engine/playerCore';
+import { assignTeamShirtNumbers, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { appendPlayerCareerLog } from '../engine/history';
 import {
@@ -20,6 +20,7 @@ import {
   validateBatchSquadRemoval
 } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -460,6 +461,7 @@ export const MarketView: React.FC<{
               <div className="text-[11px] sm:text-xs mland:text-[10px] text-[var(--mut)] truncate tabular">
                 {sellerTeam ? `${sellerTeam.name} · ` : ''}อายุ {q.age} ปี · {q.free ? <b className="text-[var(--g)]">ฟรีเอเยนต์</b> : `ค่าตัว ${fmtMoney(q.price || 0)}`} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}
               </div>
+              <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-1" />
             </div>
             <span className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl text-white font-bold text-sm mland:text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>
               {q.ov}
@@ -468,7 +470,7 @@ export const MarketView: React.FC<{
               type="button"
               onClick={() => setOfferDraft(null)}
               aria-label="ปิดหน้าต่างเจรจา"
-              className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer shrink-0 hover:border-[var(--g)]"
+              className="btn-icon"
             >
               ✕
             </button>
@@ -488,8 +490,8 @@ export const MarketView: React.FC<{
                         type="button"
                         disabled={disabledLoan}
                         onClick={() => setOfferDraft({ ...offerDraft, type: k, counter: null, msg: '' })}
-                        className={`px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer disabled:opacity-40 transition-colors ${
-                          offerDraft.type === k ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)] hover:bg-[var(--line)]/50'
+                        className={`btn btn-sm ${
+                          offerDraft.type === k ? 'btn-primary' : 'btn-secondary'
                         }`}
                       >
                         {l}{disabledLoan ? ` (เต็ม ${tx.maxLoans})` : ''}
@@ -508,8 +510,8 @@ export const MarketView: React.FC<{
                         key={p}
                         type="button"
                         onClick={() => setOfferDraft({ ...offerDraft, pct: p, counter: null, msg: '' })}
-                        className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold tabular whitespace-nowrap cursor-pointer transition-colors ${
-                          offerDraft.pct === p ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)] hover:bg-[var(--line)]/50'
+                        className={`btn btn-sm tabular ${
+                          offerDraft.pct === p ? 'btn-primary' : 'btn-secondary'
                         }`}
                       >
                         {p}%
@@ -550,8 +552,8 @@ export const MarketView: React.FC<{
                         key={y}
                         type="button"
                         onClick={() => setOfferDraft({ ...offerDraft, yr: y, counter: null, msg: '' })}
-                        className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                          offerDraft.yr === y ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]'
+                        className={`btn btn-sm ${
+                          offerDraft.yr === y ? 'btn-primary' : 'btn-secondary'
                         }`}
                       >
                         {y} ปี
@@ -565,8 +567,8 @@ export const MarketView: React.FC<{
                       key={k}
                       type="button"
                       onClick={() => setOfferDraft({ ...offerDraft, role: k, counter: null, msg: '' })}
-                      className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                        offerDraft.role === k ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]'
+                      className={`btn btn-sm ${
+                        offerDraft.role === k ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
                       {l}
@@ -579,8 +581,8 @@ export const MarketView: React.FC<{
                       key={k}
                       type="button"
                       onClick={() => setOfferDraft({ ...offerDraft, wb: k, counter: null, msg: '' })}
-                      className={`py-1.5 mland:py-1 px-1 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap cursor-pointer truncate ${
-                        offerDraft.wb === k ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]'
+                      className={`btn btn-sm truncate ${
+                        offerDraft.wb === k ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
                       {l}
@@ -625,7 +627,7 @@ export const MarketView: React.FC<{
                   <div className="font-bold">💬 ผลการเจรจา ({q.tries || 0}/3)</div>
                   <p className="leading-snug">{offerDraft.msg}</p>
                   {offerDraft.counter && (
-                    <button type="button" onClick={() => submitOffer(true)} className="w-full px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white font-bold cursor-pointer">
+                    <button type="button" onClick={() => submitOffer(true)} className="btn btn-sm btn-primary w-full">
                       ✅ ตกลงตามข้อเสนอสวน ({fmtMoneyNum(offerDraft.counter.cashNow)} · {fmtMoneyNum(offerDraft.counter.wg)}/นัด)
                     </button>
                   )}
@@ -635,14 +637,14 @@ export const MarketView: React.FC<{
           </div>
 
           <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
-            <button type="button" onClick={() => setOfferDraft(null)} className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-sm mland:text-xs cursor-pointer whitespace-nowrap">
+            <button type="button" onClick={() => setOfferDraft(null)} className="btn btn-md btn-surface">
               ปิด
             </button>
             <button
               type="button"
               disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || !!q.locked}
               onClick={() => submitOffer(false)}
-              className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-sm mland:text-xs disabled:opacity-40 cursor-pointer"
+              className="btn btn-md btn-gold flex-1"
             >
               {q.locked
                 ? 'การเจรจาล่มแล้ว'
@@ -684,6 +686,7 @@ export const MarketView: React.FC<{
               <div className="text-xs mland:text-[10.5px] text-[var(--mut)] tabular">
                 เหลือสัญญา <b>{con.yr} ปี</b> · ค่าเหนื่อยเดิม {fmtMoneyNum(con.wg)}/นัด
               </div>
+              <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-1" />
             </div>
             <span className="px-2 py-0.5 rounded-lg text-white font-bold text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>
               {q.ov}
@@ -692,7 +695,7 @@ export const MarketView: React.FC<{
               type="button"
               onClick={() => setRenewIdx(null)}
               aria-label="ปิดหน้าต่างต่อสัญญา"
-              className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer shrink-0 hover:border-[var(--g)]"
+              className="btn-icon"
             >
               ✕
             </button>
@@ -704,7 +707,7 @@ export const MarketView: React.FC<{
                 <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ระยะเวลาสัญญาใหม่</div>
                 <div className="grid grid-cols-4 gap-1.5 mland:gap-1">
                   {[2, 3, 4, 5].map((y) => (
-                    <button key={y} type="button" onClick={() => setRenewYr(y)} className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewYr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                    <button key={y} type="button" onClick={() => setRenewYr(y)} className={`btn btn-sm ${renewYr === y ? 'btn-primary' : 'btn-secondary'}`}>
                       {y} ปี
                     </button>
                   ))}
@@ -714,7 +717,7 @@ export const MarketView: React.FC<{
                 <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">บทบาทในทีม</div>
                 <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
                   {([['key', '⭐ ตัวหลัก'], ['rot', '🔄 หมุนเวียน'], ['pro', '🌱 ดาวรุ่ง']] as const).map(([k, l]) => (
-                    <button key={k} type="button" onClick={() => setRenewRole(k)} className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${renewRole === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                    <button key={k} type="button" onClick={() => setRenewRole(k)} className={`btn btn-sm ${renewRole === k ? 'btn-primary' : 'btn-secondary'}`}>
                       {l}
                     </button>
                   ))}
@@ -726,7 +729,7 @@ export const MarketView: React.FC<{
                 <div className="text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1">ระดับค่าเหนื่อยที่เสนอ</div>
                 <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
                   {([['รัดเข็มขัด (-10%)', 0], ['เพิ่มนิด (+5%)', 1], ['จัดเต็ม (+25%)', 2]] as const).map(([l, k]) => (
-                    <button key={k} type="button" onClick={() => setRenewWb(k)} className={`px-1.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap truncate cursor-pointer ${renewWb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                    <button key={k} type="button" onClick={() => setRenewWb(k)} className={`btn btn-sm truncate ${renewWb === k ? 'btn-primary' : 'btn-secondary'}`}>
                       {l}
                     </button>
                   ))}
@@ -751,7 +754,7 @@ export const MarketView: React.FC<{
           </div>
 
           <div className="shrink-0 p-3 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex gap-2">
-            <button type="button" onClick={() => setRenewIdx(null)} className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer whitespace-nowrap">
+            <button type="button" onClick={() => setRenewIdx(null)} className="btn btn-md btn-surface">
               ปิด
             </button>
             <button
@@ -770,7 +773,7 @@ export const MarketView: React.FC<{
                   setRenewMsg('นักเตะยังไม่พอใจข้อเสนอ ลองเพิ่มค่าเหนื่อยหรือบทบาท');
                 }
               }}
-              className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-xs disabled:opacity-40 cursor-pointer"
+              className="btn btn-md btn-gold flex-1"
             >
               {renewOverCap ? `เกินเพดาน ${fmtMoneyNum(tx.wageCap)}` : `✅ ยืนยันต่อสัญญา (${fmtMoneyNum(newWg)}/นัด${bonus ? `, โบนัส ${fmtMoneyNum(bonus)}` : ''})`}
             </button>
@@ -827,7 +830,7 @@ export const MarketView: React.FC<{
       </div>
 
       {/* Divided 4-Section Market Sub-Navigation */}
-      <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+      <div className="seg-bar grid grid-cols-4 w-full shrink-0">
         {marketTabs.map((t) => {
           const active = activeTab === t.id;
           return (
@@ -838,11 +841,7 @@ export const MarketView: React.FC<{
                 SFX.tap();
                 setActiveTab(t.id);
               }}
-              className={`px-2 mland:px-1.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5 min-w-0 ${
-                active
-                  ? 'bg-[var(--g)] text-white shadow-xs'
-                  : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
-              }`}
+              className={`seg-btn min-w-0 ${active ? 'seg-btn-active' : ''}`}
             >
               <span className="truncate whitespace-nowrap">{t.label}</span>
               {t.count && (
@@ -863,12 +862,12 @@ export const MarketView: React.FC<{
             <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
               <div className="space-y-1.5 mland:space-y-1">
                 <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">แหล่งนักเตะ</div>
-                <div className="grid grid-cols-3 gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                <div className="seg-bar grid grid-cols-3 w-full">
                   <button
                     type="button"
                     onClick={() => setMarketSource('mk')}
-                    className={`py-1.5 mland:py-1 px-1 rounded-lg mland:rounded-md text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                      marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`seg-btn px-1 ${
+                      marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : ''
                     }`}
                   >
                     🏪 ตลาด
@@ -879,8 +878,8 @@ export const MarketView: React.FC<{
                       setMarketSource('club');
                       if (filter === 'FREE') setFilter('ALL');
                     }}
-                    className={`py-1.5 mland:py-1 px-1 rounded-lg mland:rounded-md text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                      marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`seg-btn px-1 ${
+                      marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : ''
                     }`}
                   >
                     🏟️ สโมสร
@@ -891,8 +890,8 @@ export const MarketView: React.FC<{
                       setMarketSource('created');
                       if (filter === 'FREE') setFilter('ALL');
                     }}
-                    className={`py-1.5 mland:py-1 px-1 rounded-lg mland:rounded-md text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                      marketSource === 'created' ? 'bg-[var(--surface)] text-[var(--g)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`seg-btn px-1 ${
+                      marketSource === 'created' ? 'bg-[var(--surface)] text-[var(--g)] shadow-xs' : ''
                     }`}
                   >
                     ⭐ สร้างเอง
@@ -935,8 +934,8 @@ export const MarketView: React.FC<{
                         setFilter(k);
                         setSubFilter('ALL');
                       }}
-                      className={`py-1.5 mland:py-1 px-1 rounded-lg text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer transition-colors ${
-                        filter === k ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      className={`btn btn-xs ${
+                        filter === k ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
                       {l}
@@ -976,22 +975,18 @@ export const MarketView: React.FC<{
               {marketSource === 'club' && (
                 <div className="space-y-1.5 mland:space-y-1">
                   <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">ขอบเขตลีก</div>
-                  <div className="grid grid-cols-2 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                  <div className="seg-bar grid grid-cols-2 w-full">
                     <button
                       type="button"
                       onClick={() => setClubTierFilter('MY_TIER')}
-                      className={`py-1 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                        clubTierFilter === 'MY_TIER' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
-                      }`}
+                      className={`seg-btn ${clubTierFilter === 'MY_TIER' ? 'seg-btn-active' : ''}`}
                     >
                       ลีกใกล้เคียง
                     </button>
                     <button
                       type="button"
                       onClick={() => setClubTierFilter('ALL')}
-                      className={`py-1 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                        clubTierFilter === 'ALL' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
-                      }`}
+                      className={`seg-btn ${clubTierFilter === 'ALL' ? 'seg-btn-active' : ''}`}
                     >
                       ทุกลีก
                     </button>
@@ -1014,7 +1009,7 @@ export const MarketView: React.FC<{
                     });
                     onToast('อัปเดตรายชื่อตลาดใหม่ครบทุกตำแหน่งแล้ว');
                   }}
-                  className="w-full py-1.5 mland:py-1 px-2.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
+                  className="btn btn-sm btn-surface w-full"
                 >
                   🔄 หาชุดใหม่ ({fmtMoneyNum(15)})
                 </button>
@@ -1023,7 +1018,7 @@ export const MarketView: React.FC<{
                 <button
                   type="button"
                   onClick={resetBuyFilters}
-                  className="w-full py-1 px-2 rounded-lg text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                  className="btn btn-xs btn-ghost w-full"
                 >
                   ล้างตัวกรองทั้งหมด
                 </button>
@@ -1084,6 +1079,7 @@ export const MarketView: React.FC<{
                           <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
                             {SPN[q.ro] || q.pos} · อายุ {q.age} ปี · ศักยภาพ {q.pot || q.ov} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด
                           </div>
+                          <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         </button>
                         <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                           {q.ov}
@@ -1092,8 +1088,8 @@ export const MarketView: React.FC<{
                           type="button"
                           disabled={!!q.locked || blockedByWindow}
                           onClick={() => openNegotiation('mk', i, q)}
-                          className={`min-w-[92px] mland:min-w-[78px] px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
-                            blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
+                          className={`btn btn-sm min-w-[92px] mland:min-w-[78px] shrink-0 ${
+                            blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                           }`}
                         >
                           {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : q.free ? 'เซ็นฟรี' : `ยื่น ${fmtMoneyNum(q.price || 0)}`}
@@ -1107,7 +1103,7 @@ export const MarketView: React.FC<{
                     <button
                       type="button"
                       onClick={resetBuyFilters}
-                      className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+                      className="btn btn-sm btn-secondary"
                     >
                       ล้างตัวกรอง
                     </button>
@@ -1133,6 +1129,7 @@ export const MarketView: React.FC<{
                           <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
                             {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age} ปี
                           </div>
+                          <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         </button>
                         <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                           {q.ov}
@@ -1141,8 +1138,8 @@ export const MarketView: React.FC<{
                           type="button"
                           disabled={!!q.locked || blockedByWindow}
                           onClick={() => openNegotiation('club', idx, q, team)}
-                          className={`min-w-[92px] mland:min-w-[78px] px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
-                            blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
+                          className={`btn btn-sm min-w-[92px] mland:min-w-[78px] shrink-0 ${
+                            blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                           }`}
                         >
                           {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${fmtMoneyNum(price)}`}
@@ -1159,7 +1156,7 @@ export const MarketView: React.FC<{
                         resetBuyFilters();
                         setClubTierFilter('ALL');
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+                      className="btn btn-sm btn-secondary"
                     >
                       ดูทุกลีกทั้งหมด
                     </button>
@@ -1282,6 +1279,7 @@ export const MarketView: React.FC<{
                           {cand.sourceType === 'career_save' && cand.clubName ? ` · ${cand.clubName}` : ''}
                           {cand.archName ? ` · ${cand.archName}` : ''} · อายุ {q.age} ปี · ศักยภาพ {cand.pot}
                         </div>
+                        <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] mland:text-[8.5px] tabular">
                           <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-[var(--surface-2)] border border-[var(--line)]/80 text-[var(--ink)] font-semibold">
                             <span>ยิง <b>{coreA.sh}</b></span>
@@ -1318,7 +1316,7 @@ export const MarketView: React.FC<{
                             SFX.tap();
                             onInspectPlayer(q, null);
                           }}
-                          className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] hover:border-[var(--g)] border border-[var(--line)] text-[11px] mland:text-[9px] font-bold text-[var(--ink)] whitespace-nowrap cursor-pointer"
+                          className="btn btn-xs btn-secondary"
                           title="ดูการ์ดพลังและประวัติสถิติทั้งหมด"
                         >
                           📊 สถิติ
@@ -1333,7 +1331,7 @@ export const MarketView: React.FC<{
                               type="button"
                               disabled={squadFull}
                               onClick={() => signCreatedPlayer(false)}
-                              className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--g)] hover:brightness-110 text-white text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
+                              className="btn btn-xs btn-primary"
                               title="ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร"
                             >
                               🌱 ปั้นฟรี
@@ -1342,7 +1340,7 @@ export const MarketView: React.FC<{
                               type="button"
                               disabled={squadFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
                               onClick={() => signCreatedPlayer(true)}
-                              className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp)] hover:brightness-105 text-[#261900] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
+                              className="btn btn-xs btn-gold"
                               title="ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น"
                             >
                               💰 ซื้อ {fmtMoneyNum(cand.price)}
@@ -1357,7 +1355,7 @@ export const MarketView: React.FC<{
                                   onToast(`ลบ ${q.n} ออกจากทำเนียบนักเตะสร้างเองแล้ว`);
                                 }}
                                 aria-label={`ลบ ${q.n}`}
-                                className="px-2 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--red-soft)] border border-[var(--line)] text-xs cursor-pointer"
+                                className="btn btn-xs btn-danger"
                               >
                                 🗑️
                               </button>
@@ -1474,7 +1472,7 @@ export const MarketView: React.FC<{
                               SFX.win();
                               onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
                             }}
-                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer hover:brightness-105"
+                            className="btn btn-xs btn-primary"
                           >
                             ✅ ตอบรับขาย
                           </button>
@@ -1490,7 +1488,7 @@ export const MarketView: React.FC<{
                                     : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
                                 );
                               }}
-                              className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer hover:border-[var(--g)]"
+                              className="btn btn-xs btn-secondary"
                             >
                               💰 โก่ง +15%
                             </button>
@@ -1501,7 +1499,7 @@ export const MarketView: React.FC<{
                               onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
                               onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
                             }}
-                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
+                            className="btn btn-xs btn-secondary hover:text-[var(--red)]"
                           >
                             ✕ ปฏิเสธ
                           </button>
@@ -1529,12 +1527,12 @@ export const MarketView: React.FC<{
                 <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
                   🏷️ ขายนักเตะ &amp; บัญชีขาย ({sellSquadList.length})
                 </h3>
-                <div className="flex p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
+                <div className="seg-bar shrink-0">
                   <button
                     type="button"
                     onClick={() => setSellSubView('all')}
-                    className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                      sellSubView === 'all' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'
+                    className={`seg-btn ${
+                      sellSubView === 'all' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : ''
                     }`}
                   >
                     นักเตะในทีม ({me.sq.length})
@@ -1542,8 +1540,8 @@ export const MarketView: React.FC<{
                   <button
                     type="button"
                     onClick={() => setSellSubView('listed')}
-                    className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer tabular ${
-                      sellSubView === 'listed' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
+                    className={`seg-btn tabular ${
+                      sellSubView === 'listed' ? 'seg-btn-active' : ''
                     }`}
                   >
                     ตั้งขาย ({listedPlayers.length})
@@ -1572,17 +1570,13 @@ export const MarketView: React.FC<{
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="seg-bar shrink-0">
                   {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((posKey) => (
                     <button
                       key={posKey}
                       type="button"
                       onClick={() => setSellPosFilter(posKey)}
-                      className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-semibold whitespace-nowrap cursor-pointer ${
-                        sellPosFilter === posKey
-                          ? 'bg-[var(--g)] text-white'
-                          : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                      }`}
+                      className={`seg-btn ${sellPosFilter === posKey ? 'seg-btn-active' : ''}`}
                     >
                       {posKey === 'ALL' ? 'ทั้งหมด' : posKey}
                     </button>
@@ -1608,14 +1602,14 @@ export const MarketView: React.FC<{
                         SFX.tap();
                         setSellModalNames(activeSelectedSell);
                       }}
-                      className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap"
+                      className="btn btn-xs btn-primary"
                     >
                       💰 ขายที่เลือก ({activeSelectedSell.length})
                     </button>
                     <button
                       type="button"
                       onClick={() => setSelectedSellNames([])}
-                      className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                      className="btn btn-xs btn-surface"
                     >
                       ล้าง
                     </button>
@@ -1700,7 +1694,7 @@ export const MarketView: React.FC<{
                                 });
                                 onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
                               }}
-                              className="px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
+                              className="btn btn-xs btn-secondary hover:text-[var(--red)]"
                             >
                               ถอด
                             </button>
@@ -1711,7 +1705,7 @@ export const MarketView: React.FC<{
                               SFX.tap();
                               setSellModalNames([q.n]);
                             }}
-                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--lamp-soft)] border border-[var(--lamp)]/55 text-[#7c5300] dark:text-[var(--lamp)] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer hover:brightness-95"
+                            className="btn btn-xs bg-[var(--lamp-soft)] border border-[var(--lamp)]/55 text-[#7c5300] dark:text-[var(--lamp)] hover:brightness-95"
                           >
                             💰 ขาย
                           </button>
@@ -1787,7 +1781,7 @@ export const MarketView: React.FC<{
                             });
                             onToast('ส่งแมวมองออกเดินทางแล้ว! รอรายงานในอีก 2 นัด');
                           }}
-                          className="px-3 py-2.5 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10.5px] font-semibold text-left whitespace-nowrap disabled:opacity-40 cursor-pointer transition-colors"
+                          className="btn btn-md btn-secondary justify-start"
                         >
                           {lbl}
                         </button>
@@ -1826,7 +1820,7 @@ export const MarketView: React.FC<{
                           });
                           onToast(`ส่งแมวมองหาตำแหน่ง ${scoutRole} แล้ว! รอรายงานในอีก 2 นัด`);
                         }}
-                        className="px-3.5 py-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10.5px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer shrink-0"
+                        className="btn btn-md btn-primary shrink-0"
                       >
                         ส่งเจาะจง
                       </button>
@@ -1847,7 +1841,7 @@ export const MarketView: React.FC<{
                 <button
                   type="button"
                   onClick={() => onUpdateState((d) => { d.scout = null; })}
-                  className="text-xs mland:text-[10px] text-[var(--mut)] hover:text-[var(--ink)] font-semibold whitespace-nowrap cursor-pointer"
+                  className="btn btn-xs btn-ghost"
                 >
                   ✕ ปิดรายงาน
                 </button>
@@ -1869,6 +1863,7 @@ export const MarketView: React.FC<{
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
                           {SPN[q.ro] || q.pos} · อายุ {q.age} ปี · ศักยภาพ {q.pot} · {q.free ? 'ฟรีเอเยนต์' : fmtMoneyNum(q.price || 0)}
                         </div>
+                        <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                       </button>
                       <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                         {q.ov}
@@ -1877,8 +1872,8 @@ export const MarketView: React.FC<{
                         type="button"
                         disabled={!!q.locked || blockedByWindow}
                         onClick={() => openNegotiation('scout', i, q)}
-                        className={`px-3 py-1.5 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 ${
-                          blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] text-white'
+                        className={`btn btn-sm shrink-0 ${
+                          blockedByWindow ? 'btn-secondary text-[var(--mut)]' : 'btn-primary'
                         }`}
                       >
                         {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : 'เจรจา'}
@@ -1921,12 +1916,12 @@ export const MarketView: React.FC<{
                 </span>
               </div>
 
-              <div className="flex p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
+              <div className="seg-bar shrink-0">
                 <button
                   type="button"
                   onClick={() => setContractFilter('all')}
-                  className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                    contractFilter === 'all' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'
+                  className={`seg-btn ${
+                    contractFilter === 'all' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : ''
                   }`}
                 >
                   ทั้งหมด
@@ -1934,8 +1929,8 @@ export const MarketView: React.FC<{
                 <button
                   type="button"
                   onClick={() => setContractFilter('expiring')}
-                  className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer tabular ${
-                    contractFilter === 'expiring' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
+                  className={`seg-btn tabular ${
+                    contractFilter === 'expiring' ? 'seg-btn-active' : ''
                   }`}
                 >
                   ใกล้หมด ({expiringCount})
@@ -1972,8 +1967,8 @@ export const MarketView: React.FC<{
                         setRenewWb(1);
                         setRenewMsg('');
                       }}
-                      className={`px-2.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer ${
-                        c.yr <= 1 ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)]'
+                      className={`btn btn-sm shrink-0 ${
+                        c.yr <= 1 ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
                       ต่อสัญญา
@@ -1987,7 +1982,7 @@ export const MarketView: React.FC<{
                   <button
                     type="button"
                     onClick={() => setContractFilter('all')}
-                    className="px-3 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] font-semibold cursor-pointer"
+                    className="btn btn-sm btn-secondary"
                   >
                     แสดงสัญญาทั้งหมด
                   </button>
@@ -2030,7 +2025,7 @@ export const MarketView: React.FC<{
                           });
                           onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
                         }}
-                        className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap disabled:opacity-40 cursor-pointer"
+                        className="btn btn-sm btn-primary shrink-0"
                       >
                         {!tx.tw.open ? '🔒 รอตลาดเปิด' : `ซื้อขาด ${fmtMoneyNum(q.loanOpt || 0)}`}
                       </button>
@@ -2059,6 +2054,7 @@ export const MarketView: React.FC<{
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
                           อายุ {q.age} ปี · ศักยภาพ {q.pot} · ค่าเหนื่อย ~{fmtMoneyNum(wagOf(q))}
                         </div>
+                        <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                       </button>
                       <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                         {q.ov}
@@ -2082,7 +2078,7 @@ export const MarketView: React.FC<{
                           });
                           onToast(`เซ็นเยาวชน ${q.n} สัญญา 3 ปี`);
                         }}
-                        className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-40"
+                        className="btn btn-sm btn-secondary shrink-0"
                       >
                         เซ็น 3 ปี
                       </button>

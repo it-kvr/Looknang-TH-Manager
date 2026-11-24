@@ -86,11 +86,11 @@ export const CupView: React.FC<{ state: GameState; onInspectTeam: (id: number) =
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      <div className="inline-flex gap-1 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] w-fit max-w-full shrink-0">
-        <button type="button" onClick={() => setCupTab('fa')} className={`px-3 mland:px-2.5 py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'fa' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+      <div className="seg-bar w-fit max-w-full shrink-0">
+        <button type="button" onClick={() => setCupTab('fa')} className={`seg-btn ${cupTab === 'fa' ? 'seg-btn-active' : ''}`}>
           🏆 ถ้วยประชาชน
         </button>
-        <button type="button" onClick={() => setCupTab('asia')} className={`px-3 mland:px-2.5 py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${cupTab === 'asia' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+        <button type="button" onClick={() => setCupTab('asia')} className={`seg-btn ${cupTab === 'asia' ? 'seg-btn-active' : ''}`}>
           🌏 บอลถ้วยทวีป
         </button>
       </div>

@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate, PreferredFoot } from '../types/game';
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
@@ -389,6 +389,115 @@ export function hasTrait(
   return getPlayerTraits(q, careerP).some((t) => t.id === traitId);
 }
 
+export interface PlayerBio {
+  heightCm: number;
+  weightKg: number;
+  foot: PreferredFoot;
+  footLabel: string;
+  footShort: string;
+  physiqueLabel: string;
+}
+
+const hashBioSeed = (seed: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+
+export function rollPlayerBio(
+  pos: Position,
+  ro: SubRole,
+  seedKey?: string
+): { ht: number; wt: number; foot: PreferredFoot } {
+  let s = seedKey ? hashBioSeed(`${seedKey}:${pos}:${ro}`) : 0;
+  const nextRand = (): number => {
+    if (!seedKey) return Math.random();
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+  const randInt = (lo: number, hi: number) => Math.floor(nextRand() * (hi - lo + 1)) + lo;
+
+  let minH = 169;
+  let maxH = 183;
+  let bmiBase = 22.1;
+  if (pos === 'GK') {
+    minH = 182;
+    maxH = 194;
+    bmiBase = 23.0;
+  } else if (ro === 'CB') {
+    minH = 179;
+    maxH = 192;
+    bmiBase = 23.1;
+  } else if (ro === 'ST' || ro === 'CF') {
+    minH = 173;
+    maxH = 189;
+    bmiBase = 22.8;
+  } else if (ro === 'CDM' || ro === 'LDM' || ro === 'RDM') {
+    minH = 173;
+    maxH = 186;
+    bmiBase = 22.5;
+  } else if (['LB', 'RB', 'LWB', 'RWB', 'LM', 'RM', 'LW', 'RW'].includes(ro)) {
+    minH = 166;
+    maxH = 181;
+    bmiBase = 21.5;
+  } else if (pos === 'DF') {
+    minH = 174;
+    maxH = 187;
+    bmiBase = 22.4;
+  } else if (pos === 'FW') {
+    minH = 170;
+    maxH = 185;
+    bmiBase = 22.0;
+  }
+
+  const ht = clamp(Math.round((randInt(minH, maxH) + randInt(minH, maxH)) / 2), 160, 200);
+  const bmi = bmiBase + (nextRand() * 2.2 - 1.1);
+  const wt = clamp(Math.round((ht / 100) ** 2 * bmi), 56, 98);
+
+  const footRoll = nextRand();
+  let foot: PreferredFoot;
+  if (ro === 'LB' || ro === 'LWB' || ro === 'LM') {
+    foot = footRoll < 0.72 ? 'L' : footRoll < 0.88 ? 'B' : 'R';
+  } else if (ro === 'RB' || ro === 'RWB' || ro === 'RM') {
+    foot = footRoll < 0.78 ? 'R' : footRoll < 0.91 ? 'B' : 'L';
+  } else if (ro === 'LW' || ro === 'RW') {
+    foot = footRoll < 0.56 ? 'R' : footRoll < 0.84 ? 'L' : 'B';
+  } else {
+    foot = footRoll < 0.68 ? 'R' : footRoll < 0.89 ? 'L' : 'B';
+  }
+  return { ht, wt, foot };
+}
+
+export function getPlayerBio(
+  q: Pick<Player, 'n' | 'pos' | 'ro' | 'ht' | 'wt' | 'foot' | 'me'> | null | undefined,
+  careerP?: Pick<PlayerCareerProfile, 'name' | 'pos' | 'sp' | 'ht' | 'wt' | 'foot'> | null
+): PlayerBio {
+  const po = q?.me ? careerP : careerP || null;
+  const pos = (po?.pos || q?.pos || 'MF') as Position;
+  const ro = (po?.sp || q?.ro || 'CM') as SubRole;
+  const seed = q?.n || po?.name || 'player';
+  const fallback = rollPlayerBio(pos, ro, seed);
+  const heightCm = clamp(Math.round((q?.me ? po?.ht : undefined) ?? q?.ht ?? po?.ht ?? fallback.ht), 155, 205);
+  const weightKg = clamp(Math.round((q?.me ? po?.wt : undefined) ?? q?.wt ?? po?.wt ?? fallback.wt), 50, 110);
+  const rawFoot = (q?.me ? po?.foot : undefined) ?? q?.foot ?? po?.foot ?? fallback.foot;
+  const foot: PreferredFoot = rawFoot === 'L' || rawFoot === 'R' || rawFoot === 'B' ? rawFoot : fallback.foot;
+  const footLabel = foot === 'L' ? 'เท้าซ้าย' : foot === 'B' ? 'สองข้าง' : 'เท้าขวา';
+  const footShort = foot === 'L' ? 'ซ้าย' : foot === 'B' ? '2 ข้าง' : 'ขวา';
+  const bmi = weightKg / ((heightCm / 100) ** 2);
+  const physiqueLabel =
+    heightCm >= 186
+      ? 'สูงใหญ่'
+      : bmi >= 23.6
+        ? 'กำยำ'
+        : heightCm <= 171
+          ? 'คล่องปราดเปรียว'
+          : 'สมส่วน';
+  return { heightCm, weightKg, foot, footLabel, footShort, physiqueLabel };
+}
+
 export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: SubRole): Player {
   const age = yo ? R(16, 18) : R(17, 34);
   const ov = yo ? clamp(baseOv + R(-6, 4), 20, 82) : clamp(baseOv + R(-9, 9), 25, 92);
@@ -397,6 +506,7 @@ export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: 
     : clamp(Math.round(38 + (ov - 50) * 0.55 + R(-10, 30)), 28, 95);
   const potBoost = talent >= 80 ? R(4, 10) : 0;
   const ro = forceRo || SPW(pos);
+  const bio = rollPlayerBio(pos, ro);
   return {
     n: genPlayerName(),
     pos,
@@ -404,6 +514,9 @@ export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: 
     sp: 0,
     ov,
     age,
+    ht: bio.ht,
+    wt: bio.wt,
+    foot: bio.foot,
     pot: clamp(ov + (age < 24 ? R(4, 25) + Math.round(potBoost * 0.5) : R(0, 3)), ov, 95),
     talent,
     traits: rollPlayerTraits(pos, ro, ov, talent),
@@ -906,6 +1019,7 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const gro = ag < D0.pk - 2 ? 'กำลังเติบโต' : ag <= D0.pk + 4 ? 'ช่วงพีค' : 'เริ่มถดถอย';
   const stCls = (q.sus || 0) > 0 || q.inj > 0 ? 'bad' : f < 60 ? 'wrn' : 'ok';
   const traits = getPlayerTraits(q, careerP);
+  const bio = getPlayerBio(q, careerP);
   const stTxt =
     (q.sus || 0) > 0
       ? `🟥 โดนแบน ${q.sus} นัด`
@@ -914,7 +1028,7 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
         : f < 60
           ? `⚠️ เหนื่อยล้า (${f}%)`
           : `✅ พร้อมลง (${f}%)`;
-  return { D0, a, f, d, gk, G, top, TR, traits, ag, gro, stCls, stTxt };
+  return { D0, a, f, d, gk, G, top, TR, traits, bio, ag, gro, stCls, stTxt };
 }
 
 export function injD(q: Player, n: number, careerP?: PlayerCareerProfile | null): number {
@@ -981,6 +1095,13 @@ export function syncMe(s: GameState) {
     else if (q.roleExp && Object.keys(q.roleExp).length) s.p.roleExp = { ...q.roleExp };
     if (s.p.customPers != null) q.customPers = s.p.customPers;
     else if (q.customPers != null) s.p.customPers = q.customPers;
+    const syncedBio = getPlayerBio(q, s.p);
+    q.ht = syncedBio.heightCm;
+    q.wt = syncedBio.weightKg;
+    q.foot = syncedBio.foot;
+    s.p.ht = syncedBio.heightCm;
+    s.p.wt = syncedBio.weightKg;
+    s.p.foot = syncedBio.foot;
     if (!q.pot || q.pot < q.ov) q.pot = clamp(92, q.ov + 12, 95);
     if (q.blessed) {
       q.customA = { ...s.p.a };
@@ -1464,6 +1585,18 @@ export function buildPlayerFromCareerProfile(
   const srs = lp?.srs ?? (hasHistory ? 0 : p.rs ?? 0);
   const sra = lp?.sra ?? (hasHistory ? 0 : p.ap ?? 0);
 
+  const resolvedBio = getPlayerBio(
+    {
+      n: p.name.trim() || 'นักเตะสร้างเอง',
+      pos: p.pos,
+      ro: p.sp,
+      ht: lp?.ht ?? p.ht,
+      wt: lp?.wt ?? p.wt,
+      foot: lp?.foot ?? p.foot
+    },
+    p
+  );
+
   const basePlayer: Player = {
     n: p.name.trim() || 'นักเตะสร้างเอง',
     pos: p.pos,
@@ -1480,6 +1613,9 @@ export function buildPlayerFromCareerProfile(
     sra,
     ov,
     age: clamp(Math.round(p.age ?? lp?.age ?? 17), 15, 42),
+    ht: resolvedBio.heightCm,
+    wt: resolvedBio.weightKg,
+    foot: resolvedBio.foot,
     pot,
     talent,
     traits,

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, saveCustomPlayer, loadCustomPlayers } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers } from '../engine/playerCore';
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor, statBarColor, statTierMeta, talentTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { PlayerBioStrip, getFootColorMeta } from '../components/PlayerBioStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
@@ -204,6 +205,9 @@ export const MainMenu: React.FC<{
   const [cSp, setCSp] = useState<SubRole>('ST');
   const [cNo, setCNo] = useState<number>(10);
   const [cAge, setCAge] = useState<number>(17);
+  const [cHt, setCHt] = useState<number>(177);
+  const [cWt, setCWt] = useState<number>(70);
+  const [cFoot, setCFoot] = useState<PreferredFoot>('R');
   const [cDiff, setCDiff] = useState<number>(1);
   const [cArchId, setCArchId] = useState<string>('poacher');
   const [cColor, setCColor] = useState(() => P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']));
@@ -326,6 +330,10 @@ export const MainMenu: React.FC<{
     setCSp('ST');
     setCNo(defaultNoForPos('FW'));
     setCAge(17);
+    const initBio = rollPlayerBio('FW', 'ST');
+    setCHt(initBio.ht);
+    setCWt(initBio.wt);
+    setCFoot(initBio.foot);
     setCDiff(1);
     setCArchId(defaultArch.id);
     setCBase(rolled.base);
@@ -469,15 +477,13 @@ export const MainMenu: React.FC<{
               </p>
             </div>
             <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
-              <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+              <div className="seg-bar">
                 {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
                   <button
                     key={lbl}
                     type="button"
                     onClick={() => { SFX.tap(); setDiff(idx); }}
-                    className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-xs mland:text-[10.5px] font-semibold cursor-pointer transition-colors ${
-                      diff === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                    }`}
+                    className={`seg-btn ${diff === idx ? 'seg-btn-active' : ''}`}
                   >
                     {lbl}
                   </button>
@@ -486,7 +492,7 @@ export const MainMenu: React.FC<{
               <button
                 type="button"
                 onClick={() => goStep('menu')}
-                className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[11px] font-semibold cursor-pointer hover:border-[var(--g)]"
+                className="btn btn-sm btn-secondary"
               >
                 ‹ กลับ
               </button>
@@ -554,15 +560,16 @@ export const MainMenu: React.FC<{
     const tlMeta = talentTierMeta(cTalent);
     const previewName = cName.trim() || 'นักเตะใหม่';
     const previewPlayer: Player = {
-      n: previewName, pos: cPos, ro: cSp, ov, age: cAge, pot: estPot, talent: cTalent, traits: cTraits, fit: 100, inj: 0, no: cNo, me: 1, hg: 1, customCreated: 1
+      n: previewName, pos: cPos, ro: cSp, ov, age: cAge, ht: cHt, wt: cWt, foot: cFoot, pot: estPot, talent: cTalent, traits: cTraits, fit: 100, inj: 0, no: cNo, me: 1, hg: 1, customCreated: 1
     };
     const previewProfile: PlayerCareerProfile = {
       name: previewName, pos: cPos, sp: cSp, no: cNo, tr: curArch.tr, sig: curArch.sig, archName: `${curArch.icon} ${curArch.name}`,
       sb: combinedSb, c: cColor, k: cSkin, h: cHair, hs: cHs, fh: cFh, fs: cFs, ey: cEy, acc: cAcc, pts: 0, b: cBase, a: cAttrs,
       talent: cTalent, traits: cTraits,
-      age: cAge, gl: 0, as: 0, ap: 0, rs: 0, en: 100, plan: 1
+      age: cAge, ht: cHt, wt: cWt, foot: cFoot, gl: 0, as: 0, ap: 0, rs: 0, en: 100, plan: 1
     };
     const previewDt = dtInfo(previewPlayer, previewProfile);
+    const previewBio = getPlayerBio(previewPlayer, previewProfile);
     const subStats = previewDt.G;
     const posTraits = FOOTBALL_TRAITS.filter((t) => t.pos.includes(cPos));
     const kitPalette = ['#e4572e', '#2f6fd6', '#158049', '#f4c63d', '#7c3aed', '#0ea5e9', '#be185d', '#111111'];
@@ -595,6 +602,10 @@ export const MainMenu: React.FC<{
       setCSp(sp);
       setCNo(defaultNoForPos(pos));
       setCArchId(nextArch.id);
+      const nextBio = rollPlayerBio(pos, sp);
+      setCHt(nextBio.ht);
+      setCWt(nextBio.wt);
+      setCFoot(nextBio.foot);
       const rolled = applyRolledStats(pos, sp, nextArch);
       setCTraits(rollPlayerTraits(pos, sp, OVF(pos, rolled.attrs), cTalent));
     };
@@ -602,6 +613,10 @@ export const MainMenu: React.FC<{
     const changeSubRole = (sp: SubRole) => {
       SFX.tap();
       setCSp(sp);
+      const nextBio = rollPlayerBio(cPos, sp);
+      setCHt(nextBio.ht);
+      setCWt(nextBio.wt);
+      setCFoot(nextBio.foot);
       const rolled = applyRolledStats(cPos, sp, curArch);
       setCTraits(rollPlayerTraits(cPos, sp, OVF(cPos, rolled.attrs), cTalent));
     };
@@ -669,6 +684,10 @@ export const MainMenu: React.FC<{
       setCSp(rSp);
       setCArchId(rArch.id);
       setCTalent(nextTalent);
+      const nextBio = rollPlayerBio(cPos, rSp);
+      setCHt(nextBio.ht);
+      setCWt(nextBio.wt);
+      setCFoot(nextBio.foot);
       const rolled = applyRolledStats(cPos, rSp, rArch);
       setCTraits(rollPlayerTraits(cPos, rSp, OVF(cPos, rolled.attrs), nextTalent));
     };
@@ -698,6 +717,9 @@ export const MainMenu: React.FC<{
         talent: cTalent,
         traits: cTraits,
         age: cAge,
+        ht: cHt,
+        wt: cWt,
+        foot: cFoot,
         diff: cDiff
       };
     };
@@ -746,21 +768,21 @@ export const MainMenu: React.FC<{
               <button
                 type="button"
                 onClick={randomizeFaceOnly}
-                className="px-2.5 mland:px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] font-semibold text-xs mland:text-[10px] cursor-pointer hover:border-[var(--g)] whitespace-nowrap"
+                className="btn btn-sm btn-secondary"
               >
                 🎭 สุ่มหน้า
               </button>
               <button
                 type="button"
                 onClick={randomizeAll}
-                className="px-2.5 mland:px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] font-semibold text-xs mland:text-[10px] cursor-pointer hover:border-[var(--g)] whitespace-nowrap"
+                className="btn btn-sm btn-secondary"
               >
                 🔄 สุ่มทั้งหมด
               </button>
               <button
                 type="button"
                 onClick={() => goStep('menu')}
-                className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10px] font-semibold cursor-pointer hover:border-[var(--g)] whitespace-nowrap"
+                className="btn btn-sm btn-secondary"
               >
                 ‹ กลับ
               </button>
@@ -825,7 +847,7 @@ export const MainMenu: React.FC<{
                 </div>
               </div>
 
-              {/* Identity & Active Traits */}
+              {/* Identity & Bio & Active Traits */}
               <div className="px-3 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-1 mland:space-y-0.5">
                 <div className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-white truncate leading-tight">
                   {previewName}
@@ -833,6 +855,7 @@ export const MainMenu: React.FC<{
                 <div className="text-[10.5px] mland:text-[8.5px] text-emerald-100/80 truncate tabular">
                   อายุ {cAge} ปี · {curArch.icon} {curArch.name}
                 </div>
+                <PlayerBioStrip bio={previewBio} variant="card" className="pt-0.5" />
                 <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
                   {cTraits.map((tid) => {
                     const tr = TRAIT_BY_ID[tid];
@@ -873,14 +896,14 @@ export const MainMenu: React.FC<{
               <button
                 type="button"
                 onClick={startCareerNow}
-                className="w-full py-2.5 mland:py-1.5 px-3 rounded-xl mland:rounded-lg bg-gradient-to-r from-[#f8d15b] to-[#eab308] text-[#261900] font-extrabold text-xs sm:text-sm mland:text-[10.5px] hover:brightness-105 transition-all cursor-pointer shadow-sm truncate"
+                className="btn btn-md btn-gold w-full font-extrabold truncate"
               >
                 ⚽ เริ่มอาชีพช่อง #{targetSlot} ({cSp} · OVR {ov})
               </button>
               <button
                 type="button"
                 onClick={saveToCustomPool}
-                className="w-full py-1.5 mland:py-1 px-2.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--g)]/50 text-[var(--g)] hover:bg-[var(--g-soft)] font-bold text-[11px] mland:text-[9.5px] transition-colors cursor-pointer truncate"
+                className="btn btn-sm btn-surface w-full border-[var(--g)]/50 text-[var(--g)] hover:bg-[var(--g-soft)] truncate"
               >
                 💾 บันทึกตัวไว้ซื้อในโหมดผู้จัดการ
               </button>
@@ -889,7 +912,7 @@ export const MainMenu: React.FC<{
 
           {/* Right Column: 4-Tab Complete Customization Workspace */}
           <div className="flex flex-col min-h-0 gap-2 mland:gap-1.5">
-            <div className="shrink-0 grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <div className="seg-bar grid grid-cols-4 w-full shrink-0">
               {(
                 [
                   ['info', '📝 ข้อมูล'],
@@ -902,9 +925,7 @@ export const MainMenu: React.FC<{
                   key={tid}
                   type="button"
                   onClick={() => { SFX.tap(); setCrMobTab(tid); }}
-                  className={`py-1.5 mland:py-1 px-1.5 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer truncate transition-colors ${
-                    crMobTab === tid ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
+                  className={`seg-btn py-1.5 mland:py-1 truncate ${crMobTab === tid ? 'seg-btn-active' : ''}`}
                 >
                   {tlbl}
                 </button>
@@ -939,7 +960,7 @@ export const MainMenu: React.FC<{
                     <button
                       type="button"
                       onClick={() => { SFX.tap(); setCName(genPlayerName()); }}
-                      className="px-3 py-2 mland:py-1.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs mland:text-[10.5px] font-bold shrink-0 cursor-pointer hover:border-[var(--g)]"
+                      className="btn btn-sm btn-secondary shrink-0"
                     >
                       🔄 สุ่มชื่อ
                     </button>
@@ -951,8 +972,8 @@ export const MainMenu: React.FC<{
                         key={num}
                         type="button"
                         onClick={() => { SFX.tap(); setCNo(num); }}
-                        className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-bold tabular cursor-pointer transition-colors ${
-                          cNo === num ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        className={`btn btn-xs tabular ${
+                          cNo === num ? 'btn-primary' : 'btn-secondary text-[var(--mut)] hover:text-[var(--ink)]'
                         }`}
                       >
                         #{num}
@@ -974,8 +995,8 @@ export const MainMenu: React.FC<{
                           key={ageOpt}
                           type="button"
                           onClick={() => { SFX.tap(); setCAge(ageOpt); }}
-                          className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold tabular cursor-pointer ${
-                            cAge === ageOpt ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
+                          className={`btn btn-sm tabular ${
+                            cAge === ageOpt ? 'btn-primary' : 'btn-surface'
                           }`}
                         >
                           {ageOpt} ปี
@@ -995,13 +1016,102 @@ export const MainMenu: React.FC<{
                           key={dlbl}
                           type="button"
                           onClick={() => { SFX.tap(); setCDiff(didx); }}
-                          className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer ${
-                            cDiff === didx ? 'bg-[var(--lamp)] text-[#261900] shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
+                          className={`btn btn-sm ${
+                            cDiff === didx ? 'btn-gold font-extrabold' : 'btn-surface'
                           }`}
                         >
                           {dlbl}
                         </button>
                       ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Height, Weight & Preferred Foot (Color-Coded) */}
+                <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]">
+                      📐 สัดส่วนร่างกาย &amp; เท้าที่ถนัด
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        const rb = rollPlayerBio(cPos, cSp);
+                        setCHt(rb.ht);
+                        setCWt(rb.wt);
+                        setCFoot(rb.foot);
+                      }}
+                      className="btn btn-xs btn-surface"
+                    >
+                      🎲 สุ่มรูปร่าง
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5">
+                    <div className="p-2 mland:p-1 rounded-xl border bg-teal-500/10 border-teal-500/35 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
+                        <span className="font-bold text-teal-700 dark:text-teal-300">📏 ส่วนสูง</span>
+                        <b className="tabular font-extrabold text-teal-700 dark:text-teal-300">{cHt} ซม.</b>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => setCHt((v) => clamp(v - 1, 155, 205))} className="btn-icon w-6 h-6 text-xs">-</button>
+                        <input
+                          type="range"
+                          min={155}
+                          max={205}
+                          value={cHt}
+                          onChange={(e) => setCHt(Number(e.target.value))}
+                          className="flex-1 min-w-0 accent-teal-500"
+                        />
+                        <button type="button" onClick={() => setCHt((v) => clamp(v + 1, 155, 205))} className="btn-icon w-6 h-6 text-xs">+</button>
+                      </div>
+                    </div>
+
+                    <div className="p-2 mland:p-1 rounded-xl border bg-emerald-500/10 border-emerald-500/35 space-y-1">
+                      <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
+                        <span className="font-bold text-emerald-700 dark:text-emerald-300">⚖️ น้ำหนัก</span>
+                        <b className="tabular font-extrabold text-emerald-700 dark:text-emerald-300">{cWt} กก.</b>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => setCWt((v) => clamp(v - 1, 50, 110))} className="btn-icon w-6 h-6 text-xs">-</button>
+                        <input
+                          type="range"
+                          min={50}
+                          max={110}
+                          value={cWt}
+                          onChange={(e) => setCWt(Number(e.target.value))}
+                          className="flex-1 min-w-0 accent-emerald-500"
+                        />
+                        <button type="button" onClick={() => setCWt((v) => clamp(v + 1, 50, 110))} className="btn-icon w-6 h-6 text-xs">+</button>
+                      </div>
+                    </div>
+
+                    <div className="p-2 mland:p-1 rounded-xl border bg-[var(--surface)] border-[var(--line)] space-y-1">
+                      <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
+                        <span className="font-bold text-[var(--mut)]">🦶 ถนัดเท้า</span>
+                        <b className="font-extrabold" style={{ color: getFootColorMeta(cFoot).dotColor }}>
+                          {getFootColorMeta(cFoot).label}
+                        </b>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['L', 'R', 'B'] as const).map((fk) => {
+                          const fm = getFootColorMeta(fk);
+                          const active = cFoot === fk;
+                          return (
+                            <button
+                              key={fk}
+                              type="button"
+                              onClick={() => { SFX.tap(); setCFoot(fk); }}
+                              className={`btn btn-xs px-1 ${
+                                active ? fm.buttonActiveCls : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
+                              }`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: active ? 'currentColor' : fm.dotColor }} />
+                              <span>{fm.shortLabel}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1692,14 +1802,14 @@ export const MainMenu: React.FC<{
               <button
                 type="button"
                 onClick={() => setShowImport(false)}
-                className="px-4 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
+                className="btn btn-md btn-secondary"
               >
                 ยกเลิก
               </button>
               <button
                 type="button"
                 onClick={handleImport}
-                className="flex-1 py-2 px-4 rounded-xl bg-[var(--g)] text-white text-xs font-bold cursor-pointer hover:brightness-105"
+                className="btn btn-md btn-primary flex-1"
               >
                 ยืนยันนำเข้าเซฟ
               </button>

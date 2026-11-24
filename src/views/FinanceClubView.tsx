@@ -332,7 +332,7 @@ export const FinanceClubView: React.FC<{
         </div>
 
         {/* Finance Sub-navigation (3 Focused Commercial & Cashflow Tabs) */}
-        <div className="grid grid-cols-3 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        <div className="seg-bar grid grid-cols-3 w-full bg-[var(--surface)] shrink-0">
           {(
             [
               ['overview', '📊 กระแสเงิน & แคมเปญ'],
@@ -344,8 +344,8 @@ export const FinanceClubView: React.FC<{
               key={id}
               type="button"
               onClick={() => setFinTab(id)}
-              className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors whitespace-nowrap ${
-                finTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
+              className={`seg-btn truncate ${
+                finTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
               }`}
             >
               {label}
@@ -438,12 +438,12 @@ export const FinanceClubView: React.FC<{
                       </b>
                     </div>
                   </div>
-                  <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--surface-2)] text-[10.5px] mland:text-[9.5px]">
+                  <div className="seg-bar shrink-0">
                     <button
                       type="button"
                       onClick={() => setFinChartMode('balance')}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors ${
-                        finChartMode === 'balance' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                      className={`seg-btn ${
+                        finChartMode === 'balance' ? 'seg-btn-active' : ''
                       }`}
                     >
                       ยอดเงินคงคลัง
@@ -451,8 +451,8 @@ export const FinanceClubView: React.FC<{
                     <button
                       type="button"
                       onClick={() => setFinChartMode('cashflow')}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer transition-colors ${
-                        finChartMode === 'cashflow' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                      className={`seg-btn ${
+                        finChartMode === 'cashflow' ? 'seg-btn-active' : ''
                       }`}
                     >
                       รายรับ-รายจ่าย
@@ -583,8 +583,8 @@ export const FinanceClubView: React.FC<{
                         key={v}
                         type="button"
                         onClick={() => onUpdateState((d) => { d.winBonus = v; })}
-                        className={`flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold cursor-pointer ${
-                          (state.winBonus || 0) === v ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)]'
+                        className={`btn btn-sm flex-1 ${
+                          (state.winBonus || 0) === v ? 'btn-primary' : 'btn-surface'
                         }`}
                       >
                         {l}
@@ -615,7 +615,7 @@ export const FinanceClubView: React.FC<{
                           });
                           onToast('เปิดแคมเปญโปรโมตตั๋ววันแข่งแล้ว');
                         }}
-                        className="flex-1 py-1.5 px-3 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer hover:border-[var(--g)]"
+                        className="btn btn-sm btn-surface flex-1"
                       >
                         โปรโมตตั๋ว (15k)
                       </button>
@@ -630,7 +630,7 @@ export const FinanceClubView: React.FC<{
                           });
                           onToast('เปิดแคมเปญบูสต์สปอนเซอร์แล้ว');
                         }}
-                        className="flex-1 py-1.5 px-3 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer hover:border-[var(--g)]"
+                        className="btn btn-sm btn-surface flex-1"
                       >
                         บูสต์สปอนฯ (25k)
                       </button>
@@ -714,7 +714,7 @@ export const FinanceClubView: React.FC<{
                             });
                             onToast(`เซ็นสัญญากับ ${deal.name} สำเร็จ (+${fmtMoney(deal.signBonus)})`);
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                          className="btn btn-sm btn-primary shrink-0"
                         >
                           เซ็นสัญญา
                         </button>
@@ -810,7 +810,7 @@ export const FinanceClubView: React.FC<{
                           type="button"
                           disabled={state.money < merchRenovateCost}
                           onClick={() => renovateFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
-                          className="px-3 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-bold hover:border-[var(--lamp)] disabled:opacity-40 cursor-pointer shrink-0"
+                          className="btn btn-sm btn-surface hover:border-[var(--lamp)] shrink-0"
                         >
                           🔧 ปรับปรุง {fmtMoneyNum(merchRenovateCost)}
                         </button>
@@ -819,7 +819,7 @@ export const FinanceClubView: React.FC<{
                         type="button"
                         disabled={merchLv >= MAX_FACILITY_LV || state.money < merchUpgradeCost}
                         onClick={() => upgradeFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
-                        className="px-3.5 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                        className="btn btn-sm btn-primary shrink-0"
                       >
                         {merchLv >= MAX_FACILITY_LV ? `Lv.${MAX_FACILITY_LV} เต็ม` : `ขยายร้าน ${fmtMoneyNum(merchUpgradeCost)}`}
                       </button>
@@ -859,7 +859,7 @@ export const FinanceClubView: React.FC<{
                           });
                           onToast('ชำระเงินกู้ล่วงหน้า 1 งวดแล้ว');
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer"
+                        className="btn btn-sm btn-surface"
                       >
                         จ่าย 1 งวด ({fmtMoneyNum(state.bankLoan.per)})
                       </button>
@@ -874,7 +874,7 @@ export const FinanceClubView: React.FC<{
                           });
                           onToast('ปิดยอดหนี้ธนาคารทั้งหมดแล้ว');
                         }}
-                        className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer"
+                        className="btn btn-sm btn-primary"
                       >
                         โปะปิดทั้งหมด ({fmtMoneyNum(bankRemain)})
                       </button>
@@ -899,7 +899,7 @@ export const FinanceClubView: React.FC<{
                             });
                             onToast(`รับเงินกู้ +${fmtMoney(lp.amount)} เข้าคลังสโมสรแล้ว`);
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs font-bold cursor-pointer shrink-0"
+                          className="btn btn-sm btn-gold shrink-0"
                         >
                           กู้ +{fmtMoneyNum(lp.amount)}
                         </button>
@@ -926,7 +926,7 @@ export const FinanceClubView: React.FC<{
                         });
                         onToast('ชำระยอดค้างผ่อนค่าตัวครบแล้ว');
                       }}
-                      className="px-3 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                      className="btn btn-sm btn-surface shrink-0"
                     >
                       ปิดยอด {fmtMoneyNum(state.payDue || 0)}
                     </button>
@@ -959,13 +959,13 @@ export const FinanceClubView: React.FC<{
             <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full flex flex-col min-h-0">
               <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <h3 className="font-bold text-sm mland:text-xs">📒 สมุดบัญชีรายรับ-รายจ่าย</h3>
-                <div className="flex gap-1 p-0.5 rounded-lg bg-[var(--surface-2)] text-[11px]">
+                <div className="seg-bar shrink-0">
                   {([['all', 'ทั้งหมด'], ['in', 'รายรับ'], ['out', 'รายจ่าย']] as const).map(([fId, fLbl]) => (
                     <button
                       key={fId}
                       type="button"
                       onClick={() => setLedgerFilter(fId)}
-                      className={`px-2 py-0.5 rounded-md font-bold cursor-pointer ${ledgerFilter === fId ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}
+                      className={`seg-btn ${ledgerFilter === fId ? 'seg-btn-active' : ''}`}
                     >
                       {fLbl}
                     </button>
@@ -1120,7 +1120,7 @@ export const FinanceClubView: React.FC<{
                 });
                 onToast('สุ่มตราสโมสรและชุดแข่งใหม่แล้ว!');
               }}
-              className="px-3.5 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs mland:text-[11px] font-bold cursor-pointer shadow-xs shrink-0 hover:brightness-105"
+              className="btn btn-sm btn-gold shrink-0"
             >
               🎲 สุ่มดีไซน์ทั้งหมด
             </button>
@@ -1148,7 +1148,7 @@ export const FinanceClubView: React.FC<{
       </div>
 
       {/* Club HQ Sub-navigation (5 Tabs) */}
-      <div className="grid grid-cols-5 gap-1 p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+      <div className="seg-bar grid grid-cols-5 w-full bg-[var(--surface)] shrink-0">
         {(
           [
             ['info', '🏛️ ข้อมูล & บอร์ด'],
@@ -1162,8 +1162,8 @@ export const FinanceClubView: React.FC<{
             key={id}
             type="button"
             onClick={() => setClubTab(id)}
-            className={`px-2 mland:px-1.5 py-2 mland:py-1 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold truncate cursor-pointer transition-colors whitespace-nowrap ${
-              clubTab === id ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]'
+            className={`seg-btn truncate ${
+              clubTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
             }`}
           >
             {label}
@@ -1332,7 +1332,7 @@ export const FinanceClubView: React.FC<{
                         type="button"
                         onClick={randomizeCoachVis}
                         title="สุ่มหน้าตาโค้ช"
-                        className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] font-bold cursor-pointer"
+                        className="btn btn-xs btn-secondary"
                       >
                         🎲 สุ่ม
                       </button>
@@ -1342,10 +1342,8 @@ export const FinanceClubView: React.FC<{
                           SFX.tap();
                           setShowCoachEditor((v) => !v);
                         }}
-                        className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
-                          showCoachEditor
-                            ? 'bg-[var(--g)] border-[var(--g)] text-white'
-                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                        className={`btn btn-xs ${
+                          showCoachEditor ? 'btn-primary' : 'btn-secondary'
                         }`}
                       >
                         {showCoachEditor ? 'ย่อแต่งหน้า ▴' : '🎨 แต่งหน้าโค้ช'}
@@ -1517,7 +1515,7 @@ export const FinanceClubView: React.FC<{
                         });
                         onToast('รับคำสั่งประเมินรอบใหม่จากบอร์ดบริหารแล้ว');
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] font-bold cursor-pointer transition-colors"
+                      className="btn btn-xs btn-secondary"
                     >
                       + ขอคำสั่งบอร์ด
                     </button>
@@ -1714,7 +1712,7 @@ export const FinanceClubView: React.FC<{
                     type="button"
                     disabled={state.money < totalRenovateAll}
                     onClick={() => renovateAllFacs(infraFacilityDefs)}
-                    className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/45 text-[#9a6700] dark:text-[var(--lamp)] text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                    className="btn btn-xs btn-gold"
                   >
                     🔧 ปรับปรุงทั้งหมด ({wornCount}) · {fmtMoneyNum(totalRenovateAll)}
                   </button>
@@ -1787,7 +1785,7 @@ export const FinanceClubView: React.FC<{
                               type="button"
                               disabled={state.money < renCost}
                               onClick={() => renovateFac(key, title, baseCost)}
-                              className="px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                              className="btn btn-xs btn-surface hover:border-[var(--lamp)]"
                             >
                               🔧 ปรับปรุง {fmtMoneyNum(renCost)}
                             </button>
@@ -1796,7 +1794,7 @@ export const FinanceClubView: React.FC<{
                             type="button"
                             disabled={lv >= MAX_FACILITY_LV || state.money < upgCost}
                             onClick={() => upgradeFac(key, title, baseCost)}
-                            className="px-3 py-1 rounded-xl bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                            className="btn btn-xs btn-primary"
                           >
                             {lv >= MAX_FACILITY_LV ? `Lv.${MAX_FACILITY_LV} เต็ม` : `⬆️ อัป ${fmtMoneyNum(upgCost)}`}
                           </button>
@@ -1865,7 +1863,7 @@ export const FinanceClubView: React.FC<{
                             <button
                               type="button"
                               onClick={() => fireStaff(role, title)}
-                              className="px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
+                              className="btn btn-xs btn-surface text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50"
                             >
                               ลด
                             </button>
@@ -1874,7 +1872,7 @@ export const FinanceClubView: React.FC<{
                             type="button"
                             disabled={lv >= MAX_STAFF_LV || state.money < nextCost}
                             onClick={() => hireStaff(role, title)}
-                            className="px-3 py-1 rounded-xl bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                            className="btn btn-xs btn-primary"
                           >
                             {lv >= MAX_STAFF_LV ? `Lv.${MAX_STAFF_LV} เต็ม` : `${lv === 0 ? 'จ้าง' : 'เลื่อนขั้น'} ${fmtMoneyNum(nextCost)}`}
                           </button>
@@ -1985,7 +1983,7 @@ export const FinanceClubView: React.FC<{
                         key={lbl}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).crestBorder = i; })}
-                        className={`py-1.5 rounded-xl text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${(k.crestBorder ?? 0) === i ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]/70 text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                        className={`btn btn-xs w-full ${(k.crestBorder ?? 0) === i ? 'btn-primary' : 'btn-secondary'}`}
                       >
                         {lbl}
                       </button>
@@ -2000,7 +1998,7 @@ export const FinanceClubView: React.FC<{
                         key={stCnt}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).stars = stCnt; })}
-                        className={`py-1.5 rounded-xl text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${(k.stars ?? 0) === stCnt ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]/70 text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                        className={`btn btn-xs w-full ${(k.stars ?? 0) === stCnt ? 'btn-primary' : 'btn-secondary'}`}
                       >
                         {stCnt === 0 ? 'ไม่มี' : '⭐'.repeat(stCnt)}
                       </button>
@@ -2021,7 +2019,7 @@ export const FinanceClubView: React.FC<{
                       const picked = P(icKeys);
                       onUpdateState((d) => { ensureClubIdentity(d).icon = picked; });
                     }}
-                    className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer border border-[var(--line)]/80"
+                    className="btn btn-xs btn-secondary hover:bg-[var(--g)] hover:text-white"
                   >
                     🎲 สุ่มสัญลักษณ์
                   </button>
@@ -2046,10 +2044,10 @@ export const FinanceClubView: React.FC<{
                         key={lbl}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).iconColor = colVal; })}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] mland:text-[9px] font-bold border cursor-pointer transition-colors ${
+                        className={`btn btn-xs rounded-full! ${
                           active
-                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                            : 'bg-[var(--surface-2)]/75 text-[var(--mut)] border-[var(--line)]/70 hover:text-[var(--ink)]'
+                            ? 'btn-primary'
+                            : 'btn-secondary'
                         }`}
                       >
                         {colVal && <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: colVal }} />}
@@ -2209,7 +2207,7 @@ export const FinanceClubView: React.FC<{
                       key={l}
                       type="button"
                       onClick={() => onUpdateState((d) => { ensureClubIdentity(d).kit = i; })}
-                      className={`py-1.5 px-2 rounded-lg text-[11px] font-semibold cursor-pointer truncate ${k.kit === i ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                      className={`btn btn-xs w-full truncate ${k.kit === i ? 'btn-primary' : 'btn-secondary'}`}
                     >
                       {l}
                     </button>
@@ -2244,7 +2242,7 @@ export const FinanceClubView: React.FC<{
                         key={clbl}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).collar = ci; })}
-                        className={`py-1.5 rounded-lg text-[11px] font-semibold cursor-pointer ${(k.collar ?? 0) === ci ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
+                        className={`btn btn-xs w-full ${(k.collar ?? 0) === ci ? 'btn-primary' : 'btn-secondary'}`}
                       >
                         {clbl}
                       </button>

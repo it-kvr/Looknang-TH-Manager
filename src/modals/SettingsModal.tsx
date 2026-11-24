@@ -88,7 +88,7 @@ export const SettingsModal: React.FC<{
               {vipUnlocked ? 'v1.2 · 👑 VIP' : 'v1.2'}
             </button>
           </div>
-          <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="w-7 h-7 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer">✕</button>
+          <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="btn-icon rounded-full!">✕</button>
         </div>
 
         {/* Organized Horizontal 2-Column Body */}
@@ -103,7 +103,7 @@ export const SettingsModal: React.FC<{
 
               <div className="space-y-1">
                 <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ความเร็วการแข่งเริ่มต้น</div>
-                <div className="grid grid-cols-5 gap-1">
+                <div className="seg-bar grid grid-cols-5 w-full bg-[var(--surface)]">
                   {([
                     [0.25, '0.25x'],
                     [0.5, '0.5x'],
@@ -115,8 +115,8 @@ export const SettingsModal: React.FC<{
                       key={sp}
                       type="button"
                       onClick={() => { SFX.tap(); update({ matchSpeed: sp, quick: sp === 5 }); }}
-                      className={`py-2 mland:py-1 px-1 rounded-xl mland:rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors ${
-                        curMatchSpeed === sp ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)]/70 text-[var(--ink)]'
+                      className={`seg-btn px-1! ${
+                        curMatchSpeed === sp ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
                       }`}
                     >
                       {lbl}
@@ -150,7 +150,7 @@ export const SettingsModal: React.FC<{
                       unlockAudio();
                       SFX.whistle();
                     }}
-                    className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer hover:brightness-95 whitespace-nowrap"
+                    className="btn btn-xs bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] hover:brightness-95"
                   >
                     🔊 ทดสอบ
                   </button>
@@ -200,10 +200,8 @@ export const SettingsModal: React.FC<{
                       key={key}
                       type="button"
                       onClick={() => { unlockAudio(); SFX.tap(); update({ [key]: !active }); }}
-                      className={`py-1.5 mland:py-1 px-1.5 rounded-lg text-[10.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors truncate ${
-                        active
-                          ? 'bg-[var(--g)] text-white shadow-xs'
-                          : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      className={`btn btn-xs truncate ${
+                        active ? 'btn-primary' : 'btn-secondary'
                       }`}
                     >
                       {label}
@@ -222,14 +220,14 @@ export const SettingsModal: React.FC<{
                 <span>หน้าจอ &amp; แอปพลิเคชัน</span>
               </div>
 
-              <div className="grid grid-cols-3 gap-1.5 mland:gap-1">
+              <div className="seg-bar grid grid-cols-3 w-full bg-[var(--surface)]">
                 {([['', 'ตามระบบ'], ['light', '☀️ สว่าง'], ['dark', '🌙 มืด']] as const).map(([val, lbl]) => (
                   <button
                     key={lbl}
                     type="button"
                     onClick={() => { SFX.tap(); update({ theme: val }); }}
-                    className={`py-2 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${
-                      (st.theme || '') === val ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)]/70'
+                    className={`seg-btn ${
+                      (st.theme || '') === val ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
                     }`}
                   >
                     {lbl}
@@ -301,7 +299,7 @@ export const SettingsModal: React.FC<{
                       navigator.clipboard?.writeText(code).catch(() => undefined);
                       onToast(`สร้างและคัดลอกโค้ดเซฟแบบย่อ (${code.length.toLocaleString()} ตัวอักษร) แล้ว`);
                     }}
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[9.5px] font-bold cursor-pointer shrink-0"
+                    className="btn btn-xs btn-primary shrink-0"
                   >
                     สร้างโค้ด
                   </button>
@@ -328,11 +326,11 @@ export const SettingsModal: React.FC<{
               onClose();
               onExitToMenu();
             }}
-            className="flex-1 py-2.5 mland:py-1 rounded-xl bg-[var(--red-soft)] text-[var(--red)] font-bold text-xs mland:text-[10.5px] cursor-pointer"
+            className="btn btn-md btn-danger flex-1"
           >
             🏠 กลับหน้าเมนูหลัก
           </button>
-          <button type="button" onClick={onClose} className="flex-1 py-2.5 mland:py-1 rounded-xl bg-[var(--g)] text-white font-bold text-xs mland:text-[10.5px] cursor-pointer">
+          <button type="button" onClick={onClose} className="btn btn-md btn-primary flex-1">
             ตกลง
           </button>
         </div>

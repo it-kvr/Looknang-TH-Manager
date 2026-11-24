@@ -883,7 +883,7 @@ export const applyMatchMissionProgress = (
     const rt = q.me && payload.pf?.rt ? payload.pf.rt : payload.ratings?.[q.n] || 0;
     if (rt >= 7.2) addMissionStat(q, 'highRatings', 1, careerP);
 
-    const goals = payload.evs.filter((e) => e.t === meTeam.id && e.who === q.n).length;
+    const goals = payload.evs.filter((e) => !e.og && e.t === meTeam.id && e.who === q.n).length;
     const assists = payload.evs.filter((e) => e.t === meTeam.id && e.as === q.n).length;
     if (goals > 0) addMissionStat(q, 'goals', goals, careerP);
 

@@ -68,7 +68,7 @@ export const SquadRenewModal: React.FC<{
             type="button"
             onClick={onClose}
             aria-label="ปิดหน้าต่างต่อสัญญา"
-            className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer shrink-0 hover:border-[var(--g)]"
+            className="btn-icon rounded-full!"
           >
             ✕
           </button>
@@ -87,8 +87,8 @@ export const SquadRenewModal: React.FC<{
                       SFX.tap();
                       setRenewYr(y);
                     }}
-                    className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                      renewYr === y ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'
+                    className={`btn btn-sm w-full ${
+                      renewYr === y ? 'btn-primary' : 'btn-secondary'
                     }`}
                   >
                     {y} ปี
@@ -111,8 +111,8 @@ export const SquadRenewModal: React.FC<{
                       SFX.tap();
                       setRenewRole(k);
                     }}
-                    className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-semibold whitespace-nowrap cursor-pointer ${
-                      renewRole === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'
+                    className={`btn btn-sm w-full ${
+                      renewRole === k ? 'btn-primary' : 'btn-secondary'
                     }`}
                   >
                     {l}
@@ -138,8 +138,8 @@ export const SquadRenewModal: React.FC<{
                       SFX.tap();
                       setRenewWb(k);
                     }}
-                    className={`px-1.5 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-semibold whitespace-nowrap truncate cursor-pointer ${
-                      renewWb === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'
+                    className={`btn btn-sm w-full truncate ${
+                      renewWb === k ? 'btn-primary' : 'btn-secondary'
                     }`}
                   >
                     {l}
@@ -173,7 +173,7 @@ export const SquadRenewModal: React.FC<{
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer whitespace-nowrap"
+            className="btn btn-md btn-surface"
           >
             ปิด
           </button>
@@ -197,7 +197,7 @@ export const SquadRenewModal: React.FC<{
                 setRenewMsg('นักเตะยังไม่พอใจข้อเสนอ ลองเพิ่มค่าเหนื่อยหรือบทบาท');
               }
             }}
-            className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--lamp)] text-[#261900] font-bold text-xs disabled:opacity-40 cursor-pointer"
+            className="btn btn-md btn-gold flex-1"
           >
             {renewOverCap
               ? `เกินเพดาน ${fmtMoneyNum(tx.wageCap)}`
@@ -269,7 +269,7 @@ export const SquadSellModal: React.FC<{
             type="button"
             onClick={onClose}
             aria-label="ปิดหน้าต่างขายนักเตะ"
-            className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer"
+            className="btn-icon rounded-full!"
           >
             ✕
           </button>
@@ -286,7 +286,7 @@ export const SquadSellModal: React.FC<{
             <div className="space-y-1.5">
               <div className="flex items-center justify-between text-xs mland:text-[10.5px]">
                 <span className="font-semibold text-[var(--mut)]">ระดับราคาขายด่วน</span>
-                <div className="flex gap-1">
+                <div className="seg-bar">
                   {[75, 85, 95].map((pct) => (
                     <button
                       key={pct}
@@ -295,8 +295,8 @@ export const SquadSellModal: React.FC<{
                         SFX.tap();
                         setPricePct(pct);
                       }}
-                      className={`px-2 py-0.5 rounded-md text-[11px] font-bold cursor-pointer ${
-                        pricePct === pct ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] border border-[var(--line)]'
+                      className={`seg-btn ${
+                        pricePct === pct ? 'seg-btn-active' : ''
                       }`}
                     >
                       {pct}%
@@ -375,7 +375,7 @@ export const SquadSellModal: React.FC<{
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer"
+            className="btn btn-md btn-surface"
           >
             ยกเลิก
           </button>
@@ -383,7 +383,7 @@ export const SquadSellModal: React.FC<{
             type="button"
             disabled={!check.canConfirm}
             onClick={handleConfirm}
-            className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--g)] text-white font-bold text-xs disabled:opacity-40 cursor-pointer"
+            className="btn btn-md btn-primary flex-1"
           >
             ✅ ยืนยันขาย {check.eligiblePlayers.length} ราย (+{fmtMoney(check.totalQuickSellValue)})
           </button>
@@ -456,7 +456,7 @@ export const SquadReleaseModal: React.FC<{
             type="button"
             onClick={onClose}
             aria-label="ปิดหน้าต่างปล่อยตัวนักเตะ"
-            className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer"
+            className="btn-icon rounded-full!"
           >
             ✕
           </button>
@@ -541,7 +541,7 @@ export const SquadReleaseModal: React.FC<{
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer"
+            className="btn btn-md btn-surface"
           >
             ยกเลิก
           </button>
@@ -549,7 +549,7 @@ export const SquadReleaseModal: React.FC<{
             type="button"
             disabled={!check.canConfirm}
             onClick={handleConfirm}
-            className="flex-1 py-2 mland:py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs disabled:opacity-40 cursor-pointer"
+            className="btn btn-md btn-danger flex-1"
           >
             🔓 ยืนยันปล่อยตัว {check.eligiblePlayers.length} ราย
             {check.totalReleaseCost > 0 ? ` (-${fmtMoney(check.totalReleaseCost)})` : ''}

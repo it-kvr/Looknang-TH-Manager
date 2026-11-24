@@ -119,7 +119,7 @@ export const SeasonStatsModal: React.FC<{
 
           <div className="flex items-center gap-1.5 shrink-0">
             {sortedArchives.length > 1 && (
-              <div className="flex items-center gap-1 overflow-x-auto max-w-[180px] sm:max-w-[300px]">
+              <div className="seg-bar bg-[var(--surface)] overflow-x-auto max-w-[180px] sm:max-w-[300px]">
                 {sortedArchives.map((item) => (
                   <button
                     key={item.season}
@@ -128,10 +128,8 @@ export const SeasonStatsModal: React.FC<{
                       SFX.tap();
                       setSelectedSeason(item.season);
                     }}
-                    className={`px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
-                      item.season === rec.season
-                        ? 'bg-[var(--g)] text-white shadow-xs'
-                        : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`seg-btn ${
+                      item.season === rec.season ? 'seg-btn-active' : ''
                     }`}
                   >
                     ซ.{item.season}
@@ -146,7 +144,7 @@ export const SeasonStatsModal: React.FC<{
                 onClose();
               }}
               aria-label="ปิดหน้าต่าง"
-              className="w-8 h-8 mland:w-7 mland:h-7 rounded-xl bg-[var(--surface)] hover:bg-[var(--line)]/50 border border-[var(--line)] flex items-center justify-center text-xs font-bold cursor-pointer"
+              className="btn-icon"
             >
               ✕
             </button>
@@ -306,7 +304,7 @@ export const SeasonStatsModal: React.FC<{
               <div className="font-bold text-xs sm:text-sm mland:text-[11px]">
                 👥 ตารางสถิตินักเตะทั้งหมด ({sortedPlayers.length} คน)
               </div>
-              <div className="flex flex-wrap items-center gap-1">
+              <div className="seg-bar flex-wrap bg-[var(--surface)]">
                 {sortOptions.map((opt) => (
                   <button
                     key={opt.key}
@@ -315,10 +313,8 @@ export const SeasonStatsModal: React.FC<{
                       SFX.tap();
                       setSortBy(opt.key);
                     }}
-                    className={`px-2 mland:px-1.5 py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors ${
-                      sortBy === opt.key
-                        ? 'bg-[var(--g)] text-white'
-                        : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`seg-btn ${
+                      sortBy === opt.key ? 'seg-btn-active' : ''
                     }`}
                   >
                     {opt.label}

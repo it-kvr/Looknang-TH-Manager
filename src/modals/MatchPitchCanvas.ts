@@ -917,6 +917,42 @@ export const drawLivePitchToCanvas = (
       ctx.fillRect(ix - 5, iy - 1.5, 10, 3);
       ctx.fillRect(ix - 1.5, iy - 5, 3, 10);
       ctx.restore();
+    } else if (fx.type === 'slip') {
+      const sx = px(fx.x);
+      const sy = py(fx.y);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.92;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy + 2, 10 + (1 - alpha) * 12, 5 + (1 - alpha) * 6, -0.25, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(134, 239, 172, 0.8)';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(sx - 9, sy + 4);
+      ctx.lineTo(sx + 7, sy - 2);
+      ctx.stroke();
+      ctx.restore();
+    } else if (fx.type === 'whiff') {
+      const wx = px(fx.x);
+      const wy = py(fx.y);
+      const expand = (1 - alpha) * 18 + 7;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.strokeStyle = '#fb923c';
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(wx, wy, expand, -Math.PI * 0.75, Math.PI * 0.65);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(wx, wy, expand * 0.68, -Math.PI * 0.4, Math.PI * 0.45);
+      ctx.stroke();
+      ctx.restore();
     } else if (
       fx.type === 'foul' ||
       fx.type === 'save' ||
@@ -1345,6 +1381,37 @@ export const drawLivePitchToCanvas = (
         ctx.beginPath();
         ctx.arc(0, 0, playerRadius + 10 + prog * 9, 0, Math.PI * 2);
         ctx.stroke();
+      } else if (ag.acrobatType === 'slip') {
+        // Player slips & tumbles onto the wet grass with water/turf splash
+        const skidDist = arcEnv * playerRadius * 0.62;
+        ctx.translate(-Math.cos(ag.facing) * skidDist * 0.45, arcEnv * playerRadius * 0.42);
+        ctx.rotate((ag.skillSpinDir || 1) * 1.18 * arcEnv);
+        ctx.strokeStyle = `rgba(56, 189, 248, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.ellipse(0, playerRadius * 0.35, playerRadius + 5.5 + prog * 5, playerRadius * 0.55 + prog * 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(187, 247, 208, ${acAlpha * 0.78})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(-playerRadius * 1.2, playerRadius * 0.2);
+        ctx.lineTo(playerRadius * 0.9, -playerRadius * 0.15);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'whiff') {
+        // Big awkward air-swing stagger + wind swoosh arc
+        const stagger = Math.sin(prog * Math.PI * 2) * 0.65;
+        ctx.rotate(stagger);
+        ctx.scale(1 + 0.08 * arcEnv, 1 + 0.08 * arcEnv);
+        ctx.strokeStyle = `rgba(251, 146, 60, ${acAlpha * 0.96})`;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 6.5, ag.facing - 1.15, ag.facing + 1.15);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${acAlpha * 0.85})`;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 10.5, ag.facing - 0.75, ag.facing + 0.85);
+        ctx.stroke();
       }
     }
 
@@ -1696,10 +1763,18 @@ export const drawLivePitchToCanvas = (
     const alpha = Math.min(clamp(enterT * 2.4, 0, 1), fadeOut);
     ctx.save();
     ctx.globalAlpha = alpha;
-    const title = gb.isMeScorer
-      ? `🌟 คุณยิงประตู!! ${gb.scorer}`
-      : `⚽ GOAL!! ${gb.scorer} (${gb.teamName})`;
-    const sub = gb.assister ? `🎯 แอสซิสต์: ${gb.assister}` : gb.isMyGoal ? '🎉 เฮลั่นสนาม!' : '🔥 ตุงตาข่าย!';
+    const title = gb.isOwnGoal
+      ? `🤦 เข้าประตูตัวเอง!! (OG) · ${gb.scorer}`
+      : gb.isMeScorer
+        ? `🌟 คุณยิงประตู!! ${gb.scorer}`
+        : `⚽ GOAL!! ${gb.scorer} (${gb.teamName})`;
+    const sub = gb.isOwnGoal
+      ? `${gb.teamName} ได้ประตูส้มหล่น!`
+      : gb.assister
+        ? `🎯 แอสซิสต์: ${gb.assister}`
+        : gb.isMyGoal
+          ? '🎉 เฮลั่นสนาม!'
+          : '🔥 ตุงตาข่าย!';
     ctx.font = '800 13px Sarabun, sans-serif';
     const w1 = ctx.measureText(title).width;
     ctx.font = '600 10px Sarabun, sans-serif';
@@ -1715,8 +1790,8 @@ export const drawLivePitchToCanvas = (
     ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 4;
-    ctx.fillStyle = 'rgba(9, 23, 16, 0.94)';
-    ctx.strokeStyle = gb.isMyGoal ? '#facc15' : '#4ade80';
+    ctx.fillStyle = gb.isOwnGoal ? 'rgba(28, 10, 16, 0.95)' : 'rgba(9, 23, 16, 0.94)';
+    ctx.strokeStyle = gb.isOwnGoal ? '#fb7185' : gb.isMyGoal ? '#facc15' : '#4ade80';
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 12);
@@ -1732,7 +1807,7 @@ export const drawLivePitchToCanvas = (
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = gb.isMyGoal ? '#fde047' : '#ffffff';
+    ctx.fillStyle = gb.isOwnGoal ? '#fda4af' : gb.isMyGoal ? '#fde047' : '#ffffff';
     ctx.font = '800 12.5px Sarabun, sans-serif';
     ctx.fillText(title, cx + 3, cy + 14);
     ctx.fillStyle = 'rgba(255, 255, 255, 0.86)';

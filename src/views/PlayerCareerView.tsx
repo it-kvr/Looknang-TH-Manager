@@ -10,6 +10,7 @@ import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPan
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
+import { PlayerBioStrip } from '../components/PlayerBioStrip';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -30,7 +31,7 @@ export const PlayerCareerView: React.FC<{
   const injCount = meSq?.inj ?? p.inj ?? 0;
   const ycCount = meSq?.yc ?? p.yc ?? 0;
   const rcCount = meSq?.rc ?? p.rc ?? 0;
-  const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, talent: p.talent, traits: p.traits, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
+  const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, ht: p.ht, wt: p.wt, foot: p.foot, pot: 95, talent: p.talent, traits: p.traits, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
   const details = dtInfo(fakePlayer, p);
   const myTalent = getPlayerTalent(fakePlayer, p);
   const tlMeta = talentTierMeta(myTalent);
@@ -130,6 +131,8 @@ export const PlayerCareerView: React.FC<{
 
         {/* Personal Info Box below Portrait Card */}
         <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
+          <PlayerBioStrip bio={details.bio} variant="grid" />
+
           <div className="space-y-1 mland:space-y-0.5">
             <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
               <span>⚡ พลังกาย</span>
@@ -170,7 +173,7 @@ export const PlayerCareerView: React.FC<{
                   });
                   onToast(injCount - 1 <= 0 ? '💆 กายภาพส่วนตัวสำเร็จ! คุณหายเจ็บพร้อมลงสนามแล้ว' : `💆 กายภาพส่วนตัวสำเร็จ! ลดวันพักเหลือ ${injCount - 1} นัด (+12% พลังกาย)`);
                 }}
-                className="w-full py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10px] mland:text-[8px] font-bold cursor-pointer disabled:opacity-45"
+                className="btn btn-xs btn-primary w-full"
               >
                 💆 กายภาพ (-1 นัด · +12% ฟิต · 4 ★)
               </button>
@@ -207,7 +210,7 @@ export const PlayerCareerView: React.FC<{
                   SFX.tap();
                   onOpenSeasonStats();
                 }}
-                className="px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[9px] mland:text-[7px] font-bold cursor-pointer transition-colors shrink-0"
+                className="btn btn-xs btn-surface shrink-0"
               >
                 📊 ซีซั่น ({state.seasonArchives!.length})
               </button>
@@ -336,7 +339,7 @@ export const PlayerCareerView: React.FC<{
       </div>
 
       <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0">
-        <div className="grid grid-cols-5 gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        <div className="seg-bar grid grid-cols-5 w-full shrink-0">
           {([
             ['plan', '📅 แผนฝึก'],
             ['missions', '🎯 ภารกิจ'],
@@ -347,8 +350,8 @@ export const PlayerCareerView: React.FC<{
             <button
               key={k}
               type="button"
-              onClick={() => setCareerTab(k)}
-              className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors truncate px-1 ${careerTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+              onClick={() => { SFX.tap(); setCareerTab(k); }}
+              className={`seg-btn py-1.5 mland:py-1 truncate px-1 ${careerTab === k ? 'seg-btn-active' : ''}`}
             >
               {lbl}
             </button>
@@ -480,9 +483,9 @@ export const PlayerCareerView: React.FC<{
                           });
                           onToast(`ปลดล็อกสกิล "${pk.name}" แล้ว!`);
                         }}
-                        className={`px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg text-[11px] mland:text-[9px] font-bold shrink-0 cursor-pointer disabled:opacity-45 ${owned ? 'bg-[var(--g)] text-white' : 'bg-[var(--lamp)] text-[#261900]'}`}
+                        className={`btn btn-sm shrink-0 ${owned ? 'btn-primary opacity-80' : 'btn-gold'}`}
                       >
-                        {owned ? 'มีแล้ว' : `ปลด ${pk.cost}`}
+                        {owned ? '✓ มีแล้ว' : `ปลด ${pk.cost}★`}
                       </button>
                     </div>
                   );

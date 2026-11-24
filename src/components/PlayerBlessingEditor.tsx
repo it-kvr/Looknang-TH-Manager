@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { Position, SubRole, StatKey, CoreAttrs, Player, Team, GameState } from '../types/game';
+import type { Position, SubRole, StatKey, CoreAttrs, Player, Team, GameState, PreferredFoot } from '../types/game';
 import { clamp } from '../utils/math';
 import {
   ATT,
@@ -19,10 +19,11 @@ import {
   ACC_N
 } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { OVF, dtInfo, rollPlayerTraits, visOf, rndVis } from '../engine/playerCore';
+import { OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, visOf, rndVis } from '../engine/playerCore';
 import { ovColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/blessings';
 import { PlayerFace } from './SvgVisuals';
+import { getFootColorMeta } from './PlayerBioStrip';
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 const GK_SIG_KEYS = ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp'];
@@ -56,6 +57,9 @@ export const PlayerBlessingEditor: React.FC<{
   const [showAppearance, setShowAppearance] = useState(false);
 
   const [age, setAge] = useState<number>(player.age || 24);
+  const [ht, setHt] = useState<number>(() => initInfo.bio.heightCm);
+  const [wt, setWt] = useState<number>(() => initInfo.bio.weightKg);
+  const [foot, setFoot] = useState<PreferredFoot>(() => initInfo.bio.foot);
   const [fit, setFit] = useState<number>(Math.round(player.fit ?? 100));
   const [inj, setInj] = useState<number>(player.inj || 0);
   const [sus, setSus] = useState<number>(player.sus || 0);
@@ -107,6 +111,10 @@ export const PlayerBlessingEditor: React.FC<{
     setPerks(nextMe && state.p?.perks ? [...state.p.perks] : []);
     setTraitSearch('');
     setAge(player.age || 24);
+    const nextBio = getPlayerBio(player, nextCareer);
+    setHt(nextBio.heightCm);
+    setWt(nextBio.weightKg);
+    setFoot(nextBio.foot);
     setFit(Math.round(player.fit ?? 100));
     setInj(player.inj || 0);
     setSus(player.sus || 0);
@@ -354,6 +362,9 @@ export const PlayerBlessingEditor: React.FC<{
         perks: isMePlayer ? perks : undefined,
         vis,
         age,
+        ht,
+        wt,
+        foot,
         fit,
         inj,
         sus,
@@ -416,13 +427,13 @@ export const PlayerBlessingEditor: React.FC<{
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" onClick={() => shiftAllStatsBy(5)} className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] font-bold cursor-pointer">
+            <button type="button" onClick={() => shiftAllStatsBy(5)} className="btn btn-xs btn-surface">
               ⚡ +5 ทุกค่า
             </button>
-            <button type="button" onClick={() => shiftAllStatsBy(10)} className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] font-bold cursor-pointer">
+            <button type="button" onClick={() => shiftAllStatsBy(10)} className="btn btn-xs btn-surface">
               🔥 +10 ทุกค่า
             </button>
-            <button type="button" onClick={applyMax99} className="px-2.5 py-1 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[10.5px] font-extrabold cursor-pointer shadow-xs">
+            <button type="button" onClick={applyMax99} className="btn btn-xs btn-gold font-extrabold">
               👑 เทพ 99
             </button>
             <button
@@ -433,7 +444,7 @@ export const PlayerBlessingEditor: React.FC<{
                 setInj(0);
                 setSus(0);
               }}
-              className="px-2 py-1 rounded-lg bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35 text-[10.5px] font-bold cursor-pointer"
+              className="btn btn-xs bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35 hover:bg-[var(--g)] hover:text-white"
             >
               💚 ฟิต 100% / หายเจ็บ
             </button>
@@ -443,10 +454,10 @@ export const PlayerBlessingEditor: React.FC<{
                 SFX.tap();
                 setShowAppearance((v) => !v);
               }}
-              className={`px-2 py-1 rounded-lg border text-[10.5px] font-bold cursor-pointer ${
+              className={`btn btn-xs ${
                 showAppearance
-                  ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                  : 'bg-[var(--surface)] border-[var(--line)] hover:border-[var(--g)]'
+                  ? 'btn-primary'
+                  : 'btn-surface'
               }`}
             >
               💈 หน้าตา/ทรงผม
@@ -845,37 +856,110 @@ export const PlayerBlessingEditor: React.FC<{
           </div>
         )}
 
+        {/* Physical Bio: Height, Weight, Preferred Foot */}
+        <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[10.5px] font-bold text-[var(--ink)]">📐 รูปร่าง &amp; เท้าที่ถนัด</span>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                const rb = rollPlayerBio(curPos, ro);
+                setHt(rb.ht);
+                setWt(rb.wt);
+                setFoot(rb.foot);
+              }}
+              className="btn btn-xs btn-secondary"
+            >
+              🎲 สุ่มสัดส่วน
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1.5">
+            <div className="p-1.5 rounded-lg border bg-teal-500/8 border-teal-500/30 space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-teal-700 dark:text-teal-300 font-bold">📏 ส่วนสูง</span>
+                <b className="tabular text-xs text-teal-700 dark:text-teal-300">{ht} ซม.</b>
+              </div>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setHt((v) => clamp(v - 1, 155, 205))} className="btn-icon w-6 h-6 text-xs">-</button>
+                <input type="range" min={155} max={205} value={ht} onChange={(e) => setHt(Number(e.target.value))} className="flex-1 accent-teal-500 min-w-0" />
+                <button type="button" onClick={() => setHt((v) => clamp(v + 1, 155, 205))} className="btn-icon w-6 h-6 text-xs">+</button>
+              </div>
+            </div>
+
+            <div className="p-1.5 rounded-lg border bg-emerald-500/8 border-emerald-500/30 space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-emerald-700 dark:text-emerald-300 font-bold">⚖️ น้ำหนัก</span>
+                <b className="tabular text-xs text-emerald-700 dark:text-emerald-300">{wt} กก.</b>
+              </div>
+              <div className="flex items-center gap-1">
+                <button type="button" onClick={() => setWt((v) => clamp(v - 1, 50, 110))} className="btn-icon w-6 h-6 text-xs">-</button>
+                <input type="range" min={50} max={110} value={wt} onChange={(e) => setWt(Number(e.target.value))} className="flex-1 accent-emerald-500 min-w-0" />
+                <button type="button" onClick={() => setWt((v) => clamp(v + 1, 50, 110))} className="btn-icon w-6 h-6 text-xs">+</button>
+              </div>
+            </div>
+
+            <div className="p-1.5 rounded-lg border bg-[var(--surface-2)]/65 border-[var(--line)] space-y-1">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-[var(--mut)] font-bold">🦶 ถนัดเท้า</span>
+                <b className="text-[10.5px] font-extrabold" style={{ color: getFootColorMeta(foot).dotColor }}>
+                  {getFootColorMeta(foot).label}
+                </b>
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(['L', 'R', 'B'] as const).map((fk) => {
+                  const fm = getFootColorMeta(fk);
+                  const active = foot === fk;
+                  return (
+                    <button
+                      key={fk}
+                      type="button"
+                      onClick={() => { SFX.tap(); setFoot(fk); }}
+                      className={`btn btn-xs px-1 ${
+                        active ? fm.buttonActiveCls : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: active ? 'currentColor' : fm.dotColor }} />
+                      <span>{fm.shortLabel}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mland:gap-1.5">
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
             <span className="text-[10.5px] font-semibold text-[var(--mut)]">อายุ</span>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setAge((v) => clamp(v - 1, 15, 45))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <button type="button" onClick={() => setAge((v) => clamp(v - 1, 15, 45))} className="btn-icon w-6 h-6 text-xs">-</button>
               <span className="text-xs font-bold tabular w-6 text-center">{age}</span>
-              <button type="button" onClick={() => setAge((v) => clamp(v + 1, 15, 45))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+              <button type="button" onClick={() => setAge((v) => clamp(v + 1, 15, 45))} className="btn-icon w-6 h-6 text-xs">+</button>
             </div>
           </div>
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
             <span className="text-[10.5px] font-semibold text-[var(--mut)]">ความฟิต</span>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setFit((v) => clamp(v - 5, 1, 100))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <button type="button" onClick={() => setFit((v) => clamp(v - 5, 1, 100))} className="btn-icon w-6 h-6 text-xs">-</button>
               <span className="text-xs font-bold tabular w-8 text-center">{fit}%</span>
-              <button type="button" onClick={() => setFit((v) => clamp(v + 5, 1, 100))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+              <button type="button" onClick={() => setFit((v) => clamp(v + 5, 1, 100))} className="btn-icon w-6 h-6 text-xs">+</button>
             </div>
           </div>
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
             <span className="text-[10.5px] font-semibold text-[var(--mut)]">บาดเจ็บ (นัด)</span>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setInj((v) => Math.max(0, v - 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <button type="button" onClick={() => setInj((v) => Math.max(0, v - 1))} className="btn-icon w-6 h-6 text-xs">-</button>
               <span className="text-xs font-bold tabular w-5 text-center">{inj}</span>
-              <button type="button" onClick={() => setInj((v) => Math.min(20, v + 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+              <button type="button" onClick={() => setInj((v) => Math.min(20, v + 1))} className="btn-icon w-6 h-6 text-xs">+</button>
             </div>
           </div>
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
             <span className="text-[10.5px] font-semibold text-[var(--mut)]">โทษแบน (นัด)</span>
             <div className="flex items-center gap-1">
-              <button type="button" onClick={() => setSus((v) => Math.max(0, v - 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <button type="button" onClick={() => setSus((v) => Math.max(0, v - 1))} className="btn-icon w-6 h-6 text-xs">-</button>
               <span className="text-xs font-bold tabular w-5 text-center">{sus}</span>
-              <button type="button" onClick={() => setSus((v) => Math.min(10, v + 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+              <button type="button" onClick={() => setSus((v) => Math.min(10, v + 1))} className="btn-icon w-6 h-6 text-xs">+</button>
             </div>
           </div>
         </div>
@@ -966,7 +1050,7 @@ export const PlayerBlessingEditor: React.FC<{
           <button
             type="button"
             onClick={handleReset}
-            className="px-3 py-2 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--red)] text-xs mland:text-[10.5px] font-bold text-[var(--red)] cursor-pointer"
+            className="btn btn-md btn-danger"
           >
             🔄 คืนค่าเดิม
           </button>
@@ -976,7 +1060,7 @@ export const PlayerBlessingEditor: React.FC<{
         <button
           type="button"
           onClick={handleSave}
-          className="ml-auto px-5 py-2 mland:py-1.5 rounded-xl bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-xs sm:text-sm mland:text-xs font-extrabold shadow-sm hover:brightness-105 cursor-pointer"
+          className="btn btn-md btn-gold ml-auto px-5 font-extrabold"
         >
           ✨ บันทึกพรของพระเจ้า ({player.n.split(' ')[0]})
         </button>

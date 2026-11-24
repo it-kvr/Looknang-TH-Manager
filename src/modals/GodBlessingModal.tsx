@@ -3,8 +3,10 @@ import type { Position, Player, Team, GameState } from '../types/game';
 import { TN, SPN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { ovColor } from '../engine/missions';
+import { getPlayerBio } from '../engine/playerCore';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerBlessingEditor } from '../components/PlayerBlessingEditor';
+import { PlayerBioStrip } from '../components/PlayerBioStrip';
 
 export const GodBlessingModal: React.FC<{
   state: GameState;
@@ -55,7 +57,8 @@ export const GodBlessingModal: React.FC<{
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-white/15 hover:bg-white/25 text-xs font-bold cursor-pointer shrink-0"
+            aria-label="ปิดหน้าต่าง"
+            className="btn-icon rounded-full bg-white/15 hover:bg-white/25 border-white/20 text-white"
           >
             ✕
           </button>
@@ -102,10 +105,10 @@ export const GodBlessingModal: React.FC<{
                     key={pf}
                     type="button"
                     onClick={() => { SFX.tap(); setPosFilter(pf); }}
-                    className={`px-1.5 py-0.5 rounded-md border text-[9.5px] font-bold cursor-pointer ${
+                    className={`btn btn-xs ${
                       posFilter === pf
-                        ? 'bg-[var(--lamp)] text-[#261900] border-[#ca8a04]/50'
-                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)]'
+                        ? 'btn-gold'
+                        : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
                     }`}
                   >
                     {pf === 'ALL' ? 'ทั้งหมด' : pf}
@@ -163,7 +166,7 @@ export const GodBlessingModal: React.FC<{
                     careerProfile={activeItem.pl.me ? state.p : null}
                     size={42}
                   />
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 space-y-0.5">
                     <div className="font-bold text-sm mland:text-xs truncate flex items-center gap-1.5">
                       {activeItem.pl.blessed && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] font-extrabold shrink-0">✨ พรของพระเจ้า</span>}
                       <span className="truncate">{activeItem.pl.n}</span>
@@ -172,6 +175,10 @@ export const GodBlessingModal: React.FC<{
                       {activeItem.team ? activeItem.team.name : 'ตลาดซื้อขาย / ฟรีเอเยนต์'} · {activeItem.pl.ro} ({SPN[activeItem.pl.ro] || activeItem.pl.pos})
                       {activeItem.pl.altRoles?.length ? ` · ถนัดเพิ่ม: ${activeItem.pl.altRoles.join(', ')}` : ''}
                     </div>
+                    <PlayerBioStrip
+                      bio={getPlayerBio(activeItem.pl, activeItem.pl.me ? state.p : null)}
+                      variant="inline"
+                    />
                   </div>
                 </div>
                 <PlayerBlessingEditor

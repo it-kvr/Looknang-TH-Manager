@@ -49,24 +49,20 @@ export const TeamTrainingView: React.FC<{
     <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
       {/* Mode Sub-Navigation */}
       <div className="flex items-center justify-between gap-2 shrink-0">
-        <div className="inline-flex p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] gap-1">
+        <div className="seg-bar">
           <button
             type="button"
             onClick={() => { SFX.tap(); setTrainingMode('program'); }}
-            className={`px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${
-              trainingMode === 'program' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-            }`}
+            className={`seg-btn ${trainingMode === 'program' ? 'seg-btn-active' : ''}`}
           >
             📅 โปรแกรมซ้อมทีม
           </button>
           <button
             type="button"
             onClick={() => { SFX.tap(); setTrainingMode('missions'); }}
-            className={`px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors flex items-center gap-1.5 ${
-              trainingMode === 'missions' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-            }`}
+            className={`seg-btn ${trainingMode === 'missions' ? 'seg-btn-active' : ''}`}
           >
-            <span>🎯 ภารกิจส่วนบุคคล</span>
+            🎯 ภารกิจส่วนบุคคล
           </button>
         </div>
         <span className="text-[11px] mland:text-[9px] text-[var(--mut)]">
@@ -396,7 +392,7 @@ export const TeamTrainingView: React.FC<{
                   });
                   onToast(cnt > 0 ? `😴 สั่งพักเดี่ยวนักเตะล้า/เจ็บ ${cnt} คนแล้ว` : 'ทุกคนฟิตพร้อมซ้อมดีอยู่แล้ว');
                 }}
-                className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer"
+                className="btn btn-xs btn-secondary"
               >
                 😴 พักคนที่ล้า &lt;72%
               </button>
@@ -411,7 +407,7 @@ export const TeamTrainingView: React.FC<{
                     });
                     onToast('ให้ทุกคนกลับมาซ้อมตามโปรแกรมทีมแล้ว');
                   }}
-                  className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                  className="btn btn-xs btn-ghost"
                 >
                   รีเซ็ต
                 </button>
@@ -464,10 +460,10 @@ export const TeamTrainingView: React.FC<{
                           d.trainingPlan = { ...cur, individualFocus: nextInd };
                         });
                       }}
-                      className={`px-2 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold cursor-pointer border ${
+                      className={`btn btn-xs ${
                         isRest
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                          ? 'bg-emerald-600 text-white border border-emerald-600 shadow-xs'
+                          : 'btn-secondary'
                       }`}
                     >
                       {isRest ? '😴 พักอยู่' : '😴 พัก'}
@@ -489,10 +485,8 @@ export const TeamTrainingView: React.FC<{
                             }
                           });
                         }}
-                        className={`px-2 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold cursor-pointer border ${
-                          isFocus
-                            ? 'bg-[var(--lamp)] text-[#261900] border-[#ca8a04]/40'
-                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        className={`btn btn-xs ${
+                          isFocus ? 'btn-gold' : 'btn-secondary'
                         }`}
                       >
                         {isFocus ? '🌟 ปั้น' : '⭐ ปั้น'}

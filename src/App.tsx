@@ -739,7 +739,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setInspectTeamId(nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId)}
-                  className="px-2 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] font-bold shrink-0 cursor-pointer transition-colors"
+                  className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)] shrink-0"
                 >
                   ส่อง
                 </button>
@@ -756,7 +756,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleTriggerNextStep}
-              className="min-h-[34px] mland:min-h-[28px] px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] font-bold text-xs sm:text-sm mland:text-[10.5px] hover:brightness-105 transition-all cursor-pointer shadow-[0_2px_8px_rgba(234,179,8,0.28)] whitespace-nowrap border border-[#ca8a04]/30"
+              className="btn btn-md btn-gold sm:px-4 text-xs sm:text-sm mland:text-[10.5px]"
             >
               {nextMatchInfo
                 ? appSettings.autoSkipMatch
@@ -776,7 +776,7 @@ export default function App() {
               type="button"
               onClick={() => { SFX.tap(); setShowSettings(true); }}
               aria-label="ตั้งค่า"
-              className="w-8 h-8 sm:w-9 sm:h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] flex items-center justify-center text-sm mland:text-xs cursor-pointer shrink-0"
+              className="btn-icon sm:w-9 sm:h-9 text-sm mland:text-xs"
             >
               ⚙️
             </button>

@@ -15,6 +15,7 @@ export type MainTab = 't' | 's' | 'q' | 'r' | 'k' | 'f' | 'u' | 'c' | 'p';
 export type TrainingFocus = 'FW' | 'MF' | 'DF' | 'F';
 export type TrainingProgramId = 'balanced' | 'attack' | 'defense' | 'tactics' | 'setpiece' | 'fitness' | 'recovery';
 export type TrainingIntensity = 'light' | 'normal' | 'heavy';
+export type PreferredFoot = 'L' | 'R' | 'B';
 
 export interface TeamTrainingPlan {
   program: TrainingProgramId;
@@ -67,6 +68,9 @@ export interface Player {
   sp?: number;
   ov: number;
   age: number;
+  ht?: number;
+  wt?: number;
+  foot?: PreferredFoot;
   pot: number;
   talent?: number;
   traits?: string[];
@@ -249,6 +253,9 @@ export interface PlayerCareerProfile {
   sb?: Record<string, number>;
   customD?: Record<string, number>;
   age: number;
+  ht?: number;
+  wt?: number;
+  foot?: PreferredFoot;
   talent?: number;
   traits?: string[];
   altRoles?: SubRole[];
@@ -292,6 +299,7 @@ export interface MatchEvent {
   who: string;
   as?: string;
   style?: string;
+  og?: boolean;
 }
 
 export interface MatchCardEvent {
@@ -311,7 +319,7 @@ export interface MatchSubEvent {
 export interface MatchDramaticEvent {
   m: number;
   t?: number;
-  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch' | 'miracle' | 'blessed';
+  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch' | 'miracle' | 'blessed' | 'own_goal' | 'slip' | 'whiff';
   text: string;
 }
 
@@ -879,7 +887,9 @@ export interface LivePitchAgent {
     | 'skill_pass'
     | 'dragback'
     | 'cutinside'
-    | 'supersave';
+    | 'supersave'
+    | 'slip'
+    | 'whiff';
   skillSpinDir?: number;
   actionDirX?: number;
   actionDirY?: number;
@@ -926,6 +936,8 @@ export interface LiveBallState {
     blockerId?: string;
     deflectorId?: string;
     deflectedFrom?: string;
+    ownGoalCulpritId?: string;
+    isPureOwnGoal?: boolean;
     parryCorner?: boolean;
     shootoutScored?: boolean;
     gkDiveTargetY?: number;
@@ -974,7 +986,9 @@ export interface LivePitchFx {
     | 'press'
     | 'cutinside'
     | 'solo'
-    | 'throwin';
+    | 'throwin'
+    | 'slip'
+    | 'whiff';
   x: number;
   y: number;
   toX?: number;
@@ -1084,6 +1098,7 @@ export interface LiveMatchWorld {
     kit: string;
     isMyGoal: boolean;
     isMeScorer: boolean;
+    isOwnGoal?: boolean;
     ttl: number;
     maxTtl: number;
   } | null;
@@ -1165,6 +1180,9 @@ export interface GodBlessingPatch {
   pot: number;
   talent?: number;
   age: number;
+  ht?: number;
+  wt?: number;
+  foot?: PreferredFoot;
   fit: number;
   inj: number;
   sus: number;

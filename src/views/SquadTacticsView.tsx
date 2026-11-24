@@ -3,12 +3,13 @@ import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, A
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc } from '../engine/playerCore';
+import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { LockerRoomPanel } from '../components/LockerRoomPanel';
+import { getFootColorMeta } from '../components/PlayerBioStrip';
 import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
 
@@ -685,17 +686,17 @@ export const SquadTacticsView: React.FC<{
       )}
 
       <div className="flex items-center justify-between gap-1.5 flex-nowrap overflow-x-auto shrink-0">
-        <div className="flex items-center p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 0 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+        <div className="seg-bar shrink-0">
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`seg-btn ${sub === 0 ? 'seg-btn-active' : ''}`}>
             ⚽ ตัวจริง
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 1 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`seg-btn ${sub === 1 ? 'seg-btn-active' : ''}`}>
             🧭 แผนเกม
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 2 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`seg-btn ${sub === 2 ? 'seg-btn-active' : ''}`}>
             📋 ทั้งทีม ({me.sq.length})
           </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 3; })} className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 transition-colors ${sub === 3 ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}>
+          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 3; })} className={`seg-btn ${sub === 3 ? 'seg-btn-active' : ''}`}>
             👕 ล็อกเกอร์
           </button>
         </div>
@@ -761,7 +762,7 @@ export const SquadTacticsView: React.FC<{
                     <button
                       type="button"
                       onClick={() => setShowFormationSheet(false)}
-                      className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer"
+                      className="btn btn-xs btn-secondary"
                     >
                       ✕ ปิด
                     </button>
@@ -782,10 +783,8 @@ export const SquadTacticsView: React.FC<{
                             }
                           });
                         }}
-                        className={`px-1 py-1.5 mland:py-1 rounded-lg text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
-                          me.form === f
-                            ? 'bg-[var(--g)] text-white shadow-xs'
-                            : 'bg-[var(--surface-2)] text-[var(--ink)] hover:border-[var(--g)]'
+                        className={`btn btn-xs truncate ${
+                          me.form === f ? 'btn-primary' : 'btn-secondary'
                         }`}
                       >
                         {f}
@@ -798,8 +797,8 @@ export const SquadTacticsView: React.FC<{
                         key={k}
                         type="button"
                         onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
-                        className={`px-1 py-1.5 mland:py-1 rounded-lg text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer truncate transition-colors ${
-                          me.tac === k ? 'bg-[var(--lamp)] text-[#261900] shadow-xs' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        className={`btn btn-xs truncate ${
+                          me.tac === k ? 'btn-gold' : 'btn-secondary text-[var(--mut)]'
                         }`}
                       >
                         {AR_T[k]}
@@ -817,7 +816,7 @@ export const SquadTacticsView: React.FC<{
                     SFX.tap();
                     setShowFormationSheet((v) => !v);
                   }}
-                  className="w-full flex items-center justify-between gap-2 px-2.5 mland:px-2 py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:border-[var(--g)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer transition-colors"
+                  className="btn btn-sm btn-secondary w-full justify-between"
                 >
                   <span className="truncate">
                     🧭 เปลี่ยนแผน · <span className="text-[var(--g)]">{formName(me, pitchDragPreview)}</span> · <span className="text-[var(--mut)]">{AR_T[me.tac]}</span>
@@ -832,15 +831,13 @@ export const SquadTacticsView: React.FC<{
             {/* RIGHT: Squad & Bench List */}
             <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
               <div className="flex items-center justify-between gap-1 mb-1.5 mland:mb-1 shrink-0">
-                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] min-w-0">
+                <div className="seg-bar min-w-0">
                   {([['ทั้งหมด', 0], ['ตัวจริง 11', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
                     <button
                       key={k}
                       type="button"
                       onClick={() => setLuTab(k)}
-                      className={`px-2 mland:px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap transition-colors ${
-                        luTab === k ? 'bg-[var(--g)] text-white shadow-2xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                      }`}
+                      className={`seg-btn ${luTab === k ? 'seg-btn-active' : ''}`}
                     >
                       {l}
                     </button>
@@ -852,10 +849,10 @@ export const SquadTacticsView: React.FC<{
                       type="button"
                       onClick={restTiredStarters}
                       title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
-                      className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap transition-colors cursor-pointer border ${
+                      className={`btn btn-xs ${
                         restNeededStarters.length > 0
-                          ? 'bg-rose-500/15 border-rose-500/45 text-[#dc2626] dark:text-[#fca5a5] hover:bg-rose-500 hover:text-white'
-                          : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                          ? 'btn-danger'
+                          : 'bg-amber-500/15 border border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
                       }`}
                     >
                       🛌 พักตัวล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
@@ -869,10 +866,10 @@ export const SquadTacticsView: React.FC<{
                       onUpdateState((d) => { d.teams[d.me].lu = null; });
                       onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
                     }}
-                    className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 border ${
+                    className={`btn btn-xs shrink-0 ${
                       !me.lu
-                        ? 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
-                        : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
+                        ? 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)]'
+                        : 'btn-secondary hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
                     }`}
                   >
                     {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
@@ -950,9 +947,9 @@ export const SquadTacticsView: React.FC<{
 
             <div className="p-2 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
               <div className="font-bold text-xs mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0">👥 รายชื่อทีม</div>
-              <div className="grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] mb-1.5 mland:mb-1 shrink-0">
+              <div className="seg-bar grid grid-cols-3 w-full mb-1.5 mland:mb-1 shrink-0">
                 {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
-                  <button key={k} type="button" onClick={() => setLuTab(k)} className={`py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer truncate ${luTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'}`}>{l}</button>
+                  <button key={k} type="button" onClick={() => setLuTab(k)} className={`seg-btn truncate ${luTab === k ? 'seg-btn-active' : ''}`}>{l}</button>
                 ))}
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
@@ -999,12 +996,12 @@ export const SquadTacticsView: React.FC<{
                               }
                             });
                           }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${me.form === f ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--ink)]'}`}
+                          className={`btn btn-sm ${me.form === f ? 'btn-primary' : 'btn-secondary'}`}
                         >
                           {f}
                         </button>
                       ))}
-                      <button type="button" onClick={() => setShowCustomEditor(true)} className={`px-2.5 py-1 rounded-lg text-xs font-semibold cursor-pointer ${me.form === 'custom' ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--ink)]'}`}>
+                      <button type="button" onClick={() => setShowCustomEditor(true)} className={`btn btn-sm ${me.form === 'custom' ? 'btn-primary' : 'btn-secondary'}`}>
                         ✏️ ปรับแผนเอง
                       </button>
                     </div>
@@ -1024,7 +1021,7 @@ export const SquadTacticsView: React.FC<{
                           onUpdateState((d) => { Object.assign(d.teams[d.me], cfg); d.teams[d.me].lu = null; });
                           onToast(`ใช้ยุทธวิธี "${lbl}"`);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g)] hover:text-white text-xs font-semibold transition-colors cursor-pointer"
+                        className="btn btn-sm btn-secondary hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]"
                       >
                         {lbl}
                       </button>
@@ -1044,7 +1041,7 @@ export const SquadTacticsView: React.FC<{
                             });
                             onToast(`บันทึกแผน ${idx + 1} แล้ว`);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
+                          className="btn btn-sm btn-secondary"
                         >
                           บันทึก {idx + 1}
                         </button>
@@ -1058,7 +1055,7 @@ export const SquadTacticsView: React.FC<{
                             });
                             onToast(`โหลดแผน ${idx + 1} แล้ว`);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] text-xs font-semibold disabled:opacity-40 cursor-pointer"
+                          className="btn btn-sm btn-surface"
                         >
                           โหลด {idx + 1}
                         </button>
@@ -1073,7 +1070,7 @@ export const SquadTacticsView: React.FC<{
                   <div className="text-xs font-bold mb-1">สไตล์การเล่น (Mentality)</div>
                   <div className="flex flex-wrap gap-1.5">
                     {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
-                      <button key={k} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${me.tac === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>
+                      <button key={k} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })} className={`btn btn-sm ${me.tac === k ? 'btn-primary' : 'btn-secondary'}`}>
                         {AR_T[k]}
                       </button>
                     ))}
@@ -1083,17 +1080,17 @@ export const SquadTacticsView: React.FC<{
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs font-bold mb-1">เพรสซิ่ง</div>
-                    <div className="flex gap-1">
+                    <div className="seg-bar grid grid-cols-3 w-full">
                       {['ต่ำ', 'กลาง', 'สูง'].map((l, k) => (
-                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].press = k; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(me.press ?? 1) === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].press = k; })} className={`seg-btn ${(me.press ?? 1) === k ? 'seg-btn-active' : ''}`}>{l}</button>
                       ))}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs font-bold mb-1">จังหวะเกม</div>
-                    <div className="flex gap-1">
+                    <div className="seg-bar grid grid-cols-3 w-full">
                       {['ช้า', 'กลาง', 'เร็ว'].map((l, k) => (
-                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].tempo = k; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(me.tempo ?? 1) === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].tempo = k; })} className={`seg-btn ${(me.tempo ?? 1) === k ? 'seg-btn-active' : ''}`}>{l}</button>
                       ))}
                     </div>
                   </div>
@@ -1102,17 +1099,17 @@ export const SquadTacticsView: React.FC<{
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <div className="text-xs font-bold mb-1">ความกว้าง</div>
-                    <div className="flex gap-1">
+                    <div className="seg-bar grid grid-cols-3 w-full">
                       {['แคบ', 'กลาง', 'กว้าง'].map((l, k) => (
-                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].wid = k; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(me.wid ?? 1) === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].wid = k; })} className={`seg-btn ${(me.wid ?? 1) === k ? 'seg-btn-active' : ''}`}>{l}</button>
                       ))}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs font-bold mb-1">แนวรับ</div>
-                    <div className="flex gap-1">
+                    <div className="seg-bar grid grid-cols-3 w-full">
                       {['ลึก', 'กลาง', 'สูง'].map((l, k) => (
-                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].line = k; })} className={`flex-1 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(me.line ?? 1) === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                        <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].line = k; })} className={`seg-btn ${(me.line ?? 1) === k ? 'seg-btn-active' : ''}`}>{l}</button>
                       ))}
                     </div>
                   </div>
@@ -1122,7 +1119,7 @@ export const SquadTacticsView: React.FC<{
                   <div className="text-xs font-bold mb-1">สไตล์การจ่ายบอล</div>
                   <div className="flex flex-wrap gap-1.5">
                     {['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'].map((l, k) => (
-                      <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].pass = k; })} className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${(me.pass ?? 1) === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}>{l}</button>
+                      <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].pass = k; })} className={`btn btn-sm ${(me.pass ?? 1) === k ? 'btn-primary' : 'btn-secondary'}`}>{l}</button>
                     ))}
                   </div>
                 </div>
@@ -1157,7 +1154,7 @@ export const SquadTacticsView: React.FC<{
                         onClick={() => onUpdateState((d) => {
                           d.rules = [...(d.rules || []), { c: 'tr', min: 65, tac: 'A' }];
                         })}
-                        className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] text-[11px] font-semibold cursor-pointer"
+                        className="btn btn-xs btn-secondary"
                       >
                         ＋ เพิ่มกฎ
                       </button>
@@ -1195,7 +1192,7 @@ export const SquadTacticsView: React.FC<{
                           <button
                             type="button"
                             onClick={() => onUpdateState((d) => { d.rules = (d.rules || []).filter((_, j) => j !== idx); })}
-                            className="ml-auto px-2 py-1 text-[var(--red)] font-bold cursor-pointer"
+                            className="ml-auto btn btn-xs btn-danger"
                           >
                             ✕
                           </button>
@@ -1303,7 +1300,7 @@ export const SquadTacticsView: React.FC<{
 
                 {/* List Filter & Sort Bar */}
                 <div className="flex items-center justify-between gap-2 mland:gap-1 pb-1.5 mland:pb-1 border-b border-[var(--line)] shrink-0 overflow-x-auto">
-                  <div className="flex flex-nowrap gap-1 shrink-0">
+                  <div className="seg-bar shrink-0">
                     {([
                       ['ALL', `ทั้งหมด (${me.sq.length})`],
                       ['GK', `GK (${posCounts.GK})`],
@@ -1315,31 +1312,33 @@ export const SquadTacticsView: React.FC<{
                         key={k}
                         type="button"
                         onClick={() => setSquadPosFilter(k)}
-                        className={`px-2 py-0.5 rounded-lg text-[11px] mland:text-[10px] font-semibold whitespace-nowrap shrink-0 cursor-pointer ${squadPosFilter === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                        className={`seg-btn ${squadPosFilter === k ? 'seg-btn-active' : ''}`}
                       >
                         {lbl}
                       </button>
                     ))}
                   </div>
-                  <div className="flex flex-nowrap items-center gap-1 text-[10.5px] mland:text-[9.5px] shrink-0">
-                    <span className="text-[var(--mut)] font-semibold mr-0.5 shrink-0">เรียง:</span>
-                    {([
-                      ['pos', 'ตำแหน่ง'],
-                      ['ov', 'OVR'],
-                      ['fit', 'ความฟิต'],
-                      ['age', 'อายุ'],
-                      ['val', 'มูลค่า'],
-                      ['goals', 'ฟอร์ม/ประตู']
-                    ] as const).map(([sKey, sLbl]) => (
-                      <button
-                        key={sKey}
-                        type="button"
-                        onClick={() => setSquadSort(sKey)}
-                        className={`px-2 mland:px-1.5 py-0.5 rounded-lg font-semibold whitespace-nowrap shrink-0 cursor-pointer ${squadSort === sKey ? 'bg-[var(--ink)] text-[var(--bg)]' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'}`}
-                      >
-                        {sLbl}
-                      </button>
-                    ))}
+                  <div className="flex flex-nowrap items-center gap-1 shrink-0">
+                    <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mr-0.5 shrink-0">เรียง:</span>
+                    <div className="seg-bar">
+                      {([
+                        ['pos', 'ตำแหน่ง'],
+                        ['ov', 'OVR'],
+                        ['fit', 'ความฟิต'],
+                        ['age', 'อายุ'],
+                        ['val', 'มูลค่า'],
+                        ['goals', 'ฟอร์ม/ประตู']
+                      ] as const).map(([sKey, sLbl]) => (
+                        <button
+                          key={sKey}
+                          type="button"
+                          onClick={() => setSquadSort(sKey)}
+                          className={`seg-btn ${squadSort === sKey ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : ''}`}
+                        >
+                          {sLbl}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -1369,7 +1368,7 @@ export const SquadTacticsView: React.FC<{
                           SFX.tap();
                           setSellModalNames(activeSelected);
                         }}
-                        className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap"
+                        className="btn btn-xs btn-primary"
                       >
                         💰 ขายที่เลือก ({activeSelected.length})
                       </button>
@@ -1379,7 +1378,7 @@ export const SquadTacticsView: React.FC<{
                           SFX.tap();
                           setReleaseModalNames(activeSelected);
                         }}
-                        className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--red)]/45 text-[var(--red)] text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap hover:bg-[var(--red-soft)]"
+                        className="btn btn-xs btn-danger"
                       >
                         🔓 ปลด ({activeSelected.length})
                       </button>
@@ -1389,7 +1388,7 @@ export const SquadTacticsView: React.FC<{
                           SFX.tap();
                           setSelectedSquadNames([]);
                         }}
-                        className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer whitespace-nowrap"
+                        className="btn btn-xs btn-surface"
                       >
                         ล้าง
                       </button>
@@ -1413,7 +1412,7 @@ export const SquadTacticsView: React.FC<{
                           if (onNavigate) onNavigate('k', 'sell');
                           else onUpdateState((d) => { d.v = 'k'; });
                         }}
-                        className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap shrink-0"
+                        className="btn btn-xs btn-gold shrink-0"
                       >
                         เปิดหน้าตลาด →
                       </button>
@@ -1466,6 +1465,8 @@ export const SquadTacticsView: React.FC<{
                       const fitTxtCls = stMeta.txtCls;
                       const isSelected = selectedSet.has(q.n);
                       const expiringSoon = !q.loan && con.yr <= 1;
+                      const bio = getPlayerBio(q);
+                      const footMeta = getFootColorMeta(bio.foot);
 
                       return (
                         <div
@@ -1553,6 +1554,13 @@ export const SquadTacticsView: React.FC<{
                                     · {con.yr <= 0 ? 'หมดสัญญา!' : `สัญญา ${con.yr} ปี`}
                                   </span>
                                 )}
+                                <span
+                                  className={`hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1 rounded border text-[9.5px] mland:text-[8px] font-bold leading-tight shrink-0 ${footMeta.badgeCls}`}
+                                  title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: footMeta.dotColor }} />
+                                  <span>{bio.heightCm}/{bio.weightKg} · {footMeta.shortLabel}</span>
+                                </span>
                                 {f < 75 && q.inj === 0 && (q.sus || 0) === 0 && (
                                   <span className={`sm:hidden mland:hidden px-1 rounded text-[9px] font-bold ${stMeta.pillCls}`}>
                                     {stMeta.label} {f}%
@@ -1638,10 +1646,8 @@ export const SquadTacticsView: React.FC<{
                                   SFX.tap();
                                   setRenewTargetName(q.n);
                                 }}
-                                className={`px-1.5 mland:px-1 py-1 mland:py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap disabled:opacity-35 disabled:cursor-not-allowed ${
-                                  expiringSoon
-                                    ? 'bg-[var(--g)] text-white'
-                                    : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                                className={`btn btn-xs ${
+                                  expiringSoon ? 'btn-primary' : 'btn-secondary'
                                 }`}
                               >
                                 <span className="hidden lg:inline">ต่อสัญญา</span>
@@ -1655,7 +1661,7 @@ export const SquadTacticsView: React.FC<{
                                   SFX.tap();
                                   setSellModalNames([q.n]);
                                 }}
-                                className="px-1.5 mland:px-1 py-1 mland:py-0.5 rounded-md bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[#7c5300] dark:text-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap hover:brightness-95 disabled:opacity-35 disabled:cursor-not-allowed"
+                                className="btn btn-xs bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[#7c5300] dark:text-[var(--lamp)] hover:brightness-95"
                               >
                                 ขาย
                               </button>
@@ -1666,7 +1672,7 @@ export const SquadTacticsView: React.FC<{
                                   SFX.tap();
                                   setReleaseModalNames([q.n]);
                                 }}
-                                className="px-1.5 mland:px-1 py-1 mland:py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50 text-[10px] mland:text-[8.5px] font-bold cursor-pointer whitespace-nowrap"
+                                className="btn btn-xs btn-secondary text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50"
                               >
                                 {q.loan ? 'คืนยืม' : 'ปลด'}
                               </button>

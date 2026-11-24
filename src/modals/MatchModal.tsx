@@ -10,6 +10,7 @@ type TimelineKind =
   | 'second_half'
   | 'full_time'
   | 'goal'
+  | 'own_goal'
   | 'pen_goal'
   | 'pen_awarded'
   | 'pen_miss'
@@ -1592,6 +1593,200 @@ export const MatchModal: React.FC<{
     }
   };
 
+  const isOnRainyPuddle = (w: LiveMatchWorld, x: number, y: number): boolean => {
+    if (w.env?.season !== 'rainy' || !w.env.puddles?.length) return false;
+    return w.env.puddles.some((pd) => {
+      const dx = (x - pd.x) / Math.max(0.8, pd.rx);
+      const dy = (y - pd.y) / Math.max(0.8, pd.ry);
+      return dx * dx + dy * dy <= 1.85;
+    });
+  };
+
+  const triggerAgentSlipFx = (
+    w: LiveMatchWorld,
+    ag: LivePitchAgent,
+    fxLabel: string,
+    formPenalty = -0.15
+  ) => {
+    ag.acrobatType = 'slip';
+    ag.acrobatMax = 0.88;
+    ag.acrobatTimer = 0.88;
+    ag.skillSpinDir = Math.random() < 0.5 ? 1 : -1;
+    ag.intent = 'MARK';
+    ag.intentTimer = 0.82;
+    adjustLiveForm(ag.id, formPenalty);
+    addWorldFx(w, {
+      type: 'slip',
+      x: ag.x,
+      y: ag.y,
+      label: fxLabel,
+      color: '#38bdf8',
+      ttl: 1.9,
+      maxTtl: 1.9
+    });
+    SFX.pass();
+    SFX.boo(0.45);
+  };
+
+  const shouldShooterWhiff = (
+    w: LiveMatchWorld,
+    shooter: LivePitchAgent | undefined,
+    nearestDefDist: number,
+    shotStyle: LiveBallState['shotStyle'],
+    isFirstTime = false
+  ): boolean => {
+    if (!shooter || shooter.pos === 'GK') return false;
+    const isAcro = shotStyle === 'bicycle' || shotStyle === 'volley' || shotStyle === 'diving_header';
+    const isRainy = w.env?.season === 'rainy';
+    const inPuddle = isOnRainyPuddle(w, shooter.x, shooter.y);
+    const finComp = ((shooter.d.fin || 60) + (shooter.d.comp || 60)) * 0.5;
+    let p = isFirstTime ? 0.044 : 0.028;
+    if (isAcro) p += 0.028;
+    if (isRainy) p += 0.012;
+    if (inPuddle) p += 0.022;
+    if (shooter.fit < 55) p += 0.022;
+    if (nearestDefDist < 5.5) p += 0.015;
+    p -= (finComp - 60) * 0.0006;
+    if ((shooter.blessedMins ?? 0) > 0) p *= 0.22;
+    if (agentHasTrait(shooter, 'poacher_instinct') || agentHasTrait(shooter, 'consistency_pro')) p *= 0.72;
+    return Math.random() < clamp(p, 0.01, 0.13);
+  };
+
+  const launchWhiffLooseBall = (
+    w: LiveMatchWorld,
+    curMin: number,
+    side: 'H' | 'A',
+    shooter: LivePitchAgent,
+    attTeam: Team,
+    defPool: LivePitchAgent[],
+    attRightNow: boolean,
+    contextText = 'ง้างเท้ายิงเต็มเหนี่ยวแต่เตะวืดลม!'
+  ) => {
+    const b = w.ball;
+    const defSide: 'H' | 'A' = side === 'H' ? 'A' : 'H';
+    const defRightNow = isAttackRight(w, defSide);
+    const dir = attRightNow ? 1 : -1;
+    shooter.acrobatType = 'whiff';
+    shooter.acrobatMax = 0.78;
+    shooter.acrobatTimer = 0.78;
+    adjustLiveForm(shooter.id, -0.14);
+    addWorldFx(w, {
+      type: 'whiff',
+      x: shooter.x,
+      y: shooter.y,
+      label: `💨 เตะวืด!! (${shooter.shortName})`,
+      color: '#fb923c',
+      ttl: 1.9,
+      maxTtl: 1.9
+    });
+    SFX.tap();
+    SFX.boo(0.45);
+    triggerCoachMood(w, side, '🤦', 2.0);
+    const trickleDist = 4.5 + Math.random() * 4.5;
+    const endX = clamp(shooter.x + dir * trickleDist, 1.5, 98.5);
+    const endY = clamp(shooter.y + (Math.random() - 0.5) * 14, 14, 86);
+    const nearDef = defPool
+      .slice()
+      .sort((u, v) => Math.hypot(u.x - endX, u.y - endY) - Math.hypot(v.x - endX, v.y - endY))[0];
+    const rollOutGoalLine = (attRightNow && shooter.x > 91.5 && Math.random() < 0.45) || (!attRightNow && shooter.x < 8.5 && Math.random() < 0.45);
+    b.fromX = shooter.x;
+    b.fromY = shooter.y;
+    b.toX = rollOutGoalLine ? (attRightNow ? 100.6 : -0.6) : endX;
+    b.toY = endY;
+    b.curve = 0;
+    b.maxZ = 0.5;
+    b.startZ = 0;
+    b.endZ = 0;
+    b.progress = 0;
+    b.duration = 0.46;
+    b.flightType = 'bounce';
+    b.shotStyle = undefined;
+    b.carrierId = null;
+    b.targetId = rollOutGoalLine ? null : nearDef?.id || null;
+    b.possessionSide = side;
+    b.bounceNext = rollOutGoalLine
+      ? {
+          setPiece: {
+            type: 'goalkick',
+            side: defSide,
+            x: defRightNow ? 5.5 : 94.5,
+            y: 50,
+            waitSec: 0.85
+          },
+          phaseLabel: `💨 ${shooter.shortName} เตะวืดบอลกลิ้งออกหลัง!`,
+          phaseTone: 'normal'
+        }
+      : {
+          carrierId: nearDef?.id,
+          possessionSide: nearDef ? defSide : side,
+          phaseLabel: nearDef
+            ? `💨 ${shooter.shortName} เตะวืด! ${nearDef.shortName} เก็บบอลได้`
+            : `💨 ${shooter.shortName} เตะวืด!`,
+          phaseTone: 'normal'
+        };
+    w.phaseLabel = `💨 เตะวืด!! ${shooter.shortName} เตะลมอย่างน่าเสียดาย!`;
+    w.phaseTone = 'normal';
+    pushLog(curMin, `💨 เตะวืด! ${shooter.id} (${attTeam.name}) ${contextText}`);
+  };
+
+  const launchOwnGoalShot = (
+    w: LiveMatchWorld,
+    curMin: number,
+    benefitingSide: 'H' | 'A',
+    culprit: LivePitchAgent,
+    culpritTeam: Team,
+    reasonText: string
+  ) => {
+    const b = w.ball;
+    const active = w.agents.filter((a) => !a.sentOff);
+    const gk = active.find((a) => a.side === culprit.side && a.pos === 'GK');
+    const oppAttRight = isAttackRight(w, benefitingSide);
+    const ownGoalLineX = oppAttRight ? 101.3 : -1.3;
+    const ownGoalY = clamp(50 + (Math.random() < 0.5 ? -1 : 1) * (2.5 + Math.random() * 4.5), 42.8, 57.2);
+    if (gk) {
+      if (gk.intent === 'DIVE') gk.intent = 'SUPPORT';
+      gk.diveProgress = 0;
+      gk.diveTargetY = undefined;
+    }
+    const wrongY = clamp(50 - (ownGoalY - 50) * 0.9, 42.2, 57.8);
+    const shotDist = Math.hypot(ownGoalLineX - culprit.x, ownGoalY - culprit.y);
+    b.fromX = culprit.x;
+    b.fromY = culprit.y;
+    b.toX = ownGoalLineX;
+    b.toY = ownGoalY;
+    b.curve = (Math.random() - 0.5) * 3.5;
+    b.maxZ = 4.6;
+    b.startZ = 0;
+    b.endZ = 0;
+    b.progress = 0;
+    b.duration = clamp(shotDist / 30, 0.34, 0.62);
+    b.flightType = 'shot';
+    b.shotStyle = 'deflected';
+    b.carrierId = null;
+    b.targetId = null;
+    b.shooterId = culprit.id;
+    b.lastPasserId = null;
+    b.possessionSide = benefitingSide;
+    b.bounceNext = undefined;
+    b.shotPlan = {
+      outcome: 'goal',
+      ownGoalCulpritId: culprit.id,
+      isPureOwnGoal: true,
+      deflectedFrom: culprit.shortName,
+      gkDiveTargetY: wrongY,
+      gkDiveDir: gk ? (wrongY >= gk.y ? 1 : -1) : 1,
+      gkDiveStartProg: clamp(1 - 7.8 / Math.max(7.2, shotDist), 0.28, 0.62)
+    };
+    culprit.acrobatType = 'clash';
+    culprit.acrobatMax = 0.65;
+    culprit.acrobatTimer = 0.65;
+    w.phaseLabel = `😱 ระวัง!! ${culprit.shortName} สกัดผิดเหลี่ยมพุ่งเข้าประตูตัวเอง!!`;
+    w.phaseTone = 'danger';
+    triggerDramaSlow(w, 1.4, `😱 สกัดผิดเหลี่ยม!! ${culprit.shortName}`);
+    SFX.kick();
+    pushLog(curMin, `😱 จังหวะช็อก! ${culprit.id} (${culpritTeam.name}) ${reasonText}`);
+  };
+
   // Pre-compute physically accurate shot trajectory (block, woodwork, off-target, GK save spot, or net goal)
   const prepareShotFlight = (
     w: LiveMatchWorld,
@@ -2456,6 +2651,84 @@ export const MatchModal: React.FC<{
       }
     }
 
+    // 2a2. Turf Slip ("ลื่นล้ม") & Panicked Own-Box Mistake Own Goal ("ทำเข้าประตูตัวเอง")
+    const inOwnPenaltyBox = carrier.pos !== 'GK' && carrierNormXEarly < 15.5 && Math.abs(carrier.y - 50) <= 21.5;
+    if (carrier.pos !== 'GK' && curMin >= 2) {
+      const onPuddle = isOnRainyPuddle(w, carrier.x, carrier.y);
+      const isRainy = w.env?.season === 'rainy';
+      const slipBase = 0.0085 + (isRainy ? 0.008 : 0) + (onPuddle ? 0.024 : 0) + (carrier.fit < 55 ? 0.014 : 0) + (nearestDefDist < 7.5 ? 0.007 : 0);
+      const slipAgilAdj = ((carrier.d.spd || 60) + (carrier.d.comp || 60) - 120) * 0.00012;
+      const carrierSlipProb = clamp((slipBase - slipAgilAdj) * ((carrier.blessedMins ?? 0) > 0 ? 0.35 : 1), 0.004, 0.065);
+      if (Math.random() < carrierSlipProb) {
+        triggerAgentSlipFx(w, carrier, `💦 ${carrier.shortName} ลื่นล้ม!`, inOwnPenaltyBox ? -0.22 : -0.15);
+        triggerCoachMood(w, side, '🤦', 1.9);
+        if (nearestDef && nearestDefDist < 14.5) {
+          bumpPlayerStat(nearestDef.id, 'tackles');
+          b.possessionSide = defSide;
+          b.carrierId = nearestDef.id;
+          b.lastPasserId = null;
+          b.targetId = null;
+          b.x = nearestDef.x;
+          b.y = nearestDef.y;
+          b.fromX = nearestDef.x;
+          b.fromY = nearestDef.y;
+          b.toX = nearestDef.x;
+          b.toY = nearestDef.y;
+          b.flightType = 'carry';
+          b.shotStyle = undefined;
+          w.phaseLabel = `💦 ${carrier.shortName} ลื่นล้ม${onPuddle ? 'บนแอ่งน้ำ' : ''}! ${nearestDef.shortName} ฉกบอลไปได้`;
+          w.phaseTone = 'attack';
+        } else {
+          const nearCatcher = active
+            .filter((a) => a.id !== carrier.id)
+            .sort((u, v) => Math.hypot(u.x - carrier.x, u.y - carrier.y) - Math.hypot(v.x - carrier.x, v.y - carrier.y))[0];
+          const looseX = clamp(carrier.x + dir * (3.5 + Math.random() * 3), 5, 95);
+          const looseY = clamp(carrier.y + (Math.random() - 0.5) * 8, 8, 92);
+          b.fromX = carrier.x;
+          b.fromY = carrier.y;
+          b.toX = looseX;
+          b.toY = looseY;
+          b.curve = 0;
+          b.maxZ = 0.2;
+          b.startZ = 0;
+          b.endZ = 0;
+          b.progress = 0;
+          b.duration = 0.38;
+          b.flightType = 'bounce';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = nearCatcher?.id || null;
+          b.bounceNext = {
+            carrierId: nearCatcher?.id,
+            possessionSide: nearCatcher?.side || defSide,
+            phaseLabel: `💦 ${carrier.shortName} ลื่นเสียหลัก! บอลหลุดเท้า`,
+            phaseTone: 'normal'
+          };
+          w.phaseLabel = `💦 ${carrier.shortName} ลื่นล้มเสียหลักบนพื้นสนาม!`;
+          w.phaseTone = 'normal';
+        }
+        pushLog(curMin, `💦 ลื่นล้ม! ${carrier.id} (${attTeam.name}) ลื่นไถล${onPuddle ? 'บนแอ่งน้ำ' : 'เสียจังหวะ'} ทำให้เสียการครองบอล!`);
+        return;
+      }
+
+      // Panicked Own-Box Clearance / Backpass mistake into own net under heavy press
+      if (inOwnPenaltyBox && nearestDefDist < 10.5 && curMin >= 4) {
+        const panicProb = clamp(
+          0.0055 +
+            (isRainy ? 0.003 : 0) +
+            (onPuddle ? 0.005 : 0) +
+            (carrier.fit < 55 ? 0.004 : 0) -
+            ((carrier.d.comp || 60) - 60) * 0.00012,
+          0.0025,
+          0.018
+        ) * ((carrier.blessedMins ?? 0) > 0 ? 0.25 : 1);
+        if (Math.random() < panicProb) {
+          launchOwnGoalShot(w, curMin, defSide, carrier, attTeam, 'โดนกดดันหนัก สกัดคืนหลังผิดเหลี่ยมพุ่งเข้าประตูตัวเอง!');
+          return;
+        }
+      }
+    }
+
     const dribbleSkill =
       carrier.d.spd * 0.42 +
       carrier.d.run * 0.34 +
@@ -2551,6 +2824,45 @@ export const MatchModal: React.FC<{
     }
 
     if (nearestDef && nearestDefDist < (defCfg.press === 2 ? 9.0 : inBoxNow ? 8.2 : 6.8) && carrier.pos !== 'GK') {
+      // Defender Slip while pressing/chasing carrier!
+      const defOnPuddle = isOnRainyPuddle(w, nearestDef.x, nearestDef.y);
+      const defSlipProb = clamp(
+        (0.0085 + (w.env?.season === 'rainy' ? 0.007 : 0) + (defOnPuddle ? 0.024 : 0) + (nearestDef.fit < 55 ? 0.013 : 0) - ((nearestDef.d.pos || 60) - 60) * 0.00015) *
+          ((nearestDef.blessedMins ?? 0) > 0 ? 0.35 : 1),
+        0.004,
+        0.055
+      );
+      if (curMin >= 2 && Math.random() < defSlipProb) {
+        triggerAgentSlipFx(w, nearestDef, `💦 ${nearestDef.shortName} ลื่น!`, -0.18);
+        triggerCoachMood(w, defSide, '😱', 2.0);
+        carrier.acrobatType = 'burst';
+        carrier.acrobatMax = 0.72;
+        carrier.acrobatTimer = 0.72;
+        const burstX = clamp(carrier.x + dir * (7.5 + Math.random() * 4.5), 6, 94);
+        const burstY = clamp(carrier.y + (50 - carrier.y) * 0.3, 12, 88);
+        carrier.tx = burstX;
+        carrier.ty = burstY;
+        b.fromX = carrier.x;
+        b.fromY = carrier.y;
+        b.toX = burstX;
+        b.toY = burstY;
+        b.curve = 0;
+        b.maxZ = 0;
+        b.startZ = 0;
+        b.endZ = 0;
+        b.progress = 0;
+        b.duration = 0.42;
+        b.flightType = 'carry';
+        b.shotStyle = undefined;
+        b.carrierId = carrier.id;
+        b.targetId = null;
+        bumpPlayerStat(carrier.id, 'dribbles');
+        w.phaseLabel = `💦 ${nearestDef.shortName} ลื่นล้ม! ${carrier.shortName} ฉวยโอกาสกระชากหลุด!!`;
+        w.phaseTone = 'attack';
+        pushLog(curMin, `💦 จังหวะพลาด! ${nearestDef.id} (${defTeam.name}) ลื่นล้ม${defOnPuddle ? 'บนแอ่งน้ำ' : 'เสียหลัก'} ปล่อย ${carrier.id} หลุดเข้าพื้นที่อันตราย!`);
+        return;
+      }
+
       const defVolatile = nearestDef.tr === 1 || nearestDef.tr === 7 || nearestDef.tr === 15 || nearestDef.tr === 22;
       const foulProb = clamp(
         0.052 +
@@ -3139,6 +3451,10 @@ export const MatchModal: React.FC<{
         shotLabel = `⚡ ${carrier.shortName} ฮาล์ฟวอลเลย์กลางอากาศ!`;
       }
 
+      if (shouldShooterWhiff(w, carrier, nearestDefDist, shotStyle, false)) {
+        launchWhiffLooseBall(w, curMin, side, carrier, attTeam, defPool, attRight, 'ง้างเท้ายิงเต็มแรงแต่เตะวืดลมไปอย่างเหลือเชื่อ!');
+        return;
+      }
       prepareShotFlight(w, curMin, {
         flightType: 'shot',
         side,
@@ -3590,11 +3906,18 @@ export const MatchModal: React.FC<{
     assisterName: string,
     finishVerb: string,
     goalX: number,
-    goalY: number
+    goalY: number,
+    ogOpts?: { isOwnGoal?: boolean; culpritName?: string; culpritShort?: string; culpritTeam?: Team }
   ) => {
     const sr = simRef.current;
     const defSide = side === 'H' ? 'A' : 'H';
     const attTeam = side === 'H' ? homeOrig : awayOrig;
+    const concTeam = defSide === 'H' ? homeOrig : awayOrig;
+    const isOwnGoal = Boolean(ogOpts?.isOwnGoal);
+    const ogCulpritName = ogOpts?.culpritName || scorerName;
+    const ogCulpritShort = ogOpts?.culpritShort || scorerShort;
+    const ogCulpritTeam = ogOpts?.culpritTeam || concTeam;
+
     if (side === 'H') {
       sr.gh++;
       setGh(sr.gh);
@@ -3604,53 +3927,84 @@ export const MatchModal: React.FC<{
     }
     if (goalX > 50) w.goalNetRippleRight = 1.0;
     else w.goalNetRippleLeft = 1.0;
-    const newEv: MatchEvent = { m: curMin, t: attTeam.id, who: scorerName, as: assisterName };
+    const newEv: MatchEvent = isOwnGoal
+      ? { m: curMin, t: attTeam.id, who: ogCulpritName, as: '', style: 'own_goal', og: true }
+      : { m: curMin, t: attTeam.id, who: scorerName, as: assisterName };
     sr.evs.push(newEv);
     setEvs(sr.evs.slice());
 
-    adjustLiveForm(scorerName, 0.95);
-    if (assisterName) adjustLiveForm(assisterName, 0.55);
+    if (isOwnGoal) {
+      adjustLiveForm(ogCulpritName, -1.05);
+    } else {
+      adjustLiveForm(scorerName, 0.95);
+      if (assisterName) adjustLiveForm(assisterName, 0.55);
+    }
     const concLu = defSide === 'H' ? sr.homeLu : sr.awayLu;
-    const concTeam = defSide === 'H' ? homeOrig : awayOrig;
     concLu.forEach((dn) => {
       if (sr.sentOff.includes(dn)) return;
+      if (isOwnGoal && dn === ogCulpritName) return;
       const dPl = concTeam.sq.find((q) => q.n === dn);
       if (dPl?.pos === 'GK') adjustLiveForm(dn, -0.22);
       else if (dPl?.pos === 'DF') adjustLiveForm(dn, -0.12);
     });
 
-    const isPenaltyGoal = finishVerb.includes('จุดโทษ');
-    pushLog(
-      curMin,
-      `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · แอสซิสต์ ${assisterName}` : ''}`,
-      'goal'
-    );
-    pushTimeline(
-      curMin,
-      side,
-      isPenaltyGoal ? 'pen_goal' : 'goal',
-      scorerName,
-      isPenaltyGoal ? 'จุดโทษ' : assisterName ? `แอสซิสต์ ${assisterName.split(' ')[0]}` : undefined
-    );
-    addWorldFx(w, {
-      type: 'goal',
-      x: goalX,
-      y: goalY,
-      label: `⚽ GOAL!! ${scorerShort}`,
-      color: '#22c55e',
-      ttl: 3.4,
-      maxTtl: 3.4,
-      goalSide: side
-    });
+    const isPenaltyGoal = !isOwnGoal && finishVerb.includes('จุดโทษ');
+    if (isOwnGoal) {
+      pushLog(
+        curMin,
+        `🤦 เข้าประตูตัวเอง!! ${ogCulpritName} (${ogCulpritTeam.name}) ${finishVerb} · ${attTeam.name} ได้ประตูส้มหล่น!`,
+        'goal'
+      );
+      pushTimeline(
+        curMin,
+        side,
+        'own_goal',
+        ogCulpritName,
+        `เข้าประตูตัวเอง (${ogCulpritTeam.name})`
+      );
+      addWorldFx(w, {
+        type: 'goal',
+        x: goalX,
+        y: goalY,
+        label: `🤦 OG!! ${ogCulpritShort}`,
+        color: '#fb7185',
+        ttl: 3.4,
+        maxTtl: 3.4,
+        goalSide: side
+      });
+    } else {
+      pushLog(
+        curMin,
+        `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · แอสซิสต์ ${assisterName}` : ''}`,
+        'goal'
+      );
+      pushTimeline(
+        curMin,
+        side,
+        isPenaltyGoal ? 'pen_goal' : 'goal',
+        scorerName,
+        isPenaltyGoal ? 'จุดโทษ' : assisterName ? `แอสซิสต์ ${assisterName.split(' ')[0]}` : undefined
+      );
+      addWorldFx(w, {
+        type: 'goal',
+        x: goalX,
+        y: goalY,
+        label: `⚽ GOAL!! ${scorerShort}`,
+        color: '#22c55e',
+        ttl: 3.4,
+        maxTtl: 3.4,
+        goalSide: side
+      });
+    }
     if (lastSoundMinRef.current !== curMin) {
       lastSoundMinRef.current = curMin;
       SFX.goal();
       vibrate([50, 40, 80]);
     }
     const isMyTeamGoal = (side === 'H') === meIsHome;
-    const isMeScorer = isPlayerMode && scorerName === myPlayerName;
+    const isMeScorer = !isOwnGoal && isPlayerMode && scorerName === myPlayerName;
     const scoringKit = side === 'H' ? homeKit : awayKit;
-    const sparkCols = [scoringKit, '#facc15', '#ffffff', '#4ade80'];
+    const sparkCols = isOwnGoal ? [scoringKit, '#fb7185', '#fde047', '#ffffff'] : [scoringKit, '#facc15', '#ffffff', '#4ade80'];
     for (let i = 0; i < 22; i++) {
       const ang = (Math.PI * 2 * i) / 22 + (Math.random() - 0.5) * 0.4;
       const spd = 8 + Math.random() * 18;
@@ -3666,13 +4020,14 @@ export const MatchModal: React.FC<{
       });
     }
     w.goalBanner = {
-      scorer: scorerShort,
+      scorer: isOwnGoal ? ogCulpritShort : scorerShort,
       teamName: attTeam.name,
-      assister: assisterName || undefined,
+      assister: isOwnGoal ? undefined : assisterName || undefined,
       side,
       kit: scoringKit,
       isMyGoal: isMyTeamGoal,
       isMeScorer,
+      isOwnGoal,
       ttl: 4.2,
       maxTtl: 4.2
     };
@@ -3709,9 +4064,11 @@ export const MatchModal: React.FC<{
     w.ball.carrierId = null;
     w.ball.targetId = null;
     w.ball.lastPasserId = null;
-    triggerDramaSlow(w, 2.1, `⚽ GOAL!! ${scorerShort} (${attTeam.name})`);
+    triggerDramaSlow(w, 2.1, isOwnGoal ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritShort}` : `⚽ GOAL!! ${scorerShort} (${attTeam.name})`);
     w.pendingSetPiece = { type: 'kickoff', side: defSide, x: 50, y: 50, waitSec: 3.15 };
-    w.phaseLabel = `⚽ ประตู!! ${scorerName} ยิงให้ ${attTeam.name}!`;
+    w.phaseLabel = isOwnGoal
+      ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritName} (${ogCulpritTeam.name})!`
+      : `⚽ ประตู!! ${scorerName} ยิงให้ ${attTeam.name}!`;
     w.phaseTone = 'goal';
   };
 
@@ -4139,7 +4496,8 @@ export const MatchModal: React.FC<{
         resetGkDive(gk);
 
         if (deflectRoll < deflectedGoalProb) {
-          // Deflected Goal! Wrong-foots the GK cleanly!
+          // Deflected Goal! Wrong-foots the GK cleanly (can be awarded as Own Goal if heavy mis-deflection!)
+          const isDeflectOwnGoal = Boolean(deflector && Math.random() < (defDist < 14 || w.env?.season === 'rainy' ? 0.36 : 0.28));
           const goalY = swingSide < 0 ? 42.9 + Math.random() * 4.4 : 52.7 + Math.random() * 4.4;
           b.toX = attRightNow ? 101.3 : -1.3;
           b.toY = goalY;
@@ -4151,6 +4509,7 @@ export const MatchModal: React.FC<{
           b.shotPlan = {
             outcome: 'goal',
             deflectedFrom: defShort,
+            ownGoalCulpritId: isDeflectOwnGoal ? deflector?.id : undefined,
             gkDiveTargetY: wrongY,
             gkDiveDir: gk ? (wrongY >= gk.y ? 1 : -1) : 1,
             gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
@@ -4308,18 +4667,20 @@ export const MatchModal: React.FC<{
         }
       }
 
-      // Shot registered!
-      const shotXg =
-        b.flightType === 'penalty'
-          ? 0.78
-          : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002 + (b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'diving_header' ? 0.04 : 0), 0.04, 0.45);
-      bumpPlayerStat(shooter?.id, 'shots');
-      if (side === 'H') {
-        w.shotsH++;
-        w.xgH = Math.round((w.xgH + shotXg) * 100) / 100;
-      } else {
-        w.shotsA++;
-        w.xgA = Math.round((w.xgA + shotXg) * 100) / 100;
+      // Shot registered! (skip attacking shot stats for panicked own-goal clearances)
+      if (!plan?.isPureOwnGoal) {
+        const shotXg =
+          b.flightType === 'penalty'
+            ? 0.78
+            : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002 + (b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'diving_header' ? 0.04 : 0), 0.04, 0.45);
+        bumpPlayerStat(shooter?.id, 'shots');
+        if (side === 'H') {
+          w.shotsH++;
+          w.xgH = Math.round((w.xgH + shotXg) * 100) / 100;
+        } else {
+          w.shotsA++;
+          w.xgA = Math.round((w.xgA + shotXg) * 100) / 100;
+        }
       }
 
       // Woodwork or Off-target resolution
@@ -4430,9 +4791,11 @@ export const MatchModal: React.FC<{
       }
 
       // On target!
-      bumpPlayerStat(shooter?.id, 'onTarget');
-      if (side === 'H') w.onTargetH++;
-      else w.onTargetA++;
+      if (!plan?.isPureOwnGoal) {
+        bumpPlayerStat(shooter?.id, 'onTarget');
+        if (side === 'H') w.onTargetH++;
+        else w.onTargetA++;
+      }
 
       let isGoal = plan?.outcome === 'goal';
       if (!plan) {
@@ -4491,8 +4854,8 @@ export const MatchModal: React.FC<{
                                   ? 'ตะบันไกลสุดแรงบอลพุ่งเสียบตาข่าย!'
                                   : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
 
-        // Tight-call VAR Goal Check (~15% chance on open-play goals)
-        if (b.flightType === 'shot' && w.varChecks < 2 && Math.random() < 0.15) {
+        // Tight-call VAR Goal Check (~15% chance on open-play goals, skipped on Own Goals)
+        if (b.flightType === 'shot' && !plan?.ownGoalCulpritId && w.varChecks < 2 && Math.random() < 0.15) {
           w.varChecks++;
           const overturn = Math.random() < 0.34;
           w.varReview = {
@@ -4527,8 +4890,29 @@ export const MatchModal: React.FC<{
           return;
         }
 
+        const ogCulprit = plan?.ownGoalCulpritId ? active.find((a) => a.id === plan.ownGoalCulpritId) : undefined;
         b.shotStyle = undefined;
-        awardGoalToTeam(w, side, curMin, scorerName, scorerShort, assisterName, finishVerb, b.toX, b.toY);
+        if (plan?.ownGoalCulpritId && ogCulprit) {
+          awardGoalToTeam(
+            w,
+            side,
+            curMin,
+            ogCulprit.id,
+            ogCulprit.shortName,
+            '',
+            plan.isPureOwnGoal ? 'สกัดบอลพลาดเข้าประตูตัวเอง!!' : `สกัดพลาดบอลแฉลบเข้าประตูตัวเอง!!`,
+            b.toX,
+            b.toY,
+            {
+              isOwnGoal: true,
+              culpritName: ogCulprit.id,
+              culpritShort: ogCulprit.shortName,
+              culpritTeam: defTeam
+            }
+          );
+        } else {
+          awardGoalToTeam(w, side, curMin, scorerName, scorerShort, assisterName, finishVerb, b.toX, b.toY);
+        }
       } else {
         // ACCURATE & SYNCHRONIZED SUPER SAVE RIGHT AT GK'S POSITION!
         SFX.save();
@@ -4646,6 +5030,11 @@ export const MatchModal: React.FC<{
         target.x = b.toX;
         target.y = b.toY;
         const style: LiveBallState['shotStyle'] = target.d.cur >= 66 ? 'curler' : Math.random() < 0.35 ? 'volley' : 'normal';
+        const nearDefDistCut = nearDef ? Math.hypot(nearDef.x - b.toX, nearDef.y - b.toY) : 99;
+        if (shouldShooterWhiff(w, target, nearDefDistCut, style, true)) {
+          launchWhiffLooseBall(w, curMin, side, target, attTeam, defPool, isAttackRight(w, side), 'วิ่งมาเข้าฮอสลูกคัทแบ็คแต่เตะวืดเต็มๆ!');
+          return;
+        }
         prepareShotFlight(w, curMin, {
           flightType: 'shot',
           side,
@@ -4713,6 +5102,12 @@ export const MatchModal: React.FC<{
             : isDivingHeader
               ? 'diving_header'
               : 'header';
+
+        const nearDefDistBox = topDef ? Math.hypot(topDef.x - b.toX, topDef.y - b.toY) : 99;
+        if ((isBicycle || isVolley) && shouldShooterWhiff(w, target, nearDefDistBox, chosenStyle, true)) {
+          launchWhiffLooseBall(w, curMin, side, target, attTeam, defPool, attRightNow, 'ลอยตัวยิงจังหวะเปิดเข้ากรอบแต่เตะวืดอากาศ!');
+          return;
+        }
 
         prepareShotFlight(w, curMin, {
           flightType: 'shot',
@@ -4820,6 +5215,64 @@ export const MatchModal: React.FC<{
             w.phaseTone = 'normal';
           }
         } else {
+          // Defender tries to clear cross/corner: small chance of OG slice or clearance whiff!
+          const defInPuddle = isOnRainyPuddle(w, topDef.x, topDef.y);
+          const defOgProb = clamp(
+            (0.022 + (w.env?.season === 'rainy' ? 0.009 : 0) + (defInPuddle ? 0.012 : 0) + (topDef.fit < 55 ? 0.01 : 0) - ((topDef.d.hd || 60) - 60) * 0.0003) *
+              ((topDef.blessedMins ?? 0) > 0 ? 0.25 : 1),
+            0.01,
+            0.055
+          );
+          const defWhiffProb = clamp(
+            (0.048 + (w.env?.season === 'rainy' ? 0.016 : 0) + (defInPuddle ? 0.02 : 0) + (topDef.fit < 55 ? 0.02 : 0)) *
+              ((topDef.blessedMins ?? 0) > 0 ? 0.3 : 1),
+            0.02,
+            0.10
+          );
+          const defErrRoll = Math.random();
+          if (defErrRoll < defOgProb) {
+            launchOwnGoalShot(w, curMin, side, topDef, defTeam, 'โหม่งสกัดลูกเปิดพลาดเหลี่ยมลอยเข้าประตูตัวเอง!');
+            return;
+          }
+          if (defErrRoll < defOgProb + defWhiffProb && target) {
+            topDef.acrobatType = 'whiff';
+            topDef.acrobatMax = 0.78;
+            topDef.acrobatTimer = 0.78;
+            adjustLiveForm(topDef.id, -0.14);
+            addWorldFx(w, {
+              type: 'whiff',
+              x: topDef.x,
+              y: topDef.y,
+              label: `💨 สกัดวืด!! (${topDef.shortName})`,
+              color: '#fb923c',
+              ttl: 1.9,
+              maxTtl: 1.9
+            });
+            SFX.tap();
+            SFX.boo(0.45);
+            triggerCoachMood(w, defSide, '🤦', 2.0);
+            b.possessionSide = side;
+            b.carrierId = target.id;
+            b.lastPasserId = b.lastPasserId;
+            b.targetId = null;
+            b.x = target.x;
+            b.y = target.y;
+            b.fromX = target.x;
+            b.fromY = target.y;
+            b.toX = target.x;
+            b.toY = target.y;
+            b.startZ = 0;
+            b.endZ = 0;
+            b.progress = 0;
+            b.duration = 0.16;
+            b.flightType = 'carry';
+            b.shotStyle = undefined;
+            w.phaseLabel = `💨 ${topDef.shortName} สกัดวืด! บอลหลุดมาถึง ${target.shortName} หน้าประตู!!`;
+            w.phaseTone = 'danger';
+            pushLog(curMin, `💨 สกัดวืด! ${topDef.id} (${defTeam.name}) เตะสกัดพลาดบอลหลุดเข้าทาง ${target.id} หน้าเขตโทษ!`);
+            return;
+          }
+
           // Defender wins aerial duel and heads ball clear!
           topDef.acrobatType = 'header';
           topDef.acrobatMax = 0.64;
@@ -7098,8 +7551,8 @@ export const MatchModal: React.FC<{
       const sqObj = meTeamOrig.sq.find((q) => q.n === plName);
       if (!sqObj) return;
       const st = srDone.playerStats[plName] || { shots: 0, onTarget: 0, passes: 0, tackles: 0, saves: 0, blocks: 0 };
-      const qGoals = srDone.evs.filter((e) => e.t === meTeamOrig.id && e.who === plName).length;
-      const qAssists = srDone.evs.filter((e) => e.t === meTeamOrig.id && e.as === plName).length;
+      const qGoals = srDone.evs.filter((e) => !e.og && e.t === meTeamOrig.id && e.who === plName).length;
+      const qAssists = srDone.evs.filter((e) => !e.og && e.t === meTeamOrig.id && e.as === plName).length;
       const qRt = fullTimeAnalysis.ratings[plName] ?? 6.5;
       playerActions[plName] = {
         matches: 1,
@@ -7234,6 +7687,8 @@ export const MatchModal: React.FC<{
           return <span className="text-[11px] leading-none shrink-0">🏁</span>;
         case 'goal':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">⚽</span>;
+        case 'own_goal':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🤦</span>;
         case 'pen_goal':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">🎯</span>;
         case 'pen_awarded':
@@ -7271,6 +7726,8 @@ export const MatchModal: React.FC<{
           return 'จบเกม';
         case 'goal':
           return 'ประตู';
+        case 'own_goal':
+          return 'เข้าประตูตัวเอง (OG)';
         case 'pen_goal':
           return 'ประตูจุดโทษ';
         case 'pen_awarded':
@@ -7355,7 +7812,7 @@ export const MatchModal: React.FC<{
               const isHomeSide = item.side === 'H';
               const shortWho = item.who.split(' ')[0] || item.who;
               const isGoal = item.kind === 'goal' || item.kind === 'pen_goal';
-              const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss';
+              const isNeg = item.kind === 'red' || item.kind === 'injury' || item.kind === 'var_no_goal' || item.kind === 'pen_miss' || item.kind === 'own_goal';
               const titleCls = isGoal
                 ? isHomeSide
                   ? 'text-[var(--g)] font-extrabold'
@@ -7364,12 +7821,12 @@ export const MatchModal: React.FC<{
                   ? 'text-[var(--red)] font-bold'
                   : 'text-[var(--ink)] font-bold';
               const subText = labelForKind(item.kind, item.detail);
-              const sideTeam = isHomeSide ? homeOrig : awayOrig;
-              const sideId = isHomeSide ? homeId : awayId;
+              const sideTeam = item.kind === 'own_goal' ? (isHomeSide ? awayOrig : homeOrig) : (isHomeSide ? homeOrig : awayOrig);
+              const sideId = sideTeam.id;
               const tlPlayer = sideTeam.sq.find((q) => q.n === item.who || q.n.split(' ')[0] === item.who) || null;
               const tlNo = tlPlayer ? getShirtNo(sideTeam, tlPlayer) : null;
-              const sideKit = isHomeSide ? homeKit : awayKit;
-              const sideTrim = isHomeSide ? homeTrim : awayTrim;
+              const sideKit = sideId === homeOrig.id ? homeKit : awayKit;
+              const sideTrim = sideId === homeOrig.id ? homeTrim : awayTrim;
 
               return (
                 <div key={item.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] relative">
@@ -7391,7 +7848,7 @@ export const MatchModal: React.FC<{
                                   careerProfile={tlPlayer.me ? state.p : null}
                                   club={state.club}
                                   isMyClub={sideId === state.me && state.mode === 'm'}
-                                  kitColor={tlPlayer.pos === 'GK' ? homeGkKit : sideKit}
+                                  kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
                                   trimColor={sideTrim}
                                   size={20}
                                   bare
@@ -7450,7 +7907,7 @@ export const MatchModal: React.FC<{
                                   careerProfile={tlPlayer.me ? state.p : null}
                                   club={state.club}
                                   isMyClub={sideId === state.me && state.mode === 'm'}
-                                  kitColor={tlPlayer.pos === 'GK' ? awayGkKit : sideKit}
+                                  kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
                                   trimColor={sideTrim}
                                   size={20}
                                   bare
@@ -8054,8 +8511,8 @@ export const MatchModal: React.FC<{
                           const pl = team.sq.find((q) => q.n === name) || team.sq[idx];
                           const rt = Number((liveFormMap[name] ?? 6.5).toFixed(1));
                           const fitVal = Math.round(liveFitMap[name] ?? pl?.fit ?? 100);
-                          const goals = evs.filter((e) => e.t === team.id && e.who === name).length;
-                          const assists = evs.filter((e) => e.t === team.id && e.as === name).length;
+                          const goals = evs.filter((e) => !e.og && e.t === team.id && e.who === name).length;
+                          const assists = evs.filter((e) => !e.og && e.t === team.id && e.as === name).length;
                           const pCards = matchCards.filter((c) => c.t === team.id && c.who === name);
                           const isRed = sentOff.includes(name) || pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
                           const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
@@ -8085,8 +8542,8 @@ export const MatchModal: React.FC<{
                             const no = p ? getShirtNo(t, p) : 0;
                             const rt = liveFormMap[htPickedPlayer] ?? 6.5;
                             const fitVal = Math.round(liveFitMap[htPickedPlayer] ?? p?.fit ?? 100);
-                            const gl = evs.filter((e) => e.t === t.id && e.who === htPickedPlayer).length;
-                            const as = evs.filter((e) => e.t === t.id && e.as === htPickedPlayer).length;
+                            const gl = evs.filter((e) => !e.og && e.t === t.id && e.who === htPickedPlayer).length;
+                            const as = evs.filter((e) => !e.og && e.t === t.id && e.as === htPickedPlayer).length;
                             const cards = matchCards.filter((c) => c.t === t.id && c.who === htPickedPlayer);
                             const hasRed = sentOff.includes(htPickedPlayer) || cards.some((c) => c.type === 'R' || c.type === 'Y2R');
                             return { name: htPickedPlayer, team: t, role: p?.ro || 'CM', no, rt, fitVal, gl, as, cards, hasRed };
@@ -8280,8 +8737,8 @@ export const MatchModal: React.FC<{
                   const out: Record<string, PitchPlayerMeta> = {};
                   xiNames.forEach((name) => {
                     const rt = fullTimeAnalysis.ratings[name] ?? 6.5;
-                    const goals = evs.filter((e) => e.t === team.id && e.who === name).length;
-                    const assists = evs.filter((e) => e.t === team.id && e.as === name).length;
+                    const goals = evs.filter((e) => !e.og && e.t === team.id && e.who === name).length;
+                    const assists = evs.filter((e) => !e.og && e.t === team.id && e.as === name).length;
                     const pCards = fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name);
                     const isRed = pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
                     const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
@@ -8310,8 +8767,8 @@ export const MatchModal: React.FC<{
                       const p = t.sq.find((q) => q.n === ftPickedPlayer);
                       const no = p ? getShirtNo(t, p) : 0;
                       const rt = fullTimeAnalysis.ratings[ftPickedPlayer] ?? 6.5;
-                      const gl = evs.filter((e) => e.t === t.id && e.who === ftPickedPlayer).length;
-                      const as = evs.filter((e) => e.t === t.id && e.as === ftPickedPlayer).length;
+                      const gl = evs.filter((e) => !e.og && e.t === t.id && e.who === ftPickedPlayer).length;
+                      const as = evs.filter((e) => !e.og && e.t === t.id && e.as === ftPickedPlayer).length;
                       const subIn = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.inPlayer === ftPickedPlayer);
                       const subOut = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.outPlayer === ftPickedPlayer);
                       const cards = fullTimeAnalysis.cards.filter((c) => c.t === t.id && c.who === ftPickedPlayer);
@@ -8534,8 +8991,8 @@ export const MatchModal: React.FC<{
                             const subRt = fullTimeAnalysis.ratings[sb.inPlayer] ?? 6.5;
                             const isSubMotm = fullTimeAnalysis.motm === sb.inPlayer;
                             const isPicked = ftPickedPlayer === sb.inPlayer;
-                            const subGl = evs.filter((e) => e.t === subTeam.id && e.who === sb.inPlayer).length;
-                            const subAs = evs.filter((e) => e.t === subTeam.id && e.as === sb.inPlayer).length;
+                            const subGl = evs.filter((e) => !e.og && e.t === subTeam.id && e.who === sb.inPlayer).length;
+                            const subAs = evs.filter((e) => !e.og && e.t === subTeam.id && e.as === sb.inPlayer).length;
                             return (
                               <button
                                 key={idx}

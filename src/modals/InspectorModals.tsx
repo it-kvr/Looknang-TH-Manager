@@ -3,7 +3,7 @@ import type { Position, Player, Team, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
+import { getShirtNo, xi, dtInfo, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { sortTable, teamStats } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
@@ -13,6 +13,7 @@ import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
+import { PlayerBioStrip } from '../components/PlayerBioStrip';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -93,14 +94,14 @@ export const PlayerInspectorModal: React.FC<{
           </div>
 
           <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
-            <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+            <div className="seg-bar">
               <button
                 type="button"
                 onClick={() => { SFX.tap(); setInspectMode('info'); }}
-                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                className={`seg-btn ${
                   effectiveMode === 'info'
                     ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    : ''
                 }`}
               >
                 📊 การ์ด &amp; ค่าพลัง
@@ -108,10 +109,10 @@ export const PlayerInspectorModal: React.FC<{
               <button
                 type="button"
                 onClick={() => { SFX.tap(); setInspectMode('history'); }}
-                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                className={`seg-btn ${
                   effectiveMode === 'history'
-                    ? 'bg-[var(--g)] text-white shadow-xs'
-                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    ? 'seg-btn-active'
+                    : ''
                 }`}
               >
                 📜 ประวัติผลงาน
@@ -120,10 +121,10 @@ export const PlayerInspectorModal: React.FC<{
                 <button
                   type="button"
                   onClick={() => { SFX.tap(); setInspectMode('missions'); }}
-                  className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                  className={`seg-btn ${
                     effectiveMode === 'missions'
-                      ? 'bg-[var(--g)] text-white shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                      ? 'seg-btn-active'
+                      : ''
                   }`}
                 >
                   🎯 ภารกิจ
@@ -135,7 +136,7 @@ export const PlayerInspectorModal: React.FC<{
               type="button"
               onClick={onClose}
               aria-label="ปิดหน้าต่าง"
-              className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface-2)] hover:bg-[var(--line)]/60 border border-[var(--line)] text-xs font-bold flex items-center justify-center cursor-pointer transition-colors shrink-0"
+              className="btn-icon rounded-full"
             >
               ✕
             </button>
@@ -279,6 +280,8 @@ export const PlayerInspectorModal: React.FC<{
 
               {/* Personal Info Box below Portrait Card (Unified with Career Mode) */}
               <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
+                <PlayerBioStrip bio={info.bio} variant="grid" />
+
                 <div className="space-y-1 mland:space-y-0.5">
                   <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
                     <span>⚡ พลังกาย</span>
@@ -378,50 +381,50 @@ export const PlayerInspectorModal: React.FC<{
                       onChange={(e) => setShirtNo(e.target.value)}
                       className="w-10 px-1 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9px] font-bold text-center tabular shrink-0"
                     />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const n = clamp(parseInt(shirtNo, 10) || currentNo, 1, 99);
-                        onUpdateState((d) => {
-                          const sq = d.teams[d.me].sq;
-                          const pl = sq.find((q) => q.n === livePlayer.n);
-                          if (!pl) return;
-                          const oldNo = getShirtNo(d.teams[d.me], pl);
-                          const holder = sq.find((q) => q !== pl && q.no === n);
-                          if (holder) {
-                            holder.no = oldNo;
-                            if (Array.isArray(holder.vis) && holder.vis.length >= 6) holder.vis[5] = oldNo;
-                          }
-                          pl.no = n;
-                          if (Array.isArray(pl.vis) && pl.vis.length >= 6) pl.vis[5] = n;
-                          if (pl.me && d.p) d.p.no = n;
-                        });
-                        setShirtNo(String(n));
-                        onToast(`เปลี่ยนเบอร์เสื้อ ${livePlayer.n} เป็น #${n}`);
-                      }}
-                      className="px-2 py-0.5 rounded-md bg-[var(--g)] text-white text-[10px] mland:text-[8px] font-bold cursor-pointer shrink-0"
-                    >
-                      บันทึก
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onUpdateState((d) => {
-                          d.teams[d.me].cap = livePlayer.n;
-                        });
-                        onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
-                      }}
-                      className={`flex-1 py-0.5 px-1.5 rounded-md text-[10px] mland:text-[8px] font-bold cursor-pointer transition-colors truncate ${
-                        isCap
-                          ? 'bg-[var(--lamp)] text-[#261900]'
-                          : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                      }`}
-                    >
-                      {isCap ? '© กัปตัน' : 'ตั้งกัปตัน'}
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const n = clamp(parseInt(shirtNo, 10) || currentNo, 1, 99);
+                          onUpdateState((d) => {
+                            const sq = d.teams[d.me].sq;
+                            const pl = sq.find((q) => q.n === livePlayer.n);
+                            if (!pl) return;
+                            const oldNo = getShirtNo(d.teams[d.me], pl);
+                            const holder = sq.find((q) => q !== pl && q.no === n);
+                            if (holder) {
+                              holder.no = oldNo;
+                              if (Array.isArray(holder.vis) && holder.vis.length >= 6) holder.vis[5] = oldNo;
+                            }
+                            pl.no = n;
+                            if (Array.isArray(pl.vis) && pl.vis.length >= 6) pl.vis[5] = n;
+                            if (pl.me && d.p) d.p.no = n;
+                          });
+                          setShirtNo(String(n));
+                          onToast(`เปลี่ยนเบอร์เสื้อ ${livePlayer.n} เป็น #${n}`);
+                        }}
+                        className="btn btn-xs btn-primary shrink-0"
+                      >
+                        บันทึก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateState((d) => {
+                            d.teams[d.me].cap = livePlayer.n;
+                          });
+                          onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
+                        }}
+                        className={`btn btn-xs flex-1 truncate ${
+                          isCap
+                            ? 'btn-gold'
+                            : 'btn-secondary'
+                        }`}
+                      >
+                        {isCap ? '© กัปตัน' : 'ตั้งกัปตัน'}
+                      </button>
+                    </div>
+                  )}
+                </div>
 
               {/* Personality, Style & Insights Strip below Athlete Card */}
               <PlayerTraitsStrip
@@ -716,6 +719,7 @@ export const TeamInspectorModal: React.FC<{
                   {filteredSquad.map((q) => {
                     const isStarter = starterNames.has(q.n);
                     const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
+                    const qBio = getPlayerBio(q, isMe ? state.p : null);
                     const f = Math.round(q.fit ?? 100);
                     const fCol = q.inj > 0 || (q.sus || 0) > 0 ? 'var(--red)' : f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
                     return (
@@ -747,8 +751,10 @@ export const TeamInspectorModal: React.FC<{
                               {team.cap === q.n && <span className="text-[var(--lamp)] font-bold shrink-0">©</span>}
                               <span className="truncate">{q.n}</span>
                             </div>
-                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
-                              <span>{q.ro} · อายุ {q.age} ·</span>
+                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 flex-wrap">
+                              <span>{q.ro} · อายุ {q.age}</span>
+                              <PlayerBioStrip bio={qBio} variant="inline" className="hidden sm:inline-flex" />
+                              <span>·</span>
                               <span className="inline-flex items-center gap-0.5 tabular">
                                 {(q.sg || 0) <= 1 && <span>{q.sg || 0}</span>}
                                 <StatIconBadge kind="goal" count={Math.max(1, q.sg || 0)} size="xs" />

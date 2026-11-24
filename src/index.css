@@ -230,6 +230,68 @@ button:not(:disabled):active {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.28);
 }
 
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 font-bold whitespace-nowrap select-none cursor-pointer transition-all rounded-xl mland:rounded-lg disabled:opacity-45 disabled:pointer-events-none;
+  }
+
+  .btn-xs {
+    @apply h-6 mland:h-5 px-2 mland:px-1.5 text-[10.5px] mland:text-[9px] rounded-lg mland:rounded-md;
+  }
+
+  .btn-sm {
+    @apply h-8 mland:h-6.5 px-2.5 mland:px-2 text-[11px] mland:text-[9.5px] rounded-lg;
+  }
+
+  .btn-md {
+    @apply h-9 mland:h-7.5 px-3.5 mland:px-2.5 text-xs mland:text-[10.5px];
+  }
+
+  .btn-lg {
+    @apply h-10 sm:h-11 mland:h-8 px-4 sm:px-5 mland:px-3 text-xs sm:text-sm mland:text-[11px];
+  }
+
+  .btn-primary {
+    @apply bg-[var(--g)] text-white border border-emerald-400/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_6px_rgba(21,128,73,0.24)] hover:brightness-110 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.28),0_4px_10px_rgba(21,128,73,0.32)];
+  }
+
+  .btn-gold {
+    @apply bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_2px_6px_rgba(202,138,4,0.25)] hover:brightness-105 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_4px_10px_rgba(202,138,4,0.32)];
+  }
+
+  .btn-secondary {
+    @apply bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)] shadow-2xs hover:border-[var(--g)]/65 hover:bg-[var(--surface)];
+  }
+
+  .btn-surface {
+    @apply bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)] shadow-2xs hover:border-[var(--g)]/65 hover:bg-[var(--surface-2)]/70;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-[var(--mut)] border border-transparent hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/80;
+  }
+
+  .btn-danger {
+    @apply bg-[var(--red-soft)] text-[var(--red)] border border-[var(--red)]/40 hover:bg-[var(--red)] hover:text-white;
+  }
+
+  .btn-icon {
+    @apply w-8 h-8 mland:w-6.5 mland:h-6.5 p-0 inline-flex items-center justify-center rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/65 hover:bg-[var(--surface-2)] font-bold cursor-pointer select-none transition-all shrink-0 disabled:opacity-45 disabled:pointer-events-none;
+  }
+
+  .seg-bar {
+    @apply inline-flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/85 shadow-inner;
+  }
+
+  .seg-btn {
+    @apply px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer whitespace-nowrap transition-all select-none inline-flex items-center justify-center gap-1;
+  }
+
+  .seg-btn-active {
+    @apply bg-[var(--g)] text-white shadow-xs;
+  }
+}
+
 @keyframes confetti-fall {
   0% {
     transform: translateY(-10vh) rotate(0deg);

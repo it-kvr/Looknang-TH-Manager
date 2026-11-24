@@ -193,7 +193,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       const no = pl ? getShirtNo(activeTeam, pl) : i + 1;
       const fitVal = Math.round(liveFitMap[name] ?? pl?.fit ?? 100);
       const rt = Number((liveFormMap[name] ?? 6.5).toFixed(1));
-      const goals = evs.filter((e) => e.t === activeTeam.id && e.who === name).length;
+      const goals = evs.filter((e) => !e.og && e.t === activeTeam.id && e.who === name).length;
       const assists = evs.filter((e) => e.t === activeTeam.id && e.as === name).length;
       const cards = matchCards.filter((c) => c.t === activeTeam.id && c.who === name);
       const isRed = sentOff.includes(name) || cards.some((c) => c.type === 'R' || c.type === 'Y2R');

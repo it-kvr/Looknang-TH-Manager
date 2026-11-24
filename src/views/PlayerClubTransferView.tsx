@@ -212,18 +212,18 @@ export const PlayerClubTransferView: React.FC<{
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
+        <div className="seg-bar grid grid-cols-2 shrink-0">
           <button
             type="button"
             onClick={() => { SFX.tap(); setSubTab('status'); }}
-            className={`px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${subTab === 'status' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+            className={`seg-btn ${subTab === 'status' ? 'seg-btn-active' : ''}`}
           >
             🏟️ สถานะในทีม & ทีมชาติ
           </button>
           <button
             type="button"
             onClick={() => { SFX.tap(); setSubTab('transfer'); }}
-            className={`px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${subTab === 'transfer' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+            className={`seg-btn ${subTab === 'transfer' ? 'seg-btn-active' : ''}`}
           >
             🤝 ย้ายทีม & ทีมที่คุม
           </button>
@@ -352,7 +352,7 @@ export const PlayerClubTransferView: React.FC<{
                     <button
                       type="button"
                       onClick={() => handleJoinManagedClub(mc.slot)}
-                      className="w-full py-1.5 mland:py-1 rounded-lg bg-[var(--g)] hover:brightness-110 text-white text-xs mland:text-[10px] font-bold cursor-pointer transition-all"
+                      className="btn btn-sm btn-primary w-full"
                     >
                       🌱 ย้ายเข้าทีมนี้เลย (รับบทเด็กปั้น)
                     </button>
@@ -372,13 +372,13 @@ export const PlayerClubTransferView: React.FC<{
           <div className="md:col-span-7 mland:col-span-7 p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 gap-2 mland:gap-1.5">
             <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
               <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">🔄 ยื่นขอย้ายทีมในลีก</h3>
-              <div className="flex gap-1">
+              <div className="seg-bar">
                 {[0, 1, 2].map((tIdx) => (
                   <button
                     key={tIdx}
                     type="button"
                     onClick={() => { SFX.tap(); setTierFilter(tIdx); }}
-                    className={`px-2 py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer border ${tierFilter === tIdx ? 'bg-[var(--g)] text-white border-[var(--g)]' : 'bg-[var(--surface-2)] text-[var(--mut)] border-[var(--line)]'}`}
+                    className={`seg-btn ${tierFilter === tIdx ? 'seg-btn-active' : ''}`}
                   >
                     {TN[tIdx]}
                   </button>
@@ -406,7 +406,7 @@ export const PlayerClubTransferView: React.FC<{
                     <button
                       type="button"
                       onClick={() => handleRequestLeagueTransfer(team, score)}
-                      className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors"
+                      className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]"
                     >
                       📩 ขอย้าย
                     </button>

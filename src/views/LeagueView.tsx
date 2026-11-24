@@ -160,14 +160,14 @@ export const LeagueView: React.FC<{
           <button
             type="button"
             onClick={() => { SFX.tap(); onInspectTeam(oppId); }}
-            className="py-1.5 mland:py-1 px-2 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+            className="btn btn-sm btn-secondary w-full"
           >
             🔍 ส่องคู่แข่ง
           </button>
           <button
             type="button"
             onClick={() => { SFX.tap(); onNavigate?.('q'); }}
-            className="py-1.5 mland:py-1 px-2 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 transition-all whitespace-nowrap"
+            className="btn btn-sm btn-primary w-full"
           >
             ⚽ จัดทัพ 11 ตัวจริง
           </button>
@@ -477,7 +477,7 @@ export const LeagueView: React.FC<{
           <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
             📬 งานด่วน &amp; ข่าวสโมสร
           </div>
-          <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 shrink-0">
+          <div className="seg-bar shrink-0">
             {(
               [
                 ['all', 'ทั้งหมด'],
@@ -489,9 +489,7 @@ export const LeagueView: React.FC<{
                 key={fid}
                 type="button"
                 onClick={() => { SFX.tap(); setNewsFilter(fid); }}
-                className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                  newsFilter === fid ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
+                className={`seg-btn ${newsFilter === fid ? 'seg-btn-active' : ''}`}
               >
                 {flbl}
               </button>
@@ -525,7 +523,7 @@ export const LeagueView: React.FC<{
                   <button
                     type="button"
                     onClick={() => { SFX.tap(); it.onAction?.(); }}
-                    className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-[var(--g)] hover:text-white border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold shrink-0 cursor-pointer whitespace-nowrap transition-colors"
+                    className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white shrink-0"
                   >
                     {it.actionLabel}
                   </button>
@@ -699,9 +697,9 @@ export const LeagueView: React.FC<{
       <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex-1 min-h-0 flex flex-col overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2 mland:mb-1.5 shrink-0">
           <h3 className="font-bold text-xs sm:text-sm mland:text-[11px]">📊 เทียบพลังทีม · {TN[vt]}</h3>
-          <div className="flex flex-wrap gap-1">
+          <div className="seg-bar shrink-0">
             {(['ovSq', 'ovXi', 'at', 'df'] as const).map((k) => (
-              <button key={k} type="button" onClick={() => setCmpSort(k)} className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9.5px] font-semibold cursor-pointer ${cmpSort === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
+              <button key={k} type="button" onClick={() => setCmpSort(k)} className={`seg-btn ${cmpSort === k ? 'seg-btn-active' : ''}`}>
                 {sortLabels[k]}
               </button>
             ))}
@@ -961,7 +959,7 @@ export const LeagueView: React.FC<{
                   SFX.tap();
                   onOpenSeasonStats();
                 }}
-                className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 whitespace-nowrap"
+                className="btn btn-xs btn-primary"
               >
                 📜 สถิติซีซั่นที่จบแล้ว ({state.seasonArchives!.length})
               </button>
@@ -1114,7 +1112,7 @@ export const LeagueView: React.FC<{
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
       <div className="flex flex-row items-center justify-between gap-1.5 shrink-0">
         {/* Competition Sub-Navigation Menu: Single compact horizontal pill strip */}
-        <div className="order-2 w-auto max-w-full inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-x-auto">
+        <div className="order-2 w-auto max-w-full seg-bar bg-[var(--surface)] shadow-xs overflow-x-auto">
           {(
             [
               [0, '🏆', 'บอลลีก'],
@@ -1134,10 +1132,10 @@ export const LeagueView: React.FC<{
                   d.tv = tabIdx;
                 });
               }}
-              className={`flex flex-row items-center justify-center gap-1 px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${
+              className={`seg-btn shrink-0 min-w-0 ${
                 sub === tabIdx
-                  ? 'bg-[var(--g)] text-white shadow-xs'
-                  : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                  ? 'seg-btn-active'
+                  : 'hover:bg-[var(--surface-2)]/70'
               }`}
             >
               <span className="text-xs mland:text-[10.5px] leading-none">{ic}</span>
@@ -1178,7 +1176,7 @@ export const LeagueView: React.FC<{
                 title="กลับลีกของฉัน"
                 aria-label="กลับลีกของฉัน"
                 onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
-                className="inline-flex items-center gap-1 px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer hover:brightness-105 whitespace-nowrap shrink-0 shadow-xs"
+                className="btn btn-xs btn-gold shrink-0"
               >
                 <span>↩</span>
                 <span>กลับลีกฉัน ★</span>
@@ -1186,7 +1184,7 @@ export const LeagueView: React.FC<{
             )}
           </div>
         ) : sub === 1 || sub === 2 ? (
-          <div className="order-1 w-auto inline-flex items-center gap-0.5 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
+          <div className="order-1 w-auto seg-bar bg-[var(--surface)] shadow-xs shrink-0">
             {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
               const isMyTier = idx === me.tier;
               const active = vt === idx;
@@ -1196,10 +1194,10 @@ export const LeagueView: React.FC<{
                   type="button"
                   title={isMyTier ? `${lbl} (ลีกของคุณ)` : lbl}
                   onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
-                  className={`flex items-center justify-center gap-1 px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${
+                  className={`seg-btn min-w-0 ${
                     active
-                      ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                      ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs hover:text-[var(--bg)]'
+                      : 'hover:bg-[var(--surface-2)]/70'
                   }`}
                 >
                   <span className="truncate">{lbl}</span>
@@ -1284,10 +1282,10 @@ export const ScheduleCalendarView: React.FC<{
               <button
                 type="button"
                 onClick={onOpenMarket}
-                className={`px-3 mland:px-1.5 py-1.5 mland:py-0.5 rounded-xl text-xs mland:text-[9.5px] font-bold cursor-pointer border transition-colors ${
+                className={`btn btn-xs ${
                   tw.open
-                    ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]'
-                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'
+                    ? 'bg-[var(--g-soft)] border border-[var(--g)]/50 text-[var(--g)] hover:border-[var(--g)]'
+                    : 'btn-secondary text-[var(--mut)]'
                 }`}
               >
                 {tw.shortLabel} ›
@@ -1307,7 +1305,7 @@ export const ScheduleCalendarView: React.FC<{
               <button
                 type="button"
                 onClick={onPlayNext}
-                className="px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold cursor-pointer"
+                className="btn btn-xs btn-gold"
               >
                 {state.md >= totalMd ? '🏁 สรุปจบฤดูกาล' : state.pa ? '🌏 แข่งถ้วยทวีป' : state.pc ? '🏆 แข่งถ้วยประชาชน' : `▶ แข่งนัดที่ ${state.md + 1}`}
               </button>
@@ -1337,7 +1335,7 @@ export const ScheduleCalendarView: React.FC<{
                 : `🏆 คิวแข่งคั่นกลางสัปดาห์นี้: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
             </span>
             {onPlayNext && (
-              <button type="button" onClick={onPlayNext} className="px-3 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] font-bold cursor-pointer">
+              <button type="button" onClick={onPlayNext} className="btn btn-xs btn-gold">
                 ▶ ลงสนามนัดนี้
               </button>
             )}
@@ -1355,23 +1353,23 @@ export const ScheduleCalendarView: React.FC<{
                 key={m.idx}
                 type="button"
                 onClick={() => { SFX.tap(); setMonthIdx(m.idx); }}
-                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl text-xs mland:text-[10.5px] font-semibold cursor-pointer transition-colors border ${
+                className={`btn btn-xs ${
                   monthIdx === m.idx
-                    ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                    ? 'btn-primary'
                     : isCurMonth
-                      ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[var(--ink)]'
-                      : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      ? 'bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[var(--ink)] hover:border-[var(--lamp)]'
+                      : 'btn-secondary text-[var(--mut)]'
                 }`}
               >
-                {m.label} <span className="opacity-80 text-[10px]">({m.range})</span>
+                {m.label} <span className="opacity-80 text-[9.5px]">({m.range})</span>
               </button>
             );
           })}
           <button
             type="button"
             onClick={() => { SFX.tap(); setMonthIdx(-1); }}
-            className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl text-xs mland:text-[10.5px] font-semibold cursor-pointer border ml-auto ${
-              monthIdx === -1 ? 'bg-[var(--ink)] text-[var(--bg)] border-[var(--ink)]' : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'
+            className={`btn btn-xs ml-auto ${
+              monthIdx === -1 ? 'bg-[var(--ink)] text-[var(--bg)] border border-[var(--ink)]' : 'btn-secondary text-[var(--mut)]'
             }`}
           >
             📋 ดูทั้ง 30 นัด
@@ -1483,7 +1481,7 @@ export const ScheduleCalendarView: React.FC<{
                 type="button"
                 disabled={roundPreview <= 0}
                 onClick={() => setRoundPreview((r) => Math.max(0, r - 1))}
-                className="px-2 py-1 rounded-lg bg-[var(--surface-2)] text-xs font-bold disabled:opacity-35 cursor-pointer"
+                className="btn btn-xs btn-secondary"
               >
                 ‹
               </button>
@@ -1491,7 +1489,7 @@ export const ScheduleCalendarView: React.FC<{
                 type="button"
                 disabled={roundPreview >= totalMd - 1}
                 onClick={() => setRoundPreview((r) => Math.min(totalMd - 1, r + 1))}
-                className="px-2 py-1 rounded-lg bg-[var(--surface-2)] text-xs font-bold disabled:opacity-35 cursor-pointer"
+                className="btn btn-xs btn-secondary"
               >
                 ›
               </button>
