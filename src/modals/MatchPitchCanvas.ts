@@ -266,6 +266,28 @@ export const drawLivePitchToCanvas = (
     ctx.fillText('🧱 กำแพง', midWallX, topWallY);
     ctx.restore();
   }
+  if (world.pendingSetPiece?.type === 'throwin') {
+    const spTh = world.pendingSetPiece;
+    const tx = px(spTh.x);
+    const ty = py(spTh.y);
+    const isTop = spTh.y < 50;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(tx, ty, 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.font = '800 8.5px Sarabun, sans-serif';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(tx - 21, ty + (isTop ? 10 : -22), 42, 13, 5);
+    ctx.fill();
+    ctx.fillStyle = '#7dd3fc';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🤲 ทุ่ม', tx, ty + (isTop ? 16.5 : -15.5));
+    ctx.restore();
+  }
   world.fx.forEach((fx) => {
     const alpha = clamp(fx.ttl / fx.maxTtl, 0, 1);
     if (fx.type === 'offside' && fx.offsideX != null) {
@@ -279,15 +301,51 @@ export const drawLivePitchToCanvas = (
       ctx.stroke();
       ctx.restore();
     }
-    if ((fx.type === 'onetwo' || fx.type === 'through') && fx.toX != null && fx.toY != null) {
+    if ((fx.type === 'onetwo' || fx.type === 'through' || fx.type === 'cutback' || fx.type === 'trivela' || fx.type === 'cutinside' || fx.type === 'solo' || fx.type === 'throwin') && fx.toX != null && fx.toY != null) {
+      const sx = px(fx.x);
+      const sy = py(fx.y);
+      const ex = px(fx.toX);
+      const ey = py(fx.toY);
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.strokeStyle =
+        fx.type === 'onetwo'
+          ? '#34d399'
+          : fx.type === 'cutback'
+            ? '#2dd4bf'
+            : fx.type === 'trivela'
+              ? '#fb923c'
+              : fx.type === 'cutinside'
+                ? '#e879f9'
+                : fx.type === 'solo'
+                  ? '#fbbf24'
+                  : fx.type === 'throwin'
+                    ? '#38bdf8'
+                    : '#facc15';
+      ctx.lineWidth = fx.type === 'solo' || fx.type === 'cutback' ? 2.6 : 2.2;
+      ctx.setLineDash(fx.type === 'trivela' || fx.type === 'cutinside' ? [] : [5, 3]);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      if (fx.type === 'trivela' || fx.type === 'cutinside') {
+        const bend = fx.type === 'trivela' ? (sy < ph * 0.5 + padY ? -22 : 22) : (sy < ph * 0.5 + padY ? 18 : -18);
+        ctx.quadraticCurveTo((sx + ex) * 0.5, (sy + ey) * 0.5 + bend, ex, ey);
+      } else {
+        ctx.lineTo(ex, ey);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (fx.type === 'dragback' || fx.type === 'press') {
+      const cx0 = px(fx.x);
+      const cy0 = py(fx.y);
+      const rad0 = 8 + (1 - alpha) * (fx.type === 'press' ? 20 : 13);
       ctx.save();
       ctx.globalAlpha = alpha * 0.88;
-      ctx.strokeStyle = fx.type === 'onetwo' ? '#34d399' : '#facc15';
+      ctx.strokeStyle = fx.type === 'press' ? '#f43f5e' : '#facc15';
       ctx.lineWidth = 2.2;
-      ctx.setLineDash([5, 3]);
+      ctx.setLineDash(fx.type === 'press' ? [4, 3] : [3, 2]);
       ctx.beginPath();
-      ctx.moveTo(px(fx.x), py(fx.y));
-      ctx.lineTo(px(fx.toX), py(fx.toY));
+      ctx.arc(cx0, cy0, rad0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -435,13 +493,19 @@ export const drawLivePitchToCanvas = (
                     : 'rgba(248, 113, 113, 0.55)'
         : b.flightType === 'onetwo'
           ? 'rgba(52, 211, 153, 0.72)'
-          : b.flightType === 'through'
-            ? 'rgba(250, 204, 21, 0.68)'
-            : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
-              ? 'rgba(96, 165, 250, 0.62)'
-              : 'rgba(255, 255, 255, 0.34)';
-    ctx.lineWidth = isSpecialShot ? 2.5 : b.flightType === 'onetwo' || b.flightType === 'through' || b.flightType === 'shot' ? 2 : 1.4;
-    ctx.setLineDash(b.flightType === 'onetwo' ? [6, 3] : [4, 4]);
+          : b.flightType === 'cutback'
+            ? 'rgba(45, 212, 191, 0.85)'
+            : b.flightType === 'trivela_pass'
+              ? 'rgba(249, 115, 22, 0.85)'
+              : b.flightType === 'throwin'
+                ? 'rgba(56, 189, 248, 0.72)'
+                : b.flightType === 'through'
+                  ? 'rgba(250, 204, 21, 0.68)'
+                  : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+                    ? 'rgba(96, 165, 250, 0.62)'
+                    : 'rgba(255, 255, 255, 0.34)';
+    ctx.lineWidth = isSpecialShot || b.flightType === 'cutback' || b.flightType === 'trivela_pass' ? 2.5 : b.flightType === 'onetwo' || b.flightType === 'through' || b.flightType === 'shot' ? 2 : 1.4;
+    ctx.setLineDash(b.flightType === 'onetwo' ? [6, 3] : b.flightType === 'trivela_pass' ? [] : [4, 4]);
     ctx.beginPath();
     ctx.moveTo(startPx, startPy);
     ctx.quadraticCurveTo(midX, midY, endPx, endPy);
@@ -469,13 +533,19 @@ export const drawLivePitchToCanvas = (
                     ? `rgba(125, 211, 252, ${a})`
                     : b.flightType === 'onetwo'
                       ? `rgba(52, 211, 153, ${a})`
-                      : b.flightType === 'through'
-                        ? `rgba(250, 204, 21, ${a})`
-                        : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
-                          ? `rgba(147, 197, 253, ${a * 0.85})`
-                          : b.flightType === 'shot'
-                            ? `rgba(254, 240, 138, ${a})`
-                            : `rgba(255, 255, 255, ${a * 0.7})`;
+                      : b.flightType === 'cutback'
+                        ? `rgba(45, 212, 191, ${Math.min(0.92, a + 0.14)})`
+                        : b.flightType === 'trivela_pass'
+                          ? `rgba(249, 115, 22, ${Math.min(0.92, a + 0.14)})`
+                          : b.flightType === 'throwin'
+                            ? `rgba(56, 189, 248, ${a})`
+                            : b.flightType === 'through'
+                              ? `rgba(250, 204, 21, ${a})`
+                              : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+                                ? `rgba(147, 197, 253, ${a * 0.85})`
+                                : b.flightType === 'shot'
+                                  ? `rgba(254, 240, 138, ${a})`
+                                  : `rgba(255, 255, 255, ${a * 0.7})`;
       ctx.lineWidth = 1.6 + (i / b.trail.length) * (b.flightType === 'shot' || b.flightType === 'freekick' ? 3.2 : 2.1);
       ctx.beginPath();
       ctx.moveTo(px(p0.x), py(p0.y) - p0.z * 0.78);
@@ -521,6 +591,16 @@ export const drawLivePitchToCanvas = (
       ctx.setLineDash([3, 2]);
       ctx.beginPath();
       ctx.arc(0, 0, playerRadius + 3.2, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (ag.intent === 'PRESS') {
+      const pulse = 0.55 + Math.sin(world.minuteFloat * 14 + ag.slotIndex) * 0.25;
+      ctx.strokeStyle = `rgba(244, 63, 94, ${pulse})`;
+      ctx.lineWidth = 1.6;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 5.8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -666,6 +746,21 @@ export const drawLivePitchToCanvas = (
         ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.arc(0, 0, playerRadius + 5, ag.facing + Math.PI * 0.5, ag.facing + Math.PI * 1.5);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'dragback') {
+        const rock = Math.sin(prog * Math.PI * 3) * (playerRadius * 0.28);
+        ctx.translate(-Math.cos(ag.facing) * rock, -Math.sin(ag.facing) * rock);
+        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 4.8, 0, Math.PI * 1.65);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'cutinside') {
+        ctx.rotate((ag.skillSpinDir || 1) * 0.42 * arcEnv);
+        ctx.strokeStyle = `rgba(232, 121, 249, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5.8, ag.facing - 0.85, ag.facing + 0.85);
         ctx.stroke();
       } else if (ag.acrobatType === 'slide') {
         const slidePush = arcEnv * playerRadius * 0.72;

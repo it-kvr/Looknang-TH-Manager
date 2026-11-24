@@ -965,7 +965,8 @@ export function createNewGame(
     names?: string[][];
     t0?: Team[];
     pick?: number;
-    player?: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>;
+    diff?: number;
+    player?: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'> & { age?: number };
   }
 ): GameState {
   clearNamePool();
@@ -1004,7 +1005,8 @@ export function createNewGame(
     records: {},
     fan: 55,
     mor: 55,
-    bd: 55
+    bd: 55,
+    ...(opts.diff !== undefined ? { diff: opts.diff } : {})
   };
 
   if (mode === 'm') {
@@ -1013,6 +1015,7 @@ export function createNewGame(
   } else if (opts.player) {
     const p = opts.player;
     const chosenNo = clamp(p.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);
+    const startAge = clamp(Math.round(p.age ?? 17), 16, 22);
     const careerTalent = clamp(Math.round(p.talent ?? R(60, 92)), 40, 96);
     const careerTraits = p.traits && p.traits.length ? p.traits.slice(0, 5) : rollPlayerTraits(p.pos, p.sp, R(45, 58), careerTalent);
     const startLog = `🌱 เริ่มเส้นทางอาชีพกับ ${teams[meId].name} (${TN[teams[meId].tier]}) ในซีซั่น 1`;
@@ -1023,7 +1026,7 @@ export function createNewGame(
       no: chosenNo,
       b: { ...p.a },
       sb: p.sb ? { ...p.sb } : {},
-      age: 17,
+      age: startAge,
       pts: p.pts || 0,
       gl: 0,
       as: 0,
@@ -1049,14 +1052,16 @@ export function createNewGame(
       ro: p.sp,
       sp: 0,
       ov,
-      age: 17,
-      pot: clamp(R(87, 95), ov + 18, 95),
+      age: startAge,
+      pot: clamp(Math.max(R(87, 95), careerTalent + 6), ov + 18, 96),
       talent: careerTalent,
       traits: careerTraits,
       fit: 100,
       inj: 0,
       no: chosenNo,
       me: 1,
+      hg: 1,
+      customCreated: 1,
       signedSeason: 1,
       careerLog: [startLog],
       history: [],

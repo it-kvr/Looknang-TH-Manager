@@ -103,6 +103,8 @@ export interface Player {
   customD?: Record<string, number>;
   customSig?: string;
   blessed?: boolean;
+  hg?: number;
+  customCreated?: number;
   sb?: Record<string, number>;
   coreSb?: Partial<CoreAttrs>;
   missions?: PlayerMissionsState;
@@ -113,6 +115,14 @@ export interface Player {
   history?: PlayerSeasonHistoryRecord[];
   careerLog?: string[];
   seasonProg?: PlayerSeasonProgression;
+}
+
+export interface CreatedPlayerTemplate {
+  id: string;
+  createdAt: number;
+  profile: Omit<PlayerCareerProfile, 'b' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>;
+  ov: number;
+  pot: number;
 }
 
 export type PersonalMissionMetric =
@@ -793,6 +803,9 @@ export type BallFlightType =
   | 'pass'
   | 'onetwo'
   | 'through'
+  | 'cutback'
+  | 'trivela_pass'
+  | 'throwin'
   | 'lofted'
   | 'cross'
   | 'shot'
@@ -842,6 +855,8 @@ export interface LivePitchAgent {
     | 'tackle'
     | 'clash'
     | 'skill_pass'
+    | 'dragback'
+    | 'cutinside'
     | 'supersave';
   skillSpinDir?: number;
   actionDirX?: number;
@@ -918,7 +933,14 @@ export interface LivePitchFx {
     | 'tackle'
     | 'injury'
     | 'onetwo'
-    | 'through';
+    | 'through'
+    | 'cutback'
+    | 'trivela'
+    | 'dragback'
+    | 'press'
+    | 'cutinside'
+    | 'solo'
+    | 'throwin';
   x: number;
   y: number;
   toX?: number;
@@ -933,7 +955,7 @@ export interface LivePitchFx {
 }
 
 export interface PendingSetPiece {
-  type: 'kickoff' | 'freekick' | 'penalty' | 'corner' | 'goalkick' | 'offside';
+  type: 'kickoff' | 'freekick' | 'penalty' | 'corner' | 'goalkick' | 'offside' | 'throwin';
   side: 'H' | 'A';
   x: number;
   y: number;

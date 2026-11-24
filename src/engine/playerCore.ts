@@ -1,7 +1,7 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, TN } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -1049,3 +1049,190 @@ export function ensureClubIdentity(s: GameState): ClubIdentity {
   }
   return s.club;
 }
+
+const CUSTOM_PLAYERS_KEY = 'lk_custom_players';
+
+export function loadCustomPlayers(): CreatedPlayerTemplate[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_PLAYERS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => x && x.profile && x.profile.name) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveCustomPlayer(tpl: CreatedPlayerTemplate) {
+  try {
+    const list = loadCustomPlayers().filter((x) => x.id !== tpl.id && x.profile.name !== tpl.profile.name);
+    list.unshift(tpl);
+    if (list.length > 24) list.length = 24;
+    localStorage.setItem(CUSTOM_PLAYERS_KEY, JSON.stringify(list));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function deleteCustomPlayer(id: string) {
+  try {
+    const list = loadCustomPlayers().filter((x) => x.id !== id);
+    localStorage.setItem(CUSTOM_PLAYERS_KEY, JSON.stringify(list));
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export interface CreatedPlayerCandidate {
+  key: string;
+  sourceType: 'career_save' | 'custom_pool';
+  slot?: number;
+  templateId?: string;
+  sourceLabel: string;
+  clubName: string;
+  archName?: string;
+  ov: number;
+  pot: number;
+  price: number;
+  player: Player;
+  profile: Omit<PlayerCareerProfile, 'b' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>;
+}
+
+export function buildPlayerFromCareerProfile(
+  p: Omit<PlayerCareerProfile, 'b' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>,
+  opts?: { livePlayer?: Player | null; ovOverride?: number; potOverride?: number; asHomegrown?: boolean }
+): Player {
+  const lp = opts?.livePlayer;
+  const attrs: CoreAttrs = {
+    sh: clamp(Math.round(p.a?.sh ?? 55), 1, 99),
+    ps: clamp(Math.round(p.a?.ps ?? 55), 1, 99),
+    dr: clamp(Math.round(p.a?.dr ?? 55), 1, 99),
+    tk: clamp(Math.round(p.a?.tk ?? 55), 1, 99),
+    ph: clamp(Math.round(p.a?.ph ?? 55), 1, 99)
+  };
+  const ov = clamp(Math.round(opts?.ovOverride ?? lp?.ov ?? OVF(p.pos, attrs)), 30, 99);
+  const talent = clamp(Math.round(p.talent ?? lp?.talent ?? 78), 25, 99);
+  const pot = clamp(Math.round(opts?.potOverride ?? lp?.pot ?? Math.max(ov + 14, Math.min(96, talent + 6))), ov, 99);
+  const ki = SKIN_P.indexOf(p.k);
+  const hi = HAIR_P.indexOf(p.h);
+  const no = clamp(p.no || lp?.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);
+  const vis = lp?.vis && lp.vis.length >= 5
+    ? [...lp.vis]
+    : [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, no, p.fs ?? 0];
+  const traits = p.traits?.length ? [...p.traits] : lp?.traits?.length ? [...lp.traits] : [];
+  const basePlayer: Player = {
+    n: p.name.trim() || 'นักเตะสร้างเอง',
+    pos: p.pos,
+    ro: p.sp,
+    sp: 0,
+    ov,
+    age: clamp(Math.round(p.age ?? lp?.age ?? 17), 15, 42),
+    pot,
+    talent,
+    traits,
+    fit: 100,
+    inj: 0,
+    no,
+    vis,
+    customA: attrs,
+    ...(p.customD ? { customD: { ...p.customD } } : {}),
+    ...(p.sig ? { customSig: p.sig } : {}),
+    ...(p.sb && Object.keys(p.sb).length ? { sb: { ...p.sb } } : {}),
+    ...(opts?.asHomegrown !== false ? { hg: 1, customCreated: 1 } : {})
+  };
+  basePlayer.price = Math.max(8, vlu(basePlayer));
+  return basePlayer;
+}
+
+export function listCreatedPlayersForManager(): CreatedPlayerCandidate[] {
+  const out: CreatedPlayerCandidate[] = [];
+  const seenNames = new Set<string>();
+
+  // 1) From saved Player Career slots (lk_p .. lk_p_5)
+  for (let k = 1; k <= NSL; k++) {
+    const ps = loadGameFromSlot('p', k);
+    if (!ps || !ps.p || !Array.isArray(ps.teams)) continue;
+    const club = ps.teams[ps.me];
+    const mePl = club?.sq?.find((q) => q.me) || null;
+    const player = buildPlayerFromCareerProfile(ps.p, { livePlayer: mePl, ovOverride: mePl?.ov || ovMe(ps.p) });
+    const price = Math.max(8, player.price || vlu(player));
+    seenNames.add(player.n);
+    out.push({
+      key: `career_${k}_${player.n}`,
+      sourceType: 'career_save',
+      slot: k,
+      sourceLabel: `เซฟนักเตะอาชีพ #${k} (ซีซั่น ${ps.season})`,
+      clubName: club?.name || 'สโมสรอาชีพ',
+      archName: ps.p.archName,
+      ov: player.ov,
+      pot: player.pot,
+      price,
+      player,
+      profile: ps.p
+    });
+  }
+
+  // 2) From standalone custom created roster (lk_custom_players)
+  for (const tpl of loadCustomPlayers()) {
+    const player = buildPlayerFromCareerProfile(tpl.profile, {
+      ovOverride: tpl.ov,
+      potOverride: tpl.pot
+    });
+    if (seenNames.has(player.n)) continue;
+    seenNames.add(player.n);
+    const price = Math.max(8, player.price || vlu(player));
+    out.push({
+      key: `custom_${tpl.id}`,
+      sourceType: 'custom_pool',
+      templateId: tpl.id,
+      sourceLabel: 'ทำเนียบนักเตะที่สร้างเอง',
+      clubName: 'นักเตะสร้างอิสระ',
+      archName: tpl.profile.archName,
+      ov: player.ov,
+      pot: player.pot,
+      price,
+      player,
+      profile: tpl.profile
+    });
+  }
+
+  return out;
+}
+
+export interface ManagedClubCandidate {
+  slot: number;
+  teamId: number;
+  name: string;
+  tier: number;
+  tierLabel: string;
+  season: number;
+  squadCount: number;
+  kc: [string, string];
+  team: Team;
+  club?: ClubIdentity | null;
+}
+
+export function listManagedClubsFromSaves(): ManagedClubCandidate[] {
+  const out: ManagedClubCandidate[] = [];
+  for (let k = 1; k <= NSL; k++) {
+    const ms = loadGameFromSlot('m', k);
+    if (!ms || !Array.isArray(ms.teams)) continue;
+    const meTeam = ms.teams[ms.me];
+    if (!meTeam) continue;
+    const clubName = ms.club?.name || meTeam.name;
+    out.push({
+      slot: k,
+      teamId: meTeam.id,
+      name: clubName,
+      tier: meTeam.tier,
+      tierLabel: TN[meTeam.tier] || `Tier ${meTeam.tier + 1}`,
+      season: ms.season || 1,
+      squadCount: meTeam.sq?.length || 0,
+      kc: [ms.club?.c1 || meTeam.kc?.[0] || '#158049', ms.club?.c2 || meTeam.kc?.[1] || '#f5c242'],
+      team: meTeam,
+      club: ms.club || null
+    });
+  }
+  return out;
+}
+

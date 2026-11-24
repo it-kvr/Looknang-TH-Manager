@@ -974,6 +974,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
 
                       <div className="flex-1 min-w-0 flex items-center gap-1">
                         <span className="text-[10.5px] mland:text-[9.5px] font-semibold truncate">{pl.n}</span>
+                        {(pl.hg || pl.customCreated) && (
+                          <span title="เด็กปั้นสโมสร" className="text-[9.5px] shrink-0">🌱</span>
+                        )}
                         {compatPen === 0 && (
                           <span className="px-1 py-0.2 rounded bg-[var(--g-soft)] text-[var(--g)] text-[8.5px] font-extrabold shrink-0 whitespace-nowrap">
                             ตรงตำแหน่ง

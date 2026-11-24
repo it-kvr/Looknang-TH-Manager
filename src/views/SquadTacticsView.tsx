@@ -525,6 +525,7 @@ export const SquadTacticsView: React.FC<{
             </span>
           )}
           {me.cap === q.n && <span className="inline-block px-1 mr-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-bold">C</span>}
+          {(q.hg || q.customCreated) ? <span title="เด็กปั้นสโมสร" className="mr-0.5">🌱</span> : null}
           {q.n}
           {slotSp && slotSp !== q.ro && (
             <span className="ml-1 text-[8.5px] text-[var(--mut)]">({q.ro}{pn === 2 ? ' ⚠️' : ''})</span>
@@ -1367,6 +1368,11 @@ export const SquadTacticsView: React.FC<{
                                 {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
                                 {me.cap === q.n && <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">[C]</span>}
                                 <span className="truncate">{q.n}</span>
+                                {(q.hg || q.customCreated) ? (
+                                  <span className="px-1 rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0" title="เด็กปั้นสโมสร">
+                                    🌱 เด็กปั้น
+                                  </span>
+                                ) : null}
                                 {q.loan ? <span className="text-[10px] mland:text-[8.5px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
                                 {q.listed ? <span className="text-[10px] mland:text-[8.5px] text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">[ขาย {fmtMoneyNum(q.askPrice || vlu(q))}]</span> : null}
                                 {offerCount > 0 ? <span className="px-1 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}

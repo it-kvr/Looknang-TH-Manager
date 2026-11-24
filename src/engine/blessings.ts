@@ -1,6 +1,6 @@
 import type { StatKey, Player, Team, GameState, GodBlessingPatch } from '../types/game';
 import { clamp, fmtMoney } from '../utils/math';
-import { LINE } from '../data/thaiFootballData';
+import { LINE, CAREER_PERKS } from '../data/thaiFootballData';
 import { ovMe, syncMe, logFin, recordPlayerSeasonProgress } from './playerCore';
 
 export const findMutablePlayerInState = (d: GameState, playerName: string, teamId: number | null): { pl: Player | null; team: Team | null } => {
@@ -86,9 +86,35 @@ export const resetGodBlessingOnPlayer = (d: GameState, playerName: string, teamI
   return true;
 };
 
+export function applySecretMoneyAdjust(
+  d: GameState,
+  mode: 'add' | 'sub' | 'set',
+  amountK: number
+): string {
+  const cleanAmt = Math.max(0, Math.round(Number.isFinite(amountK) ? amountK : 0));
+  if (mode === 'set') {
+    const prev = Math.round(d.money || 0);
+    const diff = cleanAmt - prev;
+    d.money = cleanAmt;
+    if (diff !== 0) {
+      logFin(d, diff > 0 ? 'ปรับงบเป็นยอดกำหนด (VIP)' : 'ปรับลดงบเป็นยอดกำหนด (VIP)', diff);
+    }
+    return `💳 ตั้งงบสโมสรเป็น ${fmtMoney(d.money)} แล้ว`;
+  }
+  if (cleanAmt <= 0) return 'กรุณาระบุจำนวนเงินมากกว่า 0';
+  if (mode === 'sub') {
+    d.money = Math.round((d.money || 0) - cleanAmt);
+    logFin(d, 'ปรับลดงบพิเศษ (VIP)', -cleanAmt);
+    return `💸 ลดงบสโมสร -${fmtMoney(cleanAmt)} (คงเหลือ ${fmtMoney(d.money)})`;
+  }
+  d.money = Math.round((d.money || 0) + cleanAmt);
+  logFin(d, 'งบสนับสนุนพิเศษ (VIP)', cleanAmt);
+  return `🎁 เติมเงินทุน +${fmtMoney(cleanAmt)} สำเร็จ!`;
+}
+
 export function applySecretBoost(
   d: GameState,
-  kind: 'money500' | 'money2500' | 'money10000' | 'stat5' | 'stat10' | 'healAll'
+  kind: 'money500' | 'money2500' | 'money10000' | 'sub500' | 'sub2500' | 'sub10000' | 'stat5' | 'stat10' | 'healAll'
 ): string {
   if (kind === 'money500' || kind === 'money2500' || kind === 'money10000') {
     const amt = kind === 'money500' ? 500 : kind === 'money2500' ? 2500 : 10000;
@@ -100,6 +126,10 @@ export function applySecretBoost(
       syncMe(d);
     }
     return `🎁 เติมเงินทุน +${fmtMoney(amt)} สำเร็จ!`;
+  }
+  if (kind === 'sub500' || kind === 'sub2500' || kind === 'sub10000') {
+    const amt = kind === 'sub500' ? 500 : kind === 'sub2500' ? 2500 : 10000;
+    return applySecretMoneyAdjust(d, 'sub', amt);
   }
   if (kind === 'healAll') {
     if (d.mode === 'p' && d.p) {
@@ -146,3 +176,59 @@ export function applySecretBoost(
   d.mor = clamp((d.mor ?? 60) + 15, 0, 100);
   return `⚡ เสริมพลังทั้งทีม +${delta} OVR & ฟิต 100% สำเร็จ!`;
 }
+
+export function applySecretRepAdjust(
+  d: GameState,
+  mode: 'add' | 'sub' | 'set',
+  amount: number
+): string {
+  if (!d.p) return 'ไม่พบข้อมูลนักเตะ';
+  const cleanAmt = Math.max(0, Math.round(Number.isFinite(amount) ? amount : 0));
+  if (mode === 'set') {
+    d.p.rep = clamp(cleanAmt, 0, 999);
+    syncMe(d);
+    return `⭐ ตั้งค่าชื่อเสียงเป็น ★ ${d.p.rep} แล้ว`;
+  }
+  if (cleanAmt <= 0) return 'กรุณาระบุจำนวนมากกว่า 0';
+  if (mode === 'sub') {
+    d.p.rep = clamp((d.p.rep ?? 10) - cleanAmt, 0, 999);
+    syncMe(d);
+    return `📉 ลดชื่อเสียง -${cleanAmt} (คงเหลือ ★ ${d.p.rep})`;
+  }
+  d.p.rep = clamp((d.p.rep ?? 10) + cleanAmt, 0, 999);
+  syncMe(d);
+  return `⭐ เพิ่มชื่อเสียง +${cleanAmt} (รวม ★ ${d.p.rep}) สำเร็จ!`;
+}
+
+export function applySecretPlayerBoost(
+  d: GameState,
+  kind: 'rep15' | 'rep50' | 'repSub10' | 'talent10' | 'ageSub2' | 'unlockPerks'
+): string {
+  if (!d.p) return 'ไม่พบข้อมูลนักเตะ';
+  if (kind === 'rep15') return applySecretRepAdjust(d, 'add', 15);
+  if (kind === 'rep50') return applySecretRepAdjust(d, 'add', 50);
+  if (kind === 'repSub10') return applySecretRepAdjust(d, 'sub', 10);
+  if (kind === 'talent10') {
+    const nextTl = clamp((d.p.talent ?? 75) + 10, 25, 99);
+    d.p.talent = nextTl;
+    const meSq = d.teams[d.me]?.sq.find((q) => q.me);
+    if (meSq) {
+      meSq.talent = nextTl;
+      meSq.pot = Math.max(meSq.pot ?? nextTl, nextTl);
+    }
+    syncMe(d);
+    return `🌟 อัปเกรดพรสวรรค์เป็น TL ${nextTl}/99 สำเร็จ!`;
+  }
+  if (kind === 'ageSub2') {
+    const nextAge = clamp((d.p.age ?? 18) - 2, 16, 40);
+    d.p.age = nextAge;
+    const meSq = d.teams[d.me]?.sq.find((q) => q.me);
+    if (meSq) meSq.age = nextAge;
+    syncMe(d);
+    return `⏳ ย้อนวัยนักเตะเหลืออายุ ${nextAge} ปี สำเร็จ!`;
+  }
+  d.p.perks = CAREER_PERKS.map((pk) => pk.id);
+  syncMe(d);
+  return '🔓 ปลดล็อกสกิลอาชีพ (Career Perks) ครบทุกสกิลแล้ว!';
+}
+

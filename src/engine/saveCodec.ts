@@ -42,6 +42,8 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.customD) ex.cd = q.customD;
   if (q.customSig) ex.csg = q.customSig;
   if (q.blessed) ex.bl = 1;
+  if (q.hg) ex.hg = 1;
+  if (q.customCreated) ex.cc = 1;
   if (q.sb && Object.keys(q.sb).length) ex.sb = q.sb;
   if (q.coreSb && Object.keys(q.coreSb).length) ex.cb = q.coreSb;
   if (q.missions) ex.ms = q.missions;
@@ -146,6 +148,8 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (ex.cd) p.customD = ex.cd as Record<string, number>;
   if (ex.csg) p.customSig = String(ex.csg);
   if (ex.bl) p.blessed = true;
+  if (ex.hg) p.hg = 1;
+  if (ex.cc) p.customCreated = 1;
   if (ex.sb) p.sb = ex.sb as Record<string, number>;
   if (ex.cb) p.coreSb = ex.cb as Partial<CoreAttrs>;
   if (ex.ms) p.missions = ex.ms as PlayerMissionsState;

@@ -17,6 +17,7 @@ import { TeamTrainingView } from './views/TeamTrainingView';
 import { MarketView } from './views/MarketView';
 import { FinanceClubView } from './views/FinanceClubView';
 import { PlayerCareerView } from './views/PlayerCareerView';
+import { PlayerClubTransferView } from './views/PlayerClubTransferView';
 import { MatchModal } from './modals/MatchModal';
 import { GodBlessingModal } from './modals/GodBlessingModal';
 import { PlayerInspectorModal, TeamInspectorModal } from './modals/InspectorModals';
@@ -124,11 +125,12 @@ export default function App() {
 
   const handleStartPlayer = (
     targetSlot: number,
-    profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'>
+    profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'> & { age?: number; diff?: number }
   ) => {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
-    const fresh = createNewGame('p', { player: profile });
+    const { diff: playerDiff, ...playerProfile } = profile;
+    const fresh = createNewGame('p', { player: playerProfile, diff: playerDiff });
     fresh.v = 't';
     fresh.tv = 0;
     fresh.sub = 0;
@@ -622,7 +624,8 @@ export default function App() {
       : [
           ['t', '🏆', 'การแข่งขัน'],
           ['p', '🌟', 'อาชีพ'],
-          ['q', '⚽', 'ทีม & แผน']
+          ['q', '⚽', 'ทีม & แผน'],
+          ['k', '🧭', 'สโมสร & ย้ายทีม']
         ];
 
   const resolvedView: MainTab = state.v === 'c' ? 't' : state.v;
@@ -841,6 +844,16 @@ export default function App() {
               onOpenSeasonStats={(seasonNum) =>
                 setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
               }
+            />
+          )}
+          {curTab === 'k' && state.mode === 'p' && (
+            <PlayerClubTransferView
+              key={`pk-${navResetSeq}`}
+              state={state}
+              onUpdateState={updateState}
+              onInspectTeam={(tid) => setInspectTeamId(tid)}
+              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onToast={showToast}
             />
           )}
           </div>

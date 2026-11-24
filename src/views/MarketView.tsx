@@ -3,7 +3,7 @@ import type { SubRole, MainTab, Player, Team, ScoutMission, GameState } from '..
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { assignTeamShirtNumbers, vlu, wagOf, ensureCon, logFin } from '../engine/playerCore';
+import { assignTeamShirtNumbers, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { appendPlayerCareerLog } from '../engine/history';
 import {
@@ -100,7 +100,8 @@ export const MarketView: React.FC<{
   const tx = getLeagueTransferContext(state, me);
 
   const [activeTab, setActiveTab] = useState<MarketTab>('buy');
-  const [marketSource, setMarketSource] = useState<'mk' | 'club'>('mk');
+  const [marketSource, setMarketSource] = useState<'mk' | 'club' | 'created'>('mk');
+  const [createdRefresh, setCreatedRefresh] = useState(0);
   const [filter, setFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW' | 'FREE'>('ALL');
   const [subFilter, setSubFilter] = useState<'ALL' | SubRole>('ALL');
   const [sortBy, setSortBy] = useState<'default' | 'ov_desc' | 'price_asc' | 'age_asc'>('default');
@@ -194,8 +195,27 @@ export const MarketView: React.FC<{
     .filter((q) => !q.listed && !q.loan)
     .slice()
     .sort((a, b) => b.ov - a.ov);
+  const createdPool = useMemo(() => listCreatedPlayersForManager(), [createdRefresh, state.md, state.season, me.sq.length]);
+  const createdMarketList = useMemo(() => {
+    const items = createdPool.filter((c) => {
+      const q = c.player;
+      const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
+      const subOk = subFilter === 'ALL' || q.ro === subFilter;
+      const searchOk =
+        !normalizedQuery ||
+        q.n.toLowerCase().includes(normalizedQuery) ||
+        c.sourceLabel.toLowerCase().includes(normalizedQuery) ||
+        (c.archName || '').toLowerCase().includes(normalizedQuery);
+      return lineOk && subOk && searchOk;
+    });
+    if (sortBy === 'ov_desc') return [...items].sort((a, b) => b.ov - a.ov);
+    if (sortBy === 'price_asc') return [...items].sort((a, b) => a.price - b.price);
+    if (sortBy === 'age_asc') return [...items].sort((a, b) => a.player.age - b.player.age || b.ov - a.ov);
+    return items;
+  }, [createdPool, filter, subFilter, sortBy, normalizedQuery]);
+
   const expiringCount = contractList.filter(({ c }) => c.yr <= 1).length;
-  const activeCount = marketSource === 'mk' ? marketList.length : clubMarketList.length;
+  const activeCount = marketSource === 'mk' ? marketList.length : marketSource === 'club' ? clubMarketList.length : createdMarketList.length;
   const hasBuyFilters = filter !== 'ALL' || subFilter !== 'ALL' || sortBy !== 'default' || searchQuery.trim() !== '';
 
   const resetBuyFilters = () => {
@@ -814,15 +834,15 @@ export const MarketView: React.FC<{
             <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">
               <div className="space-y-1.5 mland:space-y-1">
                 <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">แหล่งนักเตะ</div>
-                <div className="grid grid-cols-2 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                <div className="grid grid-cols-3 gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
                   <button
                     type="button"
                     onClick={() => setMarketSource('mk')}
-                    className={`py-1.5 mland:py-1 px-1.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    className={`py-1.5 mland:py-1 px-1 rounded-lg mland:rounded-md text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
                       marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                     }`}
                   >
-                    🏪 ตลาดกลาง
+                    🏪 ตลาด
                   </button>
                   <button
                     type="button"
@@ -830,11 +850,23 @@ export const MarketView: React.FC<{
                       setMarketSource('club');
                       if (filter === 'FREE') setFilter('ALL');
                     }}
-                    className={`py-1.5 mland:py-1 px-1.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    className={`py-1.5 mland:py-1 px-1 rounded-lg mland:rounded-md text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
                       marketSource === 'club' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                     }`}
                   >
-                    🏟️ สโมสรอื่น
+                    🏟️ สโมสร
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMarketSource('created');
+                      if (filter === 'FREE') setFilter('ALL');
+                    }}
+                    className={`py-1.5 mland:py-1 px-1 rounded-lg mland:rounded-md text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                      marketSource === 'created' ? 'bg-[var(--surface)] text-[var(--g)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    ⭐ สร้างเอง
                   </button>
                 </div>
               </div>
@@ -975,15 +1007,24 @@ export const MarketView: React.FC<{
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
               <div className="flex items-baseline gap-2 min-w-0">
                 <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-                  {marketSource === 'mk' ? '🏪 รายชื่อนักเตะในตลาดกลาง' : '🏟️ นักเตะจากสโมสรในลีก'}
+                  {marketSource === 'mk'
+                    ? '🏪 รายชื่อนักเตะในตลาดกลาง'
+                    : marketSource === 'club'
+                      ? '🏟️ นักเตะจากสโมสรในลีก'
+                      : '⭐ นักเตะที่คุณสร้างเอง (ดึงเป็นเด็กปั้นหรือซื้อเข้าทีม)'}
                 </h3>
                 <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
                   · {activeCount} คน
                 </span>
               </div>
-              {!tx.tw.open && (
+              {!tx.tw.open && marketSource !== 'created' && (
                 <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap shrink-0">
                   {marketSource === 'mk' ? 'ช่วงปิดตลาดเซ็นได้เฉพาะฟรีเอเยนต์' : '🔒 รอเปิดตลาดซื้อขาย'}
+                </span>
+              )}
+              {marketSource === 'created' && (
+                <span className="text-[11px] mland:text-[9.5px] text-[var(--g)] font-bold whitespace-nowrap shrink-0">
+                  🌱 ดึงเป็นเด็กปั้นได้ทุกเวลา
                 </span>
               )}
             </div>
@@ -1043,55 +1084,194 @@ export const MarketView: React.FC<{
                     </button>
                   </div>
                 )
-              ) : clubMarketList.length > 0 ? (
-                clubMarketList.map(({ q, team, idx, price }) => {
-                  const blockedByWindow = !tx.tw.open;
+              ) : marketSource === 'club' ? (
+                clubMarketList.length > 0 ? (
+                  clubMarketList.map(({ q, team, idx, price }) => {
+                    const blockedByWindow = !tx.tw.open;
+                    return (
+                      <div
+                        key={`${team.id}-${q.n}-${idx}`}
+                        className={`flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
+                      >
+                        <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                          <PlayerFace player={q} team={team} state={state} size={40} />
+                        </div>
+                        <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
+                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight">
+                            <span className="text-[var(--g)] mr-1.5">{q.ro}</span>
+                            {q.n}
+                          </div>
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                            {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age} ปี
+                          </div>
+                        </button>
+                        <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
+                          {q.ov}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={!!q.locked || blockedByWindow}
+                          onClick={() => openNegotiation('club', idx, q, team)}
+                          className={`min-w-[92px] mland:min-w-[78px] px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
+                            blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
+                          }`}
+                        >
+                          {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${fmtMoneyNum(price)}`}
+                        </button>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-8 text-center space-y-2">
+                    <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในสโมสรอื่นตามตัวกรอง</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        resetBuyFilters();
+                        setClubTierFilter('ALL');
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
+                    >
+                      ดูทุกลีกทั้งหมด
+                    </button>
+                  </div>
+                )
+              ) : createdMarketList.length > 0 ? (
+                createdMarketList.map((cand: CreatedPlayerCandidate) => {
+                  const q = cand.player;
+                  const alreadyInSquad = me.sq.some((z) => z.n === q.n);
+                  const squadFull = me.sq.length >= tx.maxSquad;
+                  const signCreatedPlayer = (payTransferFee: boolean) => {
+                    if (alreadyInSquad) {
+                      onToast(`${q.n} อยู่ในทีมของคุณแล้ว`);
+                      return;
+                    }
+                    if (squadFull) {
+                      onToast(`ทีมเต็ม ${tx.maxSquad} คนแล้ว`);
+                      return;
+                    }
+                    const fee = payTransferFee ? cand.price : 0;
+                    if (payTransferFee && tx.ffpLocked && fee > 0) {
+                      onToast('งบติดลบตามกฎ FFP ห้ามจ่ายค่าตัวจนกว่างบจะกลับมาเป็นบวก (หรือดึงเป็นเด็กปั้นฟรีได้)');
+                      return;
+                    }
+                    if (payTransferFee && state.money < fee) {
+                      onToast(`งบไม่พอซื้อ (${fmtMoneyNum(fee)}) — สามารถกด "🌱 เด็กปั้นฟรี" ได้เลย`);
+                      return;
+                    }
+                    const wg = wagOf(q);
+                    if (tx.curWage + wg > tx.wageCap) {
+                      onToast(`เกินเพดานค่าเหนื่อยลีก (${fmtMoneyNum(tx.wageCap)}/นัด)`);
+                      return;
+                    }
+                    onUpdateState((d) => {
+                      const t = d.teams[d.me];
+                      if (t.sq.some((z) => z.n === q.n)) return;
+                      if (fee > 0) {
+                        d.money -= fee;
+                        logFin(d, `ซื้อตัวสร้างเอง ${q.n}`, -fee);
+                      }
+                      const incoming: Player = {
+                        ...q,
+                        hg: 1,
+                        customCreated: 1,
+                        no: undefined,
+                        signedSeason: d.season,
+                        signedMd: d.md,
+                        con: { yr: 3, wg, role: q.ov >= 72 ? 'key' : 'pro' }
+                      };
+                      appendPlayerCareerLog(
+                        incoming,
+                        fee > 0
+                          ? `💰 ซื้อตัวเข้า ${t.name} (${TN[t.tier]}) ซีซั่น ${d.season} [🌱 เด็กปั้นสร้างเอง]`
+                          : `🌱 ดึงตัวสู่ทีมชุดใหญ่ ${t.name} ในฐานะเด็กปั้นสโมสร ซีซั่น ${d.season}`
+                      );
+                      t.sq.push(incoming);
+                      assignTeamShirtNumbers(t);
+                      pushFeed(
+                        d,
+                        fee > 0 ? 'ซื้อตัวสร้างเอง' : 'เด็กปั้นสโมสร',
+                        `🌱 ${q.n} (${q.ro} OVR ${q.ov}) เข้าร่วมทีมพร้อมสัญลักษณ์เด็กปั้นสโมสร!`,
+                        'ok'
+                      );
+                    });
+                    SFX.win();
+                    setCreatedRefresh((n) => n + 1);
+                    onToast(fee > 0 ? `💰 ซื้อ ${q.n} เข้าทีมเรียบร้อย (🌱 เด็กปั้น)!` : `🌱 ดึง ${q.n} เข้าทีมเป็นเด็กปั้นฟรีเรียบร้อย!`);
+                  };
+
                   return (
                     <div
-                      key={`${team.id}-${q.n}-${idx}`}
-                      className={`flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors ${blockedByWindow ? 'opacity-70' : ''}`}
+                      key={cand.key}
+                      className="flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/60 transition-colors"
                     >
                       <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
-                        <PlayerFace player={q} team={team} state={state} size={40} />
+                        <PlayerFace player={q} team={me} state={state} size={40} />
                       </div>
-                      <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight">
-                          <span className="text-[var(--g)] mr-1.5">{q.ro}</span>
-                          {q.n}
+                      <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
+                        <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
+                          <span className="text-[var(--g)]">{q.ro}</span>
+                          <span className="truncate">{q.n}</span>
+                          <span className="px-1.5 py-[1px] rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                            🌱 เด็กปั้น
+                          </span>
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                          {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age} ปี
+                          {cand.sourceLabel}{cand.archName ? ` · ${cand.archName}` : ''} · อายุ {q.age} ปี · ศักยภาพ {cand.pot}
                         </div>
                       </button>
                       <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
                         {q.ov}
                       </span>
-                      <button
-                        type="button"
-                        disabled={!!q.locked || blockedByWindow}
-                        onClick={() => openNegotiation('club', idx, q, team)}
-                        className={`min-w-[92px] mland:min-w-[78px] px-3 py-1.5 mland:px-2 mland:py-1 rounded-xl text-xs mland:text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-45 transition-colors ${
-                          blockedByWindow ? 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]' : 'bg-[var(--g)] hover:brightness-110 text-white'
-                        }`}
-                      >
-                        {q.locked ? 'เจรจาล่ม' : blockedByWindow ? '🔒 ปิดตลาด' : `ยื่น ~${fmtMoneyNum(price)}`}
-                      </button>
+                      {alreadyInSquad ? (
+                        <span className="px-2.5 py-1 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[11px] mland:text-[9.5px] font-bold shrink-0">
+                          ✅ อยู่ในทีม
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            disabled={squadFull}
+                            onClick={() => signCreatedPlayer(false)}
+                            className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--g)] hover:brightness-110 text-white text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
+                            title="ดึงเข้าทีมฟรีในฐานะเด็กปั้นสโมสร"
+                          >
+                            🌱 ปั้นฟรี
+                          </button>
+                          <button
+                            type="button"
+                            disabled={squadFull || state.money < cand.price || (tx.ffpLocked && cand.price > 0)}
+                            onClick={() => signCreatedPlayer(true)}
+                            className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp)] hover:brightness-105 text-[#261900] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-45"
+                            title="ซื้อตัวเข้าทีมพร้อมสัญลักษณ์เด็กปั้น"
+                          >
+                            💰 ซื้อ {fmtMoneyNum(cand.price)}
+                          </button>
+                          {cand.sourceType === 'custom_pool' && cand.templateId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                deleteCustomPlayer(cand.templateId!);
+                                setCreatedRefresh((n) => n + 1);
+                                onToast(`ลบ ${q.n} ออกจากทำเนียบนักเตะสร้างเองแล้ว`);
+                              }}
+                              aria-label={`ลบ ${q.n}`}
+                              className="px-2 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)] hover:bg-[var(--red-soft)] border border-[var(--line)] text-xs cursor-pointer"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })
               ) : (
                 <div className="p-8 text-center space-y-2">
-                  <p className="text-xs text-[var(--mut)]">ไม่พบนักเตะในสโมสรอื่นตามตัวกรอง</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetBuyFilters();
-                      setClubTierFilter('ALL');
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
-                  >
-                    ดูทุกลีกทั้งหมด
-                  </button>
+                  <div className="text-2xl">⭐</div>
+                  <p className="text-xs font-bold text-[var(--ink)]">ยังไม่มีนักเตะที่คุณสร้างเอง</p>
+                  <p className="text-[11px] text-[var(--mut)]">สร้างนักเตะในหน้าเมนูหลัก (โหมดนักเตะ หรือ สร้างนักเตะเก็บไว้) แล้วกลับมาซื้อหรือดึงเป็นเด็กปั้นที่นี่ได้เลย</p>
                 </div>
               )}
             </div>

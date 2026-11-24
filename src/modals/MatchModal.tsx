@@ -964,6 +964,64 @@ export const MatchModal: React.FC<{
         }
       }
 
+      // Throw-in positioning on touchline
+      if (setPiece && setPiece.type === 'throwin' && ag.pos !== 'GK') {
+        const isAtt = ag.side === setPiece.side;
+        const throwRight = isAttackRight(w, setPiece.side);
+        const throwDir = throwRight ? 1 : -1;
+        const throwers = activeAgents
+          .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
+          .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y));
+        if (isAtt) {
+          if (throwers[0]?.id === ag.id) {
+            ag.tx = clamp(setPiece.x, 6, 94);
+            ag.ty = setPiece.y < 50 ? 2.5 : 97.5;
+            ag.intent = 'SUPPORT';
+            lockedTargetIds.add(ag.id);
+            return;
+          }
+          const idxT = throwers.findIndex((z) => z.id === ag.id);
+          const nearSideY = setPiece.y < 50 ? 12 : 88;
+          const spNormX = throwRight ? setPiece.x : 100 - setPiece.x;
+          if (idxT === 1) {
+            // Short back option
+            ag.tx = clamp(setPiece.x - throwDir * 9, 8, 92);
+            ag.ty = clamp(nearSideY + (setPiece.y < 50 ? 10 : -10), 10, 90);
+            ag.intent = 'SUPPORT';
+            return;
+          } else if (idxT === 2) {
+            // Forward down-the-line runner
+            ag.tx = clamp(setPiece.x + throwDir * 14, 8, 92);
+            ag.ty = clamp(nearSideY, 8, 92);
+            ag.intent = 'MAKE_RUN';
+            ag.runToX = ag.tx;
+            ag.runToY = ag.ty;
+            return;
+          } else if (spNormX >= 68 && idxT <= 5) {
+            // Box targets for potential long throw-in!
+            ag.tx = clamp(throwRight ? 88 + (idxT - 3) * 2 : 12 - (idxT - 3) * 2, 7, 93);
+            ag.ty = clamp(44 + (idxT - 3) * 6, 36, 64);
+            ag.intent = 'MAKE_RUN';
+            ag.runToX = ag.tx;
+            ag.runToY = ag.ty;
+            return;
+          }
+        } else {
+          // Defenders mark close around the throw-in zone
+          const nearDef = activeAgents
+            .filter((z) => z.side === ag.side && z.pos !== 'GK')
+            .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
+            .slice(0, 3);
+          const dIdx = nearDef.findIndex((z) => z.id === ag.id);
+          if (dIdx >= 0) {
+            ag.tx = clamp(setPiece.x + (dIdx - 1) * 7, 7, 93);
+            ag.ty = clamp(setPiece.y < 50 ? 12 + dIdx * 6 : 88 - dIdx * 6, 10, 90);
+            ag.intent = 'MARK';
+            return;
+          }
+        }
+      }
+
       // Corner kick structured box zoning (near post, penalty spot, far post, D-arc edge, rest defense)
       if (setPiece && setPiece.type === 'corner' && ag.pos !== 'GK') {
         const isAtt = ag.side === setPiece.side;
@@ -1181,47 +1239,47 @@ export const MatchModal: React.FC<{
             ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = ty;
           } else {
-            const fbCap = cfg.tac === 'X' ? 66 : cfg.tac === 'A' ? 60 : cfg.tac === 'D' ? 46 : cfg.tac === 'Z' ? 38 : 54;
+            const fbCap = cfg.tac === 'X' ? 74 : cfg.tac === 'A' ? 62 : cfg.tac === 'D' ? 46 : cfg.tac === 'Z' ? 37 : 54;
             normX = clamp(normX, 16, fbCap);
             ty = anchoredFbY;
           }
         } else if (ag.pos === 'DF') {
-          // Center backs hold rest defense line and clear left-center-right spacing
-          const cbCap = cfg.tac === 'X' ? 62 : cfg.tac === 'A' ? 56 : cfg.tac === 'D' ? 43 : cfg.tac === 'Z' ? 35 : 50;
+          // Center backs hold rest defense line; in Siege (X) they push up to halfway, leaving space behind!
+          const cbCap = cfg.tac === 'X' ? 67 : cfg.tac === 'A' ? 57 : cfg.tac === 'D' ? 42 : cfg.tac === 'Z' ? 33 : 50;
           normX = clamp(normX, 13, cbCap);
           ty = clamp(50 + (widenedY - 50) * (cfg.wid === 0 ? 0.65 : 0.84) + (b.y - 50) * 0.12, 22, 78);
         } else if (ag.role === 'CDM' || ag.role === 'LDM' || ag.role === 'RDM') {
           // Holding pivot screens behind the ball and preserves double-pivot lateral spacing
-          const dmCap = cfg.tac === 'Z' ? 46 : cfg.tac === 'D' ? 54 : cfg.tac === 'X' ? 68 : 62;
+          const dmCap = cfg.tac === 'Z' ? 44 : cfg.tac === 'D' ? 54 : cfg.tac === 'X' ? 74 : 62;
           normX = clamp(Math.min(normX, Math.max(homeBaseX - 3, carrierNormX - 4)), 19, dmCap);
           ty = clamp(widenedY * 0.78 + (50 + (b.y - 50) * 0.2) * 0.22, 18, 82);
         } else if (attMids.some((m) => m.id === ag.id) && carrier) {
           const idxM = attMids.findIndex((m) => m.id === ag.id);
-          if (carrierNormX >= 80 && cfg.tac !== 'Z') {
-            normX = clamp(idxM === 0 ? 76 : 71, 22, 79);
-            ty = clamp(widenedY * 0.58 + (50 + (idxM === 0 ? -12 : 12)) * 0.42, 16, 84);
+          if (carrierNormX >= (cfg.tac === 'X' ? 72 : 80) && cfg.tac !== 'Z') {
+            normX = clamp(idxM === 0 ? (cfg.tac === 'X' ? 83 : 76) : cfg.tac === 'X' ? 78 : 71, 22, 86);
+            ty = clamp(widenedY * 0.54 + (50 + (idxM === 0 ? -11 : 11)) * 0.46, 16, 84);
           } else {
             const triDist = cfg.pass === 0 ? 10 : cfg.pass >= 2 ? 16 : 13;
-            normX = clamp(homeBaseX * 0.38 + (carrierNormX + triDist * 0.45) * 0.62 + attPushBias * 0.35, 22, cfg.tac === 'Z' ? 60 : 78);
+            normX = clamp(homeBaseX * 0.38 + (carrierNormX + triDist * 0.45) * 0.62 + attPushBias * 0.35, 22, cfg.tac === 'Z' ? 58 : cfg.tac === 'X' ? 84 : 78);
             ty = clamp(widenedY * 0.65 + (carrier.y + (idxM === 0 ? -8 : 8)) * 0.35, 14, 86);
           }
           ag.intent = 'SUPPORT';
         } else {
           // Supporting central midfield holds formation slot depth & width
-          normX = clamp(normX, 20, cfg.tac === 'Z' ? 56 : cfg.tac === 'D' ? 64 : 74);
+          normX = clamp(normX, 20, cfg.tac === 'Z' ? 54 : cfg.tac === 'D' ? 64 : cfg.tac === 'X' ? 81 : 74);
           ty = clamp(widenedY * 0.78 + (b.y - 50) * 0.18 + 50 * 0.04, 14, 86);
         }
       } else {
         // OUT OF POSSESSION: Strictly reflects Mentality (tac), Defensive Line (line), Pressing (press), Width (wid), and slot structure
-        const tacBackDrop = cfg.tac === 'Z' ? -5.0 : cfg.tac === 'D' ? -2.5 : cfg.tac === 'X' ? 5.5 : cfg.tac === 'A' ? 3.0 : 0;
-        const lineHeightFloor = (cfg.line === 2 ? 20.5 : cfg.line === 0 ? 10.5 : 14.5) + tacBackDrop;
-        const lineCeiling = cfg.line === 2 ? 48 : cfg.line === 0 ? 32 : 41;
+        const tacBackDrop = cfg.tac === 'Z' ? -6.5 : cfg.tac === 'D' ? -3.0 : cfg.tac === 'X' ? 7.5 : cfg.tac === 'A' ? 3.5 : 0;
+        const lineHeightFloor = (cfg.line === 2 ? 20.5 : cfg.line === 0 ? 10.0 : 14.5) + tacBackDrop;
+        const lineCeiling = cfg.tac === 'X' ? 56 : cfg.tac === 'Z' ? 28 : cfg.line === 2 ? 48 : cfg.line === 0 ? 32 : 41;
         const backLineNorm = clamp(
           Math.min(ballNormX - 7.5, 31 + (cfg.line - 1) * 8.5 + tacBackDrop),
-          Math.max(9.8, lineHeightFloor),
+          Math.max(9.0, lineHeightFloor),
           lineCeiling
         );
-        const pressTriggerLimit = cfg.press === 2 ? 95 : cfg.press === 1 ? 68 : 49;
+        const pressTriggerLimit = cfg.tac === 'X' ? 98 : cfg.tac === 'Z' ? 42 : cfg.press === 2 ? 95 : cfg.press === 1 ? 68 : 49;
         const shouldEngagePress = ballNormX <= pressTriggerLimit;
 
         if (ag.id === primaryPresserId) {
@@ -1374,7 +1432,35 @@ export const MatchModal: React.FC<{
     const defenders = defPool.filter((a) => a.pos === 'DF' || a.pos === 'MF');
 
     const goalLineX = attRightNow ? 100 : 0;
+    const normFromX = attRightNow ? fromX : 100 - fromX;
     const dist = Math.hypot(goalLineX - fromX, 50 - fromY);
+
+    // Sanity Guard: NEVER allow an open-play shot from own half / in front of own goal!
+    if (flightType === 'shot' && (normFromX < 49 || dist > 50)) {
+      const attOutfield = active.filter((a) => a.side === side && a.pos !== 'GK' && a.id !== shooter?.id);
+      const fwdTarget = attOutfield.sort((u, v) => (attRightNow ? v.x - u.x : u.x - v.x))[0] || shooter;
+      if (fwdTarget) {
+        b.fromX = fromX;
+        b.fromY = fromY;
+        b.toX = clamp(fwdTarget.x, 8, 92);
+        b.toY = clamp(fwdTarget.y, 8, 92);
+        b.curve = (Math.random() - 0.5) * 4;
+        b.maxZ = 14;
+        b.progress = 0;
+        b.duration = 0.66;
+        b.flightType = 'lofted';
+        b.shotStyle = undefined;
+        b.carrierId = null;
+        b.targetId = fwdTarget.id;
+        b.lastPasserId = shooter?.id || null;
+        b.possessionSide = side;
+        b.shotPlan = undefined;
+        b.bounceNext = undefined;
+        w.phaseLabel = `🚀 ${shooter?.shortName || 'แนวรับ'} สาดยาวขึ้นหน้าให้ ${fwdTarget.shortName}`;
+        w.phaseTone = 'normal';
+        return;
+      }
+    }
 
     b.fromX = fromX;
     b.fromY = fromY;
@@ -1392,6 +1478,8 @@ export const MatchModal: React.FC<{
 
     // 1. Check defender block / free-kick wall deflection / shot deflection ("ยิงแฉลบ") first (except penalty)
     if (flightType !== 'penalty') {
+      const defTeamCfg = getEffectiveTeamCfg(defSide, curMin);
+      const lowBlockBonus = defTeamCfg.tac === 'Z' ? 0.08 : defTeamCfg.tac === 'D' ? 0.04 : defTeamCfg.tac === 'X' ? -0.03 : 0;
       const segDx = goalLineX - fromX;
       const segDy = 50 - fromY;
       const segLenSq = Math.max(1, segDx * segDx + segDy * segDy);
@@ -1404,7 +1492,7 @@ export const MatchModal: React.FC<{
           const perpDist = Math.hypot(d.x - projX, d.y - projY);
           return { d, perpDist, tProj };
         })
-        .filter((x) => x.perpDist < (flightType === 'freekick' ? 8.5 : x.d.sig === 'blk' || agentHasTrait(x.d, 'body_blocker') ? 9.8 : 7.8))
+        .filter((x) => x.perpDist < (flightType === 'freekick' ? 8.5 : x.d.sig === 'blk' || agentHasTrait(x.d, 'body_blocker') || defTeamCfg.tac === 'Z' ? 10.2 : 8.0))
         .sort((u, v) => u.perpDist - v.perpDist || u.tProj - v.tProj);
 
       const wallDef = flightType === 'freekick' ? defenders.find((d) => d.intent === 'WALL') || corridorCands[0]?.d : undefined;
@@ -1415,11 +1503,11 @@ export const MatchModal: React.FC<{
         const blockChance =
           flightType === 'freekick'
             ? clamp(0.18 - ((shooter?.d.cur || 60) - 60) * 0.002 + (agentHasTrait(nearDef, 'body_blocker') ? 0.04 : 0), 0.09, 0.28)
-            : clamp(0.09 + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) + blockerTrait - 60) * 0.0035, 0.05, 0.26);
+            : clamp(0.09 + lowBlockBonus + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) + blockerTrait - 60) * 0.0035, 0.05, 0.34);
         const deflectChance =
           flightType === 'freekick'
             ? 0.14
-            : clamp(0.11 + (corridorCands.length >= 2 ? 0.05 : 0) + (shotStyle === 'header' || shotStyle === 'diving_header' ? 0.03 : 0), 0.10, 0.19);
+            : clamp(0.11 + (corridorCands.length >= 2 ? 0.06 : 0) + (shotStyle === 'header' || shotStyle === 'diving_header' ? 0.03 : 0), 0.10, 0.21);
         const contactRoll = Math.random();
 
         if (contactRoll < blockChance) {
@@ -1847,6 +1935,119 @@ export const MatchModal: React.FC<{
         pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) รับหน้าที่สังหารจุดโทษ${isPanenka ? ' — วางเท้าเหนือชั้น!' : '!'}`);
         return;
       }
+
+      if (sp.type === 'throwin') {
+        const taker =
+          attPool
+            .filter((a) => a.pos !== 'GK')
+            .sort((u, v) => Math.hypot(u.x - sp.x, u.y - sp.y) - Math.hypot(v.x - sp.x, v.y - sp.y))[0] || attPool[0];
+        if (!taker) return;
+        const clampedY = sp.y < 50 ? 2.6 : 97.4;
+        taker.x = clamp(sp.x, 8, 92);
+        taker.y = clampedY;
+        const spNormX = attRight ? taker.x : 100 - taker.x;
+        const longThrowSpecialist = agentHasTrait(taker, 'long_throw_counter') || taker.d.str >= 70 || taker.sig === 'str';
+        const doLongThrow = spNormX >= 68 && Math.random() < (longThrowSpecialist ? 0.56 : 0.30);
+
+        if (doLongThrow) {
+          const boxTargets = attPool
+            .filter((a) => a.id !== taker.id && a.pos !== 'GK')
+            .sort((u, v) => (v.d.hd + v.d.str + (attRight ? v.x : 100 - v.x) * 0.4) - (u.d.hd + u.d.str + (attRight ? u.x : 100 - u.x) * 0.4));
+          const target = boxTargets[0] || attPool.find((a) => a.id !== taker.id);
+          if (target) {
+            const bx = clamp(attRight ? 88 + Math.random() * 5.5 : 6.5 + Math.random() * 5.5, 6, 94);
+            const by = clamp(42 + Math.random() * 16, 36, 64);
+            target.tx = bx;
+            target.ty = by;
+            target.intent = 'PASS_TARGET';
+            b.fromX = taker.x;
+            b.fromY = taker.y;
+            b.toX = bx;
+            b.toY = by;
+            b.curve = 0;
+            b.maxZ = 13.5;
+            b.progress = 0;
+            b.duration = 0.68;
+            b.flightType = 'cross';
+            b.shotStyle = undefined;
+            b.carrierId = null;
+            b.targetId = target.id;
+            b.lastPasserId = taker.id;
+            b.possessionSide = sp.side;
+            bumpPlayerStat(taker.id, 'setpieces');
+            addWorldFx(w, {
+              type: 'throwin',
+              x: taker.x,
+              y: taker.y,
+              toX: bx,
+              toY: by,
+              label: `🚀 ทุ่มไกลลุ้นประตู! (${taker.shortName})`,
+              color: '#a78bfa',
+              ttl: 1.9,
+              maxTtl: 1.9
+            });
+            w.phaseLabel = `🚀 ${taker.shortName} ทุ่มไกลเข้ากรอบเขตโทษลุ้นทำประตู!`;
+            w.phaseTone = 'danger';
+            triggerDramaSlow(w, 0.9, `🚀 ทุ่มไกลลุ้นประตู · ${taker.shortName}`);
+            SFX.kick();
+            if (Math.random() < 0.55) {
+              pushLog(curMin, `🚀 ${taker.id} (${attTeam.name}) ทุ่มไกลยัดเข้ากลางกรอบเขตโทษให้เพื่อนโหม่งลุ้นประตู!`);
+            }
+            return;
+          }
+        }
+
+        const cands = attPool.filter((a) => a.id !== taker.id && (a.pos !== 'GK' || spNormX < 42));
+        const forwardCands = cands
+          .filter((a) => (attRight ? a.x > taker.x + 3 : a.x < taker.x - 3) && Math.hypot(a.x - taker.x, a.y - taker.y) < 30)
+          .sort((u, v) => Math.hypot(u.x - taker.x, u.y - taker.y) - Math.hypot(v.x - taker.x, v.y - taker.y));
+        const backCands = cands
+          .filter((a) => (attRight ? a.x <= taker.x + 3 : a.x >= taker.x - 3) && Math.hypot(a.x - taker.x, a.y - taker.y) < 28)
+          .sort((u, v) => Math.hypot(u.x - taker.x, u.y - taker.y) - Math.hypot(v.x - taker.x, v.y - taker.y));
+
+        const preferBack = spNormX < 40 ? Math.random() < 0.42 : Math.random() < 0.34;
+        const target = preferBack ? (backCands[0] || forwardCands[0] || cands[0]) : (forwardCands[0] || backCands[0] || cands[0]);
+        if (target) {
+          const isBackThrow = attRight ? target.x < taker.x - 1 : target.x > taker.x + 1;
+          const destX = clamp(target.x + (isBackThrow ? -dir * 1.5 : dir * 3), 6, 94);
+          const destY = clamp(target.y, 8, 92);
+          target.tx = destX;
+          target.ty = destY;
+          target.intent = 'PASS_TARGET';
+          b.fromX = taker.x;
+          b.fromY = taker.y;
+          b.toX = destX;
+          b.toY = destY;
+          b.curve = 0;
+          b.maxZ = 3.2;
+          b.progress = 0;
+          b.duration = clamp(Math.hypot(destX - taker.x, destY - taker.y) / 40, 0.36, 0.60);
+          b.flightType = 'throwin';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = target.id;
+          b.lastPasserId = taker.id;
+          b.possessionSide = sp.side;
+          bumpPlayerStat(taker.id, 'setpieces');
+          addWorldFx(w, {
+            type: 'throwin',
+            x: taker.x,
+            y: taker.y,
+            toX: destX,
+            toY: destY,
+            label: isBackThrow ? `↩️ ทุ่มกลับให้ ${target.shortName}` : `↗️ ทุ่มขึ้นหน้าให้ ${target.shortName}`,
+            color: '#38bdf8',
+            ttl: 1.4,
+            maxTtl: 1.4
+          });
+          w.phaseLabel = isBackThrow
+            ? `🤲 ${taker.shortName} ทุ่มกลับตั้งเกมให้ ${target.shortName}`
+            : `🤲 ${taker.shortName} ทุ่มขึ้นหน้าให้ ${target.shortName}`;
+          w.phaseTone = 'normal';
+          SFX.pass();
+        }
+        return;
+      }
     }
 
     // 2. Open Play Decision from Carrier
@@ -1912,8 +2113,52 @@ export const MatchModal: React.FC<{
       }
     }
 
-    // 2a. Signature Skill Move / Flair Dribble to beat the presser! (Avoids risky dribbles inside own 18y box)
+    // 2a. Coordinated High Pressing ("การกดดัน") & Signature Skill Move / Dragback ("การคลึงบอล")
     const carrierNormXEarly = attRight ? carrier.x : 100 - carrier.x;
+    const pressersNearby = defPool.filter((d) => d.pos !== 'GK' && Math.hypot(d.x - carrier.x, d.y - carrier.y) < (defCfg.press === 2 ? 14 : 10.5));
+    if (nearestDef && pressersNearby.length >= 2 && (defCfg.press >= 1 || defCfg.tac === 'X') && carrier.pos !== 'GK' && Math.random() < (defCfg.press === 2 ? 0.24 : 0.14)) {
+      pressersNearby.slice(0, 2).forEach((pr) => {
+        pr.intent = 'PRESS';
+        pr.intentTimer = 1.1;
+      });
+      const pressStrength =
+        pressersNearby.reduce((s, d) => s + d.d.rd * 0.5 + d.d.spd * 0.3 + (agentHasTrait(d, 'pressing_machine') ? 10 : 0), 0) /
+          Math.max(1, pressersNearby.length) +
+        (defCfg.press === 2 ? 9 : 3) +
+        (defCfg.tac === 'X' ? 5 : 0);
+      const escapeStrength = carrier.d.cur * 0.4 + carrier.d.spd * 0.3 + carrier.d.comp * 0.3 + (attCfg.tempo === 0 ? 5 : 0);
+      const pressStealProb = clamp(0.32 + (pressStrength - escapeStrength) * 0.006, 0.15, 0.62);
+      addWorldFx(w, {
+        type: 'press',
+        x: carrier.x,
+        y: carrier.y,
+        label: `🔥 กดดันเพรสซิ่ง!`,
+        color: '#f97316',
+        ttl: 1.4,
+        maxTtl: 1.4
+      });
+      if (Math.random() < pressStealProb) {
+        const winner = pressersNearby[0] || nearestDef;
+        bumpPlayerStat(winner.id, 'tackles');
+        adjustLiveForm(winner.id, 0.14);
+        b.possessionSide = defSide;
+        b.carrierId = winner.id;
+        b.lastPasserId = null;
+        b.targetId = null;
+        b.x = winner.x;
+        b.y = winner.y;
+        b.flightType = 'carry';
+        b.shotStyle = undefined;
+        w.phaseLabel = `🔥 ${defTeam.name} รุมกดดันเพรสซิ่งแย่งบอลจาก ${carrier.shortName}!`;
+        w.phaseTone = 'attack';
+        SFX.pass();
+        if (Math.random() < 0.35) {
+          pushLog(curMin, `🔥 เพรสซิ่งหนัก! ${winner.id} และเพื่อนรุมกดดันแย่งบอลจาก ${carrier.id} (${attTeam.name}) สำเร็จ!`);
+        }
+        return;
+      }
+    }
+
     const dribbleSkill =
       carrier.d.spd * 0.42 +
       carrier.d.run * 0.34 +
@@ -1921,15 +2166,15 @@ export const MatchModal: React.FC<{
       (agentHasTrait(carrier, 'flair_dribbler') ? 14 : 0) +
       (carrier.sig === 'spd' || carrier.sig === 'cur' || carrier.sig === 'str' || carrier.sig === 'run' ? 6 : 0);
     if (nearestDef && nearestDefDist < 9.5 && carrier.pos !== 'GK' && carrierNormXEarly > 24) {
-      const tempoDribMod = attCfg.tempo === 2 ? -0.04 : attCfg.tempo === 0 ? 0.03 : 0;
+      const tempoDribMod = attCfg.tempo === 2 ? -0.04 : attCfg.tempo === 0 ? 0.05 : 0;
       const skillProb = clamp(
-        0.18 +
+        0.21 +
           (dribbleSkill - (nearestDef.d.rd * 0.5 + nearestDef.d.pos * 0.5)) * 0.0045 +
           (inBoxNow ? 0.08 : 0) +
           (agentHasTrait(carrier, 'flair_dribbler') ? 0.12 : carrier.sig === 'spd' || carrier.sig === 'cur' ? 0.06 : 0) +
           tempoDribMod,
-        0.10,
-        0.52
+        0.12,
+        0.56
       );
       if (Math.random() < skillProb) {
         const rollSk = Math.random();
@@ -1937,18 +2182,25 @@ export const MatchModal: React.FC<{
         let skillLabel = `🌀 ${carrier.shortName} หมุนตัว 360°`;
         let fxColor = '#c084fc';
         let advDist = 6.8;
+        let isDragback = false;
 
-        if (carrier.sig === 'spd' || (carrier.d.spd >= 70 && rollSk < 0.34)) {
+        if ((attCfg.tempo === 0 || agentHasTrait(carrier, 'tempo_controller') || carrier.d.cur >= 64) && rollSk < 0.32) {
+          skType = 'dragback';
+          isDragback = true;
+          skillLabel = `🧲 ${carrier.shortName} คลึงบอลดึงจังหวะหลบ!`;
+          fxColor = '#2dd4bf';
+          advDist = 4.6;
+        } else if (carrier.sig === 'spd' || (carrier.d.spd >= 70 && rollSk < 0.54)) {
           skType = 'burst';
           skillLabel = `⚡ ${carrier.shortName} กระชากหนี!`;
           fxColor = '#38bdf8';
           advDist = 10.2;
-        } else if (carrier.sig === 'str' || (carrier.d.str >= 70 && rollSk < 0.28)) {
+        } else if (carrier.sig === 'str' || (carrier.d.str >= 70 && rollSk < 0.68)) {
           skType = 'shield';
           skillLabel = `💪 ${carrier.shortName} บังบอลพลิกหนี`;
           fxColor = '#facc15';
           advDist = 6.2;
-        } else if (agentHasTrait(carrier, 'flair_dribbler') || rollSk < 0.62) {
+        } else if (agentHasTrait(carrier, 'flair_dribbler') || rollSk < 0.88) {
           skType = 'stepover';
           skillLabel = nearestDefDist < 5.5 && Math.random() < 0.45 ? `🔥 ${carrier.shortName} ลอดขาเอลาสติโก้!` : `🪄 ${carrier.shortName} สับขาหลอก!`;
           fxColor = '#f472b6';
@@ -1974,13 +2226,13 @@ export const MatchModal: React.FC<{
         b.curve = 0;
         b.maxZ = 0;
         b.progress = 0;
-        b.duration = skType === 'burst' ? 0.42 : 0.48;
+        b.duration = skType === 'burst' ? 0.42 : isDragback ? 0.52 : 0.48;
         b.flightType = 'carry';
         b.shotStyle = undefined;
         b.carrierId = carrier.id;
         b.targetId = null;
         addWorldFx(w, {
-          type: 'skill',
+          type: isDragback ? 'dragback' : 'skill',
           x: carrier.x,
           y: carrier.y,
           label: skillLabel,
@@ -1995,7 +2247,7 @@ export const MatchModal: React.FC<{
         w.phaseLabel = `${skillLabel}${flairTag}`;
         w.phaseTone = 'attack';
         if (inBoxNow || carrier.isMe || Math.random() < 0.36) {
-          pushLog(curMin, `🪄 โชว์ทักษะ! ${skillLabel} (${attTeam.name}) ฉีกหนี ${nearestDef.shortName} ได้สำเร็จ!`);
+          pushLog(curMin, `🪄 โชว์ทักษะ! ${skillLabel} (${attTeam.name}) หลบ ${nearestDef.shortName} ได้สำเร็จ!`);
         }
         return;
       }
@@ -2297,6 +2549,33 @@ export const MatchModal: React.FC<{
           }
 
           bumpPlayerStat(nearestDef.id, 'tackles');
+          // Wide tackles near the touchline can deflect out for a Throw-in!
+          if ((carrier.y < 18 || carrier.y > 82) && Math.random() < 0.26) {
+            const outY = carrier.y < 50 ? 2.2 : 97.8;
+            const outX = clamp(nearestDef.x, 8, 92);
+            b.fromX = nearestDef.x;
+            b.fromY = nearestDef.y;
+            b.toX = outX;
+            b.toY = outY < 50 ? -0.4 : 100.4;
+            b.curve = 0;
+            b.maxZ = 2.8;
+            b.progress = 0;
+            b.duration = 0.32;
+            b.flightType = 'bounce';
+            b.shotStyle = undefined;
+            b.carrierId = null;
+            b.targetId = null;
+            b.bounceNext = {
+              setPiece: { type: 'throwin', side: defSide, x: outX, y: outY, waitSec: 0.72 },
+              phaseLabel: `🤲 บอลแฉลบออกข้าง! ${defTeam.name} ได้ทุ่ม`,
+              phaseTone: 'setpiece'
+            };
+            w.phaseLabel = `⚡ ${nearestDef.shortName} สกัดบอลออกข้างสนาม!`;
+            w.phaseTone = 'normal';
+            SFX.pass();
+            return;
+          }
+
           b.possessionSide = defSide;
           b.carrierId = nearestDef.id;
           b.lastPasserId = null;
@@ -2323,12 +2602,22 @@ export const MatchModal: React.FC<{
           defPool = getTeamPool(side === 'H' ? 'A' : 'H');
           carrier = nearestDef;
           const newlyWonCfg = getEffectiveTeamCfg(side, curMin);
-          if ((newlyWonCfg.pass === 3 || carrier.sig === 'dist' || agentHasTrait(carrier, 'ball_playing_cb') || agentHasTrait(carrier, 'long_diagonal') || (newlyWonCfg.tempo === 2 && (newlyWonCfg.tac === 'D' || newlyWonCfg.tac === 'Z'))) && Math.random() < (newlyWonCfg.pass === 3 ? 0.84 : 0.65)) {
+          const oppWasHighSiege = attCfg.tac === 'X' || attCfg.line === 2;
+          const isDeepCounterTeam = newlyWonCfg.tac === 'Z' || newlyWonCfg.tac === 'D';
+          const counterTriggerProb = clamp(
+            (newlyWonCfg.pass === 3 ? 0.72 : 0.45) +
+              (isDeepCounterTeam ? 0.16 : 0) +
+              (oppWasHighSiege ? 0.16 : 0) +
+              (newlyWonCfg.tempo === 2 ? 0.08 : 0),
+            0.25,
+            0.90
+          );
+          if ((newlyWonCfg.pass === 3 || carrier.sig === 'dist' || agentHasTrait(carrier, 'ball_playing_cb') || agentHasTrait(carrier, 'long_diagonal') || isDeepCounterTeam || oppWasHighSiege) && Math.random() < counterTriggerProb) {
             const counterTarget = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.role === 'CAM');
             if (counterTarget) {
               const offChk = checkPassOffside(w, side, carrier, counterTarget, defPool);
               if (offChk.isOffside) {
-                triggerOffsideCall(w, curMin, side, carrier, counterTarget, offChk.oppLineX, 'lofted', 'ยืนล้ำแนวรับจังหวะสวนกลับ');
+                triggerOffsideCall(w, curMin, side, carrier, counterTarget, offChk.oppLineX, 'lofted', 'รีบออกตัวล้ำหน้าจังหวะสวนกลับ');
                 return;
               }
               const cAttRight = isAttackRight(w, side);
@@ -2336,18 +2625,22 @@ export const MatchModal: React.FC<{
               const cDist = Math.hypot(counterTarget.x - carrier.x, counterTarget.y - carrier.y);
               b.fromX = carrier.x;
               b.fromY = carrier.y;
-              b.toX = clamp(counterTarget.x + cDir * 6, 8, 92);
+              b.toX = clamp(counterTarget.x + cDir * (oppWasHighSiege ? 9 : 6), 8, 92);
               b.toY = counterTarget.y;
               b.curve = (Math.random() - 0.5) * 4.5;
-              b.maxZ = cDist > 22 ? 15 : 8;
+              b.maxZ = cDist > 22 ? 15 : 6;
               b.progress = 0;
-              b.duration = cDist > 22 ? 0.64 : 0.48;
+              b.duration = cDist > 22 ? 0.62 : 0.46;
               b.flightType = cDist > 22 ? 'lofted' : 'through';
               b.shotStyle = undefined;
               b.carrierId = null;
               b.targetId = counterTarget.id;
               b.lastPasserId = carrier.id;
-              w.phaseLabel = cDist > 22 ? `🚀 ${carrier.shortName} เปิดบอลโด่งสวนกลับเร็ว!` : `⚡ ${defTeam.name} สวนกลับเร็ว!`;
+              w.phaseLabel = oppWasHighSiege
+                ? `🚨 ${defTeam.name} ฉวยจังหวะสวนกลับเร็วเจาะพื้นที่โล่งหลังไลน์สูง!!`
+                : isDeepCounterTeam
+                  ? `⚡ ${defTeam.name} ตั้งรับเหนียวแล้วดีดสวนกลับเร็ว!`
+                  : `🚀 ${carrier.shortName} เปิดบอลสวนกลับเร็ว!`;
               w.phaseTone = 'attack';
               SFX.kick();
               return;
@@ -2357,25 +2650,111 @@ export const MatchModal: React.FC<{
       }
     }
 
-    // 3. Should Carrier Shoot? (Tactics-driven + Football Traits)
-    const tacShootRange = attCfg.tac === 'X' ? 36 : attCfg.tac === 'A' ? 32 : attCfg.tac === 'Z' ? 24 : 27;
-    const tacShootBias = attCfg.tac === 'X' ? 0.08 : attCfg.tac === 'A' ? 0.04 : attCfg.tac === 'Z' ? -0.08 : attCfg.tac === 'D' ? -0.04 : 0;
+    // 3. Should Carrier Shoot? (Realistic Opponent-Half Range + Cut Inside Curler + Solo Run Finish!)
+    const carrierNormXNow = attRight ? carrier.x : 100 - carrier.x;
+
+    // 3a. Cut Inside & Curler ("เลี้ยงตัดเข้าในแล้วยิงปั่นโค้ง") from Inside-Forward Flanks!
+    const inCutInsideZone = carrierNormXNow >= 62 && carrierNormXNow <= 88 && (carrier.y < 29 || carrier.y > 71);
+    const curSkill = carrier.d.cur + (carrier.sig === 'cur' ? 10 : 0) + (agentHasTrait(carrier, 'outside_curler') || agentHasTrait(carrier, 'flair_dribbler') ? 10 : 0);
+    if (carrier.pos !== 'GK' && inCutInsideZone && (curSkill >= 66 || carrier.pos === 'FW') && Math.random() < clamp(0.14 + (curSkill - 60) * 0.005 + (attCfg.tac === 'X' || attCfg.tac === 'A' ? 0.05 : 0), 0.08, 0.34)) {
+      carrier.acrobatType = 'cutinside';
+      carrier.acrobatMax = 0.72;
+      carrier.acrobatTimer = 0.72;
+      carrier.x = clamp(carrier.x + dir * 4.2, 6, 94);
+      carrier.y = clamp(carrier.y + (carrier.y < 50 ? 7.5 : -7.5), 14, 86);
+      bumpPlayerStat(carrier.id, 'dribbles');
+      addWorldFx(w, {
+        type: 'cutinside',
+        x: carrier.x,
+        y: carrier.y,
+        label: `↪️ ตัดเข้าในปั่นโค้ง!`,
+        color: '#f472b6',
+        ttl: 1.85,
+        maxTtl: 1.85
+      });
+      const cutCurve = (carrier.y < 50 ? 1 : -1) * (8.6 + Math.random() * 5.2);
+      prepareShotFlight(w, curMin, {
+        flightType: 'shot',
+        side,
+        fromX: carrier.x,
+        fromY: carrier.y,
+        shooter: carrier,
+        shotStyle: 'curler',
+        curveAmt: cutCurve,
+        maxZAmt: 8.2,
+        durAmt: clamp(Math.hypot(goalX - carrier.x, 50 - carrier.y) / 34, 0.56, 0.80)
+      });
+      w.phaseLabel = `↪️🌀 ${carrier.shortName} เลี้ยงตัดเข้าในแล้วปั่นโค้งเสียบเสา!!`;
+      w.phaseTone = 'danger';
+      triggerDramaSlow(w, 1.4, `↪️ ตัดเข้าในปั่นโค้ง! · ${carrier.shortName}`);
+      SFX.shot();
+      pushLog(curMin, `↪️🌀 ${carrier.id} (${attTeam.name}) เลี้ยงตัดจากริมเส้นเข้ากลางแล้วซัดปั่นโค้งอันตราย!`);
+      return;
+    }
+
+    // 3b. Solo Dribble Run into Goal ("การโซโล่เดี่ยวเข้าไปยิง")
+    const soloRating = carrier.d.spd * 0.42 + carrier.d.run * 0.38 + carrier.d.fin * 0.20 + (agentHasTrait(carrier, 'flair_dribbler') ? 10 : 0);
+    if (carrier.pos !== 'GK' && carrierNormXNow >= 52 && carrierNormXNow <= 76 && soloRating >= 66 && Math.random() < clamp(0.05 + (soloRating - 64) * 0.004 + (carrier.isMe ? 0.03 : 0), 0.04, 0.16)) {
+      const startX = carrier.x;
+      const startY = carrier.y;
+      const endX = clamp(carrier.x + dir * (11 + Math.random() * 6), 10, 90);
+      const endY = clamp(carrier.y + (50 - carrier.y) * 0.45 + (Math.random() - 0.5) * 6, 26, 74);
+      carrier.x = endX;
+      carrier.y = endY;
+      carrier.acrobatType = 'burst';
+      carrier.acrobatMax = 0.85;
+      carrier.acrobatTimer = 0.85;
+      bumpPlayerStat(carrier.id, 'dribbles');
+      addWorldFx(w, {
+        type: 'solo',
+        x: startX,
+        y: startY,
+        toX: endX,
+        toY: endY,
+        label: `🏃💨 โซโล่เดี่ยวลากเข้าไปยิง!`,
+        color: '#facc15',
+        ttl: 2.2,
+        maxTtl: 2.2
+      });
+      prepareShotFlight(w, curMin, {
+        flightType: 'shot',
+        side,
+        fromX: endX,
+        fromY: endY,
+        shooter: carrier,
+        shotStyle: carrier.d.cur >= 66 ? 'curler' : 'normal',
+        curveAmt: (endY < 50 ? 1 : -1) * (4.0 + Math.random() * 3.5),
+        maxZAmt: 5.5,
+        durAmt: clamp(Math.hypot(goalX - endX, 50 - endY) / 36, 0.48, 0.72)
+      });
+      w.phaseLabel = `🏃💨 ${carrier.shortName} โซโล่เดี่ยวแหวกแนวรับลากเข้าไปยิง!!`;
+      w.phaseTone = 'danger';
+      triggerDramaSlow(w, 1.5, `🏃💨 โซโล่เดี่ยวเข้าไปยิง!! · ${carrier.shortName}`);
+      SFX.shot();
+      pushLog(curMin, `🏃💨 สุดยอด!! ${carrier.id} (${attTeam.name}) ควบโซโล่เดี่ยวแหวกผู้เล่นคู่แข่งเข้าไปซัดหน้าประตู!`);
+      return;
+    }
+
+    const tacShootRange = attCfg.tac === 'X' ? 33 : attCfg.tac === 'A' ? 29 : attCfg.tac === 'B' ? 26 : attCfg.tac === 'D' ? 23 : 20;
+    const tacShootBias = attCfg.tac === 'X' ? 0.08 : attCfg.tac === 'A' ? 0.04 : attCfg.tac === 'Z' ? -0.09 : attCfg.tac === 'D' ? -0.04 : 0;
     const isLongShotSpecialist = agentHasTrait(carrier, 'long_shot_lover');
-    const inShootZone = distToGoal < tacShootRange || (distToGoal < (isLongShotSpecialist ? 38 : 35) && (carrier.d.pw > 68 || carrier.sig === 'pw' || isLongShotSpecialist));
+    const canRareHalfwayShot = carrierNormXNow >= 50.5 && distToGoal <= 45.5 && (isLongShotSpecialist || carrier.d.pw >= 74 || carrier.sig === 'pw') && Math.random() < 0.09;
+    const inOppHalfShootZone = carrierNormXNow >= 52 && distToGoal <= 45.5;
+    const inShootZone = inOppHalfShootZone && (distToGoal < tacShootRange || canRareHalfwayShot);
     const shootTraitBias =
       (agentHasTrait(carrier, 'selfish_shooter') ? 0.14 : 0) +
       (agentHasTrait(carrier, 'poacher_instinct') && inBoxNow ? 0.12 : 0) +
-      (isLongShotSpecialist && distToGoal >= 20 ? 0.11 : 0) +
+      (isLongShotSpecialist && distToGoal >= 20 ? 0.10 : 0) +
       (agentHasTrait(carrier, 'team_first') && !inBoxNow ? -0.08 : 0);
     const shootChance = inShootZone
-      ? clamp(0.27 + tacShootBias + shootTraitBias + (33 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.07 : 0), 0.18, 0.84)
+      ? clamp(0.27 + tacShootBias + shootTraitBias + (31 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.07 : 0), 0.14, 0.84)
       : 0;
     if (carrier.pos !== 'GK' && Math.random() < shootChance) {
       let shotStyle: LiveBallState['shotStyle'] = 'normal';
-      let shotLabel = `🔥 ${carrier.shortName} ซัดเต็มข้อ!`;
+      let shotLabel = distToGoal >= 34 ? `🚀 ${carrier.shortName} ซัดไกลครึ่งสนามลุ้นประตู!!` : `🔥 ${carrier.shortName} ซัดเต็มข้อ!`;
       let curveAmt = (carrier.d.cur > 65 ? 1 : 0.4) * (carrier.y < 50 ? 1 : -1) * (3 + Math.random() * 4);
       let maxZAmt = 6 + Math.random() * 3.5;
-      let durAmt = clamp(distToGoal / 36, 0.54, 0.82);
+      let durAmt = clamp(distToGoal / 36, 0.54, 0.84);
 
       if (inBoxNow && (agentHasTrait(carrier, 'acrobatic_finisher') || carrier.sig === 'fin' || carrier.d.fin >= 67) && Math.random() < (agentHasTrait(carrier, 'acrobatic_finisher') ? 0.34 : 0.16)) {
         shotStyle = 'bicycle';
@@ -2396,7 +2775,7 @@ export const MatchModal: React.FC<{
         shotStyle = 'knuckle';
         curveAmt = (Math.random() - 0.5) * 3.2;
         maxZAmt = 6.2;
-        durAmt = 0.58;
+        durAmt = 0.60;
         shotLabel = `🌪️ ${carrier.shortName} กดลูกส่ายคนัคเคิลบอล!`;
       } else if ((agentHasTrait(carrier, 'outside_curler') || carrier.sig === 'cur' || carrier.d.cur >= 66) && Math.random() < (agentHasTrait(carrier, 'outside_curler') ? 0.58 : 0.36)) {
         shotStyle = 'trivela';
@@ -2412,9 +2791,11 @@ export const MatchModal: React.FC<{
       } else if (distToGoal >= 21 && (agentHasTrait(carrier, 'long_shot_lover') || carrier.sig === 'pw' || carrier.d.pw >= 68)) {
         shotStyle = 'screamer';
         curveAmt = (Math.random() - 0.5) * 2.2;
-        maxZAmt = 4.6;
-        durAmt = 0.50;
-        shotLabel = `💥 ${carrier.shortName}${agentHasTrait(carrier, 'long_shot_lover') ? ' [จอมซัดไกล]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
+        maxZAmt = 5.0;
+        durAmt = clamp(distToGoal / 44, 0.50, 0.76);
+        shotLabel = distToGoal >= 34
+          ? `💥 ${carrier.shortName} ตะบันไกลครึ่งสนามลุ้นประตู!!`
+          : `💥 ${carrier.shortName}${agentHasTrait(carrier, 'long_shot_lover') ? ' [จอมซัดไกล]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
       } else if (inBoxNow && Math.random() < (agentHasTrait(carrier, 'acrobatic_finisher') ? 0.44 : 0.28)) {
         shotStyle = 'volley';
         carrier.acrobatType = 'volley';
@@ -2438,15 +2819,63 @@ export const MatchModal: React.FC<{
       });
       w.phaseLabel = shotLabel;
       w.phaseTone = 'danger';
-      triggerDramaSlow(w, shotStyle === 'bicycle' || shotStyle === 'curler' || shotStyle === 'trivela' ? 1.45 : 1.15, shotLabel);
+      triggerDramaSlow(w, shotStyle === 'bicycle' || shotStyle === 'curler' || shotStyle === 'trivela' || distToGoal >= 34 ? 1.45 : 1.15, shotLabel);
       SFX.shot();
-      if (shotStyle === 'bicycle' || shotStyle === 'knuckle' || shotStyle === 'trivela') {
+      if (shotStyle === 'bicycle' || shotStyle === 'knuckle' || shotStyle === 'trivela' || distToGoal >= 34) {
         pushLog(curMin, `🔥 ${shotLabel} (${attTeam.name})`);
       }
       return;
     }
 
-    // 4. Wing Cross (Boosted by Wide width, Early Crosser & Overlapping Runner)
+    // 4. Cutback ("เปิดตัดหลังสวยๆ") & Wing Cross
+    const inCutbackZone = carrierNormXNow >= 80 && (carrier.y < 27 || carrier.y > 73);
+    if (inCutbackZone && Math.random() < 0.44) {
+      const cutbackTargets = attPool
+        .filter((a) => a.id !== carrier.id && a.pos !== 'GK')
+        .filter((a) => {
+          const aNorm = attRight ? a.x : 100 - a.x;
+          return aNorm >= 72 && aNorm <= 92 && Math.abs(a.y - 50) <= 22;
+        })
+        .sort((u, v) => (v.d.fin + v.d.run) - (u.d.fin + u.d.run));
+      const cTarget = cutbackTargets[0];
+      if (cTarget) {
+        const destX = clamp(attRight ? 85 + Math.random() * 5 : 10 + Math.random() * 5, 8, 92);
+        const destY = clamp(42 + Math.random() * 16, 36, 64);
+        cTarget.tx = destX;
+        cTarget.ty = destY;
+        cTarget.intent = 'PASS_TARGET';
+        b.fromX = carrier.x;
+        b.fromY = carrier.y;
+        b.toX = destX;
+        b.toY = destY;
+        b.curve = (carrier.y < 50 ? 1 : -1) * 2.4;
+        b.maxZ = 0;
+        b.progress = 0;
+        b.duration = 0.42;
+        b.flightType = 'cutback';
+        b.shotStyle = undefined;
+        b.carrierId = null;
+        b.targetId = cTarget.id;
+        b.lastPasserId = carrier.id;
+        bumpPlayerStat(carrier.id, 'crossAssists');
+        addWorldFx(w, {
+          type: 'cutback',
+          x: carrier.x,
+          y: carrier.y,
+          toX: destX,
+          toY: destY,
+          label: `🎯 เปิดคัทแบ็คตัดหลัง!`,
+          color: '#f472b6',
+          ttl: 1.5,
+          maxTtl: 1.5
+        });
+        w.phaseLabel = `🎯 ${carrier.shortName} ลากสุดเส้นเปิดตัดหลังสวยๆ ให้ ${cTarget.shortName}!`;
+        w.phaseTone = 'attack';
+        SFX.pass();
+        return;
+      }
+    }
+
     const inWingZone = (carrier.y < 24 || carrier.y > 76) && (attRight ? carrier.x > (agentHasTrait(carrier, 'early_crosser') ? 54 : 62) : carrier.x < (agentHasTrait(carrier, 'early_crosser') ? 46 : 38));
     const crossProb = clamp(
       0.58 +
@@ -2708,7 +3137,14 @@ export const MatchModal: React.FC<{
         triggerOffsideCall(w, curMin, side, carrier, receiver, passOffChk.oppLineX, isLofted ? 'lofted' : 'pass', 'ยืนอยู่ในตำแหน่งล้ำหน้าตอนเพื่อนส่งบอล');
         return;
       }
-      const isFlairPass = !isLofted && carrierNormX > 26 && dist < 18 && carrier.pos !== 'GK' && (agentHasTrait(carrier, 'flair_dribbler') || carrier.d.cur >= 66 || carrier.sig === 'cur') && Math.random() < (agentHasTrait(carrier, 'flair_dribbler') ? 0.24 : 0.14);
+      const isTrivelaPass =
+        !isLofted &&
+        carrier.pos !== 'GK' &&
+        dist >= 13 &&
+        dist <= 35 &&
+        (agentHasTrait(carrier, 'outside_curler') || carrier.sig === 'cur' || carrier.d.cur >= 64) &&
+        Math.random() < (agentHasTrait(carrier, 'outside_curler') ? 0.42 : 0.22);
+      const isFlairPass = !isLofted && !isTrivelaPass && carrierNormX > 26 && dist < 18 && carrier.pos !== 'GK' && (agentHasTrait(carrier, 'flair_dribbler') || carrier.d.cur >= 66 || carrier.sig === 'cur') && Math.random() < (agentHasTrait(carrier, 'flair_dribbler') ? 0.24 : 0.14);
       if (isFlairPass) {
         carrier.acrobatType = 'skill_pass';
         carrier.acrobatMax = 0.55;
@@ -2719,22 +3155,46 @@ export const MatchModal: React.FC<{
       b.fromY = carrier.y;
       b.toX = clamp(receiver.x + dir * 2, 5, 95);
       b.toY = receiver.y;
-      b.curve = isLofted ? (Math.random() - 0.5) * 6 : dist > 22 ? (Math.random() - 0.5) * 3.5 : 0;
-      b.maxZ = isLofted ? clamp(13.5 + dist * 0.14, 14, 19.5) : 0;
+      b.curve = isTrivelaPass
+        ? (receiver.y >= carrier.y ? -1 : 1) * (6.2 + Math.random() * 3.4)
+        : isLofted
+          ? (Math.random() - 0.5) * 6
+          : dist > 22
+            ? (Math.random() - 0.5) * 3.5
+            : 0;
+      b.maxZ = isLofted ? clamp(13.5 + dist * 0.14, 14, 19.5) : isTrivelaPass ? 3.5 : 0;
       b.progress = 0;
-      b.duration = isLofted ? clamp(dist / 44, 0.54, 0.82) : clamp(dist / (attCfg.tempo === 2 ? 78 : attCfg.tempo === 0 ? 48 : 58), 0.26, 0.60);
-      b.flightType = isLofted ? 'lofted' : 'pass';
+      b.duration = isLofted ? clamp(dist / 44, 0.54, 0.82) : isTrivelaPass ? clamp(dist / 52, 0.36, 0.62) : clamp(dist / (attCfg.tempo === 2 ? 78 : attCfg.tempo === 0 ? 48 : 58), 0.26, 0.60);
+      b.flightType = isLofted ? 'lofted' : isTrivelaPass ? 'trivela_pass' : 'pass';
       b.shotStyle = undefined;
       b.carrierId = null;
       b.targetId = receiver.id;
       b.lastPasserId = carrier.id;
-      w.phaseLabel = isLofted
-        ? `↗️ ${carrier.shortName}${agentHasTrait(carrier, 'long_diagonal') ? ' [เปิดทะแยงมุม]' : agentHasTrait(carrier, 'ball_playing_cb') ? ' [วางบอลจากแนวรับ]' : ''} เปิดบอลโด่งเปลี่ยนแกนให้ ${receiver.shortName}`
-        : isFlairPass
-          ? `✨ ${carrier.shortName} ตอกส้น/ไขว้หลังสุดพริ้วให้ ${receiver.shortName}`
-          : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
-      w.phaseTone = isLofted || isFlairPass ? 'attack' : 'normal';
-      if (isLofted) SFX.kick();
+      if (isTrivelaPass) {
+        bumpPlayerStat(carrier.id, 'crossAssists');
+        addWorldFx(w, {
+          type: 'trivela',
+          x: carrier.x,
+          y: carrier.y,
+          toX: b.toX,
+          toY: b.toY,
+          label: `🍌 ไซส์ก้อยโค้งๆ!`,
+          color: '#fbbf24',
+          ttl: 1.5,
+          maxTtl: 1.5
+        });
+      }
+      w.phaseLabel = isTrivelaPass
+        ? `🍌 ${carrier.shortName} ดีดไซส์ก้อยโค้งๆ ให้ ${receiver.shortName}!`
+        : isLofted
+          ? `↗️ ${carrier.shortName}${agentHasTrait(carrier, 'long_diagonal') ? ' [เปิดทะแยงมุม]' : agentHasTrait(carrier, 'ball_playing_cb') ? ' [วางบอลจากแนวรับ]' : ''} เปิดบอลโด่งเปลี่ยนแกนให้ ${receiver.shortName}`
+          : isFlairPass
+            ? `✨ ${carrier.shortName} ตอกส้น/ไขว้หลังสุดพริ้วให้ ${receiver.shortName}`
+            : attCfg.tempo === 0
+              ? `🧭 ${carrier.shortName} ครองบอลเคาะคุมจังหวะให้ ${receiver.shortName}`
+              : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
+      w.phaseTone = isLofted || isFlairPass || isTrivelaPass ? 'attack' : 'normal';
+      if (isLofted || isTrivelaPass) SFX.kick();
       else SFX.pass();
     }
   };
@@ -3665,7 +4125,48 @@ export const MatchModal: React.FC<{
       return;
     }
 
-    // 2. Resolve Cross or Corner Delivery in the Box (Header / Diving Header / Volley / Bicycle Kick / Clearing Header!)
+    // 2. Resolve Cutback Delivery ("เปิดตัดหลัง") -> First-time Strike or Defender Clearance!
+    if (b.flightType === 'cutback') {
+      const target = active.find((a) => a.id === b.targetId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
+      const nearDef = defPool
+        .filter((d) => d.pos !== 'GK')
+        .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
+      const defClose = nearDef && Math.hypot(nearDef.x - b.toX, nearDef.y - b.toY) < 4.5;
+      if (target && (!defClose || Math.random() < 0.66)) {
+        target.x = b.toX;
+        target.y = b.toY;
+        const style: LiveBallState['shotStyle'] = target.d.cur >= 66 ? 'curler' : Math.random() < 0.35 ? 'volley' : 'normal';
+        prepareShotFlight(w, curMin, {
+          flightType: 'shot',
+          side,
+          fromX: b.toX,
+          fromY: b.toY,
+          shooter: target,
+          shotStyle: style,
+          curveAmt: (b.toY < 50 ? 1 : -1) * 4.5,
+          maxZAmt: 5.5,
+          durAmt: 0.44
+        });
+        w.phaseLabel = `⚡ ${target.shortName} วิ่งมาซัดคัทแบ็คจังหวะเดียว!!`;
+        w.phaseTone = 'danger';
+        triggerDramaSlow(w, 1.15, `🎯 คัทแบ็คจบสกอร์! · ${target.shortName}`);
+        SFX.shot();
+      } else if (nearDef) {
+        bumpPlayerStat(nearDef.id, 'tackles');
+        b.possessionSide = defSide;
+        b.carrierId = nearDef.id;
+        b.x = nearDef.x;
+        b.y = nearDef.y;
+        b.flightType = 'carry';
+        b.shotStyle = undefined;
+        w.phaseLabel = `🛡️ ${nearDef.shortName} อ่านทางตัดลูกคัทแบ็คได้ทัน!`;
+        w.phaseTone = 'normal';
+        SFX.pass();
+      }
+      return;
+    }
+
+    // 2b. Resolve Cross or Corner Delivery in the Box (Header / Diving Header / Volley / Bicycle Kick / Clearing Header!)
     if (b.flightType === 'cross' || b.flightType === 'corner') {
       const target = active.find((a) => a.id === b.targetId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
       const topDef = defPool
@@ -3834,8 +4335,8 @@ export const MatchModal: React.FC<{
       return;
     }
 
-    // 3. Resolve Ground Pass / Lofted Ball / Through-Ball / Give-and-Go (1-2) / Carry
-    if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'lofted' || b.flightType === 'goalkick' || b.flightType === 'onetwo') {
+    // 3. Resolve Ground Pass / Trivela Curve / Throw-in / Lofted Ball / Through-Ball / Give-and-Go (1-2) / Carry
+    if (b.flightType === 'pass' || b.flightType === 'through' || b.flightType === 'lofted' || b.flightType === 'goalkick' || b.flightType === 'onetwo' || b.flightType === 'trivela_pass' || b.flightType === 'throwin') {
       if (side === 'H') w.passesH++;
       else w.passesA++;
       bumpPlayerStat(b.lastPasserId, 'passes');
@@ -3843,6 +4344,21 @@ export const MatchModal: React.FC<{
       const nearestOpp = defPool
         .filter((d) => d.pos !== 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
+
+      // Pressured sideline passes can drift over the touchline -> Throw-in!
+      if ((b.flightType === 'pass' || b.flightType === 'lofted' || b.flightType === 'trivela_pass') && (b.toY < 13 || b.toY > 87) && nearestOpp && Math.hypot(nearestOpp.x - b.toX, nearestOpp.y - b.toY) < 7 && Math.random() < 0.24) {
+        const outY = b.toY < 50 ? 2.2 : 97.8;
+        const outX = clamp(b.toX, 8, 92);
+        w.pendingSetPiece = { type: 'throwin', side: defSide, x: outX, y: outY, waitSec: 0.72 };
+        b.carrierId = null;
+        b.targetId = null;
+        b.progress = 1;
+        b.flightType = 'carry';
+        w.phaseLabel = `🤲 บอลหลุดเส้นข้าง! ${defTeam.name} ได้ทุ่ม`;
+        w.phaseTone = 'setpiece';
+        SFX.pass();
+        return;
+      }
 
       const oppDist = nearestOpp ? Math.hypot(nearestOpp.x - b.toX, nearestOpp.y - b.toY) : 99;
       const isAerialBall = b.flightType === 'lofted' || b.flightType === 'goalkick';
@@ -4042,7 +4558,7 @@ export const MatchModal: React.FC<{
       const D = DT(pl, state.p);
       const plTraits = pl.traits || [];
       const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
-      const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.06 : sideCfg.tac === 'Z' ? -0.05 : 0);
+      const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
       const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * pressLoad * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
@@ -4197,7 +4713,7 @@ export const MatchModal: React.FC<{
       const D = DT(pl, state.p);
       const plTraits = pl.traits || [];
       const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
-      const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.06 : sideCfg.tac === 'Z' ? -0.05 : 0);
+      const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
       const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * pressLoad * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
@@ -5169,6 +5685,23 @@ export const MatchModal: React.FC<{
         for (let m = startMin + 1; m <= 90; m++) {
           if (m === 46) {
             w.secondHalf = true;
+            w.pendingSetPiece = null;
+            w.agents = buildAgentsForTeam(homeOrig, 'H', simRef.current.homeLu, simRef.current.sentOff, simRef.current.yellows, simRef.current.liveFit, state.p, myPlayerName, true).concat(
+              buildAgentsForTeam(awayOrig, 'A', simRef.current.awayLu, simRef.current.sentOff, simRef.current.yellows, simRef.current.liveFit, state.p, myPlayerName, true)
+            );
+            const ko2 = w.agents.find((a) => a.side === 'A' && !a.sentOff && a.pos !== 'GK') || w.agents[0];
+            w.ball.x = 50;
+            w.ball.y = 50;
+            w.ball.fromX = 50;
+            w.ball.fromY = 50;
+            w.ball.toX = 50;
+            w.ball.toY = 50;
+            w.ball.progress = 1;
+            w.ball.flightType = 'carry';
+            w.ball.shotStyle = undefined;
+            w.ball.possessionSide = 'A';
+            w.ball.carrierId = ko2?.id || null;
+            w.ball.targetId = null;
             pushTimeline(46, 'N', 'second_half', 'เริ่มครึ่งหลัง', 'ครึ่งหลัง');
           }
           stepInstantMinute(m, liveTacticsRef.current.tac);

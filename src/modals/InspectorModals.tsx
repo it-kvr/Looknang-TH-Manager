@@ -276,6 +276,11 @@ export const PlayerInspectorModal: React.FC<{
                           ✨ พร
                         </span>
                       )}
+                      {(livePlayer.hg || livePlayer.customCreated) && (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-400/20 border border-emerald-300/45 text-emerald-200 text-[9px] font-extrabold leading-none">
+                          🌱 เด็กปั้น
+                        </span>
+                      )}
                       {isCap && (
                         <span className="px-1.5 py-0.5 rounded bg-white/18 text-white text-[9px] font-bold leading-none">
                           © กัปตัน

@@ -1053,6 +1053,12 @@ export const FormationPitch: React.FC<{
                 <path d="M0 2.5 L2.7 -2 L-2.7 -2 Z" fill="#fff" />
               </g>
             )}
+            {(q.hg || q.customCreated) && (
+              <g transform={`translate(${cx - 19.5},${cy + (hasSubIn || hasSubOut ? 8 : -2.5)})`}>
+                <circle r="5.2" fill="#064e3b" stroke="#4ade80" strokeWidth="0.95" />
+                <text x="0" y="2.8" textAnchor="middle" fontSize="6.8">🌱</text>
+              </g>
+            )}
 
             {/* Mid-Right Edge: Goals & Assists Badges (Number in front, non-overlapping) */}
             {goalsCount > 0 && (() => {
