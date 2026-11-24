@@ -885,6 +885,8 @@ export interface LiveBallState {
   x: number;
   y: number;
   z: number;
+  startZ?: number;
+  endZ?: number;
   fromX: number;
   fromY: number;
   toX: number;
@@ -916,6 +918,9 @@ export interface LiveBallState {
   };
   bounceNext?: {
     setPiece?: PendingSetPiece;
+    isOffsideCall?: boolean;
+    offsideFx?: Omit<LivePitchFx, 'id'>;
+    offsideLog?: string;
     carrierId?: string;
     possessionSide?: 'H' | 'A';
     phaseLabel?: string;

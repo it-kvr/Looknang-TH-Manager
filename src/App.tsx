@@ -497,11 +497,12 @@ export default function App() {
         d.winBonus = 0;
         d.fan = clamp((d.fan ?? 55) + (diff > 0 ? 3 : diff < 0 ? -3 : 0) + ticketFanAdj, 5, 100);
         d.mor = clamp((d.mor ?? 55) + (diff > 0 ? 5 : diff < 0 ? -5 : 1), 0, 100);
-      } else if (payload.pf) {
+      }
+      d.md++;
+      if (d.mode !== 'm' && payload.pf) {
         creditPlayerPerf(d, payload.pf);
       }
 
-      d.md++;
       applyLiveInjuries();
       afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam });
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));

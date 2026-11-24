@@ -279,17 +279,131 @@ export function pulseCrowdRoar(intensity = 0.85) {
   if (scale <= 0 || !audioCtx || !crowdGainNode || !crowdPresenceFilter) return;
   try {
     const now = audioCtx.currentTime;
-    const baseGain = 0.048 * scale;
-    const peakGain = baseGain * (1 + intensity * 2.1);
+    const baseGain = 0.056 * scale;
+    const peakGain = baseGain * (1 + intensity * 2.35);
     crowdGainNode.gain.cancelScheduledValues(now);
     crowdGainNode.gain.setValueAtTime(crowdGainNode.gain.value, now);
     crowdGainNode.gain.linearRampToValueAtTime(peakGain, now + 0.14);
-    crowdGainNode.gain.exponentialRampToValueAtTime(Math.max(0.002, baseGain), now + 1.9 + intensity * 0.9);
+    crowdGainNode.gain.exponentialRampToValueAtTime(Math.max(0.002, baseGain), now + 2.0 + intensity * 0.95);
 
     crowdPresenceFilter.frequency.cancelScheduledValues(now);
     crowdPresenceFilter.frequency.setValueAtTime(crowdPresenceFilter.frequency.value, now);
-    crowdPresenceFilter.frequency.linearRampToValueAtTime(1320, now + 0.16);
-    crowdPresenceFilter.frequency.exponentialRampToValueAtTime(840, now + 2.0);
+    crowdPresenceFilter.frequency.linearRampToValueAtTime(1480, now + 0.18);
+    crowdPresenceFilter.frequency.exponentialRampToValueAtTime(880, now + 2.1);
+  } catch {
+    // ignore
+  }
+}
+
+export function pulseCrowdBoo(intensity = 0.8) {
+  if (sfxSuppressed) return;
+  const st = getSettings();
+  const scale = getCrowdScale(st);
+  if (scale <= 0 || !audioCtx || !crowdGainNode || !crowdPresenceFilter) return;
+  try {
+    const now = audioCtx.currentTime;
+    const baseGain = 0.056 * scale;
+    const peakGain = baseGain * (1 + intensity * 1.45);
+    crowdGainNode.gain.cancelScheduledValues(now);
+    crowdGainNode.gain.setValueAtTime(crowdGainNode.gain.value, now);
+    crowdGainNode.gain.linearRampToValueAtTime(peakGain, now + 0.12);
+    crowdGainNode.gain.exponentialRampToValueAtTime(Math.max(0.002, baseGain), now + 1.35 + intensity * 0.45);
+
+    crowdPresenceFilter.frequency.cancelScheduledValues(now);
+    crowdPresenceFilter.frequency.setValueAtTime(crowdPresenceFilter.frequency.value, now);
+    crowdPresenceFilter.frequency.linearRampToValueAtTime(290, now + 0.15);
+    crowdPresenceFilter.frequency.linearRampToValueAtTime(225, now + 0.65);
+    crowdPresenceFilter.frequency.exponentialRampToValueAtTime(880, now + 1.6);
+  } catch {
+    // ignore
+  }
+}
+
+function playCheerNoise(intensity = 0.85) {
+  if (sfxSuppressed) return;
+  const st = getSettings();
+  if (st.mute || getSfxScale(st) <= 0) return;
+  const ctx = ensureAudio();
+  if (!ctx || !sfxBus) return;
+  try {
+    const now = ctx.currentTime;
+    const dur = 0.75 + intensity * 0.55;
+    const src = ctx.createBufferSource();
+    src.buffer = getPinkNoiseBuffer(ctx);
+
+    const f1 = ctx.createBiquadFilter();
+    f1.type = 'bandpass';
+    f1.frequency.setValueAtTime(780, now);
+    f1.frequency.linearRampToValueAtTime(1420, now + 0.16);
+    f1.frequency.exponentialRampToValueAtTime(920, now + dur);
+    f1.Q.value = 1.05;
+
+    const g = ctx.createGain();
+    const peak = 0.048 * Math.max(0.35, Math.min(1.15, intensity));
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(peak, now + 0.11);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    src.connect(f1);
+    f1.connect(g);
+    g.connect(sfxBus);
+    src.start(now, Math.random() * 1.1, dur + 0.05);
+  } catch {
+    // ignore
+  }
+}
+
+function playBooNoise(intensity = 0.8) {
+  if (sfxSuppressed) return;
+  const st = getSettings();
+  if (st.mute || getSfxScale(st) <= 0) return;
+  const ctx = ensureAudio();
+  if (!ctx || !sfxBus) return;
+  try {
+    const now = ctx.currentTime + 0.06;
+    const dur = 0.78 + intensity * 0.36;
+    const src = ctx.createBufferSource();
+    src.buffer = getPinkNoiseBuffer(ctx);
+
+    const fLow = ctx.createBiquadFilter();
+    fLow.type = 'bandpass';
+    fLow.frequency.setValueAtTime(370, now);
+    fLow.frequency.linearRampToValueAtTime(215, now + dur * 0.7);
+    fLow.frequency.linearRampToValueAtTime(175, now + dur);
+    fLow.Q.value = 1.55;
+
+    const g = ctx.createGain();
+    const peak = 0.068 * Math.max(0.4, Math.min(1.15, intensity));
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(peak, now + 0.1);
+    g.gain.setValueAtTime(peak * 0.82, now + dur * 0.48);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    src.connect(fLow);
+    fLow.connect(g);
+    g.connect(sfxBus);
+    src.start(now, Math.random() * 1.2, dur + 0.05);
+
+    // Subtle low crowd groan formant
+    [164, 198].forEach((fStart, idx) => {
+      const o = ctx.createOscillator();
+      const lp = ctx.createBiquadFilter();
+      const og = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(fStart, now);
+      o.frequency.linearRampToValueAtTime(fStart * 0.76, now + dur);
+      lp.type = 'lowpass';
+      lp.frequency.value = 340;
+      const v = (idx === 0 ? 0.015 : 0.011) * intensity;
+      og.gain.setValueAtTime(0.0001, now);
+      og.gain.linearRampToValueAtTime(v, now + 0.12);
+      og.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.connect(lp);
+      lp.connect(og);
+      og.connect(sfxBus!);
+      o.start(now);
+      o.stop(now + dur + 0.03);
+    });
   } catch {
     // ignore
   }
@@ -320,13 +434,55 @@ export const SFX = {
     playNoiseBurst(0.045, 'bandpass', 1400, 1.0, 0.042);
   },
   shot: () => {
-    playThump(230, 44, 0.11, 0.105);
-    playNoiseBurst(0.06, 'bandpass', 1750, 0.9, 0.055);
+    playThump(260, 42, 0.12, 0.115);
+    playNoiseBurst(0.065, 'bandpass', 2050, 0.95, 0.062);
+    playNoiseBurst(0.11, 'bandpass', 1250, 0.75, 0.03, 0.015);
+    pulseCrowdRoar(0.32);
   },
   save: () => {
-    playThump(170, 70, 0.07, 0.075);
-    playNoiseBurst(0.09, 'bandpass', 2100, 1.1, 0.048);
-    pulseCrowdRoar(0.45);
+    playThump(185, 62, 0.085, 0.095);
+    playNoiseBurst(0.068, 'bandpass', 2350, 1.35, 0.06);
+    playNoiseBurst(0.42, 'bandpass', 1450, 0.8, 0.036, 0.045);
+    pulseCrowdRoar(0.62);
+  },
+  cheer: (intensity = 0.85) => {
+    pulseCrowdRoar(intensity);
+    playCheerNoise(intensity);
+  },
+  boo: (intensity = 0.8) => {
+    pulseCrowdBoo(intensity);
+    playBooNoise(intensity);
+  },
+  coach: () => {
+    if (sfxSuppressed) return;
+    const st = getSettings();
+    if (st.mute || getSfxScale(st) <= 0) return;
+    const ctx = ensureAudio();
+    if (!ctx || !sfxBus) return;
+    try {
+      const now = ctx.currentTime;
+      // Soft, understated sideline tactical whistle-chirp + clap cue
+      const chirp = (f1: number, f2: number, dur: number, vol: number, delay: number) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        const t = now + delay;
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f1, t);
+        o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(vol, t + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g);
+        g.connect(sfxBus!);
+        o.start(t);
+        o.stop(t + dur + 0.02);
+      };
+      chirp(1140, 1340, 0.055, 0.014, 0);
+      chirp(1280, 1480, 0.075, 0.016, 0.075);
+      playNoiseBurst(0.032, 'bandpass', 1550, 1.4, 0.012, 0.01);
+    } catch {
+      // ignore
+    }
   },
   woodwork: () => {
     [435, 688, 1120].forEach((f, idx) => snd(f, 0.32 - idx * 0.05, 'triangle', 0.048 - idx * 0.01));
@@ -350,7 +506,9 @@ export const SFX = {
     snd(587.33, 0.12, 'triangle', 0.04, 0.07);
   },
   goal: () => {
+    playNoiseBurst(0.18, 'bandpass', 2400, 0.85, 0.05);
     pulseCrowdRoar(1.0);
+    playCheerNoise(1.05);
     // Warm stadium brass fanfare chord
     const notes = [523.25, 659.25, 783.99, 1046.5];
     notes.forEach((f, i) => {
@@ -394,7 +552,7 @@ export function refreshAudioSettings() {
     } else if (!crowdSource) {
       setCrowdAudio(true);
     } else if (audioCtx && crowdGainNode) {
-      crowdGainNode.gain.setTargetAtTime(0.048 * crowdScale, audioCtx.currentTime, 0.04);
+      crowdGainNode.gain.setTargetAtTime(0.056 * crowdScale, audioCtx.currentTime, 0.04);
     }
   }
 }
@@ -429,22 +587,22 @@ export function setCrowdAudio(on: boolean) {
     // Warm low stadium murmur + mid crowd presence
     const lowBody = ctx.createBiquadFilter();
     lowBody.type = 'lowpass';
-    lowBody.frequency.value = 420;
+    lowBody.frequency.value = 440;
 
     const presence = ctx.createBiquadFilter();
     presence.type = 'bandpass';
-    presence.frequency.value = 840;
+    presence.frequency.value = 880;
     presence.Q.value = 0.85;
 
     const gain = ctx.createGain();
-    gain.gain.value = 0.048 * scale;
+    gain.gain.value = 0.056 * scale;
 
     // Gentle crowd swell modulation
     const lfo = ctx.createOscillator();
     const lfoGain = ctx.createGain();
     lfo.type = 'sine';
-    lfo.frequency.value = 0.18;
-    lfoGain.gain.value = 0.008 * scale;
+    lfo.frequency.value = 0.22;
+    lfoGain.gain.value = 0.011 * scale;
     lfo.connect(lfoGain);
     lfoGain.connect(gain.gain);
 

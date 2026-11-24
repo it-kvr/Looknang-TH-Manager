@@ -70,7 +70,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
   defaultOpen = false
 }) => {
   const [showProgChart, setShowProgChart] = useState(defaultOpen);
-  const [chartScope, setChartScope] = useState<'key' | 'all'>('key');
+  const [chartScope, setChartScope] = useState<'key' | 'all'>('all');
   const [hiddenMetrics, setHiddenMetrics] = useState<Partial<Record<ChartMetricKey, boolean>>>({});
 
   const seasonSeries = useMemo(
@@ -113,7 +113,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
             />
             <YAxis
               width={28}
-              domain={[(min: number) => Math.max(1, min - 2), (max: number) => Math.min(99, max + 2)]}
+              domain={[(min: number) => Math.max(1, Math.floor(min) - 2), (max: number) => Math.min(99, Math.ceil(max) + 2)]}
               allowDecimals={false}
               tick={{ fontSize: 9, fill: 'var(--mut)' }}
               axisLine={false}
@@ -126,12 +126,12 @@ export const PlayerSeasonProgressionCard: React.FC<{
               return (
                 <Line
                   key={k}
-                  type="monotone"
+                  type="linear"
                   dataKey={k}
                   name={meta.label}
                   stroke={meta.color}
                   strokeWidth={meta.width}
-                  dot={seasonSeries.length <= 2 ? { r: 2.8, strokeWidth: 1.5 } : { r: 1.4, strokeWidth: 1 }}
+                  dot={seasonSeries.length <= 2 ? { r: 2.8, strokeWidth: 1.5 } : { r: 1.6, strokeWidth: 1 }}
                   activeDot={{ r: 3.8 }}
                   animationDuration={220}
                 />

@@ -176,7 +176,7 @@ export const PlayerClubTransferView: React.FC<{
       const dest = d.teams[newIdx];
       const movedPlayer: Player = existingMe
         ? { ...existingMe, ov: ovMe(d.p), me: 1 }
-        : buildPlayerFromCareerProfile(d.p, { ovOverride: ovMe(d.p), asHomegrown: false });
+        : buildPlayerFromCareerProfile(d.p, { livePlayer: meSq, ovOverride: ovMe(d.p), asHomegrown: false });
       movedPlayer.me = 1;
       dest.sq = dest.sq.filter((q) => !q.me && q.n !== movedPlayer.n);
       dest.sq.push(movedPlayer);
@@ -271,7 +271,7 @@ export const PlayerClubTransferView: React.FC<{
             </div>
           </div>
 
-          {/* Right: Division Pos Leaderboard + Thailand NT + VIP Guide */}
+          {/* Right: Division Pos Leaderboard + Thailand NT */}
           <div className="md:col-span-6 mland:col-span-6 flex flex-col gap-2 mland:gap-1.5 min-h-0 overflow-hidden">
             {/* Thailand National Team Readiness */}
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5 shrink-0">
@@ -314,14 +314,6 @@ export const PlayerClubTransferView: React.FC<{
                   </div>
                 ))}
               </div>
-            </div>
-
-            {/* VIP Explanation Card */}
-            <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[11px] mland:text-[9px] leading-snug shrink-0">
-              <b className="text-[#8a5b00] dark:text-[var(--lamp)]">👑 โหมดลับ VIP ในโหมดนักเตะช่วยอะไร?</b>{' '}
-              <span className="text-[var(--ink)]/90">
-                ในโหมดนักเตะคุณไม่มีงบสโมสรให้ใช้เงิน แต่สามารถใช้ VIP เพื่อเพิ่ม <b className="text-[#8a5b00] dark:text-[var(--lamp)]">★ ชื่อเสียง (ปลดล็อกสกิล/ย้ายทีมใหญ่/กายภาพ)</b>, ฟื้นฟิต 100%, รักษาเจ็บ-แบน และอัปพลังทั้ง 5 ด้านได้ทันที (แตะตราสโมสรมุมบนซ้าย 5 ครั้ง)
-              </span>
             </div>
           </div>
         </div>

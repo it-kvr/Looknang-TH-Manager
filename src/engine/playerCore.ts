@@ -990,8 +990,18 @@ export function recordPlayerSeasonProgress(
   }
 
   const last = pts[pts.length - 1];
+  if (curMd === 0 && pts.length === 1 && (q.sp || 0) > 0) {
+    if (last.ov !== snap.ov || !sameCoreAttrs(last.a, snap.a)) {
+      pts.push({ ...snap, md: 1 });
+    }
+    return;
+  }
+
   if (curMd <= last.md) {
     if (last.md === curMd) {
+      last.ov = snap.ov;
+      last.a = snap.a;
+    } else if (curMd === 0 && last.md === 1 && (q.sp || 0) > 0) {
       last.ov = snap.ov;
       last.a = snap.a;
     }
@@ -1029,6 +1039,20 @@ export function getPlayerSeasonProgression(
           .map((pt) => ({ md: pt.md, ov: pt.ov, a: { ...pt.a } }))
       : [{ md: 0, ov: liveSnap.ov, a: { ...liveSnap.a } }];
 
+  if (
+    curSeason === 1 &&
+    careerP?.b &&
+    !q.blessed &&
+    rawPts.length === 1 &&
+    rawPts[0].md === 0 &&
+    sameCoreAttrs(rawPts[0].a, liveSnap.a) &&
+    !sameCoreAttrs(careerP.b, liveSnap.a)
+  ) {
+    const baseB = { ...careerP.b };
+    rawPts[0] = { md: 0, ov: OVF(careerP.pos, baseB), a: baseB };
+    rawPts.push({ ...liveSnap, md: Math.max(1, curMd) });
+  }
+
   if (rawPts[0].md > 0) {
     rawPts.unshift({ md: 0, ov: rawPts[0].ov, a: { ...rawPts[0].a } });
   }
@@ -1038,6 +1062,8 @@ export function getPlayerSeasonProgression(
     rawPts.push(liveSnap);
   } else if (curMd === last.md) {
     rawPts[rawPts.length - 1] = liveSnap;
+  } else {
+    rawPts[rawPts.length - 1] = { ...liveSnap, md: last.md };
   }
 
   const expanded: PlayerSeasonProgressPoint[] = [];
