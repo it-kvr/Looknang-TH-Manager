@@ -6,7 +6,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition } from './engine/simulation';
 import { applyMatchMissionProgress } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
@@ -205,7 +205,8 @@ export default function App() {
         pf: payload.pf,
         cards: payload.cards,
         subs: payload.subs,
-        playedNames: payload.playedNames
+        playedNames: payload.playedNames,
+        playedSlots: payload.playedSlots
       };
 
       const liveInjs = payload.injuries || [];
@@ -263,6 +264,7 @@ export default function App() {
             const cw = pickWinner(ch, ca, cr, d);
             nx[i / 2] = cw.id;
             c.log.push(`${RN[c.r]}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
+            applyPositionAdaptation(d, ch, ca, cr);
           }
         }
         c.ids = nx;
@@ -311,6 +313,7 @@ export default function App() {
           }
         });
         applyMatchCards(d, H, A, payload.cards);
+        applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
         return;
@@ -331,6 +334,7 @@ export default function App() {
             const aw = pickWinner(ah, aa, ar, d);
             nx[i / 2] = aw.id;
             c.log.push(`${RN[c.r]}: ${ah.name} ${ar.gh}-${ar.ga} ${aa.name}`);
+            applyPositionAdaptation(d, ah, aa, ar);
           }
         }
         c.ids = nx;
@@ -379,6 +383,7 @@ export default function App() {
           }
         });
         applyMatchCards(d, H, A, payload.cards);
+        applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
         return;
@@ -391,6 +396,7 @@ export default function App() {
       }
       applyMatchResult(H, payload.gh, A, payload.ga);
       tallyMatchPlayers(H, A, resObj);
+      applyPositionAdaptation(d, H, A, resObj);
 
       const roundCards: { h: Team; a: Team; cards?: MatchCardEvent[] }[] = [
         { h: H, a: A, cards: payload.cards }
@@ -412,6 +418,7 @@ export default function App() {
         const r = simMatch(th, ta, d);
         applyMatchResult(th, r.gh, ta, r.ga);
         tallyMatchPlayers(th, ta, r);
+        applyPositionAdaptation(d, th, ta, r);
         roundCards.push({ h: th, a: ta, cards: r.cards });
         r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
       });
@@ -426,6 +433,7 @@ export default function App() {
             const r = simMatch(th, ta, d);
             applyMatchResult(th, r.gh, ta, r.ga);
             tallyMatchPlayers(th, ta, r);
+            applyPositionAdaptation(d, th, ta, r);
             roundCards.push({ h: th, a: ta, cards: r.cards });
             r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
           });

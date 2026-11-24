@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -537,6 +537,24 @@ export const pen = (r: string, sp: string) => {
   return 2;
 };
 
+export const playerPen = (
+  q: Pick<Player, 'ro' | 'altRoles'> | null | undefined,
+  sp: string
+): number => {
+  if (!q || !sp) return 0;
+  let best = pen(q.ro, sp);
+  if (best > 0 && q.altRoles?.length) {
+    for (let i = 0; i < q.altRoles.length; i++) {
+      const altP = pen(q.altRoles[i], sp);
+      if (altP < best) {
+        best = altP;
+        if (best === 0) break;
+      }
+    }
+  }
+  return best;
+};
+
 export const fixRo = (q: Player) => {
   if ((q.ro as string) === 'SS') q.ro = 'CF';
   if (!q.ro) {
@@ -596,21 +614,39 @@ export function xi(t: Team): Player[] {
       if (f >= 64) return 0.71 + ((f - 64) / 10) * 0.22;
       return Math.max(0.32, 0.42 + (f - 40) * 0.011);
     };
+    const uq = new Set<Player>();
+    const ui = new Set<number>();
     POS.forEach((p) => {
       const ix = sl.map((z, i) => (z.pos === p ? i : -1)).filter((i) => i >= 0);
       const pr: [number, Player, number][] = [];
       t.sq
-        .filter((q) => q.pos === p)
-        .forEach((q) => ix.forEach((i) => pr.push([ef(q) * rotationReadiness(q) * PM[pen(q.ro, sl[i].sp)], q, i])));
+        .filter((q) => !uq.has(q) && (q.pos === p || (q.altRoles?.some((r) => LINE[r] === p) ?? false)))
+        .forEach((q) =>
+          ix.forEach((i) => pr.push([ef(q) * rotationReadiness(q) * PM[playerPen(q, sl[i].sp)], q, i]))
+        );
       pr.sort((a, b) => b[0] - a[0]);
-      const uq = new Set<Player>();
-      const ui = new Set<number>();
       pr.forEach(([, q, i]) => {
         if (uq.has(q) || ui.has(i)) return;
         uq.add(q);
         ui.add(i);
         o[i] = q;
       });
+    });
+    // Fallback: if injuries/formation changes leave any slot empty, assign best fit available player out-of-position
+    sl.forEach((slot, i) => {
+      if (o[i]) return;
+      const cand = t.sq
+        .filter((q) => !uq.has(q) && (slot.pos === 'GK' ? true : q.pos !== 'GK'))
+        .sort(
+          (a, b) =>
+            ef(b) * rotationReadiness(b) * PM[playerPen(b, slot.sp)] -
+            ef(a) * rotationReadiness(a) * PM[playerPen(a, slot.sp)]
+        )[0] || t.sq.find((q) => !uq.has(q));
+      if (cand) {
+        uq.add(cand);
+        ui.add(i);
+        o[i] = cand;
+      }
     });
     return o.filter(Boolean);
   };
@@ -759,7 +795,11 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
       if (d[z] != null) d[z] = cl(customD[z]);
     });
   }
-  return { a: baseA, h, d, sig, tlVal, tr: h % 4, pk: 26 + ((h >> 2) % 4) };
+  const rawPers = po?.customPers ?? q.customPers;
+  const tr = rawPers != null && rawPers >= 0 && rawPers < PLAYER_PERSONALITIES.length
+    ? rawPers
+    : h % PLAYER_PERSONALITIES.length;
+  return { a: baseA, h, d, sig, tlVal, tr, pk: 26 + ((h >> 2) % 4) };
 }
 
 export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
@@ -855,12 +895,8 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const sg = allD.find((z) => z[2] === D0.sig) || allD.find((z) => z[0] === SIGL[D0.sig]);
   const ot = allD.filter((z) => z !== sg).sort((u, w) => w[1] - u[1])[0];
   const top = [sg, ot].filter((z): z is [string, number, string?] => Boolean(z));
-  const TR = [
-    ['👑 ผู้นำ', 'ช่วยเพิ่มโบนัสเล็กน้อยให้ทีมเมื่อลงตัวจริง'],
-    ['😤 สายเกเร', 'โดนใบเหลือง/แดงบ่อยกว่าปกติ'],
-    ['🏃 ขยัน', 'ฟิตลดช้าลงและพัฒนาไวขึ้นเล็กน้อย'],
-    ['😐 ปกติ', 'ไม่มีลักษณะนิสัยพิเศษ']
-  ][D0.tr];
+  const persDef = PLAYER_PERSONALITIES[D0.tr] || PLAYER_PERSONALITIES[3];
+  const TR: [string, string] = [persDef.label, persDef.desc];
   const ag = q.age || 24;
   const gro = ag < D0.pk - 2 ? 'กำลังเติบโต' : ag <= D0.pk + 4 ? 'ช่วงพีค' : 'เริ่มถดถอย';
   const stCls = (q.sus || 0) > 0 || q.inj > 0 ? 'bad' : f < 60 ? 'wrn' : 'ok';
@@ -934,6 +970,12 @@ export function syncMe(s: GameState) {
     else if (q.talent != null) s.p.talent = q.talent;
     if (s.p.traits?.length) q.traits = [...s.p.traits];
     else if (q.traits?.length) s.p.traits = [...q.traits];
+    if (s.p.altRoles?.length) q.altRoles = [...s.p.altRoles];
+    else if (q.altRoles?.length) s.p.altRoles = [...q.altRoles];
+    if (s.p.roleExp && Object.keys(s.p.roleExp).length) q.roleExp = { ...s.p.roleExp };
+    else if (q.roleExp && Object.keys(q.roleExp).length) s.p.roleExp = { ...q.roleExp };
+    if (s.p.customPers != null) q.customPers = s.p.customPers;
+    else if (q.customPers != null) s.p.customPers = q.customPers;
     if (!q.pot || q.pot < q.ov) q.pot = clamp(92, q.ov + 12, 95);
     if (q.blessed) {
       q.customA = { ...s.p.a };
@@ -1448,6 +1490,9 @@ export function buildPlayerFromCareerProfile(
     ...(lp?.blessed ? { blessed: true } : {}),
     ...(mergedHistory.length ? { history: mergedHistory } : {}),
     ...(mergedCareerLog.length ? { careerLog: mergedCareerLog } : {}),
+    ...(p.altRoles?.length || lp?.altRoles?.length ? { altRoles: [...(p.altRoles || lp?.altRoles || [])] } : {}),
+    ...(p.roleExp || lp?.roleExp ? { roleExp: { ...(p.roleExp || lp?.roleExp) } } : {}),
+    ...(p.customPers != null || lp?.customPers != null ? { customPers: p.customPers ?? lp?.customPers } : {}),
     ...(lp?.seasonProg ? { seasonProg: { s: lp.seasonProg.s, pts: lp.seasonProg.pts.map((pt) => ({ ...pt, a: { ...pt.a } })) } } : {}),
     ...(opts?.asHomegrown !== false ? { hg: 1, customCreated: 1 } : {})
   };

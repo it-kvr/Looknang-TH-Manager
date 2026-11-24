@@ -54,6 +54,9 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.tyc) ex.tyc = q.tyc;
   if (q.talent !== undefined) ex.tl = q.talent;
   if (q.traits && q.traits.length) ex.ts = q.traits;
+  if (q.altRoles && q.altRoles.length) ex.ar = q.altRoles;
+  if (q.roleExp && Object.keys(q.roleExp).length) ex.re = q.roleExp;
+  if (q.customPers !== undefined) ex.cp = q.customPers;
   if (q.history && q.history.length) {
     ex.hi = q.history.map((h) => [
       h.season,
@@ -160,6 +163,9 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (ex.tyc !== undefined) p.tyc = Number(ex.tyc);
   if (ex.tl !== undefined) p.talent = Number(ex.tl);
   if (Array.isArray(ex.ts)) p.traits = ex.ts.map((x) => String(x));
+  if (Array.isArray(ex.ar)) p.altRoles = ex.ar.map((x) => String(x) as SubRole);
+  if (ex.re && typeof ex.re === 'object') p.roleExp = ex.re as Record<string, number>;
+  if (ex.cp !== undefined) p.customPers = Number(ex.cp);
   if (Array.isArray(ex.hi)) {
     p.history = (ex.hi as unknown[]).map((item): PlayerSeasonHistoryRecord => {
       if (!Array.isArray(item)) return item as PlayerSeasonHistoryRecord;
@@ -218,6 +224,8 @@ export const packSaveTeam = (t: Team): unknown[] => {
   if (t.foreign !== undefined) tex.fg = t.foreign;
   if (t.tacFam !== undefined) tex.tf = t.tacFam;
   if (t.philosophy) tex.ph = t.philosophy;
+  if (t.tacticTrialMd !== undefined) tex.ttm = t.tacticTrialMd;
+  if (t.tacticTrialLabel) tex.ttl = t.tacticTrialLabel;
   if (t.history && t.history.length) {
     tex.hi = t.history.map((h) => {
       const flags = (h.champion ? 1 : 0) | (h.cupChampion ? 2 : 0) | (h.asiaChampion ? 4 : 0);
@@ -282,6 +290,8 @@ export const unpackSaveTeam = (raw: unknown): Team => {
   if (tex.fg !== undefined) tm.foreign = Number(tex.fg);
   if (tex.tf !== undefined) tm.tacFam = Number(tex.tf);
   if (tex.ph !== undefined) tm.philosophy = String(tex.ph);
+  if (tex.ttm !== undefined) tm.tacticTrialMd = Number(tex.ttm);
+  if (tex.ttl !== undefined) tm.tacticTrialLabel = String(tex.ttl);
   if (Array.isArray(tex.hi)) {
     tm.history = (tex.hi as unknown[]).map((item): TeamSeasonHistoryRecord => {
       if (!Array.isArray(item)) return item as TeamSeasonHistoryRecord;

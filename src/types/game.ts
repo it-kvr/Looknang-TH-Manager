@@ -70,6 +70,9 @@ export interface Player {
   pot: number;
   talent?: number;
   traits?: string[];
+  altRoles?: SubRole[];
+  roleExp?: Record<string, number>;
+  customPers?: number;
   fit: number;
   inj: number;
   sus?: number;
@@ -115,6 +118,9 @@ export interface Player {
   history?: PlayerSeasonHistoryRecord[];
   careerLog?: string[];
   seasonProg?: PlayerSeasonProgression;
+  altRoles?: SubRole[];
+  roleExp?: Record<string, number>;
+  customPers?: number;
 }
 
 export interface CreatedPlayerTemplate {
@@ -194,6 +200,8 @@ export interface Team {
   philosophy?: string;
   history?: TeamSeasonHistoryRecord[];
   trophies?: TrophyRecord[];
+  tacticTrialMd?: number;
+  tacticTrialLabel?: string;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
@@ -355,6 +363,7 @@ export interface MatchResult {
   cards?: MatchCardEvent[];
   subs?: MatchSubEvent[];
   playedNames?: Record<number, string[]>;
+  playedSlots?: Record<number, Record<string, SubRole>>;
   incidents?: MatchDramaticEvent[];
   highlights?: MatchHighlightsSummary;
 }
@@ -793,6 +802,7 @@ export interface FinishedMatchPayload {
   cards: MatchCardEvent[];
   subs: MatchSubEvent[];
   playedNames: Record<number, string[]>;
+  playedSlots?: Record<number, Record<string, SubRole>>;
   injuries?: { teamId: number; name: string; games: number }[];
   playerActions?: Record<string, Partial<Record<PersonalMissionMetric, number>>>;
 }
@@ -1161,6 +1171,9 @@ export interface GodBlessingPatch {
   ro: SubRole;
   sig: string;
   traits?: string[];
+  altRoles?: SubRole[];
+  customPers?: number;
+  perks?: string[];
   coreA: CoreAttrs;
   subD: Record<string, number>;
 }
