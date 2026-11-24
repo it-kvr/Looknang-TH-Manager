@@ -14,8 +14,28 @@ type SubRole =
 type StatKey = 'sh' | 'ps' | 'dr' | 'tk' | 'ph';
 type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';
 type GameMode = 'm' | 'p';
-type MainTab = 't' | 's' | 'q' | 'k' | 'f' | 'u' | 'c' | 'p';
+type MainTab = 't' | 's' | 'q' | 'r' | 'k' | 'f' | 'u' | 'c' | 'p';
 type TrainingFocus = 'FW' | 'MF' | 'DF' | 'F';
+type TrainingProgramId = 'balanced' | 'attack' | 'defense' | 'tactics' | 'setpiece' | 'fitness' | 'recovery';
+type TrainingIntensity = 'light' | 'normal' | 'heavy';
+
+interface TeamTrainingPlan {
+  program: TrainingProgramId;
+  intensity: TrainingIntensity;
+  restStarters?: boolean;
+  doubleSessionMd?: number;
+  individualFocus?: Record<string, 'REST' | 'FOCUS'>;
+  lastReport?: {
+    md: number;
+    programName: string;
+    intensity: TrainingIntensity;
+    fitDeltaAvg: number;
+    tacFamDelta: number;
+    morDelta: number;
+    improved: string[];
+    restedCount: number;
+  };
+}
 
 interface CoreAttrs {
   sh: number;
@@ -69,6 +89,30 @@ interface Player {
   signedSeason?: number;
   signedMd?: number;
   treatedMd?: number;
+  customA?: CoreAttrs;
+  customD?: Record<string, number>;
+  customSig?: string;
+  blessed?: boolean;
+  sb?: Record<string, number>;
+  coreSb?: Partial<CoreAttrs>;
+  missions?: PlayerMissionsState;
+}
+
+type PersonalMissionMetric =
+  | 'setpieces'
+  | 'passes'
+  | 'shots'
+  | 'crossAssists'
+  | 'dribbles'
+  | 'tackles'
+  | 'headers'
+  | 'saves'
+  | 'matches';
+
+interface PlayerMissionsState {
+  stats: Partial<Record<PersonalMissionMetric, number>>;
+  claimed: Record<string, number>;
+  focusId?: string;
 }
 
 type CustomSlot = [SubRole, number, number];
@@ -142,6 +186,7 @@ interface PlayerCareerProfile {
   b: CoreAttrs;
   a: CoreAttrs;
   sb?: Record<string, number>;
+  customD?: Record<string, number>;
   age: number;
   gl: number;
   as: number;
@@ -165,6 +210,7 @@ interface PlayerCareerProfile {
   rc?: number;
   sus?: number;
   inj?: number;
+  missions?: PlayerMissionsState;
 }
 
 interface AutoRule {
@@ -345,6 +391,7 @@ interface GameState {
   tr: number;
   ya: number;
   tf: TrainingFocus;
+  trainingPlan?: TeamTrainingPlan;
   focusPlayer?: string | null;
   yth: Player[];
   fx: [number, number][][];
@@ -407,6 +454,7 @@ interface AppSettings {
   subAlertEnabled?: boolean;
   subAlertFitThreshold?: number;
   subAlertFormThreshold?: number;
+  godBlessingEnabled?: boolean;
 }
 
 // ============================================================================
@@ -534,7 +582,7 @@ const KIT_SW = [
 ];
 
 const SIGL: Record<string, string> = {
-  fin: 'จบสกอร์', pw: 'พลังยิง', cur: 'ยิงโค้ง', run: 'เข้าทำตำแหน่ง (วิ่งหาช่อง)',
+  fin: 'จบสกอร์', pw: 'พลังยิง', cur: 'ยิงโค้ง', fk: 'ลูกตั้งเตะ', run: 'เข้าทำตำแหน่ง (วิ่งหาช่อง)',
   crs: 'เปิดบอล', rd: 'อ่านเกม', pos: 'สกัด/ยืนตำแหน่ง', mrk: 'ประกบตัว', blk: 'บล็อกลูกยิง', hd: 'โหม่ง',
   spd: 'ความเร็ว', str: 'ความแข็งแรง', sta: 'ความอึด', tol: 'ทนต่อบาดเจ็บ', rec: 'ฟื้นตัวเร็ว',
   comp: 'ความนิ่งในนัดใหญ่', sv: 'เซฟ', cl: 'ออกมาปิดมุม', dist: 'จ่ายจากแนวหลัง'
@@ -772,6 +820,184 @@ const CAREER_PERKS: { id: string; name: string; desc: string; cost: number }[] =
   { id: 'prodigy', name: 'พรสวรรค์พุ่งทะยาน', desc: 'โอกาสค่าพลังขึ้นจากการซ้อม +10%', cost: 35 },
   { id: 'captain', name: 'ขวัญใจมหาชน', desc: 'ขวัญแฟนบอลเพิ่มเร็วขึ้นและช่วยดึงเรตติ้งทีม', cost: 20 }
 ];
+
+interface TrainingProgramMeta {
+  id: TrainingProgramId;
+  icon: string;
+  name: string;
+  short: string;
+  tf: TrainingFocus;
+  positions: Position[] | 'YOUNG';
+  fitMod: number;
+  devMult: number;
+  tacFamBonus: number;
+  morBonus: number;
+  injMult: number;
+  desc: string;
+  effectTag: string;
+}
+
+const TEAM_TRAINING_PROGRAMS: Record<TrainingProgramId, TrainingProgramMeta> = {
+  balanced: {
+    id: 'balanced',
+    icon: '⚖️',
+    name: 'ซ้อมสมดุลทุกสาย',
+    short: 'สมดุล',
+    tf: 'MF',
+    positions: ['FW', 'MF', 'DF', 'GK'],
+    fitMod: 0,
+    devMult: 1.0,
+    tacFamBonus: 1,
+    morBonus: 0,
+    injMult: 1.0,
+    desc: 'ฝึกครบทั้งเทคนิค แท็กติก และรักษาสภาพร่างกายอย่างสมดุล',
+    effectTag: 'พัฒนาทุกตำแหน่ง · เข้าใจแผน +1%'
+  },
+  attack: {
+    id: 'attack',
+    icon: '⚽',
+    name: 'จบสกอร์ & เกมรุก',
+    short: 'เกมรุก',
+    tf: 'FW',
+    positions: ['FW', 'MF'],
+    fitMod: -1,
+    devMult: 1.2,
+    tacFamBonus: 1,
+    morBonus: 0,
+    injMult: 1.06,
+    desc: 'ติวเข้มการยิงประตู เข้าทำ และประสานงานแนวรุก (FW/MF)',
+    effectTag: 'เน้น FW/MF 1.2x · ฟิต -1%'
+  },
+  defense: {
+    id: 'defense',
+    icon: '🛡️',
+    name: 'เกมรับ & ยืนโซน',
+    short: 'เกมรับ',
+    tf: 'DF',
+    positions: ['DF', 'GK'],
+    fitMod: -1,
+    devMult: 1.2,
+    tacFamBonus: 2,
+    morBonus: 0,
+    injMult: 1.05,
+    desc: 'ซ้อมวินัยเกมรับ การประกบตัว และจังหวะเซฟประตู (DF/GK)',
+    effectTag: 'เน้น DF/GK 1.2x · เข้าใจแผน +2%'
+  },
+  tactics: {
+    id: 'tactics',
+    icon: '🧭',
+    name: 'แท็กติก & ความเข้าใจแผน',
+    short: 'แท็กติก',
+    tf: 'MF',
+    positions: ['MF', 'DF', 'FW'],
+    fitMod: 1,
+    devMult: 0.9,
+    tacFamBonus: 4,
+    morBonus: 1,
+    injMult: 0.88,
+    desc: 'ซ้อมระบบทีม การเพรสซิ่ง และการเปลี่ยนจังหวะเล่นตามแผน',
+    effectTag: 'เข้าใจแผน +4%/นัด · ขวัญ +1%'
+  },
+  setpiece: {
+    id: 'setpiece',
+    icon: '🎯',
+    name: 'ลูกตั้งเตะ & ลูกโหม่ง',
+    short: 'ตั้งเตะ',
+    tf: 'FW',
+    positions: ['FW', 'DF'],
+    fitMod: 0,
+    devMult: 1.08,
+    tacFamBonus: 2,
+    morBonus: 1,
+    injMult: 0.95,
+    desc: 'ฝึกเตะมุม ฟรีคิก การเปิดบอล และลูกโหม่งทั้งรุก-รับ',
+    effectTag: 'เน้น FW/DF · เข้าใจแผน +2% · ขวัญ +1%'
+  },
+  fitness: {
+    id: 'fitness',
+    icon: '🏃',
+    name: 'ฟิตเนส & ปั้นดาวรุ่ง',
+    short: 'ฟิตเนส',
+    tf: 'MF',
+    positions: 'YOUNG',
+    fitMod: -2,
+    devMult: 1.25,
+    tacFamBonus: 0,
+    morBonus: 0,
+    injMult: 1.12,
+    desc: 'รีดความอึดและเร่งพัฒนาการนักเตะอายุไม่เกิน 25 ปีเป็นพิเศษ',
+    effectTag: 'ดาวรุ่ง <25 ปี 1.25x · ฟิต -2%'
+  },
+  recovery: {
+    id: 'recovery',
+    icon: '😴',
+    name: 'พักผ่อน & ฟื้นฟูร่างกาย',
+    short: 'พักฟื้น',
+    tf: 'F',
+    positions: [],
+    fitMod: 10,
+    devMult: 0,
+    tacFamBonus: 0,
+    morBonus: 2,
+    injMult: 0.45,
+    desc: 'ลดโปรแกรมหนัก เน้นนวดคลายกล้ามเนื้อ ฟื้นฟิตทั้งทีมและลดเสี่ยงเจ็บ',
+    effectTag: 'ฟิต +10% · ลดโอกาสเจ็บ 55% · ขวัญ +2%'
+  }
+};
+
+const TRAINING_INTENSITY_META: Record<TrainingIntensity, { label: string; icon: string; fitDelta: number; devMult: number; injMult: number; tacAdd: number; desc: string }> = {
+  light: {
+    label: 'ซ้อมเบา / ถนอมตัว',
+    icon: '🟢',
+    fitDelta: 4,
+    devMult: 0.75,
+    injMult: 0.65,
+    tacAdd: 0,
+    desc: 'ฟิตฟื้นดี +4% · ลดโอกาสเจ็บ 35% · พัฒนา 0.75x'
+  },
+  normal: {
+    label: 'มาตรฐานสมดุล',
+    icon: '🟡',
+    fitDelta: 0,
+    devMult: 1.0,
+    injMult: 1.0,
+    tacAdd: 0,
+    desc: 'ฟิตปกติ · ความเสี่ยงปกติ · พัฒนา 1.0x'
+  },
+  heavy: {
+    label: 'เข้มข้น / ติวหนัก',
+    icon: '🔴',
+    fitDelta: -5,
+    devMult: 1.45,
+    injMult: 1.38,
+    tacAdd: 1,
+    desc: 'พัฒนา 1.45x · เข้าใจแผน +1% · ฟิต -5% (เสี่ยงล้า/เจ็บสูง)'
+  }
+};
+
+function getTeamTrainingPlan(s: GameState): TeamTrainingPlan {
+  const existing = s.trainingPlan;
+  const fallbackProgram: TrainingProgramId =
+    s.tf === 'F' ? 'recovery' : s.tf === 'FW' ? 'attack' : s.tf === 'DF' ? 'defense' : 'balanced';
+  if (!existing) {
+    return { program: fallbackProgram, intensity: 'normal', restStarters: false, individualFocus: {} };
+  }
+  const prog = TEAM_TRAINING_PROGRAMS[existing.program] ? existing.program : fallbackProgram;
+  return {
+    ...existing,
+    program: prog,
+    intensity: TRAINING_INTENSITY_META[existing.intensity] ? existing.intensity : 'normal',
+    individualFocus: existing.individualFocus || {}
+  };
+}
+
+function syncTrainingFocusToPlan(d: GameState, tf: TrainingFocus) {
+  d.tf = tf;
+  const cur = getTeamTrainingPlan(d);
+  const nextProg: TrainingProgramId =
+    tf === 'F' ? 'recovery' : tf === 'FW' ? 'attack' : tf === 'DF' ? 'defense' : cur.program === 'recovery' || cur.program === 'attack' || cur.program === 'defense' ? 'tactics' : cur.program;
+  d.trainingPlan = { ...cur, program: nextProg };
+}
 
 
 // ============================================================================
@@ -1270,7 +1496,7 @@ function xi(t: Team): Player[] {
 function DT(q: Player, careerP?: PlayerCareerProfile | null) {
   const po = q.me ? careerP : null;
   const aSrc = po?.a;
-  const sb = po?.sb;
+  const sb = po?.sb || q.sb;
   const h = [...(q.n || 'นักเตะ')].reduce((s, ch) => s + ch.charCodeAt(0), 0);
   const o: Record<string, Partial<CoreAttrs>> = {
     FW: { sh: 8, dr: 4, tk: -12 },
@@ -1283,19 +1509,37 @@ function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     SS: { dr: 5, ps: 3, sh: -1 },
     ST: { sh: 4, ph: 2, ps: -4 }
   };
-  const baseA: CoreAttrs = aSrc
+  const rawBaseA: CoreAttrs = aSrc
     ? { ...aSrc }
-    : fitA(
-        q,
-        Object.fromEntries(
-          ATT.map(([kk], i) => [kk, clamp(q.ov + (o[q.pos][kk] || 0) + (roleMod[q.ro]?.[kk] || 0) + ((h * (i + 3)) % 11) - 5, 10, 99)])
-        ) as unknown as CoreAttrs
-      );
+    : q.customA
+      ? {
+          sh: clamp(Math.round(q.customA.sh), 1, 99),
+          ps: clamp(Math.round(q.customA.ps), 1, 99),
+          dr: clamp(Math.round(q.customA.dr), 1, 99),
+          tk: clamp(Math.round(q.customA.tk), 1, 99),
+          ph: clamp(Math.round(q.customA.ph), 1, 99)
+        }
+      : fitA(
+          q,
+          Object.fromEntries(
+            ATT.map(([kk], i) => [kk, clamp(q.ov + (o[q.pos][kk] || 0) + (roleMod[q.ro]?.[kk] || 0) + ((h * (i + 3)) % 11) - 5, 10, 99)])
+          ) as unknown as CoreAttrs
+        );
+  const baseA: CoreAttrs =
+    !po && q.coreSb
+      ? {
+          sh: clamp(Math.round(rawBaseA.sh + (q.coreSb.sh || 0)), 1, 99),
+          ps: clamp(Math.round(rawBaseA.ps + (q.coreSb.ps || 0)), 1, 99),
+          dr: clamp(Math.round(rawBaseA.dr + (q.coreSb.dr || 0)), 1, 99),
+          tk: clamp(Math.round(rawBaseA.tk + (q.coreSb.tk || 0)), 1, 99),
+          ph: clamp(Math.round(rawBaseA.ph + (q.coreSb.ph || 0)), 1, 99)
+        }
+      : rawBaseA;
   const hv = (n: number) => {
     const raw = (((h * (n * 7 + 3)) ^ (h >> (n % 5))) % 21) - 10;
-    return po ? Math.round(raw * 0.2) : raw;
+    return po || q.customA ? Math.round(raw * 0.2) : raw;
   };
-  const cl = (v: number) => clamp(Math.round(v), 10, 99);
+  const cl = (v: number) => clamp(Math.round(v), 1, 99);
   const ag = q.age || 24;
   const wing = ['LB', 'RB', 'LM', 'RM', 'LW', 'RW', 'LWB', 'RWB'].includes(q.ro);
 
@@ -1303,6 +1547,7 @@ function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     pw: cl(baseA.sh * 0.6 + baseA.ph * 0.4 + hv(1)),
     fin: cl(baseA.sh + hv(2) + (q.pos === 'FW' ? 4 : 0) + (q.ro === 'ST' ? 2 : 0)),
     cur: cl(baseA.sh * 0.5 + baseA.ps * 0.5 + hv(3) + (q.ro === 'SS' ? 3 : 0)),
+    fk: cl(baseA.sh * 0.4 + baseA.ps * 0.45 + baseA.dr * 0.15 + hv(20) + (q.pos === 'MF' ? 3 : 0)),
     crs: cl(baseA.ps * 0.7 + baseA.dr * 0.3 + hv(4) + (wing ? 6 : 0) + (q.ro === 'CF' ? 4 : 0)),
     run: cl(baseA.sh * 0.5 + baseA.dr * 0.3 + baseA.ph * 0.2 + hv(5) + (q.ro === 'SS' ? 4 : 0)),
     rd: cl(baseA.tk * 0.6 + baseA.ps * 0.4 + hv(6)),
@@ -1321,19 +1566,27 @@ function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     dist: cl(baseA.ps * 0.8 + hv(17))
   };
 
-  const sk = q.pos === 'GK' ? ['sv', 'cl', 'dist', 'sta', 'comp'] : ['fin', 'pw', 'cur', 'run', 'crs', 'rd', 'pos', 'mrk', 'blk', 'hd', 'spd', 'str', 'sta', 'comp'];
+  const sk = q.pos === 'GK' ? ['sv', 'cl', 'dist', 'sta', 'comp'] : ['fin', 'pw', 'cur', 'fk', 'run', 'crs', 'rd', 'pos', 'mrk', 'blk', 'hd', 'spd', 'str', 'sta', 'comp'];
   const sig = po?.sig
     ? po.sig
-    : po?.tr
-      ? q.pos === 'GK'
-        ? { sh: 'cl', ps: 'dist', dr: 'cl', tk: 'sv', ph: 'sv' }[po.tr] || 'sv'
-        : { sh: 'fin', ps: 'crs', dr: 'spd', tk: 'pos', ph: 'str' }[po.tr] || sk[h % sk.length]
-      : sk[h % sk.length];
+    : q.customSig
+      ? q.customSig
+      : po?.tr
+        ? q.pos === 'GK'
+          ? { sh: 'cl', ps: 'dist', dr: 'cl', tk: 'sv', ph: 'sv' }[po.tr] || 'sv'
+          : { sh: 'fin', ps: 'crs', dr: 'spd', tk: 'pos', ph: 'str' }[po.tr] || sk[h % sk.length]
+        : sk[h % sk.length];
 
   d[sig] = cl(d[sig] + 8);
   if (sb) {
     Object.keys(sb).forEach((z) => {
       if (d[z] != null) d[z] = cl(d[z] + sb[z]);
+    });
+  }
+  const customD = po?.customD || q.customD;
+  if (customD) {
+    Object.keys(customD).forEach((z) => {
+      if (d[z] != null) d[z] = cl(customD[z]);
     });
   }
   return { a: baseA, h, d, sig, tr: h % 4, pk: 26 + ((h >> 2) % 4) };
@@ -1349,7 +1602,7 @@ function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
     ...((gk
       ? [['🧤 ผู้รักษาประตู', [['เซฟ', d.sv, 'sv'], ['ออกมาปิดมุม', d.cl, 'cl'], ['จ่ายจากแนวหลัง', d.dist, 'dist']]]]
       : [
-          ['⚔️ โจมตี', [['พลังยิง', d.pw, 'pw'], ['จบสกอร์', d.fin, 'fin'], ['ยิงโค้ง', d.cur, 'cur'], ['เปิดบอล', d.crs, 'crs'], ['เข้าทำตำแหน่ง', d.run, 'run']]],
+          ['⚔️ โจมตี', [['พลังยิง', d.pw, 'pw'], ['จบสกอร์', d.fin, 'fin'], ['ยิงโค้ง', d.cur, 'cur'], ['ลูกตั้งเตะ', d.fk, 'fk'], ['เปิดบอล', d.crs, 'crs'], ['เข้าทำตำแหน่ง', d.run, 'run']]],
           ['🛡️ ป้องกัน', [['อ่านเกม', d.rd, 'rd'], ['สกัด/ยืนตำแหน่ง', d.pos, 'pos'], ['ประกบตัว', d.mrk, 'mrk'], ['บล็อกลูกยิง', d.blk, 'blk'], ['โหม่ง', d.hd, 'hd']]]
         ]) as [string, [string, number, string?][]][]),
     ['💪 ร่างกาย', [['ความเร็ว', d.spd, 'spd'], ['ความแข็งแรง', d.str, 'str'], ['ความอึด', d.sta, 'sta']]],
@@ -2053,9 +2306,20 @@ function syncMe(s: GameState) {
     if (s.p.no) q.no = s.p.no;
     else if (q.no) s.p.no = q.no;
     q.vis = visOf(q, s.p);
+    if (s.p.sb) q.sb = { ...s.p.sb };
+    else if (q.sb) s.p.sb = { ...q.sb };
+    if (s.p.missions) q.missions = s.p.missions;
+    else if (q.missions) s.p.missions = q.missions;
     if (!q.pot || q.pot < q.ov) q.pot = clamp(92, q.ov + 12, 95);
-    if (q.age && (!s.p.age || s.p.age < q.age)) s.p.age = q.age;
-    else if (s.p.age) q.age = s.p.age;
+    if (q.blessed) {
+      q.customA = { ...s.p.a };
+      if (s.p.sig) q.customSig = s.p.sig;
+      if (s.p.customD) q.customD = { ...s.p.customD };
+      if (s.p.age) q.age = s.p.age;
+    } else {
+      if (q.age && (!s.p.age || s.p.age < q.age)) s.p.age = q.age;
+      else if (s.p.age) q.age = s.p.age;
+    }
   }
 }
 
@@ -2843,6 +3107,14 @@ function runPlayerWeek(s: GameState) {
     p.inj = Math.max(0, (p.inj || 0) - healStep);
     m += p.inj === 0 ? ' · 🩹 หายเจ็บพร้อมลงสนาม!' : ` · 🩹 พักฟื้นเหลือ ${p.inj} นัด`;
   }
+  const meSq = s.teams[s.me]?.sq.find((q) => q.me);
+  if (meSq) {
+    const trainMissionNotes = applyTrainingMissionProgress(meSq, {
+      careerPlan: p.plan ?? 1,
+      careerP: p
+    });
+    if (trainMissionNotes.length) m += ` · 🎯 ${trainMissionNotes[0]}`;
+  }
   p.last = m;
   s.news = (s.news ? s.news + ' · ' : '') + m;
   syncMe(s);
@@ -3437,8 +3709,19 @@ function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; playerN
   const stf = getStaffState(s);
   const skipInjTeams = new Set(liveInjMeta?.teamIds || []);
   const justInjuredNames = new Set(liveInjMeta?.playerNames || []);
+  const plan = getTeamTrainingPlan(s);
+  const progMeta = TEAM_TRAINING_PROGRAMS[plan.program];
+  const intMeta = TRAINING_INTENSITY_META[plan.intensity];
 
-  me.tacFam = clamp((me.tacFam ?? 65) + 2 + stf.asst, 30, 100);
+  const tacFamDelta = mg
+    ? Math.max(0, (plan.program === 'recovery' ? 1 : 2) + progMeta.tacFamBonus + intMeta.tacAdd + stf.asst)
+    : 2 + stf.asst;
+  me.tacFam = clamp((me.tacFam ?? 65) + tacFamDelta, 30, 100);
+
+  let myFitBeforeSum = 0;
+  let myFitAfterSum = 0;
+  let myFitCount = 0;
+  let restedCount = 0;
 
   s.teams
     .filter((t) => t.tier === me.tier)
@@ -3460,20 +3743,40 @@ function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; playerN
         }
         const pi = pl.includes(q);
         const Dq = DT(q, s.p);
+        const isIndivRest = mine && mg && plan.individualFocus?.[q.n] === 'REST';
+        if (isIndivRest) restedCount++;
+        const prevFit = q.fit ?? 100;
+        const trainFitBonus = mine
+          ? lv * 2 +
+            stf.fit * 2 +
+            progMeta.fitMod +
+            (mg ? intMeta.fitDelta : 0) +
+            (mg && plan.restStarters && pi ? 5 : 0) +
+            (isIndivRest ? 10 : 0)
+          : 0;
         q.fit = clamp(
-          (q.fit ?? 100) +
+          prevFit +
             (pi
               ? -Math.round(R(7, 13) * (Dq.tr === 2 ? 0.8 : 1)) - ps * 3 + Math.round((Dq.d.sta - 70) / 8)
               : R(8, 16) + Math.round((Dq.d.rec - 70) / 8)) +
-            (mine ? lv * 2 + stf.fit * 2 + (s.tf === 'F' ? 8 : 0) : 0),
+            trainFitBonus,
           30,
           100
         );
+        if (mine) {
+          myFitBeforeSum += prevFit;
+          myFitAfterSum += q.fit;
+          myFitCount++;
+        }
         if ((q.sus || 0) > 0) q.sus = (q.sus || 0) - 1;
         if (q.inj > 0) {
           if (!justInjuredNames.has(q.n)) {
             q.inj--;
-            if (q.inj > 0 && (Dq.d.rec >= 85 || (mine && (medLv >= 3 || stf.physio >= 2))) && Math.random() < 0.3 + (mine ? (medLv - 1) * 0.08 + stf.physio * 0.08 : 0)) {
+            if (
+              q.inj > 0 &&
+              (Dq.d.rec >= 85 || isIndivRest || (mine && (medLv >= 3 || stf.physio >= 2))) &&
+              Math.random() < 0.3 + (mine ? (medLv - 1) * 0.08 + stf.physio * 0.08 + (isIndivRest ? 0.25 : 0) : 0)
+            ) {
               q.inj--;
             }
           }
@@ -3482,7 +3785,7 @@ function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; playerN
           !skipInjTeams.has(t.id) &&
           Math.random() <
             (q.fit < 60 ? 0.07 : 0.024) *
-              (mine && s.tf === 'F' ? 0.5 : 1) *
+              (mine ? progMeta.injMult * (mg ? intMeta.injMult : 1) * (isIndivRest ? 0.5 : 1) : 1) *
               (mine ? Math.max(0.5, 1 - (medLv - 1) * 0.08 - stf.physio * 0.08) : 1) *
               ((130 - Dq.d.tol) / 60)
         ) {
@@ -3496,21 +3799,63 @@ function afterMatchDay(s: GameState, liveInjMeta?: { teamIds?: number[]; playerN
     });
 
   if (mg) {
-    const gMap: Record<string, Position[]> = { FW: ['FW'], MF: ['MF'], DF: ['DF', 'GK'] };
-    const g = gMap[s.tf];
     const gr: string[] = [];
-    if (g) {
+    const xiSet = new Set(xi(me).map((z) => z.n));
+    if (progMeta.devMult > 0) {
       me.sq.forEach((q) => {
+        if (q.inj > 0 || plan.individualFocus?.[q.n] === 'REST') return;
         const isFocus = s.focusPlayer && q.n === s.focusPlayer;
-        const chance = (0.05 + 0.03 * lv + stf.asst * 0.02) * (isFocus ? 2.2 : 1);
-        if ((g.includes(q.pos) || isFocus) && q.age < 31 && q.ov < (q.pot || 92) && Math.random() < chance) {
+        const matchesPos =
+          progMeta.positions === 'YOUNG'
+            ? q.age <= 25
+            : Array.isArray(progMeta.positions) && progMeta.positions.includes(q.pos);
+        const benchSharpBonus = plan.restStarters && !xiSet.has(q.n) ? 1.2 : 1;
+        const chance =
+          (0.05 + 0.03 * lv + stf.asst * 0.02) *
+          progMeta.devMult *
+          intMeta.devMult *
+          benchSharpBonus *
+          (isFocus ? 2.2 : 1);
+        if ((matchesPos || isFocus) && q.age < 31 && q.ov < (q.pot || 92) && Math.random() < chance) {
           q.ov++;
           gr.push(`${q.n} (${q.ov})`);
         }
       });
     }
+    const avgFitAfter = myFitCount ? myFitAfterSum / myFitCount : 80;
+    const fitDeltaAvg = myFitCount ? Math.round((myFitAfterSum - myFitBeforeSum) / myFitCount) : 0;
+    const morDelta = progMeta.morBonus + (plan.intensity === 'heavy' && avgFitAfter < 68 ? -1 : 0);
+    if (morDelta !== 0) s.mor = clamp((s.mor ?? 50) + morDelta, 0, 100);
+    s.trainingPlan = {
+      ...plan,
+      lastReport: {
+        md: (s.md ?? 0) + 1,
+        programName: `${progMeta.icon} ${progMeta.name}`,
+        intensity: plan.intensity,
+        fitDeltaAvg,
+        tacFamDelta,
+        morDelta,
+        improved: gr,
+        restedCount
+      }
+    };
     if (gr.length) {
-      pushFeed(s, 'ฝึกซ้อม', `🏋️ พัฒนาจากซ้อม: ${gr.slice(0, 2).join(', ')}${gr.length > 2 ? ` +${gr.length - 2} คน` : ''}`, 'ok');
+      pushFeed(s, 'ฝึกซ้อม', `🏋️ พัฒนาจากซ้อม (${progMeta.short}): ${gr.slice(0, 2).join(', ')}${gr.length > 2 ? ` +${gr.length - 2} คน` : ''}`, 'ok');
+    }
+    let missionReadyCount = 0;
+    me.sq.forEach((q) => {
+      if (q.inj > 0 || plan.individualFocus?.[q.n] === 'REST') return;
+      const beforeReady = countReadyMissions(q, q.me ? s.p : null);
+      applyTrainingMissionProgress(q, {
+        teamProgram: plan.program,
+        isTeamFocus: s.focusPlayer === q.n,
+        careerP: q.me ? s.p : null
+      });
+      const afterReady = countReadyMissions(q, q.me ? s.p : null);
+      if (afterReady > beforeReady) missionReadyCount += afterReady - beforeReady;
+    });
+    if (missionReadyCount > 0) {
+      pushFeed(s, 'ภารกิจส่วนบุคคล', `🎯 มีนักเตะ ${missionReadyCount} ภารกิจสำเร็จจากการซ้อม พร้อมกดรับค่าพลังเพิ่ม!`, 'ok');
     }
     const wg = squadWage(me);
     const stfWg = Math.round(getStaffWage(s));
@@ -3876,7 +4221,936 @@ const StatBarRow: React.FC<{ label: string; value: number; isSig?: boolean; comp
   );
 };
 
+interface PersonalMissionDef {
+  id: string;
+  icon: string;
+  name: string;
+  desc: string;
+  metric: PersonalMissionMetric;
+  unit: string;
+  targets: [number, number, number];
+  subRewards: Record<string, number>[];
+  coreReward: StatKey;
+  posFilter?: Position[];
+}
+
+const PERSONAL_MISSIONS: PersonalMissionDef[] = [
+  {
+    id: 'setpiece',
+    icon: '🎯',
+    name: 'เจ้าพ่อลูกตั้งเตะ',
+    desc: 'รับหน้าที่เล่นลูกตั้งเตะ (ฟรีคิก / เตะมุม / จุดโทษ) หรือซ้อมเตะนิ่ง',
+    metric: 'setpieces',
+    unit: 'ครั้ง',
+    targets: [5, 12, 25],
+    subRewards: [
+      { fk: 5, cur: 2 },
+      { fk: 5, cur: 3 },
+      { fk: 6, cur: 3, comp: 2 }
+    ],
+    coreReward: 'sh',
+    posFilter: ['FW', 'MF', 'DF']
+  },
+  {
+    id: 'passing',
+    icon: '📐',
+    name: 'จอมทัพส่งบอลแม่นยำ',
+    desc: 'ส่งบอลสำเร็จในสนามแข่งขันครบ 100 ครั้งเพื่อปลดล็อกพัฒนาทักษะจ่ายบอล',
+    metric: 'passes',
+    unit: 'ครั้ง',
+    targets: [100, 280, 600],
+    subRewards: [
+      { crs: 4, rd: 3, dist: 3 },
+      { crs: 4, rd: 4, dist: 3 },
+      { crs: 5, rd: 4, dist: 4 }
+    ],
+    coreReward: 'ps'
+  },
+  {
+    id: 'finishing',
+    icon: '🔥',
+    name: 'เพชฌฆาตจบสกอร์',
+    desc: 'หาจังหวะยิงประตูและลุ้นสับไกในเกมจริงต่อเนื่อง',
+    metric: 'shots',
+    unit: 'ครั้ง',
+    targets: [15, 38, 75],
+    subRewards: [
+      { fin: 5, pw: 3, run: 2 },
+      { fin: 5, pw: 4, cur: 2 },
+      { fin: 6, pw: 4, comp: 2 }
+    ],
+    coreReward: 'sh',
+    posFilter: ['FW', 'MF']
+  },
+  {
+    id: 'playmaker',
+    icon: '🎁',
+    name: 'จอมเปิดบอล & แอสซิสต์',
+    desc: 'เปิดบอลเข้ากรอบ แทงทะลุช่อง หรือทำแอสซิสต์ให้เพื่อนร่วมทีม',
+    metric: 'crossAssists',
+    unit: 'ครั้ง',
+    targets: [12, 30, 60],
+    subRewards: [
+      { crs: 5, cur: 3, run: 2 },
+      { crs: 5, cur: 3, fk: 2 },
+      { crs: 6, cur: 4, run: 3 }
+    ],
+    coreReward: 'ps',
+    posFilter: ['FW', 'MF', 'DF']
+  },
+  {
+    id: 'dribbler',
+    icon: '⚡',
+    name: 'สปีด & เลี้ยงกินตัว',
+    desc: 'พาบอลแหวกแนวรับหรือโชว์สกิลเลี้ยงหลบคู่แข่งในเกม',
+    metric: 'dribbles',
+    unit: 'ครั้ง',
+    targets: [25, 65, 130],
+    subRewards: [
+      { spd: 4, run: 4, cur: 2 },
+      { spd: 4, run: 4, str: 2 },
+      { spd: 5, run: 5, cur: 3 }
+    ],
+    coreReward: 'dr',
+    posFilter: ['FW', 'MF', 'DF']
+  },
+  {
+    id: 'defender',
+    icon: '🛡️',
+    name: 'ปราการเหล็กเข้าสกัด',
+    desc: 'เข้าสกัดแย่งบอล ดักตัดทางบอล หรือพุ่งบล็อกลูกยิงคู่แข่ง',
+    metric: 'tackles',
+    unit: 'ครั้ง',
+    targets: [20, 50, 100],
+    subRewards: [
+      { pos: 4, mrk: 4, blk: 3, rd: 2 },
+      { pos: 4, mrk: 4, blk: 4, rd: 3 },
+      { pos: 5, mrk: 5, blk: 4, comp: 2 }
+    ],
+    coreReward: 'tk',
+    posFilter: ['DF', 'MF']
+  },
+  {
+    id: 'aerial',
+    icon: '🗣️',
+    name: 'จ้าวเวหาลูกโหม่ง',
+    desc: 'ดวลลูกกลางอากาศและเทกตัวโหม่งทั้งเกมรุกและเกมรับ',
+    metric: 'headers',
+    unit: 'ครั้ง',
+    targets: [12, 30, 60],
+    subRewards: [
+      { hd: 5, str: 3 },
+      { hd: 5, str: 4, pos: 2 },
+      { hd: 6, str: 4, comp: 2 }
+    ],
+    coreReward: 'ph',
+    posFilter: ['FW', 'MF', 'DF']
+  },
+  {
+    id: 'goalkeeper',
+    icon: '🧤',
+    name: 'มือกาวจอมเซฟ',
+    desc: 'เซฟลูกยิงตรงกรอบและออกมาชก/คว้าบอลกลางอากาศ',
+    metric: 'saves',
+    unit: 'ครั้ง',
+    targets: [18, 45, 90],
+    subRewards: [
+      { sv: 5, cl: 4, dist: 2 },
+      { sv: 5, cl: 4, comp: 3 },
+      { sv: 6, cl: 5, dist: 3 }
+    ],
+    coreReward: 'tk',
+    posFilter: ['GK']
+  },
+  {
+    id: 'ironman',
+    icon: '💪',
+    name: 'ปอดเหล็กความฟิต & นิ่งในนัดใหญ่',
+    desc: 'ลงสนามแข่งขันและรักษาวินัยฝึกซ้อมอย่างสม่ำเสมอ',
+    metric: 'matches',
+    unit: 'นัด',
+    targets: [6, 15, 30],
+    subRewards: [
+      { sta: 4, tol: 3, rec: 3, comp: 2 },
+      { sta: 4, tol: 4, rec: 3, comp: 3 },
+      { sta: 5, tol: 4, rec: 4, comp: 4 }
+    ],
+    coreReward: 'ph'
+  }
+];
+
+const ensurePlayerMissions = (q: Player, careerP?: PlayerCareerProfile | null): PlayerMissionsState => {
+  const src = (q.me && careerP?.missions) || q.missions;
+  const normalized: PlayerMissionsState = {
+    stats: { ...(src?.stats || {}) },
+    claimed: { ...(src?.claimed || {}) },
+    focusId: src?.focusId
+  };
+  if (!normalized.focusId) {
+    normalized.focusId = q.pos === 'GK' ? 'goalkeeper' : q.pos === 'DF' ? 'defender' : q.pos === 'FW' ? 'finishing' : 'passing';
+  }
+  return normalized;
+};
+
+const getPlayerMissionView = (q: Player, careerP?: PlayerCareerProfile | null) => {
+  const mState = ensurePlayerMissions(q, careerP);
+  const items = PERSONAL_MISSIONS.filter((m) => !m.posFilter || m.posFilter.includes(q.pos)).map((def) => {
+    const stage = clamp(mState.claimed[def.id] || 0, 0, def.targets.length);
+    const completedAll = stage >= def.targets.length;
+    const target = def.targets[Math.min(stage, def.targets.length - 1)];
+    const curVal = mState.stats[def.metric] || 0;
+    const pct = completedAll ? 100 : clamp(Math.round((curVal / Math.max(1, target)) * 100), 0, 100);
+    const canClaim = !completedAll && curVal >= target;
+    const nextRewards = def.subRewards[Math.min(stage, def.subRewards.length - 1)];
+    return {
+      def,
+      stage,
+      maxStage: def.targets.length,
+      completedAll,
+      target,
+      curVal,
+      pct,
+      canClaim,
+      isFocused: mState.focusId === def.id,
+      nextRewards
+    };
+  });
+  return { mState, items };
+};
+
+const countReadyMissions = (q: Player, careerP?: PlayerCareerProfile | null): number =>
+  getPlayerMissionView(q, careerP).items.filter((x) => x.canClaim).length;
+
+const formatMissionRewardText = (subRewards: Record<string, number>, coreReward: StatKey) => {
+  const subTxt = Object.entries(subRewards)
+    .map(([k, v]) => `${SIGL[k] || k} +${v}`)
+    .join(' · ');
+  const coreLbl = ATT.find((x) => x[0] === coreReward)?.[1] || coreReward;
+  return `${subTxt} · ${coreLbl} +1`;
+};
+
+const claimPlayerMission = (
+  s: GameState,
+  playerName: string,
+  missionId: string,
+  teamId?: number | null
+): { ok: boolean; msg: string } => {
+  const def = PERSONAL_MISSIONS.find((m) => m.id === missionId);
+  if (!def) return { ok: false, msg: 'ไม่พบภารกิจ' };
+
+  const targetTeam = teamId != null ? s.teams[teamId] : s.teams[s.me];
+  const q = targetTeam?.sq.find((x) => x.n === playerName);
+  if (!q) return { ok: false, msg: 'ไม่พบข้อมูลนักเตะ' };
+
+  const isMe = !!q.me || (s.mode === 'p' && s.p?.name === q.n);
+  const careerP = isMe && s.p ? s.p : null;
+  const mState = ensurePlayerMissions(q, careerP);
+  const stage = clamp(mState.claimed[def.id] || 0, 0, def.targets.length);
+  if (stage >= def.targets.length) return { ok: false, msg: 'ภารกิจนี้สำเร็จครบทุกขั้นแล้ว' };
+  const target = def.targets[stage];
+  const curVal = mState.stats[def.metric] || 0;
+  if (curVal < target) return { ok: false, msg: `ยังทำไม่ครบ (${curVal}/${target} ${def.unit})` };
+
+  const rewards = def.subRewards[stage];
+  mState.claimed[def.id] = stage + 1;
+  q.missions = mState;
+  q.sb = { ...(q.sb || {}) };
+  Object.entries(rewards).forEach(([sk, delta]) => {
+    q.sb![sk] = (q.sb![sk] || 0) + delta;
+    if (q.customD && q.customD[sk] != null) {
+      q.customD[sk] = clamp(q.customD[sk] + delta, 1, 99);
+    }
+  });
+
+  if (careerP) {
+    careerP.missions = mState;
+    careerP.sb = { ...(careerP.sb || {}) };
+    Object.entries(rewards).forEach(([sk, delta]) => {
+      careerP.sb![sk] = (careerP.sb![sk] || 0) + delta;
+      if (careerP.customD && careerP.customD[sk] != null) {
+        careerP.customD[sk] = clamp(careerP.customD[sk] + delta, 1, 99);
+      }
+    });
+    careerP.a[def.coreReward] = clamp(careerP.a[def.coreReward] + 1, 1, 99);
+    careerP.rep = (careerP.rep || 10) + 2;
+    q.ov = ovMe(careerP);
+    if (q.blessed && q.customA) q.customA = { ...careerP.a };
+    syncMe(s);
+  } else {
+    q.coreSb = { ...(q.coreSb || {}) };
+    q.coreSb[def.coreReward] = (q.coreSb[def.coreReward] || 0) + 1;
+    if (q.customA) {
+      q.customA[def.coreReward] = clamp(q.customA[def.coreReward] + 1, 1, 99);
+    }
+    const afterDt = DT(q, null);
+    const calcOv = clamp(OVF(q.pos, afterDt.a), 1, 99);
+    if (calcOv > q.ov) {
+      q.ov = calcOv;
+    } else if ((stage === 0 || stage === 2) && q.ov < 99) {
+      q.ov = clamp(q.ov + 1, 1, 99);
+    }
+    if (q.ov > (q.pot || q.ov)) q.pot = q.ov;
+  }
+
+  const rewardStr = formatMissionRewardText(rewards, def.coreReward);
+  return { ok: true, msg: `${def.icon} ${q.n} สำเร็จ "${def.name} (ขั้น ${stage + 1}/3)"! ${rewardStr}` };
+};
+
+const addMissionStat = (
+  q: Player,
+  metric: PersonalMissionMetric,
+  rawDelta: number,
+  careerP?: PlayerCareerProfile | null
+) => {
+  if (rawDelta <= 0) return;
+  const mState = ensurePlayerMissions(q, careerP);
+  const focusedDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
+  const isFocusedMetric = focusedDef?.metric === metric;
+  const delta = isFocusedMetric ? Math.max(rawDelta + 1, Math.round(rawDelta * 1.5)) : rawDelta;
+  mState.stats[metric] = (mState.stats[metric] || 0) + delta;
+  q.missions = mState;
+  if (careerP) careerP.missions = mState;
+};
+
+const applyTrainingMissionProgress = (
+  q: Player,
+  opts: { teamProgram?: TrainingProgramId; isTeamFocus?: boolean; careerPlan?: number; careerP?: PlayerCareerProfile | null }
+): string[] => {
+  const notes: string[] = [];
+  const mState = ensurePlayerMissions(q, opts.careerP);
+  const focusDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
+  const mult = opts.isTeamFocus ? 2 : 1;
+
+  if (focusDef) {
+    const drillAmt: Record<PersonalMissionMetric, number> = {
+      setpieces: 1 * mult,
+      passes: 10 * mult,
+      shots: 2 * mult,
+      crossAssists: 2 * mult,
+      dribbles: 3 * mult,
+      tackles: 2 * mult,
+      headers: 2 * mult,
+      saves: 2 * mult,
+      matches: 0
+    };
+    const addAmt = drillAmt[focusDef.metric] || 0;
+    if (addAmt > 0) {
+      mState.stats[focusDef.metric] = (mState.stats[focusDef.metric] || 0) + addAmt;
+      notes.push(`${focusDef.name} +${addAmt}`);
+    }
+  }
+
+  if (opts.teamProgram === 'attack' && (q.pos === 'FW' || q.pos === 'MF')) {
+    mState.stats.shots = (mState.stats.shots || 0) + 2;
+    mState.stats.setpieces = (mState.stats.setpieces || 0) + (focusDef?.id === 'setpiece' ? 1 : 0);
+  } else if (opts.teamProgram === 'tactical') {
+    mState.stats.passes = (mState.stats.passes || 0) + 12;
+  } else if (opts.teamProgram === 'defense' && (q.pos === 'DF' || q.pos === 'MF')) {
+    mState.stats.tackles = (mState.stats.tackles || 0) + 2;
+    mState.stats.headers = (mState.stats.headers || 0) + 1;
+  } else if (opts.teamProgram === 'gk' && q.pos === 'GK') {
+    mState.stats.saves = (mState.stats.saves || 0) + 3;
+  }
+
+  if (opts.careerPlan === 0 && q.pos !== 'GK') {
+    mState.stats.shots = (mState.stats.shots || 0) + 2;
+  } else if (opts.careerPlan === 1) {
+    mState.stats.passes = (mState.stats.passes || 0) + 10;
+  } else if (opts.careerPlan === 4 && q.pos !== 'GK') {
+    mState.stats.setpieces = (mState.stats.setpieces || 0) + 1;
+  }
+
+  q.missions = mState;
+  if (opts.careerP) opts.careerP.missions = mState;
+  return notes;
+};
+
+const applyMatchMissionProgress = (
+  s: GameState,
+  H: Team,
+  A: Team,
+  payload: FinishedMatchPayload
+) => {
+  const meTeam = s.teams[s.me];
+  if (!meTeam) return;
+  const playedList = new Set(payload.playedNames?.[meTeam.id] || xi(meTeam).map((q) => q.n));
+  const actionsMap = payload.playerActions || {};
+
+  meTeam.sq.forEach((q) => {
+    const careerP = q.me && s.p ? s.p : null;
+    if (q.me && payload.pf && payload.pf.played === false) return;
+    if (!playedList.has(q.n) && !actionsMap[q.n]) return;
+
+    addMissionStat(q, 'matches', 1, careerP);
+    const acts = actionsMap[q.n];
+    if (acts) {
+      (Object.entries(acts) as [PersonalMissionMetric, number][]).forEach(([metric, val]) => {
+        if (val > 0 && metric !== 'matches') addMissionStat(q, metric, val, careerP);
+      });
+    } else {
+      // Fallback estimation if no per-player breakdown provided
+      const goals = payload.evs.filter((e) => e.t === meTeam.id && e.who === q.n).length;
+      const assists = payload.evs.filter((e) => e.t === meTeam.id && e.as === q.n).length;
+      if (q.pos === 'GK') {
+        addMissionStat(q, 'saves', R(2, 5), careerP);
+        addMissionStat(q, 'passes', R(10, 18), careerP);
+      } else {
+        addMissionStat(q, 'passes', q.pos === 'MF' ? R(18, 30) : R(10, 20), careerP);
+        if (goals > 0) addMissionStat(q, 'shots', goals * 2 + 1, careerP);
+        if (assists > 0) addMissionStat(q, 'crossAssists', assists * 2 + 1, careerP);
+        if (q.pos === 'DF') addMissionStat(q, 'tackles', R(2, 5), careerP);
+      }
+    }
+  });
+  void H;
+  void A;
+  if (s.mode === 'p' && s.p) syncMe(s);
+};
+
+const PlayerMissionsPanel: React.FC<{
+  player: Player;
+  team: Team | null;
+  state: GameState;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
+  onToast: (msg: string) => void;
+}> = ({ player, team, state, onUpdateState, onToast }) => {
+  const isMe = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
+  const careerP = isMe ? state.p : null;
+  const { mState, items } = getPlayerMissionView(player, careerP);
+  const readyCount = items.filter((x) => x.canClaim).length;
+  const claimedTotal = items.reduce((sum, x) => sum + x.stage, 0);
+  const maxTotal = items.length * 3;
+  const subBonusSum = Object.values((isMe ? state.p?.sb : player.sb) || {}).reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="space-y-3 mland:space-y-2">
+      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs sm:text-sm mland:text-xs font-bold flex items-center gap-1.5">
+            <span>🎯 ภารกิจส่วนบุคคลของ {player.n}</span>
+            {readyCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold tabular">
+                พร้อมรับ {readyCount}
+              </span>
+            )}
+          </div>
+          <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">
+            เลือก <b className="text-[var(--ink)]">โฟกัส (+50% ความคืบหน้า)</b> เพื่อปั้นค่าพลังเฉพาะทางจากการแข่งและซ้อม
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs mland:text-[10px] tabular shrink-0">
+          <span className="text-[var(--mut)]">สำเร็จ <b className="text-[var(--ink)]">{claimedTotal}/{maxTotal}</b> ขั้น</span>
+          <span className="font-bold text-[var(--g)]">โบนัสสะสม +{subBonusSum}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mland:gap-1.5">
+        {items.map(({ def, stage, maxStage, completedAll, target, curVal, pct, canClaim, isFocused, nextRewards }) => (
+          <div
+            key={def.id}
+            className={`p-3 mland:p-2 rounded-2xl mland:rounded-xl border flex flex-col justify-between gap-2 mland:gap-1.5 transition-colors ${
+              canClaim
+                ? 'bg-[var(--lamp-soft)]/70 border-[var(--lamp)]'
+                : isFocused
+                  ? 'bg-[var(--g-soft)]/50 border-[var(--g)]/60'
+                  : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
+            }`}
+          >
+            <div className="space-y-1.5 mland:space-y-1">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1.5">
+                    <span>{def.icon} {def.name}</span>
+                  </div>
+                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{def.desc}</div>
+                </div>
+                <span className="text-[10px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] shrink-0">
+                  {completedAll ? '✅ เต็มขั้น' : `ขั้น ${stage + 1}/${maxStage}`}
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px] mland:text-[9px] tabular">
+                  <span className="text-[var(--mut)]">
+                    ความคืบหน้า: <b className="text-[var(--ink)]">{curVal.toLocaleString()} / {target.toLocaleString()}</b> {def.unit}
+                  </span>
+                  <b className={canClaim ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}>{pct}%</b>
+                </div>
+                <div className="h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${pct}%`, background: canClaim ? 'var(--lamp)' : 'var(--g)' }}
+                  />
+                </div>
+              </div>
+
+              <div className="text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--g)]">
+                รางวัลขั้นนี้: {formatMissionRewardText(nextRewards, def.coreReward)}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 pt-0.5">
+              {!completedAll && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onUpdateState((d) => {
+                      const t = team ? d.teams[team.id] : d.teams[d.me];
+                      const pl = t?.sq.find((x) => x.n === player.n);
+                      if (!pl) return;
+                      const cp = pl.me && d.p ? d.p : null;
+                      const ms = ensurePlayerMissions(pl, cp);
+                      ms.focusId = def.id;
+                      pl.missions = ms;
+                      if (cp) cp.missions = ms;
+                    });
+                    onToast(`🎯 ตั้ง "${def.name}" เป็นภารกิจโฟกัส (+50% ความคืบหน้า)`);
+                  }}
+                  className={`px-2.5 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold border cursor-pointer shrink-0 ${
+                    isFocused
+                      ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                      : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  {isFocused ? '🎯 โฟกัสอยู่' : 'ตั้งโฟกัส'}
+                </button>
+              )}
+              {canClaim ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    let resultMsg = '';
+                    onUpdateState((d) => {
+                      const res = claimPlayerMission(d, player.n, def.id, team?.id);
+                      resultMsg = res.msg;
+                    });
+                    SFX.win();
+                    vibrate(30);
+                    onToast(resultMsg || `✨ รับรางวัล "${def.name}" แล้ว!`);
+                  }}
+                  className="flex-1 py-1 mland:py-0.5 px-2.5 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer hover:brightness-105"
+                >
+                  ✨ รับรางวัลอัพพลัง
+                </button>
+              ) : (
+                <span className="ml-auto text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)]">
+                  {completedAll ? '🏆 สำเร็จครบทุกขั้น' : mState.focusId === def.id ? '🔥 เร่งพัฒนา +50%' : 'สะสมจากการแข่ง/ซ้อม'}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
+// COMPACT SAVE CODEC (LK2: Structural Pack + Thai 1-Byte + LZSS + Base64url)
+// ============================================================================
+const SAVE_B64U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const SAVE_POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
+const SAVE_CON_ROLE: ('key' | 'rot' | 'pro')[] = ['key', 'rot', 'pro'];
+
+const packSavePlayer = (q: Player): unknown[] => {
+  const posVal = SAVE_POS.indexOf(q.pos);
+  const roVal = ALL_SUB_ROLES.indexOf(q.ro);
+  const ex: Record<string, unknown> = {};
+  if (q.id !== undefined) ex.id = q.id;
+  if (q.no) ex.no = q.no;
+  if (q.sp) ex.sp = q.sp;
+  if (q.sg) ex.sg = q.sg;
+  if (q.sa) ex.sa = q.sa;
+  if (q.cs) ex.cs = q.cs;
+  if (q.sus) ex.su = q.sus;
+  if (q.yc) ex.yc = q.yc;
+  if (q.rc) ex.rc = q.rc;
+  if (q.me) ex.me = q.me;
+  if (q.vis) ex.v = q.vis;
+  if (q.con) ex.c = [q.con.yr, q.con.wg, Math.max(0, SAVE_CON_ROLE.indexOf(q.con.role))];
+  if (q.loan) ex.ln = q.loan;
+  if (q.loanOpt) ex.lo = q.loanOpt;
+  if (q.price !== undefined) ex.pr = q.price;
+  if (q.free) ex.fr = q.free;
+  if (q.askWg !== undefined) ex.aw = q.askWg;
+  if (q.tries) ex.tr = q.tries;
+  if (q.locked) ex.lk = q.locked;
+  if (q.ap) ex.ap = q.ap;
+  if (q.g) ex.g = q.g;
+  if (q.scouted) ex.sc = 1;
+  if (q.formStreak) ex.fs = q.formStreak;
+  if (q.listed) ex.ls = q.listed;
+  if (q.askPrice !== undefined) ex.ak = q.askPrice;
+  if (q.offerCoolMd !== undefined) ex.oc = q.offerCoolMd;
+  if (q.signedSeason !== undefined) ex.ss = q.signedSeason;
+  if (q.signedMd !== undefined) ex.sm = q.signedMd;
+  if (q.treatedMd !== undefined) ex.tm = q.treatedMd;
+  if (q.customA) ex.ca = q.customA;
+  if (q.customD) ex.cd = q.customD;
+  if (q.customSig) ex.csg = q.customSig;
+  if (q.blessed) ex.bl = 1;
+  if (q.sb && Object.keys(q.sb).length) ex.sb = q.sb;
+  if (q.coreSb && Object.keys(q.coreSb).length) ex.cb = q.coreSb;
+  if (q.missions) ex.ms = q.missions;
+
+  const base: unknown[] = [
+    q.n,
+    posVal >= 0 ? posVal : q.pos,
+    roVal >= 0 ? roVal : q.ro,
+    q.ov,
+    q.age,
+    q.pot,
+    Math.round((q.fit ?? 100) * 100) / 100,
+    q.inj || 0
+  ];
+  if (Object.keys(ex).length) base.push(ex);
+  return base;
+};
+
+const unpackSavePlayer = (raw: unknown): Player => {
+  if (!Array.isArray(raw)) return raw as Player;
+  const [n, pv, rv, ov, age, pot, fit, inj, exRaw] = raw;
+  const ex = (exRaw && typeof exRaw === 'object' ? exRaw : {}) as Record<string, unknown>;
+  const pos: Position = typeof pv === 'number' ? SAVE_POS[pv] || 'MF' : (pv as Position);
+  const ro: SubRole = typeof rv === 'number' ? ALL_SUB_ROLES[rv] || 'CM' : (rv as SubRole);
+  const p: Player = {
+    n: String(n || ''),
+    pos,
+    ro,
+    ov: Number(ov || 60),
+    age: Number(age || 24),
+    pot: Number(pot || ov || 65),
+    fit: Number(fit ?? 100),
+    inj: Number(inj || 0)
+  };
+  if (ex.id !== undefined) p.id = String(ex.id);
+  if (ex.no !== undefined) p.no = Number(ex.no);
+  if (ex.sp !== undefined) p.sp = Number(ex.sp);
+  if (ex.sg !== undefined) p.sg = Number(ex.sg);
+  if (ex.sa !== undefined) p.sa = Number(ex.sa);
+  if (ex.cs !== undefined) p.cs = Number(ex.cs);
+  if (ex.su !== undefined) p.sus = Number(ex.su);
+  if (ex.yc !== undefined) p.yc = Number(ex.yc);
+  if (ex.rc !== undefined) p.rc = Number(ex.rc);
+  if (ex.me !== undefined) p.me = Number(ex.me);
+  if (Array.isArray(ex.v)) p.vis = ex.v as number[];
+  if (Array.isArray(ex.c)) {
+    p.con = {
+      yr: Number(ex.c[0] || 1),
+      wg: Number(ex.c[1] || 1),
+      role: SAVE_CON_ROLE[Number(ex.c[2] || 1)] || 'rot'
+    };
+  }
+  if (ex.ln !== undefined) p.loan = Number(ex.ln);
+  if (ex.lo !== undefined) p.loanOpt = Number(ex.lo);
+  if (ex.pr !== undefined) p.price = Number(ex.pr);
+  if (ex.fr !== undefined) p.free = Number(ex.fr);
+  if (ex.aw !== undefined) p.askWg = Number(ex.aw);
+  if (ex.tr !== undefined) p.tries = Number(ex.tr);
+  if (ex.lk !== undefined) p.locked = Number(ex.lk);
+  if (ex.ap !== undefined) p.ap = Number(ex.ap);
+  if (ex.g !== undefined) p.g = Number(ex.g);
+  if (ex.sc) p.scouted = true;
+  if (ex.fs !== undefined) p.formStreak = Number(ex.fs);
+  if (ex.ls !== undefined) p.listed = Number(ex.ls);
+  if (ex.ak !== undefined) p.askPrice = Number(ex.ak);
+  if (ex.oc !== undefined) p.offerCoolMd = Number(ex.oc);
+  if (ex.ss !== undefined) p.signedSeason = Number(ex.ss);
+  if (ex.sm !== undefined) p.signedMd = Number(ex.sm);
+  if (ex.tm !== undefined) p.treatedMd = Number(ex.tm);
+  if (ex.ca) p.customA = ex.ca as CoreAttrs;
+  if (ex.cd) p.customD = ex.cd as Record<string, number>;
+  if (ex.csg) p.customSig = String(ex.csg);
+  if (ex.bl) p.blessed = true;
+  if (ex.sb) p.sb = ex.sb as Record<string, number>;
+  if (ex.cb) p.coreSb = ex.cb as Partial<CoreAttrs>;
+  if (ex.ms) p.missions = ex.ms as PlayerMissionsState;
+  return p;
+};
+
+const packSaveTeam = (t: Team): unknown[] => {
+  const tex: Record<string, unknown> = {};
+  if (t.cf !== undefined) tex.cf = t.cf;
+  if (t.lu !== undefined) tex.lu = t.lu;
+  if (t.cap !== undefined) tex.cap = t.cap;
+  if (t.press !== undefined) tex.pr = t.press;
+  if (t.tempo !== undefined) tex.tp = t.tempo;
+  if (t.wid !== undefined) tex.wd = t.wid;
+  if (t.line !== undefined) tex.ln = t.line;
+  if (t.pass !== undefined) tex.ps = t.pass;
+  if (t.fm) tex.fm = t.fm;
+  if (t.foreign !== undefined) tex.fg = t.foreign;
+  if (t.tacFam !== undefined) tex.tf = t.tacFam;
+  const arr: unknown[] = [
+    t.id, t.name, t.tier, t.kc, t.sq.map(packSavePlayer),
+    t.form, t.tac, t.pts, t.gf, t.ga, t.w, t.d, t.l, t.p
+  ];
+  if (Object.keys(tex).length) arr.push(tex);
+  return arr;
+};
+
+const unpackSaveTeam = (raw: unknown): Team => {
+  if (!Array.isArray(raw)) return raw as Team;
+  const [id, name, tier, kc, sq, form, tac, pts, gf, ga, w, d, l, p, texRaw] = raw;
+  const tex = (texRaw && typeof texRaw === 'object' ? texRaw : {}) as Record<string, unknown>;
+  const tm: Team = {
+    id: Number(id),
+    name: String(name || ''),
+    tier: Number(tier || 0),
+    kc: (Array.isArray(kc) ? kc : ['#c0392b', '#ffffff']) as [string, string],
+    sq: Array.isArray(sq) ? sq.map(unpackSavePlayer) : [],
+    form: String(form || '4-4-2'),
+    tac: (tac as Mentality) || 'B',
+    pts: Number(pts || 0),
+    gf: Number(gf || 0),
+    ga: Number(ga || 0),
+    w: Number(w || 0),
+    d: Number(d || 0),
+    l: Number(l || 0),
+    p: Number(p || 0)
+  };
+  if (tex.cf !== undefined) tm.cf = tex.cf as CustomSlot[];
+  if (tex.lu !== undefined) tm.lu = tex.lu as string[] | null;
+  if (tex.cap !== undefined) tm.cap = String(tex.cap);
+  if (tex.pr !== undefined) tm.press = Number(tex.pr);
+  if (tex.tp !== undefined) tm.tempo = Number(tex.tp);
+  if (tex.wd !== undefined) tm.wid = Number(tex.wd);
+  if (tex.ln !== undefined) tm.line = Number(tex.ln);
+  if (tex.ps !== undefined) tm.pass = Number(tex.ps);
+  if (tex.fm !== undefined) tm.fm = String(tex.fm);
+  if (tex.fg !== undefined) tm.foreign = Number(tex.fg);
+  if (tex.tf !== undefined) tm.tacFam = Number(tex.tf);
+  return tm;
+};
+
+const packFixturesCompact = (rounds: [number, number][][]): unknown => {
+  const canCompact = rounds.every((rd) =>
+    rd.every(([h, a]) => h >= 0 && h < 64 && a >= 0 && a < 64)
+  );
+  if (!canCompact) return rounds;
+  return 'F:' + rounds.map((rd) => rd.map(([h, a]) => SAVE_B64U[h] + SAVE_B64U[a]).join('')).join('|');
+};
+
+const unpackFixturesCompact = (raw: unknown): [number, number][][] => {
+  if (typeof raw === 'string' && raw.startsWith('F:')) {
+    const body = raw.slice(2);
+    if (!body) return [];
+    return body.split('|').map((seg) => {
+      const pairs: [number, number][] = [];
+      for (let i = 0; i + 1 < seg.length; i += 2) {
+        const h = SAVE_B64U.indexOf(seg[i]);
+        const a = SAVE_B64U.indexOf(seg[i + 1]);
+        if (h >= 0 && a >= 0) pairs.push([h, a]);
+      }
+      return pairs;
+    });
+  }
+  return Array.isArray(raw) ? (raw as [number, number][][]) : [];
+};
+
+const packSaveState = (s: GameState): Record<string, unknown> => {
+  const out: Record<string, unknown> = { ...s, _lk: 2 };
+  out.teams = s.teams.map(packSaveTeam);
+  out.mk = (s.mk || []).map(packSavePlayer);
+  out.yth = (s.yth || []).map(packSavePlayer);
+  out.fx = packFixturesCompact(s.fx || []);
+  if (s.fxo) {
+    out.fxo = Object.fromEntries(Object.entries(s.fxo).map(([k, v]) => [k, packFixturesCompact(v)]));
+  }
+  return out;
+};
+
+const unpackSaveState = (raw: Record<string, unknown>): GameState => {
+  if (raw._lk !== 2) return raw as unknown as GameState;
+  const copy: Record<string, unknown> = { ...raw };
+  delete copy._lk;
+  copy.teams = Array.isArray(raw.teams) ? raw.teams.map(unpackSaveTeam) : [];
+  copy.mk = Array.isArray(raw.mk) ? raw.mk.map(unpackSavePlayer) : [];
+  copy.yth = Array.isArray(raw.yth) ? raw.yth.map(unpackSavePlayer) : [];
+  copy.fx = unpackFixturesCompact(raw.fx);
+  if (raw.fxo && typeof raw.fxo === 'object') {
+    copy.fxo = Object.fromEntries(
+      Object.entries(raw.fxo as Record<string, unknown>).map(([k, v]) => [k, unpackFixturesCompact(v)])
+    );
+  }
+  return copy as unknown as GameState;
+};
+
+const strToCompactBytes = (str: string): Uint8Array => {
+  const out: number[] = [];
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    if (c < 0x7f) {
+      out.push(c);
+    } else if (c >= 0x0e00 && c <= 0x0e7f) {
+      out.push(0x80 | (c - 0x0e00));
+    } else {
+      out.push(0x7f, (c >> 8) & 0xff, c & 0xff);
+    }
+  }
+  return new Uint8Array(out);
+};
+
+const compactBytesToStr = (bytes: Uint8Array): string => {
+  const parts: string[] = [];
+  let chunk: number[] = [];
+  for (let i = 0; i < bytes.length; i++) {
+    const b = bytes[i];
+    if (b < 0x7f) {
+      chunk.push(b);
+    } else if (b === 0x7f) {
+      if (i + 2 >= bytes.length) break;
+      chunk.push((bytes[i + 1] << 8) | bytes[i + 2]);
+      i += 2;
+    } else {
+      chunk.push(0x0e00 + (b - 0x80));
+    }
+    if (chunk.length >= 4096) {
+      parts.push(String.fromCharCode(...chunk));
+      chunk = [];
+    }
+  }
+  if (chunk.length) parts.push(String.fromCharCode(...chunk));
+  return parts.join('');
+};
+
+const lzssCompress = (input: Uint8Array): Uint8Array => {
+  const n = input.length;
+  const WIN = 4096;
+  const MASK = WIN - 1;
+  const HASH_SIZE = 32768;
+  const head = new Int32Array(HASH_SIZE).fill(-1);
+  const prev = new Int32Array(WIN).fill(-1);
+  const out: number[] = [
+    (n >>> 24) & 0xff,
+    (n >>> 16) & 0xff,
+    (n >>> 8) & 0xff,
+    n & 0xff
+  ];
+
+  const insertAt = (pos: number) => {
+    if (pos + 2 >= n) return;
+    const h = ((input[pos] << 10) ^ (input[pos + 1] << 5) ^ input[pos + 2]) & (HASH_SIZE - 1);
+    prev[pos & MASK] = head[h];
+    head[h] = pos;
+  };
+
+  let i = 0;
+  while (i < n) {
+    const flagPos = out.length;
+    out.push(0);
+    let flags = 0;
+    for (let bit = 0; bit < 8 && i < n; bit++) {
+      let bestLen = 0;
+      let bestDist = 0;
+      if (i + 2 < n) {
+        const h = ((input[i] << 10) ^ (input[i + 1] << 5) ^ input[i + 2]) & (HASH_SIZE - 1);
+        let cand = head[h];
+        let steps = 0;
+        const maxLen = Math.min(18, n - i);
+        while (cand >= 0 && i - cand <= WIN && steps < 32) {
+          steps++;
+          if (
+            input[cand] === input[i] &&
+            input[cand + 1] === input[i + 1] &&
+            input[cand + 2] === input[i + 2]
+          ) {
+            let l = 3;
+            while (l < maxLen && input[cand + l] === input[i + l]) l++;
+            if (l > bestLen) {
+              bestLen = l;
+              bestDist = i - cand;
+              if (l === maxLen) break;
+            }
+          }
+          const nxt = prev[cand & MASK];
+          if (nxt >= cand) break;
+          cand = nxt;
+        }
+      }
+      if (bestLen >= 3) {
+        const d1 = bestDist - 1;
+        const l3 = bestLen - 3;
+        out.push((d1 >> 4) & 0xff, ((d1 & 0x0f) << 4) | (l3 & 0x0f));
+        flags |= 1 << bit;
+        for (let k = 0; k < bestLen; k++) insertAt(i + k);
+        i += bestLen;
+      } else {
+        out.push(input[i]);
+        insertAt(i);
+        i++;
+      }
+    }
+    out[flagPos] = flags;
+  }
+  return new Uint8Array(out);
+};
+
+const lzssDecompress = (buf: Uint8Array): Uint8Array => {
+  if (buf.length < 4) throw new Error('Invalid compressed save');
+  const origLen = ((buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3]) >>> 0;
+  if (origLen <= 0 || origLen > 20_000_000) throw new Error('Invalid compressed size');
+  const out = new Uint8Array(origLen);
+  let p = 4;
+  let outIdx = 0;
+  while (p < buf.length && outIdx < origLen) {
+    const flags = buf[p++];
+    for (let bit = 0; bit < 8 && p < buf.length && outIdx < origLen; bit++) {
+      if ((flags & (1 << bit)) === 0) {
+        out[outIdx++] = buf[p++];
+      } else {
+        if (p + 1 >= buf.length) break;
+        const hi = buf[p++];
+        const lo = buf[p++];
+        const dist = ((hi << 4) | (lo >> 4)) + 1;
+        const len = (lo & 0x0f) + 3;
+        const srcStart = outIdx - dist;
+        if (srcStart < 0) throw new Error('Corrupt back-reference');
+        for (let k = 0; k < len && outIdx < origLen; k++) {
+          out[outIdx] = out[srcStart + k];
+          outIdx++;
+        }
+      }
+    }
+  }
+  return out.subarray(0, outIdx);
+};
+
+const bytesToB64Url = (bytes: Uint8Array): string => {
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += 8192) {
+    parts.push(String.fromCharCode(...bytes.subarray(i, Math.min(i + 8192, bytes.length))));
+  }
+  return btoa(parts.join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+const b64UrlToBytes = (str: string): Uint8Array => {
+  const norm = str.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = norm + '==='.slice((norm.length + 3) % 4);
+  const bin = atob(padded);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+};
+
 const cleanImportJson = (raw: string): GameState | null => {
+  const trimmed = raw.trim().replace(/\s+/g, (m) => (m.includes('\n') || m.includes('\r') ? '' : m));
+  if (!trimmed) return null;
+  if (trimmed.startsWith('LK2:')) {
+    try {
+      const payload = trimmed.slice(4).replace(/\s+/g, '');
+      const compressed = b64UrlToBytes(payload);
+      const rawBytes = lzssDecompress(compressed);
+      const jsonStr = compactBytesToStr(rawBytes);
+      const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+      const d = unpackSaveState(parsed);
+      if (!d || !Array.isArray(d.teams) || !Array.isArray(d.fx) || !['m', 'p'].includes(d.mode)) return null;
+      return d;
+    } catch {
+      return null;
+    }
+  }
   try {
     const json = decodeURIComponent(escape(atob(raw.trim())));
     const d = JSON.parse(json) as GameState;
@@ -3893,7 +5167,17 @@ const cleanImportJson = (raw: string): GameState | null => {
   }
 };
 
-const exportSaveCode = (s: GameState): string => btoa(unescape(encodeURIComponent(JSON.stringify(s))));
+const exportSaveCode = (s: GameState): string => {
+  try {
+    const packed = packSaveState(s);
+    const jsonStr = JSON.stringify(packed);
+    const bytes = strToCompactBytes(jsonStr);
+    const compressed = lzssCompress(bytes);
+    return 'LK2:' + bytesToB64Url(compressed);
+  } catch {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(s))));
+  }
+};
 
 
 // ============================================================================
@@ -3907,12 +5191,22 @@ const CREST_SHAPES: { label: string; d: string }[] = [
   { label: 'เพชร', d: 'M12 1.2L22.2 12 12 22.8 1.8 12z' },
   { label: 'โล่มงกุฎ', d: 'M4 5.2l4-3.2 4 2.2 4-2.2 4 3.2v8c0 4.8-3.5 7.9-8 9.9-4.5-2-8-5.1-8-9.9z' },
   { label: 'วงรี', d: 'M12 1.3c5.3 0 8.7 4.8 8.7 10.7S17.3 22.7 12 22.7 3.3 17.9 3.3 12 6.7 1.3 12 1.3z' },
-  { label: 'แปดเหลี่ยม', d: 'M8 1.8h8l5.8 5.8v8.8L16 22.2H8l-5.8-5.8V7.6z' }
+  { label: 'แปดเหลี่ยม', d: 'M8 1.8h8l5.8 5.8v8.8L16 22.2H8l-5.8-5.8V7.6z' },
+  { label: 'โล่แหลม', d: 'M12 1.4l8.5 2.8v8.6c0 4.5-3.6 8-8.5 10-4.9-2-8.5-5.5-8.5-10V4.2z' },
+  { label: 'โล่หัวใจ', d: 'M12 4.4C9.2 1.9 4.2 2.3 3.2 5.5c-.7 2.2-.2 5.8.8 8.3 1.3 3.5 4.2 6.8 8 9 3.8-2.2 6.7-5.5 8-9 1-2.5 1.5-6.1.8-8.3-1-3.2-6-3.6-8.8-1.1z' },
+  { label: 'โล่ปีกเหยี่ยว', d: 'M2.2 4.6l4.2-.8L8.5 2h7l2.1 1.8 4.2.8-1.4 4.1v4.3c0 4.6-3.6 7.8-8.4 9.8-4.8-2-8.4-5.2-8.4-9.8V8.7z' },
+  { label: 'ห้าเหลี่ยม', d: 'M12 1.4l9.6 7-3.7 12.8H6.1L2.4 8.4z' },
+  { label: 'โล่คัมภีร์', d: 'M2.8 3.6c2.6-1.4 5.8-1.4 9.2 0 3.4-1.4 6.6-1.4 9.2 0l-1.3 9c-.6 4.4-3.7 7.8-7.9 9.8-4.2-2-7.3-5.4-7.9-9.8z' },
+  { label: 'ตราแฉก', d: 'M12 1.4L15.2 4.2L19.5 4.5L19.8 8.8L22.6 12L19.8 15.2L19.5 19.5L15.2 19.8L12 22.6L8.8 19.8L4.5 19.5L4.2 15.2L1.4 12L4.2 8.8L4.5 4.5L8.8 4.2Z' },
+  { label: 'โล่ปราสาท', d: 'M3.5 2.5h4.2v2.2h2.4V2.5h3.8v2.2h2.4V2.5h4.2v10.5c0 4.8-3.8 8.2-8.5 10-4.7-1.8-8.5-5.2-8.5-10z' },
+  { label: 'ธงปลายแฉก', d: 'M3 2.2h18v11.5l-4.5 3.8L12 23l-4.5-5.5L3 13.7z' }
 ];
 
 const CREST_PATTERNS = [
   'แถบขวาง', 'ครึ่งตั้ง', 'คาดทแยง', 'สองแถบ', 'ริ้วตั้ง',
-  'ผ่าสี่ส่วน', 'เชฟรอน V', 'กากบาท', 'วงแหวน', 'ไล่เฉด'
+  'ผ่าสี่ส่วน', 'เชฟรอน V', 'กากบาท', 'วงแหวน', 'ไล่เฉด',
+  'ครึ่งนอน', 'หมากรุก', 'ข้าวหลามตัด', 'กากบาท X', 'รัศมีแฉก',
+  'สามเหลี่ยม', 'ทแยงคู่', 'เสาหลัก', 'ริ้วทแยง', 'รัศมีวง'
 ];
 
 const CREST_IC: Record<string, string> = {
@@ -4001,6 +5295,66 @@ const KIT_PATTERNS = [
 
 const KIT_COLLARS = ['คอกลม', 'คอวี', 'คอปก', 'คอทูโทน'];
 
+const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
+  <>
+    <rect width="24" height="24" fill={pat === 9 ? `url(#cg-${uid})` : pat === 19 ? `url(#cr-${uid})` : c1} />
+    {pat === 0 && <rect y="7" width="24" height="5" fill={c2} />}
+    {pat === 1 && <rect x="12" width="12" height="24" fill={c2} />}
+    {pat === 2 && <path d="M0 24L24 0v8L8 24z" fill={c2} />}
+    {pat === 3 && (
+      <>
+        <rect y="5" width="24" height="3" fill={c2} />
+        <rect y="11" width="24" height="3" fill={c2} />
+      </>
+    )}
+    {pat === 4 && [0, 1, 2, 3].map((i) => <rect key={i} x={i * 6 + 1.5} width="2.8" height="24" fill={c2} />)}
+    {pat === 5 && (
+      <>
+        <rect x="12" y="0" width="12" height="12" fill={c2} />
+        <rect x="0" y="12" width="12" height="12" fill={c2} />
+      </>
+    )}
+    {pat === 6 && <path d="M0 6l12 9 12-9v5l-12 9-12-9z" fill={c2} />}
+    {pat === 7 && (
+      <>
+        <rect x="9.5" y="0" width="5" height="24" fill={c2} />
+        <rect x="0" y="9.5" width="24" height="5" fill={c2} />
+      </>
+    )}
+    {pat === 8 && <circle cx="12" cy="12" r="7.5" fill="none" stroke={c2} strokeWidth="2.4" />}
+    {pat === 10 && <rect y="12" width="24" height="12" fill={c2} />}
+    {pat === 11 &&
+      [0, 1, 2, 3].map((r) =>
+        [0, 1, 2, 3].map((col) => ((r + col) % 2 === 1 ? <rect key={`${r}-${col}`} x={col * 6} y={r * 6} width="6" height="6" fill={c2} /> : null))
+      )}
+    {pat === 12 && <path d="M12 2.5L21.5 12 12 21.5 2.5 12z" fill={c2} />}
+    {pat === 13 && (
+      <>
+        <path d="M-1 2L2 -1 25 22 22 25z" fill={c2} />
+        <path d="M22 -1L25 2 2 25 -1 22z" fill={c2} />
+      </>
+    )}
+    {pat === 14 && (
+      <>
+        <path d="M12 12L8 0h8zM12 12l12-4v8zM12 12l4 12H8zM12 12L0 16V8z" fill={c2} />
+        <path d="M12 12L21 0h3v3zM12 12l12 9v3h-3zM12 12L3 24H0v-3zM12 12L0 3V0h3z" fill={c2} opacity="0.65" />
+      </>
+    )}
+    {pat === 15 && <path d="M0 0h24L12 14z" fill={c2} />}
+    {pat === 16 && (
+      <>
+        <path d="M-2 17L17 -2h5L-2 22z" fill={c2} />
+        <path d="M4 26L26 4v5L9 26z" fill={c2} />
+      </>
+    )}
+    {pat === 17 && <rect x="8.5" y="0" width="7" height="24" fill={c2} />}
+    {pat === 18 &&
+      [-12, -4, 4, 12, 20].map((off) => (
+        <path key={off} d={`M${off} 24L${off + 24} 0h3.5L${off + 3.5} 24z`} fill={c2} />
+      ))}
+  </>
+);
+
 const ClubCrest: React.FC<{
   name: string;
   size?: number;
@@ -4024,7 +5378,7 @@ const ClubCrest: React.FC<{
   const strokeCol = borderStyle === 1 ? '#f4c63d' : borderStyle === 3 ? '#0f172a' : '#ffffff';
   const stars = clamp(k?.stars || 0, 0, 3);
 
-  const centerLum = [0, 1, 2, 3, 4, 5, 6, 7, 9].includes(pat) ? colLum(c1) * 0.52 + colLum(c2) * 0.48 : colLum(c1);
+  const centerLum = pat !== 8 ? colLum(c1) * 0.52 + colLum(c2) * 0.48 : colLum(c1);
   const icCol = k?.iconColor ? k.iconColor : centerLum > 0.54 ? '#0f172a' : '#ffffff';
   const haloCol = colLum(icCol) > 0.52 ? 'rgba(9, 20, 15, 0.82)' : 'rgba(255, 255, 255, 0.92)';
   const icTransform = `translate(5.2 ${stars > 0 ? 6.0 : 5.2}) scale(.57)`;
@@ -4041,33 +5395,15 @@ const ClubCrest: React.FC<{
             <stop offset="100%" stopColor={c2} />
           </linearGradient>
         )}
+        {pat === 19 && (
+          <radialGradient id={`cr-${uid}`} cx="50%" cy="50%" r="55%">
+            <stop offset="0%" stopColor={c2} />
+            <stop offset="100%" stopColor={c1} />
+          </radialGradient>
+        )}
       </defs>
       <g clipPath={`url(#cp-${uid})`}>
-        <rect width="24" height="24" fill={pat === 9 ? `url(#cg-${uid})` : c1} />
-        {pat === 0 && <rect y="7" width="24" height="5" fill={c2} />}
-        {pat === 1 && <rect x="12" width="12" height="24" fill={c2} />}
-        {pat === 2 && <path d="M0 24L24 0v8L8 24z" fill={c2} />}
-        {pat === 3 && (
-          <>
-            <rect y="5" width="24" height="3" fill={c2} />
-            <rect y="11" width="24" height="3" fill={c2} />
-          </>
-        )}
-        {pat === 4 && [0, 1, 2, 3].map((i) => <rect key={i} x={i * 6 + 1.5} width="2.8" height="24" fill={c2} />)}
-        {pat === 5 && (
-          <>
-            <rect x="12" y="0" width="12" height="12" fill={c2} />
-            <rect x="0" y="12" width="12" height="12" fill={c2} />
-          </>
-        )}
-        {pat === 6 && <path d="M0 6l12 9 12-9v5l-12 9-12-9z" fill={c2} />}
-        {pat === 7 && (
-          <>
-            <rect x="9.5" y="0" width="5" height="24" fill={c2} />
-            <rect x="0" y="9.5" width="24" height="5" fill={c2} />
-          </>
-        )}
-        {pat === 8 && <circle cx="12" cy="12" r="7.5" fill="none" stroke={c2} strokeWidth="2.4" />}
+        {renderCrestPattern(pat, uid, c1, c2)}
         {k?.c3 && pat !== 8 && <path d={d} fill="none" stroke={c3} strokeWidth="2.2" opacity="0.6" />}
       </g>
       <path d={d} fill="none" stroke={strokeCol} strokeWidth={borderStyle === 2 ? '2' : '1.5'} />
@@ -5623,7 +6959,7 @@ const LeagueView: React.FC<{
 }> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
-  const sub = state.tv ?? 0;
+  const sub = state.v === 'c' ? 4 : (state.tv ?? 0);
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [sideStatTab, setSideStatTab] = useState<'sg' | 'sa' | 'cs' | 'ov'>('sg');
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'deal' | 'act' | 'train'>('all');
@@ -5856,29 +7192,26 @@ const LeagueView: React.FC<{
       }
 
       // 4. การซ้อมทีม
-      const tfNames: Record<TrainingFocus, string> = {
-        FW: 'ซ้อมกองหน้า',
-        MF: 'ซ้อมกองกลาง',
-        DF: 'ซ้อมกองหลัง & โกล์',
-        F: 'พักผ่อน / ฟื้นร่าง'
-      };
+      const curPlan = getTeamTrainingPlan(state);
+      const curProg = TEAM_TRAINING_PROGRAMS[curPlan.program];
+      const curInt = TRAINING_INTENSITY_META[curPlan.intensity];
       items.push({
         id: 'team-training',
         cat: 'train',
         tone: 'info',
-        icon: '🏋️',
+        icon: curProg.icon,
         tag: 'การซ้อมทีม',
-        title: `โปรแกรมสัปดาห์: ${tfNames[state.tf || 'MF']} (ศูนย์ฝึก Lv.${state.tr ?? 1})`,
+        title: `${curProg.name} · ${curInt.icon} ${curInt.label} (ศูนย์ฝึก Lv.${state.tr ?? 1})`,
         detail: state.focusPlayer
           ? `โฟกัสปั้นพิเศษ: ${state.focusPlayer} (2.2x)`
-          : 'ยังไม่ได้ตั้งนักเตะโฟกัสปั้นพิเศษ (2.2x)',
+          : curProg.effectTag,
         quickTraining: true,
-        actionLabel: 'ตั้งปั้นพิเศษ',
-        onAction: () => onNavigate?.('q', 'tactics')
+        actionLabel: 'ห้องซ้อมทีม',
+        onAction: () => onNavigate?.('r')
       });
 
       // 5. การพักผ่อน & สภาพร่างกาย
-      const needRest = (tiredStarters.length > 0 || lowFitAll.length > 0 || avgXiFit < 78) && state.tf !== 'F';
+      const needRest = (tiredStarters.length > 0 || lowFitAll.length > 0 || avgXiFit < 78) && curPlan.program !== 'recovery';
       if (needRest) {
         items.push({
           id: 'rest-needed',
@@ -5889,16 +7222,16 @@ const LeagueView: React.FC<{
           tag: 'การพักผ่อน',
           title: `ทีมเริ่มล้า ควรสลับพักผ่อน (ฟิตตัวจริง ${avgXiFit}%)`,
           detail: `ตัวจริงล้า ${tiredStarters.length} คน${injuredList.length ? ` · เจ็บ ${injuredList.length}` : ''}${suspendedList.length ? ` · แบน ${suspendedList.length}` : ''}`,
-          actionLabel: 'สลับฟื้นร่าง',
+          actionLabel: 'สลับพักฟื้น',
           onAction: () => {
             SFX.tap();
             onUpdateState((d) => {
-              d.tf = 'F';
+              syncTrainingFocusToPlan(d, 'F');
             });
-            onToast?.('สลับโปรแกรมเป็น "พักผ่อน / ฟื้นร่าง" แล้ว (ฟิต +8%/นัด ลดเสี่ยงเจ็บ 50%)');
+            onToast?.('สลับโปรแกรมเป็น "😴 พักผ่อน & ฟื้นฟูร่างกาย" แล้ว (ฟิต +10%/นัด ลดเสี่ยงเจ็บ 55%)');
           }
         });
-      } else if (state.tf === 'F') {
+      } else if (curPlan.program === 'recovery') {
         items.push({
           id: 'rest-active',
           cat: 'train',
@@ -5906,18 +7239,18 @@ const LeagueView: React.FC<{
           icon: '😴',
           tag: 'การพักผ่อน',
           title: `กำลังเข้าโปรแกรมพักผ่อน/ฟื้นร่าง (ฟิตตัวจริง ${avgXiFit}%)`,
-          detail: `ฟื้นฟูความฟิต +8% และลดโอกาสเจ็บ 50%${injuredList.length ? ` · เจ็บ ${injuredList.length} คน` : ''}`,
-          actionLabel: avgXiFit >= 88 ? 'กลับมาซ้อม' : undefined,
+          detail: `ฟื้นฟูความฟิต +10% และลดโอกาสเจ็บ 55%${injuredList.length ? ` · เจ็บ ${injuredList.length} คน` : ''}`,
+          actionLabel: avgXiFit >= 88 ? 'กลับมาซ้อม' : 'ห้องซ้อมทีม',
           onAction:
             avgXiFit >= 88
               ? () => {
                   SFX.tap();
                   onUpdateState((d) => {
-                    d.tf = 'MF';
+                    syncTrainingFocusToPlan(d, 'MF');
                   });
-                  onToast?.('ร่างกายฟื้นเต็มที่แล้ว! สลับกลับสู่โหมดซ้อมกองกลาง');
+                  onToast?.('ร่างกายฟื้นเต็มที่แล้ว! สลับกลับสู่โหมดซ้อมสมดุล');
                 }
-              : undefined
+              : () => onNavigate?.('r')
         });
       } else {
         items.push({
@@ -6170,7 +7503,7 @@ const LeagueView: React.FC<{
                         type="button"
                         onClick={() => {
                           SFX.tap();
-                          onUpdateState((d) => { d.tf = tk; });
+                          onUpdateState((d) => { syncTrainingFocusToPlan(d, tk); });
                           onToast?.(`เปลี่ยนโปรแกรมซ้อมทีมเป็น "${tk === 'F' ? 'พักผ่อน/ฟื้นร่าง' : `โฟกัส${tl}`}"`);
                         }}
                         className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors ${
@@ -6537,29 +7870,335 @@ const LeagueView: React.FC<{
     );
   };
 
+  const renderLeagueAwards = () => {
+    const ts = state.teams.filter((t) => t.tier === vt);
+    const ps = ts.flatMap((t) => t.sq.map((q) => ({ q, t })));
+    const totalPlayedInTier = ts.reduce((s, t) => s + t.p, 0);
+    const maxPlayedInTier = ts.reduce((m, t) => Math.max(m, t.p), 0);
+    const totalRounds = state.fx.length || 30;
+    const isSeasonDone = maxPlayedInTier >= totalRounds && totalRounds > 0;
+    const teamRankMap = new Map<number, number>(tb.map((t, idx) => [t.id, idx]));
+
+    interface AwardEntry {
+      q: Player;
+      t: Team;
+      primaryValue: string;
+      runnerValue: string;
+      breakdown: string;
+      scoreNum: number;
+    }
+
+    const goldenBootList: AwardEntry[] = ps
+      .filter((x) => (x.q.sg || 0) > 0)
+      .sort(
+        (a, b) =>
+          (b.q.sg || 0) - (a.q.sg || 0) ||
+          (a.q.sp || 999) - (b.q.sp || 999) ||
+          (b.q.sa || 0) - (a.q.sa || 0) ||
+          b.q.ov - a.q.ov
+      )
+      .slice(0, 5)
+      .map(({ q, t }) => {
+        const apps = q.sp || t.p || 1;
+        const gpg = ((q.sg || 0) / Math.max(1, apps)).toFixed(2);
+        return {
+          q,
+          t,
+          primaryValue: `${q.sg || 0} ประตู`,
+          runnerValue: `${q.sg || 0} ลูก`,
+          breakdown: `${q.sa || 0} จ่าย · ${q.sp || t.p || 0} นัด · เฉลี่ย ${gpg}/นัด`,
+          scoreNum: q.sg || 0
+        };
+      });
+
+    const goldenGloveList: AwardEntry[] = (totalPlayedInTier > 0
+      ? ps.filter((x) => x.q.pos === 'GK' && ((x.q.cs || 0) > 0 || (x.q.sp || 0) > 0))
+      : []
+    )
+      .sort(
+        (a, b) =>
+          (b.q.cs || 0) - (a.q.cs || 0) ||
+          a.t.ga - b.t.ga ||
+          (b.q.sp || 0) - (a.q.sp || 0) ||
+          b.q.ov - a.q.ov
+      )
+      .slice(0, 5)
+      .map(({ q, t }) => {
+        const apps = q.sp || t.p || 1;
+        const csPct = Math.round(((q.cs || 0) / Math.max(1, apps)) * 100);
+        return {
+          q,
+          t,
+          primaryValue: `${q.cs || 0} คลีนชีต`,
+          runnerValue: `${q.cs || 0} CS`,
+          breakdown: `ทีมเสีย ${t.ga} ลูก · ${q.sp || t.p || 0} นัด · ${csPct}%`,
+          scoreNum: q.cs || 0
+        };
+      });
+
+    const mvpList: AwardEntry[] = (totalPlayedInTier > 0
+      ? ps.filter((x) => (x.q.sp || 0) > 0 || (x.q.sg || 0) > 0 || (x.q.sa || 0) > 0 || (x.q.cs || 0) > 0)
+      : []
+    )
+      .map(({ q, t }) => {
+        const rankIdx = teamRankMap.get(t.id) ?? Math.max(0, tb.length - 1);
+        const goalWeight = q.pos === 'DF' ? 5.5 : q.pos === 'MF' ? 4.5 : 3.8;
+        const assistWeight = q.pos === 'DF' ? 3.8 : 3.0;
+        const csScore = q.pos === 'GK' ? (q.cs || 0) * 4.2 : 0;
+        const defScore = q.pos === 'DF' && t.p > 0 ? (q.sp || 0) * Math.max(0, 1.4 - (t.ga / Math.max(1, t.p)) * 0.45) : 0;
+        const appScore = Math.min(q.sp || 0, t.p || 30) * 0.45;
+        const teamBonus = Math.max(0, (tb.length - rankIdx) / Math.max(1, tb.length)) * 6;
+        const qualAdj = (q.ov - 50) * 0.25 - (q.yc || 0) * 0.5 - (q.rc || 0) * 2.5;
+        const score = Math.max(
+          0,
+          Math.round(
+            ((q.sg || 0) * goalWeight +
+              (q.sa || 0) * assistWeight +
+              csScore +
+              defScore +
+              appScore +
+              teamBonus +
+              qualAdj) *
+              10
+          ) / 10
+        );
+        const detailLine =
+          q.pos === 'GK'
+            ? `${q.cs || 0} คลีนชีต · ${q.sp || t.p || 0} นัด · อันดับ ${rankIdx + 1}`
+            : `${q.sg || 0} ประตู · ${q.sa || 0} จ่าย · ${q.sp || t.p || 0} นัด · อันดับ ${rankIdx + 1}`;
+        return {
+          q,
+          t,
+          primaryValue: `${score.toFixed(1)} คะแนน`,
+          runnerValue: `${score.toFixed(1)}`,
+          breakdown: detailLine,
+          scoreNum: score
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.scoreNum - a.scoreNum ||
+          (b.q.sg || 0) + (b.q.sa || 0) - ((a.q.sg || 0) + (a.q.sa || 0)) ||
+          b.q.ov - a.q.ov
+      )
+      .slice(0, 5);
+
+    const awards: {
+      id: string;
+      icon: string;
+      title: string;
+      enTitle: string;
+      criteria: string;
+      accentText: string;
+      accentBg: string;
+      entries: AwardEntry[];
+      emptyText: string;
+    }[] = [
+      {
+        id: 'golden-boot',
+        icon: '🥾',
+        title: 'รองเท้าทองคำ',
+        enTitle: 'Golden Boot',
+        criteria: 'ผู้ทำประตูสูงสุดประจำลีก (วัดอัตราส่วนต่อนัดเมื่อเท่ากัน)',
+        accentText: 'text-[#b45309] dark:text-[var(--lamp)]',
+        accentBg: 'bg-[var(--lamp-soft)]/70 border-[var(--lamp)]/40',
+        entries: goldenBootList,
+        emptyText: 'ยังไม่มีผู้ทำประตูในลีกนี้ ลงสนามเพื่อเปิดบัญชีดาวยิง'
+      },
+      {
+        id: 'golden-glove',
+        icon: '🧤',
+        title: 'ถุงมือทองคำ',
+        enTitle: 'Golden Glove',
+        criteria: 'ผู้รักษาประตูคลีนชีตสูงสุด (วัดประตูเสียทีมเมื่อเท่ากัน)',
+        accentText: 'text-[var(--g)]',
+        accentBg: 'bg-[var(--g-soft)]/70 border-[var(--g)]/35',
+        entries: goldenGloveList,
+        emptyText: 'ยังไม่มีสถิติคลีนชีตในลีกนี้ รอการลงสนามนัดแรก'
+      },
+      {
+        id: 'poy',
+        icon: '🌟',
+        title: 'นักเตะยอดเยี่ยมประจำฤดูกาล',
+        enTitle: 'Player of the Season',
+        criteria: 'คะแนนรวมจากประตู แอสซิสต์ คลีนชีต วินัย และอันดับทีม',
+        accentText: 'text-[var(--ink)]',
+        accentBg: 'bg-[var(--surface-2)] border-[var(--line)]',
+        entries: mvpList,
+        emptyText: 'ยังไม่มีคะแนนผลงานประจำฤดูกาล รอการลงสนามนัดแรก'
+      }
+    ];
+
+    return (
+      <div className="space-y-3 mland:space-y-1.5 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+        {/* Clean Context Strip */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm mland:text-[11px]">
+            <span className="font-bold text-[var(--ink)]">🎖️ ทำเนียบรางวัลประจำลีก</span>
+            <span aria-hidden="true" className="text-[var(--mut)]">·</span>
+            <span className="text-[var(--mut)] font-medium">{TN[vt]}</span>
+          </div>
+          <div className="text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] tabular-nums">
+            ซีซั่น {state.season} · แข่งแล้ว {maxPlayedInTier}/{totalRounds} นัด · {isSeasonDone ? 'สรุปผลประจำฤดูกาล' : 'กำลังลุ้นรางวัล'}
+          </div>
+        </div>
+
+        {/* 3-Column Awards Showcase */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 mland:grid-cols-3 gap-3 mland:gap-2 mland:flex-1 mland:min-h-0 mland:overflow-y-auto mland:pr-0.5 items-stretch">
+          {awards.map((aw) => {
+            const leader = aw.entries[0];
+            const runners = aw.entries.slice(1);
+            const leaderIsMe = leader?.t.id === state.me;
+
+            return (
+              <section
+                key={aw.id}
+                className="p-4 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-3 mland:gap-2"
+              >
+                <div className="space-y-3 mland:space-y-2">
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-base mland:text-sm leading-none" aria-hidden="true">{aw.icon}</span>
+                        <h3 className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate">{aw.title}</h3>
+                      </div>
+                      <p className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">{aw.enTitle} · {aw.criteria}</p>
+                    </div>
+                  </div>
+
+                  {/* Current #1 Leader Spotlight */}
+                  {leader ? (
+                    <button
+                      type="button"
+                      onClick={() => { SFX.tap(); onInspectPlayer(leader.q, leader.t); }}
+                      className={`w-full p-3 mland:p-2 rounded-xl border text-left cursor-pointer transition-colors hover:border-[var(--g)] ${
+                        leaderIsMe ? 'bg-[var(--lamp-soft)]/65 border-[var(--lamp)]' : aw.accentBg
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 mland:gap-2">
+                        <div className="shrink-0">
+                          <PlayerFace player={leader.q} team={leader.t} state={state} size={46} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">
+                              อันดับ 1{leaderIsMe ? ' · ทีมของคุณ' : ''}
+                            </span>
+                            <span className={`text-sm sm:text-base mland:text-xs font-extrabold tabular-nums shrink-0 ${aw.accentText}`}>
+                              {leader.primaryValue}
+                            </span>
+                          </div>
+                          <div className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate mt-0.5">
+                            {leader.q.n}
+                          </div>
+                          <div className="flex items-center gap-1.5 mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] min-w-0">
+                            <ClubCrest name={leader.t.name} size={14} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
+                            <span className="truncate font-medium text-[var(--ink)]/85">{leader.t.name}</span>
+                            <span aria-hidden="true">·</span>
+                            <span className="shrink-0">{leader.q.ro}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2.5 mland:mt-1.5 pt-2 mland:pt-1 border-t border-[var(--line)]/70 text-[11px] mland:text-[9px] text-[var(--mut)] tabular-nums">
+                        {leader.breakdown}
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="p-4 mland:p-2.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] text-center space-y-1">
+                      <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)]">ยังไม่มีผู้ครองอันดับ 1</div>
+                      <p className="text-[11px] mland:text-[9px] text-[var(--mut)] leading-snug">{aw.emptyText}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Contenders #2 - #5 */}
+                <div className="border-t border-[var(--line)] pt-2.5 mland:pt-1.5 space-y-1 mland:space-y-0.5">
+                  <div className="text-[11px] mland:text-[9px] font-semibold text-[var(--mut)] mb-1">
+                    ผู้ท้าชิงอันดับถัดไป
+                  </div>
+                  {runners.length ? (
+                    <div className="divide-y divide-[var(--line)]/50">
+                      {runners.map((entry, idx) => {
+                        const isMine = entry.t.id === state.me;
+                        return (
+                          <button
+                            key={`${aw.id}-${entry.t.id}-${entry.q.n}`}
+                            type="button"
+                            onClick={() => { SFX.tap(); onInspectPlayer(entry.q, entry.t); }}
+                            className={`w-full min-h-[40px] mland:min-h-[28px] flex items-center gap-2 mland:gap-1.5 px-2 py-1.5 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
+                              isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/75'
+                            }`}
+                          >
+                            <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-center shrink-0">
+                              {idx + 2}
+                            </span>
+                            <ClubCrest name={entry.t.name} size={16} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] truncate">
+                                {entry.q.n}
+                              </div>
+                              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                                {entry.t.name} · {entry.q.ro}
+                              </div>
+                            </div>
+                            <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">
+                              {entry.runnerValue}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-2">
+                      {leader ? 'ยังไม่มีผู้ท้าชิงอันดับรอง' : 'รอกรรมการบันทึกสถิติการแข่งขัน'}
+                    </p>
+                  )}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-2.5 mland:space-y-0 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:gap-1.5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mland:flex-row mland:items-center mland:justify-between gap-1.5 shrink-0">
-        <div className="w-full sm:w-auto mland:w-auto grid grid-cols-3 sm:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
-          {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => (
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mland:flex-row mland:items-center mland:justify-between gap-1.5 shrink-0">
+        {sub !== 4 ? (
+          <div className="w-full lg:w-auto mland:w-auto grid grid-cols-3 lg:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0">
+            {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => (
+              <button
+                key={lbl}
+                type="button"
+                onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
+                className={`flex items-center justify-center gap-1 px-2 sm:px-3 mland:px-2 py-1.5 sm:py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${vt === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
+              >
+                <span className="truncate">{lbl}</span>
+                {idx === me.tier && <span className="shrink-0">★</span>}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="hidden lg:flex mland:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
+            <span>🏅</span>
+            <span>รายการแข่งขันบอลถ้วย</span>
+          </div>
+        )}
+        <div className="w-full lg:w-auto mland:w-auto mland:max-w-full grid grid-cols-3 sm:grid-cols-6 lg:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs mland:overflow-x-auto">
+          {['🏆 ตาราง', '📊 พลังทีม', '⭐ สถิติ', '📅 ปฏิทิน', '🏅 บอลถ้วย', '🎖️ รางวัล'].map((lbl, idx) => (
             <button
               key={lbl}
               type="button"
-              onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
-              className={`flex items-center justify-center gap-1 px-2 sm:px-3 mland:px-2.5 py-1.5 sm:py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${vt === idx ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
-            >
-              <span className="truncate">{lbl}</span>
-              {idx === me.tier && <span className="shrink-0">★</span>}
-            </button>
-          ))}
-        </div>
-        <div className="w-full sm:w-auto mland:w-auto grid grid-cols-4 sm:inline-flex mland:inline-flex items-center gap-0.5 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
-          {['🏆 ตาราง', '📊 พลังทีม', '⭐ สถิติ', '📅 ปฏิทิน'].map((lbl, idx) => (
-            <button
-              key={lbl}
-              type="button"
-              onClick={() => { SFX.tap(); onUpdateState((d) => { d.tv = idx; }); }}
-              className={`flex items-center justify-center px-1.5 sm:px-3 mland:px-2.5 py-1.5 sm:py-1 mland:py-0.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap min-w-0 ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
+              onClick={() => {
+                SFX.tap();
+                onUpdateState((d) => {
+                  if (d.v === 'c') d.v = 't';
+                  d.tv = idx;
+                });
+              }}
+              className={`flex items-center justify-center px-1.5 sm:px-2.5 mland:px-1.5 py-2 sm:py-1.5 lg:py-1 mland:py-0.5 rounded-lg text-[10.5px] sm:text-xs mland:text-[10px] font-bold cursor-pointer transition-all whitespace-nowrap shrink-0 min-w-0 ${sub === idx ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'}`}
             >
               <span className="truncate">{lbl}</span>
             </button>
@@ -6570,6 +8209,8 @@ const LeagueView: React.FC<{
       {sub === 1 && renderPowerComparison()}
       {sub === 2 && renderPlayerStats()}
       {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} />}
+      {sub === 4 && <CupView state={state} onInspectTeam={onInspectTeam} />}
+      {sub === 5 && renderLeagueAwards()}
     </div>
   );
 };
@@ -7118,11 +8759,12 @@ const SquadTacticsView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
+  onOpenGodBlessing?: () => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
+}> = ({ state, onUpdateState, onInspectPlayer, onOpenGodBlessing, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
-  const sub = state.sub ?? 0;
+  const sub = (state.sub ?? 0) > 2 ? 0 : (state.sub ?? 0);
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
@@ -7602,18 +9244,29 @@ const SquadTacticsView: React.FC<{
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 mland:gap-1 text-xs mland:text-[10px] font-semibold tabular whitespace-nowrap shrink-0 px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <span>แผน {formName(me)} · {AR_T[me.tac]}</span>
-          <span className="opacity-35">·</span>
-          <span>⚔️ {Math.round(r.at)} · 🛡️ {Math.round(r.df)}</span>
-          <span className="opacity-35">·</span>
-          <span>❤️ {avgFit}%</span>
-          {offPosCount > 0 && (
-            <>
-              <span className="opacity-35">·</span>
-              <span className="text-[var(--red)] font-bold">⚠️ นอกตำแหน่ง {offPosCount}</span>
-            </>
+        <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
+          {onOpenGodBlessing && (
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); onOpenGodBlessing(); }}
+              className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-xs mland:text-[10px] font-bold cursor-pointer whitespace-nowrap shadow-xs hover:brightness-105"
+            >
+              ✨ พรของพระเจ้า
+            </button>
           )}
+          <div className="flex items-center gap-1.5 mland:gap-1 text-xs mland:text-[10px] font-semibold tabular whitespace-nowrap shrink-0 px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+            <span>แผน {formName(me)} · {AR_T[me.tac]}</span>
+            <span className="opacity-35">·</span>
+            <span>⚔️ {Math.round(r.at)} · 🛡️ {Math.round(r.df)}</span>
+            <span className="opacity-35">·</span>
+            <span>❤️ {avgFit}%</span>
+            {offPosCount > 0 && (
+              <>
+                <span className="opacity-35">·</span>
+                <span className="text-[var(--red)] font-bold">⚠️ นอกตำแหน่ง {offPosCount}</span>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -8461,6 +10114,517 @@ const SquadTacticsView: React.FC<{
           />
         );
       })()}
+    </div>
+  );
+};
+
+// ============================================================================
+// 8.5. TEAM TRAINING & RECOVERY VIEW
+// ============================================================================
+const TeamTrainingView: React.FC<{
+  state: GameState;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
+  onInspectPlayer: (player: Player, team: Team) => void;
+  onToast: (msg: string) => void;
+}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
+  const [trainingMode, setTrainingMode] = useState<'program' | 'missions'>('program');
+  const me = state.teams[state.me];
+  const [selectedMissionPlayer, setSelectedMissionPlayer] = useState<string>(() => me.sq[0]?.n || '');
+  const starters = xi(me);
+  const avgFit = Math.round(starters.reduce((s, q) => s + (q.fit ?? 100), 0) / (starters.length || 1));
+  const plan = getTeamTrainingPlan(state);
+  const curProg = TEAM_TRAINING_PROGRAMS[plan.program];
+  const curInt = TRAINING_INTENSITY_META[plan.intensity];
+  const curTurn = (state.season ?? 1) * 100 + (state.md ?? 0);
+  const sessionUsed = plan.doubleSessionMd === curTurn;
+  const avgAllFit = me.sq.length ? Math.round(me.sq.reduce((s, q) => s + (q.fit ?? 100), 0) / me.sq.length) : 100;
+  const tiredCount = me.sq.filter((q) => (q.fit ?? 100) < 72 && q.inj === 0).length;
+  const injuredSq = me.sq.filter((q) => q.inj > 0);
+  const stf = getStaffState(state);
+  const medLv = state.med ?? 1;
+  const trLv = state.tr ?? 1;
+  const indMap = plan.individualFocus || {};
+  const restedIndivCount = Object.values(indMap).filter((v) => v === 'REST').length;
+  const sortedTrainingPlayers = me.sq
+    .slice()
+    .sort((a, b) => {
+      const aUrg = a.inj > 0 ? -100 : (indMap[a.n] === 'REST' ? -30 : 0) + (a.fit ?? 100);
+      const bUrg = b.inj > 0 ? -100 : (indMap[b.n] === 'REST' ? -30 : 0) + (b.fit ?? 100);
+      return aUrg - bUrg || b.ov - a.ov;
+    });
+  const totalReadyMissions = me.sq.reduce((sum, q) => sum + countReadyMissions(q, null), 0);
+  const missionTargetPlayer = me.sq.find((q) => q.n === selectedMissionPlayer) || me.sq[0];
+  const sortedMissionSquad = me.sq
+    .slice()
+    .sort((a, b) => countReadyMissions(b, null) - countReadyMissions(a, null) || b.ov - a.ov);
+
+  return (
+    <div className="space-y-3 mland:space-y-1.5 mland:flex-1 mland:min-h-0 mland:flex mland:flex-col mland:overflow-hidden">
+      {/* Mode Sub-Navigation */}
+      <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <div className="inline-flex p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] gap-1">
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); setTrainingMode('program'); }}
+            className={`px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${
+              trainingMode === 'program' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+            }`}
+          >
+            📅 โปรแกรมซ้อมทีม
+          </button>
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); setTrainingMode('missions'); }}
+            className={`px-3 py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors flex items-center gap-1.5 ${
+              trainingMode === 'missions' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+            }`}
+          >
+            <span>🎯 ภารกิจส่วนบุคคล</span>
+            {totalReadyMissions > 0 && (
+              <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold tabular ${trainingMode === 'missions' ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]'}`}>
+                {totalReadyMissions}
+              </span>
+            )}
+          </button>
+        </div>
+        <span className="text-[11px] mland:text-[9px] text-[var(--mut)]">
+          {trainingMode === 'missions' ? 'ทำภารกิจทักษะในเกมและซ้อมเพื่ออัพค่าพลังย่อยนักเตะ' : `ศูนย์ฝึก Lv.${trLv} · สตาฟฟ์ฟิต +${stf.fit * 2}%`}
+        </span>
+      </div>
+
+      {trainingMode === 'missions' && missionTargetPlayer ? (
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] mland:grid-cols-[210px_1fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
+          <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5 mland:h-full mland:flex mland:flex-col mland:min-h-0">
+            <div className="text-xs mland:text-[10.5px] font-bold px-1 shrink-0">👥 เลือกนักเตะ ({me.sq.length} คน)</div>
+            <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto max-h-[420px] mland:max-h-none mland:flex-1 mland:min-h-0">
+              {sortedMissionSquad.map((q) => {
+                const ready = countReadyMissions(q, null);
+                const selected = q.n === missionTargetPlayer.n;
+                const { mState } = getPlayerMissionView(q, null);
+                const focusDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
+                return (
+                  <button
+                    key={q.n}
+                    type="button"
+                    onClick={() => { SFX.tap(); setSelectedMissionPlayer(q.n); }}
+                    className={`w-full px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 text-left cursor-pointer transition-colors ${
+                      selected ? 'bg-[var(--g-soft)]' : 'hover:bg-[var(--surface-2)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <PlayerFace player={q} team={me} state={state} size={26} />
+                      <div className="min-w-0">
+                        <div className="text-xs mland:text-[10px] font-bold truncate">{q.n}</div>
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                          {q.ro} · OVR {q.ov} {focusDef ? `· ${focusDef.icon}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                    {ready > 0 && (
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold tabular shrink-0">
+                        +{ready}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] mland:h-full mland:overflow-y-auto">
+            <PlayerMissionsPanel
+              player={missionTargetPlayer}
+              team={me}
+              state={state}
+              onUpdateState={onUpdateState}
+              onToast={onToast}
+            />
+          </div>
+        </div>
+      ) : (
+      <>
+      {/* Training Overview Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mland:gap-1 shrink-0">
+        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ฟิต 11 ตัวจริง / ทั้งทีม</div>
+          <div className={`font-bold text-sm mland:text-[11px] tabular ${avgFit < 72 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+            {avgFit}% <span className="text-[var(--mut)] font-normal text-xs">/ {avgAllFit}%</span>
+          </div>
+        </div>
+        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ความเข้าใจแผน</div>
+          <div className="font-bold text-sm mland:text-[11px] tabular text-[var(--g)]">{me.tacFam ?? 65}%</div>
+        </div>
+        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">โปรแกรมปัจจุบัน</div>
+          <div className="font-bold text-xs mland:text-[10px] truncate">{curProg.icon} {curProg.short} · {curInt.icon}</div>
+        </div>
+        <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ล้า (&lt;72%) / เจ็บ</div>
+          <div className="font-bold text-sm mland:text-[11px] tabular">
+            <span className={tiredCount > 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : ''}>{tiredCount}</span>
+            <span className="text-[var(--mut)]"> / </span>
+            <span className={injuredSq.length > 0 ? 'text-[var(--red)]' : ''}>{injuredSq.length}</span>
+          </div>
+        </div>
+        <div className="col-span-2 sm:col-span-1 p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ศูนย์ฝึก / สตาฟฟ์</div>
+          <div className="font-bold text-xs mland:text-[10px] tabular">ซ้อม Lv.{trLv} · ฟิต+{trLv * 2 + stf.fit * 2}%</div>
+        </div>
+      </div>
+
+      {/* Two-Column Realistic Training Workspace */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2 items-start mland:items-stretch mland:flex-1 mland:min-h-0 mland:overflow-hidden">
+        {/* Left: Weekly Program, Intensity, Rest Options & Special Sessions */}
+        <div className="space-y-3 mland:space-y-2 mland:h-full mland:overflow-y-auto mland:pr-1">
+          {/* 7 Training Programs */}
+          <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-bold text-sm mland:text-xs">📅 โปรแกรมซ้อมประจำสัปดาห์</h3>
+              <span className="text-[11px] mland:text-[9px] text-[var(--mut)]">มีผลหลังจบการแข่งแต่ละนัด</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1">
+              {(Object.values(TEAM_TRAINING_PROGRAMS) as TrainingProgramMeta[]).map((prog) => {
+                const active = plan.program === prog.id;
+                return (
+                  <button
+                    key={prog.id}
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      onUpdateState((d) => {
+                        const cur = getTeamTrainingPlan(d);
+                        d.tf = prog.tf;
+                        d.trainingPlan = { ...cur, program: prog.id };
+                      });
+                      onToast(`ตั้งโปรแกรมซ้อมเป็น "${prog.icon} ${prog.name}"`);
+                    }}
+                    className={`p-2.5 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-all space-y-1 mland:space-y-0.5 ${
+                      active
+                        ? prog.id === 'recovery'
+                          ? 'bg-emerald-500/12 border-emerald-500 ring-1 ring-emerald-500/40'
+                          : 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/40'
+                        : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="font-bold text-xs mland:text-[10.5px] truncate">{prog.icon} {prog.name}</span>
+                      {active && <span className="px-1.5 py-0.2 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">ใช้งาน</span>}
+                    </div>
+                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{prog.desc}</div>
+                    <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)]">{prog.effectTag}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Intensity & Starter Recovery Toggle */}
+          <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-bold text-sm mland:text-xs">⚡ ความหนักในการซ้อม &amp; พักตัวจริง</h3>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mland:gap-1">
+              {(['light', 'normal', 'heavy'] as TrainingIntensity[]).map((intKey) => {
+                const im = TRAINING_INTENSITY_META[intKey];
+                const active = plan.intensity === intKey;
+                return (
+                  <button
+                    key={intKey}
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      onUpdateState((d) => {
+                        const cur = getTeamTrainingPlan(d);
+                        d.trainingPlan = { ...cur, intensity: intKey };
+                      });
+                      onToast(`ปรับความหนักเป็น "${im.icon} ${im.label}"`);
+                    }}
+                    className={`p-2 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-all space-y-0.5 ${
+                      active ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/40' : 'bg-[var(--surface-2)] border-[var(--line)]'
+                    }`}
+                  >
+                    <div className="font-bold text-xs mland:text-[10px]">{im.icon} {im.label}</div>
+                    <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">{im.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                const nextVal = !plan.restStarters;
+                onUpdateState((d) => {
+                  const cur = getTeamTrainingPlan(d);
+                  d.trainingPlan = { ...cur, restStarters: nextVal };
+                });
+                onToast(nextVal ? 'เปิดพักตัวจริงแยกหลังแข่ง (+5% ฟิตตัวจริง · ตัวสำรองซ้อมเข้ม 1.2x)' : 'ปิดโหมดพักตัวจริงแยกแล้ว');
+              }}
+              className={`w-full p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 text-left cursor-pointer transition-colors ${
+                plan.restStarters ? 'bg-[var(--g-soft)] border-[var(--g)]/60' : 'bg-[var(--surface-2)] border-[var(--line)]'
+              }`}
+            >
+              <div className="min-w-0">
+                <div className="font-bold text-xs mland:text-[10.5px]">🧊 พักฟื้นตัวจริงแยกหลังเกม (Cool-down &amp; Bench Scrimmage)</div>
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">11 ตัวจริงเข้าคูลดาวน์ฟื้นฟิต +5% · ตัวสำรองซ้อมลงทีมพัฒนาไวขึ้น 1.2x</div>
+              </div>
+              <span className={`px-2.5 py-0.5 rounded-full text-[11px] mland:text-[9.5px] font-bold shrink-0 ${plan.restStarters ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                {plan.restStarters ? 'เปิด' : 'ปิด'}
+              </span>
+            </button>
+          </div>
+
+          {/* Special Weekly Session (Once per matchday) */}
+          <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-bold text-sm mland:text-xs">🏟️ เซสชันพิเศษระหว่างสัปดาห์</h3>
+              <span className={`text-[11px] mland:text-[9px] font-bold ${sessionUsed ? 'text-[var(--mut)]' : 'text-[var(--g)]'}`}>
+                {sessionUsed ? '⏳ ใช้สิทธิ์นัดนี้แล้ว (รอแข่งนัดถัดไป)' : '✅ พร้อมสั่งซ้อม 1 ครั้ง/นัด'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1">
+              <button
+                type="button"
+                disabled={sessionUsed}
+                onClick={() => {
+                  SFX.win();
+                  let healedCnt = 0;
+                  const gain = 6 + Math.floor(medLv / 2) + stf.physio;
+                  onUpdateState((d) => {
+                    const cur = getTeamTrainingPlan(d);
+                    d.teams[d.me].sq.forEach((q) => {
+                      if ((q.fit ?? 100) < 92) {
+                        q.fit = clamp((q.fit ?? 100) + gain, 35, 100);
+                        healedCnt++;
+                      }
+                    });
+                    d.mor = clamp((d.mor ?? 50) + 2, 0, 100);
+                    d.trainingPlan = { ...cur, doubleSessionMd: curTurn };
+                  });
+                  onToast(`🧘 เซสชันนวดฟื้นฟูสำเร็จ! ฟื้นฟิตให้ ${healedCnt} คน (+${gain}%) · ขวัญ +2%`);
+                }}
+                className="p-2.5 mland:p-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-emerald-500 space-y-0.5"
+              >
+                <div className="font-bold text-xs mland:text-[10px] text-emerald-700 dark:text-emerald-300">🧘 ฟื้นฟูกล้ามเนื้อ &amp; สปา</div>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ฟรี · ฟิตคนล้า +{6 + Math.floor(medLv / 2) + stf.physio}% · ขวัญ +2%</div>
+              </button>
+
+              <button
+                type="button"
+                disabled={sessionUsed || avgAllFit < 60}
+                onClick={() => {
+                  SFX.tap();
+                  const famAdd = 4 + stf.asst;
+                  onUpdateState((d) => {
+                    const cur = getTeamTrainingPlan(d);
+                    const t = d.teams[d.me];
+                    t.tacFam = clamp((t.tacFam ?? 65) + famAdd, 30, 100);
+                    d.mor = clamp((d.mor ?? 50) + 2, 0, 100);
+                    t.sq.forEach((q) => {
+                      if (q.inj === 0) q.fit = clamp((q.fit ?? 100) - 3, 30, 100);
+                    });
+                    d.trainingPlan = { ...cur, doubleSessionMd: curTurn };
+                  });
+                  onToast(`⚽ ลงทีมซ้อมแท็กติกสำเร็จ! ความเข้าใจแผน +${famAdd}% · ขวัญ +2% (ฟิต -3%)`);
+                }}
+                className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left cursor-pointer disabled:opacity-45 hover:border-[var(--g)] space-y-0.5"
+              >
+                <div className="font-bold text-xs mland:text-[10px]">⚽ ลงทีมซ้อมจำลองแผน</div>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">{avgAllFit < 60 ? 'ทีมล้าเกินไป (ต้องฟิต ≥60%)' : `ฟรี · เข้าใจแผน +${4 + stf.asst}% · ฟิต -3%`}</div>
+              </button>
+
+              <button
+                type="button"
+                disabled={sessionUsed || injuredSq.length === 0 || state.money < 15}
+                onClick={() => {
+                  SFX.win();
+                  let reduced = 0;
+                  onUpdateState((d) => {
+                    const cur = getTeamTrainingPlan(d);
+                    d.money -= 15;
+                    logFin(d, 'กายภาพบำบัดกลุ่มนักเตะบาดเจ็บ', -15);
+                    d.teams[d.me].sq.forEach((q) => {
+                      if (q.inj > 0) {
+                        q.inj = Math.max(0, q.inj - 1);
+                        q.fit = clamp((q.fit ?? 75) + 8, 40, 100);
+                        reduced++;
+                      }
+                    });
+                    d.trainingPlan = { ...cur, doubleSessionMd: curTurn };
+                  });
+                  onToast(`🩹 กายภาพกลุ่มสำเร็จ! ลดวันเจ็บ ${reduced} คน (-1 นัด) · ฟิต +8%`);
+                }}
+                className="p-2.5 mland:p-1.5 rounded-xl bg-sky-500/10 border border-sky-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-sky-500 space-y-0.5"
+              >
+                <div className="font-bold text-xs mland:text-[10px] text-sky-700 dark:text-sky-300">🩹 กายภาพกลุ่ม ({injuredSq.length})</div>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">{injuredSq.length === 0 ? 'ไม่มีคนเจ็บ' : '15k ฿ · ลดวันเจ็บ -1 นัด · ฟิต +8%'}</div>
+              </button>
+            </div>
+          </div>
+
+          {/* Last Training Report */}
+          {plan.lastReport && (
+            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface-2)]/80 border border-[var(--line)] space-y-1 text-xs mland:text-[10px]">
+              <div className="flex items-center justify-between font-bold">
+                <span>📋 รายงานผลซ้อมล่าสุด (นัดที่ {plan.lastReport.md})</span>
+                <span className="text-[var(--mut)] font-normal">{plan.lastReport.programName}</span>
+              </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] mland:text-[9.5px] tabular">
+                <span>ฟิตเฉลี่ย: <b className={plan.lastReport.fitDeltaAvg >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{plan.lastReport.fitDeltaAvg >= 0 ? `+${plan.lastReport.fitDeltaAvg}` : plan.lastReport.fitDeltaAvg}%</b></span>
+                <span>เข้าใจแผน: <b className="text-[var(--g)]">+{plan.lastReport.tacFamDelta}%</b></span>
+                {plan.lastReport.morDelta !== 0 && <span>ขวัญทีม: <b>{plan.lastReport.morDelta > 0 ? `+${plan.lastReport.morDelta}` : plan.lastReport.morDelta}%</b></span>}
+                {plan.lastReport.restedCount > 0 && <span>พักเดี่ยว: <b>{plan.lastReport.restedCount} คน</b></span>}
+              </div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">
+                {plan.lastReport.improved.length > 0
+                  ? <>🌟 พัฒนา OVR ขึ้น: <b className="text-[var(--g)]">{plan.lastReport.improved.join(', ')}</b></>
+                  : 'รอบล่าสุดยังไม่มีนักเตะอัป OVR (ลองเพิ่มความหนักหรือตั้งดาวรุ่งปั้นพิเศษ)'}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Individual Conditioning & Rest Roster */}
+        <div className="p-3.5 sm:p-4 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col space-y-2.5 mland:space-y-1.5 mland:h-full mland:min-h-0 mland:overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div>
+              <h3 className="font-bold text-sm mland:text-xs">👥 จัดการรายบุคคล (พักเดี่ยว / ปั้นพิเศษ)</h3>
+              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
+                พักเดี่ยว: ฟิต +10% &amp; ลดเสี่ยงเจ็บ 50% · ปั้นพิเศษ: พัฒนา 2.2x ({restedIndivCount} พักอยู่)
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  let cnt = 0;
+                  onUpdateState((d) => {
+                    const cur = getTeamTrainingPlan(d);
+                    const nextInd: Record<string, 'REST' | 'FOCUS'> = { ...(cur.individualFocus || {}) };
+                    d.teams[d.me].sq.forEach((q) => {
+                      if ((q.fit ?? 100) < 72 || q.inj > 0) {
+                        nextInd[q.n] = 'REST';
+                        cnt++;
+                      } else if (nextInd[q.n] === 'REST' && (q.fit ?? 100) >= 88 && q.inj === 0) {
+                        delete nextInd[q.n];
+                      }
+                    });
+                    d.trainingPlan = { ...cur, individualFocus: nextInd };
+                  });
+                  onToast(cnt > 0 ? `😴 สั่งพักเดี่ยวนักเตะล้า/เจ็บ ${cnt} คนแล้ว` : 'ทุกคนฟิตพร้อมซ้อมดีอยู่แล้ว');
+                }}
+                className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer"
+              >
+                😴 พักคนที่ล้า &lt;72%
+              </button>
+              {restedIndivCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onUpdateState((d) => {
+                      const cur = getTeamTrainingPlan(d);
+                      d.trainingPlan = { ...cur, individualFocus: {} };
+                    });
+                    onToast('ให้ทุกคนกลับมาซ้อมตามโปรแกรมทีมแล้ว');
+                  }}
+                  className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                >
+                  รีเซ็ต
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto max-h-[460px] mland:max-h-none mland:flex-1 mland:min-h-0">
+            {sortedTrainingPlayers.map((q) => {
+              const f = Math.round(q.fit ?? 100);
+              const isRest = indMap[q.n] === 'REST';
+              const isFocus = state.focusPlayer === q.n;
+              const isStarter = starters.some((s) => s.n === q.n);
+              const fCol = f >= 75 ? 'var(--g)' : f >= 55 ? 'var(--lamp)' : 'var(--red)';
+
+              return (
+                <div key={q.n} className={`px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 ${isRest ? 'bg-emerald-500/8' : isFocus ? 'bg-[var(--lamp-soft)]/35' : ''}`}>
+                  <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer">
+                    <PlayerFace player={q} team={me} state={state} size={26} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs mland:text-[10px] font-bold truncate flex items-center gap-1">
+                        <span className="px-1 rounded bg-[var(--surface-2)] text-[9.5px] font-extrabold shrink-0">{q.ro}</span>
+                        <span className="truncate">{q.n}</span>
+                        {isStarter && <span className="text-[9px] shrink-0" title="ตัวจริง">⭐</span>}
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <div className="w-16 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden shrink-0">
+                          <div className="h-full rounded-full" style={{ width: `${f}%`, background: fCol }} />
+                        </div>
+                        <span className="text-[10px] mland:text-[8.5px] font-bold tabular" style={{ color: fCol }}>{f}%</span>
+                        <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                          {q.inj > 0 ? `🩹${q.inj}นัด` : `OVR ${q.ov}/${q.pot}`}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        onUpdateState((d) => {
+                          const cur = getTeamTrainingPlan(d);
+                          const nextInd = { ...(cur.individualFocus || {}) };
+                          if (nextInd[q.n] === 'REST') delete nextInd[q.n];
+                          else nextInd[q.n] = 'REST';
+                          if (d.focusPlayer === q.n) d.focusPlayer = null;
+                          d.trainingPlan = { ...cur, individualFocus: nextInd };
+                        });
+                      }}
+                      className={`px-2 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold cursor-pointer border ${
+                        isRest
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      {isRest ? '😴 พักอยู่' : '😴 พัก'}
+                    </button>
+                    {q.age < 31 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => {
+                            const cur = getTeamTrainingPlan(d);
+                            const nextInd = { ...(cur.individualFocus || {}) };
+                            if (d.focusPlayer === q.n) {
+                              d.focusPlayer = null;
+                            } else {
+                              d.focusPlayer = q.n;
+                              if (nextInd[q.n] === 'REST') delete nextInd[q.n];
+                              d.trainingPlan = { ...cur, individualFocus: nextInd };
+                            }
+                          });
+                        }}
+                        className={`px-2 py-1 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold cursor-pointer border ${
+                          isFocus
+                            ? 'bg-[var(--lamp)] text-[#261900] border-[#ca8a04]/40'
+                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {isFocus ? '🌟 ปั้น' : '⭐ ปั้น'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      </>
+      )}
     </div>
   );
 };
@@ -10326,20 +12490,29 @@ const FinanceClubView: React.FC<{
               </div>
 
               <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
-                <h3 className="font-bold text-sm">🏋️ โฟกัสโปรแกรมซ้อมประจำสัปดาห์</h3>
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-sm">🏋️ โฟกัสโปรแกรมซ้อมประจำสัปดาห์</h3>
+                  <button
+                    type="button"
+                    onClick={() => onUpdateState((d) => { d.v = 'r'; d.sub = 0; })}
+                    className="text-[11px] font-bold text-[var(--g)] underline cursor-pointer"
+                  >
+                    เข้าเมนู 🏋️ ฝึกซ้อมแบบละเอียด →
+                  </button>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                  {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['F', 'ฟื้นร่าง']] as const).map(([k, l]) => (
+                  {([['FW', 'กองหน้า'], ['MF', 'กองกลาง'], ['DF', 'กองหลัง'], ['F', 'พักฟื้น']] as const).map(([k, l]) => (
                     <button
                       key={k}
                       type="button"
-                      onClick={() => onUpdateState((d) => { d.tf = k; })}
+                      onClick={() => onUpdateState((d) => { syncTrainingFocusToPlan(d, k); })}
                       className={`py-2 rounded-lg text-xs font-bold cursor-pointer ${state.tf === k ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
                     >
                       {l}
                     </button>
                   ))}
                 </div>
-                <p className="text-[11px] text-[var(--mut)]">นักเตะตำแหน่งที่เลือกมีโอกาสอัป OVR หลังแข่ง (ฟื้นร่างช่วยเร่งฟิตและลดเจ็บ)</p>
+                <p className="text-[11px] text-[var(--mut)]">ปรับโปรแกรมซ้อมละเอียด (7 รูปแบบ, ความหนัก, พักตัวจริงแยก, สั่งพักเดี่ยว) ได้ที่เมนู <b>🏋️ ฝึกซ้อม</b></p>
               </div>
             </div>
           </div>
@@ -10857,18 +13030,43 @@ const FinanceClubView: React.FC<{
                 <div className="grid grid-cols-2 sm:grid-cols-5 mland:grid-cols-5 gap-1.5">
                   {CREST_PATTERNS.map((l, i) => {
                     const active = k.pat === i;
+                    const shPath = CREST_SHAPES[k.shape % CREST_SHAPES.length]?.d || CREST_SHAPES[0].d;
+                    const patUid = `patprev-${i}`;
                     return (
                       <button
                         key={l}
                         type="button"
                         onClick={() => onUpdateState((d) => { ensureClubIdentity(d).pat = i; })}
-                        className={`py-1.5 px-1.5 rounded-xl text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer truncate border transition-colors ${
+                        className={`flex items-center gap-1.5 py-1.5 px-2 rounded-xl text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer border transition-colors min-w-0 ${
                           active
                             ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
                             : 'bg-[var(--surface-2)]/70 border-transparent text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
                         }`}
                       >
-                        {l}
+                        <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
+                          <defs>
+                            <clipPath id={`cp-${patUid}`}>
+                              <path d={shPath} />
+                            </clipPath>
+                            {i === 9 && (
+                              <linearGradient id={`cg-${patUid}`} x1="0" y1="0" x2="1" y2="1">
+                                <stop offset="0%" stopColor={k.c1} />
+                                <stop offset="100%" stopColor={k.c2} />
+                              </linearGradient>
+                            )}
+                            {i === 19 && (
+                              <radialGradient id={`cr-${patUid}`} cx="50%" cy="50%" r="55%">
+                                <stop offset="0%" stopColor={k.c2} />
+                                <stop offset="100%" stopColor={k.c1} />
+                              </radialGradient>
+                            )}
+                          </defs>
+                          <g clipPath={`url(#cp-${patUid})`}>
+                            {renderCrestPattern(i, patUid, k.c1, k.c2)}
+                          </g>
+                          <path d={shPath} fill="none" stroke={active ? '#ffffff' : 'var(--line)'} strokeWidth="1.5" />
+                        </svg>
+                        <span className="truncate">{l}</span>
                       </button>
                     );
                   })}
@@ -11530,7 +13728,7 @@ const PlayerCareerView: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
 }> = ({ state, onUpdateState, onToast }) => {
-  const [careerTab, setCareerTab] = useState<'plan' | 'perks' | 'stats'>('plan');
+  const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats'>('plan');
   const p = state.p;
   if (!p) return null;
   const meTeam = state.teams[state.me];
@@ -11543,8 +13741,9 @@ const PlayerCareerView: React.FC<{
   const injCount = meSq?.inj ?? p.inj ?? 0;
   const ycCount = meSq?.yc ?? p.yc ?? 0;
   const rcCount = meSq?.rc ?? p.rc ?? 0;
-  const fakePlayer: Player = { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1 };
+  const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
   const details = dtInfo(fakePlayer, p);
+  const readyMissionCount = countReadyMissions(fakePlayer, p);
   const starters = xi(meTeam);
   const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
   const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
@@ -11640,11 +13839,12 @@ const PlayerCareerView: React.FC<{
       </div>
 
       <div className="space-y-4 mland:space-y-1 mland:h-full mland:flex mland:flex-col mland:min-h-0">
-        <div className="hidden mland:grid grid-cols-3 gap-1 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        <div className="hidden mland:grid grid-cols-4 gap-1 p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {([
             ['plan', '📅 แผนฝึกซ้อม'],
+            ['missions', `🎯 ภารกิจ${readyMissionCount ? ` (${readyMissionCount})` : ''}`],
             ['perks', `🌟 สกิล (${perks.length})`],
-            ['stats', '📊 ค่าพลังละเอียด']
+            ['stats', '📊 ค่าพลัง']
           ] as const).map(([k, lbl]) => (
             <button
               key={k}
@@ -11686,6 +13886,16 @@ const PlayerCareerView: React.FC<{
             ))}
           </div>
           {p.last && <p className="text-xs text-[var(--g)] font-semibold pt-1">สัปดาห์ล่าสุด: {p.last}</p>}
+        </div>
+
+        <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'missions' ? '' : 'mland:hidden'}`}>
+          <PlayerMissionsPanel
+            player={fakePlayer}
+            team={meTeam}
+            state={state}
+            onUpdateState={onUpdateState}
+            onToast={onToast}
+          />
         </div>
 
         <div className={`p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 ${careerTab === 'perks' ? '' : 'mland:hidden'}`}>
@@ -11833,6 +14043,8 @@ interface LivePitchAgent {
   acrobatType?:
     | 'bicycle'
     | 'volley'
+    | 'header'
+    | 'diving_header'
     | 'burst'
     | 'stepover'
     | 'spin'
@@ -11871,13 +14083,29 @@ interface LiveBallState {
   progress: number;
   duration: number;
   flightType: BallFlightType;
-  shotStyle?: 'normal' | 'bicycle' | 'volley' | 'curler' | 'trivela' | 'knuckle' | 'header' | 'screamer' | 'chip' | 'panenka';
+  shotStyle?: 'normal' | 'bicycle' | 'volley' | 'curler' | 'trivela' | 'knuckle' | 'header' | 'diving_header' | 'deflected' | 'screamer' | 'chip' | 'panenka';
   carrierId: string | null;
   targetId: string | null;
   shooterId: string | null;
   lastPasserId: string | null;
   possessionSide: 'H' | 'A';
   trail: { x: number; y: number; z: number }[];
+  shotPlan?: {
+    outcome: 'block' | 'deflect' | 'miss' | 'woodwork' | 'save' | 'goal';
+    blockerId?: string;
+    deflectorId?: string;
+    deflectedFrom?: string;
+    parryCorner?: boolean;
+    shootoutScored?: boolean;
+  };
+  bounceNext?: {
+    setPiece?: PendingSetPiece;
+    carrierId?: string;
+    possessionSide?: 'H' | 'A';
+    phaseLabel?: string;
+    phaseTone?: LiveMatchWorld['phaseTone'];
+    trailLog?: string;
+  };
 }
 
 interface LivePitchFx {
@@ -12425,7 +14653,7 @@ const drawLivePitchToCanvas = (
 
   // Ball trail & target line when in flight
   const b = world.ball;
-  if (!b.carrierId && b.flightType !== 'carry') {
+  if (!b.carrierId && b.flightType !== 'carry' && b.flightType !== 'bounce') {
     const startPx = px(b.fromX);
     const startPy = py(b.fromY);
     const endPx = px(b.toX);
@@ -12438,19 +14666,25 @@ const drawLivePitchToCanvas = (
       b.shotStyle === 'curler' ||
       b.shotStyle === 'trivela' ||
       b.shotStyle === 'knuckle' ||
+      b.shotStyle === 'diving_header' ||
+      b.shotStyle === 'deflected' ||
       b.shotStyle === 'screamer';
     ctx.save();
     ctx.strokeStyle =
       b.flightType === 'shot' || b.flightType === 'freekick'
-        ? b.shotStyle === 'curler'
-          ? 'rgba(56, 189, 248, 0.75)'
-          : b.shotStyle === 'trivela'
-            ? 'rgba(249, 115, 22, 0.78)'
-            : b.shotStyle === 'knuckle'
-              ? 'rgba(192, 132, 252, 0.78)'
-              : isSpecialShot
-                ? 'rgba(251, 191, 36, 0.78)'
-                : 'rgba(248, 113, 113, 0.55)'
+        ? b.shotStyle === 'deflected'
+          ? 'rgba(251, 146, 60, 0.85)'
+          : b.shotStyle === 'curler'
+            ? 'rgba(56, 189, 248, 0.75)'
+            : b.shotStyle === 'trivela'
+              ? 'rgba(249, 115, 22, 0.78)'
+              : b.shotStyle === 'knuckle'
+                ? 'rgba(192, 132, 252, 0.78)'
+                : b.shotStyle === 'header' || b.shotStyle === 'diving_header'
+                  ? 'rgba(253, 224, 71, 0.72)'
+                  : isSpecialShot
+                    ? 'rgba(251, 191, 36, 0.78)'
+                    : 'rgba(248, 113, 113, 0.55)'
         : b.flightType === 'onetwo'
           ? 'rgba(52, 211, 153, 0.72)'
           : b.flightType === 'through'
@@ -12473,23 +14707,27 @@ const drawLivePitchToCanvas = (
       const p1 = b.trail[i];
       const a = (i / b.trail.length) * 0.72;
       ctx.strokeStyle =
-        b.shotStyle === 'curler'
-          ? `rgba(56, 189, 248, ${a})`
-          : b.shotStyle === 'trivela'
-            ? `rgba(249, 115, 22, ${a})`
-            : b.shotStyle === 'knuckle'
-              ? `rgba(216, 180, 254, ${a})`
-              : b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer'
-                ? `rgba(251, 191, 36, ${a})`
-                : b.flightType === 'onetwo'
-                  ? `rgba(52, 211, 153, ${a})`
-                  : b.flightType === 'through'
-                    ? `rgba(250, 204, 21, ${a})`
-                    : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
-                      ? `rgba(147, 197, 253, ${a * 0.85})`
-                      : b.flightType === 'shot'
-                        ? `rgba(254, 240, 138, ${a})`
-                        : `rgba(255, 255, 255, ${a * 0.7})`;
+        b.shotStyle === 'deflected'
+          ? `rgba(251, 146, 60, ${Math.min(0.92, a + 0.15)})`
+          : b.shotStyle === 'curler'
+            ? `rgba(56, 189, 248, ${a})`
+            : b.shotStyle === 'trivela'
+              ? `rgba(249, 115, 22, ${a})`
+              : b.shotStyle === 'knuckle'
+                ? `rgba(216, 180, 254, ${a})`
+                : b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer' || b.shotStyle === 'diving_header'
+                  ? `rgba(251, 191, 36, ${a})`
+                  : b.shotStyle === 'header'
+                    ? `rgba(125, 211, 252, ${a})`
+                    : b.flightType === 'onetwo'
+                      ? `rgba(52, 211, 153, ${a})`
+                      : b.flightType === 'through'
+                        ? `rgba(250, 204, 21, ${a})`
+                        : b.flightType === 'lofted' || b.flightType === 'cross' || b.flightType === 'corner'
+                          ? `rgba(147, 197, 253, ${a * 0.85})`
+                          : b.flightType === 'shot'
+                            ? `rgba(254, 240, 138, ${a})`
+                            : `rgba(255, 255, 255, ${a * 0.7})`;
       ctx.lineWidth = 1.6 + (i / b.trail.length) * (b.flightType === 'shot' || b.flightType === 'freekick' ? 3.2 : 2.1);
       ctx.beginPath();
       ctx.moveTo(px(p0.x), py(p0.y) - p0.z * 0.78);
@@ -12548,14 +14786,14 @@ const drawLivePitchToCanvas = (
     // GK diving stretch offset & extended gloves
     if (ag.intent === 'DIVE' && ag.diveProgress > 0) {
       const diveSin = Math.sin(ag.diveProgress * Math.PI);
-      const diveShiftY = ag.diveDir * diveSin * playerRadius * 1.65;
+      const diveShiftY = ag.diveDir * diveSin * playerRadius * 0.65;
       ctx.translate(0, diveShiftY);
-      ctx.rotate(ag.diveDir * diveSin * 0.82);
+      ctx.rotate(ag.diveDir * diveSin * 0.72);
       ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#0ea5e9';
       ctx.lineWidth = 1.2;
       ctx.beginPath();
-      ctx.arc(0, ag.diveDir * (playerRadius * 1.25), playerRadius * 0.38, 0, Math.PI * 2);
+      ctx.arc(0, ag.diveDir * (playerRadius * 1.15), playerRadius * 0.36, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
     }
@@ -12596,6 +14834,35 @@ const drawLivePitchToCanvas = (
         ctx.lineWidth = 2.2;
         ctx.beginPath();
         ctx.arc(0, 0, playerRadius + 5, -Math.PI * 0.35, Math.PI * 0.45);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'header') {
+        const leapY = -playerRadius * 0.76 * arcEnv;
+        const lungeX = Math.cos(ag.facing) * playerRadius * 0.38 * arcEnv;
+        const lungeY = Math.sin(ag.facing) * playerRadius * 0.38 * arcEnv;
+        const jumpScale = 1 + 0.16 * arcEnv;
+        ctx.translate(lungeX, leapY + lungeY);
+        ctx.scale(jumpScale, jumpScale);
+        ctx.strokeStyle = `rgba(253, 224, 71, ${acAlpha * 0.92})`;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 4.5 + prog * 4, ag.facing - 0.9, ag.facing + 0.9);
+        ctx.stroke();
+      } else if (ag.acrobatType === 'diving_header') {
+        const divePush = playerRadius * 0.95 * arcEnv;
+        ctx.translate(Math.cos(ag.facing) * divePush, Math.sin(ag.facing) * divePush - playerRadius * 0.36 * arcEnv);
+        ctx.rotate(Math.cos(ag.facing) * 0.42 * arcEnv);
+        ctx.strokeStyle = `rgba(56, 189, 248, ${acAlpha * 0.95})`;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(-Math.cos(ag.facing) * playerRadius * 1.5, -Math.sin(ag.facing) * playerRadius * 1.5 - 3);
+        ctx.lineTo(0, -3);
+        ctx.moveTo(-Math.cos(ag.facing) * playerRadius * 1.5, -Math.sin(ag.facing) * playerRadius * 1.5 + 3);
+        ctx.lineTo(0, 3);
+        ctx.stroke();
+        ctx.strokeStyle = `rgba(250, 204, 21, ${acAlpha * 0.9})`;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath();
+        ctx.arc(0, 0, playerRadius + 5, ag.facing - 0.85, ag.facing + 0.85);
         ctx.stroke();
       } else if (ag.acrobatType === 'burst') {
         const bx1 = -Math.cos(ag.facing) * playerRadius * 0.85;
@@ -12842,7 +15109,13 @@ const drawLivePitchToCanvas = (
 
   // Elevated 3D match ball
   const drawBy = by - b.z * 0.78;
-  const isSpecialBall = b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'screamer' || b.shotStyle === 'trivela';
+  const isSpecialBall =
+    b.shotStyle === 'bicycle' ||
+    b.shotStyle === 'volley' ||
+    b.shotStyle === 'screamer' ||
+    b.shotStyle === 'trivela' ||
+    b.shotStyle === 'diving_header' ||
+    b.shotStyle === 'deflected';
   const isCurlBall = b.shotStyle === 'curler' || b.shotStyle === 'knuckle';
   const isPowerShot = b.flightType === 'shot' || b.flightType === 'freekick' || b.flightType === 'penalty' || b.flightType === 'shootout_kick';
   ctx.save();
@@ -13166,8 +15439,10 @@ const MatchModal: React.FC<{
   homeId: number;
   awayId: number;
   isDerby: boolean;
+  isFullscreen?: boolean;
+  onExitFullscreen?: () => void;
   onFinish: (payload: FinishedMatchPayload) => void;
-}> = ({ state, kind, homeId, awayId, isDerby, onFinish }) => {
+}> = ({ state, kind, homeId, awayId, isDerby, isFullscreen, onExitFullscreen, onFinish }) => {
   const settings = useMemo(() => getSettings(), []);
   const homeOrig = state.teams[homeId];
   const awayOrig = state.teams[awayId];
@@ -13952,13 +16227,20 @@ const MatchModal: React.FC<{
         }
       }
 
-      // Goalkeeper AI (signature 'cl' rushes further to close angles)
+      // Goalkeeper AI (signature 'cl' rushes further to close angles; preserve active DIVE!)
       if (ag.pos === 'GK') {
-        const goalX = attRight ? 3.8 : 96.2;
+        if (ag.intent === 'DIVE' && ag.intentTimer > 0 && ag.diveTargetY != null) {
+          ag.ty = ag.diveTargetY;
+          ag.runToX = undefined;
+          ag.runToY = undefined;
+          lockedTargetIds.add(ag.id);
+          return;
+        }
+        const goalX = attRight ? 2.4 : 97.6;
         const ballThreat = attRight ? clamp((30 - b.x) / 30, 0, 1) : clamp((b.x - 70) / 30, 0, 1);
-        const sweepBonus = ag.sig === 'cl' ? 1.5 : 0;
-        const sweepPush = (ag.d.cl > 68 ? 3.0 : 1.5 + sweepBonus) * (inPoss ? 1.3 : ballThreat);
-        ag.tx = clamp(goalX + dir * (1.2 + sweepPush), 3, 97);
+        const sweepBonus = ag.sig === 'cl' ? 1.1 : 0;
+        const sweepPush = (ag.d.cl > 68 ? 2.2 : 1.1 + sweepBonus) * (inPoss ? 1.35 : ballThreat);
+        ag.tx = clamp(goalX + dir * (0.8 + sweepPush), 2.0, 98.0);
         ag.ty = clamp(50 + (b.y - 50) * 0.24, 42.5, 57.5);
         ag.intent = 'SUPPORT';
         ag.runToX = undefined;
@@ -13999,6 +16281,9 @@ const MatchModal: React.FC<{
         ag.intent = 'PASS_TARGET';
         normX = attRight ? b.toX : 100 - b.toX;
         ty = clamp(b.toY, 6, 94);
+        if (b.flightType === 'cross' || b.flightType === 'corner') {
+          lockedTargetIds.add(ag.id);
+        }
       } else if (inPoss) {
         const oppDefRaw = isH ? aDefLineX : hDefLineX;
         const oppDefNorm = clamp(attRight ? oppDefRaw : 100 - oppDefRaw, 54, 90.5);
@@ -14213,6 +16498,206 @@ const MatchModal: React.FC<{
     }
   };
 
+  // Pre-compute physically accurate shot trajectory (block, woodwork, off-target, GK save spot, or net goal)
+  const prepareShotFlight = (
+    w: LiveMatchWorld,
+    curMin: number,
+    opts: {
+      flightType: 'shot' | 'freekick' | 'penalty';
+      side: 'H' | 'A';
+      fromX: number;
+      fromY: number;
+      shooter: LivePitchAgent | undefined;
+      shotStyle: LiveBallState['shotStyle'];
+      curveAmt: number;
+      maxZAmt: number;
+      durAmt: number;
+      isPanenka?: boolean;
+    }
+  ) => {
+    const b = w.ball;
+    const sr = simRef.current;
+    const { flightType, side, fromX, fromY, shooter, shotStyle, curveAmt, maxZAmt, durAmt, isPanenka } = opts;
+    const defSide: 'H' | 'A' = side === 'H' ? 'A' : 'H';
+    const attRightNow = isAttackRight(w, side);
+    const active = w.agents.filter((a) => !a.sentOff);
+    const defPool = active.filter((a) => a.side === defSide);
+    const gk = defPool.find((a) => a.pos === 'GK') || defPool[0];
+    const defenders = defPool.filter((a) => a.pos === 'DF' || a.pos === 'MF');
+
+    const goalLineX = attRightNow ? 100 : 0;
+    const dist = Math.hypot(goalLineX - fromX, 50 - fromY);
+
+    b.fromX = fromX;
+    b.fromY = fromY;
+    b.curve = curveAmt;
+    b.maxZ = maxZAmt;
+    b.progress = 0;
+    b.duration = durAmt;
+    b.flightType = flightType;
+    b.shotStyle = shotStyle;
+    b.carrierId = null;
+    b.targetId = null;
+    b.shooterId = shooter?.id || null;
+    b.possessionSide = side;
+    b.bounceNext = undefined;
+
+    // 1. Check defender block / free-kick wall deflection / shot deflection ("ยิงแฉลบ") first (except penalty)
+    if (flightType !== 'penalty') {
+      const segDx = goalLineX - fromX;
+      const segDy = 50 - fromY;
+      const segLenSq = Math.max(1, segDx * segDx + segDy * segDy);
+      const corridorCands = defenders
+        .filter((d) => (attRightNow ? d.x > fromX + 0.4 && d.x < 97.8 : d.x < fromX - 0.4 && d.x > 2.2))
+        .map((d) => {
+          const tProj = clamp(((d.x - fromX) * segDx + (d.y - fromY) * segDy) / segLenSq, 0.08, 0.92);
+          const projX = fromX + segDx * tProj;
+          const projY = fromY + segDy * tProj;
+          const perpDist = Math.hypot(d.x - projX, d.y - projY);
+          return { d, perpDist, tProj };
+        })
+        .filter((x) => x.perpDist < (flightType === 'freekick' ? 8.5 : x.d.sig === 'blk' ? 9.5 : 7.8))
+        .sort((u, v) => u.perpDist - v.perpDist || u.tProj - v.tProj);
+
+      const wallDef = flightType === 'freekick' ? defenders.find((d) => d.intent === 'WALL') || corridorCands[0]?.d : undefined;
+      const nearDef = wallDef || corridorCands[0]?.d;
+
+      if (nearDef) {
+        const blockChance =
+          flightType === 'freekick'
+            ? clamp(0.18 - ((shooter?.d.cur || 60) - 60) * 0.002, 0.09, 0.24)
+            : clamp(0.09 + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) - 60) * 0.0035, 0.05, 0.22);
+        const deflectChance =
+          flightType === 'freekick'
+            ? 0.14
+            : clamp(0.11 + (corridorCands.length >= 2 ? 0.05 : 0) + (shotStyle === 'header' || shotStyle === 'diving_header' ? 0.03 : 0), 0.10, 0.19);
+        const contactRoll = Math.random();
+
+        if (contactRoll < blockChance) {
+          b.toX = nearDef.x;
+          b.toY = nearDef.y;
+          b.curve = curveAmt * 0.25;
+          b.maxZ = Math.min(maxZAmt, 2.4);
+          b.duration = clamp(Math.hypot(nearDef.x - fromX, nearDef.y - fromY) / 40, 0.16, 0.38);
+          b.shotPlan = { outcome: 'block', blockerId: nearDef.id };
+          return;
+        }
+        if (contactRoll < blockChance + deflectChance) {
+          b.toX = clamp(nearDef.x + (Math.random() - 0.5) * 1.1, 3.5, 96.5);
+          b.toY = clamp(nearDef.y + (Math.random() - 0.5) * 1.4, 8, 92);
+          b.curve = curveAmt * 0.28;
+          b.maxZ = clamp(maxZAmt * 0.52, 1.8, 5.2);
+          b.duration = clamp(Math.hypot(b.toX - fromX, b.toY - fromY) / 42, 0.15, 0.38);
+          b.shotPlan = { outcome: 'deflect', blockerId: nearDef.id, deflectorId: nearDef.id };
+          if (gk) {
+            const leanY = clamp(b.toY, 44, 56);
+            gk.ty = leanY;
+            gk.intent = 'DIVE';
+            gk.intentTimer = Math.max(b.duration + 0.45, 0.85);
+            gk.diveDir = leanY >= gk.y ? 1 : -1;
+            gk.diveTargetY = leanY;
+            gk.diveProgress = 0.02;
+          }
+          return;
+        }
+      }
+    }
+
+    // 2. Accuracy roll: On-Target vs Woodwork vs Off-Target
+    const sigFinBoost = shooter?.sig === 'fin' ? 0.06 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.05 : 0;
+    const accuracy =
+      flightType === 'penalty'
+        ? isPanenka
+          ? 0.89
+          : 0.92
+        : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.72);
+
+    if (Math.random() > accuracy) {
+      const hitWoodwork = Math.random() < (flightType === 'penalty' ? 0.35 : 0.16);
+      if (hitWoodwork) {
+        const postSide = Math.random() < 0.5 ? -1 : 1;
+        const hitCrossbar = Math.random() < 0.45;
+        b.toX = attRightNow ? 99.8 : 0.2;
+        b.toY = hitCrossbar ? 44 + Math.random() * 12 : postSide < 0 ? 42.0 : 58.0;
+        if (hitCrossbar) b.maxZ = Math.max(maxZAmt, 6.2);
+        b.shotPlan = { outcome: 'woodwork' };
+      } else {
+        const missSide = fromY < 50 ? (Math.random() < 0.62 ? -1 : 1) : Math.random() < 0.62 ? 1 : -1;
+        b.toX = attRightNow ? 101.2 : -1.2;
+        b.toY = missSide < 0 ? 33.5 + Math.random() * 6.8 : 59.7 + Math.random() * 6.8;
+        b.shotPlan = { outcome: 'miss' };
+      }
+      if (gk) {
+        const diveY = clamp(b.toY, 41.2, 58.8);
+        gk.intent = 'DIVE';
+        gk.intentTimer = Math.max(durAmt + 0.25, 0.88);
+        gk.diveDir = diveY >= gk.y ? 1 : -1;
+        gk.diveTargetY = diveY;
+        gk.diveProgress = 0.02;
+      }
+      return;
+    }
+
+    // 3. On-Target: Goal vs GK Save!
+    const onTargetY = isPanenka ? 50 + (Math.random() - 0.5) * 3 : 42.8 + Math.random() * 14.4;
+    const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
+    const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
+    const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
+    const gkSaveScore = gk ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.56 + (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.44 : 58;
+    const shooterScore = shooter
+      ? (shooter.d.fin + (shooter.sig === 'fin' ? 8 : 0)) * 0.5 +
+        (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
+        (shooter.d.pw + (shooter.sig === 'pw' ? 8 : 0)) * 0.25
+      : 60;
+    const goalProb =
+      flightType === 'penalty'
+        ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.004, 0.65, 0.9)
+        : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (flightType === 'freekick' ? 0.03 : 0), 0.14, 0.54);
+
+    if (Math.random() < goalProb) {
+      b.toX = attRightNow ? 101.3 : -1.3;
+      b.toY = onTargetY;
+      b.shotPlan = { outcome: 'goal' };
+      if (gk) {
+        const wrongWay = isPanenka || (shotStyle === 'curler' && Math.random() < 0.35);
+        const diveY = wrongWay ? clamp(50 - (onTargetY - 50), 42.5, 57.5) : clamp(onTargetY, 42.0, 58.0);
+        gk.intent = 'DIVE';
+        gk.intentTimer = Math.max(durAmt + 0.25, 0.88);
+        gk.diveDir = diveY >= gk.y ? 1 : -1;
+        gk.diveTargetY = diveY;
+        gk.diveProgress = 0.02;
+      }
+    } else {
+      // Save! Ball travels directly to the GK's actual interception spot in front of goal!
+      const gkSaveX =
+        flightType === 'penalty'
+          ? attRightNow
+            ? 97.6
+            : 2.4
+          : gk
+            ? clamp(gk.x, attRightNow ? 94.2 : 2.6, attRightNow ? 97.6 : 5.8)
+            : attRightNow
+              ? 96.2
+              : 3.8;
+      const saveDistRatio = clamp(Math.hypot(gkSaveX - fromX, onTargetY - fromY) / Math.max(4, dist), 0.62, 1.0);
+      b.toX = gkSaveX;
+      b.toY = onTargetY;
+      b.duration = Math.max(0.26, durAmt * saveDistRatio);
+      b.maxZ = Math.min(maxZAmt, 5.2);
+      const parryCorner = Math.random() < 0.48;
+      b.shotPlan = { outcome: 'save', parryCorner };
+      if (gk) {
+        gk.tx = gkSaveX;
+        gk.ty = clamp(onTargetY, 42.2, 57.8);
+        gk.intent = 'DIVE';
+        gk.intentTimer = Math.max(b.duration + 0.32, 0.88);
+        gk.diveDir = onTargetY >= gk.y ? 1 : -1;
+        gk.diveTargetY = clamp(onTargetY, 42.2, 57.8);
+        gk.diveProgress = 0.02;
+      }
+    }
+  };
+
   // Start next micro-play when ball finishes current movement/segment
   const scheduleNextPlay = (w: LiveMatchWorld, curMin: number) => {
     if (simRef.current.done) return;
@@ -14306,24 +16791,19 @@ const MatchModal: React.FC<{
         taker.y = sp.y;
         const canShootDirect = distToGoal < 36;
         if (canShootDirect) {
-          const targetGoalX = attRight ? 99.5 : 0.5;
-          const targetGoalY = 43.2 + Math.random() * 13.6;
           const isCurlerFk = taker.sig === 'cur' || taker.d.cur >= taker.d.pw;
-          b.fromX = sp.x;
-          b.fromY = sp.y;
-          b.toX = targetGoalX;
-          b.toY = targetGoalY;
-          b.curve = (sp.y < 50 ? 1 : -1) * ((isCurlerFk ? 7.5 : 4.5) + Math.random() * 5);
-          b.maxZ = isCurlerFk ? 11.2 : 8.5;
-          b.progress = 0;
-          b.duration = 0.88;
-          b.flightType = 'freekick';
-          b.shotStyle = isCurlerFk ? 'curler' : 'screamer';
-          b.carrierId = null;
-          b.targetId = null;
-          b.shooterId = taker.id;
           b.lastPasserId = null;
-          b.possessionSide = sp.side;
+          prepareShotFlight(w, curMin, {
+            flightType: 'freekick',
+            side: sp.side,
+            fromX: sp.x,
+            fromY: sp.y,
+            shooter: taker,
+            shotStyle: isCurlerFk ? 'curler' : 'screamer',
+            curveAmt: (sp.y < 50 ? 1 : -1) * ((isCurlerFk ? 7.5 : 4.5) + Math.random() * 5),
+            maxZAmt: isCurlerFk ? 11.2 : 8.5,
+            durAmt: 0.88
+          });
           w.phaseLabel = isCurlerFk
             ? `🎯 ${taker.shortName}${taker.sig === 'cur' ? ' [ยิงโค้ง]' : ''} ปั่นฟรีคิกโค้งข้ามกำแพง!`
             : `🎯 ${taker.shortName} ตะบันฟรีคิกเต็มข้อ!`;
@@ -14371,8 +16851,11 @@ const MatchModal: React.FC<{
         if (taker && headerTarget) {
           taker.x = sp.x;
           taker.y = sp.y;
-          const destX = attRight ? 91.5 + Math.random() * 3.5 : 5 + Math.random() * 3.5;
-          const destY = 40 + Math.random() * 20;
+          const destX = attRight ? 89.5 + Math.random() * 4.2 : 6.3 + Math.random() * 4.2;
+          const destY = 42 + Math.random() * 16;
+          headerTarget.tx = destX;
+          headerTarget.ty = destY;
+          headerTarget.intent = 'PASS_TARGET';
           b.fromX = sp.x;
           b.fromY = sp.y;
           b.toX = destX;
@@ -14404,21 +16887,19 @@ const MatchModal: React.FC<{
         const isPanenka = (taker.sig === 'comp' || (taker.d.comp || 60) >= 74) && Math.random() < 0.18;
         taker.x = spotX - dir * 1.8;
         taker.y = 50;
-        b.fromX = spotX;
-        b.fromY = 50;
-        b.toX = attRight ? 99.6 : 0.4;
-        b.toY = isPanenka ? 50 + (Math.random() - 0.5) * 3 : 43.0 + Math.random() * 14.0;
-        b.curve = isPanenka ? 0 : (Math.random() - 0.5) * 2.2;
-        b.maxZ = isPanenka ? 8.8 : 4.4;
-        b.progress = 0;
-        b.duration = isPanenka ? 0.84 : 0.72;
-        b.flightType = 'penalty';
-        b.shotStyle = isPanenka ? 'panenka' : 'normal';
-        b.carrierId = null;
-        b.targetId = null;
-        b.shooterId = taker.id;
         b.lastPasserId = null;
-        b.possessionSide = sp.side;
+        prepareShotFlight(w, curMin, {
+          flightType: 'penalty',
+          side: sp.side,
+          fromX: spotX,
+          fromY: 50,
+          shooter: taker,
+          shotStyle: isPanenka ? 'panenka' : 'normal',
+          curveAmt: isPanenka ? 0 : (Math.random() - 0.5) * 2.2,
+          maxZAmt: isPanenka ? 8.8 : 4.4,
+          durAmt: isPanenka ? 0.84 : 0.72,
+          isPanenka
+        });
         w.phaseLabel = isPanenka ? `🪶 ${taker.shortName} ชิพปาเนนก้าจุดโทษ!!` : `🎯 ${taker.shortName} สังหารจุดโทษ!`;
         w.phaseTone = 'danger';
         triggerDramaSlow(w, 1.35, `🎯 ดวลจุดโทษ · ${taker.shortName}`);
@@ -14873,8 +17354,6 @@ const MatchModal: React.FC<{
       ? clamp(0.28 + (33 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.08 : 0), 0.25, 0.75)
       : 0;
     if (carrier.pos !== 'GK' && Math.random() < shootChance) {
-      const targetGoalX = attRight ? 99.6 : 0.4;
-      const targetGoalY = 42.6 + Math.random() * 14.8;
       let shotStyle: LiveBallState['shotStyle'] = 'normal';
       let shotLabel = `🔥 ${carrier.shortName} ซัดเต็มข้อ!`;
       let curveAmt = (carrier.d.cur > 65 ? 1 : 0.4) * (carrier.y < 50 ? 1 : -1) * (3 + Math.random() * 4);
@@ -14929,19 +17408,17 @@ const MatchModal: React.FC<{
         shotLabel = `⚡ ${carrier.shortName} ฮาล์ฟวอลเลย์กลางอากาศ!`;
       }
 
-      b.fromX = carrier.x;
-      b.fromY = carrier.y;
-      b.toX = targetGoalX;
-      b.toY = targetGoalY;
-      b.curve = curveAmt;
-      b.maxZ = maxZAmt;
-      b.progress = 0;
-      b.duration = durAmt;
-      b.flightType = 'shot';
-      b.shotStyle = shotStyle;
-      b.carrierId = null;
-      b.targetId = null;
-      b.shooterId = carrier.id;
+      prepareShotFlight(w, curMin, {
+        flightType: 'shot',
+        side,
+        fromX: carrier.x,
+        fromY: carrier.y,
+        shooter: carrier,
+        shotStyle,
+        curveAmt,
+        maxZAmt,
+        durAmt
+      });
       w.phaseLabel = shotLabel;
       w.phaseTone = 'danger';
       triggerDramaSlow(w, shotStyle === 'bicycle' || shotStyle === 'curler' || shotStyle === 'trivela' ? 1.45 : 1.15, shotLabel);
@@ -14960,8 +17437,11 @@ const MatchModal: React.FC<{
         .sort((u, v) => (attRight ? v.x - u.x : u.x - v.x) + (v.d.hd + v.d.run + (v.sig === 'hd' ? 10 : 0)) * 0.15);
       const target = boxRunners[0];
       if (target) {
-        const boxX = clamp(attRight ? 86 + Math.random() * 7 : 7 + Math.random() * 7, 6, 94);
-        const boxY = clamp(39 + Math.random() * 22, 32, 68);
+        const boxX = clamp(attRight ? 87 + Math.random() * 6.2 : 6.8 + Math.random() * 6.2, 6, 94);
+        const boxY = clamp(40 + Math.random() * 20, 34, 66);
+        target.tx = boxX;
+        target.ty = boxY;
+        target.intent = 'PASS_TARGET';
         b.fromX = carrier.x;
         b.fromY = carrier.y;
         b.toX = boxX;
@@ -15521,14 +18001,53 @@ const MatchModal: React.FC<{
 
     if (w.pendingSetPiece) return;
 
-    // 0. Resolve Live Cup/Asia Penalty Shootout Kick
+    // 0. Resolve Parry / Woodwork / Block Bounce Deflection
+    if (b.flightType === 'bounce') {
+      b.shotPlan = undefined;
+      const bn = b.bounceNext;
+      b.bounceNext = undefined;
+      if (bn?.setPiece) {
+        w.pendingSetPiece = bn.setPiece;
+        b.carrierId = null;
+        b.shotStyle = undefined;
+        if (bn.phaseLabel) w.phaseLabel = bn.phaseLabel;
+        if (bn.phaseTone) w.phaseTone = bn.phaseTone;
+      } else if (bn?.carrierId) {
+        b.possessionSide = bn.possessionSide || defSide;
+        b.carrierId = bn.carrierId;
+        b.flightType = 'carry';
+        b.shotStyle = undefined;
+        if (bn.phaseLabel) w.phaseLabel = bn.phaseLabel;
+        if (bn.phaseTone) w.phaseTone = bn.phaseTone;
+      } else {
+        const gatherer = defPool[0] || active[0];
+        if (gatherer) {
+          b.possessionSide = gatherer.side;
+          b.carrierId = gatherer.id;
+          b.x = gatherer.x;
+          b.y = gatherer.y;
+        }
+        b.flightType = 'carry';
+        b.shotStyle = undefined;
+      }
+      return;
+    }
+
+    // 0b. Resolve Live Cup/Asia Penalty Shootout Kick
     if (b.flightType === 'shootout_kick' && w.shootout) {
       const sh = w.shootout;
       const kicker = active.find((a) => a.id === sh.kickerName);
       const gk = active.find((a) => a.side !== sh.turn && a.pos === 'GK');
-      const kickScore = kicker ? kicker.d.fin * 0.5 + (kicker.d.comp || 62) * 0.5 : 64;
-      const gkScore = gk ? gk.d.sv * 0.58 + gk.d.cl * 0.42 : 60;
-      const scored = Math.random() < clamp(0.75 + (kickScore - gkScore) * 0.0045, 0.56, 0.88);
+      const plan = b.shotPlan;
+      b.shotPlan = undefined;
+      const scored =
+        plan?.shootoutScored ??
+        Math.random() <
+          clamp(
+            0.75 + ((kicker ? kicker.d.fin * 0.5 + (kicker.d.comp || 62) * 0.5 : 64) - (gk ? gk.d.sv * 0.58 + gk.d.cl * 0.42 : 60)) * 0.0045,
+            0.56,
+            0.88
+          );
       if (scored) {
         if (sh.turn === 'H') {
           sh.hKicks.push('G');
@@ -15546,9 +18065,19 @@ const MatchModal: React.FC<{
         if (sh.turn === 'H') sh.hKicks.push('M');
         else sh.aKicks.push('M');
         SFX.whistle();
-        sh.lastMsg = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} เซฟ/หลุดกรอบ! (${sh.hScore}-${sh.aScore})`;
-        addWorldFx(w, { type: 'save', x: 97.5, y: 50, label: `🧤 พลาด!`, color: '#ef4444', ttl: 2.2, maxTtl: 2.2 });
-        triggerDramaSlow(w, 1.4, `🧤 เซฟ/พลาด! ${gk?.shortName || ''}`);
+        const wasSave = plan?.outcome === 'save';
+        if (wasSave && gk) {
+          gk.acrobatType = 'supersave';
+          gk.acrobatMax = 0.85;
+          gk.acrobatTimer = 0.85;
+          sh.lastMsg = `🧤 ${gk.shortName} พุ่งปัดเซฟได้!! (${sh.hScore}-${sh.aScore})`;
+          addWorldFx(w, { type: 'save', x: b.toX, y: b.toY, label: `🧤 เซฟ! ${gk.shortName}`, color: '#38bdf8', ttl: 2.2, maxTtl: 2.2 });
+          triggerDramaSlow(w, 1.4, `🧤 ซูเปอร์เซฟ! ${gk.shortName}`);
+        } else {
+          sh.lastMsg = `😮 ${kicker?.shortName || sh.kickerName} ยิงหลุดกรอบ! (${sh.hScore}-${sh.aScore})`;
+          addWorldFx(w, { type: 'woodwork', x: b.toX, y: b.toY, label: `😮 หลุดกรอบ!`, color: '#f59e0b', ttl: 2.2, maxTtl: 2.2 });
+          triggerDramaSlow(w, 1.4, `😮 ยิงพลาดเป้า!`);
+        }
       }
       sh.activeShot = false;
 
@@ -15595,22 +18124,118 @@ const MatchModal: React.FC<{
       const shooter = active.find((a) => a.id === b.shooterId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
       const gk = defPool.find((a) => a.pos === 'GK') || defPool[0];
       const defenders = defPool.filter((a) => a.pos === 'DF' || a.pos === 'MF');
-      const dist = Math.hypot(b.fromX - b.toX, b.fromY - b.toY);
       const attRightNow = isAttackRight(w, side);
       const defRightNow = isAttackRight(w, defSide);
+      const dist = Math.hypot((attRightNow ? 100 : 0) - b.fromX, 50 - b.fromY);
+      const plan = b.shotPlan;
+      // Shot Deflection ("ยิงแฉลบ") mid-flight!
+      if (plan?.outcome === 'deflect') {
+        const deflector = active.find((a) => a.id === (plan.deflectorId || plan.blockerId)) || defenders[0];
+        const defShort = deflector?.shortName || 'กองหลัง';
+        if (deflector) {
+          deflector.acrobatType = 'clash';
+          deflector.acrobatMax = 0.45;
+          deflector.acrobatTimer = 0.45;
+          deflector.actionDirX = b.fromX - deflector.x;
+          deflector.actionDirY = b.fromY - deflector.y;
+        }
+        addWorldFx(w, {
+          type: 'block',
+          x: b.toX,
+          y: b.toY,
+          label: `💫 แฉลบ! (${defShort})`,
+          color: '#fb923c',
+          ttl: 1.85,
+          maxTtl: 1.85
+        });
+        SFX.pass();
 
-      // Defender block / Free-kick wall deflection check (skip for Penalty Kick!)
-      if (b.flightType !== 'penalty') {
-        const wallDef = b.flightType === 'freekick' ? defenders.find((d) => d.intent === 'WALL') || defenders[0] : undefined;
-        const nearDef =
-          wallDef ||
-          defenders.find((d) => Math.hypot(d.x - (b.fromX + b.toX) * 0.5, d.y - (b.fromY + b.toY) * 0.5) < (d.sig === 'blk' ? 11.5 : 9));
-        const blockChance = nearDef
-          ? b.flightType === 'freekick'
-            ? clamp(0.24 - ((shooter?.d.cur || 60) - 60) * 0.0025, 0.12, 0.3)
-            : clamp(0.11 + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) - 60) * 0.004, 0.06, 0.28)
-          : 0;
-        if (nearDef && Math.random() < blockChance) {
+        const deflectRoll = Math.random();
+        const defDist = Math.hypot((attRightNow ? 100 : 0) - b.toX, 50 - b.toY);
+        const deflectedGoalProb = clamp(0.28 + (24 - defDist) * 0.008, 0.18, 0.36);
+
+        b.fromX = b.toX;
+        b.fromY = b.toY;
+        b.progress = 0;
+        b.flightType = 'shot';
+        b.shotStyle = 'deflected';
+        b.carrierId = null;
+        b.targetId = null;
+        b.shooterId = shooter?.id || b.shooterId;
+        b.possessionSide = side;
+
+        // Swings away from initial target side
+        const swingSide = b.fromY >= 50 ? -1 : 1;
+
+        if (deflectRoll < deflectedGoalProb) {
+          // Deflected Goal! Wrong-foots the GK cleanly!
+          const goalY = swingSide < 0 ? 42.9 + Math.random() * 4.4 : 52.7 + Math.random() * 4.4;
+          b.toX = attRightNow ? 101.3 : -1.3;
+          b.toY = goalY;
+          b.curve = swingSide * (3.2 + Math.random() * 3.8);
+          b.maxZ = 3.0 + Math.random() * 4.2;
+          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.28, 0.56);
+          b.shotPlan = { outcome: 'goal', deflectedFrom: defShort };
+          if (gk) {
+            const wrongY = clamp(50 - (goalY - 50) * 0.85, 42.2, 57.8);
+            gk.intent = 'DIVE';
+            gk.intentTimer = Math.max(b.duration + 0.25, 0.85);
+            gk.diveDir = wrongY >= gk.y ? 1 : -1;
+            gk.diveTargetY = wrongY;
+            gk.diveProgress = 0.05;
+          }
+        } else if (deflectRoll < deflectedGoalProb + 0.27) {
+          // Deflected onto target -> GK reflex save!
+          const saveY = clamp(50 + swingSide * (1.8 + Math.random() * 5.5), 42.5, 57.5);
+          const gkSaveX = gk
+            ? clamp(gk.x, attRightNow ? 94.2 : 2.6, attRightNow ? 97.6 : 5.8)
+            : attRightNow
+              ? 96.2
+              : 3.8;
+          b.toX = gkSaveX;
+          b.toY = saveY;
+          b.curve = swingSide * 2.4;
+          b.maxZ = 2.6 + Math.random() * 2.8;
+          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 26, 0.26, 0.50);
+          b.shotPlan = { outcome: 'save', parryCorner: Math.random() < 0.62, deflectedFrom: defShort };
+          if (gk) {
+            gk.tx = gkSaveX;
+            gk.ty = clamp(saveY, 42.2, 57.8);
+            gk.intent = 'DIVE';
+            gk.intentTimer = Math.max(b.duration + 0.30, 0.88);
+            gk.diveDir = saveY >= gk.y ? 1 : -1;
+            gk.diveTargetY = clamp(saveY, 42.2, 57.8);
+            gk.diveProgress = 0.02;
+          }
+        } else if (deflectRoll < deflectedGoalProb + 0.37) {
+          // Deflected onto the woodwork!
+          const postSide = Math.random() < 0.5 ? -1 : 1;
+          const hitBar = Math.random() < 0.42;
+          b.toX = attRightNow ? 99.8 : 0.2;
+          b.toY = hitBar ? 44 + Math.random() * 12 : postSide < 0 ? 42.0 : 58.0;
+          b.curve = swingSide * 2.5;
+          b.maxZ = hitBar ? 6.4 : 4.0;
+          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.26, 0.52);
+          b.shotPlan = { outcome: 'woodwork', deflectedFrom: defShort };
+        } else {
+          // Deflected wide past goal -> Corner Kick!
+          b.toX = attRightNow ? 101.0 : -1.0;
+          b.toY = swingSide < 0 ? 31.5 + Math.random() * 8.0 : 60.5 + Math.random() * 8.0;
+          b.curve = swingSide * (3.5 + Math.random() * 3.5);
+          b.maxZ = 4.2 + Math.random() * 3.8;
+          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.28, 0.54);
+          b.shotPlan = { outcome: 'miss', deflectedFrom: defShort };
+        }
+        w.phaseLabel = `💫 ยิงแฉลบ ${defShort} เปลี่ยนทาง!`;
+        w.phaseTone = 'danger';
+        triggerDramaSlow(w, 1.25, `💫 บอลแฉลบ ${defShort}!`);
+        return;
+      }
+
+      // Defender block / Free-kick wall deflection
+      if (plan?.outcome === 'block') {
+        const nearDef = active.find((a) => a.id === plan.blockerId) || defenders[0];
+        if (nearDef) {
           if (defSide === 'H') w.blocksH++;
           else w.blocksA++;
           adjustLiveForm(nearDef.id, 0.2);
@@ -15619,8 +18244,8 @@ const MatchModal: React.FC<{
             nearDef.acrobatType = 'slide';
             nearDef.acrobatMax = 0.6;
             nearDef.acrobatTimer = 0.6;
-            nearDef.actionDirX = b.toX - nearDef.x;
-            nearDef.actionDirY = b.toY - nearDef.y;
+            nearDef.actionDirX = b.fromX - nearDef.x;
+            nearDef.actionDirY = b.fromY - nearDef.y;
             addWorldFx(w, {
               type: 'slide',
               x: nearDef.x,
@@ -15651,16 +18276,32 @@ const MatchModal: React.FC<{
           if (Math.random() < 0.48) {
             if (side === 'H') w.cornersH++;
             else w.cornersA++;
-            const cy = b.y < 50 ? 2 : 98;
+            const cy = b.toY < 50 ? 2 : 98;
             const cx = attRightNow ? 98.5 : 1.5;
-            b.carrierId = null;
+            b.fromX = b.toX;
+            b.fromY = b.toY;
+            b.toX = attRightNow ? 100.8 : -0.8;
+            b.toY = b.toY < 50 ? clamp(b.toY - 12, 16, 38) : clamp(b.toY + 12, 62, 84);
+            b.curve = 0;
+            b.maxZ = 3.2;
+            b.progress = 0;
+            b.duration = 0.34;
+            b.flightType = 'bounce';
             b.shotStyle = undefined;
-            w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.05 };
-            w.phaseLabel = `🚩 บอลแฉลบออกหลัง · ${attTeam.name} ได้เตะมุม!`;
+            b.carrierId = null;
+            b.targetId = null;
+            b.bounceNext = {
+              setPiece: { type: 'corner', side, x: cx, y: cy, waitSec: 0.95 },
+              phaseLabel: `🚩 บอลแฉลบออกหลัง · ${attTeam.name} ได้เตะมุม!`,
+              phaseTone: 'setpiece'
+            };
+            w.phaseLabel = `🛡️ บล็อกแฉลบออกหลัง...`;
             w.phaseTone = 'setpiece';
           } else {
             b.possessionSide = defSide;
             b.carrierId = nearDef.id;
+            b.x = nearDef.x;
+            b.y = nearDef.y;
             b.flightType = 'carry';
             b.shotStyle = undefined;
             w.phaseLabel = `🛡️ ${nearDef.shortName} บล็อกและเก็บบอลได้`;
@@ -15674,7 +18315,7 @@ const MatchModal: React.FC<{
       const shotXg =
         b.flightType === 'penalty'
           ? 0.78
-          : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002 + (b.shotStyle === 'bicycle' || b.shotStyle === 'volley' ? 0.04 : 0), 0.04, 0.45);
+          : clamp(0.05 + (32 - dist) * 0.011 + ((shooter?.d.fin || 60) - 60) * 0.002 + (b.shotStyle === 'bicycle' || b.shotStyle === 'volley' || b.shotStyle === 'diving_header' ? 0.04 : 0), 0.04, 0.45);
       if (side === 'H') {
         w.shotsH++;
         w.xgH = Math.round((w.xgH + shotXg) * 100) / 100;
@@ -15683,41 +18324,76 @@ const MatchModal: React.FC<{
         w.xgA = Math.round((w.xgA + shotXg) * 100) / 100;
       }
 
-      // Sync final GK dive animation toward ball destination
-      if (gk) {
-        gk.intent = 'DIVE';
-        gk.intentTimer = Math.max(gk.intentTimer || 0, 0.75);
-        gk.diveDir = b.toY >= gk.y ? 1 : -1;
-        gk.diveTargetY = b.toY;
-        if (gk.diveProgress <= 0) gk.diveProgress = 0.05;
-      }
-
-      // Off-target / Woodwork / On-target resolution
-      const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
-      const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
-      const edge = side === 'H' ? (hR.at - aR.df) : (aR.at - hR.df);
-
-      const sigFinBoost = shooter?.sig === 'fin' ? 0.06 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.05 : 0;
-      const accuracy =
-        b.flightType === 'penalty'
-          ? b.shotStyle === 'panenka' ? 0.89 : 0.92
-          : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.72);
-      if (Math.random() > accuracy) {
+      // Woodwork or Off-target resolution
+      if (plan?.outcome === 'woodwork' || plan?.outcome === 'miss') {
         adjustLiveForm(shooter?.id, -0.12);
-        const hitWoodwork = Math.random() < (b.flightType === 'penalty' ? 0.35 : 0.16);
+        const hitWoodwork = plan.outcome === 'woodwork';
         if (hitWoodwork) {
           addWorldFx(w, {
             type: 'woodwork',
             x: b.toX,
             y: b.toY,
-            label: '🧱 ชนเสา/คาน!',
+            label: plan.deflectedFrom ? `🧱 แฉลบชนเสา/คาน!` : '🧱 ชนเสา/คาน!',
             color: '#f59e0b',
             ttl: 2.6,
             maxTtl: 2.6
           });
-          triggerDramaSlow(w, 1.5, `🧱 ชนเสา/คาน! · ${shooter?.shortName || ''}`);
-          pushLog(curMin, `🧱 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนคานอย่างจัง!`);
-        } else if (b.flightType === 'penalty' || Math.random() < 0.45) {
+          triggerDramaSlow(w, 1.5, `🧱 ${plan.deflectedFrom ? 'แฉลบ' : ''}ชนเสา/คาน! · ${shooter?.shortName || ''}`);
+          pushLog(
+            curMin,
+            plan.deflectedFrom
+              ? `🧱 โอ้โห! ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง!`
+              : `🧱 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนเสา/คานอย่างจัง!`
+          );
+          b.fromX = b.toX;
+          b.fromY = b.toY;
+          b.toX = attRightNow ? 91 + Math.random() * 5 : 4 + Math.random() * 5;
+          b.toY = b.toY < 50 ? 31 + Math.random() * 5 : 64 + Math.random() * 5;
+          b.curve = 0;
+          b.maxZ = 5.4;
+          b.progress = 0;
+          b.duration = 0.40;
+          b.flightType = 'bounce';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = null;
+          b.bounceNext = {
+            setPiece: {
+              type: 'goalkick',
+              side: defSide,
+              x: defRightNow ? 5.5 : 94.5,
+              y: 50,
+              waitSec: 1.1
+            },
+            phaseLabel: `🧱 ชนเสา/คานอย่างจัง! ตั้งเตะจากประตู`,
+            phaseTone: 'danger'
+          };
+          w.phaseLabel = `🧱 ชนเสา/คานอย่างจัง!`;
+          w.phaseTone = 'danger';
+          return;
+        }
+        if (plan.deflectedFrom) {
+          if (side === 'H') w.cornersH++;
+          else w.cornersA++;
+          const cy = b.toY < 50 ? 2 : 98;
+          const cx = attRightNow ? 98.5 : 1.5;
+          pushLog(curMin, `🚩 ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} เฉียดเสาออกหลัง! ${attTeam.name} ได้เตะมุม`);
+          addWorldFx(w, {
+            type: 'corner',
+            x: cx,
+            y: clamp(b.toY, 20, 80),
+            label: `🚩 แฉลบออกหลัง · เตะมุม!`,
+            color: '#fbbf24',
+            ttl: 2.0,
+            maxTtl: 2.0
+          });
+          w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 0.95 };
+          b.shotStyle = undefined;
+          w.phaseLabel = `🚩 บอลแฉลบ ${plan.deflectedFrom} ออกหลัง · ได้เตะมุม!`;
+          w.phaseTone = 'setpiece';
+          return;
+        }
+        if (b.flightType === 'penalty' || Math.random() < 0.45) {
           pushLog(curMin, `😮 ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ยิงหลุดกรอบออกหลังไปอย่างน่าเสียดาย`);
         }
         w.pendingSetPiece = {
@@ -15725,11 +18401,11 @@ const MatchModal: React.FC<{
           side: defSide,
           x: defRightNow ? 5.5 : 94.5,
           y: 50,
-          waitSec: hitWoodwork || b.flightType === 'penalty' ? 1.45 : 0.75
+          waitSec: b.flightType === 'penalty' ? 1.3 : 0.75
         };
         b.shotStyle = undefined;
-        w.phaseLabel = hitWoodwork ? `🧱 ชนเสา/คานอย่างจัง! หวุดหวิดเป็นประตู` : `😮 ยิงหลุดกรอบ · ตั้งเตะจากประตู`;
-        w.phaseTone = hitWoodwork ? 'danger' : 'normal';
+        w.phaseLabel = `😮 ยิงหลุดกรอบ · ตั้งเตะจากประตู`;
+        w.phaseTone = 'normal';
         return;
       }
 
@@ -15737,46 +18413,57 @@ const MatchModal: React.FC<{
       if (side === 'H') w.onTargetH++;
       else w.onTargetA++;
 
-      const gkSaveScore = gk ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.56 + (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.44 : 58;
-      const shooterScore = shooter
-        ? (shooter.d.fin + (shooter.sig === 'fin' ? 8 : 0)) * 0.5 +
-          (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
-          (shooter.d.pw + (shooter.sig === 'pw' ? 8 : 0)) * 0.25
-        : 60;
-      const goalProb =
-        b.flightType === 'penalty'
-          ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.004, 0.65, 0.9)
-          : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (b.flightType === 'freekick' ? 0.03 : 0), 0.14, 0.54);
+      let isGoal = plan?.outcome === 'goal';
+      if (!plan) {
+        const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
+        const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
+        const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
+        const gkSaveScore = gk ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.56 + (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.44 : 58;
+        const shooterScore = shooter
+          ? (shooter.d.fin + (shooter.sig === 'fin' ? 8 : 0)) * 0.5 +
+            (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
+            (shooter.d.pw + (shooter.sig === 'pw' ? 8 : 0)) * 0.25
+          : 60;
+        const goalProb =
+          b.flightType === 'penalty'
+            ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.004, 0.65, 0.9)
+            : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (b.flightType === 'freekick' ? 0.03 : 0), 0.14, 0.54);
+        isGoal = Math.random() < goalProb;
+      }
 
-      if (Math.random() < goalProb) {
+      if (isGoal) {
         const scorerName = shooter?.id || attPool[0]?.id || 'นักเตะ';
         const scorerShort = shooter?.shortName || scorerName;
         const assisterName =
           b.flightType !== 'penalty' && b.lastPasserId && b.lastPasserId !== scorerName && Math.random() < 0.85 ? b.lastPasserId : '';
         const finishVerb =
-          b.flightType === 'penalty'
-            ? b.shotStyle === 'panenka'
-              ? 'ชิพจุดโทษปาเนนก้าสุดเหนือชั้น!'
-              : 'สังหารจุดโทษไม่พลาดเป้า!'
-            : b.flightType === 'freekick'
-              ? 'ปั่นฟรีคิกเสียบสามเหลี่ยมสุดสวย!'
-              : b.shotStyle === 'bicycle'
-                ? 'ตีลังกาโอเวอร์เฮดคิกสุดมหัศจรรย์!!'
-                : b.shotStyle === 'volley'
-                  ? 'ฟาดวอลเลย์กลางอากาศบอลพุ่งเสียบตาข่าย!'
-                  : b.shotStyle === 'header'
-                    ? 'โหม่งเช็ดเสียบเสาอย่างเด็ดขาด!'
-                    : b.shotStyle === 'chip'
-                      ? 'ชิพข้ามหัวนายด่านเข้าประตูอย่างเยือกเย็น!'
-                      : b.shotStyle === 'curler'
-                        ? 'ปั่นโค้งเสียบสามเหลี่ยมอย่างเหนือชั้น!'
-                        : b.shotStyle === 'trivela'
-                          ? 'ตะบันไซด์ก้อยทริเวล่าบอลโค้งหนีมือสุดสวย!'
-                          : b.shotStyle === 'knuckle'
-                            ? 'กดลูกส่ายคนัคเคิลบอลฮุคเสียบตาข่ายสุดเหลือเชื่อ!'
-                            : b.shotStyle === 'screamer'
-                              ? 'ตะบันไกลสุดแรงบอลพุ่งเสียบตาข่าย!'
-                              : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
+          plan?.deflectedFrom
+            ? `ยิงแฉลบ ${plan.deflectedFrom} เปลี่ยนทางเข้าประตู!!`
+            : b.flightType === 'penalty'
+              ? b.shotStyle === 'panenka'
+                ? 'ชิพจุดโทษปาเนนก้าสุดเหนือชั้น!'
+                : 'สังหารจุดโทษไม่พลาดเป้า!'
+              : b.flightType === 'freekick'
+                ? 'ปั่นฟรีคิกเสียบสามเหลี่ยมสุดสวย!'
+                : b.shotStyle === 'bicycle'
+                  ? 'ตีลังกาโอเวอร์เฮดคิกสุดมหัศจรรย์!!'
+                  : b.shotStyle === 'volley'
+                    ? 'ฟาดวอลเลย์กลางอากาศบอลพุ่งเสียบตาข่าย!'
+                    : b.shotStyle === 'diving_header'
+                      ? 'พุ่งโหม่งตอร์ปิโดเสียบมุมอย่างสุดสวย!!'
+                      : b.shotStyle === 'header'
+                        ? 'เทกตัวโหม่งเต็มกบาลเสียบเสาอย่างเด็ดขาด!'
+                        : b.shotStyle === 'chip'
+                          ? 'ชิพข้ามหัวนายด่านเข้าประตูอย่างเยือกเย็น!'
+                          : b.shotStyle === 'curler'
+                            ? 'ปั่นโค้งเสียบสามเหลี่ยมอย่างเหนือชั้น!'
+                            : b.shotStyle === 'trivela'
+                              ? 'ตะบันไซด์ก้อยทริเวล่าบอลโค้งหนีมือสุดสวย!'
+                              : b.shotStyle === 'knuckle'
+                                ? 'กดลูกส่ายคนัคเคิลบอลฮุคเสียบตาข่ายสุดเหลือเชื่อ!'
+                                : b.shotStyle === 'screamer'
+                                  ? 'ตะบันไกลสุดแรงบอลพุ่งเสียบตาข่าย!'
+                                  : 'จบสกอร์ตุงตาข่ายอย่างเฉียบขาด!';
 
         // Tight-call VAR Goal Check (~15% chance on open-play goals)
         if (b.flightType === 'shot' && w.varChecks < 2 && Math.random() < 0.15) {
@@ -15816,31 +18503,37 @@ const MatchModal: React.FC<{
         b.shotStyle = undefined;
         awardGoalToTeam(w, side, curMin, scorerName, scorerShort, assisterName, finishVerb, b.toX, b.toY);
       } else {
-        // ACCURATE & SYNCHRONIZED SUPER SAVE by GK!
+        // ACCURATE & SYNCHRONIZED SUPER SAVE RIGHT AT GK'S POSITION!
         if (defSide === 'H') w.savesH++;
         else w.savesA++;
         adjustLiveForm(gk?.id, 0.26);
         adjustLiveForm(shooter?.id, -0.06);
         if (gk) {
+          gk.x = b.toX;
+          gk.y = clamp(b.toY, 42.2, 57.8);
           gk.acrobatType = 'supersave';
           gk.acrobatMax = 0.9;
           gk.acrobatTimer = 0.9;
         }
         const saveTypeText =
-          b.shotStyle === 'bicycle'
-            ? 'บินปัดลูกตีลังกายิงได้เหลือเชื่อ!'
-            : b.shotStyle === 'curler' || b.shotStyle === 'trivela'
-              ? 'เหินตัวปัดลูกปั่นโค้งปลายมือ!'
-              : b.shotStyle === 'knuckle'
-                ? 'ชกลูกส่ายอันตรายพ้นปากประตู!'
-                : b.shotStyle === 'chip'
-                  ? 'ถอยหลังกระโดดคว้าลูกชิพไว้ได้!'
-                  : b.shotStyle === 'volley' || b.shotStyle === 'screamer'
-                    ? 'ปฏิกิริยาไวปัดลูกยิงสุดแรงพ้นกรอบ!'
-                    : 'พุ่งปัดปลายมือสุดสวย!';
+          plan?.deflectedFrom
+            ? 'ปฏิกิริยาเทพปัดลูกแฉลบเปลี่ยนทางได้เหลือเชื่อ!'
+            : b.shotStyle === 'bicycle'
+              ? 'บินปัดลูกตีลังกายิงได้เหลือเชื่อ!'
+              : b.shotStyle === 'diving_header' || b.shotStyle === 'header'
+                ? 'ปฏิกิริยาไวบินปัดลูกโหม่งจ่อๆ พ้นเส้น!'
+                : b.shotStyle === 'curler' || b.shotStyle === 'trivela'
+                  ? 'เหินตัวปัดลูกปั่นโค้งปลายมือ!'
+                  : b.shotStyle === 'knuckle'
+                    ? 'ชกลูกส่ายอันตรายพ้นปากประตู!'
+                    : b.shotStyle === 'chip'
+                      ? 'ถอยหลังกระโดดคว้าลูกชิพไว้ได้!'
+                      : b.shotStyle === 'volley' || b.shotStyle === 'screamer'
+                        ? 'ปฏิกิริยาไวปัดลูกยิงสุดแรงพ้นกรอบ!'
+                        : 'พุ่งปัดปลายมือสุดสวย!';
         addWorldFx(w, {
           type: 'save',
-          x: gk?.x ?? (defRightNow ? 4 : 96),
+          x: b.toX,
           y: b.toY,
           label: `🧤 ซูเปอร์เซฟ! ${gk?.shortName || 'ผู้รักษาประตู'}${gk?.sig === 'sv' ? ' [เซฟเด่น]' : ''}`,
           color: '#38bdf8',
@@ -15856,18 +18549,37 @@ const MatchModal: React.FC<{
               : `🧤 ${gk?.id || 'ผู้รักษาประตู'} (${defTeam.name}) ${saveTypeText} จากลูกยิงของ ${shooter?.id || 'คู่แข่ง'}`
           );
         }
-        b.shotStyle = undefined;
-        if (Math.random() < 0.48) {
+        const parryCorner = plan?.parryCorner ?? Math.random() < 0.48;
+        if (parryCorner) {
           if (side === 'H') w.cornersH++;
           else w.cornersA++;
           const cy = b.toY < 50 ? 2 : 98;
           const cx = attRightNow ? 98.5 : 1.5;
-          w.pendingSetPiece = { type: 'corner', side, x: cx, y: cy, waitSec: 1.25 };
-          w.phaseLabel = `🧤 ปัดออกหลัง! ${attTeam.name} ได้เตะมุม`;
-          w.phaseTone = 'setpiece';
+          b.fromX = b.toX;
+          b.fromY = b.toY;
+          b.toX = attRightNow ? 100.9 : -0.9;
+          b.toY = b.toY < 50 ? clamp(b.toY - (10 + Math.random() * 7), 22, 38) : clamp(b.toY + (10 + Math.random() * 7), 62, 78);
+          b.curve = 0;
+          b.maxZ = 4.2;
+          b.progress = 0;
+          b.duration = 0.34;
+          b.flightType = 'bounce';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = null;
+          b.bounceNext = {
+            setPiece: { type: 'corner', side, x: cx, y: cy, waitSec: 1.0 },
+            phaseLabel: `🧤 ปัดออกหลัง! ${attTeam.name} ได้เตะมุม`,
+            phaseTone: 'setpiece'
+          };
+          w.phaseLabel = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} ปัดปลายมือออกหลัง!`;
+          w.phaseTone = 'danger';
         } else {
+          b.shotStyle = undefined;
           b.possessionSide = defSide;
           b.carrierId = gk?.id || null;
+          b.x = gk?.x ?? b.toX;
+          b.y = gk?.y ?? b.toY;
           b.flightType = 'carry';
           w.phaseLabel = `🧤 ${gk?.shortName || 'ผู้รักษาประตู'} ${saveTypeText}`;
           w.phaseTone = 'normal';
@@ -15876,42 +18588,55 @@ const MatchModal: React.FC<{
       return;
     }
 
-    // 2. Resolve Cross or Corner Delivery in the Box (Header / Volley / Bicycle Kick!)
+    // 2. Resolve Cross or Corner Delivery in the Box (Header / Diving Header / Volley / Bicycle Kick / Clearing Header!)
     if (b.flightType === 'cross' || b.flightType === 'corner') {
       const target = active.find((a) => a.id === b.targetId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
       const topDef = defPool
         .filter((d) => d.pos === 'DF' || d.pos === 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
+      const attRightNow = isAttackRight(w, side);
+      const goalTargetX = attRightNow ? 100 : 0;
 
-      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 12 : 0)) * 0.65 + target.d.run * 0.35 : 58;
+      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 14 : 0)) * 0.68 + target.d.run * 0.32 : 58;
       const defAir = topDef
         ? topDef.pos === 'GK'
           ? (topDef.d.cl + (topDef.sig === 'cl' ? 10 : 0)) * 0.7 + topDef.d.sv * 0.3
           : (topDef.d.hd + (topDef.sig === 'hd' ? 10 : 0)) * 0.6 + topDef.d.pos * 0.4
         : 60;
-      const winHeaderProb = clamp(0.46 + (attAir - defAir) * 0.007, 0.24, 0.74);
+      const winHeaderProb = clamp(0.48 + (attAir - defAir) * 0.007, 0.26, 0.76);
 
       if (target && Math.random() < winHeaderProb) {
-        const attRightNow = isAttackRight(w, side);
-        const goalX = attRightNow ? 99.6 : 0.4;
-        const goalY = 42.8 + Math.random() * 14.4;
-        const acroRoll = Math.random();
-        const isBicycle = acroRoll < (target.sig === 'fin' || target.d.fin >= 70 ? 0.24 : 0.16);
-        const isVolley = !isBicycle && acroRoll < 0.48;
+        // Align jumper smoothly onto impact zone and face goal
+        if (Math.hypot(target.x - b.toX, target.y - b.toY) < 9) {
+          target.x = b.toX * 0.65 + target.x * 0.35;
+          target.y = b.toY * 0.65 + target.y * 0.35;
+        }
+        target.facing = Math.atan2(50 - target.y, goalTargetX - target.x);
 
-        b.fromX = b.toX;
-        b.fromY = b.toY;
-        b.toX = goalX;
-        b.toY = goalY;
-        b.curve = isVolley || isBicycle ? (Math.random() - 0.5) * 4.5 : 0;
-        b.maxZ = isBicycle ? 6.4 : isVolley ? 4.2 : 4.8;
-        b.progress = 0;
-        b.duration = isVolley ? 0.46 : 0.56;
-        b.flightType = 'shot';
-        b.shotStyle = isBicycle ? 'bicycle' : isVolley ? 'volley' : 'header';
-        b.carrierId = null;
-        b.targetId = null;
-        b.shooterId = target.id;
+        const acroRoll = Math.random();
+        const hdPriority = target.sig === 'hd' || target.d.hd >= 68;
+        const isBicycle = acroRoll < (hdPriority ? 0.08 : target.sig === 'fin' || target.d.fin >= 70 ? 0.14 : 0.09);
+        const isVolley = !isBicycle && acroRoll < (hdPriority ? 0.24 : 0.34);
+        const isDivingHeader = !isBicycle && !isVolley && (target.sig === 'hd' || target.d.hd >= 64) && Math.random() < 0.26;
+        const chosenStyle: LiveBallState['shotStyle'] = isBicycle
+          ? 'bicycle'
+          : isVolley
+            ? 'volley'
+            : isDivingHeader
+              ? 'diving_header'
+              : 'header';
+
+        prepareShotFlight(w, curMin, {
+          flightType: 'shot',
+          side,
+          fromX: b.toX,
+          fromY: b.toY,
+          shooter: target,
+          shotStyle: chosenStyle,
+          curveAmt: isVolley || isBicycle ? (Math.random() - 0.5) * 4.5 : (Math.random() - 0.5) * 1.4,
+          maxZAmt: isBicycle ? 6.4 : isVolley ? 4.2 : isDivingHeader ? 2.6 : 4.5,
+          durAmt: isDivingHeader ? 0.40 : isVolley ? 0.44 : 0.48
+        });
         if (isBicycle) {
           target.acrobatType = 'bicycle';
           target.acrobatMax = 0.85;
@@ -15925,23 +18650,107 @@ const MatchModal: React.FC<{
           target.acrobatTimer = 0.58;
           w.phaseLabel = `⚡ ${target.shortName} วอลเลย์ไม่ต้องจับ!`;
           triggerDramaSlow(w, 1.2, `⚡ วอลเลย์ · ${target.shortName}`);
+        } else if (isDivingHeader) {
+          target.acrobatType = 'diving_header';
+          target.acrobatMax = 0.72;
+          target.acrobatTimer = 0.72;
+          w.phaseLabel = `💨 ${target.shortName} พุ่งโหม่งตอร์ปิโด!!`;
+          triggerDramaSlow(w, 1.25, `💨 พุ่งโหม่ง! · ${target.shortName}`);
+          pushLog(curMin, `💨 ${target.id} (${attTeam.name}) ทะยานพุ่งโหม่งบอลอย่างสุดอันตราย!`);
         } else {
+          target.acrobatType = 'header';
+          target.acrobatMax = 0.68;
+          target.acrobatTimer = 0.68;
           w.phaseLabel = `🗣️ ${target.shortName}${target.sig === 'hd' ? ' [โหม่งเด่น]' : ''} เทกตัวโหม่งเต็มๆ!`;
-          triggerDramaSlow(w, 1.0, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
+          triggerDramaSlow(w, 1.05, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
         }
         w.phaseTone = 'danger';
         SFX.kick();
       } else if (topDef) {
-        b.possessionSide = defSide;
-        b.carrierId = topDef.id;
-        b.lastPasserId = null;
-        b.targetId = null;
-        b.x = topDef.x;
-        b.y = topDef.y;
-        b.flightType = 'carry';
-        b.shotStyle = undefined;
-        w.phaseLabel = topDef.pos === 'GK' ? `🧤 ${topDef.shortName} ออกมาชก/คว้าบอลพ้นเขตโทษ` : `🛡️ ${topDef.shortName} โหม่งสกัดบอลพ้นอันตราย`;
-        w.phaseTone = 'normal';
+        if (Math.hypot(topDef.x - b.toX, topDef.y - b.toY) < 9) {
+          topDef.x = b.toX * 0.55 + topDef.x * 0.45;
+          topDef.y = b.toY * 0.55 + topDef.y * 0.45;
+        }
+        const clearDir = attRightNow ? -1 : 1;
+        topDef.facing = Math.atan2(0, clearDir);
+        if (topDef.pos === 'GK') {
+          topDef.acrobatType = 'supersave';
+          topDef.acrobatMax = 0.65;
+          topDef.acrobatTimer = 0.65;
+          const punchClear = Math.random() < 0.45;
+          if (punchClear) {
+            const clearX = clamp(topDef.x + clearDir * (18 + Math.random() * 10), 15, 85);
+            const clearY = clamp(topDef.y + (topDef.y < 50 ? -18 : 18) + (Math.random() - 0.5) * 10, 12, 88);
+            const outlet =
+              defPool
+                .filter((a) => a.pos !== 'GK')
+                .sort((u, v) => Math.hypot(u.x - clearX, u.y - clearY) - Math.hypot(v.x - clearX, v.y - clearY))[0] || topDef;
+            b.fromX = topDef.x;
+            b.fromY = topDef.y;
+            b.toX = clearX;
+            b.toY = clearY;
+            b.curve = 0;
+            b.maxZ = 9.5;
+            b.progress = 0;
+            b.duration = 0.48;
+            b.flightType = 'bounce';
+            b.shotStyle = undefined;
+            b.carrierId = null;
+            b.targetId = outlet.id;
+            b.bounceNext = {
+              carrierId: outlet.id,
+              possessionSide: defSide,
+              phaseLabel: `🧤 ${topDef.shortName} ชกบอลเคลียร์พ้นเขตโทษ!`,
+              phaseTone: 'normal'
+            };
+            w.phaseLabel = `🧤 ${topDef.shortName} กระโดดชกบอลพ้นกรอบ!`;
+            w.phaseTone = 'normal';
+            SFX.kick();
+          } else {
+            b.possessionSide = defSide;
+            b.carrierId = topDef.id;
+            b.lastPasserId = null;
+            b.targetId = null;
+            b.x = topDef.x;
+            b.y = topDef.y;
+            b.flightType = 'carry';
+            b.shotStyle = undefined;
+            w.phaseLabel = `🧤 ${topDef.shortName} ออกมาคว้าบอลกลางอากาศไว้ได้`;
+            w.phaseTone = 'normal';
+          }
+        } else {
+          // Defender wins aerial duel and heads ball clear!
+          topDef.acrobatType = 'header';
+          topDef.acrobatMax = 0.64;
+          topDef.acrobatTimer = 0.64;
+          const clearX = clamp(topDef.x + clearDir * (16 + Math.random() * 12), 14, 86);
+          const clearY = clamp(topDef.y + (Math.random() - 0.5) * 28, 12, 88);
+          const outlet =
+            defPool
+              .filter((a) => a.pos !== 'GK' && a.id !== topDef.id)
+              .sort((u, v) => Math.hypot(u.x - clearX, u.y - clearY) - Math.hypot(v.x - clearX, v.y - clearY))[0] || topDef;
+          b.fromX = topDef.x;
+          b.fromY = topDef.y;
+          b.toX = clearX;
+          b.toY = clearY;
+          b.curve = 0;
+          b.maxZ = 8.8;
+          b.progress = 0;
+          b.duration = 0.46;
+          b.flightType = 'bounce';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = outlet.id;
+          b.bounceNext = {
+            carrierId: outlet.id,
+            possessionSide: defSide,
+            phaseLabel: `🗣️ ${topDef.shortName} โหม่งสกัดบอลพ้นอันตราย!`,
+            phaseTone: 'normal'
+          };
+          w.phaseLabel = `🗣️ ${topDef.shortName} เทกตัวโหม่งสกัดบอลทิ้ง!`;
+          w.phaseTone = 'normal';
+          SFX.pass();
+        }
       }
       return;
     }
@@ -15956,6 +18765,92 @@ const MatchModal: React.FC<{
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
 
       const oppDist = nearestOpp ? Math.hypot(nearestOpp.x - b.toX, nearestOpp.y - b.toY) : 99;
+      const isAerialBall = b.flightType === 'lofted' || b.flightType === 'goalkick';
+
+      // Aerial header duel on long lofted balls & goalkicks!
+      if (isAerialBall && receiver && nearestOpp && oppDist < 7.5 && Math.random() < 0.55) {
+        const attAir = (receiver.d.hd + (receiver.sig === 'hd' ? 12 : 0)) * 0.65 + receiver.d.run * 0.35;
+        const defAir = (nearestOpp.d.hd + (nearestOpp.sig === 'hd' ? 12 : 0)) * 0.65 + nearestOpp.d.pos * 0.35;
+        const winProb = clamp(0.5 + (attAir - defAir) * 0.008, 0.25, 0.78);
+        const attRightNow = isAttackRight(w, side);
+        const dir = attRightNow ? 1 : -1;
+
+        if (Math.random() < winProb) {
+          receiver.acrobatType = 'header';
+          receiver.acrobatMax = 0.58;
+          receiver.acrobatTimer = 0.58;
+          receiver.facing = Math.atan2(0, dir);
+          // Flick-on header to a forward partner ahead if in attacking half!
+          const partner = attPool.find(
+            (a) => a.id !== receiver.id && a.pos !== 'GK' && (attRightNow ? a.x > receiver.x + 4 : a.x < receiver.x - 4) && Math.hypot(a.x - receiver.x, a.y - receiver.y) < 24
+          );
+          if (partner && Math.random() < 0.56) {
+            b.fromX = receiver.x;
+            b.fromY = receiver.y;
+            b.toX = clamp(partner.x + dir * 2.5, 6, 94);
+            b.toY = partner.y;
+            b.curve = 0;
+            b.maxZ = 4.2;
+            b.progress = 0;
+            b.duration = 0.38;
+            b.flightType = 'pass';
+            b.shotStyle = undefined;
+            b.carrierId = null;
+            b.targetId = partner.id;
+            b.lastPasserId = receiver.id;
+            w.phaseLabel = `🗣️ ${receiver.shortName} โหม่งเช็ดตั้งให้ ${partner.shortName}!`;
+            w.phaseTone = 'attack';
+            SFX.pass();
+            return;
+          }
+          b.carrierId = receiver.id;
+          b.targetId = null;
+          b.x = receiver.x;
+          b.y = receiver.y;
+          b.flightType = 'carry';
+          b.shotStyle = undefined;
+          w.phaseLabel = `🗣️ ${receiver.shortName} เทกตัวโหม่งคุมจังหวะได้`;
+          w.phaseTone = 'normal';
+          SFX.pass();
+          return;
+        } else {
+          nearestOpp.acrobatType = 'header';
+          nearestOpp.acrobatMax = 0.58;
+          nearestOpp.acrobatTimer = 0.58;
+          nearestOpp.facing = Math.atan2(0, -dir);
+          adjustLiveForm(nearestOpp.id, 0.14);
+          const clearX = clamp(nearestOpp.x - dir * (12 + Math.random() * 8), 8, 92);
+          const clearY = clamp(nearestOpp.y + (Math.random() - 0.5) * 20, 10, 90);
+          const outlet =
+            defPool
+              .filter((a) => a.pos !== 'GK' && a.id !== nearestOpp.id)
+              .sort((u, v) => Math.hypot(u.x - clearX, u.y - clearY) - Math.hypot(v.x - clearX, v.y - clearY))[0] || nearestOpp;
+          b.fromX = nearestOpp.x;
+          b.fromY = nearestOpp.y;
+          b.toX = clearX;
+          b.toY = clearY;
+          b.curve = 0;
+          b.maxZ = 7.2;
+          b.progress = 0;
+          b.duration = 0.42;
+          b.flightType = 'bounce';
+          b.shotStyle = undefined;
+          b.carrierId = null;
+          b.targetId = outlet.id;
+          b.lastPasserId = null;
+          b.bounceNext = {
+            carrierId: outlet.id,
+            possessionSide: defSide,
+            phaseLabel: `🗣️ ${nearestOpp.shortName} เทกตัวโหม่งแย่งได้!`,
+            phaseTone: 'normal'
+          };
+          w.phaseLabel = `🗣️ ${nearestOpp.shortName} โหม่งสกัดบอลโด่ง!`;
+          w.phaseTone = 'normal';
+          SFX.pass();
+          return;
+        }
+      }
+
       const interceptProb =
         oppDist < 6.8
           ? clamp(
@@ -16169,6 +19064,14 @@ const MatchModal: React.FC<{
       w.ball.y = w.ball.toY;
       w.ball.progress = 1;
       resolveSegmentArrival(w, curMin);
+      let chainGuard = 0;
+      while ((w.ball.flightType === 'bounce' || (w.ball.flightType === 'shot' && w.ball.progress === 0)) && chainGuard < 3) {
+        chainGuard++;
+        w.ball.x = w.ball.toX;
+        w.ball.y = w.ball.toY;
+        w.ball.progress = 1;
+        resolveSegmentArrival(w, curMin);
+      }
       if (w.varReview) resolveVarReview(w, curMin);
       w.possTicksTotal++;
       if (w.ball.possessionSide === 'H') w.possTicksH++;
@@ -16653,10 +19556,15 @@ const MatchModal: React.FC<{
             if (sh.waitSec <= 0) {
               sh.activeShot = true;
               const b = w.ball;
+              const kicker = w.agents.find((a) => !a.sentOff && a.id === sh.kickerName);
+              const gk = w.agents.find((a) => !a.sentOff && a.side !== sh.turn && a.pos === 'GK');
+              const kickScore = kicker ? kicker.d.fin * 0.5 + (kicker.d.comp || 62) * 0.5 : 64;
+              const gkScore = gk ? gk.d.sv * 0.58 + gk.d.cl * 0.42 : 60;
+              const scored = Math.random() < clamp(0.75 + (kickScore - gkScore) * 0.0045, 0.56, 0.88);
+              const shotY = 43.0 + Math.random() * 14.0;
+
               b.fromX = 88.5;
               b.fromY = 50;
-              b.toX = 99.6;
-              b.toY = 43.2 + Math.random() * 13.6;
               b.curve = (Math.random() - 0.5) * 2.4;
               b.maxZ = 4.5;
               b.progress = 0;
@@ -16664,12 +19572,45 @@ const MatchModal: React.FC<{
               b.flightType = 'shootout_kick';
               b.possessionSide = sh.turn;
               b.shooterId = sh.kickerName;
-              const gk = w.agents.find((a) => !a.sentOff && a.side !== sh.turn && a.pos === 'GK');
-              if (gk) {
-                gk.intent = 'DIVE';
-                gk.intentTimer = 0.95;
-                gk.diveDir = b.toY >= gk.y ? 1 : -1;
-                gk.diveProgress = 0.01;
+
+              if (scored) {
+                b.toX = 101.3;
+                b.toY = shotY;
+                b.shotPlan = { outcome: 'goal', shootoutScored: true };
+                if (gk) {
+                  const wrongWay = Math.random() < 0.45;
+                  const diveY = wrongWay ? clamp(50 - (shotY - 50), 42.5, 57.5) : shotY;
+                  gk.intent = 'DIVE';
+                  gk.intentTimer = 0.95;
+                  gk.diveDir = diveY >= gk.y ? 1 : -1;
+                  gk.diveTargetY = diveY;
+                  gk.diveProgress = 0.02;
+                }
+              } else if (Math.random() < 0.22) {
+                b.toX = 101.2;
+                b.toY = Math.random() < 0.5 ? 36.8 + Math.random() * 4.0 : 59.2 + Math.random() * 4.0;
+                b.shotPlan = { outcome: 'miss', shootoutScored: false };
+                if (gk) {
+                  gk.intent = 'DIVE';
+                  gk.intentTimer = 0.95;
+                  gk.diveDir = b.toY >= gk.y ? 1 : -1;
+                  gk.diveTargetY = clamp(b.toY, 42.0, 58.0);
+                  gk.diveProgress = 0.02;
+                }
+              } else {
+                const gkSaveX = gk ? clamp(gk.x, 95.8, 98.4) : 97.8;
+                b.toX = gkSaveX;
+                b.toY = shotY;
+                b.shotPlan = { outcome: 'save', shootoutScored: false };
+                if (gk) {
+                  gk.tx = gkSaveX;
+                  gk.ty = shotY;
+                  gk.intent = 'DIVE';
+                  gk.intentTimer = 0.95;
+                  gk.diveDir = shotY >= gk.y ? 1 : -1;
+                  gk.diveTargetY = shotY;
+                  gk.diveProgress = 0.02;
+                }
               }
               SFX.kick();
               setShootoutUi({ ...sh, hKicks: sh.hKicks.slice(), aKicks: sh.aKicks.slice() });
@@ -16723,15 +19664,22 @@ const MatchModal: React.FC<{
         // Update tactical targets
         updateAgentTargets(w, Math.max(1, curIntMin));
 
-        // Synchronized early GK dive during live shots
-        if (isSlowShot && w.ball.progress >= 0.22 && w.ball.progress <= 0.9) {
+        // Synchronized fallback GK dive during live shots if not already diving
+        if (
+          isSlowShot &&
+          w.ball.progress >= 0.16 &&
+          w.ball.progress <= 0.9 &&
+          w.ball.shotPlan?.outcome !== 'block' &&
+          w.ball.shotPlan?.outcome !== 'deflect'
+        ) {
           const defSide: 'H' | 'A' = w.ball.possessionSide === 'H' ? 'A' : 'H';
           const defGk = w.agents.find((a) => !a.sentOff && a.side === defSide && a.pos === 'GK');
           if (defGk && defGk.intent !== 'DIVE') {
+            const diveY = clamp(w.ball.toY, 41.5, 58.5);
             defGk.intent = 'DIVE';
             defGk.intentTimer = 0.88;
-            defGk.diveDir = w.ball.toY >= defGk.y ? 1 : -1;
-            defGk.diveTargetY = w.ball.toY;
+            defGk.diveDir = diveY >= defGk.y ? 1 : -1;
+            defGk.diveTargetY = diveY;
             defGk.diveProgress = 0.02;
           }
         }
@@ -16748,7 +19696,7 @@ const MatchModal: React.FC<{
             ag.intentTimer -= rawDt;
             ag.diveProgress = clamp(1 - ag.intentTimer / 0.88, 0, 1);
             if (ag.diveTargetY != null) {
-              ag.y = clamp(ag.y + (ag.diveTargetY - ag.y) * Math.min(1, rawDt * 5.2), 36, 64);
+              ag.y = clamp(ag.y + (ag.diveTargetY - ag.y) * Math.min(1, rawDt * 8.0), 39, 61);
               ag.ty = ag.y;
             }
             if (ag.intentTimer <= 0) {
@@ -16769,7 +19717,9 @@ const MatchModal: React.FC<{
           if (dist > 0.15) {
             ag.vx = (dx / dist) * stepSpd;
             ag.vy = (dy / dist) * stepSpd;
-            ag.x = clamp(ag.x + ag.vx * rawDt, 3, 97);
+            const minX = ag.pos === 'GK' ? 1.6 : 3;
+            const maxX = ag.pos === 'GK' ? 98.4 : 97;
+            ag.x = clamp(ag.x + ag.vx * rawDt, minX, maxX);
             ag.y = clamp(ag.y + ag.vy * rawDt, 4, 96);
             const targetAngle = Math.atan2(ag.vy, ag.vx);
             let angleDiff = targetAngle - ag.facing;
@@ -16844,8 +19794,8 @@ const MatchModal: React.FC<{
             b.y = omt * omt * b.fromY + 2 * omt * t * ctrlY + t * t * b.toY;
             if (b.shotStyle === 'knuckle') {
               const ang = Math.atan2(b.toY - b.fromY, b.toX - b.fromX) + Math.PI / 2;
-              const wobble = Math.sin(t * Math.PI * 3.5) * 2.0;
-              b.x = clamp(b.x + Math.cos(ang) * wobble, 0.5, 99.5);
+              const wobble = Math.sin(t * Math.PI * 3.5) * Math.sin(t * Math.PI) * 2.1;
+              b.x = clamp(b.x + Math.cos(ang) * wobble, -2, 102);
               b.y = clamp(b.y + Math.sin(ang) * wobble, 1, 99);
             }
             b.z = Math.sin(t * Math.PI) * b.maxZ;
@@ -16856,7 +19806,7 @@ const MatchModal: React.FC<{
 
           if (b.progress >= 1) {
             resolveSegmentArrival(w, Math.max(1, curIntMin));
-            if (!w.pendingSetPiece && !w.varReview) {
+            if (!w.pendingSetPiece && !w.varReview && w.ball.progress >= 1) {
               scheduleNextPlay(w, Math.max(1, curIntMin));
             }
           }
@@ -17769,11 +20719,22 @@ const MatchModal: React.FC<{
         <div className="shrink-0 px-3 sm:px-4 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)]">
           <div className="flex items-center justify-between text-xs mland:text-[9.5px] text-[var(--mut)] mb-1 mland:mb-0.5 gap-2">
             <span className="font-semibold truncate">{compTitle}</span>
-            {done && (
-              <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px] shrink-0">
-                FT
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0">
+              {isFullscreen && onExitFullscreen && (
+                <button
+                  type="button"
+                  onClick={onExitFullscreen}
+                  className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] font-bold text-[10.5px] mland:text-[9px] cursor-pointer hover:border-[var(--g)]"
+                >
+                  ✕ ย่อจอ
+                </button>
+              )}
+              {done && (
+                <span className="px-2 mland:px-1.5 py-0.5 rounded-lg bg-[var(--g)] text-white font-bold tabular text-[11px] mland:text-[9.5px] shrink-0">
+                  FT
+                </span>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3 mland:gap-2">
             <div className="flex items-center justify-end gap-2 mland:gap-1.5 min-w-0">
@@ -18656,6 +21617,728 @@ const MatchModal: React.FC<{
   );
 };
 
+interface GodBlessingPatch {
+  ov: number;
+  pot: number;
+  age: number;
+  fit: number;
+  inj: number;
+  sus: number;
+  ro: SubRole;
+  sig: string;
+  coreA: CoreAttrs;
+  subD: Record<string, number>;
+}
+
+const findMutablePlayerInState = (d: GameState, playerName: string, teamId: number | null): { pl: Player | null; team: Team | null } => {
+  if (teamId !== null && d.teams[teamId]) {
+    const found = d.teams[teamId].sq.find((q) => q.n === playerName);
+    if (found) return { pl: found, team: d.teams[teamId] };
+  }
+  const inMk = d.mk.find((q) => q.n === playerName);
+  if (inMk) return { pl: inMk, team: null };
+  const inYth = d.yth.find((q) => q.n === playerName);
+  if (inYth) return { pl: inYth, team: d.teams[d.me] || null };
+  for (const t of d.teams) {
+    const found = t.sq.find((q) => q.n === playerName);
+    if (found) return { pl: found, team: t };
+  }
+  return { pl: null, team: null };
+};
+
+const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamId: number | null, patch: GodBlessingPatch) => {
+  const { pl } = findMutablePlayerInState(d, playerName, teamId);
+  if (!pl) return false;
+  const nextPos = LINE[patch.ro] || pl.pos;
+  pl.ro = patch.ro;
+  pl.pos = nextPos;
+  pl.ov = clamp(Math.round(patch.ov), 1, 99);
+  pl.pot = clamp(Math.round(Math.max(patch.pot, pl.ov)), 1, 99);
+  pl.age = clamp(Math.round(patch.age), 15, 45);
+  pl.fit = clamp(Math.round(patch.fit), 1, 100);
+  pl.inj = Math.max(0, Math.round(patch.inj));
+  pl.sus = Math.max(0, Math.round(patch.sus));
+  pl.customA = {
+    sh: clamp(Math.round(patch.coreA.sh), 1, 99),
+    ps: clamp(Math.round(patch.coreA.ps), 1, 99),
+    dr: clamp(Math.round(patch.coreA.dr), 1, 99),
+    tk: clamp(Math.round(patch.coreA.tk), 1, 99),
+    ph: clamp(Math.round(patch.coreA.ph), 1, 99)
+  };
+  const cleanSub: Record<string, number> = {};
+  Object.entries(patch.subD).forEach(([k, v]) => {
+    cleanSub[k] = clamp(Math.round(v), 1, 99);
+  });
+  pl.customD = cleanSub;
+  pl.customSig = patch.sig;
+  pl.blessed = true;
+
+  if ((pl.me || (d.mode === 'p' && d.p?.name === pl.n)) && d.p) {
+    d.p.pos = nextPos;
+    d.p.sp = patch.ro;
+    d.p.a = { ...pl.customA };
+    d.p.b = { ...pl.customA };
+    d.p.sig = patch.sig;
+    d.p.customD = { ...cleanSub };
+    d.p.age = pl.age;
+    d.p.en = pl.fit;
+    d.p.inj = pl.inj;
+    d.p.sus = pl.sus;
+    syncMe(d);
+  }
+  return true;
+};
+
+const resetGodBlessingOnPlayer = (d: GameState, playerName: string, teamId: number | null) => {
+  const { pl } = findMutablePlayerInState(d, playerName, teamId);
+  if (!pl) return false;
+  delete pl.customA;
+  delete pl.customD;
+  delete pl.customSig;
+  delete pl.blessed;
+  if ((pl.me || (d.mode === 'p' && d.p?.name === pl.n)) && d.p) {
+    delete d.p.customD;
+    syncMe(d);
+  }
+  return true;
+};
+
+const PlayerBlessingEditor: React.FC<{
+  player: Player;
+  team: Team | null;
+  state: GameState;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
+  onToast: (msg: string) => void;
+  onSaved?: () => void;
+}> = ({ player, team, state, onUpdateState, onToast, onSaved }) => {
+  const isMePlayer = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
+  const initInfo = dtInfo(player, isMePlayer ? state.p : null);
+
+  const [ro, setRo] = useState<SubRole>(player.ro || 'CM');
+  const [sig, setSig] = useState<string>(initInfo.D0.sig || 'fin');
+  const [ov, setOv] = useState<number>(player.ov || 60);
+  const [pot, setPot] = useState<number>(Math.max(player.pot || player.ov || 65, player.ov || 60));
+  const [age, setAge] = useState<number>(player.age || 24);
+  const [fit, setFit] = useState<number>(Math.round(player.fit ?? 100));
+  const [inj, setInj] = useState<number>(player.inj || 0);
+  const [sus, setSus] = useState<number>(player.sus || 0);
+  const [coreA, setCoreA] = useState<CoreAttrs>(() => ({ ...initInfo.a }));
+  const [subD, setSubD] = useState<Record<string, number>>(() => ({ ...initInfo.D0.d }));
+
+  const calcCoreFromSub = (pos: Position, sub: Record<string, number>, fb: CoreAttrs): CoreAttrs => {
+    const g = (k: string, d = 60) => sub[k] ?? d;
+    if (pos === 'GK') {
+      return {
+        sh: fb.sh,
+        ps: g('dist') * 0.75 + g('cl') * 0.25,
+        dr: g('spd') * 0.6 + g('cl') * 0.4,
+        tk: g('cl') * 0.6 + g('sv') * 0.4,
+        ph: g('sv') * 0.5 + g('str') * 0.25 + g('sta') * 0.25
+      };
+    }
+    return {
+      sh: g('fin') * 0.36 + g('pw') * 0.23 + g('cur') * 0.18 + g('run') * 0.13 + g('fk') * 0.10,
+      ps: g('crs') * 0.40 + g('cur') * 0.25 + g('rd') * 0.22 + g('fk') * 0.13,
+      dr: g('spd') * 0.45 + g('run') * 0.25 + g('cur') * 0.15 + g('crs') * 0.15,
+      tk: g('pos') * 0.3 + g('mrk') * 0.25 + g('rd') * 0.25 + g('blk') * 0.2,
+      ph: g('str') * 0.35 + g('sta') * 0.3 + g('hd') * 0.2 + g('spd') * 0.15
+    };
+  };
+
+  const subAnchorRef = useRef<{ core: CoreAttrs; raw: CoreAttrs }>({
+    core: { ...initInfo.a },
+    raw: calcCoreFromSub(LINE[player.ro || 'CM'] || player.pos, initInfo.D0.d, initInfo.a)
+  });
+
+  useEffect(() => {
+    const nextMe = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
+    const nextInfo = dtInfo(player, nextMe ? state.p : null);
+    const nextRo = player.ro || 'CM';
+    const nextPos = LINE[nextRo] || player.pos;
+    setRo(nextRo);
+    setSig(nextInfo.D0.sig || 'fin');
+    setOv(player.ov || 60);
+    setPot(Math.max(player.pot || player.ov || 65, player.ov || 60));
+    setAge(player.age || 24);
+    setFit(Math.round(player.fit ?? 100));
+    setInj(player.inj || 0);
+    setSus(player.sus || 0);
+    setCoreA({ ...nextInfo.a });
+    setSubD({ ...nextInfo.D0.d });
+    subAnchorRef.current = {
+      core: { ...nextInfo.a },
+      raw: calcCoreFromSub(nextPos, nextInfo.D0.d, nextInfo.a)
+    };
+  }, [player.n, team?.id]);
+
+  const curPos = LINE[ro] || player.pos;
+
+  const shiftAllStatsBy = (delta: number) => {
+    SFX.tap();
+    const nextOv = clamp(ov + delta, 1, 99);
+    const nextCore: CoreAttrs = {
+      sh: clamp(coreA.sh + delta, 1, 99),
+      ps: clamp(coreA.ps + delta, 1, 99),
+      dr: clamp(coreA.dr + delta, 1, 99),
+      tk: clamp(coreA.tk + delta, 1, 99),
+      ph: clamp(coreA.ph + delta, 1, 99)
+    };
+    const nextSub: Record<string, number> = {};
+    Object.keys(subD).forEach((k) => {
+      nextSub[k] = clamp(subD[k] + delta, 1, 99);
+    });
+    setOv(nextOv);
+    setPot((p) => clamp(Math.max(p + (delta > 0 ? delta : 0), nextOv), 1, 99));
+    setCoreA(nextCore);
+    setSubD(nextSub);
+    subAnchorRef.current = { core: nextCore, raw: calcCoreFromSub(curPos, nextSub, nextCore) };
+  };
+
+  const handleOvChange = (nextOvVal: number) => {
+    const clampedOv = clamp(nextOvVal, 1, 99);
+    const diff = clampedOv - ov;
+    setOv(clampedOv);
+    if (clampedOv > pot) setPot(clampedOv);
+    if (diff !== 0) {
+      const nextCore: CoreAttrs = {
+        sh: clamp(coreA.sh + diff, 1, 99),
+        ps: clamp(coreA.ps + diff, 1, 99),
+        dr: clamp(coreA.dr + diff, 1, 99),
+        tk: clamp(coreA.tk + diff, 1, 99),
+        ph: clamp(coreA.ph + diff, 1, 99)
+      };
+      const nextSub: Record<string, number> = {};
+      Object.keys(subD).forEach((k) => {
+        nextSub[k] = clamp(subD[k] + diff, 1, 99);
+      });
+      setCoreA(nextCore);
+      setSubD(nextSub);
+      subAnchorRef.current = { core: nextCore, raw: calcCoreFromSub(curPos, nextSub, nextCore) };
+    }
+  };
+
+  const handleCoreChange = (key: StatKey, val: number) => {
+    const clamped = clamp(val, 1, 99);
+    const diff = clamped - coreA[key];
+    const nextCore = { ...coreA, [key]: clamped };
+    setCoreA(nextCore);
+    const computedOv = clamp(OVF(curPos, nextCore), 1, 99);
+    setOv(computedOv);
+    if (computedOv > pot) setPot(computedOv);
+    let nextSub = subD;
+    if (diff !== 0) {
+      const linkMap: Record<StatKey, string[]> = {
+        sh: ['fin', 'pw', 'cur', 'fk', 'run'],
+        ps: ['crs', 'dist', 'rd', 'fk'],
+        dr: ['spd', 'run', 'cur'],
+        tk: ['rd', 'pos', 'mrk', 'blk'],
+        ph: ['str', 'sta', 'hd', 'tol', 'sv']
+      };
+      nextSub = { ...subD };
+      (linkMap[key] || []).forEach((sk) => {
+        if (nextSub[sk] != null) nextSub[sk] = clamp(nextSub[sk] + Math.round(diff * 0.7), 1, 99);
+      });
+      setSubD(nextSub);
+    }
+    subAnchorRef.current = { core: nextCore, raw: calcCoreFromSub(curPos, nextSub, nextCore) };
+  };
+
+  const handleSubChange = (sk: string, val: number) => {
+    const clampedVal = clamp(Math.round(val), 1, 99);
+    const nextSub = { ...subD, [sk]: clampedVal };
+    setSubD(nextSub);
+    const anchor = subAnchorRef.current;
+    const rawNow = calcCoreFromSub(curPos, nextSub, coreA);
+    const nextCore: CoreAttrs = { ...coreA };
+    (['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[]).forEach((k) => {
+      if (curPos === 'GK' && k === 'sh') return;
+      const initR = anchor.raw[k];
+      const offset = anchor.core[k] - initR;
+      const diffFromAnchor = rawNow[k] - initR;
+      const scale =
+        diffFromAnchor >= 0
+          ? initR >= 99
+            ? 0
+            : clamp((99 - rawNow[k]) / Math.max(1, 99 - initR), 0, 1)
+          : initR <= 1
+            ? 0
+            : clamp((rawNow[k] - 1) / Math.max(1, initR - 1), 0, 1);
+      nextCore[k] = clamp(Math.round(rawNow[k] + offset * scale), 1, 99);
+    });
+    setCoreA(nextCore);
+    const computedOv = clamp(OVF(curPos, nextCore), 1, 99);
+    setOv(computedOv);
+    if (computedOv > pot) setPot(computedOv);
+  };
+
+  const handleRoleChange = (nextRo: SubRole) => {
+    setRo(nextRo);
+    const nextPos = LINE[nextRo] || curPos;
+    const computedOv = clamp(OVF(nextPos, coreA), 1, 99);
+    setOv(computedOv);
+    if (computedOv > pot) setPot(computedOv);
+    subAnchorRef.current = { core: coreA, raw: calcCoreFromSub(nextPos, subD, coreA) };
+  };
+
+  const applyMax99 = () => {
+    SFX.win();
+    const maxCore: CoreAttrs = { sh: 99, ps: 99, dr: 99, tk: 99, ph: 99 };
+    const maxSub: Record<string, number> = {};
+    Object.keys(subD).forEach((k) => {
+      maxSub[k] = 99;
+    });
+    setOv(99);
+    setPot(99);
+    setFit(100);
+    setInj(0);
+    setSus(0);
+    setCoreA(maxCore);
+    setSubD(maxSub);
+    subAnchorRef.current = { core: maxCore, raw: calcCoreFromSub(curPos, maxSub, maxCore) };
+  };
+
+  const subGroups: [string, [string, string][]][] = [
+    ...(curPos === 'GK'
+      ? [['🧤 ผู้รักษาประตู', [['sv', 'เซฟ'], ['cl', 'ออกมาปิดมุม'], ['dist', 'จ่ายจากแนวหลัง']]] as [string, [string, string][]]]
+      : ([
+          ['⚔️ โจมตี', [['pw', 'พลังยิง'], ['fin', 'จบสกอร์'], ['cur', 'ยิงโค้ง'], ['fk', 'ลูกตั้งเตะ'], ['crs', 'เปิดบอล'], ['run', 'เข้าทำตำแหน่ง']]],
+          ['🛡️ ป้องกัน & กลางอากาศ', [['rd', 'อ่านเกม'], ['pos', 'สกัด/ยืนตำแหน่ง'], ['mrk', 'ประกบตัว'], ['blk', 'บล็อกลูกยิง'], ['hd', 'โหม่ง']]]
+        ] as [string, [string, string][]][])),
+    ['💪 ร่างกาย & ฟื้นตัว', [['spd', 'ความเร็ว'], ['str', 'ความแข็งแรง'], ['sta', 'ความอึด'], ['tol', 'ทนต่อบาดเจ็บ'], ['rec', 'ฟื้นตัวเร็ว']]],
+    ['🌟 จิตใจ', [['comp', 'นิ่งในนัดใหญ่']]]
+  ];
+
+  const handleSave = () => {
+    SFX.win();
+    vibrate(35);
+    const tid = team ? team.id : null;
+    onUpdateState((d) => {
+      applyGodBlessingToPlayer(d, player.n, tid, {
+        ov,
+        pot,
+        age,
+        fit,
+        inj,
+        sus,
+        ro,
+        sig,
+        coreA,
+        subD
+      });
+    });
+    onToast(`✨ มอบพรของพระเจ้าให้ ${player.n} (OVR ${ov}) สำเร็จ!`);
+    onSaved?.();
+  };
+
+  const handleReset = () => {
+    SFX.tap();
+    const tid = team ? team.id : null;
+    onUpdateState((d) => {
+      resetGodBlessingOnPlayer(d, player.n, tid);
+    });
+    onToast(`🔄 คืนค่าพลังพื้นฐานให้ ${player.n} แล้ว`);
+    onSaved?.();
+  };
+
+  return (
+    <div className="space-y-3 mland:space-y-2">
+      {/* Quick Miracle Bar */}
+      <div className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-r from-[var(--lamp-soft)]/70 via-[var(--surface-2)] to-[var(--g-soft)] border border-[var(--lamp)]/45 space-y-2 mland:space-y-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-xs mland:text-[10.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] flex items-center gap-1.5">
+            <span>✨ พรของพระเจ้า · ปรับแต่งค่าพลังเฉพาะตัว</span>
+            <span className="px-2 py-0.5 rounded-lg text-white text-[11px] font-extrabold tabular" style={{ background: ovColor(ov) }}>
+              OVR {ov}
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" onClick={() => shiftAllStatsBy(5)} className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] font-bold cursor-pointer">
+              ⚡ +5 ทุกค่า
+            </button>
+            <button type="button" onClick={() => shiftAllStatsBy(10)} className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[10.5px] font-bold cursor-pointer">
+              🔥 +10 ทุกค่า
+            </button>
+            <button type="button" onClick={applyMax99} className="px-2.5 py-1 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[10.5px] font-extrabold cursor-pointer shadow-xs">
+              👑 เทพ 99
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setFit(100);
+                setInj(0);
+                setSus(0);
+              }}
+              className="px-2 py-1 rounded-lg bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35 text-[10.5px] font-bold cursor-pointer"
+            >
+              💚 ฟิต 100% / หายเจ็บ
+            </button>
+          </div>
+        </div>
+
+        {/* Role, Signature & Basic Vitals */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mland:gap-1.5">
+          <label className="block space-y-0.5">
+            <span className="text-[10px] font-semibold text-[var(--mut)]">ตำแหน่ง / บทบาท</span>
+            <select
+              value={ro}
+              onChange={(e) => handleRoleChange(e.target.value as SubRole)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold"
+            >
+              {ALL_SUB_ROLES.map((rKey) => (
+                <option key={rKey} value={rKey}>
+                  {rKey} · {SPN[rKey] || rKey}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block space-y-0.5">
+            <span className="text-[10px] font-semibold text-[var(--mut)]">จุดเด่นเฉพาะตัว</span>
+            <select
+              value={sig}
+              onChange={(e) => setSig(e.target.value)}
+              className="w-full px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold"
+            >
+              {Object.entries(SIGL).map(([sKey, sLbl]) => (
+                <option key={sKey} value={sKey}>
+                  ⭐ {sLbl}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-[var(--mut)] font-semibold">OVR รวม</span>
+              <b className="tabular text-xs" style={{ color: statBarColor(ov) }}>{ov}</b>
+            </div>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => handleOvChange(ov - 1)} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <input type="range" min={1} max={99} value={ov} onChange={(e) => handleOvChange(Number(e.target.value))} className="flex-1 accent-[var(--g)] min-w-0" />
+              <button type="button" onClick={() => handleOvChange(ov + 1)} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
+
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-[var(--mut)] font-semibold">ศักยภาพ (POT)</span>
+              <b className="tabular text-xs" style={{ color: statBarColor(pot) }}>{pot}</b>
+            </div>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setPot((v) => clamp(v - 1, 1, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <input type="range" min={1} max={99} value={pot} onChange={(e) => setPot(Number(e.target.value))} className="flex-1 accent-[var(--lamp)] min-w-0" />
+              <button type="button" onClick={() => setPot((v) => clamp(v + 1, 1, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mland:gap-1.5">
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
+            <span className="text-[10.5px] font-semibold text-[var(--mut)]">อายุ</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setAge((v) => clamp(v - 1, 15, 45))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <span className="text-xs font-bold tabular w-6 text-center">{age}</span>
+              <button type="button" onClick={() => setAge((v) => clamp(v + 1, 15, 45))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
+            <span className="text-[10.5px] font-semibold text-[var(--mut)]">ความฟิต</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setFit((v) => clamp(v - 5, 1, 100))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <span className="text-xs font-bold tabular w-8 text-center">{fit}%</span>
+              <button type="button" onClick={() => setFit((v) => clamp(v + 5, 1, 100))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
+            <span className="text-[10.5px] font-semibold text-[var(--mut)]">บาดเจ็บ (นัด)</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setInj((v) => Math.max(0, v - 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <span className="text-xs font-bold tabular w-5 text-center">{inj}</span>
+              <button type="button" onClick={() => setInj((v) => Math.min(20, v + 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-between gap-1">
+            <span className="text-[10.5px] font-semibold text-[var(--mut)]">โทษแบน (นัด)</span>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setSus((v) => Math.max(0, v - 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <span className="text-xs font-bold tabular w-5 text-center">{sus}</span>
+              <button type="button" onClick={() => setSus((v) => Math.min(10, v + 1))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5 Core Attributes */}
+      <div className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-2">
+        <div className="text-xs mland:text-[10.5px] font-bold flex items-center justify-between">
+          <span>🎯 ค่าพลังหลัก 5 ด้าน</span>
+          <span className="text-[10px] font-normal text-[var(--mut)]">ปรับแล้วคำนวณ OVR ให้อัตโนมัติ</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-5 mland:grid-cols-5 gap-2 mland:gap-1">
+          {ATT.map(([k, lbl]) => {
+            const val = coreA[k];
+            return (
+              <div key={k} className="p-2 mland:p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
+                <div className="flex items-center justify-between text-xs mland:text-[10px]">
+                  <span className="font-semibold text-[var(--mut)]">{lbl}</span>
+                  <b className="tabular font-extrabold" style={{ color: statBarColor(val) }}>{val}</b>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={99}
+                  value={val}
+                  onChange={(e) => handleCoreChange(k, Number(e.target.value))}
+                  className="w-full accent-[var(--g)]"
+                />
+                <div className="flex justify-between gap-1">
+                  <button type="button" onClick={() => handleCoreChange(k, val - 1)} className="flex-1 py-0.5 rounded bg-[var(--surface-2)] text-[10px] font-bold cursor-pointer">-1</button>
+                  <button type="button" onClick={() => handleCoreChange(k, val + 1)} className="flex-1 py-0.5 rounded bg-[var(--surface-2)] text-[10px] font-bold cursor-pointer">+1</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Detailed Sub-attributes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mland:gap-1.5">
+        {subGroups.map(([grp, rows]) => (
+          <div key={grp} className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-1.5">
+            <div className="font-bold text-xs mland:text-[10.5px] pb-1 border-b border-[var(--line)]/70">{grp}</div>
+            <div className="space-y-1.5">
+              {rows.map(([sk, lbl]) => {
+                const v = clamp(Math.round(subD[sk] ?? 60), 1, 99);
+                const isSigKey = sk === sig;
+                return (
+                  <div key={sk} className="flex items-center gap-1.5 text-[11px] mland:text-[10px]">
+                    <span className={`w-24 shrink-0 truncate ${isSigKey ? 'font-bold text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                      {isSigKey ? '⭐ ' : ''}{lbl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSubChange(sk, v - 1)}
+                      className="w-5 h-5 rounded bg-[var(--surface)] border border-[var(--line)] text-[10px] font-bold shrink-0 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <input
+                      type="range"
+                      min={1}
+                      max={99}
+                      value={v}
+                      onChange={(e) => handleSubChange(sk, Number(e.target.value))}
+                      className="flex-1 min-w-0 accent-[var(--g)]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSubChange(sk, v + 1)}
+                      className="w-5 h-5 rounded bg-[var(--surface)] border border-[var(--line)] text-[10px] font-bold shrink-0 cursor-pointer"
+                    >
+                      +
+                    </button>
+                    <span className="w-6 text-right font-extrabold tabular shrink-0" style={{ color: statBarColor(v) }}>
+                      {v}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Save / Reset Footer */}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        {player.blessed ? (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="px-3 py-2 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--red)] text-xs mland:text-[10.5px] font-bold text-[var(--red)] cursor-pointer"
+          >
+            🔄 คืนค่าเดิม
+          </button>
+        ) : (
+          <span className="text-[11px] text-[var(--mut)]">ปรับแล้วมีผลทันทีทั้งในสนาม 2D และสถิติ</span>
+        )}
+        <button
+          type="button"
+          onClick={handleSave}
+          className="ml-auto px-5 py-2 mland:py-1.5 rounded-xl bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-xs sm:text-sm mland:text-xs font-extrabold shadow-sm hover:brightness-105 cursor-pointer"
+        >
+          ✨ บันทึกพรของพระเจ้า ({player.n.split(' ')[0]})
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const GodBlessingModal: React.FC<{
+  state: GameState;
+  onClose: () => void;
+  onUpdateState: (updater: (draft: GameState) => void) => void;
+  onToast: (msg: string) => void;
+}> = ({ state, onClose, onUpdateState, onToast }) => {
+  const [selectedTeamId, setSelectedTeamId] = useState<number | 'mk' | 'yth'>(state.me);
+  const [search, setSearch] = useState('');
+  const [editingName, setEditingName] = useState<string | null>(() => {
+    if (state.mode === 'p' && state.p?.name) return state.p.name;
+    return state.teams[state.me]?.sq[0]?.n || null;
+  });
+
+  const roster: { pl: Player; team: Team | null }[] = useMemo(() => {
+    if (selectedTeamId === 'mk') return state.mk.map((pl) => ({ pl, team: null }));
+    if (selectedTeamId === 'yth') return state.yth.map((pl) => ({ pl, team: state.teams[state.me] || null }));
+    const tm = state.teams[selectedTeamId] || state.teams[state.me];
+    return (tm?.sq || []).map((pl) => ({ pl, team: tm }));
+  }, [state, selectedTeamId]);
+
+  const filteredRoster = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const list = q ? roster.filter((x) => x.pl.n.toLowerCase().includes(q) || x.pl.ro.toLowerCase().includes(q)) : roster;
+    return list.slice().sort((a, b) => (b.pl.me ? 1 : 0) - (a.pl.me ? 1 : 0) || b.pl.ov - a.pl.ov);
+  }, [roster, search]);
+
+  const activeItem = roster.find((x) => x.pl.n === editingName) || filteredRoster[0] || roster[0] || null;
+
+  return (
+    <div className="fixed inset-0 z-[65] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-4xl mland:max-w-[97vw] max-h-[93dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 flex flex-col overflow-hidden shadow-2xl">
+        <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-1.5 bg-gradient-to-r from-[#2e2000] via-[#17281e] to-[#0c1c14] text-white border-b border-[var(--lamp)]/35 flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h3 className="font-bold text-base mland:text-xs font-display flex items-center gap-1.5 truncate">
+              <span>✨</span>
+              <span>พรของพระเจ้า · ปรับแต่งค่าพลังนักเตะแต่ละคน</span>
+            </h3>
+            <p className="text-[11px] mland:text-[9px] text-amber-200/85 truncate">
+              เลือกนักเตะคนใดก็ได้ในเกมเพื่อปรับ OVR ศักยภาพ อายุ ตำแหน่ง จุดเด่น และค่าพลังย่อยทั้งหมด
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-white/15 hover:bg-white/25 text-xs font-bold cursor-pointer shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 min-h-0 flex flex-col md:grid md:grid-cols-[260px_1fr] mland:grid mland:grid-cols-[220px_1fr] overflow-hidden">
+          {/* Left Column: Team & Player Selector */}
+          <div className="shrink-0 md:h-full mland:h-full flex flex-col border-b md:border-b-0 md:border-r mland:border-b-0 mland:border-r border-[var(--line)] bg-[var(--surface-2)]/55 min-h-0 max-h-[34dvh] md:max-h-none mland:max-h-none">
+            <div className="p-2.5 mland:p-1.5 space-y-1.5 border-b border-[var(--line)] shrink-0">
+              <select
+                value={String(selectedTeamId)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  const nextId = raw === 'mk' || raw === 'yth' ? raw : Number(raw);
+                  setSelectedTeamId(nextId);
+                  setSearch('');
+                  if (nextId === 'mk') setEditingName(state.mk[0]?.n || null);
+                  else if (nextId === 'yth') setEditingName(state.yth[0]?.n || null);
+                  else setEditingName(state.teams[nextId]?.sq[0]?.n || null);
+                }}
+                className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold"
+              >
+                <option value={String(state.me)}>⭐ ทีมของเรา · {state.teams[state.me]?.name}</option>
+                <option value="yth">🎓 อคาเดมีเยาวชน ({state.yth.length})</option>
+                <option value="mk">🛒 ตลาดซื้อขาย / ฟรีเอเยนต์ ({state.mk.length})</option>
+                {state.teams
+                  .filter((t) => t.id !== state.me)
+                  .map((t) => (
+                    <option key={t.id} value={String(t.id)}>
+                      {TN[t.tier]} · {t.name}
+                    </option>
+                  ))}
+              </select>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="🔍 ค้นหาชื่อ หรือตำแหน่ง (เช่น ST, CB)..."
+                className="w-full px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px]"
+              />
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-1.5 space-y-1">
+              {filteredRoster.length === 0 ? (
+                <div className="text-center py-6 text-xs text-[var(--mut)]">ไม่พบนักเตะ</div>
+              ) : (
+                filteredRoster.map(({ pl, team: pTeam }) => {
+                  const isSel = activeItem?.pl.n === pl.n;
+                  return (
+                    <button
+                      key={pl.n}
+                      type="button"
+                      onClick={() => { SFX.tap(); setEditingName(pl.n); }}
+                      className={`w-full px-2 py-1.5 mland:py-1 rounded-xl border text-left flex items-center gap-2 transition-colors cursor-pointer ${
+                        isSel
+                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-1 ring-[var(--lamp)]/50'
+                          : 'bg-[var(--surface)] border-[var(--line)] hover:border-[var(--g)]'
+                      }`}
+                    >
+                      <PlayerFace player={pl} team={pTeam} state={state} size={26} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs mland:text-[10.5px] font-bold truncate flex items-center gap-1">
+                          {pl.blessed && <span title="ได้รับพรของพระเจ้า">✨</span>}
+                          <span className="truncate">{pl.n}</span>
+                        </div>
+                        <div className="text-[10px] mland:text-[9px] text-[var(--mut)]">
+                          {pl.ro} · อายุ {pl.age}
+                        </div>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded-md text-white text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(pl.ov) }}>
+                        {pl.ov}
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Right Column: Individual Stat Editor */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
+            {activeItem ? (
+              <div className="space-y-3 mland:space-y-2">
+                <div className="flex items-center gap-3 p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)]">
+                  <PlayerFace
+                    player={activeItem.pl}
+                    team={activeItem.team}
+                    state={state}
+                    careerProfile={activeItem.pl.me ? state.p : null}
+                    size={42}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm mland:text-xs truncate flex items-center gap-1.5">
+                      {activeItem.pl.blessed && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] font-extrabold shrink-0">✨ พรของพระเจ้า</span>}
+                      <span className="truncate">{activeItem.pl.n}</span>
+                    </div>
+                    <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
+                      {activeItem.team ? activeItem.team.name : 'ตลาดซื้อขาย / ฟรีเอเยนต์'} · {activeItem.pl.ro} ({SPN[activeItem.pl.ro] || activeItem.pl.pos})
+                    </div>
+                  </div>
+                </div>
+                <PlayerBlessingEditor
+                  key={`${selectedTeamId}:${activeItem.pl.n}`}
+                  player={activeItem.pl}
+                  team={activeItem.team}
+                  state={state}
+                  onUpdateState={onUpdateState}
+                  onToast={onToast}
+                />
+              </div>
+            ) : (
+              <div className="text-center py-12 text-xs text-[var(--mut)]">เลือกนักเตะจากรายการทางซ้ายเพื่อปรับแต่งค่าพลัง</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PlayerInspectorModal: React.FC<{
   player: Player;
   team: Team | null;
@@ -18663,14 +22346,21 @@ const PlayerInspectorModal: React.FC<{
   onClose: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ player, team, state, onClose, onUpdateState, onToast }) => {
+  godBlessingEnabled?: boolean;
+}> = ({ player, team, state, onClose, onUpdateState, onToast, godBlessingEnabled = true }) => {
   const liveTeam = team ? state.teams[team.id] || team : null;
-  const livePlayer = liveTeam ? liveTeam.sq.find((q) => q.n === player.n) || player : player;
+  const livePlayer = liveTeam
+    ? liveTeam.sq.find((q) => q.n === player.n) || player
+    : state.mk.find((q) => q.n === player.n) || state.yth.find((q) => q.n === player.n) || player;
   const isMyTeam = !!liveTeam && liveTeam.id === state.me;
   const isMePlayer = !!livePlayer.me || (state.mode === 'p' && state.p?.name === livePlayer.n);
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [shirtNo, setShirtNo] = useState(String(currentNo));
+  const [inspectMode, setInspectMode] = useState<'info' | 'missions' | 'blessing'>('info');
+  const effectiveMode = inspectMode === 'blessing' && !godBlessingEnabled ? 'info' : inspectMode;
+  const canDoMissions = isMyTeam || isMePlayer;
+  const readyMissionCnt = canDoMissions ? countReadyMissions(livePlayer, isMePlayer ? state.p : null) : 0;
   const isCap = !!liveTeam && liveTeam.cap === livePlayer.n;
   const con = liveTeam ? ensureCon(livePlayer) : null;
   const sigLabel = SIGL[info.D0.sig] || info.D0.sig;
@@ -18693,6 +22383,7 @@ const PlayerInspectorModal: React.FC<{
             <div className="min-w-0 space-y-0.5 mland:space-y-0">
               <div className="font-bold text-base sm:text-lg mland:text-xs truncate flex items-center gap-1.5">
                 {isMePlayer && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold shrink-0">ฉัน</span>}
+                {livePlayer.blessed && <span className="px-1.5 py-0.5 rounded bg-amber-300 text-[#261900] text-[10px] mland:text-[8.5px] font-extrabold shrink-0">✨ พร</span>}
                 <span className="opacity-85 tabular">#{currentNo}</span>
                 <span className="truncate">{livePlayer.n}</span>
                 {isCap && <span className="px-1.5 py-0.5 rounded bg-white/20 text-[10px] mland:text-[8.5px] font-bold shrink-0">© กัปตัน</span>}
@@ -18713,13 +22404,63 @@ const PlayerInspectorModal: React.FC<{
               </div>
             </div>
           </div>
-          <div className="text-center shrink-0">
-            <div className="text-2xl sm:text-3xl mland:text-lg font-bold font-display leading-none tabular">{livePlayer.ov}</div>
-            <div className="text-[10px] mland:text-[8.5px] opacity-80">OVR</div>
-            <button type="button" onClick={onClose} className="mt-1.5 mland:mt-0.5 px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs mland:text-[10px] font-bold cursor-pointer">ปิด ✕</button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {canDoMissions && (
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setInspectMode((m) => (m === 'missions' ? 'info' : 'missions')); }}
+                className={`px-2.5 mland:px-2 py-1.5 mland:py-1 rounded-xl text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
+                  effectiveMode === 'missions'
+                    ? 'bg-white text-[#14532d] shadow-md'
+                    : 'bg-white/15 hover:bg-white/25 text-white border border-white/25'
+                }`}
+              >
+                {effectiveMode === 'missions' ? '📊 ดูข้อมูล' : `🎯 ภารกิจ${readyMissionCnt ? ` (${readyMissionCnt})` : ''}`}
+              </button>
+            )}
+            {godBlessingEnabled && (
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setInspectMode((m) => (m === 'blessing' ? 'info' : 'blessing')); }}
+                className={`px-2.5 mland:px-2 py-1.5 mland:py-1 rounded-xl text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
+                  effectiveMode === 'blessing'
+                    ? 'bg-white text-[#261900] shadow-md'
+                    : 'bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 hover:brightness-105'
+                }`}
+              >
+                {effectiveMode === 'blessing' ? '📊 ดูข้อมูล' : '✨ พรของพระเจ้า'}
+              </button>
+            )}
+            <div className="text-center shrink-0">
+              <div className="text-2xl sm:text-3xl mland:text-lg font-bold font-display leading-none tabular">{livePlayer.ov}</div>
+              <div className="text-[10px] mland:text-[8.5px] opacity-80">OVR</div>
+              <button type="button" onClick={onClose} className="mt-1 mland:mt-0.5 px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-white/15 hover:bg-white/25 text-xs mland:text-[10px] font-bold cursor-pointer">ปิด ✕</button>
+            </div>
           </div>
         </div>
 
+        {effectiveMode === 'blessing' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
+            <PlayerBlessingEditor
+              player={livePlayer}
+              team={liveTeam}
+              state={state}
+              onUpdateState={onUpdateState}
+              onToast={onToast}
+              onSaved={() => setInspectMode('info')}
+            />
+          </div>
+        ) : effectiveMode === 'missions' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
+            <PlayerMissionsPanel
+              player={livePlayer}
+              team={liveTeam}
+              state={state}
+              onUpdateState={onUpdateState}
+              onToast={onToast}
+            />
+          </div>
+        ) : (
         <div className="flex-1 min-h-0 overflow-y-auto mland:overflow-hidden p-3.5 sm:p-4 mland:p-2 space-y-3 mland:space-y-0 mland:grid mland:grid-cols-[0.95fr_1.05fr] mland:gap-2">
           <div className="contents mland:block mland:h-full mland:overflow-y-auto mland:pr-1 mland:space-y-1.5">
             {/* Trait & Signature Spotlight */}
@@ -18877,6 +22618,7 @@ const PlayerInspectorModal: React.FC<{
             </div>
           </div>
         </div>
+        )}
 
         <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-t border-[var(--line)] flex justify-end">
           <button type="button" onClick={onClose} className="px-5 py-2 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer">
@@ -19264,9 +23006,10 @@ function applySecretBoost(d: GameState, kind: 'money500' | 'money2500' | 'stat5'
 const SecretBoostModal: React.FC<{
   state: GameState;
   onClose: () => void;
+  onOpenGodBlessing?: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onClose, onUpdateState, onToast }) => {
+}> = ({ state, onClose, onOpenGodBlessing, onUpdateState, onToast }) => {
   const me = state.teams[state.me];
   const avgOv = me?.sq.length ? Math.round(me.sq.reduce((s, q) => s + q.ov, 0) / me.sq.length) : 60;
   const runBoost = (kind: 'money500' | 'money2500' | 'stat5' | 'stat10') => {
@@ -19334,6 +23077,20 @@ const SecretBoostModal: React.FC<{
               <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">{state.mode === 'p' ? 'ซูเปอร์สตาร์ +10 & ฟิตเต็ม' : 'ระดับแชมป์ +10 OVR & หายเจ็บ'}</div>
             </button>
           </div>
+
+          {onOpenGodBlessing && (
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                onClose();
+                onOpenGodBlessing();
+              }}
+              className="w-full p-3 mland:p-2 rounded-xl bg-gradient-to-r from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-xs mland:text-[10.5px] font-extrabold text-center cursor-pointer shadow-sm hover:brightness-105"
+            >
+              ✨ พรของพระเจ้า · ปรับแต่งค่าพลังนักเตะแต่ละคนได้เอง
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -19344,10 +23101,11 @@ const SettingsModal: React.FC<{
   state: GameState;
   onClose: () => void;
   onExitToMenu: () => void;
+  onOpenGodBlessing: () => void;
   onToast: (msg: string) => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onSettingsChange?: (next: AppSettings) => void;
-}> = ({ state, onClose, onExitToMenu, onToast, onUpdateState, onSettingsChange }) => {
+}> = ({ state, onClose, onExitToMenu, onOpenGodBlessing, onToast, onUpdateState, onSettingsChange }) => {
   const [st, setSt] = useState<AppSettings>(() => getSettings());
   const [saveCode, setSaveCode] = useState('');
   const [showVip, setShowVip] = useState(false);
@@ -19364,7 +23122,7 @@ const SettingsModal: React.FC<{
     SFX.tap();
     try {
       if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
+        await document.documentElement.requestFullscreen({ navigationUI: 'show' } as FullscreenOptions);
         setIsFullscreen(true);
       } else {
         await document.exitFullscreen();
@@ -19384,6 +23142,7 @@ const SettingsModal: React.FC<{
   };
 
   const curMatchSpeed = getDefaultMatchSpeed(st);
+  const godBlessingOn = st.godBlessingEnabled !== false;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
@@ -19527,26 +23286,76 @@ const SettingsModal: React.FC<{
                   isFullscreen ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]' : 'bg-[var(--surface-2)] border-[var(--line)]'
                 }`}
               >
-                <span>🖥️ โหมดเต็มจอไร้ขอบ (ซ่อนแถบบน/ล่าง)</span>
+                <span>🖥️ โหมดเต็มจอเว็บ (ซ่อนแถบ URL)</span>
                 <span className={`px-2 py-0.5 rounded-full text-[11px] mland:text-[9.5px] font-bold ${isFullscreen ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
-                  {isFullscreen ? 'เต็มจออยู่' : 'เปิดเต็มจอ'}
+                  {isFullscreen ? 'ออกเต็มจอ' : 'เปิดเต็มจอ'}
                 </span>
               </button>
             )}
+            <div
+              className={`w-full flex items-center justify-between gap-2 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-xs mland:text-[10.5px] font-bold transition-colors ${
+                godBlessingOn
+                  ? 'bg-gradient-to-r from-[var(--lamp-soft)] to-[var(--surface-2)] border-[var(--lamp)]/50'
+                  : 'bg-[var(--surface-2)] border-[var(--line)]'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  const nextVal = !godBlessingOn;
+                  update({ godBlessingEnabled: nextVal });
+                  onToast(nextVal ? '✨ เปิดใช้งานพรของพระเจ้าแล้ว' : 'ปิดพรของพระเจ้าแล้ว (เปิดใหม่ได้ตลอดในตั้งค่า)');
+                }}
+                className="flex-1 min-w-0 flex items-center justify-between gap-2 text-left cursor-pointer"
+              >
+                <div className="min-w-0">
+                  <div className={godBlessingOn ? 'text-[#7a4f00] dark:text-[var(--lamp)] truncate' : 'text-[var(--ink)] truncate'}>
+                    ✨ พรของพระเจ้า
+                  </div>
+                  <div className="text-[10.5px] mland:text-[8.5px] font-normal text-[var(--mut)] truncate">
+                    {godBlessingOn ? 'แสดงปุ่มแต่งค่าพลังนักเตะรายคน' : 'ซ่อนปุ่มแต่งค่าพลังชั่วคราว'}
+                  </div>
+                </div>
+                <span className={`px-2.5 mland:px-2 py-0.5 rounded-full text-[11px] mland:text-[9.5px] font-bold shrink-0 ${godBlessingOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                  {godBlessingOn ? 'เปิด' : 'ปิด'}
+                </span>
+              </button>
+              {godBlessingOn && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onClose();
+                    onOpenGodBlessing();
+                  }}
+                  className="px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[10.5px] mland:text-[9px] font-extrabold shrink-0 cursor-pointer hover:brightness-105"
+                >
+                  แต่งพลัง ↗
+                </button>
+              )}
+            </div>
             <PWAInstallButton variant="settings" onToast={onToast} />
 
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] space-y-2 mland:space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs mland:text-[10.5px] font-bold">📤 ส่งออกโค้ดเซฟ</span>
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs mland:text-[10.5px] font-bold">📤 ส่งออกโค้ดเซฟ (แบบบีบอัดย่อสั้น)</div>
+                  {saveCode && (
+                    <div className="text-[10px] mland:text-[8.5px] text-[var(--g)] font-semibold tabular">
+                      ขนาด {saveCode.length.toLocaleString()} ตัวอักษร · คัดลอกแล้ว
+                    </div>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => {
                     const code = exportSaveCode(state);
                     setSaveCode(code);
                     navigator.clipboard?.writeText(code).catch(() => undefined);
-                    onToast('สร้างและคัดลอกโค้ดเซฟแล้ว');
+                    onToast(`สร้างและคัดลอกโค้ดเซฟแบบย่อ (${code.length.toLocaleString()} ตัวอักษร) แล้ว`);
                   }}
-                  className="px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer"
+                  className="px-3 mland:px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer shrink-0"
                 >
                   สร้างโค้ด
                 </button>
@@ -19662,9 +23471,25 @@ export default function App() {
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
+  const [showGodBlessing, setShowGodBlessing] = useState(false);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
+  const godBlessingEnabled = appSettings.godBlessingEnabled !== false;
+  const [isFullscreen, setIsFullscreen] = useState(() => typeof document !== 'undefined' && Boolean(document.fullscreenElement));
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
+
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  const exitFullscreenQuick = () => {
+    SFX.tap();
+    if (typeof document !== 'undefined' && document.fullscreenElement) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+  };
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -19680,8 +23505,20 @@ export default function App() {
     setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
     updateState((d) => {
+      if (tab === 'c') {
+        d.v = 't';
+        d.tv = 4;
+        d.sub = 0;
+        return;
+      }
+      if (tab === 'q' && sub === 'training') {
+        d.v = 'r';
+        d.tv = 0;
+        d.sub = 0;
+        return;
+      }
       d.v = tab;
-      d.tv = 0;
+      d.tv = tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 5 : 0) : 0;
       d.sub = tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : 0) : 0;
       if (tab === 't') d.lg = d.teams[d.me].tier;
     });
@@ -20107,21 +23944,26 @@ export default function App() {
   const tabs: [MainTab, string, string][] =
     state.mode === 'm'
       ? [
-          ['t', '🏆', 'ตารางลีก'],
+          ['t', '🏆', 'การแข่งขัน'],
           ['q', '⚽', 'ทีม & แผน'],
+          ['r', '🏋️', 'ฝึกซ้อม'],
           ['k', '🤝', 'ตลาด'],
           ['f', '💰', 'การเงิน'],
-          ['u', '🏟️', 'สโมสร'],
-          ['c', '🏅', 'บอลถ้วย']
+          ['u', '🏟️', 'สโมสร']
         ]
       : [
           ['p', '🌟', 'อาชีพ'],
-          ['t', '🏆', 'ตารางลีก'],
-          ['q', '⚽', 'ทีม & แผน'],
-          ['c', '🏅', 'บอลถ้วย']
+          ['t', '🏆', 'การแข่งขัน'],
+          ['q', '⚽', 'ทีม & แผน']
         ];
 
-  const curTab: MainTab = tabs.some(([k]) => k === state.v) ? state.v : tabs[0][0];
+  const resolvedView: MainTab =
+    state.v === 'c'
+      ? 't'
+      : state.v === 'q' && state.mode === 'm' && state.sub === 3
+        ? 'r'
+        : state.v;
+  const curTab: MainTab = tabs.some(([k]) => k === resolvedView) ? resolvedView : tabs[0][0];
 
   return (
     <div className="h-full min-h-[100dvh] w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
@@ -20179,6 +24021,17 @@ export default function App() {
 
           <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
             <PWAInstallButton variant="compact" onToast={showToast} />
+            {isFullscreen && (
+              <button
+                type="button"
+                onClick={exitFullscreenQuick}
+                aria-label="ออกจากโหมดเต็มจอ"
+                title="ออกจากโหมดเต็มจอ"
+                className="min-h-[36px] mland:min-h-[28px] px-2.5 mland:px-2 py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--line)]/50 border border-[var(--line)] text-[11px] mland:text-[10px] font-bold text-[var(--ink)] cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                ✕ ย่อจอ
+              </button>
+            )}
             <button
               type="button"
               onClick={handleTriggerNextStep}
@@ -20299,6 +24152,16 @@ export default function App() {
               state={state}
               onUpdateState={updateState}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onOpenGodBlessing={godBlessingEnabled ? () => setShowGodBlessing(true) : undefined}
+              onToast={showToast}
+            />
+          )}
+          {curTab === 'r' && state.mode === 'm' && (
+            <TeamTrainingView
+              key={`r-${navResetSeq}`}
+              state={state}
+              onUpdateState={updateState}
+              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onToast={showToast}
             />
           )}
@@ -20322,7 +24185,6 @@ export default function App() {
               navIntent={navIntent}
             />
           )}
-          {curTab === 'c' && <CupView key={`c-${navResetSeq}`} state={state} onInspectTeam={(tid) => setInspectTeamId(tid)} />}
           {curTab === 'p' && state.mode === 'p' && (
             <PlayerCareerView key={`p-${navResetSeq}`} state={state} onUpdateState={updateState} onToast={showToast} />
           )}
@@ -20376,6 +24238,8 @@ export default function App() {
           homeId={activeMatch.homeId}
           awayId={activeMatch.awayId}
           isDerby={activeMatch.isDerby}
+          isFullscreen={isFullscreen}
+          onExitFullscreen={exitFullscreenQuick}
           onFinish={handleMatchFinish}
         />
       )}
@@ -20399,6 +24263,7 @@ export default function App() {
           onClose={() => setInspectPlayer(null)}
           onUpdateState={updateState}
           onToast={showToast}
+          godBlessingEnabled={godBlessingEnabled}
         />
       )}
 
@@ -20428,9 +24293,13 @@ export default function App() {
           state={state}
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => setState(null)}
+          onOpenGodBlessing={() => setShowGodBlessing(true)}
           onToast={showToast}
           onUpdateState={updateState}
-          onSettingsChange={setAppSettings}
+          onSettingsChange={(next) => {
+            setAppSettings(next);
+            if (next.godBlessingEnabled === false) setShowGodBlessing(false);
+          }}
         />
       )}
 
@@ -20438,6 +24307,16 @@ export default function App() {
         <SecretBoostModal
           state={state}
           onClose={() => setShowSecretBoost(false)}
+          onOpenGodBlessing={godBlessingEnabled ? () => setShowGodBlessing(true) : undefined}
+          onUpdateState={updateState}
+          onToast={showToast}
+        />
+      )}
+
+      {showGodBlessing && godBlessingEnabled && (
+        <GodBlessingModal
+          state={state}
+          onClose={() => setShowGodBlessing(false)}
           onUpdateState={updateState}
           onToast={showToast}
         />
