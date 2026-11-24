@@ -42,7 +42,7 @@ export const PlayerCareerView: React.FC<{
 
   return (
     <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] flex-1 min-h-0 gap-2.5 mland:gap-1.5 items-stretch overflow-hidden">
-      <div className="flex flex-col gap-1.5 mland:gap-1 h-full min-h-0 overflow-hidden">
+      <div className="flex flex-col gap-1.5 mland:gap-1 h-full min-h-0 overflow-y-auto pr-0.5">
         {/* Collectible Career Athlete Card */}
         <div className="relative rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-lg overflow-hidden flex flex-col shrink-0">
           <div
@@ -128,8 +128,8 @@ export const PlayerCareerView: React.FC<{
           </div>
         </div>
 
-        {/* Personal Info Box below Portrait Card (Fits cleanly without scrolling) */}
-        <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex-1 min-h-0 flex flex-col justify-between gap-1.5 mland:gap-1">
+        {/* Personal Info Box below Portrait Card */}
+        <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
           <div className="space-y-1 mland:space-y-0.5">
             <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
               <span>⚡ พลังกาย</span>
@@ -320,6 +320,19 @@ export const PlayerCareerView: React.FC<{
             );
           })()}
         </div>
+
+        {/* Personality, Style & Insights Strip below Athlete Card */}
+        <PlayerTraitsStrip
+          player={fakePlayer}
+          careerProfile={p}
+          trPair={details.TR}
+          traits={details.traits}
+          talent={myTalent}
+          growthStage={details.gro}
+          peakAge={details.D0.pk}
+          sigKey={details.D0.sig}
+          archName={p.archName}
+        />
       </div>
 
       <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0">
@@ -480,17 +493,6 @@ export const PlayerCareerView: React.FC<{
 
           {careerTab === 'stats' && (
             <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5">
-              <PlayerTraitsStrip
-                player={fakePlayer}
-                careerProfile={p}
-                trPair={details.TR}
-                traits={details.traits}
-                talent={myTalent}
-                growthStage={details.gro}
-                peakAge={details.D0.pk}
-                sigKey={details.D0.sig}
-                archName={p.archName}
-              />
               <PlayerSeasonProgressionCard
                 player={fakePlayer}
                 state={state}

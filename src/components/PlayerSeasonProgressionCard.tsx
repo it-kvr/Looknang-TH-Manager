@@ -244,7 +244,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
                     : 'text-[var(--mut)] hover:text-[var(--ink)]'
                 }`}
               >
-                จุดเด่น
+                จุดเด่น (4)
               </button>
               <button
                 type="button"
@@ -255,7 +255,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
                     : 'text-[var(--mut)] hover:text-[var(--ink)]'
                 }`}
               >
-                ครบ 5 ค่า
+                ครบ 6 ค่า
               </button>
             </div>
           )}

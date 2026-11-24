@@ -6,7 +6,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition } from './engine/simulation';
 import { applyMatchMissionProgress } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
@@ -468,11 +468,13 @@ export default function App() {
         const spIdx = d.sp ?? 0;
         const ticketMult = [0.82, 1.0, 1.24][tpIdx];
         const fanEff = clamp((d.fan ?? 55) + getActiveBoardModifiers(d).fan, 5, 100);
+        const stCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'st') / 100);
+        const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'merchLv') / 100);
         const ticket = isHomeMatch
-          ? Math.round((8 + (d.st ?? 1) * 7) * (fanEff / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1))
+          ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1) * stCondMul)
           : 0;
         const merch = isHomeMatch
-          ? Math.round((2 + (d.merchLv ?? 1) * 3) * (fanEff / 55))
+          ? Math.round((2 + clamp(d.merchLv ?? 1, 1, 10) * 2.5) * (fanEff / 55) * merchCondMul)
           : 0;
         const baseSp = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
         const winSpBonus = spIdx === 1 && diff > 0 ? 10 + me.tier * 6 : 0;
@@ -583,7 +585,7 @@ export default function App() {
         }
       }
       d.season++;
-      d.yth = Array.from({ length: 4 }, () => mkPlayer(P(POS), BASE[d.teams[d.me].tier] - 2 + (d.ya ?? 1) * 2, true));
+      d.yth = Array.from({ length: 4 }, () => mkPlayer(P(POS), BASE[d.teams[d.me].tier] - 2 + Math.round((d.ya ?? 1) * 1.2), true));
       startSeason(d);
       d.lg = d.teams[d.me].tier;
       pushFeed(d, 'ฤดูกาลใหม่', `🚀 เปิดฉากฤดูกาลที่ ${d.season} · ${TN[d.teams[d.me].tier]}`, 'ok');

@@ -159,8 +159,8 @@ export const PlayerInspectorModal: React.FC<{
           </div>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] gap-2.5 mland:gap-1.5">
-            {/* Left Column: Athlete Portrait Card + Personal Info Box Below */}
-            <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 md:overflow-hidden mland:overflow-hidden">
+            {/* Left Column: Athlete Portrait Card + Personal Info Box + Traits/Insights Below */}
+            <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
               {/* Signature Athlete Card */}
               <div className="relative rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-lg overflow-hidden shrink-0 flex flex-col">
                 <div
@@ -275,7 +275,7 @@ export const PlayerInspectorModal: React.FC<{
               </div>
 
               {/* Personal Info Box below Portrait Card (Unified with Career Mode) */}
-              <div className="flex-1 min-h-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col justify-between gap-1.5 mland:gap-1 overflow-y-auto">
+              <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
                 <div className="space-y-1 mland:space-y-0.5">
                   <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
                     <span>⚡ พลังกาย</span>
@@ -292,7 +292,7 @@ export const PlayerInspectorModal: React.FC<{
                   const curTurn = state.season * 40 + state.md;
                   const medLv = state.med ?? 1;
                   const physioLv = state.staff?.physio ?? 0;
-                  const treatCost = Math.max(6, 14 - medLv * 2 - physioLv * 2);
+                  const treatCost = Math.max(4, 14 - Math.floor(medLv * 1.1) - physioLv);
                   const alreadyTreated = livePlayer.treatedMd === curTurn;
                   return (
                     <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 60 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
@@ -419,10 +419,8 @@ export const PlayerInspectorModal: React.FC<{
                   </div>
                 )}
               </div>
-            </div>
 
-            {/* Right Column: Interactive Traits & Insights -> Season Progression Graph -> Attribute Breakdown */}
-            <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
+              {/* Personality, Style & Insights Strip below Athlete Card */}
               <PlayerTraitsStrip
                 player={livePlayer}
                 careerProfile={isMePlayer ? state.p : null}
@@ -434,7 +432,10 @@ export const PlayerInspectorModal: React.FC<{
                 sigKey={info.D0.sig}
                 archName={isMePlayer ? state.p?.archName : undefined}
               />
+            </div>
 
+            {/* Right Column: Season Progression Graph -> Attribute Breakdown */}
+            <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
               <PlayerSeasonProgressionCard
                 player={livePlayer}
                 state={state}

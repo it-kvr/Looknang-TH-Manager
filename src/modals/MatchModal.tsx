@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach } from '../types/game';
+import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID } from '../data/thaiFootballData';
 import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
@@ -17,7 +17,9 @@ type TimelineKind =
   | 'red'
   | 'injury'
   | 'miss'
-  | 'var_no_goal';
+  | 'var_no_goal'
+  | 'miracle'
+  | 'blessed';
 
 interface MatchTimelineItem {
   id: string;
@@ -58,6 +60,28 @@ export const MatchModal: React.FC<{
   const myPlayerName = state.p?.name || '';
   const myPlayerSquadObj = isPlayerMode ? meTeamOrig.sq.find((q) => q.me || q.n === myPlayerName) : undefined;
   const myInitialBanned = isPlayerMode && ((myPlayerSquadObj?.sus || state.p?.sus || 0) > 0);
+
+  const matchEnv = useMemo<MatchEnvironment>(() => {
+    const season: 'rainy' | 'summer' = Math.random() < 0.5 ? 'rainy' : 'summer';
+    const timeOfDay: 'day' | 'night' = Math.random() < 0.5 ? 'night' : 'day';
+    const puddles: MatchPitchPuddle[] =
+      season === 'rainy'
+        ? Array.from({ length: 6 }, () => ({
+            x: 12 + Math.random() * 76,
+            y: 12 + Math.random() * 76,
+            rx: 2.3 + Math.random() * 2.5,
+            ry: 1.4 + Math.random() * 1.6,
+            rot: (Math.random() - 0.5) * 1.4,
+            alpha: 0.14 + Math.random() * 0.1
+          }))
+        : [];
+    return {
+      season,
+      timeOfDay,
+      puddles,
+      sunAngle: 0.25 + Math.random() * 0.4
+    };
+  }, []);
 
   const initialHomeXi = useMemo(() => xi(homeOrig).map((q) => q.n), [homeOrig]);
   const initialAwayXi = useMemo(() => xi(awayOrig).map((q) => q.n), [awayOrig]);
@@ -153,6 +177,8 @@ export const MatchModal: React.FC<{
   const [showRatings, setShowRatings] = useState(true);
   const [htStatMode, setHtStatMode] = useState<'rating' | 'ovr'>('rating');
   const [injuryAlert, setInjuryAlert] = useState<{ name: string; role: SubRole; no: number; games: number; minute: number } | null>(null);
+  const [miracleBannerUi, setMiracleBannerUi] = useState<{ side: 'H' | 'A'; teamName: string; minsLeft: number; goalsDuring: number } | null>(null);
+  const [blessedListUi, setBlessedListUi] = useState<{ id: string; shortName: string; side: 'H' | 'A'; tag: string; minsLeft: number }[]>([]);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
   const [goalFlashSide, setGoalFlashSide] = useState<'H' | 'A' | null>(null);
@@ -175,8 +201,17 @@ export const MatchModal: React.FC<{
     teamSide: 'H'
   });
   const [logs, setLogs] = useState<{ m: number; text: string; tone?: 'goal' | 'card' | 'sys' | 'sub' }[]>(() => {
+    const envDesc =
+      matchEnv.season === 'rainy'
+        ? matchEnv.timeOfDay === 'night'
+          ? '🌙💧 สภาพสนาม: หน้าฝน · เตะกลางคืน (สนามมีน้ำขังเล็กน้อย)'
+          : '🌦️ สภาพสนาม: หน้าฝน · กลางวัน (สนามมีน้ำขังเล็กน้อย)'
+        : matchEnv.timeOfDay === 'night'
+          ? '🌙 สภาพสนาม: หน้าร้อน · เตะกลางคืน'
+          : '☀️ สภาพสนาม: หน้าร้อน · แดดออก';
     const base: { m: number; text: string; tone?: 'goal' | 'card' | 'sys' | 'sub' }[] = [
-      { m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${homeOrig.name} พบ ${awayOrig.name}`, tone: 'sys' }
+      { m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${homeOrig.name} พบ ${awayOrig.name}`, tone: 'sys' },
+      { m: 0, text: envDesc, tone: 'sys' }
     ];
     if (isPlayerMode) {
       if (myInitialBanned) {
@@ -295,6 +330,11 @@ export const MatchModal: React.FC<{
       { id: 'phase-kickoff-0', seq: 1, m: 0, side: 'N' as const, kind: 'kickoff' as const, who: 'เริ่มเกม', detail: 'เขี่ยบอลครึ่งแรก' }
     ] as MatchTimelineItem[],
     timelineSeq: 1,
+    miracleUsedH: false,
+    miracleUsedA: false,
+    maxDeficitH: 0,
+    maxDeficitA: 0,
+    miracleCelebrated: false,
     done: false
   });
 
@@ -413,6 +453,7 @@ export const MatchModal: React.FC<{
       };
     };
     return {
+      env: matchEnv,
       agents: [...hAgents, ...aAgents],
       ball: {
         x: 50,
@@ -480,6 +521,7 @@ export const MatchModal: React.FC<{
       xgH: 0,
       xgA: 0,
       inMatchInjuryCount: 0,
+      miracle: null,
       sideline: {
         benchH: buildBenchSeatsForTeam(homeOrig, sr.homeLu),
         benchA: buildBenchSeatsForTeam(awayOrig, sr.awayLu),
@@ -514,6 +556,8 @@ export const MatchModal: React.FC<{
     let pushShift = base.tac === 'X' ? 12 : base.tac === 'A' ? 6 : base.tac === 'D' ? -7 : base.tac === 'Z' ? -13 : 0;
     let pressLvl = base.press;
     let lineLvl = base.line;
+    let tempoLvl = base.tempo;
+    let tacMode = base.tac;
 
     // Adaptive AI response to scoreline & match clock
     if (!isUserSide || state.mode === 'p') {
@@ -526,15 +570,26 @@ export const MatchModal: React.FC<{
         lineLvl = Math.max(0, lineLvl - 1);
       }
     }
+
+    // Active Miracle Comeback surge pushes the trailing team into relentless attack
+    const activeMiracle = worldRef.current?.miracle;
+    if (activeMiracle && activeMiracle.side === side && (activeMiracle.minsLeft ?? 0) > 0) {
+      pushShift += 12;
+      pressLvl = 2;
+      lineLvl = 2;
+      tempoLvl = 2;
+      tacMode = 'X';
+    }
+
     const downMen = worldRef.current
       ? worldRef.current.agents.filter((a) => a.side === side && a.sentOff).length
       : 0;
     if (downMen > 0) pushShift -= downMen * 5;
 
     return {
-      tac: base.tac,
+      tac: tacMode,
       press: pressLvl,
-      tempo: base.tempo,
+      tempo: tempoLvl,
       line: lineLvl,
       wid: base.wid,
       pass: base.pass,
@@ -768,8 +823,9 @@ export const MatchModal: React.FC<{
     const D = DT(pl, state.p);
     const curFit = sr.liveFit[victim.id] ?? victim.fit ?? 100;
     const medLv = isMySide ? (state.med ?? 1) : 1;
+    const turfLv = isMySide ? (state.turfLv ?? 1) : 1;
     const physioLv = isMySide ? (state.staff?.physio ?? 0) : 0;
-    const medMult = Math.max(0.45, 1 - (medLv - 1) * 0.08 - physioLv * 0.08) * (isMySide && state.tf === 'F' ? 0.55 : 1);
+    const medMult = Math.max(0.4, 1 - (medLv - 1) * 0.045 - physioLv * 0.05 - (turfLv - 1) * 0.02) * (isMySide && state.tf === 'F' ? 0.55 : 1);
     const tolMult = clamp((132 - (D.d.tol || 65)) / 65, 0.55, 1.45);
     const fitMult = curFit < 54 ? 1.8 : curFit < 65 ? 1.25 : 0.85;
     const traitInjMult = agentHasTrait(victim, 'glass_cannon') ? 1.45 : agentHasTrait(victim, 'iron_lungs') ? 0.78 : 1;
@@ -1650,16 +1706,27 @@ export const MatchModal: React.FC<{
       const wallDef = flightType === 'freekick' ? defenders.find((d) => d.intent === 'WALL') || corridorCands[0]?.d : undefined;
       const nearDef = wallDef || corridorCands[0]?.d;
 
+      const attBlessed = (shooter?.blessedMins ?? 0) > 0;
+      const gkBlessed = (gk?.blessedMins ?? 0) > 0;
+      const miracleAtt = w.miracle?.side === side && w.miracle.minsLeft > 0;
+      const miracleDef = w.miracle?.side === defSide && w.miracle.minsLeft > 0;
+
       if (nearDef) {
+        const defAgentBlessed = (nearDef.blessedMins ?? 0) > 0;
         const blockerTrait = agentHasTrait(nearDef, 'body_blocker') ? 14 : 0;
-        const blockChance =
+        let blockChance =
           flightType === 'freekick'
             ? clamp(0.18 - ((shooter?.d.cur || 60) - 60) * 0.002 + (agentHasTrait(nearDef, 'body_blocker') ? 0.04 : 0), 0.09, 0.28)
             : clamp(0.09 + lowBlockBonus + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) + blockerTrait - 60) * 0.0035, 0.05, 0.34);
-        const deflectChance =
+        let deflectChance =
           flightType === 'freekick'
             ? 0.14
             : clamp(0.11 + (corridorCands.length >= 2 ? 0.06 : 0) + (shotStyle === 'header' || shotStyle === 'diving_header' ? 0.03 : 0), 0.10, 0.21);
+        if (defAgentBlessed) blockChance = clamp(blockChance + 0.16, 0.08, 0.52);
+        else if (attBlessed || miracleAtt) {
+          blockChance *= 0.55;
+          deflectChance *= 0.72;
+        }
         const contactRoll = Math.random();
 
         if (contactRoll < blockChance) {
@@ -1684,6 +1751,10 @@ export const MatchModal: React.FC<{
     }
 
     // 2. Accuracy roll: On-Target vs Woodwork vs Off-Target
+    const attBlessed = (shooter?.blessedMins ?? 0) > 0;
+    const gkBlessed = (gk?.blessedMins ?? 0) > 0;
+    const miracleAtt = w.miracle?.side === side && w.miracle.minsLeft > 0;
+    const miracleDef = w.miracle?.side === defSide && w.miracle.minsLeft > 0;
     const sigFinBoost = shooter?.sig === 'fin' ? 0.05 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.04 : 0;
     const isShooterSub = Boolean(shooter && sr.subs.some((s) => s.inPlayer === shooter.id));
     const traitAccBoost =
@@ -1693,10 +1764,11 @@ export const MatchModal: React.FC<{
       (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 0.07 : 0) +
       (agentHasTrait(shooter, 'consistency_pro') ? 0.03 : 0) +
       (agentHasTrait(shooter, 'setpiece_specialist') && flightType === 'freekick' ? 0.08 : 0);
+    const luckAccBoost = (attBlessed ? 0.17 : 0) + (miracleAtt ? 0.15 : 0) - (gkBlessed ? 0.04 : 0);
     const accuracy =
       flightType === 'penalty'
-        ? clamp((isPanenka ? 0.89 : 0.92) + (agentHasTrait(shooter, 'clutch_player') ? 0.03 : 0), 0.85, 0.96)
-        : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost + traitAccBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.78);
+        ? clamp((isPanenka ? 0.89 : 0.92) + (agentHasTrait(shooter, 'clutch_player') ? 0.03 : 0) + (attBlessed ? 0.05 : 0), 0.85, 0.98)
+        : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost + traitAccBoost + luckAccBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.93);
 
     if (Math.random() > accuracy) {
       const hitWoodwork = Math.random() < (flightType === 'penalty' ? 0.35 : 0.16);
@@ -1728,19 +1800,22 @@ export const MatchModal: React.FC<{
     const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
     const gkSaveScore = gk
       ? (gk.d.sv + (gk.sig === 'sv' ? 7 : 0) + (agentHasTrait(gk, 'reflex_cat') ? 8 : 0) + (flightType === 'penalty' && agentHasTrait(gk, 'penalty_saver') ? 12 : 0)) * 0.56 +
-        (gk.d.cl + (gk.sig === 'cl' ? 6 : 0) + (agentHasTrait(gk, 'sweeper_keeper') ? 5 : 0)) * 0.44
+        (gk.d.cl + (gk.sig === 'cl' ? 6 : 0) + (agentHasTrait(gk, 'sweeper_keeper') ? 5 : 0)) * 0.44 +
+        (gkBlessed ? 18 : 0)
       : 58;
     const shooterScore = shooter
       ? (shooter.d.fin + (shooter.sig === 'fin' ? 6 : 0) + (agentHasTrait(shooter, 'poacher_instinct') && dist < 17 ? 8 : 0) + (agentHasTrait(shooter, 'acrobatic_finisher') && (shotStyle === 'bicycle' || shotStyle === 'volley' || shotStyle === 'diving_header') ? 9 : 0)) * 0.5 +
         (shooter.d.cur + (shooter.sig === 'cur' ? 6 : 0) + (agentHasTrait(shooter, 'outside_curler') && (shotStyle === 'trivela' || shotStyle === 'curler') ? 8 : 0)) * 0.25 +
         (shooter.d.pw + (shooter.sig === 'pw' ? 6 : 0) + (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 8 : 0)) * 0.25 +
         (agentHasTrait(shooter, 'clutch_player') && (curMin >= 70 || isDerby || kind !== 'league') ? 6 : 0) +
-        (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 7 : 0)
+        (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 7 : 0) +
+        (attBlessed ? 16 : 0)
       : 60;
+    const luckGoalBias = (attBlessed ? 0.14 : 0) + (miracleAtt ? 0.20 : 0) - (gkBlessed ? 0.14 : 0) - (miracleDef ? 0.10 : 0);
     const goalProb =
       flightType === 'penalty'
-        ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.0045 - (agentHasTrait(gk, 'penalty_saver') ? 0.06 : 0), 0.58, 0.92)
-        : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (flightType === 'freekick' ? 0.03 + (agentHasTrait(shooter, 'setpiece_specialist') ? 0.05 : 0) : 0), 0.14, 0.56);
+        ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.0045 - (agentHasTrait(gk, 'penalty_saver') ? 0.06 : 0) + luckGoalBias * 0.45, 0.52, 0.94)
+        : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (flightType === 'freekick' ? 0.03 + (agentHasTrait(shooter, 'setpiece_specialist') ? 0.05 : 0) : 0) + luckGoalBias, 0.09, 0.78);
 
     if (Math.random() < goalProb) {
       b.toX = attRightNow ? 101.3 : -1.3;
@@ -2682,26 +2757,36 @@ export const MatchModal: React.FC<{
       }
 
       // Defensive Duel Variety: Slide Tackle ("สไลด์"), Shoulder Clash ("เข้าประทะ"), or Clean Interception ("เข้าสกัด")
-      const carrierDribble = carrier.d.spd * 0.55 + carrier.d.run * 0.45 + (agentHasTrait(carrier, 'flair_dribbler') ? 7 : 0) + (carrier.sig === 'str' || carrier.sig === 'spd' ? 5 : 0);
+      const carrierBlessed = (carrier.blessedMins ?? 0) > 0;
+      const defBlessed = (nearestDef.blessedMins ?? 0) > 0;
+      const miracleAtt = w.miracle?.side === side && w.miracle.minsLeft > 0;
+      const carrierDribble =
+        carrier.d.spd * 0.55 +
+        carrier.d.run * 0.45 +
+        (agentHasTrait(carrier, 'flair_dribbler') ? 7 : 0) +
+        (carrier.sig === 'str' || carrier.sig === 'spd' ? 5 : 0) +
+        (carrierBlessed ? 16 : 0);
       const defTackleEdge =
         (agentHasTrait(nearestDef, 'man_marker') ? 10 : 0) +
         (agentHasTrait(nearestDef, 'slide_tackler') ? 8 : 0) +
         (agentHasTrait(nearestDef, 'pressing_machine') ? 6 : 0) +
         (nearestDef.sig === 'mrk' || nearestDef.sig === 'tkl' ? 6 : 0) +
+        (defBlessed ? 18 : 0) +
         (nearestDef.d.rd + (nearestDef.d.tkl ?? nearestDef.d.pos));
-      const tackleProb = clamp(
-        0.18 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
+      const rawTackleProb = clamp(
+        0.18 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02) + (defBlessed ? 0.14 : 0),
         0.10,
-        0.42
+        0.48
       );
+      const tackleProb = rawTackleProb * (carrierBlessed ? 0.42 : miracleAtt ? 0.65 : 1);
       if (Math.random() < tackleProb) {
         const duelRoll = Math.random();
         const isSlideTackle = duelRoll < ((defCfg.press === 2 ? 0.42 : 0.30) + (agentHasTrait(nearestDef, 'slide_tackler') ? 0.24 : 0));
         const isPhysicalClash = !isSlideTackle && duelRoll < 0.68;
 
         if (isPhysicalClash) {
-          const carPhys = carrier.d.str + (carrier.sig === 'str' ? 12 : 0) + (carrier.fit < 55 ? -8 : 0);
-          const defPhys = nearestDef.d.str + (nearestDef.d.tkl ?? nearestDef.d.pos) * 0.35 + (nearestDef.sig === 'str' || nearestDef.sig === 'mrk' ? 10 : 0);
+          const carPhys = carrier.d.str + (carrier.sig === 'str' ? 12 : 0) + (carrier.fit < 55 ? -8 : 0) + (carrierBlessed ? 18 : 0) + (miracleAtt ? 10 : 0);
+          const defPhys = nearestDef.d.str + (nearestDef.d.tkl ?? nearestDef.d.pos) * 0.35 + (nearestDef.sig === 'str' || nearestDef.sig === 'mrk' ? 10 : 0) + (defBlessed ? 18 : 0);
           const clashDx = carrier.x - nearestDef.x;
           const clashDy = carrier.y - nearestDef.y;
           nearestDef.acrobatType = 'clash';
@@ -2976,26 +3061,30 @@ export const MatchModal: React.FC<{
       return;
     }
 
+    const carrierBlessedNow = (carrier.blessedMins ?? 0) > 0;
+    const miracleAttNow = w.miracle?.side === side && w.miracle.minsLeft > 0;
     const tacShootRange = attCfg.tac === 'X' ? 33 : attCfg.tac === 'A' ? 29 : attCfg.tac === 'B' ? 26 : attCfg.tac === 'D' ? 23 : 20;
     const tacShootBias = attCfg.tac === 'X' ? 0.08 : attCfg.tac === 'A' ? 0.04 : attCfg.tac === 'Z' ? -0.09 : attCfg.tac === 'D' ? -0.04 : 0;
     const isLongShotSpecialist = agentHasTrait(carrier, 'long_shot_lover');
-    const canRareHalfwayShot = carrierNormXNow >= 50.5 && distToGoal <= 45.5 && (isLongShotSpecialist || carrier.d.pw >= 74 || carrier.sig === 'pw') && Math.random() < 0.09;
+    const canRareHalfwayShot = carrierNormXNow >= 50.5 && distToGoal <= 45.5 && (isLongShotSpecialist || carrier.d.pw >= 74 || carrier.sig === 'pw' || carrierBlessedNow) && Math.random() < (carrierBlessedNow ? 0.18 : 0.09);
     const inOppHalfShootZone = carrierNormXNow >= 52 && distToGoal <= 45.5;
     const inShootZone = inOppHalfShootZone && (distToGoal < tacShootRange || canRareHalfwayShot);
     const shootTraitBias =
       (agentHasTrait(carrier, 'selfish_shooter') ? 0.14 : 0) +
       (agentHasTrait(carrier, 'poacher_instinct') && inBoxNow ? 0.12 : 0) +
       (isLongShotSpecialist && distToGoal >= 20 ? 0.10 : 0) +
-      (agentHasTrait(carrier, 'team_first') && !inBoxNow ? -0.08 : 0);
+      (agentHasTrait(carrier, 'team_first') && !inBoxNow ? -0.08 : 0) +
+      (carrierBlessedNow ? 0.15 : 0) +
+      (miracleAttNow ? 0.16 : 0);
     const shootChance = inShootZone
-      ? clamp(0.27 + tacShootBias + shootTraitBias + (31 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.07 : 0), 0.14, 0.84)
+      ? clamp(0.27 + tacShootBias + shootTraitBias + (31 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.07 : 0), 0.14, 0.92)
       : 0;
     if (carrier.pos !== 'GK' && Math.random() < shootChance) {
       let shotStyle: LiveBallState['shotStyle'] = 'normal';
       let shotLabel = distToGoal >= 34 ? `🚀 ${carrier.shortName} ซัดไกลครึ่งสนามลุ้นประตู!!` : `🔥 ${carrier.shortName} ซัดเต็มข้อ!`;
       let curveAmt = (carrier.d.cur > 65 ? 1 : 0.4) * (carrier.y < 50 ? 1 : -1) * (3 + Math.random() * 4);
       let maxZAmt = 6 + Math.random() * 3.5;
-      let durAmt = clamp(distToGoal / 36, 0.54, 0.84);
+      let durAmt = clamp(distToGoal / 36, 0.54, 0.84) * (miracleAttNow ? 0.85 : 1);
 
       if (inBoxNow && (agentHasTrait(carrier, 'acrobatic_finisher') || carrier.sig === 'fin' || carrier.d.fin >= 67) && Math.random() < (agentHasTrait(carrier, 'acrobatic_finisher') ? 0.34 : 0.16)) {
         shotStyle = 'bicycle';
@@ -3342,8 +3431,8 @@ export const MatchModal: React.FC<{
     const baseDrib = carrierNormX < 22 ? 0.06 : carrierNormX > 87 ? 0.15 : carrier.pos === 'FW' || carrier.role === 'CAM' || carrier.role === 'CF' ? 0.31 : 0.21;
     const tempoDribAdj = attCfg.tempo === 2 ? -0.10 : attCfg.tempo === 0 ? 0.07 : 0;
     const passDribAdj = attCfg.pass === 0 ? -0.05 : 0;
-    const traitDribAdj = (agentHasTrait(carrier, 'flair_dribbler') ? 0.09 : 0) + (agentHasTrait(carrier, 'tempo_controller') ? -0.05 : 0);
-    const dribbleBias = clamp(baseDrib + tempoDribAdj + passDribAdj + traitDribAdj, 0.04, 0.44);
+    const traitDribAdj = (agentHasTrait(carrier, 'flair_dribbler') ? 0.09 : 0) + (agentHasTrait(carrier, 'tempo_controller') ? -0.05 : 0) + ((carrier.blessedMins ?? 0) > 0 ? 0.14 : 0);
+    const dribbleBias = clamp(baseDrib + tempoDribAdj + passDribAdj + traitDribAdj, 0.04, 0.56);
     if (carrier.pos !== 'GK' && Math.random() < dribbleBias) {
       const stepFwd = carrierNormX > 86 ? 1 + Math.random() * 2.8 : 6 + Math.random() * 7.5;
       const advX = clamp(carrier.x + dir * stepFwd, 7.5, 92.5);
@@ -3585,6 +3674,27 @@ export const MatchModal: React.FC<{
       maxTtl: 4.2
     };
     setGoalFlashSide(side);
+
+    // Check Miracle Comeback progress & completion!
+    if (w.miracle?.side === side && w.miracle.minsLeft > 0) {
+      w.miracle.goalsDuring++;
+    }
+    const sideMaxDef = side === 'H' ? sr.maxDeficitH : sr.maxDeficitA;
+    const sideLeadNow = side === 'H' ? sr.gh - sr.ga : sr.ga - sr.gh;
+    if (sideMaxDef >= 2) {
+      if (sideLeadNow === 0) {
+        pushLog(curMin, `🔥⚡ เหลือเชื่อ!! ${attTeam.name} ไล่ตีเสมอได้สำเร็จหลังเคยตามหลังถึง ${sideMaxDef} ประตู!!`, 'goal');
+        triggerDramaSlow(w, 1.8, `🔥 ตีเสมอปาฏิหาริย์!! ${attTeam.name}`);
+        SFX.cheer(0.95);
+      } else if (sideLeadNow > 0 && !sr.miracleCelebrated) {
+        sr.miracleCelebrated = true;
+        pushLog(curMin, `🏆⚡ ปาฏิหาริย์พลิกนรกสำเร็จ!! ${attTeam.name} โดนนำห่าง ${sideMaxDef} ลูก แต่กลับมาพลิกแซงขึ้นนำอย่างเหลือเชื่อ!!`, 'goal');
+        pushTimeline(curMin, side, 'miracle', attTeam.name, `พลิกแซงจากตาม ${sideMaxDef} ลูก!`);
+        triggerDramaSlow(w, 2.2, `🏆 ปาฏิหาริย์พลิกแซง!! ${attTeam.name}`);
+        SFX.cheer(1.0);
+        if (isMyTeamGoal) triggerConfetti();
+      }
+    }
     if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
     goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashSide(null), 3200);
     if (isMeScorer) {
@@ -4571,13 +4681,14 @@ export const MatchModal: React.FC<{
       const attRightNow = isAttackRight(w, side);
       const goalTargetX = attRightNow ? 100 : 0;
 
-      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 12 : 0) + (agentHasTrait(target, 'aerial_menace') ? 16 : 0) + (agentHasTrait(target, 'near_post_runner') ? 8 : 0)) * 0.68 + target.d.run * 0.32 : 58;
+      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 12 : 0) + (agentHasTrait(target, 'aerial_menace') ? 16 : 0) + (agentHasTrait(target, 'near_post_runner') ? 8 : 0)) * 0.68 + target.d.run * 0.32 + ((target.blessedMins ?? 0) > 0 ? 16 : 0) : 58;
       const defAir = topDef
-        ? topDef.pos === 'GK'
-          ? (topDef.d.cl + (topDef.sig === 'cl' ? 8 : 0) + (agentHasTrait(topDef, 'sweeper_keeper') ? 8 : 0)) * 0.7 + topDef.d.sv * 0.3
-          : (topDef.d.hd + (topDef.sig === 'hd' ? 8 : 0) + (agentHasTrait(topDef, 'aerial_menace') ? 12 : 0)) * 0.6 + topDef.d.pos * 0.4
+        ? (topDef.pos === 'GK'
+            ? (topDef.d.cl + (topDef.sig === 'cl' ? 8 : 0) + (agentHasTrait(topDef, 'sweeper_keeper') ? 8 : 0)) * 0.7 + topDef.d.sv * 0.3
+            : (topDef.d.hd + (topDef.sig === 'hd' ? 8 : 0) + (agentHasTrait(topDef, 'aerial_menace') ? 12 : 0)) * 0.6 + topDef.d.pos * 0.4) +
+          ((topDef.blessedMins ?? 0) > 0 ? 16 : 0)
         : 60;
-      const winHeaderProb = clamp(0.48 + (attAir - defAir) * 0.007, 0.26, 0.78);
+      const winHeaderProb = clamp(0.48 + (attAir - defAir) * 0.007, 0.24, 0.84);
 
       if (target && Math.random() < winHeaderProb) {
         if (Math.hypot(target.x - b.toX, target.y - b.toY) < 18) {
@@ -4870,18 +4981,22 @@ export const MatchModal: React.FC<{
 
       const lastPasser = b.lastPasserId ? w.agents.find((a) => a.id === b.lastPasserId) : undefined;
       const passerSkill = b.flightType === 'lofted' ? (lastPasser?.d.lpass ?? 60) : (lastPasser?.d.spass ?? 60);
-      const interceptProb =
-        oppDist < (agentHasTrait(nearestOpp, 'interception_hawk') ? 8.0 : 6.8)
+      const passerBlessed = (lastPasser?.blessedMins ?? 0) > 0;
+      const oppBlessed = (nearestOpp?.blessedMins ?? 0) > 0;
+      const rawInterceptProb =
+        oppDist < (agentHasTrait(nearestOpp, 'interception_hawk') || oppBlessed ? 8.2 : 6.8)
           ? clamp(
               0.16 +
-                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 8 : nearestOpp?.d.rd || 60) + (agentHasTrait(nearestOpp, 'interception_hawk') ? 14 : 0) - 60) * 0.004) -
+                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 8 : nearestOpp?.d.rd || 60) + (agentHasTrait(nearestOpp, 'interception_hawk') ? 14 : 0) + (oppBlessed ? 16 : 0) - 60) * 0.004) -
                 ((passerSkill - 60) * 0.0018) +
                 (agentHasTrait(nearestOpp, 'pressing_machine') ? 0.04 : 0) +
+                (oppBlessed ? 0.14 : 0) +
                 (b.flightType === 'through' ? 0.14 : b.flightType === 'lofted' ? -0.05 : b.flightType === 'onetwo' ? -0.04 : 0),
               0.06,
-              0.50
+              0.58
             )
           : 0;
+      const interceptProb = rawInterceptProb * (passerBlessed ? 0.35 : 1);
       if (nearestOpp && Math.random() < interceptProb) {
         b.possessionSide = defSide;
         b.carrierId = nearestOpp.id;
@@ -4983,10 +5098,154 @@ export const MatchModal: React.FC<{
     }
   };
 
+  const triggerFortuneAndMiraclesForMinute = (w: LiveMatchWorld, curMin: number, isInstant: boolean) => {
+    const sr = simRef.current;
+    sr.maxDeficitH = Math.max(sr.maxDeficitH, sr.ga - sr.gh);
+    sr.maxDeficitA = Math.max(sr.maxDeficitA, sr.gh - sr.ga);
+
+    // Tick down active divine blessings
+    w.agents.forEach((ag) => {
+      if ((ag.blessedMins ?? 0) > 0) {
+        ag.blessedMins = Math.max(0, (ag.blessedMins ?? 0) - 1);
+        if (ag.blessedMins === 0) ag.blessedTag = undefined;
+      }
+    });
+
+    // Tick down active miracle surge
+    if (w.miracle && w.miracle.minsLeft > 0) {
+      w.miracle.minsLeft = Math.max(0, w.miracle.minsLeft - 1);
+      if (w.miracle.minsLeft === 0) {
+        const mTeam = w.miracle.side === 'H' ? homeOrig : awayOrig;
+        pushLog(curMin, `🔥 จบช่วงพายุโหมบุกปาฏิหาริย์ของ ${mTeam.name}`, 'sys');
+        w.miracle = null;
+      }
+    }
+
+    // 1. Miracle Comeback Surge ("โหมดปาฏิหาริย์พลิกนรก") — either team when trailing by 2+
+    if (!w.miracle && curMin >= 36 && curMin <= 88) {
+      (['H', 'A'] as const).forEach((mSide) => {
+        if (w.miracle) return;
+        const alreadyUsed = mSide === 'H' ? sr.miracleUsedH : sr.miracleUsedA;
+        if (alreadyUsed) return;
+        const deficit = mSide === 'H' ? sr.ga - sr.gh : sr.gh - sr.ga;
+        if (deficit < 2) return;
+        const mPool = w.agents.filter((a) => !a.sentOff && a.side === mSide);
+        const hasClutch = mPool.some((a) => agentHasTrait(a, 'clutch_player'));
+        const baseMirProb = deficit >= 3 ? (curMin >= 60 ? 0.088 : 0.056) : curMin >= 64 ? 0.056 : 0.034;
+        if (Math.random() < baseMirProb + (hasClutch ? 0.015 : 0)) {
+          if (mSide === 'H') sr.miracleUsedH = true;
+          else sr.miracleUsedA = true;
+          const minsDur = R(11, 16);
+          w.miracle = { side: mSide, minsLeft: minsDur, maxDeficit: deficit, goalsDuring: 0 };
+          const mTeam = mSide === 'H' ? homeOrig : awayOrig;
+
+          // Adrenaline stamina lift + immediately bless up to 2 teammates!
+          const blessedPool = mPool.filter((a) => a.pos !== 'GK').sort(() => Math.random() - 0.5).slice(0, 2);
+          blessedPool.forEach((ag) => {
+            ag.blessedMins = Math.max(ag.blessedMins || 0, 10);
+            ag.blessedTag = ag.pos === 'FW' ? 'พรดาวยิง' : ag.pos === 'MF' ? 'เทพเจ้าแดนกลาง' : 'พลังใจนักสู้';
+            adjustLiveForm(ag.id, 0.35);
+          });
+          mPool.forEach((ag) => {
+            sr.liveFit[ag.id] = clamp((sr.liveFit[ag.id] ?? ag.fit) + 8, 25, 100);
+            ag.fit = sr.liveFit[ag.id];
+          });
+
+          const hero = blessedPool[0] || mPool[0];
+          if (hero && !isInstant) {
+            for (let i = 0; i < 16; i++) {
+              const ang = (Math.PI * 2 * i) / 16;
+              const spd = 6 + Math.random() * 14;
+              w.sparkles.push({
+                x: hero.x,
+                y: hero.y,
+                vx: Math.cos(ang) * spd,
+                vy: Math.sin(ang) * spd,
+                color: i % 2 === 0 ? '#facc15' : '#34d399',
+                size: 2 + Math.random() * 1.8,
+                ttl: 1.6,
+                maxTtl: 1.6
+              });
+            }
+            addWorldFx(w, {
+              type: 'skill',
+              x: hero.x,
+              y: hero.y,
+              label: `⚡ ปาฏิหาริย์! ${mTeam.name}`,
+              color: '#facc15',
+              ttl: 2.6,
+              maxTtl: 2.6
+            });
+            triggerDramaSlow(w, 1.6, `⚡🔥 โหมดปาฏิหาริย์!! ${mTeam.name} ฮึดสู้ลุ้นพลิกนรก!`);
+            triggerCoachShout(w, mSide, '⚡ สู้ตาย!! พลิกเกม!', 3.2);
+            SFX.cheer(0.95);
+          }
+          pushLog(
+            curMin,
+            `⚡🔥 โหมดปาฏิหาริย์!! ${mTeam.name} (ตามหลัง ${deficit} ประตู) ระเบิดพลังฮึดสู้เต็มพิกัดลุ้นพลิกแซงใน ${minsDur} นาทีนี้!`,
+            'goal'
+          );
+          pushTimeline(curMin, mSide, 'miracle', mTeam.name, `ฮึดปาฏิหาริย์ (ตาม ${deficit} ลูก)`);
+        }
+      });
+    }
+
+    // 2. Divine Fortune / Blessed Player ("พรสิ่งศักดิ์สิทธิ์") — can spark on EITHER team regardless of OVR
+    const activeAgentsAll = w.agents.filter((a) => !a.sentOff);
+    const blessedNowCount = activeAgentsAll.filter((a) => (a.blessedMins ?? 0) > 0).length;
+    if (curMin >= 5 && blessedNowCount < 2) {
+      const blessRollChance = blessedNowCount === 0 && curMin >= 16 ? 0.115 : 0.068;
+      if (Math.random() < blessRollChance) {
+        const trailingH = sr.gh < sr.ga;
+        const trailingA = sr.ga < sr.gh;
+        const pickHProb = trailingH ? 0.57 : trailingA ? 0.43 : 0.5;
+        const bSide: 'H' | 'A' = Math.random() < pickHProb ? 'H' : 'A';
+        const candidates = activeAgentsAll.filter((a) => a.side === bSide && (a.blessedMins ?? 0) === 0);
+        if (candidates.length) {
+          const picked = P(candidates);
+          const minsDur = R(7, 12);
+          const tagByPos =
+            picked.pos === 'GK'
+              ? 'มือเทวดา'
+              : picked.pos === 'DF'
+                ? 'กำแพงทองคำ'
+                : picked.pos === 'MF'
+                  ? 'เทพเจ้าแดนกลาง'
+                  : 'พรดาวยิงเข้าฝัก';
+          picked.blessedMins = minsDur;
+          picked.blessedTag = tagByPos;
+          adjustLiveForm(picked.id, 0.35);
+          const bTeam = bSide === 'H' ? homeOrig : awayOrig;
+          if (!isInstant) {
+            addWorldFx(w, {
+              type: 'skill',
+              x: picked.x,
+              y: picked.y,
+              label: `✨ ${picked.shortName} [${tagByPos}]`,
+              color: '#fde047',
+              ttl: 2.3,
+              maxTtl: 2.3
+            });
+            triggerCoachShout(w, bSide, `✨ ${picked.shortName} เข้าฝัก!`, 2.4);
+          }
+          pushLog(
+            curMin,
+            `✨ พรสิ่งศักดิ์สิทธิ์!! ${picked.id} (${bTeam.name}) [${tagByPos}] เข้าสู่ฟอร์มเทพ ทำอะไรก็ดีไปหมดนาน ${minsDur} นาที!`,
+            'sys'
+          );
+          if (picked.isMe || blessedNowCount === 0) {
+            pushTimeline(curMin, bSide, 'blessed', picked.id, tagByPos);
+          }
+        }
+      }
+    }
+  };
+
   // Synchronous instant minute resolver (used when clicking "ข้ามจบเกม")
   const stepInstantMinute = (curMin: number, curTac: Mentality) => {
     const sr = simRef.current;
     const w = worldRef.current!;
+    triggerFortuneAndMiraclesForMinute(w, curMin, true);
 
     // Drain stamina & update live match form (scaled by tactical pressing & tempo)
     const hCfgMin = getEffectiveTeamCfg('H', curMin);
@@ -5148,6 +5407,7 @@ export const MatchModal: React.FC<{
   const onMinuteTick = (curMin: number) => {
     const sr = simRef.current;
     const w = worldRef.current!;
+    triggerFortuneAndMiraclesForMinute(w, curMin, false);
 
     const hCfgMin = getEffectiveTeamCfg('H', curMin);
     const aCfgMin = getEffectiveTeamCfg('A', curMin);
@@ -5562,6 +5822,22 @@ export const MatchModal: React.FC<{
       xgA: Math.max(0.05, Math.round(w.xgA * 100) / 100)
     });
     setLivePlayerStatsUi({ ...simRef.current.playerStats });
+    if (w.miracle && w.miracle.minsLeft > 0) {
+      const mTeam = w.miracle.side === 'H' ? homeOrig : awayOrig;
+      setMiracleBannerUi({ side: w.miracle.side, teamName: mTeam.name, minsLeft: w.miracle.minsLeft, goalsDuring: w.miracle.goalsDuring });
+    } else {
+      setMiracleBannerUi(null);
+    }
+    const nextBlessed = w.agents
+      .filter((a) => !a.sentOff && (a.blessedMins ?? 0) > 0)
+      .map((a) => ({
+        id: a.id,
+        shortName: a.shortName,
+        side: a.side,
+        tag: a.blessedTag || 'เข้าฝัก',
+        minsLeft: a.blessedMins ?? 0
+      }));
+    setBlessedListUi(nextBlessed);
   };
 
   const computePenWinnerInstant = () => {
@@ -6081,6 +6357,8 @@ export const MatchModal: React.FC<{
             (18 + ((ag.d.spd || 60) - 55) * 0.22) *
             (ag.intent === 'MAKE_RUN' || ag.intent === 'OVERLAP' || ag.intent === 'PRESS' || ag.intent === 'RESET' || ag.intent === 'PASS_TARGET' ? 1.38 : 1.0) *
             (ag.fit < 50 ? 0.82 : 1.0) *
+            ((ag.blessedMins ?? 0) > 0 ? 1.14 : 1.0) *
+            (w.miracle?.side === ag.side && w.miracle.minsLeft > 0 ? 1.12 : 1.0) *
             moveScale;
           const stepSpd = Math.min(dist * 6.5 * moveScale, maxSpd);
           if (dist > 0.15) {
@@ -6815,6 +7093,10 @@ export const MatchModal: React.FC<{
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🩹</span>;
         case 'var_no_goal':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] shrink-0">📺</span>;
+        case 'miracle':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[11px] shrink-0">⚡</span>;
+        case 'blessed':
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-600 dark:text-yellow-300 text-[11px] shrink-0">✨</span>;
         case 'miss':
         default:
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--surface-2)] text-[var(--mut)] text-[10px] shrink-0">🥅</span>;
@@ -6848,6 +7130,10 @@ export const MatchModal: React.FC<{
           return 'บาดเจ็บ';
         case 'var_no_goal':
           return 'VAR ริบประตู';
+        case 'miracle':
+          return 'โหมดปาฏิหาริย์';
+        case 'blessed':
+          return 'พรสิ่งศักดิ์สิทธิ์';
         case 'miss':
           return 'ยิงพลาด';
       }
@@ -7147,14 +7433,47 @@ export const MatchModal: React.FC<{
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
         <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
           <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2 gap-y-1">
-            {/* Left: Competition / League Tier */}
-            <div className="order-1 flex items-center min-w-0 max-w-[62%] sm:max-w-[210px] md:max-w-[260px] lg:max-w-none mland:max-w-[195px] shrink">
+            {/* Left: Competition / League Tier + Weather & Kickoff Time */}
+            <div className="order-1 flex items-center gap-1 min-w-0 max-w-[66%] sm:max-w-[260px] md:max-w-[330px] lg:max-w-none mland:max-w-[250px] shrink">
               <span
                 className="inline-flex items-center px-2 mland:px-1.5 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--line)] text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate max-w-full shadow-2xs"
                 title={compTitle}
               >
                 <span className="lg:hidden truncate">{compShortTitle}</span>
                 <span className="hidden lg:inline truncate">{compTitle}</span>
+              </span>
+              <span
+                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9.5px] mland:text-[7.5px] font-bold shrink-0 shadow-2xs ${
+                  matchEnv.timeOfDay === 'night'
+                    ? matchEnv.season === 'rainy'
+                      ? 'bg-slate-800/90 border-sky-400/45 text-sky-200'
+                      : 'bg-indigo-950/85 border-amber-300/40 text-amber-200'
+                    : matchEnv.season === 'rainy'
+                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-700 dark:text-sky-200'
+                      : 'bg-amber-400/20 border-amber-500/45 text-amber-800 dark:text-amber-200'
+                }`}
+                title={
+                  matchEnv.season === 'rainy'
+                    ? matchEnv.timeOfDay === 'night'
+                      ? 'หน้าฝน · เตะตอนกลางคืน (สนามมีน้ำเล็กน้อย)'
+                      : 'หน้าฝน · กลางวัน (สนามมีน้ำเล็กน้อย)'
+                    : matchEnv.timeOfDay === 'night'
+                      ? 'หน้าร้อน · เตะตอนกลางคืน'
+                      : 'หน้าร้อน · แดดออก'
+                }
+              >
+                <span>
+                  {matchEnv.timeOfDay === 'night'
+                    ? matchEnv.season === 'rainy'
+                      ? '🌙💧'
+                      : '🌙'
+                    : matchEnv.season === 'rainy'
+                      ? '💧'
+                      : '☀️'}
+                </span>
+                <span className="hidden sm:inline mland:hidden">
+                  {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
+                </span>
               </span>
             </div>
 
@@ -7476,7 +7795,45 @@ export const MatchModal: React.FC<{
                       </div>
                     </div>
                   )}
-                  <div className="relative bg-[#144d2e]">
+                  {(miracleBannerUi || blessedListUi.length > 0) && !done && (
+                    <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-gradient-to-r from-amber-950/90 via-[#1b2e19]/95 to-emerald-950/90 border-b border-amber-400/35 flex flex-wrap items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px] text-amber-100 shrink-0">
+                      {miracleBannerUi && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-400/25 border border-amber-300/60 text-amber-200 font-extrabold animate-pulse">
+                          <span>⚡🔥</span>
+                          <span>ปาฏิหาริย์: {miracleBannerUi.teamName} (เหลือ {miracleBannerUi.minsLeft}&apos;)</span>
+                        </span>
+                      )}
+                      {blessedListUi.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                          {blessedListUi.map((bl) => {
+                            const blTeamName = bl.side === 'H' ? homeOrig.name : awayOrig.name;
+                            return (
+                              <span
+                                key={bl.id}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-yellow-300/15 border border-yellow-300/45 text-yellow-200 font-bold"
+                                title={`${bl.id} (${blTeamName}) ได้รับพร: ${bl.tag}`}
+                              >
+                                <span>✨</span>
+                                <span>{bl.shortName}</span>
+                                <span className="opacity-75">[{bl.tag} · {bl.minsLeft}&apos;]</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div
+                    className={`relative ${
+                      matchEnv.timeOfDay === 'night'
+                        ? matchEnv.season === 'rainy'
+                          ? 'bg-[#06160e]'
+                          : 'bg-[#081d13]'
+                        : matchEnv.season === 'rainy'
+                          ? 'bg-[#103b25]'
+                          : 'bg-[#165834]'
+                    }`}
+                  >
                     {/* Unified Centered Live Commentary Badge inside Top Stadium Apron */}
                     {matchPhaseUi !== 'halftime' && !done && (
                       <div className="pointer-events-none absolute top-0 left-0 right-0 h-[26px] sm:h-[29px] mland:h-[23px] flex items-center justify-center px-2 z-10">

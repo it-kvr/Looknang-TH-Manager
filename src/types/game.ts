@@ -303,7 +303,7 @@ export interface MatchSubEvent {
 export interface MatchDramaticEvent {
   m: number;
   t?: number;
-  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch';
+  kind: 'var' | 'penalty' | 'woodwork' | 'save' | 'injury' | 'skill' | 'shootout' | 'clutch' | 'miracle' | 'blessed';
   text: string;
 }
 
@@ -661,10 +661,16 @@ export interface GameState {
   cupLog?: { md: number; comp: 'cup' | 'asia'; r: number; h: number; a: number; gh: number; ga: number; penText?: string }[];
   med?: number;
   merchLv?: number;
-  staff?: { asst: number; fit: number; scout: number; physio: number };
+  turfLv?: number;
+  analyticsLv?: number;
+  facCond?: Partial<Record<FacilityKey, number>>;
+  staff?: { asst: number; fit: number; scout: number; physio: number; gkCoach?: number; setPieceCoach?: number };
   sponsorDeal?: { id: string; name: string; perMatch: number; left: number } | null;
   seasonArchives?: SeasonArchiveRecord[];
 }
+
+export type FacilityKey = 'st' | 'tr' | 'ya' | 'med' | 'merchLv' | 'turfLv' | 'analyticsLv';
+export type StaffRoleKey = 'asst' | 'fit' | 'scout' | 'physio' | 'gkCoach' | 'setPieceCoach';
 
 export interface AppSettings {
   mute?: boolean;
@@ -879,6 +885,8 @@ export interface LivePitchAgent {
   tr: number;
   ov: number;
   vis: number[];
+  blessedMins?: number;
+  blessedTag?: string;
 }
 
 export interface LiveBallState {
@@ -1015,7 +1023,24 @@ export interface ShootoutState {
   finished: boolean;
 }
 
+export interface MatchPitchPuddle {
+  x: number;
+  y: number;
+  rx: number;
+  ry: number;
+  rot: number;
+  alpha: number;
+}
+
+export interface MatchEnvironment {
+  season: 'rainy' | 'summer';
+  timeOfDay: 'day' | 'night';
+  puddles: MatchPitchPuddle[];
+  sunAngle: number;
+}
+
 export interface LiveMatchWorld {
+  env?: MatchEnvironment;
   agents: LivePitchAgent[];
   ball: LiveBallState;
   fx: LivePitchFx[];
@@ -1082,6 +1107,12 @@ export interface LiveMatchWorld {
   xgH: number;
   xgA: number;
   inMatchInjuryCount: number;
+  miracle?: {
+    side: 'H' | 'A';
+    minsLeft: number;
+    maxDeficit: number;
+    goalsDuring: number;
+  } | null;
   sideline?: {
     benchH: LiveBenchSeat[];
     benchA: LiveBenchSeat[];

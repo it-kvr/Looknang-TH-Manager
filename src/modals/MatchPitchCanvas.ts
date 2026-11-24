@@ -128,23 +128,174 @@ export const drawLivePitchToCanvas = (
   const px = (x: number) => padX + (x / 100) * pw;
   const py = (y: number) => padY + (y / 100) * ph;
 
-  // 1. Stadium apron & mowed turf stripes
-  ctx.fillStyle = '#144d2e';
+  const env = world.env;
+  const isRainy = env?.season === 'rainy';
+  const isNight = env?.timeOfDay === 'night';
+
+  // 1. Stadium apron & mowed turf stripes (reflecting season & day/night lighting)
+  const apronFill = isNight
+    ? isRainy
+      ? '#06160e'
+      : '#081d13'
+    : isRainy
+      ? '#103b25'
+      : '#165834';
+  ctx.fillStyle = apronFill;
   ctx.fillRect(0, 0, cssW, cssH);
+
+  const stripeEven = isNight
+    ? isRainy
+      ? '#144b2e'
+      : '#195e39'
+    : isRainy
+      ? '#195836'
+      : '#217846';
+  const stripeOdd = isNight
+    ? isRainy
+      ? '#195937'
+      : '#1f6e44'
+    : isRainy
+      ? '#1f6840'
+      : '#298e53';
 
   const stripeCount = 12;
   const stripeW = pw / stripeCount;
   for (let i = 0; i < stripeCount; i++) {
-    ctx.fillStyle = i % 2 === 0 ? '#1e6e42' : '#25814f';
+    ctx.fillStyle = i % 2 === 0 ? stripeEven : stripeOdd;
     ctx.fillRect(padX + i * stripeW, padY, stripeW + 0.5, ph);
   }
 
-  // Subtle top/bottom stadium light sheen
-  const sheen = ctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.1, cssW * 0.5, cssH * 0.5, pw * 0.65);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.06)');
-  sheen.addColorStop(1, 'rgba(0,0,0,0.22)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(0, 0, cssW, cssH);
+  // Subtle rainy-season surface water patches on the turf (no raindrops)
+  if (isRainy && env?.puddles?.length) {
+    const ball = world.ball;
+    env.puddles.forEach((pd, idx) => {
+      const cxP = px(pd.x);
+      const cyP = py(pd.y);
+      const rX = Math.max(8, (pd.rx / 100) * pw);
+      const rY = Math.max(5, (pd.ry / 100) * ph);
+
+      ctx.save();
+      ctx.translate(cxP, cyP);
+      ctx.rotate(pd.rot);
+
+      // Damp darker-grass halo around shallow water patch
+      ctx.fillStyle = isNight ? 'rgba(4, 18, 12, 0.26)' : 'rgba(6, 26, 16, 0.2)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rX * 1.24, rY * 1.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Shallow reflective water sheen
+      const wGrad = ctx.createRadialGradient(-rX * 0.22, -rY * 0.22, rX * 0.08, 0, 0, rX);
+      if (isNight) {
+        wGrad.addColorStop(0, `rgba(186, 230, 253, ${pd.alpha + 0.08})`);
+        wGrad.addColorStop(0.55, `rgba(125, 211, 252, ${pd.alpha * 0.72})`);
+        wGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+      } else {
+        wGrad.addColorStop(0, `rgba(219, 244, 255, ${pd.alpha + 0.06})`);
+        wGrad.addColorStop(0.55, `rgba(147, 210, 235, ${pd.alpha * 0.68})`);
+        wGrad.addColorStop(1, 'rgba(125, 211, 252, 0)');
+      }
+      ctx.fillStyle = wGrad;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Soft surface glint on puddle edge
+      ctx.strokeStyle = isNight ? 'rgba(224, 242, 254, 0.22)' : 'rgba(240, 249, 255, 0.26)';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, rX * 0.78, rY * 0.78, 0, -2.5, -0.8);
+      ctx.stroke();
+
+      // Subtle splash ripple if ball passes across this puddle
+      const distToBall = Math.hypot((ball.x - pd.x) / Math.max(1, pd.rx), (ball.y - pd.y) / Math.max(1, pd.ry));
+      if (ball.z < 3 && distToBall < 1.25) {
+        const ripPhase = ((world.minuteFloat * 40 + idx) % 1);
+        ctx.strokeStyle = `rgba(224, 242, 254, ${0.42 * (1 - ripPhase)})`;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rX * (0.45 + ripPhase * 0.6), rY * (0.45 + ripPhase * 0.6), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  }
+
+  // Atmospheric stadium lighting: Summer Sun vs Night Floodlights vs Overcast Rainy Day
+  if (isNight) {
+    // Deep nighttime outer vignette around stadium apron
+    const nightVig = ctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.24, cssW * 0.5, cssH * 0.5, cssW * 0.72);
+    nightVig.addColorStop(0, 'rgba(255, 252, 230, 0.05)');
+    nightVig.addColorStop(0.62, 'rgba(6, 15, 28, 0.14)');
+    nightVig.addColorStop(1, 'rgba(2, 6, 16, 0.56)');
+    ctx.fillStyle = nightVig;
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // 4 Corner Stadium Floodlight Cones illuminating the pitch
+    const corners: [number, number][] = [
+      [8, 8],
+      [cssW - 8, 8],
+      [8, cssH - 8],
+      [cssW - 8, cssH - 8]
+    ];
+    corners.forEach(([fx, fy]) => {
+      const cone = ctx.createRadialGradient(fx, fy, 2, cssW * 0.5, cssH * 0.5, cssW * 0.62);
+      cone.addColorStop(0, isRainy ? 'rgba(215, 238, 255, 0.28)' : 'rgba(255, 248, 215, 0.3)');
+      cone.addColorStop(0.32, isRainy ? 'rgba(186, 230, 253, 0.09)' : 'rgba(254, 243, 199, 0.1)');
+      cone.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.fillStyle = cone;
+      ctx.fillRect(0, 0, cssW, cssH);
+
+      // Crisp corner floodlight tower lamp glow
+      ctx.save();
+      ctx.fillStyle = isRainy ? 'rgba(224, 242, 254, 0.92)' : 'rgba(254, 249, 195, 0.94)';
+      ctx.shadowColor = isRainy ? '#7dd3fc' : '#fde047';
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(fx, fy, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
+  } else if (!isRainy) {
+    // Summer Daylight: Warm golden sunlight beams & subtle stand shadow along far edge
+    const sunX = cssW * (0.78 + Math.sin(env?.sunAngle ?? 0.4) * 0.12);
+    const sunY = cssH * 0.06;
+    const sunGlow = ctx.createRadialGradient(sunX, sunY, 8, sunX, sunY, cssW * 0.72);
+    sunGlow.addColorStop(0, 'rgba(255, 244, 179, 0.24)');
+    sunGlow.addColorStop(0.35, 'rgba(253, 224, 71, 0.09)');
+    sunGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = sunGlow;
+    ctx.fillRect(0, 0, cssW, cssH);
+
+    // Gentle diagonal sunlight shafts across the sunlit pitch
+    ctx.save();
+    const beamGrad = ctx.createLinearGradient(sunX, 0, cssW * 0.2, cssH);
+    beamGrad.addColorStop(0, 'rgba(255, 246, 195, 0.1)');
+    beamGrad.addColorStop(0.55, 'rgba(255, 246, 195, 0.03)');
+    beamGrad.addColorStop(1, 'rgba(6, 26, 14, 0.14)');
+    ctx.fillStyle = beamGrad;
+    ctx.fillRect(0, 0, cssW, cssH);
+    ctx.restore();
+  } else {
+    // Rainy Daylight: Cool overcast soft vignette
+    const sheen = ctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.12, cssW * 0.5, cssH * 0.5, pw * 0.68);
+    sheen.addColorStop(0, 'rgba(215, 232, 238, 0.06)');
+    sheen.addColorStop(1, 'rgba(4, 16, 11, 0.24)');
+    ctx.fillStyle = sheen;
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
+
+  // Miracle Comeback Stadium Energy Pulse
+  if (world.miracle && world.miracle.minsLeft > 0) {
+    const pulse = 0.12 + 0.06 * Math.sin(world.minuteFloat * 8);
+    const attRightMir = (world.miracle.side === 'H') !== world.secondHalf;
+    const mGrad = ctx.createLinearGradient(attRightMir ? padX + pw : padX, 0, px(50), 0);
+    mGrad.addColorStop(0, `rgba(250, 204, 21, ${pulse})`);
+    mGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+    ctx.fillStyle = mGrad;
+    ctx.fillRect(padX, padY, pw, ph);
+  }
 
   // 2. Pitch markings
   ctx.strokeStyle = 'rgba(240, 248, 240, 0.86)';
@@ -937,6 +1088,37 @@ export const drawLivePitchToCanvas = (
     ctx.save();
     ctx.translate(cx, cy);
 
+    // Divine blessing / hot-streak golden halo aura (can occur on either team!)
+    const isBlessed = (ag.blessedMins ?? 0) > 0;
+    if (isBlessed) {
+      const bPulse = 0.65 + 0.3 * Math.sin(world.minuteFloat * 10 + ag.slotIndex);
+      const auraGrad = ctx.createRadialGradient(0, 0, playerRadius * 0.5, 0, 0, playerRadius + 10);
+      auraGrad.addColorStop(0, `rgba(250, 204, 21, ${0.42 * bPulse})`);
+      auraGrad.addColorStop(0.65, `rgba(52, 211, 153, ${0.22 * bPulse})`);
+      auraGrad.addColorStop(1, 'rgba(250, 204, 21, 0)');
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(253, 224, 71, ${0.9 * bPulse})`;
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 6.5, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Orbiting 3 starlight sparks
+      for (let g = 0; g < 3; g++) {
+        const ang = world.minuteFloat * 4.2 + ag.slotIndex + (g * Math.PI * 2) / 3;
+        const gx = Math.cos(ang) * (playerRadius + 7.2);
+        const gy = Math.sin(ang) * (playerRadius + 7.2);
+        ctx.fillStyle = g % 2 === 0 ? '#fef08a' : '#6ee7b7';
+        ctx.beginPath();
+        ctx.arc(gx, gy, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // Carrier or "Me" highlight ring
     if (ag.isMe) {
       ctx.strokeStyle = '#facc15';
@@ -1312,18 +1494,23 @@ export const drawLivePitchToCanvas = (
     ctx.fillStyle = ag.fit >= 70 ? '#22c55e' : ag.fit >= 45 ? '#f59e0b' : '#ef4444';
     ctx.fillRect(-barW / 2, barY, barW * stamPct, barH);
 
-    // Compact label for carrier, target, shooter, or "★ ฉัน"
-    if (isCarrier || isTarget || ag.isMe || ag.intent === 'CELEBRATE' || ag.intent === 'MAKE_RUN') {
-      const label = ag.isMe ? `★ ${ag.shortName} ${Math.round(ag.fit)}%` : ag.shortName;
+    // Compact label for carrier, target, shooter, blessed hot-streak, or "★ ฉัน"
+    if (isCarrier || isTarget || ag.isMe || isBlessed || ag.intent === 'CELEBRATE' || ag.intent === 'MAKE_RUN') {
+      const prefix = isBlessed ? '✨ ' : '';
+      const label = ag.isMe ? `${prefix}★ ${ag.shortName} ${Math.round(ag.fit)}%` : `${prefix}${ag.shortName}`;
       ctx.font = `700 ${Math.max(9, Math.round(playerRadius * 0.86))}px Sarabun, sans-serif`;
       const tw = ctx.measureText(label).width;
       const bw = tw + 8;
       const by = playerRadius + 11.5;
-      ctx.fillStyle = ag.isMe ? 'rgba(250, 204, 21, 0.92)' : 'rgba(8, 22, 15, 0.78)';
+      ctx.fillStyle = isBlessed
+        ? 'rgba(245, 158, 11, 0.94)'
+        : ag.isMe
+          ? 'rgba(250, 204, 21, 0.92)'
+          : 'rgba(8, 22, 15, 0.78)';
       ctx.beginPath();
       ctx.roundRect(-bw / 2, by - 6.5, bw, 13, 4);
       ctx.fill();
-      ctx.fillStyle = ag.isMe ? '#1a1200' : '#ffffff';
+      ctx.fillStyle = isBlessed || ag.isMe ? '#1a1200' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(label, 0, by);

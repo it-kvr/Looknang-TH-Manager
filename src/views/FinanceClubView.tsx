@@ -11,7 +11,7 @@ import {
   Tooltip,
   ReferenceLine
 } from 'recharts';
-import type { Position, MainTab, Player, Team, GameState } from '../types/game';
+import type { Position, MainTab, Player, Team, GameState, FacilityKey, StaffRoleKey } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
 import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES } from '../data/thaiFootballData';
@@ -27,9 +27,17 @@ import {
   getBoardDirectiveProgress,
   issueBoardDirective,
   getClubFinanceChartData,
+  MAX_FACILITY_LV,
+  MAX_STAFF_LV,
+  STAFF_HIRE_COSTS,
+  ALL_FACILITY_KEYS,
+  getFacilityUpgradeCost,
+  getFacilityCondition,
+  getFacilityRenovateCost,
   type ClubFinanceChartPoint
 } from '../engine/simulation';
 import { renderCrestPattern, ClubCrest, KitJersey, PlayerFace } from '../components/SvgVisuals';
+import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel } from '../components/FacilityUpgradeSvg';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 
 interface FinTooltipProps {
@@ -116,29 +124,90 @@ export const FinanceClubView: React.FC<{
   const seasonBalDelta = Math.round(state.money) - seasonStartBal;
   const activeBoardEffects = getActiveBoardEffects(state);
 
-  const upgradeFac = (key: 'st' | 'tr' | 'ya' | 'med' | 'merchLv', title: string, baseCost: number) => {
+  const upgradeFac = (key: FacilityKey, title: string, baseCost: number) => {
     const lv = state[key] ?? 1;
-    const cost = lv * baseCost;
-    if (lv >= 5 || state.money < cost) {
-      onToast(lv >= 5 ? 'ระดับสูงสุดแล้ว' : 'งบสโมสรไม่พอ');
+    const cost = getFacilityUpgradeCost(baseCost, lv);
+    if (lv >= MAX_FACILITY_LV || state.money < cost) {
+      onToast(lv >= MAX_FACILITY_LV ? `${title} ถึงระดับสูงสุด Lv.${MAX_FACILITY_LV} แล้ว` : `งบสโมสรไม่พอ (ต้องการ ${fmtMoney(cost)})`);
       return;
     }
     SFX.tap();
     onUpdateState((d) => {
       d.money -= cost;
-      d[key] = (d[key] ?? 1) + 1;
-      logFin(d, `อัปเกรด${title} Lv.${d[key]}`, -cost);
+      const nextLv = (d[key] ?? 1) + 1;
+      d[key] = nextLv;
+      d.facCond = { ...(d.facCond || {}), [key]: 100 };
+      logFin(d, `อัปเกรด${title} Lv.${nextLv}`, -cost);
     });
-    onToast(`อัปเกรด${title}เป็น Lv.${lv + 1} สำเร็จ!`);
+    onToast(`อัปเกรด${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ!`);
   };
 
-  const hireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
-    const cur = stf[role];
-    if (cur >= 3) {
-      onToast(`${title} ระดับสูงสุดแล้ว`);
+  const renovateFac = (key: FacilityKey, title: string, baseCost: number) => {
+    const lv = state[key] ?? 1;
+    const cond = getFacilityCondition(state, key);
+    if (cond >= 100) {
+      onToast(`${title} สภาพสมบูรณ์ 100% อยู่แล้ว`);
       return;
     }
-    const cost = [45, 75, 110][cur];
+    const cost = getFacilityRenovateCost(baseCost, lv, cond);
+    if (state.money < cost) {
+      onToast(`งบไม่พอสำหรับปรับปรุง${title} (ต้องการ ${fmtMoney(cost)})`);
+      return;
+    }
+    SFX.tap();
+    onUpdateState((d) => {
+      d.money -= cost;
+      d.facCond = { ...(d.facCond || {}), [key]: 100 };
+      if (cond < 88) {
+        if (key === 'st' || key === 'merchLv') d.fan = clamp((d.fan ?? 55) + 1, 5, 100);
+        else d.mor = clamp((d.mor ?? 55) + 1, 0, 100);
+      }
+      logFin(d, `ปรับปรุงบำรุงรักษา${title} (${cond}% → 100%)`, -cost);
+    });
+    onToast(`🔧 ปรับปรุง${title}กลับมาสภาพ 100% แล้ว`);
+  };
+
+  const renovateAllFacs = (defs: readonly { key: FacilityKey; title: string; baseCost: number }[]) => {
+    let totalCost = 0;
+    const toFix: { key: FacilityKey; cond: number }[] = [];
+    defs.forEach((f) => {
+      const cond = getFacilityCondition(state, f.key);
+      if (cond < 100) {
+        totalCost += getFacilityRenovateCost(f.baseCost, state[f.key] ?? 1, cond);
+        toFix.push({ key: f.key, cond });
+      }
+    });
+    if (!toFix.length) {
+      onToast('สิ่งอำนวยความสะดวกทุกแห่งสภาพ 100% แล้ว');
+      return;
+    }
+    if (state.money < totalCost) {
+      onToast(`งบไม่พอปรับปรุงทั้งหมด (ต้องการ ${fmtMoney(totalCost)})`);
+      return;
+    }
+    SFX.tap();
+    onUpdateState((d) => {
+      d.money -= totalCost;
+      const nextCond: Partial<Record<FacilityKey, number>> = { ...(d.facCond || {}) };
+      toFix.forEach(({ key }) => {
+        nextCond[key] = 100;
+      });
+      d.facCond = nextCond;
+      if (toFix.some((x) => x.cond < 85)) {
+        d.mor = clamp((d.mor ?? 55) + 2, 0, 100);
+      }
+      logFin(d, `ปรับปรุงสิ่งอำนวยความสะดวกทั้งสโมสร (${toFix.length} รายการ)`, -totalCost);
+    });
+    onToast(`🔧 ปรับปรุงสิ่งอำนวยความสะดวกทั้ง ${toFix.length} แห่งเป็น 100% สำเร็จ!`);
+  };
+
+  const hireStaff = (role: StaffRoleKey, title: string) => {
+    const cur = stf[role];
+    if (cur >= MAX_STAFF_LV) {
+      onToast(`${title} ระดับสูงสุด Lv.${MAX_STAFF_LV} แล้ว`);
+      return;
+    }
+    const cost = STAFF_HIRE_COSTS[cur] ?? 300;
     if (state.money < cost) {
       onToast(`งบไม่พอ (ต้องการ ${fmtMoney(cost)})`);
       return;
@@ -149,17 +218,17 @@ export const FinanceClubView: React.FC<{
       d.staff = { ...getStaffState(d), [role]: cur + 1 };
       logFin(d, `จ้าง/อัปเกรด${title} Lv.${cur + 1}`, -cost);
     });
-    onToast(`จ้าง${title} Lv.${cur + 1} เรียบร้อย`);
+    onToast(`จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} เรียบร้อย`);
   };
 
-  const fireStaff = (role: 'asst' | 'fit' | 'scout' | 'physio', title: string) => {
+  const fireStaff = (role: StaffRoleKey, title: string) => {
     const cur = stf[role];
     if (cur <= 0) return;
     SFX.tap();
     onUpdateState((d) => {
       d.staff = { ...getStaffState(d), [role]: cur - 1 };
     });
-    onToast(`ลดระดับ${title}เหลือ Lv.${cur - 1} (ประหยัดค่าจ้าง ${fmtMoneyNum(1.5)}/นัด)`);
+    onToast(`ลดระดับ${title}เหลือ Lv.${cur - 1} (ประหยัดค่าจ้าง ${fmtMoneyNum(1.2)}/นัด)`);
   };
 
   if (tab === 'f') {
@@ -687,30 +756,77 @@ export const FinanceClubView: React.FC<{
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm">🛍️ ร้านค้าของที่ระลึกสโมสร</h3>
-                  <span className="text-xs font-bold tabular">Lv.{state.merchLv ?? 1}/5</span>
-                </div>
-                <p className="text-xs text-[var(--mut)]">
-                  สร้างรายได้เสริมทุกนัดเหย้า ({fmtMoney(est.estMerch)}/นัด) และช่วยขยายเพดานค่าเหนื่อยลีก +5% ต่อเลเวล
-                </p>
-                <div className="flex items-center justify-between gap-3 pt-1">
-                  <div className="flex gap-1.5">
-                    {[1, 2, 3, 4, 5].map((lv) => (
-                      <span key={lv} className={`h-2 w-7 rounded-full ${lv <= (state.merchLv ?? 1) ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
-                    ))}
+              {(() => {
+                const merchLv = clamp(state.merchLv ?? 1, 1, MAX_FACILITY_LV);
+                const merchCond = getFacilityCondition(state, 'merchLv');
+                const merchUpgradeCost = getFacilityUpgradeCost(75, merchLv);
+                const merchRenovateCost = getFacilityRenovateCost(75, merchLv, merchCond);
+                return (
+                  <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                    <div className="flex items-start gap-3">
+                      <FacilityUpgradeSvg
+                        kind="merchLv"
+                        level={merchLv}
+                        condition={merchCond}
+                        c1={me.kc[0]}
+                        c2={me.kc[1]}
+                        className="w-24 h-16"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="font-bold text-sm truncate">🛍️ ร้านค้าของที่ระลึกสโมสร</h3>
+                          <span className="text-xs font-bold tabular shrink-0">Lv.{merchLv}/{MAX_FACILITY_LV}</span>
+                        </div>
+                        <div className="text-[10.5px] font-semibold text-[var(--g)] mt-0.5">{getFacilityTierLabel(merchLv)}</div>
+                        <p className="text-xs text-[var(--mut)] mt-0.5">
+                          รายได้เสริมเหย้า ({fmtMoney(est.estMerch)}/นัด) · ขยายเพดานค่าเหนื่อย +4%/Lv
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10.5px]">
+                        <span className="text-[var(--mut)]">ระดับพัฒนา (สูงสุด Lv.{MAX_FACILITY_LV})</span>
+                        <span className={`font-bold tabular ${merchCond < 75 ? 'text-[var(--red)]' : merchCond < 90 ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+                          สภาพอาคาร {merchCond}%
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-10 gap-1">
+                        {Array.from({ length: MAX_FACILITY_LV }, (_, idx) => idx + 1).map((lv) => (
+                          <span key={lv} className={`h-1.5 rounded-full ${lv <= merchLv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
+                        ))}
+                      </div>
+                      <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${merchCond < 75 ? 'bg-[var(--red)]' : merchCond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
+                          style={{ width: `${merchCond}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-0.5">
+                      {merchCond < 100 && (
+                        <button
+                          type="button"
+                          disabled={state.money < merchRenovateCost}
+                          onClick={() => renovateFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
+                          className="px-3 py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-bold hover:border-[var(--lamp)] disabled:opacity-40 cursor-pointer shrink-0"
+                        >
+                          🔧 ปรับปรุง {fmtMoneyNum(merchRenovateCost)}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={merchLv >= MAX_FACILITY_LV || state.money < merchUpgradeCost}
+                        onClick={() => upgradeFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
+                        className="px-3.5 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
+                      >
+                        {merchLv >= MAX_FACILITY_LV ? `Lv.${MAX_FACILITY_LV} เต็ม` : `ขยายร้าน ${fmtMoneyNum(merchUpgradeCost)}`}
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={(state.merchLv ?? 1) >= 5 || state.money < (state.merchLv ?? 1) * 75}
-                    onClick={() => upgradeFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
-                    className="px-3.5 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0"
-                  >
-                    {(state.merchLv ?? 1) >= 5 ? 'เต็มแล้ว' : `ขยายร้าน ${fmtMoneyNum((state.merchLv ?? 1) * 75)}`}
-                  </button>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -1555,91 +1671,223 @@ export const FinanceClubView: React.FC<{
         </div>
       )}
 
-      {/* Club Tab 2: Facilities & Backroom Staff (Moved from Finance, zero training duplicate) */}
-      {clubTab === 'infra' && (
-        <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-            <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร (สูงสุด Lv.5)</h3>
-            {(
-              [
-                ['st', 'สนามกีฬา', `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มตั๋ว & เพดานค่าจ้าง +10%/Lv`, 100],
-                ['tr', 'ศูนย์ฝึกซ้อม', 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นความฟิต +2%/Lv', 80],
-                ['ya', 'อะคาเดมี่เยาวชน', 'สร้างเยาวชน OVR สูงขึ้น & เพิ่มคุณภาพแมวมอง', 80],
-                ['med', 'ศูนย์การแพทย์ & ฟื้นฟู', 'ลดโอกาสบาดเจ็บ -8%/Lv และเร่งฟื้นฟูอาการเจ็บ', 75]
-              ] as const
-            ).map(([facKey, title, desc, baseCost]) => {
-              const lv = state[facKey] ?? 1;
-              const cost = lv * baseCost;
-              return (
-                <div key={facKey} className="flex items-center justify-between gap-3 py-2 border-b border-[var(--line)]/60 last:border-0">
-                  <div className="min-w-0">
-                    <div className="font-bold text-xs">{title} · Lv.{lv}/5</div>
-                    <div className="text-[11px] text-[var(--mut)]">{desc}</div>
-                    <div className="flex gap-1 mt-1.5">
-                      {[1, 2, 3, 4, 5].map((x) => (
-                        <span key={x} className={`h-1.5 w-5 rounded-full ${x <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
-                      ))}
-                    </div>
-                  </div>
+      {/* Club Tab 2: Facilities & Backroom Staff (Unique evolving illustrations, Lv.10/Lv.6 progression & Renovations) */}
+      {clubTab === 'infra' && (() => {
+        const infraFacilityDefs: readonly { key: FacilityKey; title: string; desc: string; baseCost: number }[] = [
+          { key: 'st', title: 'สนามเหย้า & อัฒจันทร์', desc: `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มค่าตั๋ว & เพดานค่าจ้าง +8%/Lv`, baseCost: 110 },
+          { key: 'tr', title: 'ศูนย์ฝึกซ้อมครบวงจร', desc: 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นฟูความฟิตระหว่างสัปดาห์', baseCost: 90 },
+          { key: 'ya', title: 'อะคาเดมี่เยาวชน', desc: 'ปั้นดาวรุ่ง OVR สูงขึ้นทุกซีซั่น & เพิ่มคุณภาพงานแมวมอง', baseCost: 85 },
+          { key: 'med', title: 'ศูนย์การแพทย์ & กายภาพ', desc: 'ลดโอกาสบาดเจ็บ & เร่งระยะเวลาฟื้นฟูอาการบาดเจ็บ', baseCost: 80 },
+          { key: 'turfLv', title: 'พื้นสนามหญ้า & ระบายน้ำ', desc: 'ลดความล้าและอาการบาดเจ็บจากสภาพสนามแฉะหรือแห้งแข็ง', baseCost: 75 },
+          { key: 'analyticsLv', title: 'ห้องวิเคราะห์เกม & วีดิทัศน์', desc: 'เร่งความคุ้นเคยแท็กติก เสริมภารกิจนักเตะ & แมวมอง', baseCost: 85 },
+          { key: 'merchLv', title: 'เมกะสโตร์ & แฟนโซน', desc: `สร้างรายได้วันแข่งเหย้า (+${fmtMoneyNum(est.estMerch)}) & เพดานค่าจ้าง +4%/Lv`, baseCost: 75 }
+        ];
+        const staffDefs: readonly { role: StaffRoleKey; title: string; desc: string }[] = [
+          { role: 'asst', title: 'ผู้ช่วยผู้จัดการทีม', desc: 'เร่งความคุ้นเคยแท็กติก & เพิ่มโอกาสอัป OVR ตอนซ้อม +1.5%/Lv' },
+          { role: 'fit', title: 'โค้ชฟิตเนส & พละกำลัง', desc: 'ฟื้นฟูความฟิตนักเตะหลังแข่ง +1.6%/Lv ทั้งตัวจริงและสำรอง' },
+          { role: 'scout', title: 'หัวหน้าทีมแมวมอง', desc: 'ยกระดับ OVR & จำนวนแข้งเป้าหมายที่ค้นพบจากภารกิจแมวมอง' },
+          { role: 'physio', title: 'ทีมแพทย์ & นักกายภาพ', desc: 'ลดโอกาสบาดเจ็บ -5%/Lv และลดค่ากายภาพบำบัดรายคน' },
+          { role: 'gkCoach', title: 'โค้ชผู้รักษาประตู', desc: 'เร่งพัฒนาการผู้รักษาประตูในการซ้อม +2.4%/Lv' },
+          { role: 'setPieceCoach', title: 'โค้ชลูกตั้งเตะ & ยุทธวิธี', desc: 'เพิ่มความคุ้นเคยแผนการเล่น & เสริมพัฒนาการผู้เล่นเอาต์ฟิลด์' }
+        ];
+        let totalRenovateAll = 0;
+        let wornCount = 0;
+        infraFacilityDefs.forEach((f) => {
+          const cond = getFacilityCondition(state, f.key);
+          if (cond < 100) {
+            wornCount++;
+            totalRenovateAll += getFacilityRenovateCost(f.baseCost, state[f.key] ?? 1, cond);
+          }
+        });
+
+        return (
+          <div className="grid grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            {/* Left Column: 7 Unique Facilities Lv.10 + Renovation */}
+            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[var(--line)]/60">
+                <div>
+                  <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร ({infraFacilityDefs.length} แห่ง · สูงสุด Lv.{MAX_FACILITY_LV})</h3>
+                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">อัปเกรดตามลำดับขั้น พร้อมภาพพัฒนาการเฉพาะทาง &amp; ระบบปรับปรุงบำรุงรักษา</div>
+                </div>
+                {wornCount > 0 && (
                   <button
                     type="button"
-                    disabled={lv >= 5 || state.money < cost}
-                    onClick={() => upgradeFac(facKey, title, baseCost)}
-                    className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer shrink-0 whitespace-nowrap"
+                    disabled={state.money < totalRenovateAll}
+                    onClick={() => renovateAllFacs(infraFacilityDefs)}
+                    className="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/45 text-[#9a6700] dark:text-[var(--lamp)] text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
                   >
-                    {lv >= 5 ? 'เต็มแล้ว' : `อัป ${fmtMoneyNum(cost)}`}
+                    🔧 ปรับปรุงทั้งหมด ({wornCount}) · {fmtMoneyNum(totalRenovateAll)}
                   </button>
-                </div>
-              );
-            })}
-          </div>
+                )}
+              </div>
 
-          <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm mland:text-xs">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช (สูงสุด Lv.3)</h3>
-              <span className="text-xs font-bold text-[var(--red)] tabular">ค่าจ้างรวม -{fmtMoneyNum(est.staffCost)}/นัด</span>
-            </div>
-            {(
-              [
-                ['asst', 'ผู้ช่วยโค้ช', 'เพิ่มความคุ้นเคยแท็กติก & โอกาสซ้อมพัฒนา +2%/Lv'],
-                ['fit', 'โค้ชฟิตเนส', 'ฟื้นฟูความฟิตทั้งทีมหลังจบแมตช์ +2%/Lv'],
-                ['scout', 'หัวหน้าแมวมอง', 'เพิ่มคุณภาพ & จำนวนนักเตะจากภารกิจแมวมอง'],
-                ['physio', 'นักกายภาพบำบัด', 'ลดความเสี่ยงบาดเจ็บ -8%/Lv & หายเจ็บไวขึ้น']
-              ] as const
-            ).map(([role, title, desc]) => {
-              const lv = stf[role];
-              const nextCost = [45, 75, 110][lv] ?? 0;
-              return (
-                <div key={role} className="flex items-center justify-between gap-2 py-2 border-b border-[var(--line)]/60 last:border-0">
-                  <div className="min-w-0">
-                    <div className="font-bold text-xs">{title} · Lv.{lv}/3</div>
-                    <div className="text-[11px] text-[var(--mut)]">{desc}</div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {lv > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => fireStaff(role, title)}
-                        className="px-2 py-1.5 rounded-lg bg-[var(--surface-2)] text-[11px] font-semibold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
-                      >
-                        ลด
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      disabled={lv >= 3 || state.money < nextCost}
-                      onClick={() => hireStaff(role, title)}
-                      className="px-3 py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+              <div className="space-y-2.5">
+                {infraFacilityDefs.map(({ key, title, desc, baseCost }) => {
+                  const lv = clamp(state[key] ?? 1, 1, MAX_FACILITY_LV);
+                  const cond = getFacilityCondition(state, key);
+                  const upgCost = getFacilityUpgradeCost(baseCost, lv);
+                  const renCost = getFacilityRenovateCost(baseCost, lv, cond);
+                  const condBadgeCls =
+                    cond < 75
+                      ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/35'
+                      : cond < 90
+                        ? 'text-[#9a6700] dark:text-[var(--lamp)] bg-[var(--lamp-soft)] border-[var(--lamp)]/40'
+                        : 'text-[var(--g)] bg-[var(--g-soft)] border-[var(--g)]/35';
+
+                  return (
+                    <div
+                      key={key}
+                      className="p-2.5 mland:p-2 rounded-2xl bg-[var(--surface-2)]/55 border border-[var(--line)]/80 space-y-2"
                     >
-                      {lv >= 3 ? 'เต็ม' : `จ้าง ${fmtMoneyNum(nextCost)}`}
-                    </button>
-                  </div>
+                      <div className="flex items-start gap-2.5">
+                        <FacilityUpgradeSvg
+                          kind={key}
+                          level={lv}
+                          condition={cond}
+                          c1={me.kc[0]}
+                          c2={me.kc[1]}
+                          className="w-[104px] h-[66px] mland:w-[88px] mland:h-[56px]"
+                        />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
+                            <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-extrabold text-[10.5px] tabular shrink-0">
+                              Lv.{lv}/{MAX_FACILITY_LV}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                            <span className="font-semibold text-[var(--ink)]/85">{getFacilityTierLabel(lv)}</span>
+                            <span className={`px-1.5 py-0.5 rounded-md border font-bold tabular text-[9.5px] ${condBadgeCls}`}>
+                              สภาพ {cond}%
+                            </span>
+                          </div>
+                          <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-10 gap-1">
+                        {Array.from({ length: MAX_FACILITY_LV }, (_, idx) => idx + 1).map((step) => (
+                          <span
+                            key={step}
+                            className={`h-1.5 rounded-full transition-colors ${step <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface)] border border-[var(--line)]/60'}`}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                        <div className="flex-1 h-1.5 rounded-full bg-[var(--surface)] overflow-hidden border border-[var(--line)]/50">
+                          <div
+                            className={`h-full transition-all ${cond < 75 ? 'bg-[var(--red)]' : cond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
+                            style={{ width: `${cond}%` }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {cond < 100 && (
+                            <button
+                              type="button"
+                              disabled={state.money < renCost}
+                              onClick={() => renovateFac(key, title, baseCost)}
+                              className="px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                            >
+                              🔧 ปรับปรุง {fmtMoneyNum(renCost)}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={lv >= MAX_FACILITY_LV || state.money < upgCost}
+                            onClick={() => upgradeFac(key, title, baseCost)}
+                            className="px-3 py-1 rounded-xl bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                          >
+                            {lv >= MAX_FACILITY_LV ? `Lv.${MAX_FACILITY_LV} เต็ม` : `⬆️ อัป ${fmtMoneyNum(upgCost)}`}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Column: 6 Unique Staff Roles Lv.6 */}
+            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[var(--line)]/60">
+                <div>
+                  <h3 className="font-bold text-sm mland:text-xs">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช ({staffDefs.length} ตำแหน่ง · สูงสุด Lv.{MAX_STAFF_LV})</h3>
+                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ทีมงานเฉพาะทางแต่ละสายช่วยยกระดับทีมอย่างต่อเนื่อง</div>
                 </div>
-              );
-            })}
+                <span className="text-xs mland:text-[10.5px] font-bold text-[var(--red)] tabular">ค่าจ้างรวม -{fmtMoneyNum(est.staffCost)}/นัด</span>
+              </div>
+
+              <div className="space-y-2.5">
+                {staffDefs.map(({ role, title, desc }) => {
+                  const lv = clamp(stf[role], 0, MAX_STAFF_LV);
+                  const nextCost = STAFF_HIRE_COSTS[lv] ?? 0;
+                  return (
+                    <div
+                      key={role}
+                      className="p-2.5 mland:p-2 rounded-2xl bg-[var(--surface-2)]/55 border border-[var(--line)]/80 space-y-2"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <StaffRoleSvg
+                          role={role}
+                          level={lv}
+                          c1={me.kc[0]}
+                          c2={me.kc[1]}
+                          className="w-[78px] h-[64px] mland:w-[68px] mland:h-[56px]"
+                        />
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
+                            <span className={`px-1.5 py-0.5 rounded-md font-extrabold text-[10.5px] tabular shrink-0 ${lv > 0 ? 'bg-[var(--g-soft)] text-[var(--g)]' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                              Lv.{lv}/{MAX_STAFF_LV}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--mut)]">
+                            <span className="font-semibold text-[var(--ink)]/85">{getStaffTierLabel(lv)}</span>
+                            <span>·</span>
+                            <span className="tabular">ค่าจ้าง {(lv * 1.2).toFixed(1)} ล./นัด</span>
+                          </div>
+                          <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 grid grid-cols-6 gap-1">
+                          {Array.from({ length: MAX_STAFF_LV }, (_, idx) => idx + 1).map((step) => (
+                            <span
+                              key={step}
+                              className={`h-1.5 rounded-full transition-colors ${step <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface)] border border-[var(--line)]/60'}`}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {lv > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => fireStaff(role, title)}
+                              className="px-2.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] cursor-pointer"
+                            >
+                              ลด
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            disabled={lv >= MAX_STAFF_LV || state.money < nextCost}
+                            onClick={() => hireStaff(role, title)}
+                            className="px-3 py-1 rounded-xl bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold disabled:opacity-40 cursor-pointer whitespace-nowrap"
+                          >
+                            {lv >= MAX_STAFF_LV ? `Lv.${MAX_STAFF_LV} เต็ม` : `${lv === 0 ? 'จ้าง' : 'เลื่อนขั้น'} ${fmtMoneyNum(nextCost)}`}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Club Tab 2: Crest & Jersey Studio */}
       {clubTab === 'identity' && (

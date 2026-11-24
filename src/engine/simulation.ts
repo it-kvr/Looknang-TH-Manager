@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, hasTrait, rollPlayerTraits, recordPlayerSeasonProgress } from './playerCore';
@@ -318,15 +318,83 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   const G = rate(a, s, bg);
   if (h.pass === 3 && G.at > H.at) H.at += 3;
   if (a.pass === 3 && H.at > G.at) G.at += 3;
+
+  // Divine fortune / hot-streak spark ("พรสิ่งศักดิ์สิทธิ์") — can bless either side regardless of OVR
+  const incidents: MatchDramaticEvent[] = [];
+  let luckH = 0;
+  let luckA = 0;
+  let blessedHomeHero: Player | null = null;
+  let blessedAwayHero: Player | null = null;
+  if (Math.random() < (bg ? 0.34 : 0.25)) {
+    const gap = Math.max(0, G.at + G.df - (H.at + H.df));
+    luckH = R(4, 7) + (gap > 8 ? 3 : 0);
+    H.at += luckH;
+    H.df += Math.round(luckH * 0.7);
+    blessedHomeHero = H.x.length ? P(H.x) : null;
+  }
+  if (Math.random() < (bg ? 0.34 : 0.25)) {
+    const gap = Math.max(0, H.at + H.df - (G.at + G.df));
+    luckA = R(4, 7) + (gap > 8 ? 3 : 0);
+    G.at += luckA;
+    G.df += Math.round(luckA * 0.7);
+    blessedAwayHero = G.x.length ? P(G.x) : null;
+  }
+
   const lamH = Math.min(5, 1.35 * Math.exp((H.at - G.df) / 20 + 0.1));
   const lamA = Math.min(5, 1.35 * Math.exp((G.at - H.df) / 20 - 0.05));
-  const gh = pois(lamH);
-  const ga = pois(lamA);
-  const evs = [...genMatchGoals(h, H.x, gh, s?.p), ...genMatchGoals(a, G.x, ga, s?.p)].sort((x, y) => x.m - y.m);
+  let gh = pois(lamH);
+  let ga = pois(lamA);
+  let evs = [...genMatchGoals(h, H.x, gh, s?.p), ...genMatchGoals(a, G.x, ga, s?.p)].sort((x, y) => x.m - y.m);
+
+  // Miracle rapid comeback ("ปาฏิหาริย์พลิกนรก") when trailing by 2+ goals
+  const deficitAbs = Math.abs(gh - ga);
+  if (deficitAbs >= 2) {
+    const miracleChance = deficitAbs >= 3 ? (bg ? 0.13 : 0.095) : (bg ? 0.09 : 0.065);
+    if (Math.random() < miracleChance) {
+      const trailingHome = gh < ga;
+      const rallyTeam = trailingHome ? h : a;
+      const rallyPool = trailingHome ? H.x : G.x;
+      // Push early/mid goals earlier so the final surge feels like a rapid comeback!
+      evs.forEach((ev) => {
+        if (ev.m > 68) ev.m = R(12, 66);
+      });
+      const rallyGoals = deficitAbs + (Math.random() < 0.65 ? 1 : 0);
+      const startBurstMin = R(70, 77);
+      const addedEvs = genMatchGoals(rallyTeam, rallyPool, rallyGoals, s?.p).map((ev, idx) => ({
+        ...ev,
+        m: clamp(startBurstMin + idx * R(2, 4) + R(0, 2), 70, 90)
+      }));
+      evs = [...evs, ...addedEvs].sort((x, y) => x.m - y.m);
+      if (trailingHome) gh += rallyGoals;
+      else ga += rallyGoals;
+      incidents.push({
+        m: startBurstMin,
+        t: rallyTeam.id,
+        kind: 'miracle',
+        text: `⚡ ปาฏิหาริย์พลิกนรก! ${rallyTeam.name} โดนนำห่างแต่ฮึดรัว ${rallyGoals} ประตูติดในช่วงท้ายเกม!`
+      });
+    }
+  }
+
+  if (blessedHomeHero && gh > 0) {
+    incidents.push({
+      m: R(22, 78),
+      t: h.id,
+      kind: 'blessed',
+      text: `✨ ${blessedHomeHero.n} (${h.name}) เหมือนได้รับพรสิ่งศักดิ์สิทธิ์ ฟอร์มเข้าฝักทำอะไรก็ดีไปหมด!`
+    });
+  } else if (blessedAwayHero && ga > 0) {
+    incidents.push({
+      m: R(22, 78),
+      t: a.id,
+      kind: 'blessed',
+      text: `✨ ${blessedAwayHero.n} (${a.name}) เหมือนได้รับพรสิ่งศักดิ์สิทธิ์ ฟอร์มเข้าฝักทำอะไรก็ดีไปหมด!`
+    });
+  }
+
   const xgH = Math.max(0.1, Math.round((lamH * 0.85 + gh * 0.18 + R(-10, 15) / 100) * 100) / 100);
   const xgA = Math.max(0.1, Math.round((lamA * 0.85 + ga * 0.18 + R(-10, 15) / 100) * 100) / 100);
   const { cards, subs, playedNames } = simMatchCardsAndSubs(h, a, s);
-  const incidents: MatchDramaticEvent[] = [];
 
   if (xgH - gh >= 0.9 || (ga === 0 && xgH >= 1.4)) {
     const gkA = a.sq.find((q) => q.pos === 'GK')?.n || 'ผู้รักษาประตู';
@@ -512,7 +580,9 @@ export function extractMatchHighlights(
         lg.text.includes('ปั่นโค้ง') ||
         lg.text.includes('ทริเวล่า') ||
         lg.text.includes('คนัคเคิล') ||
-        lg.text.includes('ปาเนนก้า');
+        lg.text.includes('ปาเนนก้า') ||
+        lg.text.includes('ปาฏิหาริย์') ||
+        lg.text.includes('สิ่งศักดิ์สิทธิ์');
       if (isDramaLog && !(r.incidents || []).some((inc) => Math.abs(inc.m - lg.m) <= 1)) {
         pushDrama(lg.m, lg.text);
       }
@@ -796,18 +866,39 @@ export const LEAGUE_TRANSFER_RULES = {
   minPos: { GK: 2, DF: 4, MF: 4, FW: 2 } as Record<Position, number>
 };
 
+export const MAX_FACILITY_LV = 10;
+export const MAX_STAFF_LV = 6;
+export const STADIUM_CAPACITIES = [3500, 7500, 13000, 20000, 28000, 36000, 44000, 52000, 60000, 68000] as const;
+export const STAFF_HIRE_COSTS = [45, 75, 115, 165, 225, 300] as const;
+export const ALL_FACILITY_KEYS: readonly FacilityKey[] = ['st', 'tr', 'ya', 'med', 'merchLv', 'turfLv', 'analyticsLv'];
+
+export function getFacilityUpgradeCost(baseCost: number, currentLv: number): number {
+  return Math.round(baseCost * currentLv * (1 + (currentLv - 1) * 0.25));
+}
+
+export function getFacilityCondition(s: Pick<GameState, 'facCond'>, key: FacilityKey): number {
+  return clamp(Math.round(s.facCond?.[key] ?? 100), 40, 100);
+}
+
+export function getFacilityRenovateCost(baseCost: number, currentLv: number, cond: number): number {
+  if (cond >= 100) return 0;
+  return Math.max(6, Math.round(baseCost * (0.2 + currentLv * 0.08) * ((100 - cond) / 100) * 1.4));
+}
+
 export function getStaffState(s: Pick<GameState, 'staff'>) {
   return {
     asst: s.staff?.asst ?? 0,
     fit: s.staff?.fit ?? 0,
     scout: s.staff?.scout ?? 0,
-    physio: s.staff?.physio ?? 0
+    physio: s.staff?.physio ?? 0,
+    gkCoach: s.staff?.gkCoach ?? 0,
+    setPieceCoach: s.staff?.setPieceCoach ?? 0
   };
 }
 
 export function getStaffWage(s: Pick<GameState, 'staff'>) {
   const st = getStaffState(s);
-  return (st.asst + st.fit + st.scout + st.physio) * 1.5;
+  return (st.asst + st.fit + st.scout + st.physio + st.gkCoach + st.setPieceCoach) * 1.2;
 }
 
 export function getLeagueTransferContext(s: GameState, me: Team) {
@@ -815,7 +906,7 @@ export function getLeagueTransferContext(s: GameState, me: Team) {
   const loansCount = me.sq.filter((q) => !!q.loan).length;
   const curWage = squadWage(me);
   const baseCap = [26, 44, 70, 95][me.tier] ?? 44;
-  const infraMult = 1 + ((s.st ?? 1) - 1) * 0.1 + ((s.merchLv ?? 1) - 1) * 0.05;
+  const infraMult = 1 + ((s.st ?? 1) - 1) * 0.08 + ((s.merchLv ?? 1) - 1) * 0.04;
   const wageCap = Math.round(baseCap * infraMult);
   const wagePct = Math.round((curWage / Math.max(1, wageCap)) * 100);
   const posCounts: Record<Position, number> = {
@@ -840,9 +931,11 @@ export function getLeagueTransferContext(s: GameState, me: Team) {
 }
 
 export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
-  const stLv = s.st ?? 1;
-  const merchLv = s.merchLv ?? 1;
-  const cap = [3500, 8000, 15000, 26000, 42000][stLv - 1] || 3500;
+  const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
+  const merchLv = clamp(s.merchLv ?? 1, 1, MAX_FACILITY_LV);
+  const stCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'st') / 100);
+  const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'merchLv') / 100);
+  const cap = STADIUM_CAPACITIES[stLv - 1] || 3500;
   const tpIdx = s.tp ?? 1;
   const spIdx = s.sp ?? 0;
   const bMods = getActiveBoardModifiers(s);
@@ -850,8 +943,8 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const attRate = clamp((0.36 + (fanVal / 100) * 0.56) * [1.15, 1.0, 0.8][tpIdx] * (s.promo === 1 ? 1.15 : 1), 0.2, 0.98);
   const estAtt = Math.round(cap * attRate);
   const ticketPriceMult = [0.82, 1.0, 1.24][tpIdx];
-  const estTicket = Math.round((8 + stLv * 7) * (fanVal / 60) * ticketPriceMult * (s.promo === 1 ? 1.35 : 1));
-  const estMerch = Math.round((2 + merchLv * 3) * (fanVal / 55));
+  const estTicket = Math.round((8 + stLv * 6) * (fanVal / 60) * ticketPriceMult * (s.promo === 1 ? 1.35 : 1) * stCondMul);
+  const estMerch = Math.round((2 + merchLv * 2.5) * (fanVal / 55) * merchCondMul);
   const baseSponsor = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
   const estSponsor = Math.round(baseSponsor * (s.promo === 2 ? 1.35 : 1));
   const dealIncome = s.sponsorDeal ? s.sponsorDeal.perMatch : 0;
@@ -1479,7 +1572,8 @@ export function createScoutMission(focus: ScoutMission['focus'], targetRole?: Su
 
 export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
   const scoutStaff = getStaffState(s).scout;
-  const b0 = BASE[s.teams[s.me].tier] + (s.ya ?? 1) * 2 + scoutStaff * 2;
+  const analyticsLv = s.analyticsLv ?? 1;
+  const b0 = BASE[s.teams[s.me].tier] + Math.round((s.ya ?? 1) * 1.2) + Math.round(scoutStaff * 1.4) + Math.floor((analyticsLv - 1) / 3);
   return Array.from({ length: 3 }, (_, idx) => {
     let pos: Position = P(POS);
     let forceRo: SubRole | undefined;
@@ -2433,9 +2527,26 @@ export function afterMatchDay(
 ) {
   const me = s.teams[s.me];
   const mg = s.mode === 'm';
-  const lv = s.tr ?? 1;
-  const medLv = s.med ?? 1;
+  const lv = clamp(s.tr ?? 1, 1, MAX_FACILITY_LV);
+  const medLv = clamp(s.med ?? 1, 1, MAX_FACILITY_LV);
+  const turfLv = clamp(s.turfLv ?? 1, 1, MAX_FACILITY_LV);
+  const analyticsLv = clamp(s.analyticsLv ?? 1, 1, MAX_FACILITY_LV);
   const stf = getStaffState(s);
+
+  // Gradual facility wear & tear each matchday in Manager mode (40%..100%)
+  if (mg) {
+    const nextCond: Partial<Record<FacilityKey, number>> = { ...(s.facCond || {}) };
+    ALL_FACILITY_KEYS.forEach((fk) => {
+      const curCond = getFacilityCondition(s, fk);
+      const wear = fk === 'st' || fk === 'turfLv' || fk === 'tr' ? R(1, 3) : R(1, 2);
+      nextCond[fk] = clamp(curCond - wear, 40, 100);
+    });
+    s.facCond = nextCond;
+  }
+
+  const trCondFactor = mg ? 0.65 + 0.35 * (getFacilityCondition(s, 'tr') / 100) : 1;
+  const medCondFactor = mg ? 0.65 + 0.35 * (getFacilityCondition(s, 'med') / 100) : 1;
+  const turfCondFactor = mg ? 0.65 + 0.35 * (getFacilityCondition(s, 'turfLv') / 100) : 1;
   const skipInjTeams = new Set(liveInjMeta?.teamIds || []);
   const justInjuredNames = new Set(liveInjMeta?.playerNames || []);
   const subbedOutByTeam = liveInjMeta?.subbedOutByTeam || {};
@@ -2445,7 +2556,16 @@ export function afterMatchDay(
 
   const coachStyle = mg ? s.club?.managerStyle || 'balanced' : 'balanced';
   const tacFamDelta = mg
-    ? Math.max(0, (plan.program === 'recovery' ? 1 : 2) + progMeta.tacFamBonus + intMeta.tacAdd + stf.asst + (coachStyle === 'balanced' ? 2 : 0))
+    ? Math.max(
+        0,
+        (plan.program === 'recovery' ? 1 : 2) +
+          progMeta.tacFamBonus +
+          intMeta.tacAdd +
+          Math.ceil(stf.asst * 0.75) +
+          Math.floor((analyticsLv - 1) / 2) +
+          Math.ceil(stf.setPieceCoach * 0.5) +
+          (coachStyle === 'balanced' ? 2 : 0)
+      )
     : 2 + stf.asst;
   me.tacFam = clamp((me.tacFam ?? 65) + tacFamDelta, 30, 100);
 
@@ -2494,8 +2614,9 @@ export function afterMatchDay(
         ? Math.round(clamp((90 - subOutMin) / 8, 2, 7))
         : 0;
       const trainFitBonus = mine && mg
-        ? lv * 2 +
-          stf.fit * 2 +
+        ? Math.round(lv * 1.4 * trCondFactor) +
+          Math.floor((turfLv - 1) * 0.7 * turfCondFactor) +
+          Math.round(stf.fit * 1.6) +
           progMeta.fitMod +
           intMeta.fitDelta +
           (coachStyle === 'motivator' ? 2 : 0) +
@@ -2520,7 +2641,7 @@ export function afterMatchDay(
           if (
             q.inj > 0 &&
             (Dq.d.rec >= 82 || isIndivRest || (!mine && t.tier >= 1) || (mine && (medLv >= 3 || stf.physio >= 2))) &&
-            Math.random() < (mine ? 0.3 + (medLv - 1) * 0.08 + stf.physio * 0.08 + (isIndivRest ? 0.25 : 0) : aiPhysioChance)
+            Math.random() < (mine ? (0.28 + (medLv - 1) * 0.05 * medCondFactor + stf.physio * 0.055 + (isIndivRest ? 0.25 : 0)) : aiPhysioChance)
           ) {
             q.inj--;
           }
@@ -2531,7 +2652,7 @@ export function afterMatchDay(
         Math.random() <
           (q.fit < 60 ? 0.068 : 0.022) *
             (mine ? progMeta.injMult * (mg ? intMeta.injMult : 1) * (isIndivRest ? 0.5 : 1) : 1) *
-            (mine ? Math.max(0.5, 1 - (medLv - 1) * 0.08 - stf.physio * 0.08) : Math.max(0.65, 1 - t.tier * 0.12)) *
+            (mine ? Math.max(0.4, 1 - (medLv - 1) * 0.045 * medCondFactor - stf.physio * 0.05 - (turfLv - 1) * 0.02 * turfCondFactor) : Math.max(0.65, 1 - t.tier * 0.12)) *
             (hasTrait(q, 'glass_cannon', s.p) ? 1.38 : hasTrait(q, 'iron_lungs', s.p) ? 0.8 : 1) *
             ((130 - Dq.d.tol) / 60)
       ) {
@@ -2558,8 +2679,9 @@ export function afterMatchDay(
         const benchSharpBonus = plan.restStarters && !xiSet.has(q.n) ? 1.2 : 1;
         const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.65;
         const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.25 : 1;
+        const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.024 : stf.setPieceCoach * 0.01;
         const chance =
-          (0.05 + 0.03 * lv + stf.asst * 0.02) *
+          (0.04 + 0.02 * lv * trCondFactor + stf.asst * 0.015 + (analyticsLv - 1) * 0.008 + roleCoachBonus) *
           progMeta.devMult *
           intMeta.devMult *
           benchSharpBonus *

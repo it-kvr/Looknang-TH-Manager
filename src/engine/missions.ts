@@ -485,7 +485,7 @@ export function calcMissionSuccessChance(
   careerP: PlayerCareerProfile | null | undefined,
   _def: PersonalMissionDef,
   stage: number,
-  state?: Pick<GameState, 'tr' | 'staff'> | null
+  state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null
 ): number {
   const talent = getPlayerTalent(q, careerP);
   const isProdigy = Boolean(q.me && careerP?.perks?.includes('prodigy'));
@@ -503,8 +503,9 @@ export function calcMissionSuccessChance(
   else if (pot - q.ov >= 15) chance += 4;
 
   if (isProdigy) chance += 8;
-  if (state?.tr) chance += (state.tr - 1) * 1.5;
-  if (state?.staff?.asst) chance += state.staff.asst * 1.5;
+  if (state?.tr) chance += (state.tr - 1) * 1.0;
+  if (state?.staff?.asst) chance += state.staff.asst * 1.1;
+  if (state?.analyticsLv && state.analyticsLv > 1) chance += (state.analyticsLv - 1) * 0.7;
 
   // Never 100% guaranteed and never 0% impossible
   return clamp(Math.round(chance), 15, 94);
@@ -513,7 +514,7 @@ export function calcMissionSuccessChance(
 export const getPlayerMissionView = (
   q: Player,
   careerP?: PlayerCareerProfile | null,
-  state?: Pick<GameState, 'tr' | 'staff'> | null
+  state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null
 ) => {
   const mState = ensurePlayerMissions(q, careerP);
   const talent = getPlayerTalent(q, careerP);
