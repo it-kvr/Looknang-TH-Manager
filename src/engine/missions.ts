@@ -3,10 +3,74 @@ import { R, clamp } from '../utils/math';
 import { ATT, SIGL } from '../data/thaiFootballData';
 import { OVF, xi, DT, ovMe, syncMe } from './playerCore';
 
-export const ovColor = (v: number) => (v >= 80 ? '#158049' : v >= 65 ? '#2563eb' : v >= 50 ? '#c98a00' : '#64748b');
+export const ovColor = (v: number) =>
+  v >= 90 ? '#d97706' : v >= 80 ? '#059669' : v >= 70 ? '#0284c7' : v >= 60 ? '#7c3aed' : v >= 50 ? '#ea580c' : '#e11d48';
 
 export const statBarColor = (v: number) =>
-  v >= 82 ? '#158049' : v >= 68 ? '#1f9d5a' : v >= 54 ? '#c98a00' : '#64748b';
+  v >= 90 ? '#f59e0b' : v >= 80 ? '#10b981' : v >= 70 ? '#0ea5e9' : v >= 60 ? '#8b5cf6' : v >= 50 ? '#f97316' : '#f43f5e';
+
+export interface StatTierMeta {
+  textClass: string;
+  darkTextClass: string;
+  badgeClass: string;
+  dotClass: string;
+  hex: string;
+}
+
+export function statTierMeta(v: number): StatTierMeta {
+  if (v >= 90) {
+    return {
+      textClass: 'text-amber-700 dark:text-amber-300',
+      darkTextClass: 'text-amber-300',
+      badgeClass: 'bg-amber-500/14 border-amber-500/35 text-amber-800 dark:text-amber-200',
+      dotClass: 'bg-amber-500',
+      hex: '#f59e0b'
+    };
+  }
+  if (v >= 80) {
+    return {
+      textClass: 'text-emerald-700 dark:text-emerald-300',
+      darkTextClass: 'text-emerald-300',
+      badgeClass: 'bg-emerald-500/14 border-emerald-500/35 text-emerald-800 dark:text-emerald-200',
+      dotClass: 'bg-emerald-500',
+      hex: '#10b981'
+    };
+  }
+  if (v >= 70) {
+    return {
+      textClass: 'text-sky-700 dark:text-sky-300',
+      darkTextClass: 'text-sky-300',
+      badgeClass: 'bg-sky-500/14 border-sky-500/35 text-sky-800 dark:text-sky-200',
+      dotClass: 'bg-sky-500',
+      hex: '#0ea5e9'
+    };
+  }
+  if (v >= 60) {
+    return {
+      textClass: 'text-violet-700 dark:text-violet-300',
+      darkTextClass: 'text-violet-300',
+      badgeClass: 'bg-violet-500/14 border-violet-500/35 text-violet-800 dark:text-violet-200',
+      dotClass: 'bg-violet-500',
+      hex: '#8b5cf6'
+    };
+  }
+  if (v >= 50) {
+    return {
+      textClass: 'text-orange-700 dark:text-orange-300',
+      darkTextClass: 'text-orange-300',
+      badgeClass: 'bg-orange-500/14 border-orange-500/35 text-orange-800 dark:text-orange-200',
+      dotClass: 'bg-orange-500',
+      hex: '#f97316'
+    };
+  }
+  return {
+    textClass: 'text-rose-700 dark:text-rose-300',
+    darkTextClass: 'text-rose-300',
+    badgeClass: 'bg-rose-500/14 border-rose-500/35 text-rose-800 dark:text-rose-200',
+    dotClass: 'bg-rose-500',
+    hex: '#f43f5e'
+  };
+}
 
 
 export const PERSONAL_MISSIONS: PersonalMissionDef[] = [

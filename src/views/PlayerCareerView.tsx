@@ -4,7 +4,7 @@ import { clamp } from '../utils/math';
 import { ATT, SIGL, PACT, CAREER_PERKS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, xi, dtInfo, ovMe, syncMe, tc } from '../engine/playerCore';
-import { statBarColor, countReadyMissions } from '../engine/missions';
+import { statTierMeta, countReadyMissions } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 
@@ -46,18 +46,19 @@ export const PlayerCareerView: React.FC<{
             className="h-1 w-full shrink-0"
             style={{ background: `linear-gradient(90deg, ${kit1}, ${kit2})` }}
           />
-          <div className="px-3 pt-2.5 mland:px-2.5 mland:pt-1.5 flex items-start justify-between gap-2">
+          <div className="px-3 pt-2 mland:px-2 mland:pt-1.5 flex items-start justify-between gap-2">
             <div className="leading-none">
-              <div className="text-3xl mland:text-xl font-extrabold font-display tabular text-[#fad05a] leading-none">
+              <div className={`text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular leading-none ${statTierMeta(ov).darkTextClass}`}>
                 {ov}
+                <span className="text-[10px] mland:text-[8px] text-white/45 font-semibold ml-0.5">/100</span>
               </div>
-              <div className="text-[10.5px] mland:text-[8.5px] font-bold text-white/80 tracking-wide mt-0.5">
+              <div className="text-[10px] mland:text-[8px] font-bold text-white/80 tracking-wide mt-0.5">
                 {p.sp} · #{myShirtNo}
               </div>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] mland:text-[8.5px] font-bold text-amber-200/90 tabular">
-                ★ ชื่อเสียง {p.rep ?? 10}
+              <span className="text-[10px] mland:text-[8px] font-bold text-amber-200/90 tabular">
+                ★ {p.rep ?? 10}
               </span>
               <div className="w-6 h-6 mland:w-5 mland:h-5 rounded-md bg-white/10 border border-white/15 flex items-center justify-center [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
                 <ClubCrest name={meTeam.name} size={16} team={meTeam} club={state.club} isMyClub={false} />
@@ -66,7 +67,7 @@ export const PlayerCareerView: React.FC<{
           </div>
 
           {/* Studio Spotlight Portrait Stage */}
-          <div className="relative mx-3 my-2 mland:mx-2.5 mland:my-1 rounded-xl border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-2 mland:pt-1 flex items-end justify-center overflow-hidden shadow-inner">
+          <div className="relative mx-2.5 my-1.5 mland:mx-2 mland:my-1 rounded-xl border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-1.5 mland:pt-1 flex items-end justify-center overflow-hidden shadow-inner">
             <div
               aria-hidden="true"
               className="pointer-events-none absolute inset-0"
@@ -74,7 +75,7 @@ export const PlayerCareerView: React.FC<{
                 backgroundImage: 'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)'
               }}
             />
-            <div className="relative z-10 [&>svg]:w-[86px] [&>svg]:h-[92px] mland:[&>svg]:w-[62px] mland:[&>svg]:h-[66px] drop-shadow-[0_10px_16px_rgba(0,0,0,0.72)]">
+            <div className="relative z-10 [&>svg]:w-[80px] [&>svg]:h-[86px] mland:[&>svg]:w-[54px] mland:[&>svg]:h-[58px] drop-shadow-[0_10px_16px_rgba(0,0,0,0.72)]">
               <PlayerFace
                 player={fakePlayer}
                 team={meTeam}
@@ -82,54 +83,50 @@ export const PlayerCareerView: React.FC<{
                 careerProfile={p}
                 kitColor={kit1}
                 trimColor={kit2}
-                size={86}
+                size={82}
                 bare
               />
             </div>
           </div>
 
-          <div className="px-3 pb-2 mland:px-2.5 mland:pb-1.5 text-center space-y-0.5">
-            <div className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-white truncate leading-tight">
+          <div className="px-2.5 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-0.5">
+            <div className="font-display font-extrabold text-sm mland:text-[11px] text-white truncate leading-tight">
               {p.name}
             </div>
-            <div className="text-[10.5px] mland:text-[8.5px] text-emerald-100/80 truncate tabular">
+            <div className="text-[10px] mland:text-[8px] text-emerald-100/80 truncate tabular">
               {meTeam.name} · อายุ {p.age} ปี
             </div>
             {(p.archName || details.D0.sig) && (
-              <div className="text-[10px] mland:text-[8.5px] font-semibold text-[#fad05a] truncate">
+              <div className="text-[10px] mland:text-[8px] font-semibold text-[#fad05a] truncate">
                 {p.archName || 'สไตล์เฉพาะตัว'} · ⭐ {SIGL[details.D0.sig] || details.D0.sig}
               </div>
             )}
           </div>
 
-          <div className="bg-[#060c09]/90 border-t border-white/10 px-2.5 py-2 mland:px-2 mland:py-1.5 grid grid-cols-5 gap-1 text-center">
+          {/* Bar-less Tier-Colored 5 Core Stats Strip (/100) */}
+          <div className="bg-[#060c09]/92 border-t border-white/10 px-2 py-2 mland:px-1.5 mland:py-1 grid grid-cols-5 gap-1 text-center">
             {ATT.map(([k, l]) => {
               const val = p.a[k];
+              const tier = statTierMeta(val);
               return (
-                <div key={k} className="space-y-0.5">
-                  <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-tight text-white">
+                <div key={k} className="rounded-lg bg-white/[0.04] py-1 mland:py-0.5 px-0.5">
+                  <div className="text-[8.5px] mland:text-[7px] text-white/60 leading-tight truncate">{l}</div>
+                  <div className={`text-xs sm:text-[13px] mland:text-[10px] font-extrabold font-display tabular leading-tight mt-0.5 ${tier.darkTextClass}`}>
                     {val}
+                    <span className="text-[7.5px] mland:text-[6.5px] text-white/40 font-semibold">/100</span>
                   </div>
-                  <div className="h-1 rounded-full bg-white/12 overflow-hidden mx-0.5">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }}
-                    />
-                  </div>
-                  <div className="text-[9px] mland:text-[7.5px] text-white/65 leading-tight truncate">{l}</div>
                 </div>
               );
             })}
           </div>
         </div>
 
-        <div className="p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2.5 mland:space-y-1.5">
-          <div className="flex items-center justify-between text-xs mland:text-[10.5px] font-bold">
+        <div className="p-3 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1">
+          <div className="flex items-center justify-between text-xs mland:text-[10px] font-bold">
             <span>⚡ พลังกาย (Energy)</span>
-            <span className="tabular">{p.en}%</span>
-          </div>
-          <div className="h-2.5 mland:h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
-            <div className="h-full rounded-full transition-all" style={{ width: `${p.en}%`, background: p.en >= 70 ? 'var(--g)' : p.en >= 45 ? 'var(--lamp)' : 'var(--red)' }} />
+            <span className={`tabular font-extrabold ${statTierMeta(p.en).textClass}`}>
+              {p.en}<span className="text-[9.5px] opacity-60 font-semibold">/100</span>
+            </span>
           </div>
 
           <div className={`p-2.5 mland:p-1.5 rounded-xl border text-xs mland:text-[10px] space-y-1.5 mland:space-y-0.5 ${injCount > 0 || susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
@@ -295,25 +292,67 @@ export const PlayerCareerView: React.FC<{
           </div>
         </div>
 
-        <div className={`space-y-2.5 mland:space-y-2 ${careerTab === 'stats' ? '' : 'hidden'}`}>
-          <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex items-center justify-between gap-2">
-            <h3 className="font-bold text-sm mland:text-xs">📊 รายละเอียดค่าพลังเฉพาะทาง</h3>
-            <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
+        <div className={`space-y-2 mland:space-y-1.5 ${careerTab === 'stats' ? '' : 'hidden'}`}>
+          <div className="px-3 py-2 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex items-center justify-between gap-2">
+            <h3 className="font-bold text-xs sm:text-sm mland:text-[10.5px]">📊 รายละเอียดค่าพลังเฉพาะทาง (เต็ม 100)</h3>
+            <span className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
               จุดเด่น: <b className="text-[var(--g)]">⭐ {SIGL[details.D0.sig] || details.D0.sig}</b>
             </span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2">
-            {details.G.map(([grp, items], idx) => {
-              const spanFull = details.G.length === 5 && idx === 4;
-              return (
+          {details.G.length === 5 ? (
+            <div className="flex flex-col gap-2 mland:gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+                {details.G.slice(0, 2).map(([grp, items]) => (
+                  <div
+                    key={grp}
+                    className="px-3 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                  >
+                    <div className="font-bold text-xs mland:text-[9.5px] mb-1 pb-1 border-b border-[var(--line)]/70">{grp}</div>
+                    <div className="space-y-0.5">
+                      {items.map(([lbl, val, statKey]) => (
+                        <StatBarRow
+                          key={lbl}
+                          label={lbl}
+                          value={val}
+                          isSig={!!(statKey && statKey === details.D0.sig)}
+                          compact
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5">
+                {details.G.slice(2).map(([grp, items]) => (
+                  <div
+                    key={grp}
+                    className="px-3 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
+                  >
+                    <div className="font-bold text-xs mland:text-[9.5px] mb-1 pb-1 border-b border-[var(--line)]/70">{grp}</div>
+                    <div className="space-y-0.5">
+                      {items.map(([lbl, val, statKey]) => (
+                        <StatBarRow
+                          key={lbl}
+                          label={lbl}
+                          value={val}
+                          isSig={!!(statKey && statKey === details.D0.sig)}
+                          compact
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+              {details.G.map(([grp, items]) => (
                 <div
                   key={grp}
-                  className={`p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs ${
-                    spanFull ? 'sm:col-span-2 mland:col-span-2' : ''
-                  }`}
+                  className="px-3 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs"
                 >
-                  <div className="font-bold text-xs mland:text-[10.5px] mb-1.5 pb-1 border-b border-[var(--line)]/70">{grp}</div>
-                  <div className={spanFull ? 'grid grid-cols-2 gap-x-4 gap-y-0.5' : 'space-y-0.5'}>
+                  <div className="font-bold text-xs mland:text-[9.5px] mb-1 pb-1 border-b border-[var(--line)]/70">{grp}</div>
+                  <div className="space-y-0.5">
                     {items.map(([lbl, val, statKey]) => (
                       <StatBarRow
                         key={lbl}
@@ -325,9 +364,9 @@ export const PlayerCareerView: React.FC<{
                     ))}
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Player, Team, GameState } from '../types/game';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { statBarColor, ensurePlayerMissions, getPlayerMissionView, formatMissionRewardText, claimPlayerMission } from '../engine/missions';
+import { statTierMeta, ensurePlayerMissions, getPlayerMissionView, formatMissionRewardText, claimPlayerMission } from '../engine/missions';
 
 export const StatBarRow: React.FC<{ label: string; value: number; isSig?: boolean; compact?: boolean }> = ({
   label,
@@ -9,27 +9,19 @@ export const StatBarRow: React.FC<{ label: string; value: number; isSig?: boolea
   isSig,
   compact
 }) => {
-  const pct = Math.max(6, Math.min(100, Math.round(value)));
-  const col = isSig ? 'var(--g)' : statBarColor(value);
+  const tier = statTierMeta(value);
   return (
-    <div className={compact ? 'py-0.5' : 'py-1'}>
-      <div className="flex items-center justify-between gap-2 text-xs mland:text-[10.5px] mb-1 mland:mb-0.5">
-        <span className={`truncate ${isSig ? 'font-bold text-[var(--g)]' : 'text-[var(--ink)]/85 font-medium'}`}>
-          {isSig ? '⭐ ' : ''}{label}
-        </span>
-        <span
-          className="font-extrabold tabular text-xs mland:text-[10.5px] shrink-0"
-          style={{ color: value >= 75 || isSig ? col : 'var(--ink)' }}
-        >
-          {value}
-        </span>
-      </div>
-      <div className="h-1.5 mland:h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${pct}%`, background: col }}
-        />
-      </div>
+    <div className={`flex items-center justify-between gap-2 ${compact ? 'py-[2px] mland:py-[1px]' : 'py-0.5'}`}>
+      <span className={`min-w-0 flex items-center gap-1.5 truncate text-[11.5px] mland:text-[9.5px] ${isSig ? 'font-bold text-[var(--g)]' : 'text-[var(--ink)]/85 font-medium'}`}>
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tier.dotClass}`} aria-hidden="true" />
+        <span className="truncate">{isSig ? '⭐ ' : ''}{label}</span>
+      </span>
+      <span
+        className={`shrink-0 px-1.5 py-[1px] mland:px-1 mland:py-0 rounded-md border text-[11px] mland:text-[9px] tabular leading-tight ${tier.badgeClass}`}
+      >
+        <b className="font-extrabold">{value}</b>
+        <span className="opacity-65 font-semibold text-[9.5px] mland:text-[7.5px]">/100</span>
+      </span>
     </div>
   );
 };
