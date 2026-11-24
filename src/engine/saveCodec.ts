@@ -1,4 +1,4 @@
-import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, CustomSlot, Team, GameState } from '../types/game';
+import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
 
 export const SAVE_B64U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
@@ -49,6 +49,27 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.sra) ex.sra = q.sra;
   if (q.motm) ex.mt = q.motm;
   if (q.tyc) ex.tyc = q.tyc;
+  if (q.talent !== undefined) ex.tl = q.talent;
+  if (q.traits && q.traits.length) ex.ts = q.traits;
+  if (q.history && q.history.length) {
+    ex.hi = q.history.map((h) => [
+      h.season,
+      h.teamId,
+      h.teamName,
+      h.tier,
+      h.ov,
+      h.sp,
+      h.sg,
+      h.sa,
+      h.cs,
+      h.motm,
+      h.yc,
+      h.rc,
+      h.avgRating,
+      ...(h.honor ? [h.honor] : [])
+    ]);
+  }
+  if (q.careerLog && q.careerLog.length) ex.cl = q.careerLog;
 
   const base: unknown[] = [
     q.n,
@@ -126,6 +147,30 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (ex.sra !== undefined) p.sra = Number(ex.sra);
   if (ex.mt !== undefined) p.motm = Number(ex.mt);
   if (ex.tyc !== undefined) p.tyc = Number(ex.tyc);
+  if (ex.tl !== undefined) p.talent = Number(ex.tl);
+  if (Array.isArray(ex.ts)) p.traits = ex.ts.map((x) => String(x));
+  if (Array.isArray(ex.hi)) {
+    p.history = (ex.hi as unknown[]).map((item): PlayerSeasonHistoryRecord => {
+      if (!Array.isArray(item)) return item as PlayerSeasonHistoryRecord;
+      return {
+        season: Number(item[0] || 1),
+        teamId: Number(item[1] ?? -1),
+        teamName: String(item[2] || ''),
+        tier: Number(item[3] || 0),
+        ov: Number(item[4] || 60),
+        sp: Number(item[5] || 0),
+        sg: Number(item[6] || 0),
+        sa: Number(item[7] || 0),
+        cs: Number(item[8] || 0),
+        motm: Number(item[9] || 0),
+        yc: Number(item[10] || 0),
+        rc: Number(item[11] || 0),
+        avgRating: Number(item[12] || 0),
+        ...(item[13] ? { honor: String(item[13]) } : {})
+      };
+    });
+  }
+  if (Array.isArray(ex.cl)) p.careerLog = ex.cl.map((x) => String(x));
   return p;
 };
 
@@ -142,6 +187,30 @@ export const packSaveTeam = (t: Team): unknown[] => {
   if (t.fm) tex.fm = t.fm;
   if (t.foreign !== undefined) tex.fg = t.foreign;
   if (t.tacFam !== undefined) tex.tf = t.tacFam;
+  if (t.history && t.history.length) {
+    tex.hi = t.history.map((h) => {
+      const flags = (h.champion ? 1 : 0) | (h.cupChampion ? 2 : 0) | (h.asiaChampion ? 4 : 0);
+      return [
+        h.season,
+        h.tier,
+        h.nextTier,
+        h.rank,
+        h.totalTeams,
+        h.played,
+        h.won,
+        h.drawn,
+        h.lost,
+        h.gf,
+        h.ga,
+        h.pts,
+        flags,
+        h.cupStatus || '',
+        h.asiaStatus || '',
+        h.topScorer || ''
+      ];
+    });
+  }
+  if (t.trophies && t.trophies.length) tex.tr = t.trophies;
   const arr: unknown[] = [
     t.id, t.name, t.tier, t.kc, t.sq.map(packSavePlayer),
     t.form, t.tac, t.pts, t.gf, t.ga, t.w, t.d, t.l, t.p
@@ -181,6 +250,33 @@ export const unpackSaveTeam = (raw: unknown): Team => {
   if (tex.fm !== undefined) tm.fm = String(tex.fm);
   if (tex.fg !== undefined) tm.foreign = Number(tex.fg);
   if (tex.tf !== undefined) tm.tacFam = Number(tex.tf);
+  if (Array.isArray(tex.hi)) {
+    tm.history = (tex.hi as unknown[]).map((item): TeamSeasonHistoryRecord => {
+      if (!Array.isArray(item)) return item as TeamSeasonHistoryRecord;
+      const flags = Number(item[12] || 0);
+      return {
+        season: Number(item[0] || 1),
+        tier: Number(item[1] || 0),
+        nextTier: Number(item[2] || 0),
+        rank: Number(item[3] || 1),
+        totalTeams: Number(item[4] || 16),
+        played: Number(item[5] || 0),
+        won: Number(item[6] || 0),
+        drawn: Number(item[7] || 0),
+        lost: Number(item[8] || 0),
+        gf: Number(item[9] || 0),
+        ga: Number(item[10] || 0),
+        pts: Number(item[11] || 0),
+        champion: !!(flags & 1),
+        cupChampion: !!(flags & 2),
+        asiaChampion: !!(flags & 4),
+        ...(item[13] ? { cupStatus: String(item[13]) } : {}),
+        ...(item[14] ? { asiaStatus: String(item[14]) } : {}),
+        ...(item[15] ? { topScorer: String(item[15]) } : {})
+      };
+    });
+  }
+  if (Array.isArray(tex.tr)) tm.trophies = tex.tr as TrophyRecord[];
   return tm;
 };
 

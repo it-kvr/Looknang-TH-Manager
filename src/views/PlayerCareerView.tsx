@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import type { Player, GameState } from '../types/game';
 import { clamp } from '../utils/math';
-import { ATT, SIGL, PACT, CAREER_PERKS } from '../data/thaiFootballData';
+import { ATT, PACT, CAREER_PERKS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, xi, dtInfo, ovMe, syncMe, tc } from '../engine/playerCore';
-import { statTierMeta, countReadyMissions } from '../engine/missions';
+import { statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
+import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -14,7 +15,7 @@ export const PlayerCareerView: React.FC<{
   onToast: (msg: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
 }> = ({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
-  const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats'>('plan');
+  const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
   const p = state.p;
   if (!p) return null;
   const meTeam = state.teams[state.me];
@@ -27,9 +28,10 @@ export const PlayerCareerView: React.FC<{
   const injCount = meSq?.inj ?? p.inj ?? 0;
   const ycCount = meSq?.yc ?? p.yc ?? 0;
   const rcCount = meSq?.rc ?? p.rc ?? 0;
-  const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
+  const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, pot: 95, talent: p.talent, traits: p.traits, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
   const details = dtInfo(fakePlayer, p);
-  const readyMissionCount = countReadyMissions(fakePlayer, p);
+  const myTalent = getPlayerTalent(fakePlayer, p);
+  const tlMeta = talentTierMeta(myTalent);
   const starters = xi(meTeam);
   const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
   const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
@@ -57,6 +59,13 @@ export const PlayerCareerView: React.FC<{
               </div>
             </div>
             <div className="flex items-center gap-1.5">
+              <span
+                className="px-1.5 py-[1px] rounded text-[9px] mland:text-[7.5px] font-extrabold tabular border border-white/15"
+                style={{ background: tlMeta.bg, color: tlMeta.color }}
+                title={`พรสวรรค์ ${myTalent}/99 (${tlMeta.label})`}
+              >
+                TL {myTalent}
+              </span>
               <span className="text-[10px] mland:text-[8px] font-bold text-amber-200/90 tabular">
                 ★ {p.rep ?? 10}
               </span>
@@ -96,9 +105,26 @@ export const PlayerCareerView: React.FC<{
             <div className="text-[10px] mland:text-[8px] text-emerald-100/80 truncate tabular">
               {meTeam.name} · อายุ {p.age} ปี
             </div>
-            {(p.archName || details.D0.sig) && (
+            {p.archName && (
               <div className="text-[10px] mland:text-[8px] font-semibold text-[#fad05a] truncate">
-                {p.archName || 'สไตล์เฉพาะตัว'} · ⭐ {SIGL[details.D0.sig] || details.D0.sig}
+                {p.archName}
+              </div>
+            )}
+            {details.traits.length > 0 && (
+              <div className="flex flex-wrap justify-center gap-1 pt-0.5">
+                {details.traits.slice(0, 3).map((t) => (
+                  <span
+                    key={t.id}
+                    title={t.desc}
+                    className={`px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7px] font-bold border leading-tight ${
+                      ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(t.id)
+                        ? 'bg-amber-400/15 border-amber-300/35 text-amber-200'
+                        : 'bg-emerald-400/15 border-emerald-300/30 text-emerald-100'
+                    }`}
+                  >
+                    {t.icon} {t.name}
+                  </span>
+                ))}
               </div>
             )}
           </div>
@@ -174,8 +200,22 @@ export const PlayerCareerView: React.FC<{
           </div>
 
           <div className="grid grid-cols-2 gap-2 mland:gap-1 pt-1 mland:pt-0 text-center">
-            <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ลงสนาม / ประตู</div><b className="text-sm mland:text-[10.5px] tabular">{p.ap} นัด · ⚽ {p.gl}</b></div>
-            <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">แอสซิสต์ / เรตติ้ง</div><b className="text-sm mland:text-[10.5px] tabular">🎯 {p.as} · ⭐ {avgRt}</b></div>
+            <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]">
+              <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ลงสนาม / ประตู</div>
+              <div className="text-sm mland:text-[10.5px] font-extrabold tabular inline-flex items-center justify-center gap-1 mt-0.5">
+                <span>👕 {p.ap} นัด</span>
+                <span className="opacity-45">·</span>
+                <span>⚽ {p.gl}</span>
+              </div>
+            </div>
+            <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]">
+              <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">{p.pos === 'GK' ? 'คลีนชีต / เรตติ้ง' : 'แอสซิสต์ / เรตติ้ง'}</div>
+              <div className="text-sm mland:text-[10.5px] font-extrabold tabular inline-flex items-center justify-center gap-1 mt-0.5">
+                <span>{p.pos === 'GK' ? '🧤' : '🎯'} {p.pos === 'GK' ? (meSq?.cs || 0) : p.as}</span>
+                <span className="opacity-45">·</span>
+                <span>⭐ {avgRt}</span>
+              </div>
+            </div>
             <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ทีมชาติไทย 🇹🇭</div><b className="text-sm mland:text-[10.5px] tabular">{p.ntCaps || 0} นัด · {p.ntGoals || 0} ประตู</b></div>
             <div className="p-2 mland:p-1 rounded-xl bg-[var(--surface-2)]"><div className="text-[11px] mland:text-[9px] text-[var(--mut)]">ฟอร์ม 5 นัดหลัง</div><b className="text-xs mland:text-[9.5px] tabular">{(p.fm || []).length ? p.fm!.join(' · ') : '-'}</b></div>
           </div>
@@ -196,18 +236,19 @@ export const PlayerCareerView: React.FC<{
       </div>
 
       <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0">
-        <div className="grid grid-cols-4 gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+        <div className="grid grid-cols-5 gap-1 p-1 mland:p-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
           {([
-            ['plan', '📅 แผนฝึกซ้อม'],
-            ['missions', `🎯 ภารกิจ${readyMissionCount ? ` (${readyMissionCount})` : ''}`],
+            ['plan', '📅 แผนฝึก'],
+            ['missions', '🎯 ภารกิจ'],
             ['perks', `🌟 สกิล (${perks.length})`],
-            ['stats', '📊 ค่าพลัง']
+            ['stats', '📊 ค่าพลัง'],
+            ['history', '📜 ประวัติ']
           ] as const).map(([k, lbl]) => (
             <button
               key={k}
               type="button"
               onClick={() => setCareerTab(k)}
-              className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${careerTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+              className={`py-1.5 mland:py-1 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors truncate px-1 ${careerTab === k ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
             >
               {lbl}
             </button>
@@ -293,11 +334,23 @@ export const PlayerCareerView: React.FC<{
         </div>
 
         <div className={`space-y-2 mland:space-y-1.5 ${careerTab === 'stats' ? '' : 'hidden'}`}>
-          <div className="px-3 py-2 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex items-center justify-between gap-2">
+          <div className="px-3 py-2 mland:px-2.5 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-bold text-xs sm:text-sm mland:text-[10.5px]">📊 รายละเอียดค่าพลังเฉพาะทาง (เต็ม 100)</h3>
-            <span className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
-              จุดเด่น: <b className="text-[var(--g)]">⭐ {SIGL[details.D0.sig] || details.D0.sig}</b>
-            </span>
+            <div className="flex flex-wrap items-center gap-1">
+              {details.traits.map((t) => (
+                <span
+                  key={t.id}
+                  title={t.desc}
+                  className={`px-1.5 py-[1px] rounded-md border text-[10px] mland:text-[8px] font-bold leading-tight ${
+                    ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(t.id)
+                      ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]'
+                      : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
+                  }`}
+                >
+                  {t.icon} {t.name}
+                </span>
+              ))}
+            </div>
           </div>
           {details.G.length === 5 ? (
             <div className="flex flex-col gap-2 mland:gap-1.5">
@@ -309,12 +362,11 @@ export const PlayerCareerView: React.FC<{
                   >
                     <div className="font-bold text-xs mland:text-[9.5px] mb-1 pb-1 border-b border-[var(--line)]/70">{grp}</div>
                     <div className="space-y-0.5">
-                      {items.map(([lbl, val, statKey]) => (
+                      {items.map(([lbl, val]) => (
                         <StatBarRow
                           key={lbl}
                           label={lbl}
                           value={val}
-                          isSig={!!(statKey && statKey === details.D0.sig)}
                           compact
                         />
                       ))}
@@ -330,12 +382,11 @@ export const PlayerCareerView: React.FC<{
                   >
                     <div className="font-bold text-xs mland:text-[9.5px] mb-1 pb-1 border-b border-[var(--line)]/70">{grp}</div>
                     <div className="space-y-0.5">
-                      {items.map(([lbl, val, statKey]) => (
+                      {items.map(([lbl, val]) => (
                         <StatBarRow
                           key={lbl}
                           label={lbl}
                           value={val}
-                          isSig={!!(statKey && statKey === details.D0.sig)}
                           compact
                         />
                       ))}
@@ -353,12 +404,11 @@ export const PlayerCareerView: React.FC<{
                 >
                   <div className="font-bold text-xs mland:text-[9.5px] mb-1 pb-1 border-b border-[var(--line)]/70">{grp}</div>
                   <div className="space-y-0.5">
-                    {items.map(([lbl, val, statKey]) => (
+                    {items.map(([lbl, val]) => (
                       <StatBarRow
                         key={lbl}
                         label={lbl}
                         value={val}
-                        isSig={!!(statKey && statKey === details.D0.sig)}
                         compact
                       />
                     ))}
@@ -367,6 +417,15 @@ export const PlayerCareerView: React.FC<{
               ))}
             </div>
           )}
+        </div>
+
+        <div className={`${careerTab === 'history' ? '' : 'hidden'}`}>
+          <PlayerHistoryPanel
+            player={fakePlayer}
+            team={meTeam}
+            state={state}
+            onOpenSeasonStats={onOpenSeasonStats}
+          />
         </div>
         </div>
       </div>

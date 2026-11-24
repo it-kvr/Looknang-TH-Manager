@@ -4,7 +4,7 @@ import { clamp, fmtMoney } from '../utils/math';
 import { TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { xi, logFin } from '../engine/playerCore';
-import { PERSONAL_MISSIONS, getPlayerMissionView, countReadyMissions } from '../engine/missions';
+import { PERSONAL_MISSIONS, getPlayerMissionView, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -40,11 +40,10 @@ export const TeamTrainingView: React.FC<{
       const bUrg = b.inj > 0 ? -100 : (indMap[b.n] === 'REST' ? -30 : 0) + (b.fit ?? 100);
       return aUrg - bUrg || b.ov - a.ov;
     });
-  const totalReadyMissions = me.sq.reduce((sum, q) => sum + countReadyMissions(q, null), 0);
   const missionTargetPlayer = me.sq.find((q) => q.n === selectedMissionPlayer) || me.sq[0];
   const sortedMissionSquad = me.sq
     .slice()
-    .sort((a, b) => countReadyMissions(b, null) - countReadyMissions(a, null) || b.ov - a.ov);
+    .sort((a, b) => getPlayerTalent(b, null) - getPlayerTalent(a, null) || b.ov - a.ov);
 
   return (
     <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -68,15 +67,10 @@ export const TeamTrainingView: React.FC<{
             }`}
           >
             <span>🎯 ภารกิจส่วนบุคคล</span>
-            {totalReadyMissions > 0 && (
-              <span className={`px-1.5 py-0.2 rounded text-[10px] font-extrabold tabular ${trainingMode === 'missions' ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]'}`}>
-                {totalReadyMissions}
-              </span>
-            )}
           </button>
         </div>
         <span className="text-[11px] mland:text-[9px] text-[var(--mut)]">
-          {trainingMode === 'missions' ? 'ทำภารกิจทักษะในเกมและซ้อมเพื่ออัพค่าพลังย่อยนักเตะ' : `ศูนย์ฝึก Lv.${trLv} · สตาฟฟ์ฟิต +${stf.fit * 2}%`}
+          {trainingMode === 'missions' ? 'สะสม 15 ภารกิจพร้อมกัน อัปขั้นอัตโนมัติตามค่าพรสวรรค์' : `ศูนย์ฝึก Lv.${trLv} · สตาฟฟ์ฟิต +${stf.fit * 2}%`}
         </span>
       </div>
 
@@ -86,9 +80,9 @@ export const TeamTrainingView: React.FC<{
             <div className="text-xs mland:text-[10.5px] font-bold px-1 shrink-0">👥 เลือกนักเตะ ({me.sq.length} คน)</div>
             <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto flex-1 min-h-0">
               {sortedMissionSquad.map((q) => {
-                const ready = countReadyMissions(q, null);
                 const selected = q.n === missionTargetPlayer.n;
-                const { mState } = getPlayerMissionView(q, null);
+                const { mState, talent, passedStages } = getPlayerMissionView(q, null, state);
+                const tlMeta = talentTierMeta(talent);
                 const focusDef = PERSONAL_MISSIONS.find((m) => m.id === mState.focusId);
                 return (
                   <button
@@ -104,15 +98,17 @@ export const TeamTrainingView: React.FC<{
                       <div className="min-w-0">
                         <div className="text-xs mland:text-[10px] font-bold truncate">{q.n}</div>
                         <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                          {q.ro} · OVR {q.ov} {focusDef ? `· ${focusDef.icon}` : ''}
+                          {q.ro} · OVR {q.ov} {focusDef ? `· ${focusDef.icon}` : ''} {passedStages > 0 ? `· ✓${passedStages}` : ''}
                         </div>
                       </div>
                     </div>
-                    {ready > 0 && (
-                      <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[10px] font-extrabold tabular shrink-0">
-                        +{ready}
-                      </span>
-                    )}
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0"
+                      style={{ background: tlMeta.bg, color: tlMeta.color }}
+                      title={`พรสวรรค์ ${talent}/99 (${tlMeta.label})`}
+                    >
+                      TL {talent}
+                    </span>
                   </button>
                 );
               })}
@@ -449,7 +445,7 @@ export const TeamTrainingView: React.FC<{
                         </div>
                         <span className={`text-[10px] mland:text-[8.5px] font-bold tabular ${fTextCls}`}>{f}%</span>
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                          {q.inj > 0 ? `🩹${q.inj}นัด` : `OVR ${q.ov}/${q.pot}`}
+                          {q.inj > 0 ? `🩹${q.inj}นัด` : `OVR ${q.ov}/${q.pot} · TL ${getPlayerTalent(q, null)}`}
                         </span>
                       </div>
                     </div>

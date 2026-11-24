@@ -57,6 +57,8 @@ export interface Player {
   ov: number;
   age: number;
   pot: number;
+  talent?: number;
+  traits?: string[];
   fit: number;
   inj: number;
   sus?: number;
@@ -97,22 +99,45 @@ export interface Player {
   sra?: number;
   motm?: number;
   tyc?: number;
+  history?: PlayerSeasonHistoryRecord[];
+  careerLog?: string[];
 }
 
 export type PersonalMissionMetric =
   | 'setpieces'
   | 'passes'
   | 'shots'
+  | 'onTarget'
+  | 'goals'
   | 'crossAssists'
   | 'dribbles'
   | 'tackles'
+  | 'blocks'
   | 'headers'
   | 'saves'
+  | 'cleanSheets'
+  | 'wins'
+  | 'highRatings'
   | 'matches';
+
+export type MissionStageOutcome = 'ok' | 'fail';
+
+export interface MissionAttemptLog {
+  missionId: string;
+  missionName: string;
+  icon: string;
+  stage: number;
+  success: boolean;
+  chance: number;
+  rewardText?: string;
+  md?: number;
+}
 
 export interface PlayerMissionsState {
   stats: Partial<Record<PersonalMissionMetric, number>>;
   claimed: Record<string, number>;
+  outcomes?: Record<string, MissionStageOutcome[]>;
+  recentLogs?: MissionAttemptLog[];
   focusId?: string;
 }
 
@@ -144,6 +169,8 @@ export interface Team {
   fm?: string;
   foreign?: number;
   tacFam?: number;
+  history?: TeamSeasonHistoryRecord[];
+  trophies?: TrophyRecord[];
 }
 
 export interface ClubIdentity {
@@ -189,6 +216,8 @@ export interface PlayerCareerProfile {
   sb?: Record<string, number>;
   customD?: Record<string, number>;
   age: number;
+  talent?: number;
+  traits?: string[];
   gl: number;
   as: number;
   ap: number;
@@ -212,6 +241,7 @@ export interface PlayerCareerProfile {
   sus?: number;
   inj?: number;
   missions?: PlayerMissionsState;
+  history?: PlayerSeasonHistoryRecord[];
 }
 
 export interface AutoRule {
@@ -358,6 +388,59 @@ export interface ScoutMission {
   results?: Player[];
 }
 
+export interface PlayerSeasonHistoryRecord {
+  season: number;
+  teamId: number;
+  teamName: string;
+  tier: number;
+  ov: number;
+  sp: number;
+  sg: number;
+  sa: number;
+  cs: number;
+  motm: number;
+  yc: number;
+  rc: number;
+  avgRating: number;
+  honor?: string;
+}
+
+export interface TeamSeasonHistoryRecord {
+  season: number;
+  tier: number;
+  nextTier: number;
+  rank: number;
+  totalTeams: number;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  gf: number;
+  ga: number;
+  pts: number;
+  champion?: boolean;
+  cupChampion?: boolean;
+  asiaChampion?: boolean;
+  cupStatus?: string;
+  asiaStatus?: string;
+  topScorer?: string;
+}
+
+export interface ClubAllTimePlayerRecord {
+  name: string;
+  pos: Position;
+  ro?: SubRole;
+  apps: number;
+  goals: number;
+  assists: number;
+  cleanSheets: number;
+  motm: number;
+  seasons: number;
+  lastSeason: number;
+  bestAvgRating: number;
+  stillAtClub?: boolean;
+}
+
 export interface TrophyRecord {
   season: number;
   title: string;
@@ -367,10 +450,17 @@ export interface TrophyRecord {
 
 export interface ClubRecords {
   bestWin?: { txt: string; diff: number };
+  worstLoss?: { txt: string; diff: number };
   topSeasonScorer?: { n: string; g: number; s: number };
-  mostPoints?: { pts: number; s: number };
+  topSeasonAssist?: { n: string; a: number; s: number };
+  mostPoints?: { pts: number; s: number; tier?: number };
+  mostGoalsSeason?: { gf: number; s: number; tier?: number };
+  bestDefenseSeason?: { ga: number; s: number; tier?: number };
   winStreak?: number;
   curStreak?: number;
+  unbeatenStreak?: number;
+  curUnbeatenStreak?: number;
+  allTimePlayers?: ClubAllTimePlayerRecord[];
 }
 
 export interface SeasonPlayerStatRecord {
@@ -521,6 +611,17 @@ export interface PlayerArchetype {
   autoSubPts: Record<string, number>;
 }
 
+export interface FootballTraitDef {
+  id: string;
+  icon: string;
+  name: string;
+  desc: string;
+  tone: 'att' | 'play' | 'def' | 'gk' | 'ment' | 'phys';
+  pos: Position[];
+  roles?: SubRole[];
+  conflicts?: string[];
+}
+
 export interface TrainingProgramMeta {
   id: TrainingProgramId;
   icon: string;
@@ -557,9 +658,10 @@ export interface PersonalMissionDef {
   desc: string;
   metric: PersonalMissionMetric;
   unit: string;
-  targets: [number, number, number];
+  targets: number[];
   subRewards: Record<string, number>[];
   coreReward: StatKey;
+  coreRewards?: number[];
   posFilter?: Position[];
 }
 
@@ -683,6 +785,7 @@ export interface LivePitchAgent {
   sentOff: boolean;
   d: Record<string, number>;
   sig: string;
+  traits?: string[];
   tr: number;
   ov: number;
   vis: number[];
@@ -877,12 +980,14 @@ export interface LiveMatchWorld {
 export interface GodBlessingPatch {
   ov: number;
   pot: number;
+  talent?: number;
   age: number;
   fit: number;
   inj: number;
   sus: number;
   ro: SubRole;
   sig: string;
+  traits?: string[];
   coreA: CoreAttrs;
   subD: Record<string, number>;
 }

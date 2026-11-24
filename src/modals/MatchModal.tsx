@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld } from '../types/game';
+import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { RN, TN, SIGL, AR_T } from '../data/thaiFootballData';
+import { RN, TN, AR_T, TRAIT_BY_ID } from '../data/thaiFootballData';
 import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti } from '../utils/audioTheme';
 
 type TimelineKind =
@@ -30,6 +30,7 @@ interface MatchTimelineItem {
 }
 import { getShirtNo, xi, DT, injD, matchKits, pickGK } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf } from '../engine/simulation';
+import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
@@ -144,6 +145,7 @@ export const MatchModal: React.FC<{
   const [liveFormMap, setLiveFormMap] = useState<Record<string, number>>(() =>
     Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5]))
   );
+  const [autoSubEnabled, setAutoSubEnabled] = useState<boolean>(false);
   const subAlertEnabled = settings.subAlertEnabled ?? true;
   const subAlertFitTh = clamp(settings.subAlertFitThreshold ?? 58, 45, 75);
   const subAlertFormTh = clamp(settings.subAlertFormThreshold ?? 5.8, 5.0, 6.4);
@@ -229,6 +231,8 @@ export const MatchModal: React.FC<{
 
   const subAlertCfgRef = useRef({ enabled: subAlertEnabled, fitTh: subAlertFitTh, formTh: subAlertFormTh });
   subAlertCfgRef.current = { enabled: subAlertEnabled, fitTh: subAlertFitTh, formTh: subAlertFormTh };
+  const autoSubEnabledRef = useRef(autoSubEnabled);
+  autoSubEnabledRef.current = autoSubEnabled;
 
   const buildInitialWorld = (): LiveMatchWorld => {
     const sr = simRef.current;
@@ -485,12 +489,15 @@ export const MatchModal: React.FC<{
     w.dramaLabel = label;
   };
 
+  const agentHasTrait = (ag: LivePitchAgent | null | undefined, traitId: string) => Boolean(ag?.traits?.includes(traitId));
+
   const issueCard = (culprit: LivePitchAgent, curMin: number, directRedBias = 0.04, forceType?: 'Y' | 'R') => {
     const sr = simRef.current;
     const w = worldRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
     const kit = culprit.side === 'H' ? homeKit : awayKit;
-    const directRed = forceType === 'R' ? true : forceType === 'Y' ? false : Math.random() < (culprit.tr === 1 ? 0.09 : directRedBias);
+    const hotHeadBias = agentHasTrait(culprit, 'hot_headed') ? 0.06 : agentHasTrait(culprit, 'calm_leader') ? -0.02 : 0;
+    const directRed = forceType === 'R' ? true : forceType === 'Y' ? false : Math.random() < Math.max(0.01, (culprit.tr === 1 ? 0.09 : directRedBias) + hotHeadBias);
     SFX.card();
     if (directRed) {
       culprit.sentOff = true;
@@ -570,8 +577,9 @@ export const MatchModal: React.FC<{
     const medMult = Math.max(0.45, 1 - (medLv - 1) * 0.08 - physioLv * 0.08) * (isMySide && state.tf === 'F' ? 0.55 : 1);
     const tolMult = clamp((132 - (D.d.tol || 65)) / 65, 0.55, 1.45);
     const fitMult = curFit < 54 ? 1.8 : curFit < 65 ? 1.25 : 0.85;
+    const traitInjMult = agentHasTrait(victim, 'glass_cannon') ? 1.45 : agentHasTrait(victim, 'iron_lungs') ? 0.78 : 1;
     const baseProb = severity === 'foul' ? 0.055 : severity === 'slide' ? 0.038 : severity === 'clash' ? 0.028 : 0.0055;
-    if (Math.random() >= baseProb * medMult * tolMult * fitMult) return false;
+    if (Math.random() >= baseProb * medMult * tolMult * fitMult * traitInjMult) return false;
 
     const rawGames = severity === 'foul' ? R(2, 4) : R(1, 3);
     const games = injD(pl, rawGames, state.p);
@@ -1321,17 +1329,18 @@ export const MatchModal: React.FC<{
           const perpDist = Math.hypot(d.x - projX, d.y - projY);
           return { d, perpDist, tProj };
         })
-        .filter((x) => x.perpDist < (flightType === 'freekick' ? 8.5 : x.d.sig === 'blk' ? 9.5 : 7.8))
+        .filter((x) => x.perpDist < (flightType === 'freekick' ? 8.5 : x.d.sig === 'blk' || agentHasTrait(x.d, 'body_blocker') ? 9.8 : 7.8))
         .sort((u, v) => u.perpDist - v.perpDist || u.tProj - v.tProj);
 
       const wallDef = flightType === 'freekick' ? defenders.find((d) => d.intent === 'WALL') || corridorCands[0]?.d : undefined;
       const nearDef = wallDef || corridorCands[0]?.d;
 
       if (nearDef) {
+        const blockerTrait = agentHasTrait(nearDef, 'body_blocker') ? 14 : 0;
         const blockChance =
           flightType === 'freekick'
-            ? clamp(0.18 - ((shooter?.d.cur || 60) - 60) * 0.002, 0.09, 0.24)
-            : clamp(0.09 + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) - 60) * 0.0035, 0.05, 0.22);
+            ? clamp(0.18 - ((shooter?.d.cur || 60) - 60) * 0.002 + (agentHasTrait(nearDef, 'body_blocker') ? 0.04 : 0), 0.09, 0.28)
+            : clamp(0.09 + ((nearDef.sig === 'blk' ? nearDef.d.blk + 12 : nearDef.d.blk) + blockerTrait - 60) * 0.0035, 0.05, 0.26);
         const deflectChance =
           flightType === 'freekick'
             ? 0.14
@@ -1369,13 +1378,19 @@ export const MatchModal: React.FC<{
     }
 
     // 2. Accuracy roll: On-Target vs Woodwork vs Off-Target
-    const sigFinBoost = shooter?.sig === 'fin' ? 0.06 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.05 : 0;
+    const sigFinBoost = shooter?.sig === 'fin' ? 0.05 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.04 : 0;
+    const isShooterSub = Boolean(shooter && sr.subs.some((s) => s.inPlayer === shooter.id));
+    const traitAccBoost =
+      (agentHasTrait(shooter, 'poacher_instinct') && dist < 17 ? 0.07 : 0) +
+      (agentHasTrait(shooter, 'clutch_player') && (curMin >= 70 || isDerby || kind !== 'league') ? 0.06 : 0) +
+      (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 0.07 : 0) +
+      (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 0.07 : 0) +
+      (agentHasTrait(shooter, 'consistency_pro') ? 0.03 : 0) +
+      (agentHasTrait(shooter, 'setpiece_specialist') && flightType === 'freekick' ? 0.08 : 0);
     const accuracy =
       flightType === 'penalty'
-        ? isPanenka
-          ? 0.89
-          : 0.92
-        : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.72);
+        ? clamp((isPanenka ? 0.89 : 0.92) + (agentHasTrait(shooter, 'clutch_player') ? 0.03 : 0), 0.85, 0.96)
+        : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost + traitAccBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.78);
 
     if (Math.random() > accuracy) {
       const hitWoodwork = Math.random() < (flightType === 'penalty' ? 0.35 : 0.16);
@@ -1408,16 +1423,21 @@ export const MatchModal: React.FC<{
     const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
     const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
     const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
-    const gkSaveScore = gk ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.56 + (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.44 : 58;
+    const gkSaveScore = gk
+      ? (gk.d.sv + (gk.sig === 'sv' ? 7 : 0) + (agentHasTrait(gk, 'reflex_cat') ? 8 : 0) + (flightType === 'penalty' && agentHasTrait(gk, 'penalty_saver') ? 12 : 0)) * 0.56 +
+        (gk.d.cl + (gk.sig === 'cl' ? 6 : 0) + (agentHasTrait(gk, 'sweeper_keeper') ? 5 : 0)) * 0.44
+      : 58;
     const shooterScore = shooter
-      ? (shooter.d.fin + (shooter.sig === 'fin' ? 8 : 0)) * 0.5 +
-        (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
-        (shooter.d.pw + (shooter.sig === 'pw' ? 8 : 0)) * 0.25
+      ? (shooter.d.fin + (shooter.sig === 'fin' ? 6 : 0) + (agentHasTrait(shooter, 'poacher_instinct') && dist < 17 ? 8 : 0) + (agentHasTrait(shooter, 'acrobatic_finisher') && (shotStyle === 'bicycle' || shotStyle === 'volley' || shotStyle === 'diving_header') ? 9 : 0)) * 0.5 +
+        (shooter.d.cur + (shooter.sig === 'cur' ? 6 : 0) + (agentHasTrait(shooter, 'outside_curler') && (shotStyle === 'trivela' || shotStyle === 'curler') ? 8 : 0)) * 0.25 +
+        (shooter.d.pw + (shooter.sig === 'pw' ? 6 : 0) + (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 8 : 0)) * 0.25 +
+        (agentHasTrait(shooter, 'clutch_player') && (curMin >= 70 || isDerby || kind !== 'league') ? 6 : 0) +
+        (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 7 : 0)
       : 60;
     const goalProb =
       flightType === 'penalty'
-        ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.004, 0.65, 0.9)
-        : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (flightType === 'freekick' ? 0.03 : 0), 0.14, 0.54);
+        ? clamp(0.79 + (shooterScore - gkSaveScore) * 0.0045 - (agentHasTrait(gk, 'penalty_saver') ? 0.06 : 0), 0.58, 0.92)
+        : clamp(0.27 + edge * 0.0065 + (shooterScore - gkSaveScore) * 0.004 + (flightType === 'freekick' ? 0.03 + (agentHasTrait(shooter, 'setpiece_specialist') ? 0.05 : 0) : 0), 0.14, 0.56);
 
     if (Math.random() < goalProb) {
       b.toX = attRightNow ? 101.3 : -1.3;
@@ -1585,7 +1605,7 @@ export const MatchModal: React.FC<{
 
       if (sp.type === 'goalkick' || sp.type === 'offside') {
         const kicker = sp.type === 'goalkick' ? attPool.find((a) => a.pos === 'GK') || attPool[0] : attPool.find((a) => a.pos === 'DF') || attPool[0];
-        const longDistBias = attCfg.pass >= 2 || kicker?.sig === 'dist';
+        const longDistBias = attCfg.pass >= 2 || kicker?.sig === 'dist' || agentHasTrait(kicker, 'long_throw_counter') || agentHasTrait(kicker, 'long_diagonal');
         const receiver =
           longDistBias
             ? attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.pos === 'MF')
@@ -1608,8 +1628,8 @@ export const MatchModal: React.FC<{
           w.phaseLabel =
             sp.type === 'offside'
               ? `⚽ เตะฟรีคิกล้ำหน้า (${attTeam.name})`
-              : kicker.sig === 'dist'
-                ? `🚀 ${kicker.shortName} [จุดเด่น: จ่ายแนวหลัง] เปิดบอลโด่งสวนกลับ!`
+              : agentHasTrait(kicker, 'long_throw_counter') || kicker.sig === 'dist'
+                ? `🚀 ${kicker.shortName} [บอลยาวสวนกลับ] เปิดเกมไวขึ้นหน้า!`
                 : `🥅 เปิดเกมจากประตู (${attTeam.name})`;
           w.phaseTone = 'normal';
           SFX.kick();
@@ -1623,14 +1643,15 @@ export const MatchModal: React.FC<{
         const taker =
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.cur + v.d.pw + (v.sig === 'cur' ? 12 : 0)) - (u.d.cur + u.d.pw + (u.sig === 'cur' ? 12 : 0)))[0] || attPool[0];
+            .sort((u, v) => (v.d.cur + v.d.pw + (v.sig === 'cur' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0)) - (u.d.cur + u.d.pw + (u.sig === 'cur' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0)))[0] || attPool[0];
         if (!taker) return;
         taker.x = clamp(sp.x - dir * 1.5, 4, 96);
         taker.y = sp.y;
         const canShootDirect = distToGoal < 36;
         if (canShootDirect) {
-          const isCurlerFk = taker.sig === 'cur' || taker.d.cur >= taker.d.pw;
+          const isCurlerFk = agentHasTrait(taker, 'setpiece_specialist') || agentHasTrait(taker, 'outside_curler') || taker.sig === 'cur' || taker.d.cur >= taker.d.pw;
           b.lastPasserId = null;
+          bumpPlayerStat(taker.id, 'setpieces');
           prepareShotFlight(w, curMin, {
             flightType: 'freekick',
             side: sp.side,
@@ -1643,7 +1664,7 @@ export const MatchModal: React.FC<{
             durAmt: 0.88
           });
           w.phaseLabel = isCurlerFk
-            ? `🎯 ${taker.shortName}${taker.sig === 'cur' ? ' [ยิงโค้ง]' : ''} ปั่นฟรีคิกโค้งข้ามกำแพง!`
+            ? `🎯 ${taker.shortName}${agentHasTrait(taker, 'setpiece_specialist') ? ' [เจ้าพ่อลูกนิ่ง]' : ''} ปั่นฟรีคิกโค้งข้ามกำแพง!`
             : `🎯 ${taker.shortName} ตะบันฟรีคิกเต็มข้อ!`;
           w.phaseTone = 'danger';
           triggerDramaSlow(w, 1.15, `🎯 ฟรีคิกลุ้นประตู · ${taker.shortName}`);
@@ -1651,7 +1672,7 @@ export const MatchModal: React.FC<{
           pushLog(curMin, `🎯 ${taker.id} (${attTeam.name}) วิ่งเข้ามา${isCurlerFk ? 'ปั่นฟรีคิกโค้งๆ' : 'ซัดฟรีคิก'}ข้ามกำแพง!`);
         } else {
           const boxTarget =
-            attPool.filter((a) => a.pos === 'FW' || a.role === 'CB').sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 12 : 0)) - (u.d.hd + (u.sig === 'hd' ? 12 : 0)))[0] ||
+            attPool.filter((a) => a.pos === 'FW' || a.role === 'CB').sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 10 : 0) + (agentHasTrait(v, 'aerial_menace') ? 15 : 0)) - (u.d.hd + (u.sig === 'hd' ? 10 : 0) + (agentHasTrait(u, 'aerial_menace') ? 15 : 0)))[0] ||
             attPool[1] ||
             taker;
           const destX = clamp(attRight ? 88 + Math.random() * 6 : 6 + Math.random() * 6, 6, 94);
@@ -1670,6 +1691,8 @@ export const MatchModal: React.FC<{
           b.targetId = boxTarget.id;
           b.lastPasserId = taker.id;
           b.possessionSide = sp.side;
+          bumpPlayerStat(taker.id, 'setpieces');
+          bumpPlayerStat(taker.id, 'crossAssists');
           w.phaseLabel = `⚠️ ${taker.shortName} เปิดบอลโด่งเข้ากรอบเขตโทษ`;
           w.phaseTone = 'setpiece';
           SFX.kick();
@@ -1681,16 +1704,17 @@ export const MatchModal: React.FC<{
         const taker =
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.crs + v.d.cur + (v.sig === 'crs' ? 12 : 0)) - (u.d.crs + u.d.cur + (u.sig === 'crs' ? 12 : 0)))[0] || attPool[0];
+            .sort((u, v) => (v.d.crs + v.d.cur + (v.sig === 'crs' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0)) - (u.d.crs + u.d.cur + (u.sig === 'crs' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0)))[0] || attPool[0];
         const headerTarget =
           attPool
             .filter((a) => a.id !== taker?.id && a.pos !== 'GK')
-            .sort((u, v) => (v.d.hd + v.d.str + (v.sig === 'hd' ? 14 : 0)) - (u.d.hd + u.d.str + (u.sig === 'hd' ? 14 : 0)))[0] || attPool[1];
+            .sort((u, v) => (v.d.hd + v.d.str + (v.sig === 'hd' ? 12 : 0) + (agentHasTrait(v, 'aerial_menace') ? 16 : 0) + (agentHasTrait(v, 'near_post_runner') ? 8 : 0)) - (u.d.hd + u.d.str + (u.sig === 'hd' ? 12 : 0) + (agentHasTrait(u, 'aerial_menace') ? 16 : 0) + (agentHasTrait(u, 'near_post_runner') ? 8 : 0)))[0] || attPool[1];
         if (taker && headerTarget) {
           taker.x = sp.x;
           taker.y = sp.y;
-          const destX = attRight ? 89.5 + Math.random() * 4.2 : 6.3 + Math.random() * 4.2;
-          const destY = 42 + Math.random() * 16;
+          const nearPost = agentHasTrait(headerTarget, 'near_post_runner');
+          const destX = attRight ? (nearPost ? 91.5 + Math.random() * 2.5 : 89.5 + Math.random() * 4.2) : (nearPost ? 6.0 + Math.random() * 2.5 : 6.3 + Math.random() * 4.2);
+          const destY = nearPost ? (sp.y < 50 ? 41 + Math.random() * 6 : 53 + Math.random() * 6) : 42 + Math.random() * 16;
           headerTarget.tx = destX;
           headerTarget.ty = destY;
           headerTarget.intent = 'PASS_TARGET';
@@ -1698,7 +1722,7 @@ export const MatchModal: React.FC<{
           b.fromY = sp.y;
           b.toX = destX;
           b.toY = destY;
-          b.curve = (sp.y < 50 ? 1 : -1) * (taker.sig === 'cur' || taker.sig === 'crs' ? 9.5 : 7.5);
+          b.curve = (sp.y < 50 ? 1 : -1) * (agentHasTrait(taker, 'setpiece_specialist') || taker.sig === 'cur' || taker.sig === 'crs' ? 9.5 : 7.5);
           b.maxZ = 16;
           b.progress = 0;
           b.duration = 0.78;
@@ -1708,7 +1732,9 @@ export const MatchModal: React.FC<{
           b.targetId = headerTarget.id;
           b.lastPasserId = taker.id;
           b.possessionSide = sp.side;
-          w.phaseLabel = `🚩 ${taker.shortName}${taker.sig === 'crs' ? ' [เปิดบอลแม่น]' : ''} โยนเตะมุมโค้งเข้ากลาง!`;
+          bumpPlayerStat(taker.id, 'setpieces');
+          bumpPlayerStat(taker.id, 'crossAssists');
+          w.phaseLabel = `🚩 ${taker.shortName}${agentHasTrait(taker, 'setpiece_specialist') ? ' [เจ้าพ่อลูกนิ่ง]' : ''} โยนเตะมุมโค้งเข้ากลาง!`;
           w.phaseTone = 'setpiece';
           SFX.kick();
         }
@@ -1719,13 +1745,14 @@ export const MatchModal: React.FC<{
         const taker =
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.fin + (v.d.comp || 60) + (v.sig === 'comp' || v.sig === 'fin' ? 10 : 0)) - (u.d.fin + (u.d.comp || 60) + (u.sig === 'comp' || u.sig === 'fin' ? 10 : 0)))[0] || attPool[0];
+            .sort((u, v) => (v.d.fin + (v.d.comp || 60) + (agentHasTrait(v, 'clutch_player') ? 14 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 10 : 0)) - (u.d.fin + (u.d.comp || 60) + (agentHasTrait(u, 'clutch_player') ? 14 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 10 : 0)))[0] || attPool[0];
         if (!taker) return;
         const spotX = attRight ? 88.5 : 11.5;
-        const isPanenka = (taker.sig === 'comp' || (taker.d.comp || 60) >= 74) && Math.random() < 0.18;
+        const isPanenka = (agentHasTrait(taker, 'chip_artist') || agentHasTrait(taker, 'clutch_player') || (taker.d.comp || 60) >= 74) && Math.random() < (agentHasTrait(taker, 'chip_artist') ? 0.32 : 0.18);
         taker.x = spotX - dir * 1.8;
         taker.y = 50;
         b.lastPasserId = null;
+        bumpPlayerStat(taker.id, 'setpieces');
         prepareShotFlight(w, curMin, {
           flightType: 'penalty',
           side: sp.side,
@@ -1775,7 +1802,7 @@ export const MatchModal: React.FC<{
 
     // Clean Goalkeeper Distribution based on team Passing Style (Short build-up vs Long counter/target)
     if (carrier.pos === 'GK') {
-      const preferLongGk = attCfg.pass >= 2 || (carrier.sig === 'dist' && Math.random() < 0.65) || nearestDefDist < 9;
+      const preferLongGk = attCfg.pass >= 2 || ((carrier.sig === 'dist' || agentHasTrait(carrier, 'long_throw_counter')) && Math.random() < 0.72) || nearestDefDist < 9;
       const gkReceivers = attPool.filter((a) => a.id !== carrier.id && a.pos !== 'GK');
       const shortPick = gkReceivers
         .filter((a) => a.pos === 'DF' || a.role === 'CDM' || a.role === 'LDM' || a.role === 'RDM')
@@ -1800,7 +1827,9 @@ export const MatchModal: React.FC<{
         b.carrierId = null;
         b.targetId = target.id;
         b.lastPasserId = carrier.id;
-        w.phaseLabel = useLofted ? `🧤 ${carrier.shortName} เตะสาดยาวขึ้นหน้าให้ ${target.shortName}` : `🧤 ${carrier.shortName} จ่ายสั้นต่อบอลจากแดนหลัง`;
+        w.phaseLabel = useLofted
+          ? `🧤 ${carrier.shortName}${agentHasTrait(carrier, 'long_throw_counter') ? ' [เปิดเกมสวนกลับ]' : ''} เตะสาดยาวขึ้นหน้าให้ ${target.shortName}`
+          : `🧤 ${carrier.shortName}${agentHasTrait(carrier, 'sweeper_keeper') ? ' [สวีปเปอร์]' : ''} จ่ายสั้นต่อบอลจากแดนหลัง`;
         w.phaseTone = 'normal';
         if (useLofted) SFX.kick();
         else SFX.pass();
@@ -1814,17 +1843,18 @@ export const MatchModal: React.FC<{
       carrier.d.spd * 0.42 +
       carrier.d.run * 0.34 +
       carrier.d.cur * 0.24 +
-      (carrier.sig === 'spd' || carrier.sig === 'cur' || carrier.sig === 'str' || carrier.sig === 'run' ? 8 : 0);
+      (agentHasTrait(carrier, 'flair_dribbler') ? 14 : 0) +
+      (carrier.sig === 'spd' || carrier.sig === 'cur' || carrier.sig === 'str' || carrier.sig === 'run' ? 6 : 0);
     if (nearestDef && nearestDefDist < 9.5 && carrier.pos !== 'GK' && carrierNormXEarly > 24) {
       const tempoDribMod = attCfg.tempo === 2 ? -0.04 : attCfg.tempo === 0 ? 0.03 : 0;
       const skillProb = clamp(
         0.18 +
           (dribbleSkill - (nearestDef.d.rd * 0.5 + nearestDef.d.pos * 0.5)) * 0.0045 +
           (inBoxNow ? 0.08 : 0) +
-          (carrier.sig === 'spd' || carrier.sig === 'cur' ? 0.07 : 0) +
+          (agentHasTrait(carrier, 'flair_dribbler') ? 0.12 : carrier.sig === 'spd' || carrier.sig === 'cur' ? 0.06 : 0) +
           tempoDribMod,
         0.10,
-        0.46
+        0.52
       );
       if (Math.random() < skillProb) {
         const rollSk = Math.random();
@@ -1843,9 +1873,9 @@ export const MatchModal: React.FC<{
           skillLabel = `💪 ${carrier.shortName} บังบอลพลิกหนี`;
           fxColor = '#facc15';
           advDist = 6.2;
-        } else if (rollSk < 0.62) {
+        } else if (agentHasTrait(carrier, 'flair_dribbler') || rollSk < 0.62) {
           skType = 'stepover';
-          skillLabel = nearestDefDist < 5.5 && Math.random() < 0.4 ? `🔥 ${carrier.shortName} ลอดขาเอลาสติโก้!` : `🪄 ${carrier.shortName} สับขาหลอก!`;
+          skillLabel = nearestDefDist < 5.5 && Math.random() < 0.45 ? `🔥 ${carrier.shortName} ลอดขาเอลาสติโก้!` : `🪄 ${carrier.shortName} สับขาหลอก!`;
           fxColor = '#f472b6';
           advDist = 7.8;
         }
@@ -1854,6 +1884,7 @@ export const MatchModal: React.FC<{
         carrier.acrobatMax = 0.78;
         carrier.acrobatTimer = 0.78;
         carrier.skillSpinDir = Math.random() < 0.5 ? 1 : -1;
+        bumpPlayerStat(carrier.id, 'dribbles');
         nearestDef.intent = 'MARK';
         nearestDef.intentTimer = 0.72;
 
@@ -1885,7 +1916,8 @@ export const MatchModal: React.FC<{
         if (inBoxNow || carrier.isMe || skType === 'burst') {
           triggerDramaSlow(w, 0.78, skillLabel);
         }
-        w.phaseLabel = `${skillLabel}${carrier.sig === 'spd' || carrier.sig === 'str' || carrier.sig === 'cur' ? ` [จุดเด่น: ${SIGL[carrier.sig]}]` : ''}`;
+        const flairTag = agentHasTrait(carrier, 'flair_dribbler') ? ` [${TRAIT_BY_ID.flair_dribbler.name}]` : '';
+        w.phaseLabel = `${skillLabel}${flairTag}`;
         w.phaseTone = 'attack';
         if (inBoxNow || carrier.isMe || Math.random() < 0.36) {
           pushLog(curMin, `🪄 โชว์ทักษะ! ${skillLabel} (${attTeam.name}) ฉีกหนี ${nearestDef.shortName} ได้สำเร็จ!`);
@@ -1898,12 +1930,14 @@ export const MatchModal: React.FC<{
       const foulProb = clamp(
         0.075 +
           (defCfg.press === 2 ? 0.04 : 0) +
-          (nearestDef.tr === 1 ? 0.045 : 0) +
+          (nearestDef.tr === 1 ? 0.04 : 0) +
+          (agentHasTrait(nearestDef, 'hot_headed') ? 0.05 : agentHasTrait(nearestDef, 'calm_leader') ? -0.025 : 0) +
+          (agentHasTrait(nearestDef, 'slide_tackler') ? 0.015 : 0) +
           (isDerby ? 0.025 : 0) +
           (inBoxNow ? 0.065 : 0) -
           ((nearestDef.sig === 'pos' ? nearestDef.d.pos + 8 : nearestDef.d.pos) - 60) * 0.001,
         0.045,
-        0.26
+        0.29
       );
       if (Math.random() < foulProb && curMin >= 2) {
         // FOUL + FREE KICK OR PENALTY (+ VAR Check & In-Match Injury Check)!
@@ -2000,7 +2034,15 @@ export const MatchModal: React.FC<{
           return;
         }
 
-        const cardChance = clamp(0.18 + (nearestDef.tr === 1 ? 0.16 : 0) + (distToGoal < 30 ? 0.12 : 0) + (isDerby ? 0.06 : 0), 0.14, 0.5);
+        const cardChance = clamp(
+          0.18 +
+            (nearestDef.tr === 1 ? 0.14 : 0) +
+            (agentHasTrait(nearestDef, 'hot_headed') ? 0.18 : agentHasTrait(nearestDef, 'calm_leader') ? -0.08 : 0) +
+            (distToGoal < 30 ? 0.12 : 0) +
+            (isDerby ? 0.06 : 0),
+          0.12,
+          0.58
+        );
         let cardLbl = '⚠️ ฟาวล์!';
         let cardCol = '#f59e0b';
         let cardRes: 'Y' | 'R' | null = null;
@@ -2085,16 +2127,21 @@ export const MatchModal: React.FC<{
       }
 
       // Defensive Duel Variety: Slide Tackle ("สไลด์"), Shoulder Clash ("เข้าประทะ"), or Clean Interception ("เข้าสกัด")
-      const carrierDribble = carrier.d.spd * 0.55 + carrier.d.run * 0.45 + (carrier.sig === 'str' || carrier.sig === 'spd' ? 6 : 0);
-      const defTackleEdge = (nearestDef.sig === 'mrk' || nearestDef.sig === 'pos' ? 8 : 0) + (nearestDef.d.rd + nearestDef.d.pos);
+      const carrierDribble = carrier.d.spd * 0.55 + carrier.d.run * 0.45 + (agentHasTrait(carrier, 'flair_dribbler') ? 7 : 0) + (carrier.sig === 'str' || carrier.sig === 'spd' ? 5 : 0);
+      const defTackleEdge =
+        (agentHasTrait(nearestDef, 'man_marker') ? 10 : 0) +
+        (agentHasTrait(nearestDef, 'slide_tackler') ? 8 : 0) +
+        (agentHasTrait(nearestDef, 'pressing_machine') ? 6 : 0) +
+        (nearestDef.sig === 'mrk' || nearestDef.sig === 'pos' ? 6 : 0) +
+        (nearestDef.d.rd + nearestDef.d.pos);
       const tackleProb = clamp(
         0.18 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
         0.10,
-        0.38
+        0.42
       );
       if (Math.random() < tackleProb) {
         const duelRoll = Math.random();
-        const isSlideTackle = duelRoll < (defCfg.press === 2 ? 0.42 : 0.30);
+        const isSlideTackle = duelRoll < ((defCfg.press === 2 ? 0.42 : 0.30) + (agentHasTrait(nearestDef, 'slide_tackler') ? 0.24 : 0));
         const isPhysicalClash = !isSlideTackle && duelRoll < 0.68;
 
         if (isPhysicalClash) {
@@ -2189,8 +2236,8 @@ export const MatchModal: React.FC<{
           b.flightType = 'carry';
           b.shotStyle = undefined;
           w.phaseLabel = isSlideTackle
-            ? `⚡ ${nearestDef.shortName} พุ่งสไลด์กวาดบอลสะอาด!`
-            : `🛡️ ${nearestDef.shortName}${nearestDef.sig === 'rd' || nearestDef.sig === 'mrk' ? ` [${SIGL[nearestDef.sig]}]` : ''} เข้าสกัดแย่งบอลสำเร็จ!`;
+            ? `⚡ ${nearestDef.shortName}${agentHasTrait(nearestDef, 'slide_tackler') ? ' [จอมสไลด์]' : ''} พุ่งสไลด์กวาดบอลสะอาด!`
+            : `🛡️ ${nearestDef.shortName}${agentHasTrait(nearestDef, 'man_marker') ? ' [ตัวประกบติด]' : agentHasTrait(nearestDef, 'interception_hawk') ? ' [เหยี่ยวดักบอล]' : ''} เข้าสกัดแย่งบอลสำเร็จ!`;
           w.phaseTone = 'normal';
           SFX.pass();
           if (isSlideTackle && Math.random() < 0.48) {
@@ -2201,7 +2248,7 @@ export const MatchModal: React.FC<{
           defPool = getTeamPool(side === 'H' ? 'A' : 'H');
           carrier = nearestDef;
           const newlyWonCfg = getEffectiveTeamCfg(side, curMin);
-          if ((newlyWonCfg.pass === 3 || carrier.sig === 'dist' || (newlyWonCfg.tempo === 2 && (newlyWonCfg.tac === 'D' || newlyWonCfg.tac === 'Z'))) && Math.random() < (newlyWonCfg.pass === 3 ? 0.84 : 0.65)) {
+          if ((newlyWonCfg.pass === 3 || carrier.sig === 'dist' || agentHasTrait(carrier, 'ball_playing_cb') || agentHasTrait(carrier, 'long_diagonal') || (newlyWonCfg.tempo === 2 && (newlyWonCfg.tac === 'D' || newlyWonCfg.tac === 'Z'))) && Math.random() < (newlyWonCfg.pass === 3 ? 0.84 : 0.65)) {
             const counterTarget = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.role === 'CAM');
             if (counterTarget) {
               const offChk = checkPassOffside(w, side, carrier, counterTarget, defPool);
@@ -2235,12 +2282,18 @@ export const MatchModal: React.FC<{
       }
     }
 
-    // 3. Should Carrier Shoot? (Tactics-driven: X/A shoots more eagerly; D/Z waits for clear chance)
+    // 3. Should Carrier Shoot? (Tactics-driven + Football Traits)
     const tacShootRange = attCfg.tac === 'X' ? 36 : attCfg.tac === 'A' ? 32 : attCfg.tac === 'Z' ? 24 : 27;
     const tacShootBias = attCfg.tac === 'X' ? 0.08 : attCfg.tac === 'A' ? 0.04 : attCfg.tac === 'Z' ? -0.08 : attCfg.tac === 'D' ? -0.04 : 0;
-    const inShootZone = distToGoal < tacShootRange || (distToGoal < 35 && (carrier.d.pw > 68 || carrier.sig === 'pw'));
+    const isLongShotSpecialist = agentHasTrait(carrier, 'long_shot_lover');
+    const inShootZone = distToGoal < tacShootRange || (distToGoal < (isLongShotSpecialist ? 38 : 35) && (carrier.d.pw > 68 || carrier.sig === 'pw' || isLongShotSpecialist));
+    const shootTraitBias =
+      (agentHasTrait(carrier, 'selfish_shooter') ? 0.14 : 0) +
+      (agentHasTrait(carrier, 'poacher_instinct') && inBoxNow ? 0.12 : 0) +
+      (isLongShotSpecialist && distToGoal >= 20 ? 0.11 : 0) +
+      (agentHasTrait(carrier, 'team_first') && !inBoxNow ? -0.08 : 0);
     const shootChance = inShootZone
-      ? clamp(0.27 + tacShootBias + (33 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.08 : 0), 0.20, 0.78)
+      ? clamp(0.27 + tacShootBias + shootTraitBias + (33 - distToGoal) * 0.025 + (carrier.pos === 'FW' ? 0.14 : 0) + (carrier.sig === 'fin' || carrier.sig === 'pw' || carrier.sig === 'cur' ? 0.07 : 0), 0.18, 0.84)
       : 0;
     if (carrier.pos !== 'GK' && Math.random() < shootChance) {
       let shotStyle: LiveBallState['shotStyle'] = 'normal';
@@ -2249,7 +2302,7 @@ export const MatchModal: React.FC<{
       let maxZAmt = 6 + Math.random() * 3.5;
       let durAmt = clamp(distToGoal / 36, 0.54, 0.82);
 
-      if (inBoxNow && (carrier.sig === 'fin' || carrier.d.fin >= 67) && Math.random() < 0.16) {
+      if (inBoxNow && (agentHasTrait(carrier, 'acrobatic_finisher') || carrier.sig === 'fin' || carrier.d.fin >= 67) && Math.random() < (agentHasTrait(carrier, 'acrobatic_finisher') ? 0.34 : 0.16)) {
         shotStyle = 'bicycle';
         carrier.acrobatType = 'bicycle';
         carrier.acrobatMax = 0.85;
@@ -2258,36 +2311,36 @@ export const MatchModal: React.FC<{
         maxZAmt = 6.8;
         durAmt = 0.56;
         shotLabel = `🤸 ${carrier.shortName} ตีลังกายิงกลางอากาศ!!`;
-      } else if (distToGoal < 14.5 && (carrier.sig === 'fin' || carrier.sig === 'comp' || carrier.d.fin >= 68) && Math.random() < 0.24) {
+      } else if (distToGoal < 14.5 && (agentHasTrait(carrier, 'chip_artist') || carrier.sig === 'fin' || carrier.sig === 'comp' || carrier.d.fin >= 68) && Math.random() < (agentHasTrait(carrier, 'chip_artist') ? 0.48 : 0.24)) {
         shotStyle = 'chip';
         curveAmt = 0;
         maxZAmt = 10.5;
         durAmt = 0.76;
         shotLabel = `🪶 ${carrier.shortName} ชิพข้ามหัวอย่างเหนือชั้น!`;
-      } else if (distToGoal >= 19 && (carrier.sig === 'pw' || carrier.d.pw >= 67) && Math.random() < 0.34) {
+      } else if (distToGoal >= 19 && (agentHasTrait(carrier, 'long_shot_lover') || carrier.sig === 'pw' || carrier.d.pw >= 67) && Math.random() < (agentHasTrait(carrier, 'long_shot_lover') ? 0.44 : 0.34)) {
         shotStyle = 'knuckle';
         curveAmt = (Math.random() - 0.5) * 3.2;
         maxZAmt = 6.2;
         durAmt = 0.58;
         shotLabel = `🌪️ ${carrier.shortName} กดลูกส่ายคนัคเคิลบอล!`;
-      } else if ((carrier.sig === 'cur' || carrier.d.cur >= 66) && Math.random() < 0.36) {
+      } else if ((agentHasTrait(carrier, 'outside_curler') || carrier.sig === 'cur' || carrier.d.cur >= 66) && Math.random() < (agentHasTrait(carrier, 'outside_curler') ? 0.58 : 0.36)) {
         shotStyle = 'trivela';
         curveAmt = (carrier.y < 50 ? -1 : 1) * (6.8 + Math.random() * 4.5);
         maxZAmt = 7.4;
         durAmt = 0.62;
-        shotLabel = `🍌 ${carrier.shortName} ดีดไซด์ก้อยโค้งหักศอก!`;
-      } else if (carrier.sig === 'cur' || (carrier.d.cur >= carrier.d.pw && Math.random() < 0.58)) {
+        shotLabel = `🍌 ${carrier.shortName}${agentHasTrait(carrier, 'outside_curler') ? ' [จอมปั่นไซด์ก้อย]' : ''} ดีดไซด์ก้อยโค้งหักศอก!`;
+      } else if (agentHasTrait(carrier, 'outside_curler') || carrier.sig === 'cur' || (carrier.d.cur >= carrier.d.pw && Math.random() < 0.58)) {
         shotStyle = 'curler';
         curveAmt = (carrier.y < 50 ? 1 : -1) * (7.2 + Math.random() * 5.2);
         maxZAmt = 7.5;
-        shotLabel = `🌀 ${carrier.shortName}${carrier.sig === 'cur' ? ' [ยิงโค้ง]' : ''} ปั่นโค้งๆ เสียบเสา!`;
-      } else if (distToGoal >= 21 && (carrier.sig === 'pw' || carrier.d.pw >= 68)) {
+        shotLabel = `🌀 ${carrier.shortName} ปั่นโค้งๆ เสียบเสา!`;
+      } else if (distToGoal >= 21 && (agentHasTrait(carrier, 'long_shot_lover') || carrier.sig === 'pw' || carrier.d.pw >= 68)) {
         shotStyle = 'screamer';
         curveAmt = (Math.random() - 0.5) * 2.2;
         maxZAmt = 4.6;
         durAmt = 0.50;
-        shotLabel = `💥 ${carrier.shortName}${carrier.sig === 'pw' ? ' [พลังยิง]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
-      } else if (inBoxNow && Math.random() < 0.28) {
+        shotLabel = `💥 ${carrier.shortName}${agentHasTrait(carrier, 'long_shot_lover') ? ' [จอมซัดไกล]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
+      } else if (inBoxNow && Math.random() < (agentHasTrait(carrier, 'acrobatic_finisher') ? 0.44 : 0.28)) {
         shotStyle = 'volley';
         carrier.acrobatType = 'volley';
         carrier.acrobatMax = 0.65;
@@ -2318,20 +2371,21 @@ export const MatchModal: React.FC<{
       return;
     }
 
-    // 4. Wing Cross (Boosted by Wide width & Long Ball; reduced in Narrow/Tiki-Taka)
-    const inWingZone = (carrier.y < 24 || carrier.y > 76) && (attRight ? carrier.x > 62 : carrier.x < 38);
+    // 4. Wing Cross (Boosted by Wide width, Early Crosser & Overlapping Runner)
+    const inWingZone = (carrier.y < 24 || carrier.y > 76) && (attRight ? carrier.x > (agentHasTrait(carrier, 'early_crosser') ? 54 : 62) : carrier.x < (agentHasTrait(carrier, 'early_crosser') ? 46 : 38));
     const crossProb = clamp(
       0.58 +
-        (carrier.sig === 'crs' ? 0.14 : 0) +
+        (agentHasTrait(carrier, 'early_crosser') ? 0.18 : carrier.sig === 'crs' ? 0.12 : 0) +
+        (agentHasTrait(carrier, 'overlapping_runner') ? 0.08 : 0) +
         (attCfg.wid === 2 ? 0.15 : attCfg.wid === 0 ? -0.22 : 0) +
         (attCfg.pass === 2 ? 0.12 : attCfg.pass === 0 ? -0.14 : 0),
       0.24,
-      0.86
+      0.88
     );
     if (inWingZone && Math.random() < crossProb) {
       const boxRunners = attPool
         .filter((a) => a.id !== carrier.id && (a.pos === 'FW' || a.role === 'CAM' || a.role === 'CM'))
-        .sort((u, v) => (attRight ? v.x - u.x : u.x - v.x) + (v.d.hd + v.d.run + (v.sig === 'hd' ? 10 : 0)) * 0.15);
+        .sort((u, v) => (attRight ? v.x - u.x : u.x - v.x) + (v.d.hd + v.d.run + (agentHasTrait(v, 'aerial_menace') ? 16 : 0) + (agentHasTrait(v, 'near_post_runner') ? 10 : 0)) * 0.15);
       const target = boxRunners[0];
       if (target) {
         const offChk = checkPassOffside(w, side, carrier, target, defPool);
@@ -2339,8 +2393,9 @@ export const MatchModal: React.FC<{
           triggerOffsideCall(w, curMin, side, carrier, target, offChk.oppLineX, 'cross', 'ยืนล้ำหน้าจังหวะเปิดบอลเข้ากรอบ');
           return;
         }
-        const boxX = clamp(attRight ? 87 + Math.random() * 6.2 : 6.8 + Math.random() * 6.2, 6, 94);
-        const boxY = clamp(40 + Math.random() * 20, 34, 66);
+        const nearPostTarget = agentHasTrait(target, 'near_post_runner');
+        const boxX = clamp(attRight ? (nearPostTarget ? 90 + Math.random() * 4 : 87 + Math.random() * 6.2) : (nearPostTarget ? 6 + Math.random() * 4 : 6.8 + Math.random() * 6.2), 6, 94);
+        const boxY = clamp(nearPostTarget ? (carrier.y < 50 ? 41 + Math.random() * 6 : 53 + Math.random() * 6) : 40 + Math.random() * 20, 34, 66);
         target.tx = boxX;
         target.ty = boxY;
         target.intent = 'PASS_TARGET';
@@ -2348,16 +2403,17 @@ export const MatchModal: React.FC<{
         b.fromY = carrier.y;
         b.toX = boxX;
         b.toY = boxY;
-        b.curve = (carrier.y < 50 ? 1 : -1) * (carrier.sig === 'crs' || carrier.sig === 'cur' ? 8.8 : 7.5);
+        b.curve = (carrier.y < 50 ? 1 : -1) * (agentHasTrait(carrier, 'early_crosser') || carrier.sig === 'crs' || carrier.sig === 'cur' ? 8.8 : 7.5);
         b.maxZ = 16.5;
         b.progress = 0;
-        b.duration = 0.68;
+        b.duration = agentHasTrait(carrier, 'early_crosser') ? 0.60 : 0.68;
         b.flightType = 'cross';
         b.shotStyle = undefined;
         b.carrierId = null;
         b.targetId = target.id;
         b.lastPasserId = carrier.id;
-        w.phaseLabel = `🪽 ${carrier.shortName}${carrier.sig === 'crs' ? ' [เปิดบอล]' : ''} เปิดบอลโด่งเข้ากรอบ!`;
+        bumpPlayerStat(carrier.id, 'crossAssists');
+        w.phaseLabel = `🪽 ${carrier.shortName}${agentHasTrait(carrier, 'early_crosser') ? ' [ครอสไวข้าง]' : ''} เปิดบอลโด่งเข้ากรอบ!`;
         w.phaseTone = 'attack';
         SFX.kick();
         return;
@@ -2372,9 +2428,15 @@ export const MatchModal: React.FC<{
         .filter((x) => x.d >= 6.0 && x.d <= 19.0)
         .sort((u, v) => u.d - v.d)[0]?.cand;
       const oneTwoProb = clamp(
-        0.20 + (attCfg.pass === 0 ? 0.16 : attCfg.pass === 2 ? -0.10 : 0) + (attCfg.wid === 0 ? 0.08 : 0) + (attCfg.tempo === 2 ? 0.06 : 0),
+        0.20 +
+          (agentHasTrait(carrier, 'one_two_lover') ? 0.18 : 0) +
+          (agentHasTrait(carrier, 'team_first') ? 0.08 : 0) +
+          (agentHasTrait(carrier, 'selfish_shooter') ? -0.10 : 0) +
+          (attCfg.pass === 0 ? 0.16 : attCfg.pass === 2 ? -0.10 : 0) +
+          (attCfg.wid === 0 ? 0.08 : 0) +
+          (attCfg.tempo === 2 ? 0.06 : 0),
         0.08,
-        0.44
+        0.52
       );
       if (partner && Math.random() < oneTwoProb) {
         const runDestX = clamp(carrier.x + dir * (10 + Math.random() * 5), 6, 94);
@@ -2399,6 +2461,7 @@ export const MatchModal: React.FC<{
         b.carrierId = null;
         b.targetId = partner.id;
         b.lastPasserId = carrier.id;
+        bumpPlayerStat(carrier.id, 'crossAssists');
         addWorldFx(w, {
           type: 'onetwo',
           x: carrier.x,
@@ -2424,19 +2487,21 @@ export const MatchModal: React.FC<{
 
     const throughWeight = clamp(
       (attCfg.pass === 3 ? 0.45 : attCfg.pass === 2 ? 0.34 : attCfg.pass === 1 ? 0.28 : 0.20) +
+        (agentHasTrait(carrier, 'killer_passer') ? 0.20 : 0) +
+        (agentHasTrait(carrier, 'team_first') ? 0.06 : 0) +
         (attCfg.tempo === 2 ? 0.08 : attCfg.tempo === 0 ? -0.05 : 0) +
         (attCfg.tac === 'X' || attCfg.tac === 'A' ? 0.05 : 0),
       0.14,
-      0.56
+      0.66
     );
     if (forwardRunners.length && (attRight ? carrier.x > 34 : carrier.x < 66) && Math.random() < throughWeight) {
       const runner =
-        forwardRunners.sort((u, v) => (v.d.run + v.d.spd + (v.sig === 'run' ? 12 : 0)) - (u.d.run + u.d.spd + (u.sig === 'run' ? 12 : 0)))[0] || P(forwardRunners);
+        forwardRunners.sort((u, v) => (v.d.run + v.d.spd + (v.sig === 'run' ? 10 : 0) + (agentHasTrait(v, 'offside_trap_breaker') ? 16 : 0)) - (u.d.run + u.d.spd + (u.sig === 'run' ? 10 : 0) + (agentHasTrait(u, 'offside_trap_breaker') ? 16 : 0)))[0] || P(forwardRunners);
       const offChk = checkPassOffside(w, side, carrier, runner, defPool);
       const trapEdge = defCfg.line === 2 ? 0.18 : defCfg.line === 1 ? 0.1 : 0.04;
-      const trapChance = clamp(trapEdge - ((runner.sig === 'run' ? runner.d.run + 8 : runner.d.run) - 60) * 0.003, 0.02, 0.2);
+      const trapChance = clamp(trapEdge - (agentHasTrait(runner, 'offside_trap_breaker') ? 0.09 : 0) - ((runner.sig === 'run' ? runner.d.run + 8 : runner.d.run) - 60) * 0.003, 0.01, 0.2);
 
-      if (offChk.isOffside) {
+      if (offChk.isOffside && !(agentHasTrait(runner, 'offside_trap_breaker') && Math.random() < 0.45)) {
         triggerOffsideCall(w, curMin, side, carrier, runner, offChk.oppLineX, 'through', 'ยืนล้ำแนวรับจังหวะแทงทะลุช่อง');
         return;
       }
@@ -2451,7 +2516,7 @@ export const MatchModal: React.FC<{
       runner.tx = leadX;
       runner.ty = leadY;
       runner.intent = 'PASS_TARGET';
-      const isLoftedThrough = Math.hypot(leadX - carrier.x, leadY - carrier.y) > 25 && (attCfg.pass >= 2 || carrier.sig === 'dist' || Math.random() < 0.42);
+      const isLoftedThrough = Math.hypot(leadX - carrier.x, leadY - carrier.y) > 25 && (attCfg.pass >= 2 || carrier.sig === 'dist' || agentHasTrait(carrier, 'long_diagonal') || Math.random() < 0.42);
       b.fromX = carrier.x;
       b.fromY = carrier.y;
       b.toX = leadX;
@@ -2465,6 +2530,7 @@ export const MatchModal: React.FC<{
       b.carrierId = null;
       b.targetId = runner.id;
       b.lastPasserId = carrier.id;
+      bumpPlayerStat(carrier.id, 'crossAssists');
       if (!isLoftedThrough) {
         addWorldFx(w, {
           type: 'through',
@@ -2479,8 +2545,8 @@ export const MatchModal: React.FC<{
         });
       }
       w.phaseLabel = isLoftedThrough
-        ? `↗️ ${carrier.shortName} ตักบอลโด่งข้ามไลน์ให้ ${runner.shortName}!`
-        : `👟 ${carrier.shortName} แทงทะลุช่องให้ ${runner.shortName}${runner.sig === 'run' ? ' [วิ่งหาช่อง]' : ''}!`;
+        ? `↗️ ${carrier.shortName}${agentHasTrait(carrier, 'long_diagonal') ? ' [วางบอลยาว]' : ''} ตักบอลโด่งข้ามไลน์ให้ ${runner.shortName}!`
+        : `👟 ${carrier.shortName}${agentHasTrait(carrier, 'killer_passer') ? ' [คิลเลอร์พาส]' : ''} แทงทะลุช่องให้ ${runner.shortName}${agentHasTrait(runner, 'offside_trap_breaker') ? ' [ฉีกกับดักล้ำหน้า]' : ''}!`;
       w.phaseTone = 'attack';
       SFX.pass();
       return;
@@ -2491,7 +2557,8 @@ export const MatchModal: React.FC<{
     const baseDrib = carrierNormX < 22 ? 0.06 : carrierNormX > 87 ? 0.15 : carrier.pos === 'FW' || carrier.role === 'CAM' || carrier.role === 'CF' ? 0.31 : 0.21;
     const tempoDribAdj = attCfg.tempo === 2 ? -0.10 : attCfg.tempo === 0 ? 0.07 : 0;
     const passDribAdj = attCfg.pass === 0 ? -0.05 : 0;
-    const dribbleBias = clamp(baseDrib + tempoDribAdj + passDribAdj, 0.04, 0.40);
+    const traitDribAdj = (agentHasTrait(carrier, 'flair_dribbler') ? 0.09 : 0) + (agentHasTrait(carrier, 'tempo_controller') ? -0.05 : 0);
+    const dribbleBias = clamp(baseDrib + tempoDribAdj + passDribAdj + traitDribAdj, 0.04, 0.44);
     if (carrier.pos !== 'GK' && Math.random() < dribbleBias) {
       const stepFwd = carrierNormX > 86 ? 1 + Math.random() * 2.8 : 6 + Math.random() * 7.5;
       const advX = clamp(carrier.x + dir * stepFwd, 7.5, 92.5);
@@ -2510,12 +2577,13 @@ export const MatchModal: React.FC<{
       b.shotStyle = undefined;
       b.carrierId = carrier.id;
       b.targetId = null;
+      bumpPlayerStat(carrier.id, 'dribbles');
       w.phaseLabel = carrierNormX > 82 ? `⚡ ${carrier.shortName} แหวกตัดเข้ากลางหาจังหวะ` : `⚡ ${carrier.shortName} พาบอลลุยขึ้นหน้า`;
       w.phaseTone = attRight ? (carrier.x > 65 ? 'attack' : 'normal') : carrier.x < 35 ? 'attack' : 'normal';
       return;
     }
 
-    // 7. Ground Pass / Cutback / Flair Pass / Lofted Diagonal Switch (Guided strictly by Passing Style, Width, Tempo & Mentality)
+    // 7. Ground Pass / Cutback / Flair Pass / Lofted Diagonal Switch
     const passCandidates = attPool.filter((a) => a.id !== carrier.id && (a.pos !== 'GK' || (attRight ? carrier.x < 32 : carrier.x > 68)));
     if (passCandidates.length) {
       const nearByline = carrierNormX >= 83;
@@ -2524,17 +2592,14 @@ export const MatchModal: React.FC<{
         const prog = (cand.x - carrier.x) * dir;
         const candNormX = attRight ? cand.x : 100 - cand.x;
         let wgt = 10;
-        if (attCfg.pass === 0) {
-          // Short Passing: reward close triangles (< 22) and quick safe support
+        if (attCfg.pass === 0 || agentHasTrait(carrier, 'tempo_controller')) {
           wgt += dist < 22 ? 30 : -dist * 0.65;
           if (cand.role === 'CF' || cand.role === 'CM' || cand.role === 'CAM' || cand.role === 'CDM') wgt += 11;
-        } else if (attCfg.pass === 2 || carrier.sig === 'dist') {
-          // Long Ball: reward forward verticality & wide switches
+        } else if (attCfg.pass === 2 || carrier.sig === 'dist' || agentHasTrait(carrier, 'long_diagonal') || agentHasTrait(carrier, 'ball_playing_cb')) {
           wgt += prog > 12 ? 28 : prog < 0 ? -6 : 2;
           if (Math.abs(cand.y - carrier.y) > 25) wgt += 16;
           if (cand.pos === 'FW') wgt += 12;
         } else if (attCfg.pass === 3) {
-          // Counter-Attack: aggressively find forward outlets
           wgt += prog > 10 ? 32 : -12;
           if (cand.pos === 'FW' || cand.role === 'LW' || cand.role === 'RW') wgt += 14;
         } else {
@@ -2542,16 +2607,13 @@ export const MatchModal: React.FC<{
           wgt -= Math.abs(dist - 20) * 0.4;
         }
 
-        // Width preference: Wide favors wingers/FBs on flanks; Narrow favors central spine
         const candWide = cand.y < 24 || cand.y > 76;
         if (attCfg.wid === 2 && candWide) wgt += 14;
         if (attCfg.wid === 0 && !candWide) wgt += 12;
 
-        // Tempo preference: Slow retains safe ball; Fast looks forward
         if (attCfg.tempo === 0 && prog > -8 && prog <= 10) wgt += 10;
         if (attCfg.tempo === 2 && prog > 6) wgt += 10;
 
-        // Smart cutback option: when carrier is deep near goal, reward pulling back to edge of box (Zone 14)
         if (nearByline && candNormX >= 72 && candNormX <= 85 && prog >= -16 && prog <= 2 && Math.abs(cand.y - 50) <= 26) {
           wgt += 24;
         }
@@ -2565,13 +2627,13 @@ export const MatchModal: React.FC<{
       const dist = Math.hypot(receiver.x - carrier.x, receiver.y - carrier.y);
       const isLofted =
         (attCfg.pass !== 0 && dist > 26) ||
-        ((attCfg.pass === 2 || carrier.sig === 'dist' || carrier.sig === 'crs') && dist > 20 && Math.random() < (attCfg.pass === 2 ? 0.78 : 0.62));
+        ((attCfg.pass === 2 || carrier.sig === 'dist' || carrier.sig === 'crs' || agentHasTrait(carrier, 'long_diagonal') || agentHasTrait(carrier, 'ball_playing_cb')) && dist > 20 && Math.random() < (attCfg.pass === 2 ? 0.78 : 0.62));
       const passOffChk = checkPassOffside(w, side, carrier, receiver, defPool);
       if (passOffChk.isOffside) {
         triggerOffsideCall(w, curMin, side, carrier, receiver, passOffChk.oppLineX, isLofted ? 'lofted' : 'pass', 'ยืนอยู่ในตำแหน่งล้ำหน้าตอนเพื่อนส่งบอล');
         return;
       }
-      const isFlairPass = !isLofted && carrierNormX > 26 && dist < 18 && carrier.pos !== 'GK' && (carrier.d.cur >= 66 || carrier.sig === 'cur') && Math.random() < 0.14;
+      const isFlairPass = !isLofted && carrierNormX > 26 && dist < 18 && carrier.pos !== 'GK' && (agentHasTrait(carrier, 'flair_dribbler') || carrier.d.cur >= 66 || carrier.sig === 'cur') && Math.random() < (agentHasTrait(carrier, 'flair_dribbler') ? 0.24 : 0.14);
       if (isFlairPass) {
         carrier.acrobatType = 'skill_pass';
         carrier.acrobatMax = 0.55;
@@ -2592,7 +2654,7 @@ export const MatchModal: React.FC<{
       b.targetId = receiver.id;
       b.lastPasserId = carrier.id;
       w.phaseLabel = isLofted
-        ? `↗️ ${carrier.shortName}${carrier.sig === 'dist' ? ' [จ่ายแนวหลัง]' : ''} เปิดบอลโด่งเปลี่ยนแกนให้ ${receiver.shortName}`
+        ? `↗️ ${carrier.shortName}${agentHasTrait(carrier, 'long_diagonal') ? ' [เปิดทะแยงมุม]' : agentHasTrait(carrier, 'ball_playing_cb') ? ' [วางบอลจากแนวรับ]' : ''} เปิดบอลโด่งเปลี่ยนแกนให้ ${receiver.shortName}`
         : isFlairPass
           ? `✨ ${carrier.shortName} ตอกส้น/ไขว้หลังสุดพริ้วให้ ${receiver.shortName}`
           : `⚽ ${carrier.shortName} เคาะบอลให้ ${receiver.shortName}`;
@@ -3472,7 +3534,7 @@ export const MatchModal: React.FC<{
           type: 'save',
           x: b.toX,
           y: b.toY,
-          label: `🧤 ซูเปอร์เซฟ! ${gk?.shortName || 'ผู้รักษาประตู'}${gk?.sig === 'sv' ? ' [เซฟเด่น]' : ''}`,
+          label: `🧤 ซูเปอร์เซฟ! ${gk?.shortName || 'ผู้รักษาประตู'}${agentHasTrait(gk, 'reflex_cat') ? ' [ปฏิกิริยาแมวป่า]' : ''}`,
           color: '#38bdf8',
           ttl: 2.5,
           maxTtl: 2.5
@@ -3537,16 +3599,15 @@ export const MatchModal: React.FC<{
       const attRightNow = isAttackRight(w, side);
       const goalTargetX = attRightNow ? 100 : 0;
 
-      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 14 : 0)) * 0.68 + target.d.run * 0.32 : 58;
+      const attAir = target ? (target.d.hd + (target.sig === 'hd' ? 12 : 0) + (agentHasTrait(target, 'aerial_menace') ? 16 : 0) + (agentHasTrait(target, 'near_post_runner') ? 8 : 0)) * 0.68 + target.d.run * 0.32 : 58;
       const defAir = topDef
         ? topDef.pos === 'GK'
-          ? (topDef.d.cl + (topDef.sig === 'cl' ? 10 : 0)) * 0.7 + topDef.d.sv * 0.3
-          : (topDef.d.hd + (topDef.sig === 'hd' ? 10 : 0)) * 0.6 + topDef.d.pos * 0.4
+          ? (topDef.d.cl + (topDef.sig === 'cl' ? 8 : 0) + (agentHasTrait(topDef, 'sweeper_keeper') ? 8 : 0)) * 0.7 + topDef.d.sv * 0.3
+          : (topDef.d.hd + (topDef.sig === 'hd' ? 8 : 0) + (agentHasTrait(topDef, 'aerial_menace') ? 12 : 0)) * 0.6 + topDef.d.pos * 0.4
         : 60;
-      const winHeaderProb = clamp(0.48 + (attAir - defAir) * 0.007, 0.26, 0.76);
+      const winHeaderProb = clamp(0.48 + (attAir - defAir) * 0.007, 0.26, 0.78);
 
       if (target && Math.random() < winHeaderProb) {
-        // Align jumper smoothly onto impact zone and face goal
         if (Math.hypot(target.x - b.toX, target.y - b.toY) < 9) {
           target.x = b.toX * 0.65 + target.x * 0.35;
           target.y = b.toY * 0.65 + target.y * 0.35;
@@ -3554,10 +3615,10 @@ export const MatchModal: React.FC<{
         target.facing = Math.atan2(50 - target.y, goalTargetX - target.x);
 
         const acroRoll = Math.random();
-        const hdPriority = target.sig === 'hd' || target.d.hd >= 68;
-        const isBicycle = acroRoll < (hdPriority ? 0.08 : target.sig === 'fin' || target.d.fin >= 70 ? 0.14 : 0.09);
-        const isVolley = !isBicycle && acroRoll < (hdPriority ? 0.24 : 0.34);
-        const isDivingHeader = !isBicycle && !isVolley && (target.sig === 'hd' || target.d.hd >= 64) && Math.random() < 0.26;
+        const hdPriority = agentHasTrait(target, 'aerial_menace') || target.sig === 'hd' || target.d.hd >= 68;
+        const isBicycle = acroRoll < (agentHasTrait(target, 'acrobatic_finisher') ? 0.22 : hdPriority ? 0.08 : target.sig === 'fin' || target.d.fin >= 70 ? 0.14 : 0.09);
+        const isVolley = !isBicycle && acroRoll < (agentHasTrait(target, 'acrobatic_finisher') ? 0.46 : hdPriority ? 0.24 : 0.34);
+        const isDivingHeader = !isBicycle && !isVolley && (agentHasTrait(target, 'aerial_menace') || target.sig === 'hd' || target.d.hd >= 64) && Math.random() < (agentHasTrait(target, 'aerial_menace') ? 0.38 : 0.26);
         const chosenStyle: LiveBallState['shotStyle'] = isBicycle
           ? 'bicycle'
           : isVolley
@@ -3601,7 +3662,8 @@ export const MatchModal: React.FC<{
           target.acrobatType = 'header';
           target.acrobatMax = 0.68;
           target.acrobatTimer = 0.68;
-          w.phaseLabel = `🗣️ ${target.shortName}${target.sig === 'hd' ? ' [โหม่งเด่น]' : ''} เทกตัวโหม่งเต็มๆ!`;
+          bumpPlayerStat(target.id, 'headers');
+          w.phaseLabel = `🗣️ ${target.shortName}${agentHasTrait(target, 'aerial_menace') ? ' [ราชาลูกกลางอากาศ]' : ''} เทกตัวโหม่งเต็มๆ!`;
           triggerDramaSlow(w, 1.05, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
         }
         w.phaseTone = 'danger';
@@ -3663,6 +3725,8 @@ export const MatchModal: React.FC<{
           topDef.acrobatType = 'header';
           topDef.acrobatMax = 0.64;
           topDef.acrobatTimer = 0.64;
+          bumpPlayerStat(topDef.id, 'headers');
+          bumpPlayerStat(topDef.id, 'tackles');
           const clearX = clamp(topDef.x + clearDir * (16 + Math.random() * 12), 14, 86);
           const clearY = clamp(topDef.y + (Math.random() - 0.5) * 28, 12, 88);
           const outlet =
@@ -3720,6 +3784,7 @@ export const MatchModal: React.FC<{
           receiver.acrobatType = 'header';
           receiver.acrobatMax = 0.58;
           receiver.acrobatTimer = 0.58;
+          bumpPlayerStat(receiver.id, 'headers');
           receiver.facing = Math.atan2(0, dir);
           // Flick-on header to a forward partner ahead if in attacking half!
           const partner = attPool.find(
@@ -3765,6 +3830,7 @@ export const MatchModal: React.FC<{
           nearestOpp.acrobatTimer = 0.58;
           nearestOpp.facing = Math.atan2(0, -dir);
           adjustLiveForm(nearestOpp.id, 0.14);
+          bumpPlayerStat(nearestOpp.id, 'headers');
           bumpPlayerStat(nearestOpp.id, 'tackles');
           const clearX = clamp(nearestOpp.x - dir * (12 + Math.random() * 8), 8, 92);
           const clearY = clamp(nearestOpp.y + (Math.random() - 0.5) * 20, 10, 90);
@@ -3799,13 +3865,14 @@ export const MatchModal: React.FC<{
       }
 
       const interceptProb =
-        oppDist < 6.8
+        oppDist < (agentHasTrait(nearestOpp, 'interception_hawk') ? 8.0 : 6.8)
           ? clamp(
               0.16 +
-                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 10 : nearestOpp?.d.rd || 60) - 60) * 0.004) +
+                (((nearestOpp?.sig === 'rd' ? (nearestOpp?.d.rd || 60) + 8 : nearestOpp?.d.rd || 60) + (agentHasTrait(nearestOpp, 'interception_hawk') ? 14 : 0) - 60) * 0.004) +
+                (agentHasTrait(nearestOpp, 'pressing_machine') ? 0.04 : 0) +
                 (b.flightType === 'through' ? 0.14 : b.flightType === 'lofted' ? -0.05 : b.flightType === 'onetwo' ? -0.04 : 0),
               0.07,
-              0.45
+              0.50
             )
           : 0;
       if (nearestOpp && Math.random() < interceptProb) {
@@ -3820,7 +3887,7 @@ export const MatchModal: React.FC<{
         b.y = nearestOpp.y;
         b.flightType = 'carry';
         b.shotStyle = undefined;
-        w.phaseLabel = `🔀 ${nearestOpp.shortName}${nearestOpp.sig === 'rd' ? ' [อ่านเกม]' : ''} อ่านทางบอลดักตัดไว้ได้!`;
+        w.phaseLabel = `🔀 ${nearestOpp.shortName}${agentHasTrait(nearestOpp, 'interception_hawk') ? ' [เหยี่ยวดักบอล]' : ''} อ่านทางบอลดักตัดไว้ได้!`;
         w.phaseTone = 'normal';
         SFX.pass();
         return;
@@ -3850,6 +3917,7 @@ export const MatchModal: React.FC<{
           b.carrierId = null;
           b.targetId = passer.id;
           b.lastPasserId = receiver.id;
+          bumpPlayerStat(receiver.id, 'crossAssists');
           addWorldFx(w, {
             type: 'through',
             x: receiver.x,
@@ -3897,16 +3965,18 @@ export const MatchModal: React.FC<{
       const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
       if (!pl) return;
       const D = DT(pl, state.p);
-      const staBonus = D.sig === 'sta' ? 0.8 : 1;
+      const plTraits = pl.traits || [];
+      const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
       const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.06 : sideCfg.tac === 'Z' ? -0.05 : 0);
       const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * pressLoad * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
       let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
-      if (curFit < 48) formDelta -= 0.055;
-      else if (curFit < 58) formDelta -= 0.025;
-      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * 0.12;
+      if (plTraits.includes('clutch_player') && curMin >= 70) formDelta += 0.015;
+      if (curFit < 48) formDelta -= plTraits.includes('consistency_pro') ? 0.03 : 0.055;
+      else if (curFit < 58) formDelta -= plTraits.includes('consistency_pro') ? 0.012 : 0.025;
+      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (plTraits.includes('consistency_pro') ? 0.07 : 0.12);
       if (formDelta !== 0) adjustLiveForm(n, formDelta);
       if (curFit < 56 && pl.pos !== 'GK' && Math.random() < 0.08) {
         const ag = w.agents.find((a) => a.id === n);
@@ -4050,16 +4120,18 @@ export const MatchModal: React.FC<{
       const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
       if (!pl) return;
       const D = DT(pl, state.p);
-      const staBonus = D.sig === 'sta' ? 0.8 : 1;
+      const plTraits = pl.traits || [];
+      const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
       const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.06 : sideCfg.tac === 'Z' ? -0.05 : 0);
       const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * pressLoad * (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
       let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
-      if (curFit < 48) formDelta -= 0.055;
-      else if (curFit < 58) formDelta -= 0.025;
-      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * 0.12;
+      if (plTraits.includes('clutch_player') && curMin >= 70) formDelta += 0.015;
+      if (curFit < 48) formDelta -= plTraits.includes('consistency_pro') ? 0.03 : 0.055;
+      else if (curFit < 58) formDelta -= plTraits.includes('consistency_pro') ? 0.012 : 0.025;
+      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (plTraits.includes('consistency_pro') ? 0.07 : 0.12);
       if (formDelta !== 0) adjustLiveForm(n, formDelta);
       const ag = w.agents.find((a) => a.id === n);
       if (ag) ag.fit = sr.liveFit[n];
@@ -4143,6 +4215,118 @@ export const MatchModal: React.FC<{
 
     runAiSubForSide(true);
     runAiSubForSide(false);
+
+    // Smart Position-Matched Auto-Substitution for Manager Mode (Youth Talent Experience + Ready Fit Players)
+    if (state.mode === 'm' && autoSubEnabledRef.current && !sr.done) {
+      const mySubsCount = meIsHome ? sr.homeSubsCount : sr.awaySubsCount;
+      if (mySubsCount < 5) {
+        const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+        const myPlayed = meIsHome ? sr.homePlayed : sr.awayPlayed;
+        const availBench = meTeamOrig.sq.filter(
+          (q) => !myLu.includes(q.n) && !myPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n)
+        );
+        if (availBench.length > 0) {
+          const myGoals = meIsHome ? sr.gh : sr.ga;
+          const oppGoals = meIsHome ? sr.ga : sr.gh;
+          const isSafeLead = myGoals - oppGoals >= 2 || (curMin >= 74 && myGoals > oppGoals);
+          const scheduledMins = [56, 63, 70, 77, 84];
+          const onPitch = myLu
+            .map((n, idx) => ({ idx, n, pl: meTeamOrig.sq.find((q) => q.n === n) }))
+            .filter((x): x is { idx: number; n: string; pl: Player } => Boolean(x.pl) && !sr.sentOff.includes(x.n));
+
+          // Check emergency first: injured on pitch or critically fatigued (<54%)
+          let outPick = onPitch.find((x) => sr.injuredNames.includes(x.n))
+            || onPitch
+              .filter((x) => x.pl.pos !== 'GK' && (sr.liveFit[x.n] ?? x.pl.fit ?? 100) < 54)
+              .sort((a, b) => (sr.liveFit[a.n] ?? 100) - (sr.liveFit[b.n] ?? 100))[0];
+
+          const isScheduledWindow = scheduledMins.includes(curMin) && mySubsCount < scheduledMins.indexOf(curMin) + 1;
+          if (!outPick && curMin >= 56 && (isScheduledWindow || curMin % 5 === 0)) {
+            outPick = onPitch
+              .filter((x) => x.pl.pos !== 'GK')
+              .map((x) => {
+                const fitNow = sr.liveFit[x.n] ?? x.pl.fit ?? 100;
+                const yCnt = sr.yellows[x.n] || 0;
+                const rtNow = sr.liveForm[x.n] ?? 6.5;
+                // Prioritize taking off tired, yellow-carded, older veterans (or when protecting lead, rest key seniors so youths get minutes)
+                const fatigueNeed = (100 - fitNow) * 1.15;
+                const cardRisk = yCnt > 0 ? 18 : 0;
+                const lowFormBonus = rtNow < 6.1 ? 10 : 0;
+                const protectVeteran = isSafeLead && x.pl.age >= 24 ? 16 : 0;
+                const keepYoungster = x.pl.age <= 21 && fitNow >= 64 ? -22 : 0;
+                return { ...x, outScore: fatigueNeed + cardRisk + lowFormBonus + protectVeteran + keepYoungster };
+              })
+              .filter((x) => x.outScore >= (isSafeLead ? 18 : 26) || (sr.liveFit[x.n] ?? 100) <= 72)
+              .sort((a, b) => b.outScore - a.outScore)[0];
+          }
+
+          if (outPick) {
+            const outPl = outPick.pl;
+            const posMatchedPool = availBench.filter((b) =>
+              outPl.pos === 'GK' ? b.pos === 'GK' : b.pos === outPl.pos
+            );
+            const candidatePool = posMatchedPool.length > 0
+              ? posMatchedPool
+              : outPl.pos === 'GK'
+                ? []
+                : availBench.filter((b) => b.pos !== 'GK');
+
+            if (candidatePool.length > 0) {
+              const bestCand = candidatePool
+                .map((cand) => {
+                  const fitCand = cand.fit ?? 100;
+                  const tl = getPlayerTalent(cand, null);
+                  const exactRoleBonus = cand.ro === outPl.ro ? 48 : cand.pos === outPl.pos ? 28 : -15;
+                  const isTalentedYouth = cand.age <= 22 && tl >= 65;
+                  const youthExpBonus = isTalentedYouth
+                    ? (isSafeLead ? 34 : 22) + (tl - 60) * 0.65 + (cand.age <= 19 ? 8 : 0)
+                    : cand.age <= 23
+                      ? 8
+                      : 0;
+                  const readyFitBonus = fitCand >= 82 ? 18 + (fitCand - 82) * 0.4 : fitCand < 64 ? -35 : 0;
+                  const score = exactRoleBonus + youthExpBonus + readyFitBonus + cand.ov * 0.45 + tl * 0.12;
+                  return { cand, tl, isTalentedYouth, fitCand, score };
+                })
+                .sort((a, b) => b.score - a.score)[0];
+
+              if (bestCand && (bestCand.cand.pos === outPl.pos || sr.injuredNames.includes(outPl.n) || (sr.liveFit[outPl.n] ?? 100) < 55)) {
+                const { cand, tl, isTalentedYouth, fitCand } = bestCand;
+                myLu[outPick.idx] = cand.n;
+                if (!myPlayed.includes(cand.n)) myPlayed.push(cand.n);
+                if (meIsHome) sr.homeSubsCount++;
+                else sr.awaySubsCount++;
+                const subEv: MatchSubEvent = { m: curMin, t: meTeamOrig.id, inPlayer: cand.n, outPlayer: outPl.n };
+                sr.subs.push(subEv);
+
+                const agIdx = w.agents.findIndex((a) => a.id === outPl.n);
+                if (agIdx >= 0) {
+                  const rep = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+                  if (rep[outPick.idx]) {
+                    rep[outPick.idx].x = w.agents[agIdx].x;
+                    rep[outPick.idx].y = w.agents[agIdx].y;
+                    rep[outPick.idx].facing = w.agents[agIdx].facing;
+                    w.agents[agIdx] = rep[outPick.idx];
+                  }
+                  if (w.ball.carrierId === outPl.n) w.ball.carrierId = cand.n;
+                  if (w.ball.targetId === outPl.n) w.ball.targetId = cand.n;
+                }
+
+                setLiveLu(myLu.slice());
+                setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
+                setSubLog(sr.subs.slice());
+                const reasonTag = sr.injuredNames.includes(outPl.n)
+                  ? `แทนผู้เจ็บ · ตรงตำแหน่ง ${cand.ro}`
+                  : isTalentedYouth
+                    ? `ปั้นดาวรุ่งเก็บประสบการณ์ · อายุ ${cand.age} พรสวรรค์ ${tl}`
+                    : `ตัวพร้อมลง · ฟิต ${Math.round(fitCand)}%`;
+                pushLog(curMin, `🤖 ออโต้เปลี่ยนตัว (${reasonTag}): 🟢 ${cand.n} (${cand.ro}) แทน 🔴 ${outPl.n}`, 'sub');
+                if (injuryAlert && injuryAlert.name === outPl.n) setInjuryAlert(null);
+              }
+            }
+          }
+        }
+      }
+    }
 
     if (state.mode === 'm' && state.rules && state.rules.length) {
       const myGoals = meIsHome ? sr.gh : sr.ga;
@@ -4528,9 +4712,20 @@ export const MatchModal: React.FC<{
               const b = w.ball;
               const kicker = w.agents.find((a) => !a.sentOff && a.id === sh.kickerName);
               const gk = w.agents.find((a) => !a.sentOff && a.side !== sh.turn && a.pos === 'GK');
-              const kickScore = kicker ? kicker.d.fin * 0.5 + (kicker.d.comp || 62) * 0.5 : 64;
-              const gkScore = gk ? gk.d.sv * 0.58 + gk.d.cl * 0.42 : 60;
-              const scored = Math.random() < clamp(0.75 + (kickScore - gkScore) * 0.0045, 0.56, 0.88);
+              const kickScore = kicker
+                ? kicker.d.fin * 0.5 +
+                  (kicker.d.comp || 62) * 0.5 +
+                  (agentHasTrait(kicker, 'clutch_player') ? 8 : 0) +
+                  (agentHasTrait(kicker, 'consistency_pro') ? 5 : 0) +
+                  (agentHasTrait(kicker, 'setpiece_specialist') ? 6 : 0)
+                : 64;
+              const gkScore = gk
+                ? gk.d.sv * 0.58 +
+                  gk.d.cl * 0.42 +
+                  (agentHasTrait(gk, 'penalty_saver') ? 11 : 0) +
+                  (agentHasTrait(gk, 'reflex_cat') ? 5 : 0)
+                : 60;
+              const scored = Math.random() < clamp(0.75 + (kickScore - gkScore) * 0.0045, 0.54, 0.90);
               const shotY = 43.0 + Math.random() * 14.0;
 
               b.fromX = 88.5;
@@ -5205,6 +5400,39 @@ export const MatchModal: React.FC<{
   const handleConfirmFinish = () => {
     if (!fullTimeAnalysis) return;
     const srDone = simRef.current;
+    const myGoalsCount = meIsHome ? srDone.gh : srDone.ga;
+    const oppGoalsCount = meIsHome ? srDone.ga : srDone.gh;
+    const isWin =
+      myGoalsCount > oppGoalsCount ||
+      Boolean(penResult && ((meIsHome && penResult.winnerHome) || (!meIsHome && !penResult.winnerHome)));
+    const isCleanSheet = oppGoalsCount === 0;
+    const myPlayedList = fullTimeAnalysis.playedNames[meTeamOrig.id] || [];
+    const playerActions: Record<string, Partial<Record<PersonalMissionMetric, number>>> = {};
+    myPlayedList.forEach((plName) => {
+      const sqObj = meTeamOrig.sq.find((q) => q.n === plName);
+      if (!sqObj) return;
+      const st = srDone.playerStats[plName] || { shots: 0, onTarget: 0, passes: 0, tackles: 0, saves: 0, blocks: 0 };
+      const qGoals = srDone.evs.filter((e) => e.t === meTeamOrig.id && e.who === plName).length;
+      const qAssists = srDone.evs.filter((e) => e.t === meTeamOrig.id && e.as === plName).length;
+      const qRt = fullTimeAnalysis.ratings[plName] ?? 6.5;
+      playerActions[plName] = {
+        matches: 1,
+        wins: isWin ? 1 : 0,
+        cleanSheets: isCleanSheet && (sqObj.pos === 'GK' || sqObj.pos === 'DF') ? 1 : 0,
+        highRatings: qRt >= 7.2 ? 1 : 0,
+        goals: qGoals,
+        shots: st.shots || 0,
+        onTarget: st.onTarget || 0,
+        passes: st.passes || 0,
+        tackles: st.tackles || 0,
+        blocks: st.blocks || 0,
+        saves: st.saves || 0,
+        setpieces: st.setpieces || 0,
+        crossAssists: (st.crossAssists || 0) + qAssists,
+        dribbles: st.dribbles || 0,
+        headers: st.headers || 0
+      };
+    });
     SFX.tap();
     onFinish({
       gh: srDone.gh,
@@ -5222,7 +5450,8 @@ export const MatchModal: React.FC<{
       cards: fullTimeAnalysis.cards,
       subs: fullTimeAnalysis.subs,
       playedNames: fullTimeAnalysis.playedNames,
-      injuries: srDone.injuries.slice()
+      injuries: srDone.injuries.slice(),
+      playerActions
     });
   };
 
@@ -5603,6 +5832,38 @@ export const MatchModal: React.FC<{
                   </button>
                 ) : (
                   <>
+                    {state.mode === 'm' && (
+                      <button
+                        type="button"
+                        title={
+                          autoSubEnabled
+                            ? 'เปิดอยู่: เปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ส่งดาวรุ่งมีพรสวรรค์ / นักเตะฟิตพร้อมลง) — กดเพื่อปิด'
+                            : 'ปิดอยู่: กดเพื่อเปิดเปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ดาวรุ่งมีพรสวรรค์ / ตัวพร้อม)'
+                        }
+                        aria-label="เปิด/ปิด เปลี่ยนตัวอัตโนมัติตามตำแหน่ง"
+                        onClick={() => {
+                          SFX.tap();
+                          setAutoSubEnabled((v) => {
+                            const next = !v;
+                            pushLog(
+                              minute,
+                              next
+                                ? '🤖 เปิดระบบเปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ดันดาวรุ่งมีพรสวรรค์ & ตัวฟิตพร้อม)'
+                                : '🤖 ปิดระบบเปลี่ยนตัวอัตโนมัติ (คุมเปลี่ยนตัวด้วยตนเอง)',
+                              'sys'
+                            );
+                            return next;
+                          });
+                        }}
+                        className={`h-7 mland:h-6 px-2 rounded-lg border text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer whitespace-nowrap transition-colors ${
+                          autoSubEnabled
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-700 dark:text-emerald-300 shadow-xs'
+                            : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {autoSubEnabled ? '🤖 ออโต้: เปิด' : '🤖 ออโต้: ปิด'}
+                      </button>
+                    )}
                     <button
                       type="button"
                       title={paused ? 'เล่นต่อ' : 'พักเกม'}
@@ -5707,6 +5968,20 @@ export const MatchModal: React.FC<{
               }}
               onCloseToStats={() => {
                 setMlandMatchTab('stats');
+              }}
+              autoSubEnabled={autoSubEnabled}
+              onToggleAutoSub={() => {
+                setAutoSubEnabled((v) => {
+                  const next = !v;
+                  pushLog(
+                    minute,
+                    next
+                      ? '🤖 เปิดระบบเปลี่ยนตัวอัตโนมัติตามตำแหน่ง (ดันดาวรุ่งมีพรสวรรค์ & ตัวฟิตพร้อม)'
+                      : '🤖 ปิดระบบเปลี่ยนตัวอัตโนมัติ (คุมเปลี่ยนตัวด้วยตนเอง)',
+                    'sys'
+                  );
+                  return next;
+                });
               }}
             />
           ) : (

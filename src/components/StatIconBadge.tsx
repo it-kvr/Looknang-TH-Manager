@@ -83,7 +83,7 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ width: px, height: px }}
       >
         <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
-          <circle cx="10" cy="10" r="8.8" fill="#0284c7" stroke="#e0f2fe" strokeWidth="1.35" />
+          <circle cx="10" cy="10" r="8.8" fill="#0284c7" stroke="#e0f2fe" strokeWidth="1.25" />
           {showNum ? (
             <text
               x="10"
@@ -98,14 +98,10 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
               {numText}
             </text>
           ) : (
-            <path
-              d="M5.5 13.2 C7.8 10.5 9.8 9.2 13.8 7.5 M11.2 5.8 L14.4 7.3 L12.8 10.5"
-              fill="none"
-              stroke="#ffffff"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+            <>
+              <circle cx="10" cy="10" r="5.6" fill="none" stroke="#ffffff" strokeWidth="1.5" />
+              <circle cx="10" cy="10" r="2.3" fill="#fde047" />
+            </>
           )}
         </svg>
       </span>
@@ -176,12 +172,7 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ width: px, height: px }}
       >
         <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
-          <path
-            d="M10 1.8 L17 4.6 V10.2 C17 14.3 13.9 17.2 10 18.6 C6.1 17.2 3 14.3 3 10.2 V4.6 Z"
-            fill="#0d9488"
-            stroke="#ccfbf1"
-            strokeWidth="1.35"
-          />
+          <circle cx="10" cy="10" r="8.8" fill="#0d9488" stroke="#ccfbf1" strokeWidth="1.25" />
           {showNum ? (
             <text
               x="10"
@@ -197,12 +188,8 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
             </text>
           ) : (
             <path
-              d="M6.8 10.2 L9 12.4 L13.4 7.8"
-              fill="none"
-              stroke="#ffffff"
-              strokeWidth="1.9"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+              d="M6.4 13.5 V9.1 C6.4 8.3 7.1 8.1 7.4 8.8 V7.1 C7.4 6.4 8.3 6.3 8.5 7 V5.9 C8.5 5.1 9.6 5.1 9.8 5.9 V6.7 C10.1 6.1 11.2 6.2 11.2 7 V8.1 C11.6 7.6 12.6 7.8 12.6 8.6 V11.2 L13.8 10 C14.4 9.5 15.1 10.2 14.6 10.9 L12.5 13.6 C12 14.3 11.2 14.6 10.2 14.6 H7.8 C7 14.6 6.4 14.1 6.4 13.5 Z"
+              fill="#ffffff"
             />
           )}
         </svg>

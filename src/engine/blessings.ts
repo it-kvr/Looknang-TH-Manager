@@ -27,6 +27,12 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
   pl.pos = nextPos;
   pl.ov = clamp(Math.round(patch.ov), 1, 99);
   pl.pot = clamp(Math.round(Math.max(patch.pot, pl.ov)), 1, 99);
+  if (patch.talent !== undefined) {
+    pl.talent = clamp(Math.round(patch.talent), 25, 99);
+  }
+  if (patch.traits !== undefined) {
+    pl.traits = patch.traits.slice(0, 5);
+  }
   pl.age = clamp(Math.round(patch.age), 15, 45);
   pl.fit = clamp(Math.round(patch.fit), 1, 100);
   pl.inj = Math.max(0, Math.round(patch.inj));
@@ -53,6 +59,8 @@ export const applyGodBlessingToPlayer = (d: GameState, playerName: string, teamI
     d.p.b = { ...pl.customA };
     d.p.sig = patch.sig;
     d.p.customD = { ...cleanSub };
+    if (pl.talent !== undefined) d.p.talent = pl.talent;
+    if (pl.traits !== undefined) d.p.traits = [...pl.traits];
     d.p.age = pl.age;
     d.p.en = pl.fit;
     d.p.inj = pl.inj;

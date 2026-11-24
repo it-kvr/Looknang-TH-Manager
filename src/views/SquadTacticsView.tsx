@@ -1267,12 +1267,29 @@ export const SquadTacticsView: React.FC<{
                             <span className={`text-[10px] mland:text-[8.5px] font-bold tabular w-7 text-right ${fitTxtCls}`}>{f}%</span>
                           </div>
 
-                          <div className="text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] flex items-center justify-center gap-0.5">
-                            {q.sg || q.sa || q.ap ? (
-                              <span className="inline-flex items-center gap-0.5">
-                                {q.ap ? <span>{q.ap}น</span> : null}
-                                {q.sg ? <StatIconBadge kind="goal" count={q.sg} size="xs" /> : null}
-                                {q.sa ? <StatIconBadge kind="assist" count={q.sa} size="xs" /> : null}
+                          <div className="text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] flex items-center justify-center gap-1">
+                            {q.sg || q.sa || q.cs || q.sp || q.ap ? (
+                              <span className="inline-flex items-center gap-1.5">
+                                {q.sp || q.ap ? <span className="font-semibold text-[var(--ink)]">{q.sp || q.ap}น</span> : null}
+                                {q.sg ? (
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`ยิง ${q.sg} ประตู`}>
+                                    <StatIconBadge kind="goal" count={1} size="xs" />
+                                    <span>{q.sg}</span>
+                                  </span>
+                                ) : null}
+                                {q.pos === 'GK' ? (
+                                  q.cs ? (
+                                    <span className="inline-flex items-center gap-0.5 font-bold text-[var(--g)]" title={`คลีนชีต ${q.cs} นัด`}>
+                                      <StatIconBadge kind="save" count={1} size="xs" />
+                                      <span>{q.cs}</span>
+                                    </span>
+                                  ) : null
+                                ) : q.sa ? (
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`แอสซิสต์ ${q.sa} ครั้ง`}>
+                                    <StatIconBadge kind="assist" count={1} size="xs" />
+                                    <span>{q.sa}</span>
+                                  </span>
+                                ) : null}
                               </span>
                             ) : (
                               <span>—</span>

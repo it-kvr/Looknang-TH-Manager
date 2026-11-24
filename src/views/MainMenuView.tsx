@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, SIGL, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P } from '../data/thaiFootballData';
+import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits } from '../engine/playerCore';
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor, statBarColor } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
@@ -214,6 +214,8 @@ export const MainMenu: React.FC<{
   const [cSubMap, setCSubMap] = useState<Record<string, number>>({});
   const [cBase, setCBase] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
   const [cAttrs, setCAttrs] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
+  const [cTalent, setCTalent] = useState<number>(() => R(62, 93));
+  const [cTraits, setCTraits] = useState<string[]>(() => rollPlayerTraits('FW', 'ST', 55, 78));
 
   const computeBaseWithArch = (pos: Position, sp: SubRole, arch: PlayerArchetype): CoreAttrs => {
     const base = ROLE_BASE_ATTRS(pos, sp);
@@ -309,6 +311,8 @@ export const MainMenu: React.FC<{
     setTargetSlot(slot);
     const defaultArch = PLAYER_ARCHETYPES.find((a) => a.pos.includes('FW'))!;
     const rolled = rollStartingStats('FW', 'ST', defaultArch);
+    const initTalent = R(62, 93);
+    const initOv = OVF('FW', rolled.attrs);
     const gallery = Array.from({ length: 6 }, rollFaceTraits);
     setFaceChoices(gallery);
     applyFaceTraits(gallery[0]);
@@ -319,6 +323,8 @@ export const MainMenu: React.FC<{
     setCBase(rolled.base);
     setCAttrs(rolled.attrs);
     setCSubMap(rolled.subMap);
+    setCTalent(initTalent);
+    setCTraits(rollPlayerTraits('FW', 'ST', initOv, initTalent));
     goStep('cr');
   };
 
@@ -529,20 +535,25 @@ export const MainMenu: React.FC<{
     });
 
     const ov = OVF(cPos, cAttrs);
-    const previewPlayer: Player = { n: cName.trim() || 'นักเตะใหม่', pos: cPos, ro: cSp, ov, age: 17, pot: 92, fit: 100, inj: 0, no: cNo, me: 1 };
+    const previewPlayer: Player = {
+      n: cName.trim() || 'นักเตะใหม่', pos: cPos, ro: cSp, ov, age: 17, pot: 92, talent: cTalent, traits: cTraits, fit: 100, inj: 0, no: cNo, me: 1
+    };
     const previewProfile: PlayerCareerProfile = {
       name: cName.trim() || 'นักเตะใหม่', pos: cPos, sp: cSp, no: cNo, tr: curArch.tr, sig: curArch.sig, archName: `${curArch.icon} ${curArch.name}`,
       sb: combinedSb, c: cColor, k: cSkin, h: cHair, hs: cHs, fh: cFh, fs: cFs, ey: cEy, pts: 0, b: cBase, a: cAttrs,
+      talent: cTalent, traits: cTraits,
       age: 17, gl: 0, as: 0, ap: 0, rs: 0, en: 100, plan: 1
     };
     const previewDt = dtInfo(previewPlayer, previewProfile);
     const subStats = previewDt.G;
+    const posTraits = FOOTBALL_TRAITS.filter((t) => t.pos.includes(cPos));
 
     const applyRolledStats = (pos: Position, sp: SubRole, arch: PlayerArchetype) => {
       const rolled = rollStartingStats(pos, sp, arch);
       setCBase(rolled.base);
       setCAttrs(rolled.attrs);
       setCSubMap(rolled.subMap);
+      return rolled;
     };
 
     const changePosition = (pos: Position) => {
@@ -553,13 +564,15 @@ export const MainMenu: React.FC<{
       setCSp(sp);
       setCNo(defaultNoForPos(pos));
       setCArchId(nextArch.id);
-      applyRolledStats(pos, sp, nextArch);
+      const rolled = applyRolledStats(pos, sp, nextArch);
+      setCTraits(rollPlayerTraits(pos, sp, OVF(pos, rolled.attrs), cTalent));
     };
 
     const changeSubRole = (sp: SubRole) => {
       SFX.tap();
       setCSp(sp);
-      applyRolledStats(cPos, sp, curArch);
+      const rolled = applyRolledStats(cPos, sp, curArch);
+      setCTraits(rollPlayerTraits(cPos, sp, OVF(cPos, rolled.attrs), cTalent));
     };
 
     const changeArchetype = (arch: PlayerArchetype) => {
@@ -571,6 +584,26 @@ export const MainMenu: React.FC<{
     const rerollStartingPoints = () => {
       SFX.tap();
       applyRolledStats(cPos, cSp, curArch);
+    };
+
+    const rerollTraits = () => {
+      SFX.tap();
+      setCTraits(rollPlayerTraits(cPos, cSp, ov, cTalent));
+    };
+
+    const toggleTrait = (id: string) => {
+      SFX.tap();
+      setCTraits((prev) => {
+        if (prev.includes(id)) {
+          return prev.length > 1 ? prev.filter((x) => x !== id) : prev;
+        }
+        const def = TRAIT_BY_ID[id];
+        const cleaned = prev.filter((pid) => {
+          const pd = TRAIT_BY_ID[pid];
+          return !def?.conflicts?.includes(pid) && !pd?.conflicts?.includes(id);
+        });
+        return [...cleaned, id].slice(-4);
+      });
     };
 
     const randomizeFaceOnly = () => {
@@ -594,9 +627,12 @@ export const MainMenu: React.FC<{
       applyFaceTraits(nextGallery[0]);
       const rSp = P(SPX[cPos]);
       const rArch = P(posArchs);
+      const nextTalent = R(58, 95);
       setCSp(rSp);
       setCArchId(rArch.id);
-      applyRolledStats(cPos, rSp, rArch);
+      setCTalent(nextTalent);
+      const rolled = applyRolledStats(cPos, rSp, rArch);
+      setCTraits(rollPlayerTraits(cPos, rSp, OVF(cPos, rolled.attrs), nextTalent));
     };
 
     const startCareerNow = () => {
@@ -604,7 +640,8 @@ export const MainMenu: React.FC<{
       onStartPlayer(targetSlot, {
         name: (cName || genPlayerName()).trim(), pos: cPos, sp: cSp, no: clamp(cNo || 10, 1, 99), tr: curArch.tr, sig: curArch.sig,
         archName: `${curArch.icon} ${curArch.name}`, sb: combinedSb, c: cColor, k: cSkin, h: cHair,
-        hs: cHs, fh: cFh, fs: cFs, ey: cEy, pts: 0, a: { ...cAttrs }
+        hs: cHs, fh: cFh, fs: cFs, ey: cEy, pts: 0, a: { ...cAttrs },
+        talent: cTalent, traits: cTraits
       });
     };
 
@@ -615,7 +652,7 @@ export const MainMenu: React.FC<{
           <div className="max-w-5xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
             <div className="min-w-0">
               <h2 className="text-sm sm:text-base mland:text-sm font-bold font-display truncate">⚽ สร้างนักเตะอาชีพ</h2>
-              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">เลือกตำแหน่งและจุดเด่น ระบบสุ่มแต้มเริ่มต้นให้เข้ากับสไตล์การเล่น</p>
+              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">เลือกตำแหน่ง สไตล์การเล่น และนิสัยลูกหนังเฉพาะตัว</p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
@@ -668,10 +705,22 @@ export const MainMenu: React.FC<{
                   {cName.trim() || 'นักเตะใหม่'}
                 </div>
                 <div className="text-[11px] mland:text-[9.5px] text-white/90 font-semibold truncate w-full">
-                  {curArch.icon} {curArch.name} · อายุ 17 ปี
+                  {curArch.icon} {curArch.name} · พรสวรรค์ {cTalent}
                 </div>
-                <div className="text-[10px] mland:text-[8.5px] text-white/75 truncate w-full">
-                  ⭐ {SIGL[curArch.sig]}
+                <div className="flex flex-wrap items-center justify-center gap-1 w-full">
+                  {cTraits.slice(0, 3).map((tid) => {
+                    const tr = TRAIT_BY_ID[tid];
+                    if (!tr) return null;
+                    return (
+                      <span
+                        key={tid}
+                        title={tr.desc}
+                        className="px-1.5 py-0.5 rounded bg-black/25 border border-white/15 text-[9px] mland:text-[7.5px] text-white/95 font-semibold truncate max-w-full"
+                      >
+                        {tr.icon} {tr.name}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -701,7 +750,7 @@ export const MainMenu: React.FC<{
                 [
                   ['info', '📝 ข้อมูล'],
                   ['face', '🎭 หน้าตา'],
-                  ['arch', '⭐ จุดเด่น'],
+                  ['arch', '✨ สไตล์ & นิสัย'],
                   ['stats', '📊 พลัง']
                 ] as const
               ).map(([tid, tlbl]) => (
@@ -888,10 +937,10 @@ export const MainMenu: React.FC<{
                 </div>
               </div>
 
-              {/* Tab 3: Archetype & Rolled Stats */}
+              {/* Tab 3: Archetype, Traits & Rolled Stats */}
               <div className={`space-y-3 mland:space-y-2 ${crMobTab === 'arch' ? '' : 'hidden'}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-xs sm:text-sm mland:text-xs">เลือกสไตล์การเล่น & สุ่มแต้มเริ่มต้น (+12 หลัก / +8 ย่อย)</span>
+                  <span className="font-bold text-xs sm:text-sm mland:text-xs">สไตล์การเล่น & สุ่มแต้ม (+12 หลัก / +8 ย่อย)</span>
                   <button
                     type="button"
                     onClick={rerollStartingPoints}
@@ -908,10 +957,6 @@ export const MainMenu: React.FC<{
                       const coreTags = (Object.entries(arch.coreBonus) as [StatKey, number][]).map(
                         ([k, v]) => `${ATT.find((x) => x[0] === k)?.[1]} +${v}`
                       );
-                      const subTags = [
-                        `${SIGL[arch.sig]} +8`,
-                        ...Object.entries(arch.sbBonus).map(([k, v]) => `${SIGL[k] || k} +${v}`)
-                      ];
                       return (
                         <button
                           key={arch.id}
@@ -924,7 +969,7 @@ export const MainMenu: React.FC<{
                           <div className="font-bold text-xs mland:text-[10.5px] truncate">{arch.icon} {arch.name}</div>
                           <div className={`text-[10.5px] mland:text-[9px] mt-0.5 line-clamp-1 ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>{arch.desc}</div>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {[...coreTags, ...subTags].slice(0, 3).map((tg) => (
+                            {coreTags.slice(0, 3).map((tg) => (
                               <span key={tg} className={`px-1 py-0.5 rounded text-[9.5px] mland:text-[8.5px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-[var(--surface)] text-[var(--g)]'}`}>
                                 {tg}
                               </span>
@@ -959,26 +1004,64 @@ export const MainMenu: React.FC<{
                     })}
                   </div>
                 </div>
+
+                {/* Football Personality Traits Selector */}
+                <div className="pt-2 border-t border-[var(--line)] space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-bold text-xs mland:text-[11px] truncate">✨ นิสัยลูกหนังตามตำแหน่ง ({cTraits.length}/4)</span>
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[9px] font-bold tabular shrink-0">
+                        🌟 พรสวรรค์ {cTalent}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={rerollTraits}
+                      className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[10px] font-semibold cursor-pointer hover:border-[var(--g)] shrink-0"
+                    >
+                      🎲 สุ่มนิสัยใหม่
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {posTraits.map((tr) => {
+                      const active = cTraits.includes(tr.id);
+                      return (
+                        <button
+                          key={tr.id}
+                          type="button"
+                          onClick={() => toggleTrait(tr.id)}
+                          title={tr.desc}
+                          className={`px-2 py-1 rounded-lg text-[11px] mland:text-[9.5px] font-semibold border cursor-pointer transition-colors ${
+                            active
+                              ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
+                              : 'bg-[var(--surface-2)] text-[var(--ink)] border-[var(--line)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          {tr.icon} {tr.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
 
               {/* Tab 4: Sub-stats Breakdown */}
               <div className={`space-y-2.5 mland:space-y-1.5 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-bold text-xs sm:text-sm mland:text-xs">ค่าพลังเฉพาะด้าน</span>
-                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">พลังหลัก + จุดเด่น (⭐/เขียว) + แต้มสุ่ม (เหลือง)</span>
+                  <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">พลังหลัก + โบนัสสาย (เขียว) + แต้มสุ่ม (เหลือง)</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2 mland:gap-1.5">
                   {subStats.map((g) => (
                     <div key={g[0]} className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)] space-y-1">
                       <div className="font-bold text-xs mland:text-[10px]">{g[0]}</div>
                       {g[1].map(([lbl, val, statKey]) => {
-                        const isSig = statKey && statKey === curArch.sig;
                         const archBonus = statKey ? curArch.sbBonus[statKey] || 0 : 0;
                         const rolledSub = statKey ? cSubMap[statKey] || 0 : 0;
                         return (
                           <div key={lbl} className="flex items-center justify-between gap-1 text-[11px] mland:text-[9.5px]">
                             <span className="truncate flex items-center gap-0.5 min-w-0">
-                              <span className={isSig ? 'font-bold text-[var(--g)]' : 'text-[var(--mut)]'}>{isSig ? '⭐ ' : ''}{lbl}</span>
+                              <span className={archBonus > 0 ? 'font-semibold text-[var(--g)]' : 'text-[var(--mut)]'}>{lbl}</span>
                               {archBonus > 0 && <span className="text-[9px] font-bold text-[var(--g)]">+{archBonus}</span>}
                               {rolledSub > 0 && <span className="text-[9px] font-bold text-[var(--lamp)]">+{rolledSub}</span>}
                             </span>

@@ -24,6 +24,10 @@ export interface LivePlayerMatchStats {
   tackles: number;
   saves: number;
   blocks: number;
+  setpieces?: number;
+  crossAssists?: number;
+  dribbles?: number;
+  headers?: number;
 }
 
 interface LiveTacticsStudioProps {
@@ -76,6 +80,8 @@ interface LiveTacticsStudioProps {
   findBestSubFor: (outName: string) => Player | null;
   onCloseAndResume: () => void;
   onCloseToStats: () => void;
+  autoSubEnabled?: boolean;
+  onToggleAutoSub?: () => void;
 }
 
 interface DragRuntime {
@@ -150,7 +156,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   onSwapStarters,
   findBestSubFor,
   onCloseAndResume,
-  onCloseToStats
+  onCloseToStats,
+  autoSubEnabled,
+  onToggleAutoSub
 }) => {
   const [pitchTeamView, setPitchTeamView] = useState<'me' | 'opp'>('me');
   const [dragUi, setDragUi] = useState<{
@@ -833,27 +841,46 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2 mland:space-y-1.5">
           {/* Draggable Substitutes Bench */}
           <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-1.5 mland:space-y-1">
-            <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] mland:text-[9.5px]">
               <span className="font-bold text-[var(--g)] flex items-center gap-1 shrink-0">
                 <span>🪑 ตัวสำรอง ({benchList.length})</span>
               </span>
-              {subsUsed.length < 5 && smartAutoSub ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const rep = onAutoSubstitute(smartAutoSub.outName);
-                    if (rep) setSubPickOut(null);
-                  }}
-                  title={`เปลี่ยนตัวอัตโนมัติ: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName}`}
-                  className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer hover:brightness-110 shadow-xs whitespace-nowrap shrink-0"
-                >
-                  ⚡ เปลี่ยนตัวอัตโนมัติ
-                </button>
-              ) : (
-                <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold truncate">
-                  {subsUsed.length >= 5 ? 'ใช้โควต้าเปลี่ยนตัวครบ 5 คนแล้ว' : 'ไม่มีตัวสำรองที่พร้อมลงสนาม'}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                {onToggleAutoSub && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      onToggleAutoSub();
+                    }}
+                    title="เปลี่ยนตัวอัตโนมัติตามตำแหน่ง: ส่งดาวรุ่งมีพรสวรรค์เก็บประสบการณ์หรือตัวที่ฟิตพร้อมลงแทน"
+                    className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-extrabold border cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                      autoSubEnabled
+                        ? 'bg-emerald-500/18 border-emerald-500 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
+                  >
+                    {autoSubEnabled ? '🤖 ออโต้เปลี่ยนตัว: เปิด' : '🤖 ออโต้เปลี่ยนตัว: ปิด'}
+                  </button>
+                )}
+                {subsUsed.length < 5 && smartAutoSub ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rep = onAutoSubstitute(smartAutoSub.outName);
+                      if (rep) setSubPickOut(null);
+                    }}
+                    title={`เปลี่ยนตัวอัตโนมัติ: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName}`}
+                    className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer hover:brightness-110 shadow-xs whitespace-nowrap shrink-0"
+                  >
+                    ⚡ เปลี่ยนทันที
+                  </button>
+                ) : (
+                  <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold truncate">
+                    {subsUsed.length >= 5 ? 'ใช้โควต้าเปลี่ยนตัวครบ 5 คนแล้ว' : 'ไม่มีตัวสำรองที่พร้อมลงสนาม'}
+                  </span>
+                )}
+              </div>
             </div>
 
             {subsUsed.length < 5 && smartAutoSub && (

@@ -1,14 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { TN, ATT, SPN, SIGL, AR_T } from '../data/thaiFootballData';
+import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
-import { ovColor, statTierMeta, countReadyMissions } from '../engine/missions';
+import { ovColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { sortTable, teamStats } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
+import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
+import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -27,13 +29,13 @@ export const PlayerInspectorModal: React.FC<{
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [shirtNo, setShirtNo] = useState(String(currentNo));
-  const [inspectMode, setInspectMode] = useState<'info' | 'missions'>('info');
-  const effectiveMode = inspectMode;
+  const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>('info');
+  const effectiveMode = inspectMode === 'missions' && !(isMyTeam || isMePlayer) ? 'info' : inspectMode;
   const canDoMissions = isMyTeam || isMePlayer;
-  const readyMissionCnt = canDoMissions ? countReadyMissions(livePlayer, isMePlayer ? state.p : null) : 0;
+  const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
+  const tlMeta = talentTierMeta(playerTalent);
   const isCap = !!liveTeam && liveTeam.cap === livePlayer.n;
   const con = liveTeam ? ensureCon(livePlayer) : null;
-  const sigLabel = SIGL[info.D0.sig] || info.D0.sig;
   const fitVal = Math.round(livePlayer.fit ?? 100);
   const fitCol = livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'var(--red)' : fitVal >= 75 ? 'var(--g)' : fitVal >= 55 ? '#c98a00' : 'var(--red)';
   const kit1 = liveTeam ? tc(liveTeam, state, false) : isMePlayer && state.p ? state.p.c : ovColor(livePlayer.ov);
@@ -86,19 +88,30 @@ export const PlayerInspectorModal: React.FC<{
           </div>
 
           <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
-            {canDoMissions && (
-              <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
-                <button
-                  type="button"
-                  onClick={() => { SFX.tap(); setInspectMode('info'); }}
-                  className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                    effectiveMode === 'info'
-                      ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  📊 การ์ด &amp; ค่าพลัง
-                </button>
+            <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setInspectMode('info'); }}
+                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                  effectiveMode === 'info'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
+              >
+                📊 การ์ด &amp; ค่าพลัง
+              </button>
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setInspectMode('history'); }}
+                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                  effectiveMode === 'history'
+                    ? 'bg-[var(--g)] text-white shadow-xs'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
+              >
+                📜 ประวัติผลงาน
+              </button>
+              {canDoMissions && (
                 <button
                   type="button"
                   onClick={() => { SFX.tap(); setInspectMode('missions'); }}
@@ -108,10 +121,10 @@ export const PlayerInspectorModal: React.FC<{
                       : 'text-[var(--mut)] hover:text-[var(--ink)]'
                   }`}
                 >
-                  🎯 ภารกิจ{readyMissionCnt ? ` (${readyMissionCnt})` : ''}
+                  🎯 ภารกิจ
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             <button
               type="button"
@@ -132,6 +145,14 @@ export const PlayerInspectorModal: React.FC<{
               state={state}
               onUpdateState={onUpdateState}
               onToast={onToast}
+            />
+          </div>
+        ) : effectiveMode === 'history' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2.5">
+            <PlayerHistoryPanel
+              player={livePlayer}
+              team={liveTeam}
+              state={state}
             />
           </div>
         ) : (
@@ -162,6 +183,13 @@ export const PlayerInspectorModal: React.FC<{
                   <div className="flex flex-col items-end gap-0.5">
                     <span className={`text-[10px] mland:text-[8.5px] font-bold tabular ${statTierMeta(livePlayer.pot).darkTextClass}`}>
                       POT {livePlayer.pot}/100
+                    </span>
+                    <span
+                      className="px-1.5 py-[1px] rounded text-[9px] mland:text-[7.5px] font-extrabold tabular leading-tight border border-white/15"
+                      style={{ background: tlMeta.bg, color: tlMeta.color }}
+                      title={`พรสวรรค์ ${playerTalent}/99 (${tlMeta.label})`}
+                    >
+                      TL {playerTalent}
                     </span>
                     <div className="flex items-center gap-1">
                       {isMePlayer && (
@@ -215,8 +243,25 @@ export const PlayerInspectorModal: React.FC<{
                     {livePlayer.n}
                   </div>
                   <div className="text-[10px] mland:text-[8px] text-emerald-100/80 truncate tabular">
-                    อายุ {livePlayer.age} ปี · {info.gro} · {info.TR[0]}
+                    อายุ {livePlayer.age} ปี · {info.gro} · {info.TR[1]}
                   </div>
+                  {info.traits.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-1 pt-0.5">
+                      {info.traits.slice(0, 3).map((t) => (
+                        <span
+                          key={t.id}
+                          title={t.desc}
+                          className={`px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7px] font-bold border leading-tight ${
+                            ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(t.id)
+                              ? 'bg-amber-400/15 border-amber-300/35 text-amber-200'
+                              : 'bg-emerald-400/15 border-emerald-300/30 text-emerald-100'
+                          }`}
+                        >
+                          {t.icon} {t.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Bottom 5 Core Stats Strip (Bar-less, Tier-Colored, /100) */}
@@ -337,25 +382,25 @@ export const PlayerInspectorModal: React.FC<{
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[11px] mland:text-[8.5px] font-bold text-[var(--mut)]">📈 ผลงานซีซั่นนี้</span>
                     <span className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] tabular">
-                      {livePlayer.sp || 0} นัด
+                      👕 {livePlayer.sp || 0} นัด
                     </span>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5 text-center">
-                    <div className="rounded-lg bg-[var(--surface-2)]/80 px-1.5 py-0.5 flex items-center justify-center gap-1">
+                    <div className="rounded-lg bg-[var(--surface-2)]/80 px-1.5 py-0.5 flex items-center justify-center gap-1 leading-none">
+                      <span className="text-[11px] mland:text-[9px] leading-none" aria-hidden="true">⚽</span>
                       <span className="text-[10px] mland:text-[8px] text-[var(--mut)]">ประตู</span>
                       <span className="font-extrabold text-xs sm:text-sm mland:text-[10.5px] tabular">{livePlayer.sg || 0}</span>
-                      {(livePlayer.sg || 0) > 0 && <StatIconBadge kind="goal" count={1} size="xs" />}
                     </div>
-                    <div className="rounded-lg bg-[var(--surface-2)]/80 px-1.5 py-0.5 flex items-center justify-center gap-1">
+                    <div className="rounded-lg bg-[var(--surface-2)]/80 px-1.5 py-0.5 flex items-center justify-center gap-1 leading-none">
+                      <span className="text-[11px] mland:text-[9px] leading-none" aria-hidden="true">
+                        {livePlayer.pos === 'GK' ? '🧤' : '🎯'}
+                      </span>
                       <span className="text-[10px] mland:text-[8px] text-[var(--mut)]">
                         {livePlayer.pos === 'GK' ? 'คลีนชีต' : 'แอสซิสต์'}
                       </span>
                       <span className="font-extrabold text-xs sm:text-sm mland:text-[10.5px] tabular">
                         {livePlayer.pos === 'GK' ? livePlayer.cs || 0 : livePlayer.sa || 0}
                       </span>
-                      {(livePlayer.pos === 'GK' ? (livePlayer.cs || 0) > 0 : (livePlayer.sa || 0) > 0) && (
-                        <StatIconBadge kind={livePlayer.pos === 'GK' ? 'save' : 'assist'} count={1} size="xs" />
-                      )}
                     </div>
                   </div>
                 </div>
@@ -407,14 +452,26 @@ export const PlayerInspectorModal: React.FC<{
                 );
               })()}
 
-              {/* Section Header: Sub-Attributes Cards */}
-              <div className="shrink-0 flex items-center justify-between gap-2 px-0.5">
+              {/* Section Header: Sub-Attributes & Football Traits */}
+              <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 px-0.5">
                 <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">
                   รายละเอียดค่าพลังเฉพาะทาง (เต็ม 100)
                 </span>
-                <span className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] truncate">
-                  ⭐ จุดเด่น: {sigLabel} · {info.TR[1]}
-                </span>
+                <div className="flex flex-wrap items-center gap-1">
+                  {info.traits.map((t) => (
+                    <span
+                      key={t.id}
+                      title={t.desc}
+                      className={`px-1.5 py-[1px] rounded-md border text-[10px] mland:text-[8px] font-bold leading-tight ${
+                        ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(t.id)
+                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#8a5b00] dark:text-[var(--lamp)]'
+                          : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
+                      }`}
+                    >
+                      {t.icon} {t.name}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Balanced Fit-to-Screen Attribute Card Grid */}
@@ -430,12 +487,11 @@ export const PlayerInspectorModal: React.FC<{
                           {grp}
                         </div>
                         <div className="space-y-0.5">
-                          {rows.map(([lbl, val, statKey]) => (
+                          {rows.map(([lbl, val]) => (
                             <StatBarRow
                               key={lbl}
                               label={lbl}
                               value={val}
-                              isSig={!!(statKey && statKey === info.D0.sig)}
                               compact
                             />
                           ))}
@@ -453,12 +509,11 @@ export const PlayerInspectorModal: React.FC<{
                           {grp}
                         </div>
                         <div className="space-y-0.5">
-                          {rows.map(([lbl, val, statKey]) => (
+                          {rows.map(([lbl, val]) => (
                             <StatBarRow
                               key={lbl}
                               label={lbl}
                               value={val}
-                              isSig={!!(statKey && statKey === info.D0.sig)}
                               compact
                             />
                           ))}
@@ -478,12 +533,11 @@ export const PlayerInspectorModal: React.FC<{
                         {grp}
                       </div>
                       <div className="space-y-0.5">
-                        {rows.map(([lbl, val, statKey]) => (
+                        {rows.map(([lbl, val]) => (
                           <StatBarRow
                             key={lbl}
                             label={lbl}
                             value={val}
-                            isSig={!!(statKey && statKey === info.D0.sig)}
                             compact
                           />
                         ))}
@@ -506,6 +560,7 @@ export const TeamInspectorModal: React.FC<{
   onClose: () => void;
   onInspectPlayer: (p: Player, t: Team) => void;
 }> = ({ team, state, onClose, onInspectPlayer }) => {
+  const [teamTab, setTeamTab] = useState<'squad' | 'history'>('squad');
   const [posFilter, setPosFilter] = useState<'ALL' | 'XI' | Position>('ALL');
   const st = teamStats(team, state);
   const myTeam = state.teams[state.me];
@@ -564,7 +619,7 @@ export const TeamInspectorModal: React.FC<{
           </div>
           <div className="flex items-center gap-2 ml-auto">
             {formChars.length > 0 && (
-              <div className="flex items-center gap-0.5">
+              <div className="hidden sm:flex items-center gap-0.5">
                 {formChars.map((c, idx) => (
                   <span
                     key={idx}
@@ -577,10 +632,44 @@ export const TeamInspectorModal: React.FC<{
                 ))}
               </div>
             )}
+            <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]">
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setTeamTab('squad'); }}
+                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                  teamTab === 'squad'
+                    ? 'bg-[var(--g)] text-white shadow-xs'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
+              >
+                👥 ขุมกำลัง
+              </button>
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setTeamTab('history'); }}
+                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                  teamTab === 'history'
+                    ? 'bg-[var(--g)] text-white shadow-xs'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
+              >
+                📜 ประวัติศาสตร์ทีม
+              </button>
+            </div>
             <button type="button" onClick={onClose} className="px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer">ปิด ✕</button>
           </div>
         </div>
 
+        {teamTab === 'history' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2">
+            <ClubHistoryPanel
+              team={team}
+              state={state}
+              onInspectPlayer={onInspectPlayer}
+              compact
+            />
+          </div>
+        ) : (
         <div className="flex-1 min-h-0 overflow-hidden p-3 mland:p-2 space-y-2.5 mland:space-y-1 flex flex-col">
           {/* Team Power + Head-to-Head + Tactical Identity */}
           <div className="grid grid-cols-4 gap-2 mland:gap-1 text-center text-xs mland:text-[10px] shrink-0">
@@ -734,6 +823,7 @@ export const TeamInspectorModal: React.FC<{
             </div>
           </div>
         </div>
+        )}
 
         <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-t border-[var(--line)] flex justify-end">
           <button type="button" onClick={onClose} className="px-5 py-2 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer">

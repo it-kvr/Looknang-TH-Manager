@@ -1,6 +1,6 @@
 import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld } from '../types/game';
 import { R, clamp } from '../utils/math';
-import { getShirtNo, visOf, getFormationSlots, DT, colDist } from '../engine/playerCore';
+import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
 import { faceBodySvg } from '../components/SvgVisuals';
 
 export const buildAgentsForTeam = (
@@ -56,6 +56,7 @@ export const buildAgentsForTeam = (
       d: dt.d,
       sig: dt.sig,
       tr: dt.tr,
+      traits: pl ? getPlayerTraits(pl, careerP).map((t) => t.id) : [],
       ov: pl?.ov || 60,
       vis: pl ? visOf(pl, careerP) : [2, 0, 0, 0, 0, i + 1, 0]
     };

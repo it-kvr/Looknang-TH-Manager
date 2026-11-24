@@ -5,6 +5,7 @@ import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballD
 import { SFX } from '../utils/audioTheme';
 import { assignTeamShirtNumbers, vlu, wagOf, ensureCon, logFin } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
+import { appendPlayerCareerLog } from '../engine/history';
 import {
   LEAGUE_TRANSFER_RULES,
   getLeagueTransferContext,
@@ -312,6 +313,7 @@ export const MarketView: React.FC<{
         incoming.signedSeason = d.season;
         incoming.signedMd = d.md;
         delete incoming.listed;
+        appendPlayerCareerLog(incoming, `✍️ ย้ายซบ ${t.name} (${TN[t.tier]}) ซีซั่น ${d.season}${incoming.loan ? ' (ยืมตัว)' : ''}`);
         t.sq.push(incoming);
         assignTeamShirtNumbers(t);
 
@@ -1395,6 +1397,7 @@ export const MarketView: React.FC<{
                                 target.signedSeason = d.season;
                                 target.signedMd = d.md;
                                 target.con = { yr: 3, wg: wagOf(target), role: target.ov >= 70 ? 'key' : 'rot' };
+                                appendPlayerCareerLog(target, `🤝 เซ็นสัญญาถาวรกับ ${d.teams[d.me].name} ซีซั่น ${d.season}`);
                               });
                               onToast(`ซื้อขาด ${q.n} ถาวรแล้ว!`);
                             }}
@@ -1486,6 +1489,7 @@ export const MarketView: React.FC<{
                                 y.no = undefined;
                                 y.signedSeason = d.season;
                                 y.signedMd = d.md;
+                                appendPlayerCareerLog(y, `🎓 เลื่อนชั้นจากอะคาเดมี่สู่ชุดใหญ่ ${t.name} ซีซั่น ${d.season}`);
                                 t.sq.push(y);
                                 assignTeamShirtNumbers(t);
                                 d.yth.splice(i, 1);

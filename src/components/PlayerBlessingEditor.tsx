@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Position, SubRole, StatKey, CoreAttrs, Player, Team, GameState } from '../types/game';
 import { clamp } from '../utils/math';
-import { ATT, LINE, ALL_SUB_ROLES, SPN, SIGL } from '../data/thaiFootballData';
+import { ATT, LINE, ALL_SUB_ROLES, SPN, FOOTBALL_TRAITS } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { OVF, dtInfo } from '../engine/playerCore';
-import { ovColor, statBarColor } from '../engine/missions';
+import { OVF, dtInfo, rollPlayerTraits } from '../engine/playerCore';
+import { ovColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/blessings';
 
 export const PlayerBlessingEditor: React.FC<{
@@ -22,6 +22,8 @@ export const PlayerBlessingEditor: React.FC<{
   const [sig, setSig] = useState<string>(initInfo.D0.sig || 'fin');
   const [ov, setOv] = useState<number>(player.ov || 60);
   const [pot, setPot] = useState<number>(Math.max(player.pot || player.ov || 65, player.ov || 60));
+  const [talent, setTalent] = useState<number>(() => getPlayerTalent(player, isMePlayer ? state.p : null));
+  const [traits, setTraits] = useState<string[]>(() => initInfo.traits.map((t) => t.id));
   const [age, setAge] = useState<number>(player.age || 24);
   const [fit, setFit] = useState<number>(Math.round(player.fit ?? 100));
   const [inj, setInj] = useState<number>(player.inj || 0);
@@ -63,6 +65,8 @@ export const PlayerBlessingEditor: React.FC<{
     setSig(nextInfo.D0.sig || 'fin');
     setOv(player.ov || 60);
     setPot(Math.max(player.pot || player.ov || 65, player.ov || 60));
+    setTalent(getPlayerTalent(player, nextMe ? state.p : null));
+    setTraits(nextInfo.traits.map((t) => t.id));
     setAge(player.age || 24);
     setFit(Math.round(player.fit ?? 100));
     setInj(player.inj || 0);
@@ -193,6 +197,7 @@ export const PlayerBlessingEditor: React.FC<{
     });
     setOv(99);
     setPot(99);
+    setTalent(99);
     setFit(100);
     setInj(0);
     setSus(0);
@@ -220,6 +225,8 @@ export const PlayerBlessingEditor: React.FC<{
       applyGodBlessingToPlayer(d, player.n, tid, {
         ov,
         pot,
+        talent,
+        traits,
         age,
         fit,
         inj,
@@ -297,25 +304,22 @@ export const PlayerBlessingEditor: React.FC<{
             </select>
           </label>
 
-          <label className="block space-y-0.5">
-            <span className="text-[10px] font-semibold text-[var(--mut)]">จุดเด่นเฉพาะตัว</span>
-            <select
-              value={sig}
-              onChange={(e) => setSig(e.target.value)}
-              className="w-full px-2 py-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs font-bold"
-            >
-              {Object.entries(SIGL).map(([sKey, sLbl]) => (
-                <option key={sKey} value={sKey}>
-                  ⭐ {sLbl}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-[var(--mut)] font-semibold">🌟 พรสวรรค์ (TL)</span>
+              <b className={`tabular text-xs ${statTierMeta(talent).textClass}`}>{talent}</b>
+            </div>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={() => setTalent((v) => clamp(v - 1, 25, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
+              <input type="range" min={25} max={99} value={talent} onChange={(e) => setTalent(Number(e.target.value))} className="flex-1 accent-[var(--g)] min-w-0" />
+              <button type="button" onClick={() => setTalent((v) => clamp(v + 1, 25, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
+            </div>
+          </div>
 
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-[var(--mut)] font-semibold">OVR รวม</span>
-              <b className="tabular text-xs" style={{ color: statBarColor(ov) }}>{ov}</b>
+              <b className={`tabular text-xs ${statTierMeta(ov).textClass}`}>{ov}</b>
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => handleOvChange(ov - 1)} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
@@ -327,13 +331,63 @@ export const PlayerBlessingEditor: React.FC<{
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-[var(--mut)] font-semibold">ศักยภาพ (POT)</span>
-              <b className="tabular text-xs" style={{ color: statBarColor(pot) }}>{pot}</b>
+              <b className={`tabular text-xs ${statTierMeta(pot).textClass}`}>{pot}</b>
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setPot((v) => clamp(v - 1, 1, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
               <input type="range" min={1} max={99} value={pot} onChange={(e) => setPot(Number(e.target.value))} className="flex-1 accent-[var(--lamp)] min-w-0" />
               <button type="button" onClick={() => setPot((v) => clamp(v + 1, 1, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">+</button>
             </div>
+          </div>
+        </div>
+
+        {/* Multi Football Traits Selector */}
+        <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10.5px] font-bold text-[var(--ink)]">
+              🎭 นิสัยลูกหนัง / จุดเด่น ({traits.length}/5) <span className="font-normal text-[var(--mut)]">· มีผลจริงในการแข่งขัน</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setTraits(rollPlayerTraits(curPos, ro, ov, talent));
+              }}
+              className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10px] font-bold cursor-pointer"
+            >
+              🎲 สุ่มตามตำแหน่ง
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto pr-1">
+            {FOOTBALL_TRAITS.filter((tr) => !tr.pos || tr.pos.includes(curPos) || traits.includes(tr.id)).map((tr) => {
+              const active = traits.includes(tr.id);
+              return (
+                <button
+                  key={tr.id}
+                  type="button"
+                  title={tr.desc}
+                  onClick={() => {
+                    SFX.tap();
+                    setTraits((prev) =>
+                      prev.includes(tr.id)
+                        ? prev.filter((id) => id !== tr.id)
+                        : prev.length >= 5
+                          ? [...prev.slice(1), tr.id]
+                          : [...prev, tr.id]
+                    );
+                  }}
+                  className={`px-2 py-0.5 rounded-lg border text-[10px] font-bold cursor-pointer transition-colors ${
+                    active
+                      ? ['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler'].includes(tr.id)
+                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                        : 'bg-[var(--g)] text-white border-[var(--g)]'
+                      : 'bg-[var(--surface-2)]/80 border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  {tr.icon} {tr.name}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -386,7 +440,7 @@ export const PlayerBlessingEditor: React.FC<{
               <div key={k} className="p-2 mland:p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
                 <div className="flex items-center justify-between text-xs mland:text-[10px]">
                   <span className="font-semibold text-[var(--mut)]">{lbl}</span>
-                  <b className="tabular font-extrabold" style={{ color: statBarColor(val) }}>{val}</b>
+                  <b className={`tabular font-extrabold ${statTierMeta(val).textClass}`}>{val}</b>
                 </div>
                 <input
                   type="range"
@@ -414,11 +468,10 @@ export const PlayerBlessingEditor: React.FC<{
             <div className="space-y-1.5">
               {rows.map(([sk, lbl]) => {
                 const v = clamp(Math.round(subD[sk] ?? 60), 1, 99);
-                const isSigKey = sk === sig;
                 return (
                   <div key={sk} className="flex items-center gap-1.5 text-[11px] mland:text-[10px]">
-                    <span className={`w-24 shrink-0 truncate ${isSigKey ? 'font-bold text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                      {isSigKey ? '⭐ ' : ''}{lbl}
+                    <span className="w-24 shrink-0 truncate text-[var(--ink)]">
+                      {lbl}
                     </span>
                     <button
                       type="button"
@@ -442,7 +495,7 @@ export const PlayerBlessingEditor: React.FC<{
                     >
                       +
                     </button>
-                    <span className="w-6 text-right font-extrabold tabular shrink-0" style={{ color: statBarColor(v) }}>
+                    <span className={`w-6 text-right font-extrabold tabular shrink-0 ${statTierMeta(v).textClass}`}>
                       {v}
                     </span>
                   </div>

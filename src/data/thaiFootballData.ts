@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, Mentality, TrainingFocus, TrainingProgramId, TrainingIntensity, TeamTrainingPlan, CoreAttrs, GameState, PlayerArchetype, TrainingProgramMeta } from '../types/game';
+import type { Position, SubRole, StatKey, Mentality, TrainingFocus, TrainingProgramId, TrainingIntensity, TeamTrainingPlan, CoreAttrs, GameState, PlayerArchetype, TrainingProgramMeta, FootballTraitDef } from '../types/game';
 
 export const A1 = ['ธน', 'กิต', 'วีร', 'ภัค', 'ศุภ', 'นรา', 'อนุ', 'ชัย', 'พงศ์', 'กฤษ', 'ปริญ', 'รัฐ', 'เมธ', 'ณัฐ'];
 export const A2 = ['พล', 'ภัทร', 'วัฒน์', 'ศักดิ์', 'เดช', 'พัฒน์', 'ชนม์', 'ธร', 'นนท์', 'กร'];
@@ -126,6 +126,336 @@ export const SIGL: Record<string, string> = {
   spd: 'ความเร็ว', str: 'ความแข็งแรง', sta: 'ความอึด', tol: 'ทนต่อบาดเจ็บ', rec: 'ฟื้นตัวเร็ว',
   comp: 'ความนิ่งในนัดใหญ่', sv: 'เซฟ', cl: 'ออกมาปิดมุม', dist: 'จ่ายจากแนวหลัง'
 };
+
+export const FOOTBALL_TRAITS: FootballTraitDef[] = [
+  // Attacking
+  {
+    id: 'poacher_instinct',
+    icon: '🎯',
+    name: 'จมูกไวหน้าประตู',
+    desc: 'เข้าฮอสในกรอบเขตโทษเฉียบขาด หาจังหวะซ้ำดาบสองเก่ง',
+    tone: 'att',
+    pos: ['FW', 'MF'],
+    roles: ['ST', 'CF', 'CAM']
+  },
+  {
+    id: 'outside_curler',
+    icon: '🌀',
+    name: 'ชอบปั่นไซด์โค้ง',
+    desc: 'ถนัดปั่นไซด์โป้งและไซด์ก้อยทริเวล่าโค้งหนีมือผู้รักษาประตู',
+    tone: 'att',
+    pos: ['FW', 'MF'],
+    roles: ['LW', 'RW', 'CAM', 'CF', 'LM', 'RM']
+  },
+  {
+    id: 'long_shot_lover',
+    icon: '🚀',
+    name: 'บ้ายิงไกล',
+    desc: 'เห็นพื้นที่หน้ากรอบมักสับไกเต็มข้อจากระยะไกลทันที',
+    tone: 'att',
+    pos: ['FW', 'MF'],
+    roles: ['CAM', 'CM', 'ST', 'LW', 'RW']
+  },
+  {
+    id: 'chip_artist',
+    icon: '🪶',
+    name: 'ชอบชิพข้ามหัว',
+    desc: 'ใจเย็นเหนือชั้น ยกบอลข้ามหัวผู้รักษาประตูเวลาหลุดเดี่ยว',
+    tone: 'att',
+    pos: ['FW', 'MF'],
+    roles: ['ST', 'CF', 'CAM']
+  },
+  {
+    id: 'acrobatic_finisher',
+    icon: '🤸',
+    name: 'จอมตีลังกา/วอลเลย์',
+    desc: 'ชอบยิงท่าผาดโผน ฟาดวอลเลย์และจักรยานอากาศในกรอบ',
+    tone: 'att',
+    pos: ['FW'],
+    roles: ['ST', 'CF', 'LW', 'RW']
+  },
+  {
+    id: 'selfish_shooter',
+    icon: '😈',
+    name: 'หวงบอล/บ้ายิง',
+    desc: 'ได้บอลใกล้ประตูมักเลือกยิงเองมากกว่าจ่ายให้เพื่อน',
+    tone: 'att',
+    pos: ['FW', 'MF'],
+    roles: ['ST', 'LW', 'RW'],
+    conflicts: ['team_first']
+  },
+  {
+    id: 'offside_trap_breaker',
+    icon: '⚡',
+    name: 'เช็กไลน์หลุดกับดัก',
+    desc: 'อ่านไลน์กองหลังเก่ง ออกตัวหลุดกับดักล้ำหน้าได้บ่อย',
+    tone: 'att',
+    pos: ['FW'],
+    roles: ['ST', 'LW', 'RW']
+  },
+  {
+    id: 'aerial_menace',
+    icon: '🦅',
+    name: 'เจ้าเวหาชอบโขก',
+    desc: 'ชิงจังหวะโหม่งกลางอากาศได้เปรียบทั้งลูกเปิดและลูกตั้งเตะ',
+    tone: 'att',
+    pos: ['FW', 'DF'],
+    roles: ['ST', 'CB']
+  },
+  {
+    id: 'near_post_runner',
+    icon: '🏃',
+    name: 'ชอบโฉบเสาแรก',
+    desc: 'พุ่งโฉบตัดหน้าแนวรับตรงเสาแรกเมื่อเพื่อนเตรียมเปิดบอล',
+    tone: 'att',
+    pos: ['FW', 'MF'],
+    roles: ['ST', 'CF', 'CAM']
+  },
+
+  // Playmaking / Dribbling
+  {
+    id: 'killer_passer',
+    icon: '🪄',
+    name: 'ชอบแทงทะลุช่อง',
+    desc: 'มองเห็นช่องว่างแนวรับและกล้าแทงคิลเลอร์พาสให้เพื่อนหลุดเดี่ยว',
+    tone: 'play',
+    pos: ['MF', 'FW'],
+    roles: ['CAM', 'CM', 'LCM', 'RCM', 'CF']
+  },
+  {
+    id: 'flair_dribbler',
+    icon: '🎭',
+    name: 'สายสับขา/ลีลาจัด',
+    desc: 'กล้าดวลเดี่ยวเลี้ยงหลบคู่แข่ง โชว์สเต็ปแหวกแนวรับและเรียกฟาวล์',
+    tone: 'play',
+    pos: ['FW', 'MF', 'DF'],
+    roles: ['LW', 'RW', 'LM', 'RM', 'CAM', 'LWB', 'RWB']
+  },
+  {
+    id: 'early_crosser',
+    icon: '🎯',
+    name: 'ชอบเปิดบอลเร็ว',
+    desc: 'ได้จังหวะริมเส้นมักครอสบอลโค้งเข้ากรอบทันทีก่อนแนวรับตั้งตัว',
+    tone: 'play',
+    pos: ['MF', 'DF', 'FW'],
+    roles: ['LM', 'RM', 'LB', 'RB', 'LWB', 'RWB', 'LW', 'RW']
+  },
+  {
+    id: 'long_diagonal',
+    icon: '📡',
+    name: 'ชอบวางบอลเปลี่ยนแกน',
+    desc: 'ถนัดเปิดบอลยาวข้ามฟากแม่นยำเพื่อฉีกแนวรับคู่แข่ง',
+    tone: 'play',
+    pos: ['MF', 'DF'],
+    roles: ['CM', 'CDM', 'LCM', 'RCM', 'CB', 'LB', 'RB']
+  },
+  {
+    id: 'one_two_lover',
+    icon: '🔁',
+    name: 'ชอบเล่นชิ่ง 1-2',
+    desc: 'ชอบฝากบอลให้เพื่อนแล้ววิ่งสอดหาพื้นที่รับบอลคืนทันที',
+    tone: 'play',
+    pos: ['MF', 'FW'],
+    roles: ['CF', 'CAM', 'CM', 'LW', 'RW']
+  },
+  {
+    id: 'setpiece_specialist',
+    icon: '📐',
+    name: 'เจ้าพ่อลูกนิ่ง',
+    desc: 'รับหน้าที่ปั่นฟรีคิกและเปิดลูกเตะมุมโค้งอันตรายอย่างแม่นยำ',
+    tone: 'play',
+    pos: ['MF', 'FW', 'DF'],
+    roles: ['CAM', 'CM', 'LW', 'RW', 'LB', 'RB']
+  },
+  {
+    id: 'tempo_controller',
+    icon: '🕰️',
+    name: 'ตัวคุมจังหวะเกม',
+    desc: 'เก็บบอลเหนียวแน่น คุมสปีดการต่อบอลของทีมไม่ให้เสียจังหวะ',
+    tone: 'play',
+    pos: ['MF', 'DF'],
+    roles: ['CM', 'CDM', 'LCM', 'RCM', 'LDM', 'RDM']
+  },
+  {
+    id: 'team_first',
+    icon: '🤝',
+    name: 'สายทีมเวิร์กจ่ายชัวร์',
+    desc: 'เล่นเพื่อทีม เชื่อมบอลปลอดภัยและส่งให้เพื่อนที่ยืนตำแหน่งดีกว่า',
+    tone: 'play',
+    pos: ['MF', 'DF', 'FW'],
+    roles: ['CM', 'CDM', 'CF', 'LB', 'RB'],
+    conflicts: ['selfish_shooter']
+  },
+
+  // Defending
+  {
+    id: 'slide_tackler',
+    icon: '🛷',
+    name: 'ชอบเสียบสไลด์',
+    desc: 'กล้าพุ่งสไลด์กวาดบอลเด็ดขาดในจังหวะสำคัญ (เสี่ยงฟาวล์เล็กน้อย)',
+    tone: 'def',
+    pos: ['DF', 'MF'],
+    roles: ['CB', 'LB', 'RB', 'CDM', 'LDM', 'RDM']
+  },
+  {
+    id: 'interception_hawk',
+    icon: '👁️',
+    name: 'ดักทางบอลเฉียบ',
+    desc: 'อ่านจังหวะจ่ายบอลคู่แข่งขาด ชอบชิงตัดบอลก่อนถึงเป้าหมาย',
+    tone: 'def',
+    pos: ['DF', 'MF'],
+    roles: ['CB', 'CDM', 'LDM', 'RDM', 'CM']
+  },
+  {
+    id: 'man_marker',
+    icon: '🔒',
+    name: 'กัดไม่ปล่อย',
+    desc: 'ประกบตัวรุกคู่แข่งติดแจ เบียดปะทะหนักหน่วงไม่ให้พลิกบอล',
+    tone: 'def',
+    pos: ['DF', 'MF'],
+    roles: ['CB', 'CDM', 'LB', 'RB']
+  },
+  {
+    id: 'body_blocker',
+    icon: '🧱',
+    name: 'เอาตัวขวางทุกช็อต',
+    desc: 'กล้าทิ้งตัวบล็อกลูกยิงหน้าเขตโทษ ช่วยเซฟจังหวะอันตรายได้บ่อย',
+    tone: 'def',
+    pos: ['DF', 'MF'],
+    roles: ['CB', 'CDM']
+  },
+  {
+    id: 'ball_playing_cb',
+    icon: '🧠',
+    name: 'หลังชอบลากขึ้นเกม',
+    desc: 'กล้าพาบอลขึ้นหน้าและจ่ายบอลทะลุไลน์จากแดนหลัง',
+    tone: 'def',
+    pos: ['DF'],
+    roles: ['CB', 'LB', 'RB']
+  },
+  {
+    id: 'overlapping_runner',
+    icon: '🚂',
+    name: 'แบ็กจอมเติมเกม',
+    desc: 'ชอบวิ่งสปีดอ้อมหลังปีกขึ้นสุดเส้นหลังเพื่อเปิดบอลกดดัน',
+    tone: 'def',
+    pos: ['DF'],
+    roles: ['LB', 'RB', 'LWB', 'RWB']
+  },
+
+  // Goalkeeper
+  {
+    id: 'sweeper_keeper',
+    icon: '🦅',
+    name: 'โกลชอบออกมาตัดบอล',
+    desc: 'กล้าออกมานอกเส้นประตูตัดบอลยาวและปิดมุมยิงเร็ว',
+    tone: 'gk',
+    pos: ['GK'],
+    roles: ['GK']
+  },
+  {
+    id: 'penalty_saver',
+    icon: '🧤',
+    name: 'จอมเซฟจุดโทษ',
+    desc: 'อ่านใจคนยิงเก่งเป็นพิเศษในจังหวะจุดโทษและดวลชี้ขาด',
+    tone: 'gk',
+    pos: ['GK'],
+    roles: ['GK']
+  },
+  {
+    id: 'reflex_cat',
+    icon: '🐱',
+    name: 'ปฏิกิริยาแมวป่า',
+    desc: 'พุ่งปัดลูกยิงจ่อๆ และบอลแฉลบเปลี่ยนทางได้อย่างเหลือเชื่อ',
+    tone: 'gk',
+    pos: ['GK'],
+    roles: ['GK']
+  },
+  {
+    id: 'long_throw_counter',
+    icon: '🚀',
+    name: 'เปิดเกมสวนกลับเร็ว',
+    desc: 'เซฟบอลได้มักขว้างหรือเตะยาวสวนกลับให้แนวรุกทันที',
+    tone: 'gk',
+    pos: ['GK'],
+    roles: ['GK']
+  },
+
+  // Universal Mental & Physical
+  {
+    id: 'clutch_player',
+    icon: '🔥',
+    name: 'นักเตะเกมใหญ่',
+    desc: 'ยิ่งท้ายเกม ดาร์บี้แมตช์ หรือบอลถ้วย ยิ่งเล่นนิ่งและคมขึ้น',
+    tone: 'ment',
+    pos: ['FW', 'MF', 'DF', 'GK']
+  },
+  {
+    id: 'iron_lungs',
+    icon: '🔋',
+    name: 'ปอดเหล็กวิ่งไม่หมด',
+    desc: 'ฟิตอึดผิดปกติ พลังงานในสนามลดช้ากว่าผู้เล่นทั่วไป',
+    tone: 'phys',
+    pos: ['FW', 'MF', 'DF'],
+    conflicts: ['glass_cannon']
+  },
+  {
+    id: 'pressing_machine',
+    icon: '🐺',
+    name: 'จอมเพรสไล่บี้',
+    desc: 'วิ่งบีบพื้นที่กดดันคู่แข่งตลอดเวลา ช่วยทีมแย่งบอลแดนบน',
+    tone: 'phys',
+    pos: ['FW', 'MF', 'DF'],
+    roles: ['ST', 'CF', 'CM', 'CDM', 'LW', 'RW']
+  },
+  {
+    id: 'hot_headed',
+    icon: '😡',
+    name: 'อารมณ์ร้อน/เข้าหนัก',
+    desc: 'ทุ่มเทดุดันแต่หงุดหงิดง่าย เสี่ยงโดนใบเหลือง/แดงบ่อยขึ้น',
+    tone: 'ment',
+    pos: ['FW', 'MF', 'DF'],
+    conflicts: ['calm_leader']
+  },
+  {
+    id: 'calm_leader',
+    icon: '👑',
+    name: 'ผู้นำใจเย็น',
+    desc: 'คุมสติในสนามดี ปลุกใจเพื่อนร่วมทีมและลดจังหวะเสียใบเหลือง',
+    tone: 'ment',
+    pos: ['FW', 'MF', 'DF', 'GK'],
+    conflicts: ['hot_headed']
+  },
+  {
+    id: 'super_sub',
+    icon: '💥',
+    name: 'ซูเปอร์ซับทีเด็ด',
+    desc: 'ลงสนามเป็นตัวสำรองทีไร มักพลิกเกมและยิงประตูสำคัญได้เสมอ',
+    tone: 'ment',
+    pos: ['FW', 'MF']
+  },
+  {
+    id: 'consistency_pro',
+    icon: '⭐',
+    name: 'มืออาชีพสม่ำเสมอ',
+    desc: 'รักษามาตรฐานการเล่นได้ดีทุกนัด ไม่ค่อยหลุดฟอร์ม',
+    tone: 'ment',
+    pos: ['FW', 'MF', 'DF', 'GK']
+  },
+  {
+    id: 'glass_cannon',
+    icon: '⚡',
+    name: 'ทุ่มสุดตัวไม่กลัวเจ็บ',
+    desc: 'สปีดและแรงปะทะจัดเต็มทุกจังหวะ แต่เสียฟิตและเสี่ยงเจ็บง่ายขึ้น',
+    tone: 'phys',
+    pos: ['FW', 'MF', 'DF'],
+    conflicts: ['iron_lungs']
+  }
+];
+
+export const TRAIT_BY_ID: Record<string, FootballTraitDef> = Object.fromEntries(
+  FOOTBALL_TRAITS.map((t) => [t.id, t])
+);
 
 
 export const ROLE_BASE_ATTRS = (pos: Position, sp: SubRole): CoreAttrs => {

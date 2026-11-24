@@ -7,7 +7,8 @@ import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers } from './engine/simulation';
-import { countReadyMissions } from './engine/missions';
+import { applyMatchMissionProgress } from './engine/missions';
+import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -221,6 +222,30 @@ export default function App() {
         });
       };
 
+      const recordMatchMissions = () => {
+        const mSum = applyMatchMissionProgress(d, H, A, payload);
+        if (mSum.upgraded.length > 0) {
+          const first = mSum.upgraded[0];
+          const msg =
+            mSum.upgraded.length === 1
+              ? `🎯 ${first.player} ผ่านภารกิจ "${first.mission} ขั้น ${first.stage}" อัปพลังอัตโนมัติ! (${first.rewardText})`
+              : `🎯 ภารกิจหลังเกมอัปพลังสำเร็จ ${mSum.upgraded.length} รายการ (เช่น ${first.player}: ${first.mission} ขั้น ${first.stage})`;
+          pushFeed(d, 'ภารกิจอัปพลัง', msg, 'ok');
+          showToast(msg);
+        }
+        if (mSum.failed.length > 0) {
+          const firstF = mSum.failed[0];
+          pushFeed(
+            d,
+            'ภารกิจส่วนบุคคล',
+            mSum.failed.length === 1
+              ? `💨 ${firstF.player} พลาดอัปพลัง "${firstF.mission} ขั้น ${firstF.stage}" (โอกาส ${firstF.chance}% รอบนี้ไม่สำเร็จ)`
+              : `💨 มี ${mSum.failed.length} รายการพลาดลุ้นอัปขั้นภารกิจหลังจบเกม (ติดเกณฑ์พรสวรรค์)`,
+            ''
+          );
+        }
+      };
+
       if (kind === 'cup') {
         const c = d.cup;
         const nx: number[] = [];
@@ -251,11 +276,26 @@ export default function App() {
         }
         if (nx.length === 1) {
           c.done = true;
-          if (nx[0] === d.me && d.mode === 'm') {
-            d.money += 250;
-            logFin(d, 'รางวัลแชมป์ถ้วยประชาชน', 250);
-            d.trophies = [...(d.trophies || []), { season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' }];
-            d.mgrRep = (d.mgrRep || 50) + 75;
+          const winTeam = d.teams[nx[0]];
+          if (winTeam) {
+            winTeam.trophies = winTeam.trophies || [];
+            if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === 'cup')) {
+              winTeam.trophies.push({ season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
+            }
+          }
+          if (nx[0] === d.me) {
+            d.trophies = d.trophies || [];
+            if (!d.trophies.some((tr) => tr.season === d.season && tr.type === 'cup')) {
+              d.trophies.push({ season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
+            }
+            if (d.mode === 'm') {
+              d.money += 250;
+              logFin(d, 'รางวัลแชมป์ถ้วยประชาชน', 250);
+              d.mgrRep = (d.mgrRep || 50) + 75;
+            } else if (d.p) {
+              const meSq = me.sq.find((q) => q.me);
+              appendPlayerCareerLog(meSq, `🏆 ซีซั่น ${d.season}: คว้าแชมป์ถ้วยประชาชนกับ ${me.name}`, d.p);
+            }
             triggerConfetti();
           }
         }
@@ -270,6 +310,7 @@ export default function App() {
         });
         applyMatchCards(d, H, A, payload.cards);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        recordMatchMissions();
         return;
       }
 
@@ -303,11 +344,26 @@ export default function App() {
         }
         if (nx.length === 1) {
           c.done = true;
-          if (nx[0] === d.me && d.mode === 'm') {
-            d.money += 500;
-            logFin(d, 'รางวัลแชมป์ทวีป', 500);
-            d.trophies = [...(d.trophies || []), { season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' }];
-            d.mgrRep = (d.mgrRep || 50) + 120;
+          const winTeam = d.teams[nx[0]];
+          if (winTeam) {
+            winTeam.trophies = winTeam.trophies || [];
+            if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === 'asia')) {
+              winTeam.trophies.push({ season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
+            }
+          }
+          if (nx[0] === d.me) {
+            d.trophies = d.trophies || [];
+            if (!d.trophies.some((tr) => tr.season === d.season && tr.type === 'asia')) {
+              d.trophies.push({ season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
+            }
+            if (d.mode === 'm') {
+              d.money += 500;
+              logFin(d, 'รางวัลแชมป์ทวีป', 500);
+              d.mgrRep = (d.mgrRep || 50) + 120;
+            } else if (d.p) {
+              const meSq = me.sq.find((q) => q.me);
+              appendPlayerCareerLog(meSq, `🌏 ซีซั่น ${d.season}: คว้าแชมป์สโมสรทวีปกับ ${me.name}`, d.p);
+            }
             triggerConfetti();
           }
         }
@@ -322,6 +378,7 @@ export default function App() {
         });
         applyMatchCards(d, H, A, payload.cards);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        recordMatchMissions();
         return;
       }
 
@@ -381,14 +438,26 @@ export default function App() {
 
       d.records = d.records || {};
       const diff = myGoals - oppGoals;
+      const matchTag = `ซ.${d.season} ${line}`;
       if (diff > (d.records.bestWin?.diff || 0)) {
-        d.records.bestWin = { txt: line, diff };
+        d.records.bestWin = { txt: matchTag, diff };
+      }
+      if (-diff > (d.records.worstLoss?.diff || 0)) {
+        d.records.worstLoss = { txt: matchTag, diff: -diff };
       }
       if (diff > 0) {
         d.records.curStreak = (d.records.curStreak || 0) + 1;
         if (d.records.curStreak > (d.records.winStreak || 0)) d.records.winStreak = d.records.curStreak;
       } else {
         d.records.curStreak = 0;
+      }
+      if (diff >= 0) {
+        d.records.curUnbeatenStreak = (d.records.curUnbeatenStreak || 0) + 1;
+        if (d.records.curUnbeatenStreak > (d.records.unbeatenStreak || 0)) {
+          d.records.unbeatenStreak = d.records.curUnbeatenStreak;
+        }
+      } else {
+        d.records.curUnbeatenStreak = 0;
       }
 
       if (d.mode === 'm') {
@@ -433,6 +502,7 @@ export default function App() {
       applyLiveInjuries();
       afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam });
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
+      recordMatchMissions();
     });
   };
 
@@ -500,7 +570,9 @@ export default function App() {
           assignTeamShirtNumbers(newT);
           d.p.no = mePlayer.no;
           d.me = transferToTeamId;
-          d.hist.push(`✍️ ย้ายซบ ${newT.name} (${TN[newT.tier]}) ในซีซั่น ${d.season + 1}`);
+          const trLog = `✍️ ย้ายซบ ${newT.name} (${TN[newT.tier]}) ในซีซั่น ${d.season + 1}`;
+          d.hist.push(trLog);
+          appendPlayerCareerLog(mePlayer, trLog, d.p);
         }
       }
       d.season++;
@@ -754,6 +826,7 @@ export default function App() {
               tab={curTab}
               onUpdateState={updateState}
               onToast={showToast}
+              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onOpenSeasonStats={(seasonNum) =>
                 setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
               }
@@ -780,12 +853,8 @@ export default function App() {
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
               let badgeCount = 0;
-              if (state.mode === 'm') {
-                if (key === 'k') badgeCount = getIncomingOffers(state).length + (state.scout?.results ? 1 : 0);
-                else if (key === 'r') badgeCount = me.sq.reduce((sum, q) => sum + countReadyMissions(q, null), 0);
-              } else if (key === 'p' && state.p) {
-                const meSq = me.sq.find((q) => q.me);
-                if (meSq) badgeCount = countReadyMissions(meSq, state.p);
+              if (state.mode === 'm' && key === 'k') {
+                badgeCount = getIncomingOffers(state).length + (state.scout?.results ? 1 : 0);
               }
               return (
                 <button

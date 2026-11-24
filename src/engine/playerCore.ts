@@ -1,7 +1,7 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, ClubIdentity, PlayerCareerProfile, GameState } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -203,17 +203,95 @@ export function visOf(q: Partial<Player>, careerP?: PlayerCareerProfile | null):
   ];
 }
 
+export function rollPlayerTraits(
+  pos: Position,
+  ro: SubRole,
+  ov = 60,
+  talent = 60,
+  seedStr?: string
+): string[] {
+  let seed = 0;
+  if (seedStr) {
+    seed = [...seedStr].reduce((a, c, i) => ((a * 33) ^ (c.charCodeAt(0) * (i + 1))) >>> 0, 5381);
+  }
+  const nextRand = () => {
+    if (!seedStr) return Math.random();
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+
+  const rRoll = nextRand();
+  let count = rRoll < 0.28 ? 2 : rRoll < 0.84 ? 3 : 4;
+  if (ov < 52 && talent < 60 && count > 2) count = 2;
+  if (pos === 'GK' && count > 3) count = 3;
+
+  const candidates = FOOTBALL_TRAITS.filter((t) => t.pos.includes(pos));
+  const picked: FootballTraitDef[] = [];
+
+  for (let step = 0; step < count && candidates.length > 0; step++) {
+    const avail = candidates.filter(
+      (t) =>
+        !picked.some((x) => x.id === t.id) &&
+        !picked.some((x) => t.conflicts?.includes(x.id) || x.conflicts?.includes(t.id))
+    );
+    if (!avail.length) break;
+    const weighted: FootballTraitDef[] = [];
+    avail.forEach((t) => {
+      let w = 2;
+      if (t.roles?.includes(ro)) w += 4;
+      if (t.pos.length === 1) w += 2;
+      if (step === 0 && (t.tone === 'gk' || (pos === 'FW' && t.tone === 'att') || (pos === 'DF' && t.tone === 'def') || (pos === 'MF' && t.tone === 'play'))) {
+        w += 3;
+      }
+      for (let k = 0; k < w; k++) weighted.push(t);
+    });
+    const chosen = weighted[Math.floor(nextRand() * weighted.length)] || avail[0];
+    picked.push(chosen);
+  }
+
+  return picked.map((t) => t.id);
+}
+
+export function getPlayerTraits(
+  q: Partial<Player>,
+  careerP?: PlayerCareerProfile | null
+): FootballTraitDef[] {
+  const raw = q.me && careerP?.traits?.length ? careerP.traits : q.traits;
+  const ids =
+    raw && raw.length > 0
+      ? raw
+      : rollPlayerTraits(q.pos || 'MF', q.ro || 'CM', q.ov || 60, q.talent || 60, `${q.n || 'นักเตะ'}:${q.pos || 'MF'}:${q.ro || 'CM'}`);
+  return ids.map((id) => TRAIT_BY_ID[id]).filter((t): t is FootballTraitDef => Boolean(t));
+}
+
+export function hasTrait(
+  q: Partial<Player> | string[] | undefined,
+  traitId: string,
+  careerP?: PlayerCareerProfile | null
+): boolean {
+  if (!q) return false;
+  if (Array.isArray(q)) return q.includes(traitId);
+  return getPlayerTraits(q, careerP).some((t) => t.id === traitId);
+}
+
 export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: SubRole): Player {
   const age = yo ? R(16, 18) : R(17, 34);
   const ov = yo ? clamp(baseOv + R(-6, 4), 20, 82) : clamp(baseOv + R(-9, 9), 25, 92);
+  const talent = yo
+    ? clamp(Math.round(48 + (ov - 45) * 0.45 + R(8, 36)), 40, 96)
+    : clamp(Math.round(38 + (ov - 50) * 0.55 + R(-10, 30)), 28, 95);
+  const potBoost = talent >= 80 ? R(4, 10) : 0;
+  const ro = forceRo || SPW(pos);
   return {
     n: genPlayerName(),
     pos,
-    ro: forceRo || SPW(pos),
+    ro,
     sp: 0,
     ov,
     age,
-    pot: clamp(ov + (age < 24 ? R(4, 25) : R(0, 3)), ov, 95),
+    pot: clamp(ov + (age < 24 ? R(4, 25) + Math.round(potBoost * 0.5) : R(0, 3)), ov, 95),
+    talent,
+    traits: rollPlayerTraits(pos, ro, ov, talent),
     fit: 100,
     inj: 0,
     vis: rndVis(pos, yo)
@@ -472,6 +550,14 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const f = Math.round(q.fit ?? 100);
   const d = D0.d;
   const gk = q.pos === 'GK';
+  const tlVal = clamp(
+    Math.round(
+      (q.me && careerP?.talent != null ? careerP.talent : q.talent) ??
+        clamp(Math.round(40 + ((q.pot || q.ov) - 55) * 0.5 + ((D0.h % 25) - 10)), 30, 92)
+    ),
+    25,
+    99
+  );
   const G: [string, [string, number, string?][]][] = [
     ...((gk
       ? [['🧤 ผู้รักษาประตู', [['เซฟ', d.sv, 'sv'], ['ออกมาปิดมุม', d.cl, 'cl'], ['จ่ายจากแนวหลัง', d.dist, 'dist']]]]
@@ -481,9 +567,9 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
         ]) as [string, [string, number, string?][]][]),
     ['💪 ร่างกาย', [['ความเร็ว', d.spd, 'spd'], ['ความแข็งแรง', d.str, 'str'], ['ความอึด', d.sta, 'sta']]],
     ['❤️ ความฟิต', [['ฟิตปัจจุบัน', f], ['ทนต่อบาดเจ็บ', d.tol, 'tol'], ['ฟื้นตัวเร็ว', d.rec, 'rec']]],
-    ['🌟 พรสวรรค์', [['ศักยภาพสูงสุด', q.pot || q.ov], ['นิ่งในนัดใหญ่', d.comp, 'comp']]]
+    ['🌟 พรสวรรค์', [['ค่าพรสวรรค์', tlVal], ['ศักยภาพสูงสุด', q.pot || q.ov], ['นิ่งในนัดใหญ่', d.comp, 'comp']]]
   ];
-  const allD = G.flatMap((g) => g[1]).filter((z) => !['ฟิตปัจจุบัน', 'ศักยภาพสูงสุด'].includes(z[0]));
+  const allD = G.flatMap((g) => g[1]).filter((z) => !['ฟิตปัจจุบัน', 'ศักยภาพสูงสุด', 'ค่าพรสวรรค์'].includes(z[0]));
   const sg = allD.find((z) => z[2] === D0.sig) || allD.find((z) => z[0] === SIGL[D0.sig]);
   const ot = allD.filter((z) => z !== sg).sort((u, w) => w[1] - u[1])[0];
   const top = [sg, ot].filter((z): z is [string, number, string?] => Boolean(z));
@@ -496,6 +582,7 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const ag = q.age || 24;
   const gro = ag < D0.pk - 2 ? 'กำลังเติบโต' : ag <= D0.pk + 4 ? 'ช่วงพีค' : 'เริ่มถดถอย';
   const stCls = (q.sus || 0) > 0 || q.inj > 0 ? 'bad' : f < 60 ? 'wrn' : 'ok';
+  const traits = getPlayerTraits(q, careerP);
   const stTxt =
     (q.sus || 0) > 0
       ? `🟥 โดนแบน ${q.sus} นัด`
@@ -504,7 +591,7 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
         : f < 60
           ? `⚠️ เหนื่อยล้า (${f}%)`
           : `✅ พร้อมลง (${f}%)`;
-  return { D0, a, f, d, gk, G, top, TR, ag, gro, stCls, stTxt };
+  return { D0, a, f, d, gk, G, top, TR, traits, ag, gro, stCls, stTxt };
 }
 
 export function injD(q: Player, n: number, careerP?: PlayerCareerProfile | null): number {
@@ -561,6 +648,10 @@ export function syncMe(s: GameState) {
     else if (q.sb) s.p.sb = { ...q.sb };
     if (s.p.missions) q.missions = s.p.missions;
     else if (q.missions) s.p.missions = q.missions;
+    if (s.p.talent != null) q.talent = s.p.talent;
+    else if (q.talent != null) s.p.talent = q.talent;
+    if (s.p.traits?.length) q.traits = [...s.p.traits];
+    else if (q.traits?.length) s.p.traits = [...q.traits];
     if (!q.pot || q.pot < q.ov) q.pot = clamp(92, q.ov + 12, 95);
     if (q.blessed) {
       q.customA = { ...s.p.a };
