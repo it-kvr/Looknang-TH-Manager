@@ -122,9 +122,11 @@ export const KIT_SW = [
 
 export const SIGL: Record<string, string> = {
   fin: 'จบสกอร์', pw: 'พลังยิง', cur: 'ยิงโค้ง', fk: 'ลูกตั้งเตะ', run: 'เข้าทำตำแหน่ง (วิ่งหาช่อง)',
-  crs: 'เปิดบอล', rd: 'อ่านเกม', pos: 'สกัด/ยืนตำแหน่ง', mrk: 'ประกบตัว', blk: 'บล็อกลูกยิง', hd: 'โหม่ง',
-  spd: 'ความเร็ว', str: 'ความแข็งแรง', sta: 'ความอึด', tol: 'ทนต่อบาดเจ็บ', rec: 'ฟื้นตัวเร็ว',
-  comp: 'ความนิ่งในนัดใหญ่', sv: 'เซฟ', cl: 'ออกมาปิดมุม', dist: 'จ่ายจากแนวหลัง'
+  crs: 'เปิดบอล', rd: 'อ่านเกม', tkl: 'เข้าสกัด', pos: 'ยืนตำแหน่ง', mrk: 'ประกบตัว', blk: 'บล็อกลูกยิง', hd: 'โหม่ง',
+  spd: 'ความเร็ว', str: 'ความแข็งแรง', sta: 'ความอึด', agi: 'ความคล่องตัว', jmp: 'พลังกระโดด',
+  tol: 'ทนต่อบาดเจ็บ', rec: 'ฟื้นตัวเร็ว', end: 'ยืนระยะเกม', bal: 'สมดุลร่างกาย',
+  comp: 'นิ่งในนัดใหญ่', vis: 'ไหวพริบอ่านเกม', det: 'ความมุ่งมั่น',
+  sv: 'เซฟ', cl: 'ออกมาปิดมุม', dist: 'จ่ายจากแนวหลัง'
 };
 
 export const FOOTBALL_TRAITS: FootballTraitDef[] = [
@@ -575,11 +577,11 @@ export const PLAYER_ARCHETYPES: PlayerArchetype[] = [
     name: 'ตัวรับตัดเกมดุดัน',
     desc: 'อ่านทางบอลขาด เข้าสกัดแม่นยำ ประกบติดและปิดพื้นที่เก่ง',
     tr: 'tk',
-    sig: 'rd',
+    sig: 'tkl',
     coreBonus: { tk: 3, ph: 1 },
-    sbBonus: { pos: 5, mrk: 4, str: 4 },
+    sbBonus: { rd: 5, mrk: 4, str: 4 },
     autoCorePts: { tk: 6, ph: 3, ps: 2, dr: 1 },
-    autoSubPts: { rd: 3, pos: 3, mrk: 2 }
+    autoSubPts: { tkl: 3, rd: 3, mrk: 2 }
   },
   {
     id: 'stopper',
@@ -658,6 +660,34 @@ export const PRE: [string, { form: string; tac: Mentality; press: number; tempo:
   ['เกมสวน', { form: '5-3-2', tac: 'D', press: 0, tempo: 2, wid: 1, line: 0, pass: 3 }],
   ['ปิดเกมรับ', { form: '5-4-1', tac: 'Z', press: 0, tempo: 0, wid: 0, line: 0, pass: 2 }],
   ['บอลยาวปีก', { form: '3-4-3', tac: 'B', press: 1, tempo: 2, wid: 2, line: 1, pass: 2 }]
+];
+
+export interface ClubPhilosophyDef {
+  id: string;
+  name: string;
+  form: string;
+  tac: Mentality;
+  press: number;
+  tempo: number;
+  wid: number;
+  line: number;
+  pass: number;
+  styleGroup: 'attack' | 'control' | 'balanced' | 'counter';
+}
+
+export const CLUB_PHILOSOPHIES: ClubPhilosophyDef[] = [
+  { id: 'tikitaka', name: 'ติกิตาก้า ครองบอลบุก', form: '4-3-3 (F9)', tac: 'A', press: 2, tempo: 1, wid: 1, line: 2, pass: 0, styleGroup: 'control' },
+  { id: 'gegenpress', name: 'เกเก้นเพรสซิ่ง ดุดัน', form: '4-2-3-1', tac: 'A', press: 2, tempo: 2, wid: 1, line: 2, pass: 1, styleGroup: 'attack' },
+  { id: 'wing_blitz', name: 'เปิดเกมรุกริมเส้น', form: '4-3-3', tac: 'A', press: 1, tempo: 2, wid: 2, line: 2, pass: 2, styleGroup: 'attack' },
+  { id: 'total_343', name: 'โททัลฟุตบอลบุกแหลก', form: '3-4-3', tac: 'X', press: 2, tempo: 2, wid: 2, line: 2, pass: 1, styleGroup: 'attack' },
+  { id: 'diamond_mid', name: 'ไดมอนด์คุมแดนกลาง', form: '4-1-2-1-2', tac: 'B', press: 1, tempo: 1, wid: 0, line: 1, pass: 0, styleGroup: 'control' },
+  { id: 'wingback_352', name: 'วิงแบ็กเติมเกมคู่หน้า', form: '3-5-2', tac: 'B', press: 1, tempo: 1, wid: 2, line: 1, pass: 1, styleGroup: 'balanced' },
+  { id: 'classic_442', name: 'สมดุลคู่หน้าคลาสสิก', form: '4-4-2', tac: 'B', press: 1, tempo: 1, wid: 1, line: 1, pass: 1, styleGroup: 'balanced' },
+  { id: 'linkup_4411', name: 'เพรสซิ่งจังหวะสอง', form: '4-4-1-1', tac: 'B', press: 1, tempo: 0, wid: 1, line: 1, pass: 0, styleGroup: 'balanced' },
+  { id: 'counter_532', name: 'รับแน่นสวนกลับเร็ว', form: '5-3-2', tac: 'D', press: 0, tempo: 2, wid: 1, line: 0, pass: 3, styleGroup: 'counter' },
+  { id: 'fortress_541', name: 'ป้อมปราการเกมรับ', form: '5-4-1', tac: 'Z', press: 0, tempo: 0, wid: 0, line: 0, pass: 2, styleGroup: 'counter' },
+  { id: 'direct_4231', name: 'บอลไดเรกต์จู่โจมไว', form: '4-2-3-1', tac: 'B', press: 1, tempo: 2, wid: 2, line: 1, pass: 3, styleGroup: 'attack' },
+  { id: 'counter_442', name: '4-4-2 รัดกุมรอสวน', form: '4-4-2', tac: 'D', press: 0, tempo: 2, wid: 1, line: 0, pass: 3, styleGroup: 'counter' }
 ];
 
 export const PACT = [

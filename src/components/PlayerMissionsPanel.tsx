@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Player, Team, GameState } from '../types/game';
-import { statTierMeta, getPlayerMissionView, formatMissionRewardText, talentTierMeta } from '../engine/missions';
+import { clamp } from '../utils/math';
+import { statTierMeta, statBarColor, getPlayerMissionView, formatMissionRewardText, talentTierMeta } from '../engine/missions';
 
 export const StatBarRow: React.FC<{ label: string; value: number; compact?: boolean }> = ({
   label,
@@ -8,18 +9,22 @@ export const StatBarRow: React.FC<{ label: string; value: number; compact?: bool
   compact
 }) => {
   const tier = statTierMeta(value);
+  const pct = clamp(Math.round(value), 6, 100);
   return (
-    <div className={`flex items-center justify-between gap-2 ${compact ? 'py-[2px] mland:py-[1px]' : 'py-0.5'}`}>
-      <span className="min-w-0 flex items-center gap-1.5 truncate text-[11.5px] mland:text-[9.5px] text-[var(--ink)]/85 font-medium">
+    <div className={`flex items-center gap-1.5 sm:gap-2 ${compact ? 'py-[2px] mland:py-[1px]' : 'py-0.5'}`}>
+      <span className="w-[84px] sm:w-[94px] mland:w-[68px] shrink-0 flex items-center gap-1.5 truncate text-[11px] mland:text-[9px] text-[var(--ink)]/90 font-medium">
         <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tier.dotClass}`} aria-hidden="true" />
         <span className="truncate">{label}</span>
       </span>
-      <span
-        className={`shrink-0 px-1.5 py-[1px] mland:px-1 mland:py-0 rounded-md border text-[11px] mland:text-[9px] tabular leading-tight ${tier.badgeClass}`}
-      >
-        <b className="font-extrabold">{value}</b>
-        <span className="opacity-65 font-semibold text-[9.5px] mland:text-[7.5px]">/100</span>
-      </span>
+      <div className="flex-1 min-w-[32px] h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/60 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${pct}%`, background: statBarColor(value) }}
+        />
+      </div>
+      <b className={`w-6 mland:w-5 text-right shrink-0 text-[11px] mland:text-[9px] font-extrabold tabular leading-tight ${tier.textClass}`}>
+        {value}
+      </b>
     </div>
   );
 };

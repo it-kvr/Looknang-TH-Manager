@@ -1,10 +1,7 @@
 import React, { useState } from 'react';
-import type { SubRole, Player, CustomSlot, Team, GameState } from '../types/game';
+import type { SubRole, CustomSlot, Team } from '../types/game';
 import { FSD, LINE, SPN, ROLE_HINT, POSL } from '../data/thaiFootballData';
-import { fmtMoney, fmtMoneyNum } from '../utils/math';
-import { vlu, ensureCon } from '../engine/playerCore';
-import { ovColor } from '../engine/missions';
-import { PlayerFace, PITCH_SVG_BASE } from '../components/SvgVisuals';
+import { PITCH_SVG_BASE } from '../components/SvgVisuals';
 
 export const CustomFormationModal: React.FC<{
   team: Team;
@@ -149,100 +146,4 @@ export const CustomFormationModal: React.FC<{
   );
 };
 
-export const PitchPlayerModal: React.FC<{
-  state: GameState;
-  player: Player;
-  onClose: () => void;
-  onConfirm: (askPct: number) => void;
-}> = ({ state, player, onClose, onConfirm }) => {
-  const me = state.teams[state.me];
-  const baseVal = Math.max(5, vlu(player));
-  const [askPct, setAskPct] = useState<85 | 100 | 118>(100);
-  const askAmt = Math.max(5, Math.round((baseVal * askPct) / 100));
-  const options: { pct: 85 | 100 | 118; title: string; hint: string }[] = [
-    { pct: 85, title: 'ขายด่วน (85%)', hint: 'โอกาสมีสโมสรยื่นข้อเสนอสูง รีบปล่อยตัว' },
-    { pct: 100, title: 'ราคาตลาด (100%)', hint: 'สมดุลระหว่างค่าตัวกับความสนใจของสโมสรอื่น' },
-    { pct: 118, title: 'ตั้งราคาสูง (118%)', hint: 'ได้ราคาดีหากมีทีมต้องการ แต่บางทีมอาจไม่ยื่น' }
-  ];
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-3 mland:p-1.5 overflow-hidden" onClick={onClose}>
-      <div className="w-full max-w-2xl max-h-[94dvh] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="shrink-0 flex items-center gap-3 p-3 mland:p-2.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
-          <PlayerFace player={player} team={me} state={state} size={44} />
-          <div className="flex-1 min-w-0">
-            <div className="font-bold text-sm mland:text-xs truncate">
-              เสนอขาย {player.n} <span className="text-xs text-[var(--g)]">({player.ro})</span>
-            </div>
-            <div className="text-[11px] text-[var(--mut)] tabular">
-              อายุ {player.age} ปี · ประเมินตลาด {fmtMoney(baseVal)} · ค่าเหนื่อย {fmtMoneyNum(ensureCon(player).wg)}/นัด
-            </div>
-          </div>
-          <span className="px-2.5 py-1 rounded-xl text-white font-bold text-sm tabular shrink-0" style={{ background: ovColor(player.ov) }}>
-            {player.ov}
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="ปิดหน้าต่างเสนอขาย"
-            className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer shrink-0 hover:border-[var(--g)]"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="p-3.5 mland:p-2.5 flex-1 min-h-0 overflow-y-auto grid grid-cols-[0.85fr_1.15fr] gap-3.5 mland:gap-2.5 items-start">
-          <div className="space-y-2.5">
-            <p className="text-xs mland:text-[11px] text-[var(--mut)] leading-relaxed mland:leading-snug">
-              ระบบจะขึ้นบัญชีขาย <b>{player.n}</b> ในตลาดและส่งโปรไฟล์ให้สโมสรในระดับใกล้เคียงพิจารณา สโมสรที่สนใจจะยื่นข้อเสนอเข้ามาให้คุณกดตอบรับหรือโก่งราคา
-            </p>
-            <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between text-xs tabular">
-              <span className="text-[var(--mut)]">ราคาเสนอขาย</span>
-              <b className="text-sm text-[var(--g)]">~{fmtMoney(askAmt)}</b>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-3.5 py-2 mland:py-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold cursor-pointer"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={() => onConfirm(askPct)}
-                className="flex-1 py-2 mland:py-1.5 rounded-xl bg-[var(--g)] text-white text-xs font-bold cursor-pointer"
-              >
-                📨 เสนอขาย
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-2 mland:space-y-1.5">
-            {options.map((opt) => {
-              const price = Math.max(5, Math.round((baseVal * opt.pct) / 100));
-              const active = askPct === opt.pct;
-              return (
-                <button
-                  key={opt.pct}
-                  type="button"
-                  onClick={() => setAskPct(opt.pct)}
-                  className={`w-full text-left p-2.5 mland:p-2 rounded-xl border transition-colors cursor-pointer flex items-center justify-between gap-2 ${
-                    active ? 'border-[var(--g)] bg-[var(--g-soft)]' : 'border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--mut)]'
-                  }`}
-                >
-                  <div>
-                    <div className="font-bold text-xs">{opt.title}</div>
-                    <div className="text-[11px] text-[var(--mut)]">{opt.hint}</div>
-                  </div>
-                  <div className="font-bold text-sm tabular shrink-0 text-[var(--g)]">{fmtMoney(price)}</div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 

@@ -1,7 +1,8 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate } from '../types/game';
+import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, TN } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -74,6 +75,7 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
         const mePl = d.teams[d.me]?.sq.find((q) => q.me);
         if (mePl?.no) d.p.no = mePl.no;
       }
+      ensureAiTeamPhilosophies(d, false);
     }
     return d;
   } catch {
@@ -386,30 +388,99 @@ export function mkPlayer(pos: Position, baseOv: number, yo?: boolean, forceRo?: 
   };
 }
 
+export function pickClubPhilosophy(id: number, tier: number, diff = 0, randomize = true): ClubPhilosophyDef {
+  const pool = CLUB_PHILOSOPHIES.filter((ph) => {
+    if (diff >= 3 || tier >= 2) return ph.styleGroup !== 'counter' || Math.random() < 0.35;
+    if (diff <= -3) return ph.styleGroup !== 'attack' || Math.random() < 0.35;
+    return true;
+  });
+  const candidates = pool.length ? pool : CLUB_PHILOSOPHIES;
+  if (!randomize) {
+    return candidates[Math.abs(id * 7 + tier * 3) % candidates.length];
+  }
+  const offset = R(0, candidates.length - 1);
+  return candidates[(Math.abs(id) + offset) % candidates.length];
+}
+
+export function applyClubPhilosophy(team: Team, ph: ClubPhilosophyDef) {
+  team.form = ph.form;
+  team.tac = ph.tac;
+  team.press = ph.press;
+  team.tempo = ph.tempo;
+  team.wid = ph.wid;
+  team.line = ph.line;
+  team.pass = ph.pass;
+  team.philosophy = ph.name;
+  team.lu = null;
+}
+
+export function ensureAiTeamPhilosophies(s: GameState, allowSeasonRefresh = false) {
+  s.teams.forEach((t) => {
+    if (s.mode === 'm' && t.id === s.me) return;
+    const isLegacyUniform =
+      !t.philosophy &&
+      t.form === '4-4-2' &&
+      t.tac === 'B' &&
+      (t.press ?? 1) === 1 &&
+      (t.tempo ?? 1) === 1 &&
+      (t.wid ?? 1) === 1 &&
+      (t.line ?? 1) === 1 &&
+      (t.pass ?? 1) === 1;
+    if (isLegacyUniform || (allowSeasonRefresh && Math.random() < 0.18)) {
+      const avgOv = t.sq.length ? t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length : BASE[t.tier] || 55;
+      const relDiff = Math.round(avgOv - (BASE[Math.min(t.tier, BASE.length - 1)] || 55));
+      const ph = pickClubPhilosophy(t.id, t.tier, relDiff, true);
+      applyClubPhilosophy(t, ph);
+    } else if (!t.philosophy) {
+      const matched = CLUB_PHILOSOPHIES.find((p) => p.form === t.form && p.tac === t.tac) || CLUB_PHILOSOPHIES.find((p) => p.form === t.form);
+      if (matched) t.philosophy = matched.name;
+    }
+  });
+}
+
 export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)): Team {
   const kp = KIT_P[(id + tier * 5) % KIT_P.length];
   const hasSpace = name.includes(' ');
   const sx = hasSpace ? '' : P(SFX0[tier] || ['']);
+  const ph = pickClubPhilosophy(id, tier, diff, true);
+  const fsdSlots = FSD[ph.form] || FSD['4-4-2'];
+  const slotRolesByPos: Record<Position, SubRole[]> = { GK: [], DF: [], MF: [], FW: [] };
+  fsdSlots.forEach(([sp]) => {
+    const normSp = ((sp as string) === 'SS' ? 'CF' : sp) as SubRole;
+    const pos = LINE[normSp] || 'MF';
+    slotRolesByPos[pos].push(normSp);
+  });
+
+  const baseOv = BASE[tier] + diff;
+  const sq: Player[] = (
+    [
+      ['GK', 3],
+      ['DF', 8],
+      ['MF', 7],
+      ['FW', 5]
+    ] as [Position, number][]
+  ).flatMap(([p, c]) => {
+    const preferredRoles = slotRolesByPos[p];
+    return Array.from({ length: c }, (_, idx) => {
+      const forceRo = idx < preferredRoles.length ? preferredRoles[idx] : undefined;
+      return mkPlayer(p, baseOv + R(-4, 4), false, forceRo);
+    });
+  });
+
   const team: Team = {
     id,
     name: name + (sx ? ' ' + sx : ''),
     tier,
     kc: [kp[0], kp[1]],
-    sq: (
-      [
-        ['GK', 3],
-        ['DF', 8],
-        ['MF', 7],
-        ['FW', 5]
-      ] as [Position, number][]
-    ).flatMap(([p, c]) => Array.from({ length: c }, () => mkPlayer(p, BASE[tier] + diff + R(-4, 4)))),
-    form: '4-4-2',
-    tac: 'B',
-    press: 1,
-    tempo: 1,
-    wid: 1,
-    line: 1,
-    pass: 1,
+    sq,
+    form: ph.form,
+    tac: ph.tac,
+    press: ph.press,
+    tempo: ph.tempo,
+    wid: ph.wid,
+    line: ph.line,
+    pass: ph.pass,
+    philosophy: ph.name,
     pts: 0,
     gf: 0,
     ga: 0,
@@ -418,7 +489,7 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
     l: 0,
     p: 0,
     fm: '',
-    tacFam: 65
+    tacFam: R(62, 76)
   };
   assignTeamShirtNumbers(team);
   return team;
@@ -583,6 +654,15 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
   const ag = q.age || 24;
   const wing = ['LB', 'RB', 'LM', 'RM', 'LW', 'RW', 'LWB', 'RWB'].includes(q.ro);
 
+  const tlVal = clamp(
+    Math.round(
+      (q.me && careerP?.talent != null ? careerP.talent : q.talent) ??
+        clamp(Math.round(40 + ((q.pot || q.ov) - 55) * 0.5 + ((h % 25) - 10)), 30, 92)
+    ),
+    25,
+    99
+  );
+
   const d: Record<string, number> = {
     pw: cl(baseA.sh * 0.6 + baseA.ph * 0.4 + hv(1)),
     fin: cl(baseA.sh + hv(2) + (q.pos === 'FW' ? 4 : 0) + (q.ro === 'ST' ? 2 : 0)),
@@ -591,22 +671,29 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     crs: cl(baseA.ps * 0.7 + baseA.dr * 0.3 + hv(4) + (wing ? 6 : 0) + (q.ro === 'CF' ? 4 : 0)),
     run: cl(baseA.sh * 0.5 + baseA.dr * 0.3 + baseA.ph * 0.2 + hv(5) + (q.ro === 'ST' || q.ro === 'LW' || q.ro === 'RW' ? 3 : 0)),
     rd: cl(baseA.tk * 0.6 + baseA.ps * 0.4 + hv(6)),
-    pos: cl(baseA.tk * 0.7 + baseA.ps * 0.2 + baseA.ph * 0.1 + hv(7)),
+    tkl: cl(baseA.tk * 0.72 + baseA.ph * 0.18 + baseA.dr * 0.10 + hv(7)),
+    pos: cl(baseA.tk * 0.55 + baseA.ps * 0.35 + baseA.ph * 0.10 + hv(21) + (q.pos === 'DF' || q.ro === 'CDM' ? 3 : 0)),
     mrk: cl(baseA.tk * 0.65 + baseA.ph * 0.2 + baseA.ps * 0.15 + hv(18) + (q.pos === 'DF' ? 4 : 0)),
     blk: cl(baseA.tk * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(19) + (q.ro === 'CB' ? 4 : 0)),
     hd: cl(baseA.ph * 0.7 + baseA.tk * 0.3 + hv(8)),
     spd: cl(baseA.dr * 0.5 + baseA.ph * 0.5 + hv(9) - Math.max(0, ag - 31) * 2),
     str: cl(baseA.ph + hv(10)),
     sta: cl(baseA.ph * 0.8 + hv(11) + (ag < 30 ? 3 : -3)),
+    agi: cl(baseA.dr * 0.65 + baseA.ph * 0.25 + (100 - Math.max(0, ag - 28) * 2) * 0.1 + hv(22)),
+    jmp: cl(baseA.ph * 0.65 + baseA.tk * 0.2 + (q.pos === 'GK' || q.ro === 'CB' || q.ro === 'ST' ? 5 : 0) + hv(23)),
     tol: cl(55 + baseA.ph * 0.3 + hv(12)),
     rec: cl(82 - Math.max(0, ag - 24) * 2 + hv(0)),
+    end: cl(baseA.ph * 0.55 + baseA.tk * 0.15 + 22 + (ag <= 29 ? 4 : -4) + hv(24)),
+    bal: cl(baseA.ph * 0.45 + baseA.dr * 0.35 + 15 + hv(25)),
     comp: cl(q.ov * 0.7 + 22 + hv(14)),
+    vis: cl(baseA.ps * 0.55 + q.ov * 0.3 + tlVal * 0.15 + hv(26)),
+    det: cl(q.ov * 0.45 + baseA.ph * 0.25 + tlVal * 0.2 + 10 + hv(27)),
     sv: cl(q.ov * 0.7 + baseA.ph * 0.3 + hv(15)),
     cl: cl(q.ov * 0.85 + hv(16)),
     dist: cl(baseA.ps * 0.8 + hv(17))
   };
 
-  const sk = q.pos === 'GK' ? ['sv', 'cl', 'dist', 'sta', 'comp'] : ['fin', 'pw', 'cur', 'fk', 'run', 'crs', 'rd', 'pos', 'mrk', 'blk', 'hd', 'spd', 'str', 'sta', 'comp'];
+  const sk = q.pos === 'GK' ? ['sv', 'cl', 'dist', 'sta', 'comp'] : ['fin', 'pw', 'cur', 'fk', 'run', 'crs', 'rd', 'tkl', 'pos', 'mrk', 'blk', 'hd', 'spd', 'str', 'sta', 'comp'];
   const sig = po?.sig
     ? po.sig
     : q.customSig
@@ -614,7 +701,7 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
       : po?.tr
         ? q.pos === 'GK'
           ? { sh: 'cl', ps: 'dist', dr: 'cl', tk: 'sv', ph: 'sv' }[po.tr] || 'sv'
-          : { sh: 'fin', ps: 'crs', dr: 'spd', tk: 'pos', ph: 'str' }[po.tr] || sk[h % sk.length]
+          : { sh: 'fin', ps: 'crs', dr: 'spd', tk: 'tkl', ph: 'str' }[po.tr] || sk[h % sk.length]
         : sk[h % sk.length];
 
   d[sig] = cl(d[sig] + 8);
@@ -629,7 +716,7 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
       if (d[z] != null) d[z] = cl(customD[z]);
     });
   }
-  return { a: baseA, h, d, sig, tr: h % 4, pk: 26 + ((h >> 2) % 4) };
+  return { a: baseA, h, d, sig, tlVal, tr: h % 4, pk: 26 + ((h >> 2) % 4) };
 }
 
 export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
@@ -638,24 +725,17 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const f = Math.round(q.fit ?? 100);
   const d = D0.d;
   const gk = q.pos === 'GK';
-  const tlVal = clamp(
-    Math.round(
-      (q.me && careerP?.talent != null ? careerP.talent : q.talent) ??
-        clamp(Math.round(40 + ((q.pot || q.ov) - 55) * 0.5 + ((D0.h % 25) - 10)), 30, 92)
-    ),
-    25,
-    99
-  );
+  const tlVal = D0.tlVal;
   const G: [string, [string, number, string?][]][] = [
     ...((gk
       ? [['🧤 ผู้รักษาประตู', [['เซฟ', d.sv, 'sv'], ['ออกมาปิดมุม', d.cl, 'cl'], ['จ่ายจากแนวหลัง', d.dist, 'dist']]]]
       : [
           ['⚔️ โจมตี', [['พลังยิง', d.pw, 'pw'], ['จบสกอร์', d.fin, 'fin'], ['ยิงโค้ง', d.cur, 'cur'], ['ลูกตั้งเตะ', d.fk, 'fk'], ['เปิดบอล', d.crs, 'crs'], ['เข้าทำตำแหน่ง', d.run, 'run']]],
-          ['🛡️ ป้องกัน', [['อ่านเกม', d.rd, 'rd'], ['สกัด/ยืนตำแหน่ง', d.pos, 'pos'], ['ประกบตัว', d.mrk, 'mrk'], ['บล็อกลูกยิง', d.blk, 'blk'], ['โหม่ง', d.hd, 'hd']]]
+          ['🛡️ ป้องกัน', [['อ่านเกม', d.rd, 'rd'], ['เข้าสกัด', d.tkl, 'tkl'], ['ยืนตำแหน่ง', d.pos, 'pos'], ['ประกบตัว', d.mrk, 'mrk'], ['บล็อกลูกยิง', d.blk, 'blk'], ['โหม่ง', d.hd, 'hd']]]
         ]) as [string, [string, number, string?][]][]),
-    ['💪 ร่างกาย', [['ความเร็ว', d.spd, 'spd'], ['ความแข็งแรง', d.str, 'str'], ['ความอึด', d.sta, 'sta']]],
-    ['❤️ ความฟิต', [['ฟิตปัจจุบัน', f], ['ทนต่อบาดเจ็บ', d.tol, 'tol'], ['ฟื้นตัวเร็ว', d.rec, 'rec']]],
-    ['🌟 พรสวรรค์', [['ค่าพรสวรรค์', tlVal], ['ศักยภาพสูงสุด', q.pot || q.ov], ['นิ่งในนัดใหญ่', d.comp, 'comp']]]
+    ['💪 ร่างกาย', [['ความเร็ว', d.spd, 'spd'], ['ความแข็งแรง', d.str, 'str'], ['ความอึด', d.sta, 'sta'], ['ความคล่องตัว', d.agi, 'agi'], ['พลังกระโดด', d.jmp, 'jmp']]],
+    ['❤️ ความฟิต', [['ฟิตปัจจุบัน', f], ['ทนต่อบาดเจ็บ', d.tol, 'tol'], ['ฟื้นตัวเร็ว', d.rec, 'rec'], ['ยืนระยะเกม', d.end, 'end'], ['สมดุลร่างกาย', d.bal, 'bal']]],
+    ['🌟 พรสวรรค์', [['ค่าพรสวรรค์', tlVal], ['ศักยภาพสูงสุด', q.pot || q.ov], ['นิ่งในนัดใหญ่', d.comp, 'comp'], ['ไหวพริบอ่านเกม', d.vis, 'vis'], ['ความมุ่งมั่น', d.det, 'det']]]
   ];
   const allD = G.flatMap((g) => g[1]).filter((z) => !['ฟิตปัจจุบัน', 'ศักยภาพสูงสุด', 'ค่าพรสวรรค์'].includes(z[0]));
   const sg = allD.find((z) => z[2] === D0.sig) || allD.find((z) => z[0] === SIGL[D0.sig]);

@@ -4,7 +4,7 @@ import { clamp } from '../utils/math';
 import { ATT, PACT, CAREER_PERKS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, xi, dtInfo, ovMe, syncMe, tc } from '../engine/playerCore';
-import { statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
+import { statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
@@ -52,7 +52,6 @@ export const PlayerCareerView: React.FC<{
             <div className="leading-none">
               <div className={`text-xl sm:text-[24px] mland:text-base font-extrabold font-display tabular leading-none ${statTierMeta(ov).darkTextClass}`}>
                 {ov}
-                <span className="text-[9.5px] mland:text-[7.5px] text-white/45 font-semibold ml-0.5">/100</span>
               </div>
               <div className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide mt-0.5">
                 {p.sp} · #{myShirtNo}
@@ -129,17 +128,19 @@ export const PlayerCareerView: React.FC<{
             )}
           </div>
 
-          {/* Bar-less Tier-Colored 5 Core Stats Strip (/100) */}
+          {/* 5 Core Stats Strip with Color Bars */}
           <div className="bg-[#060c09]/92 border-t border-white/10 px-1.5 py-1.5 mland:px-1 mland:py-1 grid grid-cols-5 gap-1 text-center">
             {ATT.map(([k, l]) => {
               const val = p.a[k];
               const tier = statTierMeta(val);
               return (
-                <div key={k} className="rounded-lg bg-white/[0.04] py-0.5 px-0.5">
+                <div key={k} className="rounded-lg bg-white/[0.04] py-0.5 px-0.5 space-y-0.5">
                   <div className="text-[8px] mland:text-[6.5px] text-white/60 leading-tight truncate">{l}</div>
                   <div className={`text-[11.5px] mland:text-[9.5px] font-extrabold font-display tabular leading-tight ${tier.darkTextClass}`}>
                     {val}
-                    <span className="text-[7px] mland:text-[6px] text-white/40 font-semibold">/100</span>
+                  </div>
+                  <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
                   </div>
                 </div>
               );
@@ -149,11 +150,16 @@ export const PlayerCareerView: React.FC<{
 
         <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-1.5 mland:space-y-1 flex-1 min-h-0 flex flex-col justify-between">
           <div className="space-y-1.5 mland:space-y-1">
-            <div className="flex items-center justify-between text-[11.5px] mland:text-[9.5px] font-bold">
-              <span>⚡ พลังกาย (Energy)</span>
-              <span className={`tabular font-extrabold ${statTierMeta(p.en).textClass}`}>
-                {p.en}<span className="text-[9px] opacity-60 font-semibold">/100</span>
-              </span>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11.5px] mland:text-[9.5px] font-bold">
+                <span>⚡ พลังกาย (Energy)</span>
+                <span className={`tabular font-extrabold ${statTierMeta(p.en).textClass}`}>
+                  {p.en}
+                </span>
+              </div>
+              <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{ width: `${clamp(p.en, 6, 100)}%`, background: statBarColor(p.en) }} />
+              </div>
             </div>
 
             <div className={`p-2 mland:p-1 rounded-xl border text-[11px] mland:text-[9px] space-y-1 mland:space-y-0.5 ${injCount > 0 || susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
@@ -357,7 +363,7 @@ export const PlayerCareerView: React.FC<{
           {careerTab === 'stats' && (
             <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5">
               <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-                <h3 className="font-bold text-xs mland:text-[10px]">📊 รายละเอียดค่าพลังเฉพาะทาง (เต็ม 100)</h3>
+                <h3 className="font-bold text-xs mland:text-[10px]">📊 รายละเอียดค่าพลังเฉพาะทาง</h3>
                 <div className="flex flex-wrap items-center gap-1">
                   {details.traits.map((t) => (
                     <span

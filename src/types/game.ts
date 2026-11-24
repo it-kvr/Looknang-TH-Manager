@@ -191,6 +191,7 @@ export interface Team {
   fm?: string;
   foreign?: number;
   tacFam?: number;
+  philosophy?: string;
   history?: TeamSeasonHistoryRecord[];
   trophies?: TrophyRecord[];
 }
@@ -902,6 +903,11 @@ export interface LiveBallState {
     deflectedFrom?: string;
     parryCorner?: boolean;
     shootoutScored?: boolean;
+    gkDiveTargetY?: number;
+    gkDiveDir?: number;
+    gkDiveStartProg?: number;
+    gkDiveStartY?: number;
+    gkSaveX?: number;
   };
   bounceNext?: {
     setPiece?: PendingSetPiece;

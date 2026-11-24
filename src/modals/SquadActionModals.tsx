@@ -1,18 +1,19 @@
 import React, { useMemo, useState } from 'react';
 import type { GameState, Player, Position, Team } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { ROLE_L } from '../data/thaiFootballData';
+import { ROLE_L, SPN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { ensureCon, logFin, vlu, wagOf } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import {
   batchListOrPitchPlayers,
+  getIncomingOffers,
   getLeagueTransferContext,
   quickSellSquadPlayers,
   releaseSquadPlayers,
   validateBatchSquadRemoval
 } from '../engine/simulation';
-import { PlayerFace } from '../components/SvgVisuals';
+import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 
 export const SquadRenewModal: React.FC<{
   state: GameState;
@@ -220,6 +221,7 @@ export const SquadSellModal: React.FC<{
     () => validateBatchSquadRemoval(state, team, playerNames, 'sell', 85),
     [state, team, playerNames]
   );
+  const incomingOffers = useMemo(() => getIncomingOffers(state), [state]);
 
   const canPitchOrList = validation.eligiblePlayers.length > 0;
   const eligibleNames = validation.eligiblePlayers.map((q) => q.n);
@@ -227,6 +229,18 @@ export const SquadSellModal: React.FC<{
     (sum, q) => sum + Math.max(5, Math.round((Math.max(5, vlu(q)) * askPct) / 100)),
     0
   );
+  const singlePlayer =
+    validation.eligiblePlayers.length === 1 && validation.blockedPlayers.length === 0
+      ? validation.eligiblePlayers[0]
+      : validation.blockedPlayers.length === 1 && validation.eligiblePlayers.length === 0
+        ? validation.blockedPlayers[0].player
+        : null;
+
+  const priceOptions: { pct: 85 | 100 | 118; title: string; hint: string }[] = [
+    { pct: 85, title: 'ลดราคา 85%', hint: 'โอกาสมีสโมสรยื่นข้อเสนอสูง' },
+    { pct: 100, title: 'ราคาตลาด 100%', hint: 'สมดุลระหว่างค่าตัวและความสนใจ' },
+    { pct: 118, title: 'โก่งราคา 118%', hint: 'ได้ราคาดี หากมีสโมสรต้องการตัว' }
+  ];
 
   return (
     <div
@@ -237,15 +251,49 @@ export const SquadSellModal: React.FC<{
         className="w-full max-w-3xl max-h-[92dvh] mland:max-h-[95dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="shrink-0 flex items-center justify-between gap-3 px-4 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
-          <div className="min-w-0">
+        <div className="shrink-0 flex items-center gap-3 mland:gap-2 px-4 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
+          {singlePlayer ? (
+            <PlayerFace player={singlePlayer} team={team} state={state} size={42} />
+          ) : (
+            <div className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center shrink-0">
+              <ClubCrest
+                name={team.name}
+                size={28}
+                team={team}
+                club={state.club}
+                isMyClub={team.id === state.me && state.mode === 'm'}
+              />
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
             <h3 className="font-bold text-sm sm:text-base mland:text-xs truncate">
-              💰 {playerNames.length > 1 ? `ขายนักเตะพร้อมกัน (${playerNames.length} คน)` : `ขายนักเตะ · ${playerNames[0] || ''}`}
+              {singlePlayer ? (
+                <>
+                  💰 ขายนักเตะ · {singlePlayer.n}{' '}
+                  <span className="text-xs mland:text-[10px] text-[var(--g)]">
+                    ({singlePlayer.ro} · {SPN[singlePlayer.ro] || singlePlayer.pos})
+                  </span>
+                </>
+              ) : (
+                `💰 ขายนักเตะพร้อมกัน (${playerNames.length} คน)`
+              )}
             </h3>
-            <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
-              {tx.tw.open ? `${tx.tw.label} · ขายด่วนรับเงินสดทันที หรือเสนอขายรับข้อเสนอ` : `${tx.tw.label} · ช่วงปิดตลาดสามารถขึ้นบัญชีขายรอไว้ได้`}
+            <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate">
+              {singlePlayer
+                ? `อายุ ${singlePlayer.age} ปี · ประเมิน ${fmtMoney(Math.max(5, vlu(singlePlayer)))} · ค่าเหนื่อย ${fmtMoneyNum(ensureCon(singlePlayer).wg)}/นัด`
+                : tx.tw.open
+                  ? `${tx.tw.label} · ขายด่วนรับเงินสดทันที หรือขึ้นบัญชีเสนอขายรับข้อเสนอ`
+                  : `${tx.tw.label} · ช่วงปิดตลาดสามารถขึ้นบัญชีขายรอไว้ได้`}
             </p>
           </div>
+          {singlePlayer && (
+            <span
+              className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl text-white font-bold text-sm mland:text-xs tabular shrink-0"
+              style={{ background: ovColor(singlePlayer.ov) }}
+            >
+              {singlePlayer.ov}
+            </span>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -256,9 +304,9 @@ export const SquadSellModal: React.FC<{
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 grid grid-cols-1 md:grid-cols-[1.15fr_0.85fr] mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2.5 items-start">
-          {/* Left: Selected Players List */}
-          <div className="space-y-2 mland:space-y-1.5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3.5 mland:p-2.5 grid grid-cols-1 md:grid-cols-[1.12fr_0.88fr] mland:grid-cols-[1.12fr_0.88fr] gap-3 mland:gap-2.5 items-start">
+          {/* Left: Selected Players & Squad Guard */}
+          <div className="space-y-2.5 mland:space-y-1.5">
             <div className="flex items-center justify-between text-xs mland:text-[10px] font-bold text-[var(--mut)]">
               <span>รายชื่อที่พร้อมขาย ({validation.eligiblePlayers.length} คน)</span>
               <span className="tabular">ประเมินรวม {fmtMoney(validation.totalMarketValue)}</span>
@@ -267,15 +315,21 @@ export const SquadSellModal: React.FC<{
             <div className="rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]/60 max-h-[250px] mland:max-h-[165px] overflow-y-auto bg-[var(--surface-2)]/35">
               {validation.eligiblePlayers.map((q) => {
                 const mVal = Math.max(5, vlu(q));
-                const qVal = Math.max(4, Math.round((mVal * 85) / 100));
+                const bestBid = incomingOffers.filter((o) => o.n === q.n).sort((a, b) => b.p - a.p)[0];
+                const qVal = Math.max(bestBid?.p || 0, Math.max(4, Math.round((mVal * 85) / 100)));
                 const wg = ensureCon(q).wg;
                 return (
-                  <div key={q.n} className="flex items-center gap-2 px-2.5 py-1.5 mland:px-2 mland:py-1 text-xs mland:text-[10px]">
-                    <PlayerFace player={q} team={team} state={state} size={28} />
+                  <div key={q.n} className="flex items-center gap-2.5 px-3 py-2 mland:px-2 mland:py-1 text-xs mland:text-[10px]">
+                    <PlayerFace player={q} team={team} state={state} size={30} />
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold truncate">
-                        <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                        {q.n}
+                      <div className="font-bold truncate flex items-center gap-1">
+                        <span className="text-[var(--g)]">{q.ro}</span>
+                        <span className="truncate">{q.n}</span>
+                        {q.listed ? (
+                          <span className="px-1 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                            ตั้งขาย {fmtMoneyNum(q.askPrice || mVal)}
+                          </span>
+                        ) : null}
                       </div>
                       <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular truncate">
                         อายุ {q.age} ปี · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด · มูลค่า {fmtMoneyNum(mVal)}
@@ -286,22 +340,24 @@ export const SquadSellModal: React.FC<{
                     </span>
                     <div className="text-right shrink-0 tabular">
                       <div className="font-bold text-[var(--g)] text-[11px] mland:text-[9.5px]">{fmtMoney(qVal)}</div>
-                      <div className="text-[9.5px] text-[var(--mut)]">ขายด่วน 85%</div>
+                      <div className="text-[9.5px] text-[var(--mut)]">
+                        {bestBid && bestBid.p >= Math.round((mVal * 85) / 100) ? 'ข้อเสนอสูงสุด' : 'ขายด่วน 85%'}
+                      </div>
                     </div>
                   </div>
                 );
               })}
 
               {validation.blockedPlayers.map(({ player: q, reason }) => (
-                <div key={q.n} className="flex items-center gap-2 px-2.5 py-1.5 mland:px-2 mland:py-1 text-xs mland:text-[10px] bg-[var(--red-soft)]/45">
-                  <PlayerFace player={q} team={team} state={state} size={26} />
+                <div key={q.n} className="flex items-center gap-2.5 px-3 py-2 mland:px-2 mland:py-1 text-xs mland:text-[10px] bg-[var(--red-soft)]/45">
+                  <PlayerFace player={q} team={team} state={state} size={28} />
                   <div className="flex-1 min-w-0">
                     <div className="font-bold truncate text-[var(--mut)]">
                       {q.ro} · {q.n}
                     </div>
                     <div className="text-[10px] mland:text-[8.5px] text-[var(--red)] font-semibold truncate">{reason}</div>
                   </div>
-                  <span className="text-[10px] font-bold text-[var(--red)] shrink-0">ข้ามรายการ</span>
+                  <span className="text-[10px] font-bold text-[var(--red)] shrink-0">ขายไม่ได้</span>
                 </div>
               ))}
 
@@ -317,28 +373,25 @@ export const SquadSellModal: React.FC<{
                 ))}
               </div>
             )}
-          </div>
 
-          {/* Right: Financial Impact & Sell Mode */}
-          <div className="space-y-2.5 mland:space-y-1.5">
-            <div className="grid grid-cols-2 gap-2 mland:gap-1.5 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-center tabular">
+            <div className="grid grid-cols-2 sm:grid-cols-4 mland:grid-cols-4 gap-2 mland:gap-1.5 p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-center tabular">
               <div>
-                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">รับเงินขายด่วนทันที</div>
-                <b className="text-sm mland:text-xs text-[var(--g)]">+{fmtMoney(validation.totalQuickSellValue)}</b>
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ขายด่วนรับทันที</div>
+                <b className="text-xs sm:text-sm mland:text-[11px] text-[var(--g)]">+{fmtMoney(validation.totalQuickSellValue)}</b>
               </div>
               <div>
-                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ลดภาระค่าเหนื่อย</div>
-                <b className="text-sm mland:text-xs text-[var(--ink)]">-{fmtMoneyNum(validation.totalSavedWage)}/นัด</b>
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ลดค่าเหนื่อย</div>
+                <b className="text-xs sm:text-sm mland:text-[11px] text-[var(--ink)]">-{fmtMoneyNum(validation.totalSavedWage)}/นัด</b>
               </div>
               <div>
-                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ขนาดทีมหลังขาย</div>
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">ทีมหลังขาย</div>
                 <b className={`text-xs mland:text-[10.5px] ${validation.afterSquadCount < tx.minSquad ? 'text-[var(--red)]' : ''}`}>
-                  {validation.afterSquadCount} / ขั้นต่ำ {tx.minSquad}
+                  {validation.afterSquadCount} / ≥{tx.minSquad}
                 </b>
               </div>
               <div>
-                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">คงเหลือรายตำแหน่ง</div>
-                <div className="text-[10.5px] mland:text-[9px] font-bold">
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">เหลือตำแหน่ง</div>
+                <div className="text-[10px] mland:text-[8.5px] font-bold leading-tight mt-0.5">
                   {(['GK', 'DF', 'MF', 'FW'] as Position[]).map((p, idx) => (
                     <span key={p} className={validation.afterPosCounts[p] < tx.minPos[p] ? 'text-[var(--red)]' : ''}>
                       {idx > 0 ? ' · ' : ''}
@@ -348,39 +401,53 @@ export const SquadSellModal: React.FC<{
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="p-2.5 mland:p-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/40 space-y-1.5">
-              <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                <span className="font-bold text-[var(--ink)]">ตั้งราคาขึ้นบัญชีขาย / เสนอขาย</span>
-                <span className="font-bold text-[var(--g)] tabular">~{fmtMoney(askTotal)}</span>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                {([
-                  [85, 'ขายด่วน 85%'],
-                  [100, 'ราคาตลาด 100%'],
-                  [118, 'โก่งราคา 118%']
-                ] as const).map(([pct, lbl]) => (
+          {/* Right: Ask Price Options for Listing / Pitching */}
+          <div className="space-y-2 mland:space-y-1.5">
+            <div className="flex items-center justify-between text-xs mland:text-[10px]">
+              <span className="font-bold text-[var(--ink)]">ตั้งราคาขึ้นบัญชี / เสนอขายสโมสรอื่น</span>
+              <span className="font-bold text-[var(--g)] tabular">~{fmtMoney(askTotal)}</span>
+            </div>
+
+            <div className="space-y-1.5 mland:space-y-1">
+              {priceOptions.map((opt) => {
+                const optionTotal = validation.eligiblePlayers.reduce(
+                  (sum, q) => sum + Math.max(5, Math.round((Math.max(5, vlu(q)) * opt.pct) / 100)),
+                  0
+                );
+                const active = askPct === opt.pct;
+                return (
                   <button
-                    key={pct}
+                    key={opt.pct}
                     type="button"
                     onClick={() => {
                       SFX.tap();
-                      setAskPct(pct);
+                      setAskPct(opt.pct);
                     }}
-                    className={`py-1.5 mland:py-1 px-1.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold cursor-pointer truncate ${
-                      askPct === pct ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                    className={`w-full text-left px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl border transition-colors cursor-pointer flex items-center justify-between gap-2 ${
+                      active
+                        ? 'border-[var(--g)] bg-[var(--g-soft)]'
+                        : 'border-[var(--line)] bg-[var(--surface-2)]/50 hover:border-[var(--mut)]'
                     }`}
                   >
-                    {lbl}
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs mland:text-[10.5px]">{opt.title}</div>
+                      <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">{opt.hint}</div>
+                    </div>
+                    <div className="font-bold text-xs sm:text-sm mland:text-[11px] tabular shrink-0 text-[var(--g)]">
+                      {fmtMoney(optionTotal)}
+                    </div>
                   </button>
-                ))}
-              </div>
-              <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">
-                {tx.tw.open
-                  ? 'หากต้องการรับเงินทันทีให้กด "ขายด่วนทันที" ด้านล่าง หรือกด "ขึ้นบัญชี & เสนอขาย" เพื่อรอสโมสรยื่นซื้อในราคาที่ตั้งไว้'
-                  : 'ขณะนี้ตลาดปิดอยู่ จึงยังขายด่วนไม่ได้ แต่สามารถขึ้นบัญชีขายรอไว้ล่วงหน้าได้ทันที'}
-              </p>
+                );
+              })}
             </div>
+
+            <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug px-0.5">
+              {tx.tw.open
+                ? 'กด "ขึ้นบัญชี & เสนอขาย" เพื่อเรียกข้อเสนอราคาตามที่ตั้ง หรือกด "ขายด่วนทันที" เพื่อรับเงินสดเข้าสโมสรเลย'
+                : 'ขณะนี้ตลาดปิดอยู่ สามารถขึ้นบัญชีขายรอไว้ล่วงหน้าได้ และจะขายออกได้เมื่อตลาดเปิดรอบถัดไป'}
+            </p>
           </div>
         </div>
 
@@ -390,7 +457,7 @@ export const SquadSellModal: React.FC<{
             onClick={onClose}
             className="px-3.5 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] font-semibold text-xs cursor-pointer"
           >
-            ยกเลิก
+            ปิด
           </button>
 
           <button
@@ -408,13 +475,15 @@ export const SquadSellModal: React.FC<{
                 onToast(
                   res.offerCount > 0
                     ? `ขึ้นบัญชีและเสนอขาย ${res.listedCount} คน — มี ${res.offerCount} ข้อเสนอเข้าตลาดแล้ว!`
-                    : `ขึ้นบัญชีและเสนอขาย ${res.listedCount} คนในตลาดแล้ว รอดูข้อเสนอในหน้าตลาด`
+                    : res.pitchedCount > 0
+                      ? `ขึ้นบัญชีและเสนอขาย ${res.listedCount} คนในตลาดแล้ว รอดูข้อเสนอในแท็บขายออก`
+                      : `อัปเดตราคาตั้งขาย ${res.listedCount} คนเป็น ${askPct}% แล้ว (เสนอนักเตะไปแล้วในนัดนี้)`
                 );
               } else {
                 onToast(`ขึ้นบัญชีขาย ${res.listedCount} คนรอไว้สำหรับรอบตลาดเปิดแล้ว`);
               }
             }}
-            className="px-3.5 py-2 mland:py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--g)]/50 text-[var(--g)] font-bold text-xs disabled:opacity-40 cursor-pointer"
+            className="px-3.5 py-2 mland:py-1.5 rounded-xl bg-[var(--g)] text-white font-bold text-xs disabled:opacity-40 cursor-pointer whitespace-nowrap"
           >
             {tx.tw.open ? `📨 ขึ้นบัญชี & เสนอขาย (${askPct}%)` : `🏷️ ขึ้นบัญชีขายรอตลาด (${eligibleNames.length})`}
           </button>

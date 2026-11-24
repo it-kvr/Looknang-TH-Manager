@@ -1374,7 +1374,11 @@ export const SquadTacticsView: React.FC<{
                                   </span>
                                 ) : null}
                                 {q.loan ? <span className="text-[10px] mland:text-[8.5px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span> : null}
-                                {q.listed ? <span className="text-[10px] mland:text-[8.5px] text-[#9a6700] dark:text-[var(--lamp)] font-bold shrink-0">[ขาย {fmtMoneyNum(q.askPrice || vlu(q))}]</span> : null}
+                                {q.listed ? (
+                                  <span className="px-1 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                                    ตั้งขาย {fmtMoneyNum(q.askPrice || vlu(q))}
+                                  </span>
+                                ) : null}
                                 {offerCount > 0 ? <span className="px-1 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}
                               </div>
                               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular">

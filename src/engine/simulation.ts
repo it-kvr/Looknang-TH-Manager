@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, hasTrait, rollPlayerTraits, recordPlayerSeasonProgress } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, hasTrait, rollPlayerTraits, recordPlayerSeasonProgress } from './playerCore';
 import { applyTrainingMissionProgress } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers } from './history';
 
@@ -1098,6 +1098,8 @@ export function startSeason(s: GameState) {
       recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
     });
   });
+
+  ensureAiTeamPhilosophies(s, true);
 
   if (s.p) {
     s.p.en = 100;

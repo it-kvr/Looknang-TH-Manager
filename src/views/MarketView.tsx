@@ -13,16 +13,14 @@ import {
   createScoutMission,
   getIncomingOffers,
   removeIncomingOffer,
-  getPlayerSellCheck,
   canAcceptTransferOffer,
   acceptTransferOffer,
   resolveCounterOfferOutcome,
   applyCounterOfferOutcome,
-  resolvePitchPlayerOutcome,
-  applyPitchPlayerOutcome
+  validateBatchSquadRemoval
 } from '../engine/simulation';
-import { PlayerFace } from '../components/SvgVisuals';
-import { PitchPlayerModal } from '../modals/TacticsModals';
+import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
   source: 'mk' | 'scout' | 'club';
@@ -110,8 +108,11 @@ export const MarketView: React.FC<{
 
   const [scoutRole, setScoutRole] = useState<SubRole | ''>('');
   const [offerDraft, setOfferDraft] = useState<OfferDraft | null>(null);
-  const [pitchTargetName, setPitchTargetName] = useState<string | null>(null);
-  const [quickListName, setQuickListName] = useState('');
+  const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
+  const [sellSubView, setSellSubView] = useState<'all' | 'listed'>('all');
+  const [sellPosFilter, setSellPosFilter] = useState<'ALL' | 'GK' | 'DF' | 'MF' | 'FW'>('ALL');
+  const [sellSearch, setSellSearch] = useState('');
+  const [selectedSellNames, setSelectedSellNames] = useState<string[]>([]);
   const [contractFilter, setContractFilter] = useState<'all' | 'expiring'>('all');
 
   const [renewIdx, setRenewIdx] = useState<number | null>(null);
@@ -191,10 +192,38 @@ export const MarketView: React.FC<{
 
   const incomingOffers = getIncomingOffers(state);
   const listedPlayers = me.sq.filter((q) => q.listed && !q.loan);
-  const unlistedEligible = me.sq
-    .filter((q) => !q.listed && !q.loan)
-    .slice()
-    .sort((a, b) => b.ov - a.ov);
+  const sellSearchNorm = sellSearch.trim().toLowerCase();
+  const sellSquadList = useMemo(() => {
+    const base = me.sq.filter((q) => {
+      if (sellSubView === 'listed' && (!q.listed || q.loan)) return false;
+      if (sellPosFilter !== 'ALL' && q.pos !== sellPosFilter) return false;
+      if (
+        sellSearchNorm &&
+        !q.n.toLowerCase().includes(sellSearchNorm) &&
+        !q.ro.toLowerCase().includes(sellSearchNorm) &&
+        !(SPN[q.ro] || '').toLowerCase().includes(sellSearchNorm)
+      ) {
+        return false;
+      }
+      return true;
+    });
+    return [...base].sort((a, b) => {
+      if (!!b.listed !== !!a.listed) return b.listed ? 1 : -1;
+      return b.ov - a.ov;
+    });
+  }, [me.sq, sellSubView, sellPosFilter, sellSearchNorm]);
+  const activeSelectedSell = useMemo(
+    () =>
+      selectedSellNames.filter((name) => {
+        const found = me.sq.find((q) => q.n === name);
+        return !!found && !found.me && !found.loan;
+      }),
+    [selectedSellNames, me.sq]
+  );
+  const sellBatchPreview = useMemo(
+    () => (activeSelectedSell.length > 0 ? validateBatchSquadRemoval(state, me, activeSelectedSell, 'sell', 85) : null),
+    [state, me, activeSelectedSell]
+  );
   const createdPool = useMemo(() => listCreatedPlayersForManager(), [createdRefresh, state.md, state.season, me.sq.length]);
   const createdMarketList = useMemo(() => {
     const items = createdPool.filter((c) => {
@@ -1281,7 +1310,7 @@ export const MarketView: React.FC<{
 
       {/* SECTION 2: OUTGOING TRANSFERS & INCOMING BIDS (Balanced 2-Column Workspace) */}
       {activeTab === 'sell' && (
-        <div className="grid grid-cols-2 flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
           {/* Left: Incoming Offers */}
           <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
             <div className={`shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] flex items-center justify-between gap-2 ${incomingOffers.length > 0 ? 'bg-[var(--lamp-soft)]/55' : 'bg-[var(--surface-2)]/30'}`}>
@@ -1296,70 +1325,115 @@ export const MarketView: React.FC<{
                 incomingOffers.map((off) => {
                   const targetQ = me.sq.find((q) => q.n === off.n);
                   if (!targetQ) return null;
-                  const marketVal = vlu(targetQ);
+                  const marketVal = Math.max(5, vlu(targetQ));
+                  const diffPct = Math.round(((off.p - marketVal) / marketVal) * 100);
+                  const wg = ensureCon(targetQ).wg;
                   const buyerTeam =
                     (off.teamId != null ? state.teams.find((t) => t.id === off.teamId) : undefined) ||
                     state.teams.find((t) => t.name === off.t);
                   return (
-                    <div key={`${off.n}__${off.t}`} className="p-3 mland:p-2 space-y-2 mland:space-y-1.5">
-                      <div className="flex items-center gap-2.5">
-                        <PlayerFace player={targetQ} team={me} state={state} size={36} />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs sm:text-[13px] mland:text-[10.5px] font-bold truncate leading-tight">
-                            {off.t}
-                            {buyerTeam ? ` (${TN[buyerTeam.tier] || ''})` : ''}
-                          </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                            ขอซื้อ <b className="text-[var(--ink)]">{off.n}</b> ({targetQ.ro} · OVR {targetQ.ov}) · ยื่น <b className="text-[var(--g)]">{fmtMoney(off.p)}</b> · ประเมิน {fmtMoneyNum(marketVal)}
-                          </div>
+                    <div key={`${off.n}__${off.t}`} className="p-3 mland:p-2 space-y-2 mland:space-y-1.5 hover:bg-[var(--surface-2)]/35 transition-colors">
+                      <div className="flex items-center gap-2.5 mland:gap-2">
+                        <div className="shrink-0 w-8 h-8 mland:w-7 mland:h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-center">
+                          <ClubCrest
+                            name={buyerTeam?.name || off.t}
+                            size={22}
+                            team={buyerTeam}
+                            club={state.club}
+                            isMyClub={false}
+                          />
                         </div>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
+                        <PlayerFace player={targetQ} team={me} state={state} size={34} />
                         <button
                           type="button"
-                          onClick={() => {
-                            const res = canAcceptTransferOffer(state, off);
-                            if (!res.ok) {
-                              onToast(res.err || 'ขายไม่สำเร็จ');
-                              return;
-                            }
-                            onUpdateState((d) => {
-                              acceptTransferOffer(d, off);
-                            });
-                            SFX.win();
-                            onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
-                          }}
-                          className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer hover:brightness-105"
+                          onClick={() => onInspectPlayer(targetQ, me)}
+                          className="flex-1 min-w-0 text-left cursor-pointer"
                         >
-                          ✅ ตอบรับขาย
+                          <div className="flex items-center gap-1.5 text-xs sm:text-[13px] mland:text-[10.5px] font-bold leading-tight">
+                            <span className="truncate">{off.t}</span>
+                            {buyerTeam && (
+                              <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] shrink-0">
+                                ({TN[buyerTeam.tier] || ''})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate mt-0.5 tabular">
+                            ขอซื้อ <span className="text-[var(--g)] font-bold">{targetQ.ro}</span>{' '}
+                            <b className="text-[var(--ink)]">{off.n}</b> · ลดค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
+                          </div>
                         </button>
-                        {!off.cnt && (
+                        <span
+                          className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0"
+                          style={{ background: ovColor(targetQ.ov) }}
+                        >
+                          {targetQ.ov}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pl-0.5">
+                        <div className="flex items-center gap-2 text-[11px] mland:text-[9.5px] tabular">
+                          <span className="font-extrabold text-[var(--g)] text-xs sm:text-[13px] mland:text-[11px]">
+                            ยื่น {fmtMoney(off.p)}
+                          </span>
+                          <span className="text-[var(--mut)]">· ประเมิน {fmtMoneyNum(marketVal)}</span>
+                          <span
+                            className={`px-1.5 py-0.5 rounded-md font-bold text-[10px] mland:text-[8.5px] ${
+                              diffPct >= 0
+                                ? 'bg-[var(--g-soft)] text-[var(--g)]'
+                                : 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                            }`}
+                          >
+                            {diffPct >= 0 ? `+${diffPct}%` : `${diffPct}%`}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5 shrink-0">
                           <button
                             type="button"
                             onClick={() => {
-                              const out = resolveCounterOfferOutcome(state, off);
-                              onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
-                              onToast(
-                                out.accepted
-                                  ? `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
-                                  : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
-                              );
+                              const res = canAcceptTransferOffer(state, off);
+                              if (!res.ok) {
+                                onToast(res.err || 'ขายไม่สำเร็จ');
+                                return;
+                              }
+                              onUpdateState((d) => {
+                                acceptTransferOffer(d, off);
+                              });
+                              SFX.win();
+                              onToast(`ขาย ${off.n} ให้ ${res.buyerName || off.t} รับ +${fmtMoney(off.p)}`);
                             }}
-                            className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer hover:border-[var(--g)]"
+                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer hover:brightness-105"
                           >
-                            💰 โก่ง +15%
+                            ✅ ตอบรับขาย
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
-                            onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
-                          }}
-                          className="px-3 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
-                        >
-                          ✕ ปฏิเสธ
-                        </button>
+                          {!off.cnt && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const out = resolveCounterOfferOutcome(state, off);
+                                onUpdateState((d) => applyCounterOfferOutcome(d, off, out));
+                                onToast(
+                                  out.accepted
+                                    ? `${off.t} ยอมเพิ่มราคาเป็น ${fmtMoney(out.newPrice ?? off.p)}!`
+                                    : `${off.t} ถอนข้อเสนอซื้อ ${off.n}`
+                                );
+                              }}
+                              className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer hover:border-[var(--g)]"
+                            >
+                              💰 โก่ง +15%
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onUpdateState((d) => removeIncomingOffer(d, off.n, off.t));
+                              onToast(`ปฏิเสธข้อเสนอจาก ${off.t} แล้ว`);
+                            }}
+                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
+                          >
+                            ✕ ปฏิเสธ
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1369,128 +1443,221 @@ export const MarketView: React.FC<{
                   <div className="text-2xl opacity-75">💼</div>
                   <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีข้อเสนอซื้อนักเตะเข้ามา</div>
                   <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
-                    นำนักเตะขึ้นบัญชีขายทางด้านขวา แล้วกด &ldquo;📨 เสนอขาย&rdquo; เพื่อเรียกข้อเสนอจากสโมสรอื่น
+                    เลือกนักเตะทางด้านขวาแล้วกด &ldquo;💰 ขาย&rdquo; เพื่อขายด่วนทันที หรือขึ้นบัญชี &amp; เสนอขายเพื่อเรียกข้อเสนอจากสโมสรอื่น
                   </p>
                 </div>
               )}
             </div>
           </section>
 
-          {/* Right: Transfer List */}
+          {/* Right: Squad Selling & Transfer List (Unified with SquadTacticsView) */}
           <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
             <div className="shrink-0 p-3 mland:p-2 border-b border-[var(--line)] bg-[var(--surface-2)]/30 space-y-2 mland:space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">🏷️ บัญชีขายของทีม ({listedPlayers.length})</h3>
-                <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] whitespace-nowrap">
-                  {tx.tw.open ? 'ยื่นเสนอขายทีมอื่นได้' : '🔒 รอตลาดเปิด'}
-                </span>
-              </div>
-
-              {unlistedEligible.length > 0 && (
-                <div className="flex gap-1.5">
-                  <select
-                    aria-label="เลือกนักเตะขึ้นบัญชีขาย"
-                    value={quickListName}
-                    onChange={(e) => setQuickListName(e.target.value)}
-                    className="flex-1 min-w-0 px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-semibold"
-                  >
-                    <option value="">+ เลือกนักเตะขึ้นบัญชีขาย...</option>
-                    {unlistedEligible.map((q) => (
-                      <option key={q.n} value={q.n}>
-                        {q.ro} · {q.n} (OVR {q.ov} · {fmtMoneyNum(vlu(q))})
-                      </option>
-                    ))}
-                  </select>
+                <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
+                  🏷️ ขายนักเตะ &amp; บัญชีขาย ({sellSquadList.length})
+                </h3>
+                <div className="flex p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] shrink-0">
                   <button
                     type="button"
-                    disabled={!quickListName}
-                    onClick={() => {
-                      const targetName = quickListName;
-                      if (!targetName) return;
-                      SFX.tap();
-                      onUpdateState((d) => {
-                        const target = d.teams[d.me].sq.find((z) => z.n === targetName);
-                        if (target) {
-                          target.listed = 1;
-                          target.askPrice = Math.max(5, vlu(target));
-                        }
-                      });
-                      setQuickListName('');
-                      onToast(`ขึ้นบัญชีขาย ${targetName} แล้ว`);
-                    }}
-                    className="px-3 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold whitespace-nowrap cursor-pointer disabled:opacity-40 shrink-0"
+                    onClick={() => setSellSubView('all')}
+                    className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer ${
+                      sellSubView === 'all' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : 'text-[var(--mut)]'
+                    }`}
                   >
-                    ขึ้นตลาด
+                    นักเตะในทีม ({me.sq.length})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setSellSubView('listed')}
+                    className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9.5px] font-semibold whitespace-nowrap cursor-pointer tabular ${
+                      sellSubView === 'listed' ? 'bg-[var(--g)] text-white' : 'text-[var(--mut)]'
+                    }`}
+                  >
+                    ตั้งขาย ({listedPlayers.length})
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5 mland:gap-1">
+                <div className="relative flex-1 min-w-[120px]">
+                  <input
+                    type="text"
+                    value={sellSearch}
+                    onChange={(e) => setSellSearch(e.target.value)}
+                    placeholder="ค้นหาชื่อ / ตำแหน่ง..."
+                    aria-label="ค้นหานักเตะในทีมเพื่อขาย"
+                    className="w-full pl-2.5 pr-6 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] focus:outline-none focus:border-[var(--g)]"
+                  />
+                  {sellSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setSellSearch('')}
+                      aria-label="ล้างคำค้นหา"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {(['ALL', 'GK', 'DF', 'MF', 'FW'] as const).map((posKey) => (
+                    <button
+                      key={posKey}
+                      type="button"
+                      onClick={() => setSellPosFilter(posKey)}
+                      className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-semibold whitespace-nowrap cursor-pointer ${
+                        sellPosFilter === posKey
+                          ? 'bg-[var(--g)] text-white'
+                          : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                      }`}
+                    >
+                      {posKey === 'ALL' ? 'ทั้งหมด' : posKey}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {activeSelectedSell.length > 0 && sellBatchPreview && (
+                <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp-soft)]/80 border border-[var(--lamp)]/70 flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px]">
+                  <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5 tabular">
+                    <span className="font-extrabold text-[var(--ink)]">☑ เลือก {activeSelectedSell.length} คน</span>
+                    <span className="text-[var(--mut)]">
+                      · ขายด่วน <b className="text-[var(--g)]">+{fmtMoneyNum(sellBatchPreview.totalQuickSellValue)}</b>
+                    </span>
+                    <span className="text-[var(--mut)] hidden sm:inline mland:inline">
+                      · ลดค่าเหนื่อย <b className="text-[var(--ink)]">-{fmtMoneyNum(sellBatchPreview.totalSavedWage)}/นัด</b>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSellModalNames(activeSelectedSell);
+                      }}
+                      className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold cursor-pointer whitespace-nowrap"
+                    >
+                      💰 ขายที่เลือก ({activeSelectedSell.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSellNames([])}
+                      className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                    >
+                      ล้าง
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/60">
-              {listedPlayers.length > 0 ? (
-                listedPlayers.map((q) => {
-                  const chk = getPlayerSellCheck(state, me, q);
-                  const ask = q.askPrice || vlu(q);
+              {sellSquadList.length > 0 ? (
+                sellSquadList.map((q) => {
+                  const marketVal = Math.max(5, vlu(q));
+                  const wg = ensureCon(q).wg;
+                  const bidCount = incomingOffers.filter((o) => o.n === q.n).length;
+                  const selectable = !q.me && !q.loan;
+                  const isChecked = selectable && activeSelectedSell.includes(q.n);
                   return (
-                    <div key={q.n} className="flex items-center gap-2.5 px-3 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
+                    <div
+                      key={q.n}
+                      className={`flex items-center gap-2 sm:gap-2.5 px-3 py-2 mland:px-2.5 mland:py-1.5 transition-colors hover:bg-[var(--surface-2)]/40 ${
+                        isChecked ? 'bg-[var(--g-soft)]/55' : q.listed ? 'bg-[var(--lamp-soft)]/20' : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        disabled={!selectable}
+                        onChange={() =>
+                          setSelectedSellNames((prev) =>
+                            prev.includes(q.n) ? prev.filter((name) => name !== q.n) : [...prev, q.n]
+                          )
+                        }
+                        aria-label={`เลือก ${q.n} เพื่อขาย`}
+                        className="w-3.5 h-3.5 accent-[var(--g)] cursor-pointer rounded shrink-0 disabled:opacity-30"
+                      />
                       <PlayerFace player={q} team={me} state={state} size={34} />
                       <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                          {q.n} <span className="text-[var(--mut)] tabular">· OVR {q.ov}</span>
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1">
+                          <span className="text-[var(--g)] shrink-0">{q.ro}</span>
+                          <span className="truncate">{q.n}</span>
+                          {q.listed ? (
+                            <span className="px-1 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                              ตั้งขาย {fmtMoneyNum(q.askPrice || marketVal)}
+                            </span>
+                          ) : null}
+                          {bidCount > 0 ? (
+                            <span className="px-1 rounded bg-[var(--g)] text-white text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                              {bidCount} บิด
+                            </span>
+                          ) : null}
+                          {q.loan ? (
+                            <span className="text-[10px] mland:text-[8.5px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span>
+                          ) : null}
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                          ตั้งขาย {fmtMoney(ask)} · ประเมิน {fmtMoneyNum(vlu(q))}
+                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5">
+                          อายุ {q.age} ปี · ประเมิน {fmtMoneyNum(marketVal)} · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
+                          {q.inj > 0 ? <span className="text-[var(--red)] font-semibold"> · 🩹 เจ็บ {q.inj} นัด</span> : null}
                         </div>
                       </button>
-                      <button
-                        type="button"
-                        title={chk.pitchedThisTurn ? 'เสนอขายไปแล้วในนัดนี้' : chk.canPitch ? 'ส่งเสนอขายให้ทีมอื่น' : chk.reason}
-                        onClick={() => {
-                          if (!chk.canPitch) {
-                            onToast(chk.reason || 'ยังไม่สามารถเสนอขายได้');
-                            return;
-                          }
-                          if (chk.pitchedThisTurn) {
-                            onToast('เสนอขายคนนี้ไปแล้วในนัดนี้');
-                            return;
-                          }
-                          SFX.tap();
-                          setPitchTargetName(q.n);
-                        }}
-                        className={`px-2.5 py-1.5 mland:py-1 rounded-lg border text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer ${
-                          chk.canPitch && !chk.pitchedThisTurn
-                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                            : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] opacity-75'
-                        }`}
+                      <span
+                        className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0"
+                        style={{ background: ovColor(q.ov) }}
                       >
-                        {!tx.tw.open ? '🔒 รอตลาด' : chk.pitchedThisTurn ? 'รอนัดหน้า' : '📨 เสนอขาย'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onUpdateState((d) => {
-                            const t = d.teams[d.me].sq.find((z) => z.n === q.n);
-                            if (t) {
-                              t.listed = 0;
-                              delete t.askPrice;
-                            }
-                          });
-                          onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
-                        }}
-                        className="px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
-                      >
-                        ถอด
-                      </button>
+                        {q.ov}
+                      </span>
+                      {q.loan ? (
+                        <span className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold whitespace-nowrap shrink-0">
+                          ยืมตัว
+                        </span>
+                      ) : (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {q.listed ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateState((d) => {
+                                  const t = d.teams[d.me].sq.find((z) => z.n === q.n);
+                                  if (t) {
+                                    t.listed = 0;
+                                    delete t.askPrice;
+                                  }
+                                });
+                                onToast(`ถอด ${q.n} ออกจากบัญชีขายแล้ว`);
+                              }}
+                              className="px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap cursor-pointer"
+                            >
+                              ถอด
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              setSellModalNames([q.n]);
+                            }}
+                            className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--lamp-soft)] border border-[var(--lamp)]/55 text-[#7c5300] dark:text-[var(--lamp)] text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer hover:brightness-95"
+                          >
+                            💰 ขาย
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })
               ) : (
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center space-y-1.5">
                   <div className="text-2xl opacity-75">🏷️</div>
-                  <div className="text-xs sm:text-sm mland:text-xs font-bold">ยังไม่มีนักเตะในบัญชีขาย</div>
+                  <div className="text-xs sm:text-sm mland:text-xs font-bold">
+                    {sellSubView === 'listed' ? 'ยังไม่มีนักเตะในบัญชีขาย' : 'ไม่พบนักเตะตามเงื่อนไขที่เลือก'}
+                  </div>
                   <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] max-w-xs">
-                    เลือกนักเตะจากช่องด้านบนแล้วกด &ldquo;ขึ้นตลาด&rdquo; เพื่อเริ่มเสนอขายสโมสรอื่น
+                    {sellSubView === 'listed'
+                      ? 'สลับไปดู "นักเตะในทีม" แล้วกด "💰 ขาย" เพื่อตั้งขายด่วนหรือส่งโปรไฟล์ให้ทีมอื่นพิจารณา'
+                      : 'ลองล้างคำค้นหาหรือเลือกตำแหน่งทั้งหมด'}
                   </p>
                 </div>
               )}
@@ -1866,32 +2033,19 @@ export const MarketView: React.FC<{
 
       {renderNegotiationModal()}
       {renderRenewModal()}
-      {pitchTargetName && (() => {
-        const pitchPlayer = me.sq.find((z) => z.n === pitchTargetName);
-        if (!pitchPlayer) return null;
-        return (
-          <PitchPlayerModal
-            state={state}
-            player={pitchPlayer}
-            onClose={() => setPitchTargetName(null)}
-            onConfirm={(askPct) => {
-              const result = resolvePitchPlayerOutcome(state, pitchPlayer.n, askPct);
-              setPitchTargetName(null);
-              if (!result.ok) {
-                onToast(result.err || 'เสนอขายไม่สำเร็จ');
-                return;
-              }
-              onUpdateState((d) => applyPitchPlayerOutcome(d, pitchPlayer.n, result));
-              if (result.offers.length > 0) {
-                SFX.win();
-                onToast(`มี ${result.offers.length} สโมสรยื่นข้อเสนอซื้อ ${pitchPlayer.n} แล้ว!`);
-              } else {
-                onToast(`ขึ้นบัญชีขาย ${pitchPlayer.n} แล้ว แต่รอบนี้ยังไม่มีทีมยื่นซื้อเข้ามาทันที`);
-              }
-            }}
-          />
-        );
-      })()}
+      {sellModalNames && sellModalNames.length > 0 && (
+        <SquadSellModal
+          state={state}
+          team={me}
+          playerNames={sellModalNames}
+          onClose={() => setSellModalNames(null)}
+          onUpdateState={onUpdateState}
+          onClearSelection={(soldNames) =>
+            setSelectedSellNames((prev) => prev.filter((name) => !soldNames.includes(name)))
+          }
+          onToast={onToast}
+        />
+      )}
     </div>
   );
 };

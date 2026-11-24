@@ -328,11 +328,11 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     unit: 'ครั้ง',
     targets: [16, 40, 80, 140, 220],
     subRewards: [
-      { pos: 4, mrk: 3, rd: 2 },
-      { pos: 4, mrk: 4, rd: 3 },
-      { pos: 5, mrk: 4, blk: 3, comp: 2 },
-      { pos: 6, mrk: 5, rd: 4 },
-      { pos: 7, mrk: 6, comp: 3 }
+      { tkl: 4, mrk: 3, rd: 2 },
+      { tkl: 4, mrk: 4, rd: 3 },
+      { tkl: 5, mrk: 4, blk: 3, comp: 2 },
+      { tkl: 6, mrk: 5, rd: 4 },
+      { tkl: 7, mrk: 6, comp: 3 }
     ],
     coreReward: 'tk',
     coreRewards: [1, 1, 1, 1, 2],

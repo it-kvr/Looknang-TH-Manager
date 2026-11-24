@@ -5,7 +5,7 @@ import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, dtInfo, vlu, wagOf, ensureCon, logFin, tc, getPlayerSeasonProgression } from '../engine/playerCore';
-import { ovColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
+import { ovColor, statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { sortTable, teamStats } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -244,7 +244,6 @@ export const PlayerInspectorModal: React.FC<{
                   <div className="leading-none">
                     <div className={`text-2xl sm:text-[26px] mland:text-base font-extrabold font-display tabular ${statTierMeta(livePlayer.ov).darkTextClass}`}>
                       {livePlayer.ov}
-                      <span className="text-[10px] mland:text-[8px] text-white/45 font-semibold ml-0.5">/100</span>
                     </div>
                     <div className="text-[10px] mland:text-[8px] font-bold text-white/80 tracking-wide mt-0.5">
                       {livePlayer.ro} · #{currentNo}
@@ -253,7 +252,7 @@ export const PlayerInspectorModal: React.FC<{
 
                   <div className="flex flex-col items-end gap-0.5">
                     <span className={`text-[10px] mland:text-[8.5px] font-bold tabular ${statTierMeta(livePlayer.pot).darkTextClass}`}>
-                      POT {livePlayer.pot}/100
+                      POT {livePlayer.pot}
                     </span>
                     <span
                       className="px-1.5 py-[1px] rounded text-[9px] mland:text-[7.5px] font-extrabold tabular leading-tight border border-white/15"
@@ -340,17 +339,19 @@ export const PlayerInspectorModal: React.FC<{
                   )}
                 </div>
 
-                {/* Bottom 5 Core Stats Strip (Bar-less, Tier-Colored, /100) */}
+                {/* Bottom 5 Core Stats Strip with Color Bars */}
                 <div className="bg-[#060c09]/92 border-t border-white/10 px-2 py-2 mland:px-1.5 mland:py-1 grid grid-cols-5 gap-1 text-center">
                   {ATT.map(([k, l]) => {
                     const val = info.a[k];
                     const tier = statTierMeta(val);
                     return (
-                      <div key={k} className="rounded-lg bg-white/[0.04] py-1 mland:py-0.5 px-0.5">
+                      <div key={k} className="rounded-lg bg-white/[0.04] py-1 mland:py-0.5 px-0.5 space-y-0.5">
                         <div className="text-[8.5px] mland:text-[7px] text-white/60 leading-tight truncate">{l}</div>
-                        <div className={`text-xs sm:text-[13px] mland:text-[10px] font-extrabold font-display tabular leading-tight mt-0.5 ${tier.darkTextClass}`}>
+                        <div className={`text-xs sm:text-[13px] mland:text-[10px] font-extrabold font-display tabular leading-tight ${tier.darkTextClass}`}>
                           {val}
-                          <span className="text-[7.5px] mland:text-[6.5px] text-white/40 font-semibold">/100</span>
+                        </div>
+                        <div className="h-1 rounded-full bg-white/10 overflow-hidden mx-0.5">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
                         </div>
                       </div>
                     );
@@ -420,10 +421,10 @@ export const PlayerInspectorModal: React.FC<{
             </div>
 
             {/* Right Column: Modular Status Cards, Compact Season Bar & Attribute Breakdown Cards */}
-            <div className="min-h-0 flex flex-col gap-2 mland:gap-1.5 md:overflow-hidden mland:overflow-hidden">
+            <div className="min-h-0 flex flex-col gap-2 mland:gap-1.5 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
               {/* Row 1: 3 Modular Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5 shrink-0">
-                {/* Card 1: Fitness & Discipline (Bar-less numeric /100) */}
+                {/* Card 1: Fitness & Discipline */}
                 <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:p-1.5 shadow-xs flex flex-col justify-between gap-1">
                   <div className="flex items-center justify-between gap-1">
                     <span className="text-[11px] mland:text-[8.5px] font-bold text-[var(--mut)]">⚡ สภาพร่างกาย</span>
@@ -434,11 +435,13 @@ export const PlayerInspectorModal: React.FC<{
                   <div className="flex items-baseline justify-between gap-1.5">
                     <span className={`font-extrabold text-base sm:text-lg mland:text-xs font-display tabular leading-tight ${statTierMeta(fitVal).textClass}`}>
                       {fitVal}
-                      <span className="text-[10px] mland:text-[8px] opacity-60 font-semibold">/100</span>
                     </span>
                     <span className="text-[10.5px] mland:text-[8px] font-bold truncate" style={{ color: fitCol }}>
                       {statusBadgeText}
                     </span>
+                  </div>
+                  <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${clamp(fitVal, 6, 100)}%`, background: fitCol }} />
                   </div>
                 </div>
 
@@ -719,7 +722,7 @@ export const PlayerInspectorModal: React.FC<{
               {/* Section Header: Sub-Attributes & Football Traits */}
               <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5 px-0.5">
                 <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">
-                  รายละเอียดค่าพลังเฉพาะทาง (เต็ม 100)
+                  รายละเอียดค่าพลังเฉพาะทาง
                 </span>
                 <div className="flex flex-wrap items-center gap-1">
                   {info.traits.map((t) => (
@@ -853,16 +856,23 @@ export const TeamInspectorModal: React.FC<{
   }, [team.sq, posFilter]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-4xl mland:max-w-[96vw] h-[90dvh] mland:h-[96dvh] max-h-[94dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-        <div className="shrink-0 p-3.5 sm:p-4 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-2.5 mland:gap-1.5">
-          <div className="flex items-center gap-3 mland:gap-2 min-w-0">
-            <div className="shrink-0 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-              <ClubCrest name={team.name} size={40} team={team} club={state.club} isMyClub={isMeTeam && state.mode === 'm'} />
+    <div
+      className="fixed inset-0 z-50 bg-black/68 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(92dvh,720px)] mland:h-[95dvh] mland:max-h-[calc(100dvh-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Compact Modal Header */}
+        <header className="shrink-0 px-4 py-2 mland:px-3 mland:py-1 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
+            <div className="shrink-0 w-9 h-9 mland:w-7 mland:h-7 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center [&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+              <ClubCrest name={team.name} size={28} team={team} club={state.club} isMyClub={isMeTeam && state.mode === 'm'} />
             </div>
             <div className="min-w-0">
-              <div className="font-bold text-base sm:text-lg mland:text-xs truncate flex items-center gap-1.5">
-                <span>{team.name}</span>
+              <div className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
+                <span className="truncate">{team.name}</span>
                 {isMeTeam && (
                   <span
                     title="ทีมของคุณ"
@@ -873,40 +883,27 @@ export const TeamInspectorModal: React.FC<{
                   </span>
                 )}
               </div>
-              <div className="text-xs mland:text-[9.5px] text-[var(--mut)] flex flex-wrap items-center gap-x-2">
+              <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular">
                 <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
-                {rank ? <span>· อันดับ <b className="text-[var(--ink)] tabular">{rank}</b> ({team.pts} แต้ม)</span> : null}
-                <span className="tabular">· ช{team.w} ส{team.d} พ{team.l} ({gd >= 0 ? `+${gd}` : gd})</span>
-                <span className="tabular">· อายุเฉลี่ย {st.age} ปี</span>
+                {rank ? <span> · อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
+                <span> · ชนะ {team.w} เสมอ {team.d} แพ้ {team.l} ({gd >= 0 ? `+${gd}` : gd})</span>
+                <span className="hidden sm:inline mland:inline"> · อายุเฉลี่ย {st.age} ปี</span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 ml-auto">
-            {formChars.length > 0 && (
-              <div className="hidden sm:flex items-center gap-0.5">
-                {formChars.map((c, idx) => (
-                  <span
-                    key={idx}
-                    className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center text-white ${
-                      c === 'W' ? 'bg-[var(--g)]' : c === 'L' ? 'bg-[var(--red)]' : 'bg-amber-500'
-                    }`}
-                  >
-                    {c}
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]">
+
+          <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+            <div className="flex items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
               <button
                 type="button"
                 onClick={() => { SFX.tap(); setTeamTab('squad'); }}
                 className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
                   teamTab === 'squad'
-                    ? 'bg-[var(--g)] text-white shadow-xs'
+                    ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
                     : 'text-[var(--mut)] hover:text-[var(--ink)]'
                 }`}
               >
-                👥 ขุมกำลัง
+                👥 ผัง &amp; ขุมกำลัง
               </button>
               <button
                 type="button"
@@ -920,12 +917,19 @@ export const TeamInspectorModal: React.FC<{
                 📜 ประวัติศาสตร์ทีม
               </button>
             </div>
-            <button type="button" onClick={onClose} className="px-3 mland:px-2 py-1.5 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer">ปิด ✕</button>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="ปิดหน้าต่าง"
+              className="w-8 h-8 mland:w-7 mland:h-7 rounded-full bg-[var(--surface-2)] hover:bg-[var(--line)]/60 border border-[var(--line)] text-xs font-bold flex items-center justify-center cursor-pointer transition-colors shrink-0"
+            >
+              ✕
+            </button>
           </div>
-        </div>
+        </header>
 
         {teamTab === 'history' ? (
-          <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2">
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
             <ClubHistoryPanel
               team={team}
               state={state}
@@ -934,60 +938,22 @@ export const TeamInspectorModal: React.FC<{
             />
           </div>
         ) : (
-        <div className="flex-1 min-h-0 overflow-hidden p-3 mland:p-2 space-y-2.5 mland:space-y-1 flex flex-col">
-          {/* Team Power + Head-to-Head + Tactical Identity */}
-          <div className="grid grid-cols-4 gap-2 mland:gap-1 text-center text-xs mland:text-[10px] shrink-0">
-            {(
-              [
-                ['ตัวจริง (XI)', st.ovXi, mySt.ovXi],
-                ['เฉลี่ยทีม', st.ovSq, mySt.ovSq],
-                ['เกมรุก', st.at, mySt.at],
-                ['เกมรับ', st.df, mySt.df]
-              ] as const
-            ).map(([lbl, val, myVal]) => {
-              const diff = val - myVal;
-              return (
-                <div key={lbl} className="p-2.5 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]">
-                  <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] leading-tight">{lbl}</div>
-                  <div className="font-bold text-base mland:text-xs tabular leading-tight">
-                    {val}
-                    {!isMeTeam && (
-                      <span className={`ml-1 text-[11px] mland:text-[9px] ${diff > 0 ? 'text-[var(--red)]' : diff < 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                        ({diff > 0 ? `+${diff}` : diff})
-                      </span>
-                    )}
-                  </div>
+          <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] mland:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3 mland:gap-2 items-stretch">
+            {/* Left Column: Full-Height Formation Pitch */}
+            <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-1.5 flex flex-col min-h-[340px] md:min-h-0 mland:min-h-0 overflow-hidden shadow-xs">
+              <div className="shrink-0 flex items-center justify-between gap-2 px-1 pb-1.5 mland:pb-1">
+                <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
+                  <b className="text-[var(--ink)]">ผัง 11 ตัวจริง</b> · แตะนักเตะเพื่อดูพลัง
                 </div>
-              );
-            })}
-          </div>
-
-          <div className="grid grid-cols-4 gap-2 mland:gap-1 text-xs mland:text-[10px] shrink-0">
-            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">ระบบ &amp; แท็กติก</div>
-              <div className="font-bold truncate mt-0.5">{team.form} · {AR_T[team.tac]}</div>
-            </div>
-            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">⚽ ดาวซัลโว</div>
-              <div className="font-bold truncate mt-0.5">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</div>
-            </div>
-            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">🎯 จอมแอสซิสต์</div>
-              <div className="font-bold truncate mt-0.5">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</div>
-            </div>
-            <div className="p-2 mland:p-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/70">
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight">💰 มูลค่ารวม</div>
-              <div className="font-bold tabular mt-0.5">{fmtMoney(totalVal)}</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.15fr_0.85fr] gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            <div className="space-y-1 mland:space-y-0.5 h-full flex flex-col items-center min-h-0 overflow-hidden">
-              <div className="text-xs mland:text-[9px] font-bold text-[var(--mut)] text-center shrink-0">ผัง 11 ตัวจริง · แตะเพื่อส่องพลัง</div>
-              <div className="w-full flex-1 min-h-0 h-full flex items-center justify-center mx-auto">
+                <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] tabular whitespace-nowrap shrink-0">
+                  {team.form} · {AR_T[team.tac]}
+                </span>
+              </div>
+              <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden">
                 <FormationPitch
                   team={team}
                   state={state}
+                  className="aspect-[300/340] h-full max-h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                   onPlayerPointerDown={(e, q) => {
                     e.stopPropagation();
                     SFX.tap();
@@ -995,105 +961,179 @@ export const TeamInspectorModal: React.FC<{
                   }}
                 />
               </div>
-            </div>
+            </section>
 
-            <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0 overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-                <div className="font-bold text-xs mland:text-[10px] text-[var(--mut)]">ขุมกำลัง ({team.sq.length} คน)</div>
-                <div className="flex flex-wrap gap-1">
-                  {(['ALL', 'XI', 'FW', 'MF', 'DF', 'GK'] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setPosFilter(f)}
-                      className={`px-2 mland:px-1.5 py-0.5 rounded-lg text-[11px] mland:text-[9px] font-semibold cursor-pointer ${posFilter === f ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}
-                    >
-                      {f === 'ALL' ? 'ทั้งหมด' : f === 'XI' ? 'ตัวจริง' : f}
-                    </button>
-                  ))}
+            {/* Right Column: Compact Team Summary + Squad List */}
+            <div className="flex flex-col min-h-0 gap-2.5 mland:gap-1.5 md:overflow-hidden mland:overflow-hidden">
+              {/* Compact Team Overview Card */}
+              <section className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:px-2.5 mland:py-1.5 shadow-xs space-y-1.5 mland:space-y-1">
+                <div className="grid grid-cols-4 divide-x divide-[var(--line)]/70 text-center">
+                  {(
+                    [
+                      ['ตัวจริง XI', st.ovXi, mySt.ovXi],
+                      ['เฉลี่ยทีม', st.ovSq, mySt.ovSq],
+                      ['เกมรุก', st.at, mySt.at],
+                      ['เกมรับ', st.df, mySt.df]
+                    ] as const
+                  ).map(([lbl, val, myVal]) => {
+                    const diff = val - myVal;
+                    return (
+                      <div key={lbl} className="px-1">
+                        <div className="text-[10px] mland:text-[8px] text-[var(--mut)] leading-tight">{lbl}</div>
+                        <div className="font-extrabold text-sm sm:text-base mland:text-xs font-display tabular leading-tight mt-0.5">
+                          {val}
+                          {!isMeTeam && diff !== 0 && (
+                            <span className={`ml-0.5 text-[10px] mland:text-[8px] font-bold ${diff > 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                              ({diff > 0 ? `+${diff}` : diff})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-              <div className="divide-y divide-[var(--line)]/60 flex-1 min-h-0 overflow-y-auto rounded-xl border border-[var(--line)]">
-                {filteredSquad.map((q) => {
-                  const isStarter = starterNames.has(q.n);
-                  const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
-                  const f = Math.round(q.fit ?? 100);
-                  const fCol = q.inj > 0 || (q.sus || 0) > 0 ? 'var(--red)' : f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
-                  return (
-                    <button
-                      key={q.n}
-                      type="button"
-                      onClick={() => onInspectPlayer(q, team)}
-                      className={`w-full flex items-center justify-between gap-2 px-3 mland:px-2 py-2 mland:py-0.5 hover:bg-[var(--surface-2)] text-left text-xs mland:text-[10.5px] cursor-pointer ${isMe ? 'bg-[var(--lamp-soft)]/50' : ''}`}
-                    >
-                      <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
-                        <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
-                          <PlayerFace player={q} team={team} state={state} careerProfile={isMe ? state.p : null} size={28} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-semibold truncate flex items-center gap-1">
-                            {isMe && (
-                              <span
-                                title="ตัวคุณ"
-                                aria-label="ตัวคุณ"
-                                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
-                              >
-                                ★
-                              </span>
-                            )}
-                            <span className="text-[var(--mut)] tabular shrink-0">#{getShirtNo(team, q)}</span>
-                            {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
-                            {team.cap === q.n && <span className="text-[var(--lamp)] font-bold shrink-0">©</span>}
-                            <span className="truncate">{q.n}</span>
-                          </div>
-                          <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1">
-                            <span>{q.ro} · อายุ {q.age} ·</span>
-                            <span className="inline-flex items-center gap-0.5 tabular">
-                              {(q.sg || 0) <= 1 && <span>{q.sg || 0}</span>}
-                              <StatIconBadge kind="goal" count={Math.max(1, q.sg || 0)} size="xs" />
-                            </span>
-                            <span>·</span>
-                            <span className="inline-flex items-center gap-0.5 tabular">
-                              {(q.sa || 0) <= 1 && <span>{q.sa || 0}</span>}
-                              <StatIconBadge kind="assist" count={Math.max(1, q.sa || 0)} size="xs" />
-                            </span>
-                            {(q.sus || 0) > 0 ? (
-                              <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
-                                · <StatIconBadge kind="red" count={q.sus} size="xs" /> แบน
-                              </span>
-                            ) : q.inj > 0 ? (
-                              <span>· 🩹{q.inj}</span>
-                            ) : (q.yc || 0) > 0 ? (
-                              <span className="inline-flex items-center gap-0.5">
-                                · <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" /> {q.yc}/3
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
+
+                <div className="border-t border-[var(--line)]/70 pt-1.5 mland:pt-1 space-y-1 mland:space-y-0.5 text-[11px] mland:text-[9px]">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="truncate text-[var(--mut)]">
+                      ปรัชญา: <b className="text-[var(--ink)]">{team.philosophy || `${team.form} · ${AR_T[team.tac]}`}</b>
+                    </div>
+                    <div className="shrink-0 tabular text-[var(--mut)]">
+                      มูลค่ารวม <b className="text-[var(--ink)]">{fmtMoney(totalVal)}</b>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="truncate text-[var(--mut)] tabular">
+                      ⚽ <b className="text-[var(--ink)]">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</b>
+                      <span className="mx-1.5">·</span>
+                      🎯 <b className="text-[var(--ink)]">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</b>
+                    </div>
+                    {formChars.length > 0 && (
+                      <div className="flex items-center gap-0.5 shrink-0" title="ฟอร์ม 5 นัดล่าสุด">
+                        {formChars.map((c, idx) => (
+                          <span
+                            key={idx}
+                            className={`w-4 h-4 mland:w-3.5 mland:h-3.5 rounded text-[9px] mland:text-[7.5px] font-bold flex items-center justify-center text-white ${
+                              c === 'W' ? 'bg-[var(--g)]' : c === 'L' ? 'bg-[var(--red)]' : 'bg-amber-500'
+                            }`}
+                          >
+                            {c}
+                          </span>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex flex-col items-end gap-0.5 w-10 mland:w-8" title={`พลังงาน ${f}%`}>
-                          <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular leading-none" style={{ color: fCol }}>⚡{f}%</span>
-                          <div className="w-full h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${clamp(f, 4, 100)}%`, background: fCol }} />
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              {/* Squad Roster List */}
+              <section className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-xs">
+                <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)]/50 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-1.5">
+                  <div className="font-bold text-xs mland:text-[9.5px] text-[var(--ink)] tabular">
+                    ขุมกำลัง ({filteredSquad.length}/{team.sq.length})
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(['ALL', 'XI', 'FW', 'MF', 'DF', 'GK'] as const).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setPosFilter(f)}
+                        className={`px-2 mland:px-1.5 py-0.5 rounded-lg text-[10.5px] mland:text-[8.5px] font-semibold cursor-pointer transition-colors ${
+                          posFilter === f
+                            ? 'bg-[var(--g)] text-white'
+                            : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        }`}
+                      >
+                        {f === 'ALL' ? 'ทั้งหมด' : f === 'XI' ? 'ตัวจริง' : f}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="divide-y divide-[var(--line)]/60 flex-1 min-h-0 overflow-y-auto">
+                  {filteredSquad.map((q) => {
+                    const isStarter = starterNames.has(q.n);
+                    const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
+                    const f = Math.round(q.fit ?? 100);
+                    const fCol = q.inj > 0 || (q.sus || 0) > 0 ? 'var(--red)' : f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
+                    return (
+                      <button
+                        key={q.n}
+                        type="button"
+                        onClick={() => onInspectPlayer(q, team)}
+                        className={`w-full flex items-center justify-between gap-2 px-3 mland:px-2 py-1.5 mland:py-1 hover:bg-[var(--surface-2)]/65 text-left text-xs mland:text-[10px] cursor-pointer transition-colors ${
+                          isMe ? 'bg-[var(--lamp-soft)]/50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+                          <div className="shrink-0 mland:[&_svg]:w-6 mland:[&_svg]:h-6">
+                            <PlayerFace player={q} team={team} state={state} careerProfile={isMe ? state.p : null} size={28} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold truncate flex items-center gap-1 leading-tight">
+                              {isMe && (
+                                <span
+                                  title="ตัวคุณ"
+                                  aria-label="ตัวคุณ"
+                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                                >
+                                  ★
+                                </span>
+                              )}
+                              <span className="text-[var(--mut)] tabular shrink-0">#{getShirtNo(team, q)}</span>
+                              {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
+                              {team.cap === q.n && <span className="text-[var(--lamp)] font-bold shrink-0">©</span>}
+                              <span className="truncate">{q.n}</span>
+                            </div>
+                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
+                              <span>{q.ro} · อายุ {q.age} ·</span>
+                              <span className="inline-flex items-center gap-0.5 tabular">
+                                {(q.sg || 0) <= 1 && <span>{q.sg || 0}</span>}
+                                <StatIconBadge kind="goal" count={Math.max(1, q.sg || 0)} size="xs" />
+                              </span>
+                              <span>·</span>
+                              <span className="inline-flex items-center gap-0.5 tabular">
+                                {(q.sa || 0) <= 1 && <span>{q.sa || 0}</span>}
+                                <StatIconBadge kind="assist" count={Math.max(1, q.sa || 0)} size="xs" />
+                              </span>
+                              {(q.sus || 0) > 0 ? (
+                                <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
+                                  · <StatIconBadge kind="red" count={q.sus} size="xs" /> แบน
+                                </span>
+                              ) : q.inj > 0 ? (
+                                <span>· 🩹{q.inj}</span>
+                              ) : (q.yc || 0) > 0 ? (
+                                <span className="inline-flex items-center gap-0.5">
+                                  · <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" /> {q.yc}/3
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
                         </div>
-                        <span className="px-2 mland:px-1.5 py-0.5 rounded-lg text-white font-bold tabular shrink-0 mland:text-[10px]" style={{ background: ovColor(q.ov) }}>{q.ov}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex flex-col items-end gap-0.5 w-10 mland:w-8" title={`พลังงาน ${f}%`}>
+                            <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular leading-none" style={{ color: fCol }}>
+                              ⚡{f}%
+                            </span>
+                            <div className="w-full h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${clamp(f, 4, 100)}%`, background: fCol }} />
+                            </div>
+                          </div>
+                          <span
+                            className="w-7 text-center py-0.5 rounded-lg text-white font-bold tabular shrink-0 text-[11px] mland:text-[9.5px]"
+                            style={{ background: ovColor(q.ov) }}
+                          >
+                            {q.ov}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
             </div>
           </div>
-        </div>
         )}
-
-        <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-t border-[var(--line)] flex justify-end">
-          <button type="button" onClick={onClose} className="px-5 py-2 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs font-bold cursor-pointer">
-            ปิดหน้าต่าง
-          </button>
-        </div>
       </div>
     </div>
   );

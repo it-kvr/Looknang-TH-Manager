@@ -1143,19 +1143,19 @@ export const MatchModal: React.FC<{
 
         // ROLE-DISTINCT OFF-BALL INTELLIGENCE (anchored faithfully to each player's formation lane & line)
         if (ag.role === 'ST' || (ag.sig === 'run' && ag.pos === 'FW' && ag.role !== 'LW' && ag.role !== 'RW' && ag.role !== 'CF')) {
-          const shoulderNorm = Math.min(88.5, oppDefNorm - 1.2);
+          const shoulderNorm = Math.min(88.0, oppDefNorm - 2.0);
           const readyToSprint = ballNormX > 52 && carrier && carrier.side === ag.side && (cfg.pass >= 2 || cfg.tempo === 2 || cfg.tac === 'A' || cfg.tac === 'X');
           const stLaneY = clamp(widenedY * 0.78 + 50 * 0.22 + (b.y - 50) * 0.14 + Math.sin(w.minuteFloat * 0.9 + ag.slotIndex) * 4.5, 16, 84);
-          if (readyToSprint && normX < 89.2) {
-            normX = clamp(Math.min(oppDefNorm - 0.4, Math.max(normX, shoulderNorm)), 18, 90.2);
+          if (readyToSprint && normX < 88.8) {
+            normX = clamp(Math.min(oppDefNorm - 1.1, Math.max(normX, shoulderNorm)), 18, 89.2);
             ty = stLaneY;
             ag.intent = 'MAKE_RUN';
-            const runNorm = clamp(Math.min(oppDefNorm + 1.3, normX + 3.2 + sigRunBoost * 0.5), 18, 91.2);
+            const runNorm = clamp(Math.min(oppDefNorm + 0.15, normX + 2.5 + sigRunBoost * 0.35), 18, 89.6);
             ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = clamp(ty + (50 - ty) * 0.14, 24, 76);
           } else {
             // Hold striker shoulder cleanly onside within assigned left/center/right lane
-            normX = clamp(Math.min(shoulderNorm, Math.max(normX, carrierNormX + 9)), 20, 88.5);
+            normX = clamp(Math.min(shoulderNorm, Math.max(normX, carrierNormX + 8)), 20, 88.0);
             ty = stLaneY;
           }
         } else if (ag.role === 'CF') {
@@ -1167,12 +1167,12 @@ export const MatchModal: React.FC<{
         } else if (ag.role === 'CAM' || (ag.sig === 'run' && ag.pos === 'MF' && ag.role !== 'CDM' && ag.role !== 'LDM' && ag.role !== 'RDM' && ag.role !== 'LM' && ag.role !== 'RM')) {
           // Attacking midfielder stays anchored to their slot lane and joins edge-of-box pocket
           const camLaneY = clamp(widenedY * 0.74 + b.y * 0.26, 18, 82);
-          const deepBoxTarget = ballNormX > 74 ? 82.0 : Math.min(oppDefNorm - 1.2, 85.0 + attPushBias * 0.3);
+          const deepBoxTarget = ballNormX > 74 ? 82.0 : Math.min(oppDefNorm - 2.0, 84.5 + attPushBias * 0.3);
           if (ballNormX > 52 && cfg.tac !== 'Z') {
-            normX = clamp(Math.min(deepBoxTarget, Math.max(homeBaseX + 5, carrierNormX + 11)), 26, 85.5);
+            normX = clamp(Math.min(deepBoxTarget, Math.max(homeBaseX + 5, carrierNormX + 10)), 26, 85.0);
             ty = camLaneY;
             ag.intent = 'MAKE_RUN';
-            const runNorm = clamp(Math.min(oppDefNorm + 0.8, normX + 3.0), 26, 86.8);
+            const runNorm = clamp(Math.min(oppDefNorm - 0.35, normX + 2.6), 26, 86.0);
             ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = clamp(ty + (50 - ty) * 0.12, 22, 78);
           } else {
@@ -1187,17 +1187,17 @@ export const MatchModal: React.FC<{
           const ballOnSameFlank = Math.abs(b.y - wingLaneY) < 28;
           if (ballNormX > 64 && !ballOnSameFlank) {
             // Far-side winger attacks back-post half-space onside
-            normX = clamp(Math.min(oppDefNorm - 0.7, 88.0), 24, 88.8);
+            normX = clamp(Math.min(oppDefNorm - 1.5, 87.5), 24, 88.2);
             ty = clamp(attRight ? (isLeftWing ? 28 : 72) : isLeftWing ? 72 : 28, 22, 78);
             ag.intent = 'MAKE_RUN';
-            const runNorm = clamp(Math.min(oppDefNorm + 1.0, normX + 3.0), 24, 89.2);
+            const runNorm = clamp(Math.min(oppDefNorm + 0.05, normX + 2.6), 24, 88.6);
             ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = ty;
           } else if (ballNormX > 46 && cfg.tac !== 'Z') {
-            normX = clamp(Math.min(oppDefNorm - 0.6, Math.max(homeBaseX, normX + 6 + sigRunBoost + attPushBias * 0.5)), 24, 88.2);
+            normX = clamp(Math.min(oppDefNorm - 1.4, Math.max(homeBaseX, normX + 5 + sigRunBoost * 0.7 + attPushBias * 0.45)), 24, 87.8);
             ty = wingLaneY;
             ag.intent = 'MAKE_RUN';
-            const runNorm = clamp(Math.min(oppDefNorm + 0.9, normX + 3.2), 24, 89.0);
+            const runNorm = clamp(Math.min(oppDefNorm + 0.0, normX + 2.6), 24, 88.4);
             ag.runToX = attRight ? runNorm : 100 - runNorm;
             ag.runToY = ty;
           } else {
@@ -1475,6 +1475,23 @@ export const MatchModal: React.FC<{
     b.shooterId = shooter?.id || null;
     b.possessionSide = side;
     b.bounceNext = undefined;
+    if (gk) {
+      if (gk.intent === 'DIVE') gk.intent = 'SUPPORT';
+      gk.diveProgress = 0;
+      gk.diveTargetY = undefined;
+    }
+    const calcGkDiveStartProg = (
+      fType: 'shot' | 'freekick' | 'penalty' | 'shootout_kick',
+      shotDist: number,
+      isSave = false
+    ) => {
+      if (fType === 'penalty' || fType === 'shootout_kick') {
+        return isSave ? 0.34 : 0.36;
+      }
+      const reactDist = isSave ? 9.5 : 8.2;
+      return clamp(1 - reactDist / Math.max(7.5, shotDist), 0.34, 0.72);
+    };
+    const diveReactionProg = calcGkDiveStartProg(flightType, dist, false);
 
     // 1. Check defender block / free-kick wall deflection / shot deflection ("ยิงแฉลบ") first (except penalty)
     if (flightType !== 'penalty') {
@@ -1526,15 +1543,6 @@ export const MatchModal: React.FC<{
           b.maxZ = clamp(maxZAmt * 0.52, 1.8, 5.2);
           b.duration = clamp(Math.hypot(b.toX - fromX, b.toY - fromY) / 42, 0.15, 0.38);
           b.shotPlan = { outcome: 'deflect', blockerId: nearDef.id, deflectorId: nearDef.id };
-          if (gk) {
-            const leanY = clamp(b.toY, 44, 56);
-            gk.ty = leanY;
-            gk.intent = 'DIVE';
-            gk.intentTimer = Math.max(b.duration + 0.45, 0.85);
-            gk.diveDir = leanY >= gk.y ? 1 : -1;
-            gk.diveTargetY = leanY;
-            gk.diveProgress = 0.02;
-          }
           return;
         }
       }
@@ -1563,21 +1571,18 @@ export const MatchModal: React.FC<{
         b.toX = attRightNow ? 99.8 : 0.2;
         b.toY = hitCrossbar ? 44 + Math.random() * 12 : postSide < 0 ? 42.0 : 58.0;
         if (hitCrossbar) b.maxZ = Math.max(maxZAmt, 6.2);
-        b.shotPlan = { outcome: 'woodwork' };
       } else {
         const missSide = fromY < 50 ? (Math.random() < 0.62 ? -1 : 1) : Math.random() < 0.62 ? 1 : -1;
         b.toX = attRightNow ? 101.2 : -1.2;
         b.toY = missSide < 0 ? 33.5 + Math.random() * 6.8 : 59.7 + Math.random() * 6.8;
-        b.shotPlan = { outcome: 'miss' };
       }
-      if (gk) {
-        const diveY = clamp(b.toY, 41.2, 58.8);
-        gk.intent = 'DIVE';
-        gk.intentTimer = Math.max(durAmt + 0.25, 0.88);
-        gk.diveDir = diveY >= gk.y ? 1 : -1;
-        gk.diveTargetY = diveY;
-        gk.diveProgress = 0.02;
-      }
+      const diveY = clamp(b.toY, 41.2, 58.8);
+      b.shotPlan = {
+        outcome: hitWoodwork ? 'woodwork' : 'miss',
+        gkDiveTargetY: diveY,
+        gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+        gkDiveStartProg: diveReactionProg
+      };
       return;
     }
 
@@ -1605,16 +1610,14 @@ export const MatchModal: React.FC<{
     if (Math.random() < goalProb) {
       b.toX = attRightNow ? 101.3 : -1.3;
       b.toY = onTargetY;
-      b.shotPlan = { outcome: 'goal' };
-      if (gk) {
-        const wrongWay = isPanenka || (shotStyle === 'curler' && Math.random() < 0.35);
-        const diveY = wrongWay ? clamp(50 - (onTargetY - 50), 42.5, 57.5) : clamp(onTargetY, 42.0, 58.0);
-        gk.intent = 'DIVE';
-        gk.intentTimer = Math.max(durAmt + 0.25, 0.88);
-        gk.diveDir = diveY >= gk.y ? 1 : -1;
-        gk.diveTargetY = diveY;
-        gk.diveProgress = 0.02;
-      }
+      const wrongWay = isPanenka || (shotStyle === 'curler' && Math.random() < 0.35);
+      const diveY = wrongWay ? clamp(50 - (onTargetY - 50), 42.5, 57.5) : clamp(onTargetY, 42.0, 58.0);
+      b.shotPlan = {
+        outcome: 'goal',
+        gkDiveTargetY: diveY,
+        gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+        gkDiveStartProg: diveReactionProg
+      };
     } else {
       // Save! Ball travels directly to the GK's actual interception spot in front of goal!
       const gkSaveX =
@@ -1633,16 +1636,53 @@ export const MatchModal: React.FC<{
       b.duration = Math.max(0.26, durAmt * saveDistRatio);
       b.maxZ = Math.min(maxZAmt, 5.2);
       const parryCorner = Math.random() < 0.48;
-      b.shotPlan = { outcome: 'save', parryCorner };
-      if (gk) {
-        gk.tx = gkSaveX;
-        gk.ty = clamp(onTargetY, 42.2, 57.8);
-        gk.intent = 'DIVE';
-        gk.intentTimer = Math.max(b.duration + 0.32, 0.88);
-        gk.diveDir = onTargetY >= gk.y ? 1 : -1;
-        gk.diveTargetY = clamp(onTargetY, 42.2, 57.8);
-        gk.diveProgress = 0.02;
-      }
+      const saveY = clamp(onTargetY, 42.2, 57.8);
+      b.shotPlan = {
+        outcome: 'save',
+        parryCorner,
+        gkDiveTargetY: saveY,
+        gkDiveDir: gk ? (saveY >= gk.y ? 1 : -1) : 1,
+        gkDiveStartProg: calcGkDiveStartProg(flightType, dist, true),
+        gkSaveX
+      };
+    }
+  };
+
+  const resetGkDive = (gkAgent: LivePitchAgent | undefined) => {
+    if (!gkAgent) return;
+    if (gkAgent.intent === 'DIVE') gkAgent.intent = 'SUPPORT';
+    gkAgent.diveProgress = 0;
+    gkAgent.diveTargetY = undefined;
+  };
+
+  const syncShotGkDive = (gkAgent: LivePitchAgent | undefined, ball: LiveBallState) => {
+    if (!gkAgent || gkAgent.sentOff) return;
+    const plan = ball.shotPlan;
+    if (!plan || plan.outcome === 'block' || plan.outcome === 'deflect' || plan.gkDiveTargetY == null) return;
+    const startProg = plan.gkDiveStartProg ?? 0.45;
+    if (ball.progress < startProg) {
+      if (gkAgent.intent === 'DIVE') gkAgent.intent = 'SUPPORT';
+      gkAgent.diveProgress = 0;
+      gkAgent.facing = Math.atan2(ball.y - gkAgent.y, ball.x - gkAgent.x);
+      return;
+    }
+    if (plan.gkDiveStartY == null) {
+      plan.gkDiveStartY = gkAgent.y;
+    }
+    const startY = plan.gkDiveStartY;
+    const targetY = plan.gkDiveTargetY;
+    const diveT = clamp((ball.progress - startProg) / Math.max(0.12, 1 - startProg), 0, 1);
+    const easeDive = diveT * 0.45 + (1 - Math.cos(diveT * Math.PI * 0.5)) * 0.55;
+    gkAgent.intent = 'DIVE';
+    gkAgent.intentTimer = 0.38;
+    gkAgent.diveDir = plan.gkDiveDir ?? (targetY >= startY ? 1 : -1);
+    gkAgent.diveTargetY = targetY;
+    gkAgent.diveProgress = clamp(0.05 + diveT * 0.50, 0.05, 0.55);
+    gkAgent.y = clamp(startY + (targetY - startY) * easeDive, 39, 61);
+    gkAgent.ty = gkAgent.y;
+    if (plan.gkSaveX != null) {
+      gkAgent.x = clamp(gkAgent.x + (plan.gkSaveX - gkAgent.x) * Math.min(1, diveT * 0.45 + 0.08), 1.6, 98.4);
+      gkAgent.tx = gkAgent.x;
     }
   };
 
@@ -1662,7 +1702,7 @@ export const MatchModal: React.FC<{
     const defXs = defPool.map((a) => a.x).sort((u, v) => (attRight ? v - u : u - v));
     const secondLastDefX = defXs[1] ?? (attRight ? 80 : 20);
     const offsideLineX = attRight ? Math.max(50, secondLastDefX) : Math.min(50, secondLastDefX);
-    const isOffside = attRight ? receiver.x > offsideLineX + 0.5 : receiver.x < offsideLineX - 0.5;
+    const isOffside = attRight ? receiver.x > offsideLineX + 1.45 : receiver.x < offsideLineX - 1.45;
     return { isOffside, oppLineX: offsideLineX };
   };
 
@@ -2459,8 +2499,8 @@ export const MatchModal: React.FC<{
         (agentHasTrait(nearestDef, 'man_marker') ? 10 : 0) +
         (agentHasTrait(nearestDef, 'slide_tackler') ? 8 : 0) +
         (agentHasTrait(nearestDef, 'pressing_machine') ? 6 : 0) +
-        (nearestDef.sig === 'mrk' || nearestDef.sig === 'pos' ? 6 : 0) +
-        (nearestDef.d.rd + nearestDef.d.pos);
+        (nearestDef.sig === 'mrk' || nearestDef.sig === 'tkl' ? 6 : 0) +
+        (nearestDef.d.rd + (nearestDef.d.tkl ?? nearestDef.d.pos));
       const tackleProb = clamp(
         0.18 + (defTackleEdge - carrierDribble - 60) * 0.002 + (defCfg.press === 2 ? 0.05 : -0.02),
         0.10,
@@ -2473,7 +2513,7 @@ export const MatchModal: React.FC<{
 
         if (isPhysicalClash) {
           const carPhys = carrier.d.str + (carrier.sig === 'str' ? 12 : 0) + (carrier.fit < 55 ? -8 : 0);
-          const defPhys = nearestDef.d.str + nearestDef.d.pos * 0.35 + (nearestDef.sig === 'str' || nearestDef.sig === 'mrk' ? 10 : 0);
+          const defPhys = nearestDef.d.str + (nearestDef.d.tkl ?? nearestDef.d.pos) * 0.35 + (nearestDef.sig === 'str' || nearestDef.sig === 'mrk' ? 10 : 0);
           const clashDx = carrier.x - nearestDef.x;
           const clashDy = carrier.y - nearestDef.y;
           nearestDef.acrobatType = 'clash';
@@ -2613,15 +2653,21 @@ export const MatchModal: React.FC<{
             0.90
           );
           if ((newlyWonCfg.pass === 3 || carrier.sig === 'dist' || agentHasTrait(carrier, 'ball_playing_cb') || agentHasTrait(carrier, 'long_diagonal') || isDeepCounterTeam || oppWasHighSiege) && Math.random() < counterTriggerProb) {
-            const counterTarget = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.role === 'CAM');
+            const counterPool = attPool.filter((a) => a.pos === 'FW' || a.role === 'CAM' || a.role === 'LW' || a.role === 'RW');
+            const counterTarget =
+              counterPool.find((a) => !checkPassOffside(w, side, carrier, a, defPool).isOffside) ||
+              counterPool[0];
             if (counterTarget) {
               const offChk = checkPassOffside(w, side, carrier, counterTarget, defPool);
-              if (offChk.isOffside) {
-                triggerOffsideCall(w, curMin, side, carrier, counterTarget, offChk.oppLineX, 'lofted', 'รีบออกตัวล้ำหน้าจังหวะสวนกลับ');
-                return;
-              }
               const cAttRight = isAttackRight(w, side);
               const cDir = cAttRight ? 1 : -1;
+              if (offChk.isOffside) {
+                if (Math.random() < 0.32) {
+                  triggerOffsideCall(w, curMin, side, carrier, counterTarget, offChk.oppLineX, 'lofted', 'รีบออกตัวล้ำหน้าจังหวะสวนกลับ');
+                  return;
+                }
+                counterTarget.x = clamp(offChk.oppLineX - cDir * 0.8, 8, 92);
+              }
               const cDist = Math.hypot(counterTarget.x - carrier.x, counterTarget.y - carrier.y);
               b.fromX = carrier.x;
               b.fromY = carrier.y;
@@ -2889,13 +2935,20 @@ export const MatchModal: React.FC<{
     if (inWingZone && Math.random() < crossProb) {
       const boxRunners = attPool
         .filter((a) => a.id !== carrier.id && (a.pos === 'FW' || a.role === 'CAM' || a.role === 'CM'))
-        .sort((u, v) => (attRight ? v.x - u.x : u.x - v.x) + (v.d.hd + v.d.run + (agentHasTrait(v, 'aerial_menace') ? 16 : 0) + (agentHasTrait(v, 'near_post_runner') ? 10 : 0)) * 0.15);
+        .sort((u, v) => {
+          const uOff = checkPassOffside(w, side, carrier, u, defPool).isOffside ? -30 : 0;
+          const vOff = checkPassOffside(w, side, carrier, v, defPool).isOffside ? -30 : 0;
+          return (attRight ? v.x - u.x : u.x - v.x) + (vOff - uOff) + (v.d.hd + v.d.run + (agentHasTrait(v, 'aerial_menace') ? 16 : 0) + (agentHasTrait(v, 'near_post_runner') ? 10 : 0)) * 0.15;
+        });
       const target = boxRunners[0];
       if (target) {
         const offChk = checkPassOffside(w, side, carrier, target, defPool);
         if (offChk.isOffside) {
-          triggerOffsideCall(w, curMin, side, carrier, target, offChk.oppLineX, 'cross', 'ยืนล้ำหน้าจังหวะเปิดบอลเข้ากรอบ');
-          return;
+          if (Math.random() < 0.35) {
+            triggerOffsideCall(w, curMin, side, carrier, target, offChk.oppLineX, 'cross', 'ยืนล้ำหน้าจังหวะเปิดบอลเข้ากรอบ');
+            return;
+          }
+          target.x = clamp(offChk.oppLineX - dir * 0.6, 8, 92);
         }
         const nearPostTarget = agentHasTrait(target, 'near_post_runner');
         const boxX = clamp(attRight ? (nearPostTarget ? 90 + Math.random() * 4 : 87 + Math.random() * 6.2) : (nearPostTarget ? 6 + Math.random() * 4 : 6.8 + Math.random() * 6.2), 6, 94);
@@ -2943,7 +2996,10 @@ export const MatchModal: React.FC<{
         0.52
       );
       if (partner && Math.random() < oneTwoProb) {
-        const runDestX = clamp(carrier.x + dir * (10 + Math.random() * 5), 6, 94);
+        const defXsOneTwo = defPool.map((a) => a.x).sort((u, v) => (attRight ? v - u : u - v));
+        const oneTwoLineX = attRight ? Math.max(50, defXsOneTwo[1] ?? 80) : Math.min(50, defXsOneTwo[1] ?? 20);
+        const rawDestX = clamp(carrier.x + dir * (8.5 + Math.random() * 4.5), 6, 94);
+        const runDestX = attRight ? Math.min(rawDestX, oneTwoLineX - 0.5) : Math.max(rawDestX, oneTwoLineX + 0.5);
         const runDestY = clamp(carrier.y + (50 - carrier.y) * 0.22 + (Math.random() - 0.5) * 6, 10, 90);
         carrier.intent = 'MAKE_RUN';
         carrier.intentTimer = 1.25;
@@ -2999,15 +3055,32 @@ export const MatchModal: React.FC<{
       0.66
     );
     if (forwardRunners.length && (attRight ? carrier.x > 34 : carrier.x < 66) && Math.random() < throughWeight) {
-      const runner =
-        forwardRunners.sort((u, v) => (v.d.run + v.d.spd + (v.sig === 'run' ? 10 : 0) + (agentHasTrait(v, 'offside_trap_breaker') ? 16 : 0)) - (u.d.run + u.d.spd + (u.sig === 'run' ? 10 : 0) + (agentHasTrait(u, 'offside_trap_breaker') ? 16 : 0)))[0] || P(forwardRunners);
+      const sortedRunners = forwardRunners
+        .slice()
+        .sort((u, v) => {
+          const uOffPen = checkPassOffside(w, side, carrier, u, defPool).isOffside ? -28 : 0;
+          const vOffPen = checkPassOffside(w, side, carrier, v, defPool).isOffside ? -28 : 0;
+          return (
+            v.d.run + v.d.spd + (v.sig === 'run' ? 10 : 0) + (agentHasTrait(v, 'offside_trap_breaker') ? 16 : 0) + vOffPen -
+            (u.d.run + u.d.spd + (u.sig === 'run' ? 10 : 0) + (agentHasTrait(u, 'offside_trap_breaker') ? 16 : 0) + uOffPen)
+          );
+        });
+      const runner = sortedRunners[0] || P(forwardRunners);
       const offChk = checkPassOffside(w, side, carrier, runner, defPool);
-      const trapEdge = defCfg.line === 2 ? 0.18 : defCfg.line === 1 ? 0.1 : 0.04;
-      const trapChance = clamp(trapEdge - (agentHasTrait(runner, 'offside_trap_breaker') ? 0.09 : 0) - ((runner.sig === 'run' ? runner.d.run + 8 : runner.d.run) - 60) * 0.003, 0.01, 0.2);
+      const trapEdge = defCfg.line === 2 ? 0.06 : defCfg.line === 1 ? 0.03 : 0.012;
+      const trapChance = clamp(trapEdge - (agentHasTrait(runner, 'offside_trap_breaker') ? 0.035 : 0) - ((runner.sig === 'run' ? runner.d.run + 8 : runner.d.run) - 60) * 0.0012, 0.005, 0.07);
 
-      if (offChk.isOffside && !(agentHasTrait(runner, 'offside_trap_breaker') && Math.random() < 0.45)) {
-        triggerOffsideCall(w, curMin, side, carrier, runner, offChk.oppLineX, 'through', 'ยืนล้ำแนวรับจังหวะแทงทะลุช่อง');
-        return;
+      if (offChk.isOffside) {
+        const timeRunProb = clamp(
+          0.60 + (runner.d.run - 60) * 0.006 + (agentHasTrait(runner, 'offside_trap_breaker') ? 0.24 : 0) + (agentHasTrait(carrier, 'killer_passer') ? 0.10 : 0),
+          0.42,
+          0.92
+        );
+        if (Math.random() >= timeRunProb) {
+          triggerOffsideCall(w, curMin, side, carrier, runner, offChk.oppLineX, 'through', 'ยืนล้ำแนวรับจังหวะแทงทะลุช่อง');
+          return;
+        }
+        runner.x = clamp(offChk.oppLineX - dir * 0.5, 6, 94);
       }
       if ((attRight ? offChk.oppLineX > 50.5 : offChk.oppLineX < 49.5) && (attRight ? runner.x > carrier.x + 0.35 : runner.x < carrier.x - 0.35) && Math.random() < trapChance) {
         runner.x = clamp(offChk.oppLineX + dir * 1.1, 6, 94);
@@ -3123,8 +3196,8 @@ export const MatchModal: React.FC<{
         }
         const blocked = defPool.some((d) => Math.hypot(d.x - cand.x, d.y - cand.y) < 4.5);
         if (blocked) wgt -= 12;
-        if (checkPassOffside(w, side, carrier, cand, defPool).isOffside) wgt *= 0.22;
-        return { cand, wgt: Math.max(1, wgt) };
+        if (checkPassOffside(w, side, carrier, cand, defPool).isOffside) wgt *= 0.02;
+        return { cand, wgt: Math.max(0.2, wgt) };
       });
       const pool = scored.flatMap((s) => Array(Math.round(s.wgt)).fill(s.cand));
       const receiver = P(pool) || passCandidates[0];
@@ -3553,6 +3626,7 @@ export const MatchModal: React.FC<{
       const gk = active.find((a) => a.side !== sh.turn && a.pos === 'GK');
       const plan = b.shotPlan;
       b.shotPlan = undefined;
+      resetGkDive(gk);
       const scored =
         plan?.shootoutScored ??
         Math.random() <
@@ -3679,6 +3753,7 @@ export const MatchModal: React.FC<{
 
         // Swings away from initial target side
         const swingSide = b.fromY >= 50 ? -1 : 1;
+        resetGkDive(gk);
 
         if (deflectRoll < deflectedGoalProb) {
           // Deflected Goal! Wrong-foots the GK cleanly!
@@ -3688,15 +3763,15 @@ export const MatchModal: React.FC<{
           b.curve = swingSide * (3.2 + Math.random() * 3.8);
           b.maxZ = 3.0 + Math.random() * 4.2;
           b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.28, 0.56);
-          b.shotPlan = { outcome: 'goal', deflectedFrom: defShort };
-          if (gk) {
-            const wrongY = clamp(50 - (goalY - 50) * 0.85, 42.2, 57.8);
-            gk.intent = 'DIVE';
-            gk.intentTimer = Math.max(b.duration + 0.25, 0.85);
-            gk.diveDir = wrongY >= gk.y ? 1 : -1;
-            gk.diveTargetY = wrongY;
-            gk.diveProgress = 0.05;
-          }
+          const defShotDist = Math.hypot(b.toX - b.fromX, b.toY - b.fromY);
+          const wrongY = clamp(50 - (goalY - 50) * 0.85, 42.2, 57.8);
+          b.shotPlan = {
+            outcome: 'goal',
+            deflectedFrom: defShort,
+            gkDiveTargetY: wrongY,
+            gkDiveDir: gk ? (wrongY >= gk.y ? 1 : -1) : 1,
+            gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
+          };
         } else if (deflectRoll < deflectedGoalProb + 0.27) {
           // Deflected onto target -> GK reflex save!
           const saveY = clamp(50 + swingSide * (1.8 + Math.random() * 5.5), 42.5, 57.5);
@@ -3709,17 +3784,18 @@ export const MatchModal: React.FC<{
           b.toY = saveY;
           b.curve = swingSide * 2.4;
           b.maxZ = 2.6 + Math.random() * 2.8;
-          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 26, 0.26, 0.50);
-          b.shotPlan = { outcome: 'save', parryCorner: Math.random() < 0.62, deflectedFrom: defShort };
-          if (gk) {
-            gk.tx = gkSaveX;
-            gk.ty = clamp(saveY, 42.2, 57.8);
-            gk.intent = 'DIVE';
-            gk.intentTimer = Math.max(b.duration + 0.30, 0.88);
-            gk.diveDir = saveY >= gk.y ? 1 : -1;
-            gk.diveTargetY = clamp(saveY, 42.2, 57.8);
-            gk.diveProgress = 0.02;
-          }
+          const defShotDist = Math.hypot(b.toX - b.fromX, b.toY - b.fromY);
+          b.duration = clamp(defShotDist / 26, 0.26, 0.50);
+          const clampedSaveY = clamp(saveY, 42.2, 57.8);
+          b.shotPlan = {
+            outcome: 'save',
+            parryCorner: Math.random() < 0.62,
+            deflectedFrom: defShort,
+            gkDiveTargetY: clampedSaveY,
+            gkDiveDir: gk ? (clampedSaveY >= gk.y ? 1 : -1) : 1,
+            gkDiveStartProg: clamp(1 - 9.2 / Math.max(7.5, defShotDist), 0.30, 0.66),
+            gkSaveX
+          };
         } else if (deflectRoll < deflectedGoalProb + 0.37) {
           // Deflected onto the woodwork!
           const postSide = Math.random() < 0.5 ? -1 : 1;
@@ -3728,16 +3804,32 @@ export const MatchModal: React.FC<{
           b.toY = hitBar ? 44 + Math.random() * 12 : postSide < 0 ? 42.0 : 58.0;
           b.curve = swingSide * 2.5;
           b.maxZ = hitBar ? 6.4 : 4.0;
-          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.26, 0.52);
-          b.shotPlan = { outcome: 'woodwork', deflectedFrom: defShort };
+          const defShotDist = Math.hypot(b.toX - b.fromX, b.toY - b.fromY);
+          b.duration = clamp(defShotDist / 28, 0.26, 0.52);
+          const diveY = clamp(b.toY, 41.2, 58.8);
+          b.shotPlan = {
+            outcome: 'woodwork',
+            deflectedFrom: defShort,
+            gkDiveTargetY: diveY,
+            gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+            gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
+          };
         } else {
           // Deflected wide past goal -> Corner Kick!
           b.toX = attRightNow ? 101.0 : -1.0;
           b.toY = swingSide < 0 ? 31.5 + Math.random() * 8.0 : 60.5 + Math.random() * 8.0;
           b.curve = swingSide * (3.5 + Math.random() * 3.5);
           b.maxZ = 4.2 + Math.random() * 3.8;
-          b.duration = clamp(Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / 28, 0.28, 0.54);
-          b.shotPlan = { outcome: 'miss', deflectedFrom: defShort };
+          const defShotDist = Math.hypot(b.toX - b.fromX, b.toY - b.fromY);
+          b.duration = clamp(defShotDist / 28, 0.28, 0.54);
+          const diveY = clamp(b.toY, 41.2, 58.8);
+          b.shotPlan = {
+            outcome: 'miss',
+            deflectedFrom: defShort,
+            gkDiveTargetY: diveY,
+            gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+            gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
+          };
         }
         w.phaseLabel = `💫 ยิงแฉลบ ${defShort} เปลี่ยนทาง!`;
         w.phaseTone = 'danger';
@@ -3841,6 +3933,11 @@ export const MatchModal: React.FC<{
 
       // Woodwork or Off-target resolution
       if (plan?.outcome === 'woodwork' || plan?.outcome === 'miss') {
+        if (gk && gk.intent === 'DIVE' && gk.diveProgress > 0) {
+          gk.intentTimer = Math.max(gk.intentTimer, 0.36);
+        } else {
+          resetGkDive(gk);
+        }
         adjustLiveForm(shooter?.id, -0.12);
         const hitWoodwork = plan.outcome === 'woodwork';
         if (hitWoodwork) {
@@ -3963,6 +4060,11 @@ export const MatchModal: React.FC<{
       }
 
       if (isGoal) {
+        if (gk && gk.intent === 'DIVE' && gk.diveProgress > 0) {
+          gk.intentTimer = Math.max(gk.intentTimer, 0.38);
+        } else {
+          resetGkDive(gk);
+        }
         const scorerName = shooter?.id || attPool[0]?.id || 'นักเตะ';
         const scorerShort = shooter?.shortName || scorerName;
         const assisterName =
@@ -4043,6 +4145,7 @@ export const MatchModal: React.FC<{
         adjustLiveForm(gk?.id, 0.26);
         adjustLiveForm(shooter?.id, -0.06);
         if (gk) {
+          resetGkDive(gk);
           gk.x = b.toX;
           gk.y = clamp(b.toY, 42.2, 57.8);
           gk.acrobatType = 'supersave';
@@ -4377,9 +4480,14 @@ export const MatchModal: React.FC<{
           receiver.acrobatTimer = 0.58;
           bumpPlayerStat(receiver.id, 'headers');
           receiver.facing = Math.atan2(0, dir);
-          // Flick-on header to a forward partner ahead if in attacking half!
+          // Flick-on header to an onside forward partner ahead if in attacking half!
           const partner = attPool.find(
-            (a) => a.id !== receiver.id && a.pos !== 'GK' && (attRightNow ? a.x > receiver.x + 4 : a.x < receiver.x - 4) && Math.hypot(a.x - receiver.x, a.y - receiver.y) < 24
+            (a) =>
+              a.id !== receiver.id &&
+              a.pos !== 'GK' &&
+              (attRightNow ? a.x > receiver.x + 4 : a.x < receiver.x - 4) &&
+              Math.hypot(a.x - receiver.x, a.y - receiver.y) < 24 &&
+              !checkPassOffside(w, side, receiver, a, defPool).isOffside
           );
           if (partner && Math.random() < 0.56) {
             const offChk = checkPassOffside(w, side, receiver, partner, defPool);
@@ -4490,8 +4598,13 @@ export const MatchModal: React.FC<{
           const defPool = active.filter((a) => a.side === defSide);
           const offChk = checkPassOffside(w, side, receiver, passer, defPool);
           if (offChk.isOffside) {
-            triggerOffsideCall(w, curMin, side, receiver, passer, offChk.oppLineX, 'through', 'วิ่งล้ำหน้าจังหวะชิ่งคืน 1-2');
-            return;
+            if (Math.random() < 0.35) {
+              triggerOffsideCall(w, curMin, side, receiver, passer, offChk.oppLineX, 'through', 'วิ่งล้ำหน้าจังหวะชิ่งคืน 1-2');
+              return;
+            }
+            const dirRet = isAttackRight(w, side) ? 1 : -1;
+            passer.x = clamp(offChk.oppLineX - dirRet * 0.6, 6, 94);
+            passer.runToX = passer.x;
           }
           const destX = clamp(passer.runToX ?? passer.tx, 6, 94);
           const destY = clamp(passer.runToY ?? passer.ty, 8, 92);
@@ -5282,6 +5395,23 @@ export const MatchModal: React.FC<{
           updateAgentTargets(w, 90);
           w.agents.forEach((ag) => {
             if (ag.sentOff) return;
+            if (ag.intent === 'DIVE') {
+              if (sh.activeShot) return;
+              if (ag.intentTimer > 0) {
+                ag.intentTimer -= rawDt;
+                ag.diveProgress = clamp(Math.max(ag.diveProgress, 1 - ag.intentTimer / 0.88), 0, 1);
+                if (ag.intentTimer <= 0) {
+                  ag.intent = 'SUPPORT';
+                  ag.diveProgress = 0;
+                  ag.diveTargetY = undefined;
+                }
+              } else {
+                ag.intent = 'SUPPORT';
+                ag.diveProgress = 0;
+                ag.diveTargetY = undefined;
+              }
+              return;
+            }
             const dx = ag.tx - ag.x;
             const dy = ag.ty - ag.y;
             const dist = Math.hypot(dx, dy);
@@ -5304,6 +5434,7 @@ export const MatchModal: React.FC<{
               const b = w.ball;
               const kicker = w.agents.find((a) => !a.sentOff && a.id === sh.kickerName);
               const gk = w.agents.find((a) => !a.sentOff && a.side !== sh.turn && a.pos === 'GK');
+              resetGkDive(gk);
               const kickScore = kicker
                 ? kicker.d.fin * 0.5 +
                   (kicker.d.comp || 62) * 0.5 +
@@ -5333,48 +5464,45 @@ export const MatchModal: React.FC<{
               if (scored) {
                 b.toX = 101.3;
                 b.toY = shotY;
-                b.shotPlan = { outcome: 'goal', shootoutScored: true };
-                if (gk) {
-                  const wrongWay = Math.random() < 0.45;
-                  const diveY = wrongWay ? clamp(50 - (shotY - 50), 42.5, 57.5) : shotY;
-                  gk.intent = 'DIVE';
-                  gk.intentTimer = 0.95;
-                  gk.diveDir = diveY >= gk.y ? 1 : -1;
-                  gk.diveTargetY = diveY;
-                  gk.diveProgress = 0.02;
-                }
+                const wrongWay = Math.random() < 0.45;
+                const diveY = wrongWay ? clamp(50 - (shotY - 50), 42.5, 57.5) : shotY;
+                b.shotPlan = {
+                  outcome: 'goal',
+                  shootoutScored: true,
+                  gkDiveTargetY: diveY,
+                  gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+                  gkDiveStartProg: 0.36
+                };
               } else if (Math.random() < 0.22) {
                 b.toX = 101.2;
                 b.toY = Math.random() < 0.5 ? 36.8 + Math.random() * 4.0 : 59.2 + Math.random() * 4.0;
-                b.shotPlan = { outcome: 'miss', shootoutScored: false };
-                if (gk) {
-                  gk.intent = 'DIVE';
-                  gk.intentTimer = 0.95;
-                  gk.diveDir = b.toY >= gk.y ? 1 : -1;
-                  gk.diveTargetY = clamp(b.toY, 42.0, 58.0);
-                  gk.diveProgress = 0.02;
-                }
+                const diveY = clamp(b.toY, 42.0, 58.0);
+                b.shotPlan = {
+                  outcome: 'miss',
+                  shootoutScored: false,
+                  gkDiveTargetY: diveY,
+                  gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+                  gkDiveStartProg: 0.36
+                };
               } else {
                 const gkSaveX = gk ? clamp(gk.x, 95.8, 98.4) : 97.8;
                 b.toX = gkSaveX;
                 b.toY = shotY;
-                b.shotPlan = { outcome: 'save', shootoutScored: false };
-                if (gk) {
-                  gk.tx = gkSaveX;
-                  gk.ty = shotY;
-                  gk.intent = 'DIVE';
-                  gk.intentTimer = 0.95;
-                  gk.diveDir = shotY >= gk.y ? 1 : -1;
-                  gk.diveTargetY = shotY;
-                  gk.diveProgress = 0.02;
-                }
+                b.shotPlan = {
+                  outcome: 'save',
+                  shootoutScored: false,
+                  gkDiveTargetY: shotY,
+                  gkDiveDir: gk ? (shotY >= gk.y ? 1 : -1) : 1,
+                  gkDiveStartProg: 0.34,
+                  gkSaveX
+                };
               }
               SFX.shot();
               setShootoutUi({ ...sh, hKicks: sh.hKicks.slice(), aKicks: sh.aKicks.slice() });
             }
           } else {
             const b = w.ball;
-            b.progress = Math.min(1, b.progress + (rawDt * 0.58) / Math.max(0.24, b.duration));
+            b.progress = Math.min(1, b.progress + (rawDt * (slowActive ? 0.28 : 0.58)) / Math.max(0.24, b.duration));
             const t = b.progress;
             const omt = 1 - t;
             b.x = omt * omt * b.fromX + 2 * omt * t * ((b.fromX + b.toX) * 0.5) + t * t * b.toX;
@@ -5382,6 +5510,8 @@ export const MatchModal: React.FC<{
             b.z = Math.sin(t * Math.PI) * b.maxZ;
             b.trail.push({ x: b.x, y: b.y, z: b.z });
             if (b.trail.length > 12) b.trail.shift();
+            const defGk = w.agents.find((a) => !a.sentOff && a.side !== sh.turn && a.pos === 'GK');
+            syncShotGkDive(defGk, b);
             if (b.progress >= 1) {
               resolveSegmentArrival(w, 90);
             }
@@ -5421,26 +5551,6 @@ export const MatchModal: React.FC<{
         // Update tactical targets
         updateAgentTargets(w, Math.max(1, curIntMin));
 
-        // Synchronized fallback GK dive during live shots if not already diving
-        if (
-          isSlowShot &&
-          w.ball.progress >= 0.16 &&
-          w.ball.progress <= 0.9 &&
-          w.ball.shotPlan?.outcome !== 'block' &&
-          w.ball.shotPlan?.outcome !== 'deflect'
-        ) {
-          const defSide: 'H' | 'A' = w.ball.possessionSide === 'H' ? 'A' : 'H';
-          const defGk = w.agents.find((a) => !a.sentOff && a.side === defSide && a.pos === 'GK');
-          if (defGk && defGk.intent !== 'DIVE') {
-            const diveY = clamp(w.ball.toY, 41.5, 58.5);
-            defGk.intent = 'DIVE';
-            defGk.intentTimer = 0.88;
-            defGk.diveDir = diveY >= defGk.y ? 1 : -1;
-            defGk.diveTargetY = diveY;
-            defGk.diveProgress = 0.02;
-          }
-        }
-
         // Smooth physical player movement + running stride + GK dive (slow-mo dampened during dramatic events)
         const isKickoffResetting = w.pendingSetPiece?.type === 'kickoff' && w.celebrateTimer <= 0;
         const baseMoveScale = speedMul > 2.6 ? 1.85 : speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
@@ -5454,14 +5564,27 @@ export const MatchModal: React.FC<{
           if (ag.acrobatTimer && ag.acrobatTimer > 0) {
             ag.acrobatTimer = Math.max(0, ag.acrobatTimer - rawDt * (slowActive ? 0.55 : speedMul < 0.25 ? 0.5 : 1));
           }
-          if (ag.intent === 'DIVE' && ag.intentTimer > 0) {
-            ag.intentTimer -= rawDt;
-            ag.diveProgress = clamp(1 - ag.intentTimer / 0.88, 0, 1);
-            if (ag.diveTargetY != null) {
-              ag.y = clamp(ag.y + (ag.diveTargetY - ag.y) * Math.min(1, rawDt * 8.0), 39, 61);
-              ag.ty = ag.y;
+          if (ag.intent === 'DIVE') {
+            const ballInShotFlight =
+              w.ball.progress < 1 &&
+              (w.ball.flightType === 'shot' || w.ball.flightType === 'freekick' || w.ball.flightType === 'penalty');
+            if (ballInShotFlight && !w.pendingSetPiece && !w.varReview) {
+              return;
             }
-            if (ag.intentTimer <= 0) {
+            if (ag.intentTimer > 0) {
+              const diveDt = rawDt * (slowActive ? 0.35 : baseMoveScale);
+              ag.intentTimer -= diveDt;
+              ag.diveProgress = clamp(Math.max(ag.diveProgress, 1 - ag.intentTimer / 0.88), 0, 1);
+              if (ag.diveTargetY != null) {
+                ag.y = clamp(ag.y + (ag.diveTargetY - ag.y) * Math.min(1, diveDt * 8.0), 39, 61);
+                ag.ty = ag.y;
+              }
+              if (ag.intentTimer <= 0) {
+                ag.intent = 'SUPPORT';
+                ag.diveProgress = 0;
+                ag.diveTargetY = undefined;
+              }
+            } else {
               ag.intent = 'SUPPORT';
               ag.diveProgress = 0;
               ag.diveTargetY = undefined;
@@ -5587,6 +5710,12 @@ export const MatchModal: React.FC<{
 
           b.trail.push({ x: b.x, y: b.y, z: b.z });
           if (b.trail.length > (slowActive || isSlowShot ? 18 : 9)) b.trail.shift();
+
+          if (isSlowShot) {
+            const defSide: 'H' | 'A' = b.possessionSide === 'H' ? 'A' : 'H';
+            const defGk = w.agents.find((a) => !a.sentOff && a.side === defSide && a.pos === 'GK');
+            syncShotGkDive(defGk, b);
+          }
 
           if (b.progress >= 1) {
             resolveSegmentArrival(w, Math.max(1, curIntMin));
@@ -6408,11 +6537,11 @@ export const MatchModal: React.FC<{
             </div>
 
             {/* Center: Home + (Clock above Score) + Away */}
-            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-1.5 sm:gap-2.5 mland:gap-1.5">
+            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2 sm:gap-3 mland:gap-2">
               {/* Home Team */}
-              <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1">
+              <div className="flex items-center justify-end gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1">
                 <div className="text-right min-w-0 flex-1">
-                  <div className={`font-bold text-[11.5px] sm:text-[13px] md:text-sm mland:text-[10.5px] leading-[1.15] flex items-center justify-end gap-1 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  <div className={`font-extrabold text-[13px] sm:text-[15px] md:text-base mland:text-xs leading-[1.15] flex items-center justify-end gap-1 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                     {goalFlashSide === 'H' && (
                       <span className="px-1 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold shrink-0">
                         GOAL
@@ -6420,12 +6549,16 @@ export const MatchModal: React.FC<{
                     )}
                     <span className="break-words">{homeOrig.name}</span>
                   </div>
-                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] flex items-center justify-end gap-1">
-                    <span>เหย้า{homeId === state.me ? '·คุณ' : ''}</span>
+                  <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[9px] mland:text-[7.5px] font-bold">
+                    {homeId === state.me && (
+                      <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
+                    )}
+                    {homeId === state.me && <span className="text-[var(--mut)]/50">·</span>}
+                    <span className="text-[var(--mut)]">เหย้า</span>
                   </div>
                 </div>
-                <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
-                  <ClubCrest name={homeOrig.name} size={28} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 md:[&>svg]:w-10 md:[&>svg]:h-10 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+                  <ClubCrest name={homeOrig.name} size={40} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
                 </div>
               </div>
 
@@ -6461,12 +6594,12 @@ export const MatchModal: React.FC<{
               </div>
 
               {/* Away Team */}
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
-                  <ClubCrest name={awayOrig.name} size={28} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+              <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1">
+                <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 md:[&>svg]:w-10 md:[&>svg]:h-10 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+                  <ClubCrest name={awayOrig.name} size={40} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className={`font-bold text-[11.5px] sm:text-[13px] md:text-sm mland:text-[10.5px] leading-[1.15] flex items-center gap-1 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  <div className={`font-extrabold text-[13px] sm:text-[15px] md:text-base mland:text-xs leading-[1.15] flex items-center gap-1 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                     <span className="break-words">{awayOrig.name}</span>
                     {goalFlashSide === 'A' && (
                       <span className="px-1 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold shrink-0">
@@ -6474,8 +6607,12 @@ export const MatchModal: React.FC<{
                       </span>
                     )}
                   </div>
-                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] flex items-center gap-1">
-                    <span>เยือน{awayId === state.me ? '·คุณ' : ''}</span>
+                  <div className="mt-0.5 flex items-center gap-1 leading-none text-[9px] mland:text-[7.5px] font-bold">
+                    <span className="text-[var(--mut)]">เยือน</span>
+                    {awayId === state.me && <span className="text-[var(--mut)]/50">·</span>}
+                    {awayId === state.me && (
+                      <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -7253,14 +7390,14 @@ export const MatchModal: React.FC<{
                       </div>
                     </div>
 
-                    {/* Bottom Substitutes Strip (Moved out from pitch side so pitch stays full width) */}
+                    {/* Bottom Substitutes Strip (Single compact horizontal row) */}
                     {visibleFtSubs.length > 0 && (
                       <div className="bg-[#082414] border-t border-white/10 px-2.5 py-2 mland:px-2 mland:py-1.5 text-white space-y-1.5 mland:space-y-1">
                         <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] font-bold text-white/85">
                           <span>🔄 ตัวสำรองที่ลงสนาม</span>
                           <span className="px-1.5 py-0.2 rounded bg-white/10 text-white/80 tabular font-extrabold">{visibleFtSubs.length}</span>
                         </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 mland:gap-1">
+                        <div className="flex flex-nowrap items-center gap-1.5 mland:gap-1 overflow-x-auto pb-0.5">
                           {visibleFtSubs.map((sb, idx) => {
                             const subTeam = sb.t === homeOrig.id ? homeOrig : awayOrig;
                             const subPl = subTeam.sq.find((q) => q.n === sb.inPlayer);
@@ -7275,7 +7412,7 @@ export const MatchModal: React.FC<{
                                 key={idx}
                                 type="button"
                                 onClick={() => setFtPickedPlayer((prev) => (prev === sb.inPlayer ? null : sb.inPlayer))}
-                                className={`w-full text-left px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] tabular cursor-pointer transition-colors space-y-0.5 ${
+                                className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] tabular cursor-pointer transition-colors whitespace-nowrap ${
                                   isSubMotm
                                     ? 'bg-[#facc15] text-[#1c1300] border-white font-extrabold'
                                     : isPicked
@@ -7283,45 +7420,39 @@ export const MatchModal: React.FC<{
                                       : 'bg-white/10 border-white/15 hover:bg-white/20 text-white/95'
                                 }`}
                               >
-                                <div className="flex items-center justify-between gap-1 leading-none">
-                                  <span className="inline-flex items-center gap-1 min-w-0">
-                                    <span className="shrink-0 inline-flex">
-                                      <ClubCrest name={subTeam.name} size={12} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
-                                    </span>
-                                    <span className="opacity-75 text-[9px] mland:text-[7.5px]">#{subNo}</span>
-                                    {subPl?.ro && <span className="text-[8.5px] mland:text-[7.5px] font-extrabold opacity-80">{subPl.ro}</span>}
-                                    <span className="text-[8.5px] mland:text-[7.5px] opacity-65">{sb.m}&apos;</span>
+                                <span className="shrink-0 inline-flex">
+                                  <ClubCrest name={subTeam.name} size={12} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
+                                </span>
+                                {subPl && (
+                                  <span className={`shrink-0 w-[18px] h-[18px] rounded-full overflow-hidden ring-1 inline-flex items-start justify-center [&>svg]:w-[18px] [&>svg]:h-[19px] ${isSubMotm ? 'bg-[#1c1300]/20 ring-[#1c1300]/50' : 'bg-black/30 ring-white/25'}`}>
+                                    <PlayerFace
+                                      player={subPl}
+                                      team={subTeam}
+                                      state={state}
+                                      careerProfile={subPl.me ? state.p : null}
+                                      club={state.club}
+                                      isMyClub={subTeam.id === state.me && state.mode === 'm'}
+                                      kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
+                                      trimColor={subTeam.id === homeId ? homeTrim : awayTrim}
+                                      size={18}
+                                      bare
+                                    />
                                   </span>
-                                  <span className={`px-1 py-0.2 rounded text-[9.5px] mland:text-[8px] font-black shrink-0 ${isSubMotm ? 'bg-[#1c1300] text-[#facc15]' : 'bg-black/45 text-emerald-300'}`}>
-                                    {subRt.toFixed(1)}
-                                  </span>
-                                </div>
-                                <div className="flex items-center justify-between gap-1 leading-tight">
-                                  <span className="inline-flex items-center gap-1 min-w-0">
-                                    {subPl && (
-                                      <span className={`shrink-0 w-[18px] h-[18px] rounded-full overflow-hidden ring-1 inline-flex items-start justify-center [&>svg]:w-[18px] [&>svg]:h-[19px] ${isSubMotm ? 'bg-[#1c1300]/20 ring-[#1c1300]/50' : 'bg-black/30 ring-white/25'}`}>
-                                        <PlayerFace
-                                          player={subPl}
-                                          team={subTeam}
-                                          state={state}
-                                          careerProfile={subPl.me ? state.p : null}
-                                          club={state.club}
-                                          isMyClub={subTeam.id === state.me && state.mode === 'm'}
-                                          kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                          trimColor={subTeam.id === homeId ? homeTrim : awayTrim}
-                                          size={18}
-                                          bare
-                                        />
-                                      </span>
-                                    )}
-                                    <span className="truncate font-bold">{sb.inPlayer.split(' ')[0]}</span>
-                                  </span>
+                                )}
+                                <span className="opacity-75 text-[9px] mland:text-[7.5px]">#{subNo}</span>
+                                <span className="font-bold max-w-[84px] truncate">{sb.inPlayer.split(' ')[0]}</span>
+                                {subPl?.ro && <span className="text-[8.5px] mland:text-[7.5px] font-extrabold opacity-80">{subPl.ro}</span>}
+                                <span className="text-[8.5px] mland:text-[7.5px] opacity-65">{sb.m}&apos;</span>
+                                {(subGl > 0 || subAs > 0 || isSubMotm) && (
                                   <span className="inline-flex items-center gap-0.5 shrink-0">
                                     {subGl > 0 && <StatIconBadge kind="goal" count={subGl} size="xs" />}
                                     {subAs > 0 && <StatIconBadge kind="assist" count={subAs} size="xs" />}
                                     {isSubMotm && <span>👑</span>}
                                   </span>
-                                </div>
+                                )}
+                                <span className={`px-1 py-0.2 rounded text-[9.5px] mland:text-[8px] font-black shrink-0 ${isSubMotm ? 'bg-[#1c1300] text-[#facc15]' : 'bg-black/45 text-emerald-300'}`}>
+                                  {subRt.toFixed(1)}
+                                </span>
                               </button>
                             );
                           })}
@@ -7443,12 +7574,14 @@ export const MatchModal: React.FC<{
                             <div key={i} className="text-xs mland:text-[10.5px] flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-sky-500/8 border border-sky-500/20">
                               <span className="px-1.5 py-0.2 rounded bg-sky-500/15 tabular font-extrabold text-[10.5px] text-sky-700 dark:text-sky-300 shrink-0">{sb.m}&apos;</span>
                               <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-snug">
-                                <span className="font-bold text-[var(--ink)]">{tObj.name}:</span>
-                                <span className="inline-flex items-center gap-1 font-semibold text-[var(--g)]">
-                                  <span>เข้า</span>
+                                <span className="inline-flex items-center gap-1 font-bold text-[var(--ink)]">
                                   <span className="shrink-0 inline-flex">
                                     <ClubCrest name={tObj.name} size={13} team={tObj} club={state.club} isMyClub={isTMe} />
                                   </span>
+                                  <span>{tObj.name}:</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1 font-semibold text-[var(--g)]">
+                                  <span>เข้า</span>
                                   {inPl && (
                                     <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--g)]/50 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
                                       <PlayerFace player={inPl} team={tObj} state={state} careerProfile={inPl.me ? state.p : null} club={state.club} isMyClub={isTMe} kitColor={inPl.pos === 'GK' ? tGkKit : tKit} trimColor={tTrim} size={20} bare />
@@ -7460,9 +7593,6 @@ export const MatchModal: React.FC<{
                                 <span className="text-[var(--mut)]">·</span>
                                 <span className="inline-flex items-center gap-1 text-[var(--red)]">
                                   <span>ออก</span>
-                                  <span className="shrink-0 inline-flex">
-                                    <ClubCrest name={tObj.name} size={13} team={tObj} club={state.club} isMyClub={isTMe} />
-                                  </span>
                                   {outPl && (
                                     <span className="shrink-0 w-[18px] h-[18px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--red)]/45 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[18px] [&>svg]:h-[19px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
                                       <PlayerFace player={outPl} team={tObj} state={state} careerProfile={outPl.me ? state.p : null} club={state.club} isMyClub={isTMe} kitColor={outPl.pos === 'GK' ? tGkKit : tKit} trimColor={tTrim} size={18} bare />
@@ -7518,6 +7648,8 @@ export const MatchModal: React.FC<{
                         }
                       }
 
+                      const shownCrestTeamIds = new Set<number>();
+
                       const renderInlineEventText = () => {
                         if (hits.length > 0) {
                           hits.sort((a, b) => a.start - b.start);
@@ -7534,11 +7666,15 @@ export const MatchModal: React.FC<{
                             const htGkKit = htIsHome ? homeGkKit : awayGkKit;
                             const htTrim = htIsHome ? homeTrim : awayTrim;
                             const htIsMe = htTeam.id === state.me && state.mode === 'm';
+                            const showHitCrest = !shownCrestTeamIds.has(htTeam.id);
+                            if (showHitCrest) shownCrestTeamIds.add(htTeam.id);
                             nodes.push(
                               <span key={`p-${hIdx}`} className="inline-flex items-center gap-1 align-middle mx-0.5 px-1.5 py-0.5 rounded-lg bg-black/5 dark:bg-white/8 border border-black/8 dark:border-white/10">
-                                <span className="shrink-0 inline-flex">
-                                  <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
-                                </span>
+                                {showHitCrest && (
+                                  <span className="shrink-0 inline-flex">
+                                    <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
+                                  </span>
+                                )}
                                 <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-black/15 dark:ring-white/25 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
                                   <PlayerFace
                                     player={htPlayer}
@@ -7614,7 +7750,7 @@ export const MatchModal: React.FC<{
                             {l.m}&apos;
                           </span>
 
-                          {vis.isBothTeams ? (
+                          {vis.isBothTeams && !hasInlinePlayer ? (
                             <span className="inline-flex items-center gap-0.5 shrink-0">
                               <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
                               <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />

@@ -517,7 +517,13 @@ export const MainMenu: React.FC<{
                         {tierTag}
                       </span>
                       <span aria-hidden="true">·</span>
-                      <span className="tabular">{t.sq.length} คน</span>
+                      <span className="font-semibold text-[var(--ink)]/80">{t.form}</span>
+                      {t.philosophy && (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="truncate">{t.philosophy}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <span className="px-2 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-white text-xs mland:text-[10px] font-bold tabular shrink-0 shadow-xs" style={{ background: ovColor(avg) }}>
@@ -775,7 +781,6 @@ export const MainMenu: React.FC<{
                 <div className="leading-none">
                   <div className={`text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular ${statTierMeta(ov).darkTextClass}`}>
                     {ov}
-                    <span className="text-[10px] mland:text-[8px] text-white/45 font-semibold ml-0.5">/100</span>
                   </div>
                   <div className="text-[10.5px] mland:text-[8.5px] font-bold text-white/85 tracking-wide mt-0.5">
                     {cSp} · #{cNo}
@@ -1336,21 +1341,19 @@ export const MainMenu: React.FC<{
                         const archBonus = statKey ? curArch.sbBonus[statKey] || 0 : 0;
                         const rolledSub = statKey ? cSubMap[statKey] || 0 : 0;
                         return (
-                          <div key={lbl} className="space-y-0.5">
-                            <div className="flex items-center justify-between gap-1 text-[11px] mland:text-[9.5px]">
-                              <span className="truncate flex items-center gap-1 min-w-0">
-                                {isSig && <span className="text-[#9a6700] dark:text-[var(--lamp)] font-black" title="ท่าไม้ตายประจำสาย">★</span>}
-                                <span className={isSig ? 'font-bold text-[var(--ink)]' : archBonus > 0 ? 'font-semibold text-[var(--g)]' : 'text-[var(--mut)]'}>
-                                  {lbl}
-                                </span>
-                                {archBonus > 0 && <span className="text-[9px] font-bold text-[var(--g)]">+{archBonus}</span>}
-                                {rolledSub > 0 && <span className="text-[9px] font-bold text-[#9a6700] dark:text-[var(--lamp)]">+{rolledSub}</span>}
+                          <div key={lbl} className="flex items-center gap-1.5 text-[11px] mland:text-[9.5px]">
+                            <span className="w-[92px] sm:w-[100px] mland:w-[76px] shrink-0 truncate flex items-center gap-1 min-w-0">
+                              {isSig && <span className="text-[#9a6700] dark:text-[var(--lamp)] font-black shrink-0" title="ท่าไม้ตายประจำสาย">★</span>}
+                              <span className={`truncate ${isSig ? 'font-bold text-[var(--ink)]' : archBonus > 0 ? 'font-semibold text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                {lbl}
                               </span>
-                              <b className="tabular text-[var(--ink)]">{val}</b>
+                              {archBonus > 0 && <span className="text-[9px] font-bold text-[var(--g)] shrink-0">+{archBonus}</span>}
+                              {rolledSub > 0 && <span className="text-[9px] font-bold text-[#9a6700] dark:text-[var(--lamp)] shrink-0">+{rolledSub}</span>}
+                            </span>
+                            <div className="flex-1 min-w-[28px] h-1.5 mland:h-1 rounded-full bg-[var(--surface)] overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 6, 100)}%`, background: statBarColor(val) }} />
                             </div>
-                            <div className="h-1 rounded-full bg-[var(--surface)] overflow-hidden">
-                              <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
-                            </div>
+                            <b className="w-6 mland:w-5 text-right shrink-0 tabular text-[var(--ink)]">{val}</b>
                           </div>
                         );
                       })}

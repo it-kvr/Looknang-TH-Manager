@@ -1,5 +1,6 @@
 import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
+import { ensureAiTeamPhilosophies } from './playerCore';
 
 export const SAVE_B64U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 export const SAVE_POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
@@ -216,6 +217,7 @@ export const packSaveTeam = (t: Team): unknown[] => {
   if (t.fm) tex.fm = t.fm;
   if (t.foreign !== undefined) tex.fg = t.foreign;
   if (t.tacFam !== undefined) tex.tf = t.tacFam;
+  if (t.philosophy) tex.ph = t.philosophy;
   if (t.history && t.history.length) {
     tex.hi = t.history.map((h) => {
       const flags = (h.champion ? 1 : 0) | (h.cupChampion ? 2 : 0) | (h.asiaChampion ? 4 : 0);
@@ -279,6 +281,7 @@ export const unpackSaveTeam = (raw: unknown): Team => {
   if (tex.fm !== undefined) tm.fm = String(tex.fm);
   if (tex.fg !== undefined) tm.foreign = Number(tex.fg);
   if (tex.tf !== undefined) tm.tacFam = Number(tex.tf);
+  if (tex.ph !== undefined) tm.philosophy = String(tex.ph);
   if (Array.isArray(tex.hi)) {
     tm.history = (tex.hi as unknown[]).map((item): TeamSeasonHistoryRecord => {
       if (!Array.isArray(item)) return item as TeamSeasonHistoryRecord;
@@ -359,7 +362,9 @@ export const unpackSaveState = (raw: Record<string, unknown>): GameState => {
       Object.entries(raw.fxo as Record<string, unknown>).map(([k, v]) => [k, unpackFixturesCompact(v)])
     );
   }
-  return copy as unknown as GameState;
+  const result = copy as unknown as GameState;
+  if (Array.isArray(result.teams)) ensureAiTeamPhilosophies(result, false);
+  return result;
 };
 
 export const strToCompactBytes = (str: string): Uint8Array => {
