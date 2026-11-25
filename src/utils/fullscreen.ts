@@ -232,6 +232,11 @@ export function bindAutoLandscapeFullscreen(): () => void {
   let inFlight = false;
   let lastAttempt = 0;
 
+  const isAppleDevice =
+    typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+  const isAppleStandalone =
+    isAppleDevice && (navigator as unknown as { standalone?: boolean }).standalone === true;
+
   const shouldSkipTarget = (target: EventTarget | null): boolean => {
     if (!(target instanceof Element)) return false;
     return Boolean(
@@ -243,7 +248,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     if (shouldSkipTarget(target)) return;
     if (!shouldAutoMobileFullscreen()) return;
 
-    if (isStandaloneDisplayMode() || getFullscreenElement() || !isFullscreenSupported()) {
+    if (isAppleStandalone || getFullscreenElement() || !isFullscreenSupported()) {
       lockLandscapeOrientation().catch(() => undefined);
       return;
     }
@@ -273,6 +278,9 @@ export function bindAutoLandscapeFullscreen(): () => void {
   const lockedByOri = new Map<string, SafeInsets>();
   let lastOriKey = '';
   let settleTimer: number | null = null;
+  let fsSettleTimer: number | null = null;
+  let initTimer1: number | null = null;
+  let initTimer2: number | null = null;
 
   const getOriKey = (): string => {
     const scrOri = (screen as Screen & { orientation?: { angle?: number } }).orientation;
@@ -284,10 +292,13 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
   const readProbeInsets = (): SafeInsets => {
     const cs = window.getComputedStyle(probe);
+    const isLand = window.innerWidth > window.innerHeight;
+    // In non-Apple (Android) landscape fullscreen/standalone, top & bottom insets are transient system bars (not cutouts)
+    const ignoreTopBottom = !isAppleDevice && isLand;
     return {
-      t: Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
+      t: ignoreTopBottom ? 0 : Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
       r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
-      b: Math.max(0, Math.round(parseFloat(cs.paddingBottom) || 0)),
+      b: ignoreTopBottom ? 0 : Math.max(0, Math.round(parseFloat(cs.paddingBottom) || 0)),
       l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
     };
   };
@@ -306,7 +317,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     rootStyle.removeProperty('--sal');
   };
 
-  const updateSafeAreas = (forceReset = false) => {
+  const updateSafeAreas = () => {
     const standalone = isStandaloneDisplayMode();
     const activeFs = Boolean(getFullscreenElement());
     syncFullscreenClass(activeFs);
@@ -317,9 +328,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
 
     const oriKey = getOriKey();
-    if (forceReset || oriKey !== lastOriKey) {
+    if (oriKey !== lastOriKey) {
       lastOriKey = oriKey;
-      lockedByOri.delete(oriKey);
     }
 
     const cur = readProbeInsets();
@@ -354,10 +364,14 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
   const onVisibilityOrFocus = () => {
     if (document.visibilityState === 'visible') {
-      updateSafeAreas(false);
+      updateSafeAreas();
       guardViewportScroll();
       if (shouldAutoMobileFullscreen()) {
-        lockLandscapeOrientation().catch(() => undefined);
+        if (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported()) {
+          enterImmersiveFullscreen().catch(() => undefined);
+        } else {
+          lockLandscapeOrientation().catch(() => undefined);
+        }
       }
     }
   };
@@ -365,8 +379,13 @@ export function bindAutoLandscapeFullscreen(): () => void {
   const onFsChange = () => {
     const active = Boolean(getFullscreenElement());
     syncFullscreenClass(active);
-    updateSafeAreas(true);
+    updateSafeAreas();
     guardViewportScroll();
+    if (fsSettleTimer) window.clearTimeout(fsSettleTimer);
+    fsSettleTimer = window.setTimeout(() => {
+      updateSafeAreas();
+      guardViewportScroll();
+    }, 250);
     if (active && shouldAutoMobileFullscreen()) {
       lockLandscapeOrientation().catch(() => undefined);
       window.setTimeout(() => {
@@ -379,15 +398,15 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
   const onOrientationChange = () => {
     if (settleTimer) window.clearTimeout(settleTimer);
-    updateSafeAreas(true);
+    updateSafeAreas();
     settleTimer = window.setTimeout(() => {
-      updateSafeAreas(false);
+      updateSafeAreas();
       guardViewportScroll();
-    }, 200);
+    }, 260);
   };
 
   const onViewportResize = () => {
-    updateSafeAreas(false);
+    updateSafeAreas();
     guardViewportScroll();
   };
 
@@ -403,13 +422,22 @@ export function bindAutoLandscapeFullscreen(): () => void {
   document.addEventListener('mozfullscreenchange', onFsChange);
   document.addEventListener('MSFullscreenChange', onFsChange);
 
-  updateSafeAreas(true);
+  updateSafeAreas();
+  initTimer1 = window.setTimeout(() => updateSafeAreas(), 250);
+  initTimer2 = window.setTimeout(() => updateSafeAreas(), 750);
   if (isStandaloneDisplayMode() && shouldAutoMobileFullscreen()) {
-    lockLandscapeOrientation().catch(() => undefined);
+    if (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported()) {
+      enterImmersiveFullscreen().catch(() => undefined);
+    } else {
+      lockLandscapeOrientation().catch(() => undefined);
+    }
   }
 
   return () => {
     if (settleTimer) window.clearTimeout(settleTimer);
+    if (fsSettleTimer) window.clearTimeout(fsSettleTimer);
+    if (initTimer1) window.clearTimeout(initTimer1);
+    if (initTimer2) window.clearTimeout(initTimer2);
     probe.remove();
     clearLockedInsets();
     window.removeEventListener('click', onClick, { capture: true });

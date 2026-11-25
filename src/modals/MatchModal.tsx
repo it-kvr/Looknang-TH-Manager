@@ -3,11 +3,14 @@ import {
   Bot,
   Check,
   FastForward,
+  Film,
   Flag,
   Gauge,
   Pause,
   Play,
+  Route,
   Star,
+  Tag,
   Users,
   Zap
 } from 'lucide-react';
@@ -194,9 +197,9 @@ export const MatchModal: React.FC<{
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 5>(() => getDefaultMatchSpeed(settings));
-  const cineSlowMo = true;
-  const showRunVectors = true;
-  const showPositions = true;
+  const [cineSlowMo, setCineSlowMo] = useState(true);
+  const [showRunVectors, setShowRunVectors] = useState(true);
+  const [showPositions, setShowPositions] = useState(true);
   const [showRatings, setShowRatings] = useState(true);
   const [htStatMode, setHtStatMode] = useState<'rating' | 'ovr'>('rating');
   const [injuryAlert, setInjuryAlert] = useState<{ name: string; role: SubRole; no: number; games: number; minute: number } | null>(null);
@@ -7295,7 +7298,7 @@ export const MatchModal: React.FC<{
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, showRatings, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
+  }, [paused, done, speed, showRatings, showRunVectors, showPositions, cineSlowMo, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
@@ -8341,24 +8344,6 @@ export const MatchModal: React.FC<{
                   </>
                 ) : (
                   <>
-                    <button
-                      type="button"
-                      title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนาม"
-                      aria-label="สลับเรตติ้งหรือพลัง"
-                      onClick={() => {
-                        SFX.tap();
-                        setShowRatings((v) => !v);
-                      }}
-                      className={`btn btn-md px-2.5 sm:px-3 mland:px-2 ${
-                        showRatings
-                          ? 'bg-amber-400/22 border border-amber-400/60 text-[#8a5b00] dark:text-[#fde047] shadow-2xs hover:bg-amber-400/30'
-                          : 'bg-sky-500/18 border border-sky-400/55 text-sky-700 dark:text-sky-300 shadow-2xs hover:bg-sky-500/25'
-                      }`}
-                    >
-                      {showRatings ? <Star className="w-3.5 h-3.5 fill-current shrink-0" /> : <Zap className="w-3.5 h-3.5 fill-current shrink-0" />}
-                      <span>{showRatings ? 'เรตติ้ง' : 'พลัง'}</span>
-                    </button>
-
                     {state.mode === 'm' && (
                       <button
                         type="button"
@@ -8413,10 +8398,10 @@ export const MatchModal: React.FC<{
                         title="ปรับความเร็วการแข่งขัน"
                         aria-label="ปรับความเร็วการแข่งขัน"
                         onClick={cycleMatchSpeed}
-                        className="seg-btn h-full px-2.5 sm:px-3 mland:px-2 text-xs mland:text-[10.5px] tabular"
+                        className="seg-btn h-full w-[68px] sm:w-[74px] mland:w-[58px] px-1.5 text-xs mland:text-[10.5px] tabular justify-center shrink-0"
                       >
-                        <Gauge className="w-3.5 h-3.5 opacity-80" />
-                        <span>{speed}x</span>
+                        <Gauge className="w-3.5 h-3.5 opacity-80 shrink-0" />
+                        <span className="inline-block min-w-[3.4ch] text-center">{speed}x</span>
                       </button>
                     </div>
 
@@ -9375,6 +9360,86 @@ export const MatchModal: React.FC<{
                         </button>
                       ))}
                     </div>
+
+                    {!done && matchPhaseUi !== 'halftime' && (
+                      <div className="flex flex-wrap items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          title="เปิด/ปิด เส้นทิศทางการวิ่งและจ่ายบอล"
+                          aria-label="เปิด/ปิด เส้นวิ่ง"
+                          onClick={() => {
+                            SFX.tap();
+                            setShowRunVectors((v) => !v);
+                          }}
+                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                            showRunVectors
+                              ? 'bg-emerald-500/20 border border-emerald-500/55 text-emerald-700 dark:text-emerald-300 shadow-2xs hover:bg-emerald-500/28'
+                              : 'bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/45'
+                          }`}
+                        >
+                          <Route className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                          <span>เส้น</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนาม"
+                          aria-label="สลับเรตติ้งหรือพลัง"
+                          onClick={() => {
+                            SFX.tap();
+                            setShowRatings((v) => !v);
+                          }}
+                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                            showRatings
+                              ? 'bg-amber-400/22 border border-amber-400/60 text-[#8a5b00] dark:text-[#fde047] shadow-2xs hover:bg-amber-400/30'
+                              : 'bg-sky-500/18 border border-sky-400/55 text-sky-700 dark:text-sky-300 shadow-2xs hover:bg-sky-500/25'
+                          }`}
+                        >
+                          {showRatings ? (
+                            <Star className="w-3 h-3 mland:w-2.5 mland:h-2.5 fill-current shrink-0" />
+                          ) : (
+                            <Zap className="w-3 h-3 mland:w-2.5 mland:h-2.5 fill-current shrink-0" />
+                          )}
+                          <span>{showRatings ? 'เรตติ้ง' : 'พลัง'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          title="เปิด/ปิด ป้ายตำแหน่งบนหัวผู้เล่น"
+                          aria-label="เปิด/ปิด ป้ายตำแหน่ง"
+                          onClick={() => {
+                            SFX.tap();
+                            setShowPositions((v) => !v);
+                          }}
+                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                            showPositions
+                              ? 'bg-sky-500/18 border border-sky-400/55 text-sky-700 dark:text-sky-300 shadow-2xs hover:bg-sky-500/25'
+                              : 'bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/45'
+                          }`}
+                        >
+                          <Tag className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                          <span>ป้าย</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          title="เปิด/ปิด เอฟเฟกต์สโลว์โมชันจังหวะสำคัญ"
+                          aria-label="เปิด/ปิด สโลว์โมชัน"
+                          onClick={() => {
+                            SFX.tap();
+                            setCineSlowMo((v) => !v);
+                          }}
+                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                            cineSlowMo
+                              ? 'bg-violet-500/18 border border-violet-400/55 text-violet-700 dark:text-violet-300 shadow-2xs hover:bg-violet-500/25'
+                              : 'bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/45'
+                          }`}
+                        >
+                          <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                          <span>สโล</span>
+                        </button>
+                      </div>
+                    )}
 
                     {!done && matchPhaseUi === 'halftime' && (
                       <div className="flex flex-wrap items-center gap-1.5 shrink-0">

@@ -656,6 +656,8 @@ export const drawLivePitchToCanvas = (
         ctx.beginPath();
         ctx.arc(0, 0, Math.max(1, cr - 0.9), 0, Math.PI * 2);
         ctx.clip();
+        ctx.fillStyle = '#3f5c4e';
+        ctx.fillRect(-cr, -cr, cr * 2, cr * 2);
         const fw = cr * 2.08;
         const fh = (fw * 68) / 64;
         ctx.drawImage(coachFace, -fw / 2, -fh * 0.5, fw, fh);

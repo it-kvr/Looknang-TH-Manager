@@ -1215,55 +1215,77 @@ export const FinanceClubView: React.FC<{
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
       {/* Club Hero Identity Banner (unifies live preview when on identity tab so crests/kits never duplicate) */}
       <div
-        className={`p-3 mland:p-2 rounded-2xl border border-[var(--line)] shrink-0 ${
-          clubTab === 'identity' ? 'border-[var(--g)]/35 shadow-sm' : ''
+        className={`relative px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 overflow-hidden ${
+          clubTab === 'identity' ? 'border-[var(--g)]/40 shadow-sm' : 'border-[var(--line)]'
         }`}
-        style={{ background: `linear-gradient(155deg, color-mix(in srgb, ${dk.c1} 18%, var(--surface)), var(--surface) 58%)` }}
+        style={{
+          background: `linear-gradient(135deg, color-mix(in srgb, ${dk.c1} 14%, var(--surface)), var(--surface) 54%, color-mix(in srgb, ${dk.c2} 7%, var(--surface)))`
+        }}
       >
-        <div className="flex flex-row items-center justify-between gap-3 mland:gap-2">
-          <div className="flex flex-row items-center gap-3 mland:gap-2.5 text-left min-w-0">
-            <div className="flex items-end gap-2 mland:gap-1.5 shrink-0 [&_svg]:w-12 [&_svg]:h-12 mland:[&_svg]:w-10 mland:[&_svg]:h-10">
-              <div className="text-center">
-                <ClubCrest name={me.name} size={64} team={me} club={dk} isMyClub />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
+          style={{ background: `linear-gradient(90deg, ${dk.c1}, ${dk.c2})` }}
+        />
+        <div className="flex flex-col sm:flex-row mland:flex-row sm:items-center mland:items-center justify-between gap-2 sm:gap-3 mland:gap-2">
+          <div className="flex items-center gap-2.5 mland:gap-2 text-left min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 mland:gap-1 px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/70 shrink-0 shadow-2xs">
+              <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-center justify-center">
+                <ClubCrest name={me.name} size={48} team={me} club={dk} isMyClub />
               </div>
-              <div className="text-center">
-                <KitJersey club={dk} away={false} size={56} />
+              <div className="w-px h-7 mland:h-5 bg-[var(--line)]/75 mx-0.5" aria-hidden="true" />
+              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                <KitJersey club={dk} away={false} size={44} />
               </div>
-              <div className="text-center">
-                <KitJersey club={dk} away={true} size={56} />
+              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                <KitJersey club={dk} away={true} size={44} />
               </div>
             </div>
-            <div className="space-y-1 mland:space-y-0 min-w-0">
-              <div
-                className={`text-[11px] mland:text-[10px] font-bold ${
-                  clubTab === 'identity' && hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'
-                }`}
-              >
-                {clubTab === 'identity'
-                  ? hasIdentityChanges
-                    ? 'ตัวอย่างตรา & ชุดแข่ง (มีรายการแก้ไขที่ยังไม่บันทึก)'
-                    : 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์'
-                  : `${TN[me.tier]} · ก่อตั้งปี ${k.founded || 2568}`}
+
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0 text-[10.5px] mland:text-[9px] font-bold leading-tight">
+                {clubTab === 'identity' ? (
+                  <span className={hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)] truncate' : 'text-[var(--g)] truncate'}>
+                    {hasIdentityChanges
+                      ? 'ตัวอย่างตรา & ชุดแข่ง (มีรายการแก้ไขที่ยังไม่บันทึก)'
+                      : 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์'}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-[var(--g)] shrink-0">{TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}</span>
+                    {k.motto && (
+                      <span className="hidden md:inline mland:hidden text-[var(--mut)] font-medium italic truncate">
+                        · &ldquo;{k.motto}&rdquo;
+                      </span>
+                    )}
+                  </>
+                )}
               </div>
-              <h2 className="font-bold text-2xl mland:text-base font-display leading-tight truncate">
-                {me.name} {k.nick ? <span className="text-base mland:text-xs font-semibold text-[var(--mut)]">«{k.nick}»</span> : null}
+
+              <h2 className="font-bold text-base sm:text-lg mland:text-sm font-display leading-tight truncate text-[var(--ink)]">
+                {me.name}
+                {k.nick ? (
+                  <span className="ml-1.5 text-xs sm:text-sm mland:text-[11px] font-semibold text-[var(--mut)]">«{k.nick}»</span>
+                ) : null}
               </h2>
+
               {clubTab === 'identity' ? (
-                <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate">
-                  ตรา: <b>{CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}</b> · <b>{CREST_PATTERNS[dk.pat] || 'แถบขวาง'}</b> · เสื้อ: <b>{KIT_PATTERNS[dk.kit || 0]}</b> / เยือน <b>{KIT_PATTERNS[(dk.awayKit ?? dk.kit) || 0]}</b> · <b>{KIT_COLLARS[(dk.collar ?? 0) % 4]}</b>
+                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate leading-tight">
+                  ตรา: <b className="text-[var(--ink)]">{CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}</b> ·{' '}
+                  <b className="text-[var(--ink)]">{CREST_PATTERNS[dk.pat] || 'แถบขวาง'}</b> · เสื้อ:{' '}
+                  <b className="text-[var(--ink)]">{KIT_PATTERNS[dk.kit || 0]}</b> / เยือน{' '}
+                  <b className="text-[var(--ink)]">{KIT_PATTERNS[(dk.awayKit ?? dk.kit) || 0]}</b> ·{' '}
+                  <b className="text-[var(--ink)]">{KIT_COLLARS[(dk.collar ?? 0) % 4]}</b>
                 </p>
               ) : (
-                <>
-                  <p className="text-xs mland:text-[10px] text-[var(--mut)] truncate flex items-center gap-1.5">
-                    <span>🏟️ {k.std} ({cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1})</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="truncate font-semibold text-[var(--ink)]">
-                      👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'} ({COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.icon}{' '}
-                      {COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.name})
-                    </span>
-                  </p>
-                  {k.motto && <p className="text-xs italic text-[var(--ink)]/85 mland:hidden">&ldquo;{k.motto}&rdquo;</p>}
-                </>
+                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate flex items-center gap-1.5 leading-tight">
+                  <span className="truncate">🏟️ {k.std} ({cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
+                  <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
+                  <span className="truncate font-semibold text-[var(--ink)]">
+                    👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'} ({COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.icon}{' '}
+                    {COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.name})
+                  </span>
+                </p>
               )}
             </div>
           </div>
@@ -1316,22 +1338,41 @@ export const FinanceClubView: React.FC<{
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-1.5 mland:gap-1 w-auto text-center shrink-0">
-              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">พลัง XI / ทีม</div>
-                <b className="text-xs mland:text-[10.5px] tabular">{ts.ovXi} / {ts.ovSq}</b>
+            <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/75 w-full sm:w-auto mland:w-auto text-center shrink-0">
+              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1">
+                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</div>
+                <b className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight block mt-0.5 mland:mt-0">
+                  {ts.ovXi}/{ts.ovSq}
+                </b>
               </div>
-              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แฟนบอลทั้งหมด</div>
-                <b className="text-xs mland:text-[10.5px] tabular">{fmtFansShort(ensureTeamFans(me))}</b>
+              <div
+                className="px-2.5 py-1.5 mland:px-2 mland:py-1"
+                title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}
+              >
+                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">แฟนบอล</div>
+                <b className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight block mt-0.5 mland:mt-0">
+                  {fmtFansShort(ensureTeamFans(me))}
+                </b>
               </div>
-              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">บอร์ด</div>
-                <b className="text-xs mland:text-[10.5px] tabular">{state.bd ?? 50}%</b>
+              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1">
+                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">บอร์ด</div>
+                <b
+                  className={`text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular leading-tight block mt-0.5 mland:mt-0 ${
+                    (state.bd ?? 50) < 30
+                      ? 'text-[var(--red)]'
+                      : (state.bd ?? 50) >= 75
+                        ? 'text-[var(--g)]'
+                        : 'text-[var(--ink)]'
+                  }`}
+                >
+                  {state.bd ?? 50}%
+                </b>
               </div>
-              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">มูลค่าทีม</div>
-                <b className="text-xs mland:text-[10.5px] tabular">{fmtMoneyNum(totV)}</b>
+              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1">
+                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">มูลค่าทีม</div>
+                <b className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight block mt-0.5 mland:mt-0">
+                  {fmtMoneyNum(totV)}
+                </b>
               </div>
             </div>
           )}
@@ -1694,27 +1735,33 @@ export const FinanceClubView: React.FC<{
                           setShowCoachEditor(true);
                         }}
                         title="คลิกเพื่อปรับแต่งโค้ช"
-                        className="shrink-0 w-13 h-13 mland:w-11 mland:h-11 rounded-xl bg-gradient-to-b from-[#1a2b24] to-[#0c1410] border border-[var(--line)] hover:border-[var(--g)] flex items-end justify-center overflow-hidden cursor-pointer transition-colors"
+                        className="relative shrink-0 w-14 h-14 mland:w-13 mland:h-13 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#eef5f1] via-[#dce9e2] to-[#c7dad0] dark:from-[#324d40] dark:via-[#24392f] dark:to-[#182820] border border-[var(--line)] hover:border-[var(--g)] flex items-end justify-center overflow-hidden cursor-pointer transition-colors shadow-inner"
                       >
-                        <PlayerFace
-                          player={coachFacePlayer}
-                          team={me}
-                          state={state}
-                          kitColor="#1e293b"
-                          trimColor={k.c2 || '#facc15'}
-                          size={48}
-                          bare
-                          isCoach
+                        <div
+                          aria-hidden="true"
+                          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.65),transparent_70%)] dark:bg-[radial-gradient(circle_at_50%_40%,rgba(232,248,240,0.22),transparent_72%)]"
                         />
+                        <div className="relative z-10 w-full h-full pt-0.5 flex items-end justify-center [&>svg]:w-full [&>svg]:h-full">
+                          <PlayerFace
+                            player={coachFacePlayer}
+                            team={me}
+                            state={state}
+                            kitColor="#1e293b"
+                            trimColor={k.c2 || '#facc15'}
+                            size={54}
+                            bare
+                            isCoach
+                          />
+                        </div>
                       </button>
                       <div className="min-w-0">
-                        <div className="font-bold text-xs sm:text-sm text-[var(--ink)] truncate">
+                        <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
                           {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular">
                           {repRank} · ชื่อเสียง {rep}
                         </div>
-                        <div className="text-[10.5px] font-semibold text-[var(--g)] truncate">
+                        <div className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
                           {curStyle.icon} {curStyle.name} · {curStyle.effectDesc}
                         </div>
                       </div>
@@ -2223,17 +2270,23 @@ export const FinanceClubView: React.FC<{
                       {/* Left Live Preview & Quick Looks */}
                       <div className="sm:w-[235px] mland:w-[215px] shrink-0 p-4 mland:p-3 border-b sm:border-b-0 sm:border-r mland:border-b-0 mland:border-r border-[var(--line)]/70 bg-[var(--surface-2)]/35 flex flex-col gap-3 mland:gap-2 overflow-y-auto">
                         <div className="flex flex-col items-center text-center gap-2">
-                          <div className="w-28 h-28 mland:w-22 mland:h-22 rounded-2xl bg-gradient-to-b from-[#1e352a] via-[#12221a] to-[#0a130e] border border-[var(--line)] flex items-end justify-center overflow-hidden shadow-sm">
-                            <PlayerFace
-                              player={draftCoachPlayer}
-                              team={me}
-                              state={state}
-                              kitColor="#1e293b"
-                              trimColor={k.c2 || '#facc15'}
-                              size={104}
-                              bare
-                              isCoach
+                          <div className="relative w-28 h-28 mland:w-22 mland:h-22 rounded-2xl bg-gradient-to-b from-[#eef5f1] via-[#dce9e2] to-[#c7dad0] dark:from-[#324d40] dark:via-[#24392f] dark:to-[#182820] border border-[var(--line)] flex items-end justify-center overflow-hidden shadow-sm">
+                            <div
+                              aria-hidden="true"
+                              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.65),transparent_70%)] dark:bg-[radial-gradient(circle_at_50%_40%,rgba(232,248,240,0.24),transparent_72%)]"
                             />
+                            <div className="relative z-10 flex items-end justify-center">
+                              <PlayerFace
+                                player={draftCoachPlayer}
+                                team={me}
+                                state={state}
+                                kitColor="#1e293b"
+                                trimColor={k.c2 || '#facc15'}
+                                size={104}
+                                bare
+                                isCoach
+                              />
+                            </div>
                           </div>
                           <div className="w-full min-w-0">
                             <div className="font-bold text-sm text-[var(--ink)] truncate">
