@@ -838,7 +838,7 @@ export const MainMenu: React.FC<{
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto sm:overflow-hidden mland:overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden flex flex-col">
               {filteredClubs.length === 0 ? (
                 <div className="h-full min-h-[140px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] flex flex-col items-center justify-center gap-2 p-6 text-center">
                   <p className="text-xs sm:text-sm font-semibold text-[var(--mut)]">
@@ -853,7 +853,7 @@ export const MainMenu: React.FC<{
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-1.5 sm:gap-2 mland:gap-1 sm:h-full mland:h-full auto-rows-[58px] sm:auto-rows-auto sm:grid-rows-6 lg:grid-rows-4 mland:grid-rows-4 content-start">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-1.5 sm:gap-2 mland:gap-1.5 lg:h-full auto-rows-[96px] sm:auto-rows-[106px] lg:auto-rows-auto lg:grid-rows-4 mland:auto-rows-[74px] content-start">
                   {filteredClubs.map(({ team: t, idx, squadAvg, tierBucket, tierTag }) => {
                     const isSelected = idx === activeIdx;
                     const primaryKit = t.kc?.[0] || '#158049';
@@ -875,15 +875,31 @@ export const MainMenu: React.FC<{
                           className={`h-[3px] mland:h-[2px] w-full shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'}`}
                           style={{ background: `linear-gradient(90deg, ${primaryKit}, ${secondaryKit})` }}
                         />
-                        <div className="flex-1 px-2 py-1.5 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 flex items-center gap-1.5 sm:gap-2 mland:gap-1 min-w-0">
-                          <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
-                            <ClubCrest name={t.name} size={28} team={t} />
+                        <div className="flex-1 px-2.5 py-1.5 sm:px-3 sm:py-2 mland:px-2 mland:py-1 flex flex-col justify-between gap-1 mland:gap-0.5 min-w-0">
+                          {/* Top Row: Large Club Crest + Team OVR */}
+                          <div className="flex items-center justify-between gap-2 min-w-0">
+                            <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 lg:[&>svg]:w-12 lg:[&>svg]:h-12 mland:[&>svg]:w-8 mland:[&>svg]:h-8 drop-shadow-xs transition-transform group-hover:scale-[1.04]">
+                              <ClubCrest name={t.name} size={48} team={t} />
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div
+                                className="text-base sm:text-lg mland:text-xs font-extrabold font-display tabular leading-none"
+                                style={{ color: ovColor(squadAvg) }}
+                              >
+                                {squadAvg}
+                              </div>
+                              <div className="text-[9px] mland:text-[7px] font-bold text-[var(--mut)] mt-0.5 leading-none">
+                                OVR
+                              </div>
+                            </div>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="font-display font-bold text-[11px] sm:text-xs mland:text-[9.5px] truncate leading-tight text-[var(--ink)]">
+
+                          {/* Bottom Row: Full-width Club Name & Tier/Formation */}
+                          <div className="min-w-0">
+                            <div className="font-display font-bold text-xs sm:text-[13px] mland:text-[10px] truncate leading-tight text-[var(--ink)]">
                               {t.name}
                             </div>
-                            <div className="flex items-center gap-1 mt-0.5 text-[9.5px] sm:text-[10px] mland:text-[8px] text-[var(--mut)] truncate leading-tight">
+                            <div className="flex items-center gap-1 mt-0.5 mland:mt-0 text-[10px] mland:text-[8px] text-[var(--mut)] truncate leading-tight">
                               <span
                                 className={`font-semibold shrink-0 ${
                                   tierBucket === 'top'
@@ -897,17 +913,6 @@ export const MainMenu: React.FC<{
                               </span>
                               <span aria-hidden="true">·</span>
                               <span className="shrink-0 font-medium text-[var(--ink)]/75">{t.form}</span>
-                            </div>
-                          </div>
-                          <div className="text-right shrink-0 pl-0.5">
-                            <div
-                              className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-none"
-                              style={{ color: ovColor(squadAvg) }}
-                            >
-                              {squadAvg}
-                            </div>
-                            <div className="text-[8.5px] mland:text-[7px] text-[var(--mut)] mt-0.5 leading-none">
-                              OVR
                             </div>
                           </div>
                         </div>
@@ -927,37 +932,55 @@ export const MainMenu: React.FC<{
               style={{ background: `linear-gradient(90deg, ${selectedTeam.kc?.[0] || '#158049'}, ${selectedTeam.kc?.[1] || '#f5c242'})` }}
             />
 
-            {/* Dossier Identity Header */}
-            <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/75 flex items-center gap-2.5 mland:gap-2">
-              <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
-                <ClubCrest name={selectedTeam.name} size={48} team={selectedTeam} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--g)] truncate">
-                  {selectedMeta.tierBucket === 'top'
-                    ? 'กลุ่มเต็งลุ้นแชมป์ลีก'
-                    : selectedMeta.tierBucket === 'mid'
-                      ? 'กลุ่มกลางตารางสมดุล'
-                      : 'ทีมพลังสู้ท้าทาย'}
+            {/* Dossier Identity Header — Top Row: Large Crest + Team OVR, Second Row: Club Name & Info */}
+            <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/75 space-y-2 mland:space-y-1">
+              <div className="flex items-center justify-between gap-3">
+                <div className="shrink-0 [&>svg]:w-14 [&>svg]:h-14 sm:[&>svg]:w-16 sm:[&>svg]:h-16 mland:[&>svg]:w-11 mland:[&>svg]:h-11 drop-shadow-sm">
+                  <ClubCrest name={selectedTeam.name} size={64} team={selectedTeam} />
                 </div>
-                <h3 className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate leading-tight mt-0.5">
-                  {selectedTeam.name}
-                </h3>
+                <div className="flex items-center gap-3 mland:gap-2 shrink-0">
+                  <div className="text-right">
+                    <div
+                      className="text-xl sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none"
+                      style={{ color: ovColor(selectedMeta.squadAvg) }}
+                    >
+                      {selectedMeta.squadAvg}
+                    </div>
+                    <div className="text-[9.5px] mland:text-[7.5px] font-semibold text-[var(--mut)] mt-0.5 whitespace-nowrap">
+                      พลังทีม
+                    </div>
+                  </div>
+                  <div className="text-right pl-3 mland:pl-2 border-l border-[var(--line)]/75">
+                    <div
+                      className="text-xl sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none"
+                      style={{ color: ovColor(xiAvg) }}
+                    >
+                      {xiAvg}
+                    </div>
+                    <div className="text-[9.5px] mland:text-[7.5px] font-semibold text-[var(--mut)] mt-0.5 whitespace-nowrap">
+                      11 ตัวจริง
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate leading-tight">
+                    {selectedTeam.name}
+                  </h3>
+                  <span className="text-[10px] mland:text-[8px] font-bold text-[var(--g)] shrink-0">
+                    {selectedMeta.tierBucket === 'top'
+                      ? 'เต็งแชมป์ลีก'
+                      : selectedMeta.tierBucket === 'mid'
+                        ? 'กลางตารางสมดุล'
+                        : 'พลังสู้ท้าทาย'}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5 tabular">
                   <span>ฐานแฟน ~{fmtFansShort(selectedTeam.fans || 9500)}</span>
                   <span aria-hidden="true">·</span>
                   <span>นักเตะ {selectedTeam.sq.length} คน</span>
-                </div>
-              </div>
-              <div className="text-right shrink-0 pl-2 border-l border-[var(--line)]/75">
-                <div
-                  className="text-lg sm:text-xl mland:text-sm font-extrabold font-display tabular leading-none"
-                  style={{ color: ovColor(xiAvg) }}
-                >
-                  {xiAvg}
-                </div>
-                <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] mt-0.5 whitespace-nowrap">
-                  11 ตัวจริง
                 </div>
               </div>
             </div>
