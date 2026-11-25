@@ -483,56 +483,87 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     playedNames[tm.id] = Array.from(played);
     playedSlots[tm.id] = slotMap;
 
-    // Simulate cards (realistic ~1-2 yellows per team, rare red card)
+    // Simulate cards (realistic ~1-3 yellows per team by pressing & match heat, plus rare second yellows / straight reds)
     const pool = currentLineup.filter((q) => q.pos !== 'GK');
-    const cardRoll = (tm.press ?? 1) === 2 ? 0.54 : 0.40;
-    const numYellows = (Math.random() < cardRoll ? 1 : 0) + (Math.random() < cardRoll * 0.45 ? 1 : 0) + (big && Math.random() < 0.2 ? 1 : 0);
+    const pressLvl = tm.press ?? 1;
+    const cardRoll = pressLvl === 2 ? 0.62 : pressLvl === 0 ? 0.30 : 0.45;
+    const numYellows =
+      (Math.random() < cardRoll ? 1 : 0) +
+      (Math.random() < cardRoll * 0.52 ? 1 : 0) +
+      (Math.random() < cardRoll * 0.22 ? 1 : 0) +
+      (big && Math.random() < 0.28 ? 1 : 0);
     const matchY: Record<string, number> = {};
+    const firstYMin: Record<string, number> = {};
     const poolWeights = numYellows > 0 && pool.length
       ? pool.map((q) => {
           const D = DT(q, s?.p);
-          let w = (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22 ? 3 : 1) + (D.d.pos < 58 ? 1 : 0);
-          if (D.tr === 6 || D.tr === 17 || D.tr === 23) w = Math.max(1, w - 1);
-          if (hasTrait(q, 'hot_headed', s?.p)) w += 3;
-          if (hasTrait(q, 'slide_tackler', s?.p) || hasTrait(q, 'risk_taker', s?.p)) w += 2;
-          if (hasTrait(q, 'calm_leader', s?.p) || hasTrait(q, 'tireless_mentor', s?.p)) w = Math.max(1, w - 1);
-          if (q.me && s?.p?.perks?.includes('discipline_pro')) w = Math.max(1, w - 1);
+          const role = slotMap[q.n] || q.ro;
+          let w = q.pos === 'DF' || role === 'CDM' ? 2.4 : q.pos === 'MF' ? 1.6 : 0.9;
+          if (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22) w += 2.6;
+          if (D.d.pos < 58) w += 0.8;
+          if (D.tr === 6 || D.tr === 17 || D.tr === 23) w = Math.max(0.6, w - 0.8);
+          if (hasTrait(q, 'hot_headed', s?.p)) w += 3.0;
+          if (hasTrait(q, 'slide_tackler', s?.p) || hasTrait(q, 'risk_taker', s?.p)) w += 1.8;
+          if (hasTrait(q, 'calm_leader', s?.p) || hasTrait(q, 'tireless_mentor', s?.p)) w = Math.max(0.6, w - 0.8);
+          if (q.me && s?.p?.perks?.includes('discipline_pro')) w = Math.max(0.6, w - 0.8);
           return w;
         })
       : [];
-    const poolWeightSum = poolWeights.reduce((acc, v) => acc + v, 0);
-    for (let c = 0; c < numYellows && pool.length; c++) {
-      let rW = Math.random() * poolWeightSum;
-      let culprit = pool[pool.length - 1];
+    const pickWeightedOutfield = (excludeSet?: Set<string>) => {
+      let totalW = 0;
       for (let idx = 0; idx < pool.length; idx++) {
+        if (!excludeSet || !excludeSet.has(pool[idx].n)) totalW += poolWeights[idx];
+      }
+      if (totalW <= 0) return null;
+      let rW = Math.random() * totalW;
+      for (let idx = 0; idx < pool.length; idx++) {
+        if (excludeSet && excludeSet.has(pool[idx].n)) continue;
         rW -= poolWeights[idx];
-        if (rW <= 0) {
-          culprit = pool[idx];
-          break;
-        }
+        if (rW <= 0) return pool[idx];
       }
-      const min = R(12, 89);
-      matchY[culprit.n] = (matchY[culprit.n] || 0) + 1;
-      if (matchY[culprit.n] >= 2) {
-        if (Math.random() < 0.55) {
+      return pool[pool.length - 1];
+    };
+    let teamReds = 0;
+    for (let c = 0; c < numYellows && pool.length; c++) {
+      let culprit = pickWeightedOutfield();
+      if (!culprit) break;
+      if ((matchY[culprit.n] || 0) >= 1) {
+        const isReckless =
+          hasTrait(culprit, 'hot_headed', s?.p) ||
+          hasTrait(culprit, 'slide_tackler', s?.p) ||
+          [1, 7, 15, 22].includes(DT(culprit, s?.p).tr);
+        const y2rChance = teamReds < 2 ? (isReckless ? 0.48 : 0.28) : 0;
+        if (Math.random() < y2rChance) {
+          matchY[culprit.n] = 2;
+          teamReds++;
+          const baseMin = firstYMin[culprit.n] ?? 30;
+          const min = Math.min(90, Math.max(baseMin + R(5, 26), R(48, 90)));
           cards.push({ m: min, t: tm.id, who: culprit.n, type: 'Y2R' });
+          continue;
         }
-      } else {
-        cards.push({ m: min, t: tm.id, who: culprit.n, type: 'Y' });
+        const alreadyBooked = new Set(Object.keys(matchY).filter((n) => matchY[n] >= 1));
+        const alt = pickWeightedOutfield(alreadyBooked);
+        if (!alt) continue;
+        culprit = alt;
       }
+      const min = R(8, 88);
+      matchY[culprit.n] = 1;
+      firstYMin[culprit.n] = min;
+      cards.push({ m: min, t: tm.id, who: culprit.n, type: 'Y' });
     }
-    if (pool.length && Math.random() < (big ? 0.032 : 0.018)) {
+    if (pool.length && teamReds < 2 && Math.random() < (big ? 0.036 : pressLvl === 2 ? 0.026 : 0.016)) {
       const rough = pool.filter((q) => {
         const tr = DT(q, s?.p).tr;
-        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || hasTrait(q, 'hot_headed', s?.p);
+        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || hasTrait(q, 'hot_headed', s?.p) || hasTrait(q, 'slide_tackler', s?.p);
       });
-      const culprit = rough.length ? P(rough) : P(pool);
+      const culprit = rough.length ? P(rough) : P(pool.filter((q) => q.pos === 'DF' || q.pos === 'MF').length ? pool.filter((q) => q.pos === 'DF' || q.pos === 'MF') : pool);
       if (!cards.some((c) => c.t === tm.id && c.who === culprit.n && (c.type === 'R' || c.type === 'Y2R'))) {
-        cards.push({ m: R(25, 86), t: tm.id, who: culprit.n, type: 'R' });
+        cards.push({ m: R(22, 86), t: tm.id, who: culprit.n, type: 'R' });
       }
     }
   });
 
+  cards.sort((x, y) => x.m - y.m);
   return { cards, subs, playedNames, playedSlots };
 }
 
@@ -696,7 +727,7 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
       m: R(40, 88),
       t: varSide.id,
       kind: 'var',
-      text: `📺 ดราม่า VAR! ผู้ตัดสินเช็กจังหวะล้ำหน้า/ฟาวล์เขตโทษของ ${varSide.name} อย่างละเอียด`
+      text: `🖥 ดราม่า VAR! ผู้ตัดสินเช็กจังหวะล้ำหน้า/ฟาวล์เขตโทษของ ${varSide.name} อย่างละเอียด`
     });
   }
   if (Math.random() < (bg ? 0.14 : 0.09)) {

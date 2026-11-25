@@ -2259,10 +2259,10 @@ export const drawLivePitchToCanvas = (
     ctx.font = '800 12px Sarabun, sans-serif';
     ctx.fillText(
       vr.kind === 'goal'
-        ? '📺 VAR CHECK · ตรวจสอบประตู'
+        ? '🖥 VAR CHECK · ตรวจสอบประตู'
         : vr.kind === 'foul_card'
-          ? '📺 VAR CHECK · ฟาวล์รุนแรง / ใบแดง'
-          : '📺 VAR CHECK · ตรวจสอบจุดโทษ & ใบ',
+          ? '🖥 VAR CHECK · ฟาวล์รุนแรง / ใบแดง'
+          : '🖥 VAR CHECK · ตรวจสอบจุดโทษ & ใบ',
       cx - boxW / 2 + 26,
       cy + 15
     );

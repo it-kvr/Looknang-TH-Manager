@@ -1559,20 +1559,31 @@ export const MatchModal: React.FC<{
 
   const agentHasTrait = (ag: LivePitchAgent | null | undefined, traitId: string) => Boolean(ag?.traits?.includes(traitId));
 
-  const issueCard = (culprit: LivePitchAgent, curMin: number, directRedBias = 0.015, forceType?: 'Y' | 'R', silentLog = false) => {
+  const issueCard = (
+    culprit: LivePitchAgent,
+    curMin: number,
+    directRedBias = 0.015,
+    forceType?: 'Y' | 'R',
+    silentLog = false,
+    reasonLabel?: string
+  ) => {
     const sr = simRef.current;
     const w = worldRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
     const kit = culprit.side === 'H' ? homeKit : awayKit;
-    const hotHeadBias = (agentHasTrait(culprit, 'hot_headed') ? 0.02 : agentHasTrait(culprit, 'calm_leader') ? -0.01 : 0) + (agentHasTrait(culprit, 'risk_taker') ? 0.01 : 0);
+    const hotHeadBias = (agentHasTrait(culprit, 'hot_headed') ? 0.025 : agentHasTrait(culprit, 'calm_leader') ? -0.012 : 0) + (agentHasTrait(culprit, 'risk_taker') ? 0.012 : 0);
     const isVolatilePers = culprit.tr === 1 || culprit.tr === 7 || culprit.tr === 15 || culprit.tr === 22;
     const teamRedCount = sr.cards.filter((c) => c.t === team.id && (c.type === 'R' || c.type === 'Y2R')).length;
+    const effectiveRedProb = directRedBias <= 0
+      ? 0
+      : clamp(directRedBias + (isVolatilePers ? 0.015 : 0) + hotHeadBias, 0.004, 0.95);
     const directRed =
       forceType === 'R'
         ? true
-        : forceType === 'Y' || teamRedCount >= 2
+        : forceType === 'Y' || teamRedCount >= 2 || directRedBias <= 0
           ? false
-          : Math.random() < Math.max(0.008, (isVolatilePers ? 0.025 : directRedBias) + hotHeadBias);
+          : Math.random() < effectiveRedProb;
+    const cardReason = reasonLabel || (directRed ? 'เข้าสกัดเปิดปุ่มอันตราย' : 'เข้าสกัดหนัก');
     SFX.card();
     SFX.boo(directRed || (sr.yellows[culprit.id] || 0) >= 1 ? 0.95 : 0.72);
     if (directRed) {
@@ -1583,9 +1594,9 @@ export const MatchModal: React.FC<{
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
-        pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) เสียบสกัดอันตราย โดนไล่ออก (แบน 2 นัด)`, 'card');
+        pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) ${cardReason} โดนไล่ออก (แบน 2 นัด)`, 'card');
       }
-      pushTimeline(curMin, culprit.side, 'red', culprit.id, 'ใบแดงโดยตรง');
+      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel || 'ใบแดงโดยตรง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -1606,9 +1617,9 @@ export const MatchModal: React.FC<{
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
-        pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
+        pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) ${cardReason} · โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
       }
-      pushTimeline(curMin, culprit.side, 'red', culprit.id, 'เหลืองที่สอง');
+      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -1626,11 +1637,11 @@ export const MatchModal: React.FC<{
     if (!silentLog) {
       pushLog(
         curMin,
-        `🟨 ใบเหลือง! ${culprit.id} (${team.name}) เข้าสกัดหนัก${totalSeasonY >= 3 ? ' (ครบ 3 ใบ แบนนัดหน้า!)' : ` (สะสม ${totalSeasonY}/3)`}`,
+        `🟨 ใบเหลือง! ${culprit.id} (${team.name}) ${cardReason}${totalSeasonY >= 3 ? ' (ครบ 3 ใบ แบนนัดหน้า!)' : ` (สะสม ${totalSeasonY}/3)`}`,
         'card'
       );
     }
-    pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : undefined);
+    pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : reasonLabel);
     if (w) {
       w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y', kit, ttl: 2.6, maxTtl: 2.6 };
       triggerDramaSlow(w, 1.5, `🟨 ใบเหลือง · ${culprit.shortName}`);
@@ -3760,36 +3771,92 @@ export const MatchModal: React.FC<{
       }
 
       const defVolatile = nearestDef.tr === 1 || nearestDef.tr === 7 || nearestDef.tr === 15 || nearestDef.tr === 22;
+      const defBehindScore = defSide === 'H' ? simRef.current.gh < simRef.current.ga : simRef.current.ga < simRef.current.gh;
+      const defHasDisciplinePerk = defTeam.id === state.me && Boolean(state.p?.perks?.includes('discipline_pro'));
+      const defsBetweenCarrierAndGoal = defPool.filter(
+        (d) => !d.sentOff && d.pos !== 'GK' && d.id !== nearestDef.id && (attRight ? d.x > carrier.x + 2 : d.x < carrier.x - 2)
+      ).length;
+      const isBreakawayCounter =
+        defsBetweenCarrierAndGoal <= 1 && (carrierNormXEarly >= 52 || carrier.d.spd - nearestDef.d.spd >= 6);
       const foulProb = clamp(
-        0.052 +
-          (defCfg.press === 2 ? 0.025 : 0) +
-          (defVolatile ? 0.024 : nearestDef.tr === 6 || nearestDef.tr === 23 ? -0.008 : 0) +
-          (agentHasTrait(nearestDef, 'hot_headed') ? 0.03 : agentHasTrait(nearestDef, 'calm_leader') || agentHasTrait(nearestDef, 'tireless_mentor') ? -0.015 : 0) +
+        0.048 +
+          (defCfg.press === 2 ? 0.028 : defCfg.press === 0 ? -0.014 : 0) +
+          (defVolatile ? 0.022 : nearestDef.tr === 6 || nearestDef.tr === 23 ? -0.008 : 0) +
+          (agentHasTrait(nearestDef, 'hot_headed')
+            ? 0.028
+            : agentHasTrait(nearestDef, 'calm_leader') || agentHasTrait(nearestDef, 'tireless_mentor')
+              ? -0.015
+              : 0) +
           (agentHasTrait(nearestDef, 'slide_tackler') || agentHasTrait(nearestDef, 'risk_taker') ? 0.012 : 0) +
+          (defHasDisciplinePerk ? -0.012 : 0) +
+          (nearestDef.fit < 58 ? 0.018 : nearestDef.fit < 68 ? 0.008 : 0) +
+          (turfMatchMods.slipMult > 1.08 || defOnPuddle ? 0.012 : 0) +
+          (isBreakawayCounter ? 0.018 : 0) +
+          (curMin >= 72 && defBehindScore ? 0.014 : 0) +
           (isDerby ? 0.015 : 0) +
-          (inBoxNow ? 0.035 : 0) -
+          (inBoxNow ? 0.024 : 0) -
           ((nearestDef.sig === 'pos' ? nearestDef.d.pos + 8 : nearestDef.d.pos) - 60) * 0.0008,
-        0.035,
-        0.18
+        0.028,
+        0.19
       );
-      if (Math.random() < foulProb && curMin >= 2) {
-        // FOUL + FREE KICK OR PENALTY (+ VAR Check & In-Match Injury Check)!
+
+      const resolveCommittedFoul = (forcedKind?: 'late_slide' | 'push') => {
         if (defSide === 'H') w.foulsH++;
         else w.foulsA++;
         SFX.foul();
         SFX.boo(inBoxNow ? 0.85 : 0.62);
-        nearestDef.acrobatType = 'slide';
-        nearestDef.acrobatMax = 0.65;
-        nearestDef.acrobatTimer = 0.65;
-        tryTriggerInMatchInjury(w, carrier, curMin, 'foul');
 
-        const shouldVarPen = (inBoxNow && Math.random() < 0.34) || (onBoxEdgeNow && Math.random() < 0.28);
+        const alreadyYellowed = (simRef.current.yellows[nearestDef.id] || 0) >= 1;
+        const speedMismatch = carrier.d.spd - nearestDef.d.spd >= 7;
+        let foulKind: 'tactical' | 'late_slide' | 'hard_tackle' | 'push' | 'dogso' = 'push';
+        if (forcedKind === 'late_slide') {
+          foulKind = isBreakawayCounter && distToGoal < 30 && !inBoxNow && Math.random() < 0.35 ? 'dogso' : 'late_slide';
+        } else if (forcedKind === 'push') {
+          foulKind = 'push';
+        } else if (isBreakawayCounter && distToGoal < 30 && !inBoxNow && Math.random() < 0.32) {
+          foulKind = 'dogso';
+        } else if (!inBoxNow && (isBreakawayCounter || (speedMismatch && distToGoal < 58)) && Math.random() < 0.52) {
+          foulKind = 'tactical';
+        } else if ((defCfg.press === 2 || defVolatile || agentHasTrait(nearestDef, 'slide_tackler') || nearestDef.fit < 58 || defOnPuddle) && Math.random() < 0.36) {
+          foulKind = 'late_slide';
+        } else if (Math.random() < 0.28) {
+          foulKind = 'hard_tackle';
+        } else {
+          foulKind = 'push';
+        }
+
+        if (foulKind === 'late_slide' || foulKind === 'dogso') {
+          nearestDef.acrobatType = 'slide';
+          nearestDef.acrobatMax = 0.65;
+          nearestDef.acrobatTimer = 0.65;
+        } else if (foulKind === 'hard_tackle' || foulKind === 'push') {
+          nearestDef.acrobatType = 'clash';
+          nearestDef.acrobatMax = 0.55;
+          nearestDef.acrobatTimer = 0.55;
+          carrier.acrobatType = 'clash';
+          carrier.acrobatMax = 0.55;
+          carrier.acrobatTimer = 0.55;
+        } else {
+          nearestDef.acrobatType = 'tackle';
+          nearestDef.acrobatMax = 0.52;
+          nearestDef.acrobatTimer = 0.52;
+        }
+
+        const injSev = foulKind === 'late_slide' || foulKind === 'hard_tackle' ? 'slide' : 'foul';
+        tryTriggerInMatchInjury(w, carrier, curMin, injSev);
+
+        const shouldVarPen = (inBoxNow && Math.random() < 0.32) || (onBoxEdgeNow && Math.random() < 0.26);
         const existingReds = simRef.current.cards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
-        const isHardFoul =
-          (defVolatile || agentHasTrait(nearestDef, 'hot_headed') || agentHasTrait(nearestDef, 'slide_tackler')) && Math.random() < 0.25
-            ? true
-            : distToGoal < 28 && Math.random() < 0.08;
-        const shouldVarFoulCard = !shouldVarPen && w.varChecks < 2 && existingReds === 0 && isHardFoul && Math.random() < 0.14;
+        const isSevereFoul =
+          foulKind === 'dogso' ||
+          ((foulKind === 'late_slide' || foulKind === 'hard_tackle') &&
+            (defVolatile || agentHasTrait(nearestDef, 'hot_headed') || agentHasTrait(nearestDef, 'slide_tackler')));
+        const shouldVarFoulCard =
+          !shouldVarPen &&
+          w.varChecks < 2 &&
+          existingReds === 0 &&
+          isSevereFoul &&
+          Math.random() < (foulKind === 'dogso' ? 0.38 : 0.16);
 
         if (shouldVarPen && w.varChecks < 2) {
           w.varChecks++;
@@ -3814,27 +3881,27 @@ export const MatchModal: React.FC<{
             type: 'var',
             x: carrier.x,
             y: carrier.y,
-            label: '📺 VAR เช็กจุดโทษ!',
+            label: '🖥 VAR เช็กจุดโทษ!',
             color: '#38bdf8',
             ttl: 3.4,
             maxTtl: 3.4
           });
-          triggerDramaSlow(w, 3.4, '📺 VAR เช็กจุดโทษ');
+          triggerDramaSlow(w, 3.4, '🖥 VAR เช็กจุดโทษ');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
           b.shotStyle = undefined;
-          w.phaseLabel = `📺 VAR กำลังเช็กจังหวะฟาวล์ในเขตโทษ!`;
+          w.phaseLabel = `🖥 VAR กำลังเช็กจังหวะฟาวล์ในเขตโทษ!`;
           w.phaseTone = 'setpiece';
-          pushLog(curMin, `📺 ผู้ตัดสินขอเช็ก VAR จังหวะ ${nearestDef.id} (${defTeam.name}) สกัดใส่ ${carrier.id} ในกรอบเขตโทษ!`, 'sys');
+          pushLog(curMin, `🖥 ผู้ตัดสินขอเช็ก VAR จังหวะ ${nearestDef.id} (${defTeam.name}) สกัดใส่ ${carrier.id} ในกรอบเขตโทษ!`, 'sys');
           return;
         }
 
         if (shouldVarFoulCard) {
           w.varChecks++;
-          const upgradeRed = Math.random() < (defVolatile ? 0.22 : 0.14);
+          const upgradeRed = Math.random() < (foulKind === 'dogso' ? 0.56 : defVolatile ? 0.28 : 0.18);
           w.varReview = {
             kind: 'foul_card',
             side,
@@ -3848,50 +3915,103 @@ export const MatchModal: React.FC<{
             overturn: upgradeRed,
             pendingCardUpgrade: upgradeRed ? 'R' : 'Y',
             distToGoal,
-            reasonText: `เช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName} (ลุ้นใบแดง)`
+            reasonText:
+              foulKind === 'dogso'
+                ? `เช็กจังหวะตัดเกมหลุดเดี่ยวของ ${nearestDef.shortName} (DOGSO)`
+                : `เช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName} (ลุ้นใบแดง)`
           };
           addWorldFx(w, {
             type: 'var',
             x: carrier.x,
             y: carrier.y,
-            label: '📺 VAR เช็กฟาวล์/ใบแดง!',
+            label: '🖥 VAR เช็กฟาวล์/ใบแดง!',
             color: '#f59e0b',
             ttl: 3.3,
             maxTtl: 3.3
           });
-          triggerDramaSlow(w, 3.3, '📺 VAR เช็กใบแดง');
+          triggerDramaSlow(w, 3.3, '🖥 VAR เช็กใบแดง');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
           b.shotStyle = undefined;
-          w.phaseLabel = `📺 VAR กำลังเช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName}!`;
+          w.phaseLabel = `🖥 VAR กำลังเช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName}!`;
           w.phaseTone = 'danger';
-          pushLog(curMin, `📺 ผู้ตัดสินเดินไปดูจอ VAR เช็กจังหวะฟาวล์อันตรายของ ${nearestDef.id} (${defTeam.name})!`, 'sys');
+          pushLog(curMin, `🖥 ผู้ตัดสินเดินไปดูจอ VAR เช็กจังหวะฟาวล์อันตรายของ ${nearestDef.id} (${defTeam.name})!`, 'sys');
           return;
         }
 
-        const alreadyYellowed = (simRef.current.yellows[nearestDef.id] || 0) >= 1;
-        const baseCardChance = clamp(
-          0.09 +
-            (defVolatile ? 0.06 : 0) +
-            (agentHasTrait(nearestDef, 'hot_headed') ? 0.08 : agentHasTrait(nearestDef, 'calm_leader') ? -0.04 : 0) +
-            (distToGoal < 26 ? 0.04 : 0) +
-            (isDerby ? 0.03 : 0),
-          0.06,
-          0.26
-        );
-        const cardChance = alreadyYellowed ? baseCardChance * 0.55 : baseCardChance;
-        const maxRegularCards = isDerby ? 5 : 4;
-        let cardLbl = '⚠️ ฟาวล์!';
+        const minuteLeniency = curMin <= 12 ? -0.10 : curMin >= 68 ? 0.08 : 0;
+        const traitCardMod =
+          (defVolatile ? 0.08 : 0) +
+          (agentHasTrait(nearestDef, 'hot_headed') ? 0.10 : agentHasTrait(nearestDef, 'calm_leader') ? -0.05 : 0) +
+          (isDerby ? 0.05 : 0) +
+          (defHasDisciplinePerk ? -0.04 : 0);
+
+        let baseCardProb = 0.10;
+        let directRedBias = 0;
+        let cardReason = 'เข้าสกัดหนัก';
+        let foulDesc = `ทำฟาวล์ใส่ ${carrier.id}`;
+
+        if (foulKind === 'dogso') {
+          baseCardProb = inBoxNow ? 0.68 : 0.88;
+          directRedBias = inBoxNow ? 0.14 : 0.44;
+          cardReason = inBoxNow ? 'ขัดขวางจังหวะยิงในเขตโทษ' : 'ฟาวล์ตัวสุดท้ายหยุดโอกาสหลุดเดี่ยว';
+          foulDesc = `สกัดตัดเกมหลุดเดี่ยวใส่ ${carrier.id}`;
+        } else if (foulKind === 'tactical') {
+          baseCardProb = 0.72;
+          directRedBias = 0;
+          cardReason = 'ดึงเสื้อ/ตัดเกมโต้กลับ';
+          foulDesc = `ดึงเสื้อตัดจังหวะโต้กลับใส่ ${carrier.id}`;
+        } else if (foulKind === 'late_slide') {
+          baseCardProb = 0.48;
+          directRedBias = 0.045;
+          cardReason = 'สไลด์เปิดปุ่มช้าเกินจังหวะ';
+          foulDesc = `สไลด์ดักช้าโดนข้อเท้า ${carrier.id}`;
+        } else if (foulKind === 'hard_tackle') {
+          baseCardProb = 0.32;
+          directRedBias = 0.022;
+          cardReason = 'เข้าปะทะหนักเกินเหตุ';
+          foulDesc = `เข้าปะทะหนักใส่ ${carrier.id}`;
+        } else {
+          baseCardProb = inBoxNow ? 0.18 : 0.09;
+          directRedBias = 0;
+          cardReason = 'ทำฟาวล์ซ้ำ/ขัดจังหวะ';
+          foulDesc = Math.random() < 0.5 ? `กระแทกด้านหลังใส่ ${carrier.id}` : `ขัดขาทำฟาวล์ใส่ ${carrier.id}`;
+        }
+
+        const secondYellowMult = alreadyYellowed
+          ? foulKind === 'tactical' || foulKind === 'dogso'
+            ? 0.90
+            : foulKind === 'late_slide' || foulKind === 'hard_tackle'
+              ? 0.70
+              : 0.36
+          : 1;
+        const cardChance = clamp((baseCardProb + traitCardMod + minuteLeniency) * secondYellowMult, 0.03, 0.94);
+        const maxTotalCards = isDerby ? 11 : 9;
+        let cardLbl =
+          foulKind === 'tactical'
+            ? '⚠️ ดึงตัดเกม!'
+            : foulKind === 'late_slide'
+              ? '⚠️ สไลด์ฟาวล์!'
+              : '⚠️ ฟาวล์!';
         let cardCol = '#f59e0b';
         let cardRes: 'Y' | 'R' | null = null;
-        if (Math.random() < cardChance && simRef.current.cards.length < maxRegularCards) {
-          const r = issueCard(nearestDef, curMin);
+        const cardRoll = Math.random();
+        if (cardRoll < cardChance && simRef.current.cards.length < maxTotalCards) {
+          const r = issueCard(nearestDef, curMin, directRedBias, undefined, false, cardReason);
           cardRes = r === 'Y' ? 'Y' : 'R';
-          cardLbl = r === 'Y' ? `🟨 ใบเหลือง ${nearestDef.shortName}` : `🟥 ใบแดง ${nearestDef.shortName}!`;
+          cardLbl =
+            r === 'Y'
+              ? `🟨 ใบเหลือง ${nearestDef.shortName}`
+              : r === 'Y2R'
+                ? `🟨🟥 เหลืองแดง! ${nearestDef.shortName}`
+                : `🟥 ใบแดง ${nearestDef.shortName}!`;
           cardCol = r === 'Y' ? '#facc15' : '#ef4444';
+        } else if (alreadyYellowed && cardRoll < Math.min(0.9, cardChance * 1.45) && !inBoxNow) {
+          cardLbl = `⚠️ ตักเตือน! ${nearestDef.shortName}`;
+          pushLog(curMin, `⚠️ ผู้ตัดสินเรียก ${nearestDef.id} (${defTeam.name}) มาตักเตือนครั้งสุดท้าย (มีใบเหลืองติดตัวแล้ว)!`);
         }
 
         if (inBoxNow) {
@@ -3914,7 +4034,7 @@ export const MatchModal: React.FC<{
           w.pendingSetPiece = { type: 'penalty', side, x: spotX, y: 50, waitSec: 1.9 };
           w.phaseLabel = `🚨 จุดโทษ!! ${carrier.shortName} ถูกทำฟาวล์ในเขตโทษ!`;
           w.phaseTone = 'danger';
-          pushLog(curMin, `🚨 จุดโทษ!! ${nearestDef.id} ทำฟาวล์ใส่ ${carrier.id} ในกรอบเขตโทษ · ${attTeam.name} ได้จุดโทษ!`, 'card');
+          pushLog(curMin, `🚨 จุดโทษ!! ${nearestDef.id} ${foulDesc} ในกรอบเขตโทษ · ${attTeam.name} ได้จุดโทษ!`, 'card');
           pushTimeline(curMin, side, 'pen_awarded', carrier.id, 'ได้จุดโทษ (ฟาวล์ในเขต)');
           return;
         }
@@ -3922,7 +4042,7 @@ export const MatchModal: React.FC<{
         if (side === 'H') w.freeKicksH++;
         else w.freeKicksA++;
         if (!cardRes) {
-          pushLog(curMin, `⚠️ ${nearestDef.id} (${defTeam.name}) ทำฟาวล์ใส่ ${carrier.id} · ${attTeam.name} ได้ฟรีคิก`);
+          pushLog(curMin, `⚠️ ${nearestDef.id} (${defTeam.name}) ${foulDesc} · ${attTeam.name} ได้ฟรีคิก`);
         }
 
         const wallCount = distToGoal < 38 ? (distToGoal < 24 ? 4 : 3) : 0;
@@ -3964,6 +4084,10 @@ export const MatchModal: React.FC<{
         };
         w.phaseLabel = distToGoal < 38 ? `🧱 ตั้งกำแพง! ฟรีคิกระยะ ${Math.round(distToGoal * 0.9)} หลา` : `⚠️ ฟาวล์ (${attTeam.name} ได้ฟรีคิก)`;
         w.phaseTone = cardRes === 'R' ? 'danger' : 'setpiece';
+      };
+
+      if (Math.random() < foulProb && curMin >= 2) {
+        resolveCommittedFoul();
         return;
       }
 
@@ -4022,6 +4146,10 @@ export const MatchModal: React.FC<{
           });
 
           if (carPhys > defPhys + R(-8, 10)) {
+            if (curMin >= 2 && (defVolatile || agentHasTrait(nearestDef, 'hot_headed') || defCfg.press === 2) && Math.random() < 0.14) {
+              resolveCommittedFoul('push');
+              return;
+            }
             // Attacker wins the shoulder clash and keeps going!
             w.phaseLabel = `💪 ${carrier.shortName} แข็งแกร่งเบียดชนะ ${nearestDef.shortName}!`;
             w.phaseTone = 'attack';
@@ -4047,6 +4175,22 @@ export const MatchModal: React.FC<{
             return;
           }
         } else {
+          if (isSlideTackle && curMin >= 2) {
+            const slideMistimeProb = clamp(
+              0.14 +
+                (nearestDef.fit < 58 ? 0.06 : 0) +
+                (w.env?.season === 'rainy' || defOnPuddle ? 0.045 : 0) +
+                (defVolatile || agentHasTrait(nearestDef, 'hot_headed') ? 0.05 : 0) -
+                ((nearestDef.d.tkl ?? nearestDef.d.pos) - 60) * 0.0025 -
+                (agentHasTrait(nearestDef, 'slide_tackler') ? 0.05 : 0),
+              0.06,
+              0.26
+            );
+            if (Math.random() < slideMistimeProb) {
+              resolveCommittedFoul('late_slide');
+              return;
+            }
+          }
           // Clean Sliding Tackle OR Standing Tackle/Interception
           const startX = nearestDef.x;
           const startY = nearestDef.y;
@@ -5000,16 +5144,16 @@ export const MatchModal: React.FC<{
           x: offX,
           y: vr.y,
           offsideX: offX,
-          label: `📺❌ VAR ริบประตู!`,
+          label: `🖥❌ VAR ริบประตู!`,
           color: '#ef4444',
           ttl: 3.4,
           maxTtl: 3.4
         });
-        triggerDramaSlow(w, 2.2, `📺❌ VAR ริบประตู!`);
+        triggerDramaSlow(w, 2.2, `🖥❌ VAR ริบประตู!`);
         w.pendingSetPiece = { type: 'offside', side: defSide, x: offX, y: 50, waitSec: 2.1 };
-        w.phaseLabel = `📺❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
+        w.phaseLabel = `🖥❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
         w.phaseTone = 'offside';
-        pushLog(curMin, `📺❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card');
+        pushLog(curMin, `🖥❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card');
         pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, 'VAR ริบประตู (ล้ำหน้า)');
       } else {
         // Goal stands!
@@ -5017,12 +5161,12 @@ export const MatchModal: React.FC<{
           type: 'var',
           x: 50,
           y: 22,
-          label: '📺✅ VAR ยืนยันให้ประตู!',
+          label: '🖥✅ VAR ยืนยันให้ประตู!',
           color: '#22c55e',
           ttl: 3.0,
           maxTtl: 3.0
         });
-        pushLog(curMin, `📺✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`, 'goal');
+        pushLog(curMin, `🖥✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`, 'goal');
         awardGoalToTeam(
           w,
           vr.side,
@@ -5065,16 +5209,16 @@ export const MatchModal: React.FC<{
           type: 'foul',
           x: vr.x,
           y: vr.y,
-          label: `📺🟥 VAR ใบแดง! ${vr.culpritShort || ''}`,
+          label: `🖥🟥 VAR ใบแดง! ${vr.culpritShort || ''}`,
           color: '#ef4444',
           ttl: 3.4,
           maxTtl: 3.4,
           wallPlayers
         });
-        triggerDramaSlow(w, 2.5, `📺🟥 VAR ใบแดง!! ${vr.culpritShort || ''}`);
-        w.phaseLabel = `📺🟥 VAR ยกระดับเป็นใบแดง! ${vr.culpritShort || ''} โดนไล่ออก`;
+        triggerDramaSlow(w, 2.5, `🖥🟥 VAR ใบแดง!! ${vr.culpritShort || ''}`);
+        w.phaseLabel = `🖥🟥 VAR ยกระดับเป็นใบแดง! ${vr.culpritShort || ''} โดนไล่ออก`;
         w.phaseTone = 'danger';
-        pushLog(curMin, `📺🟥 VAR ยกระดับเป็นใบแดงโดยตรง!! ${culprit.id} (${defTeam.name}) เสียบสกัดอันตราย โดนไล่ออก!`, 'card');
+        pushLog(curMin, `🖥🟥 VAR ยกระดับเป็นใบแดงโดยตรง!! ${culprit.id} (${defTeam.name}) เสียบสกัดอันตราย โดนไล่ออก!`, 'card');
       } else {
         SFX.foul();
         SFX.boo(0.75);
@@ -5084,22 +5228,22 @@ export const MatchModal: React.FC<{
           type: 'foul',
           x: vr.x,
           y: vr.y,
-          label: isSecondRed ? `📺🟨🟥 เหลืองแดง! ${vr.culpritShort || ''}` : `📺🟨 VAR ใบเหลือง ${vr.culpritShort || ''}`,
+          label: isSecondRed ? `🖥🟨🟥 เหลืองแดง! ${vr.culpritShort || ''}` : `🖥🟨 VAR ใบเหลือง ${vr.culpritShort || ''}`,
           color: isSecondRed ? '#ef4444' : '#facc15',
           ttl: 3.0,
           maxTtl: 3.0,
           wallPlayers
         });
-        triggerDramaSlow(w, isSecondRed ? 2.4 : 1.7, isSecondRed ? `📺🟨🟥 เหลืองแดง!!` : `📺🟨 VAR ใบเหลือง`);
+        triggerDramaSlow(w, isSecondRed ? 2.4 : 1.7, isSecondRed ? `🖥🟨🟥 เหลืองแดง!!` : `🖥🟨 VAR ใบเหลือง`);
         w.phaseLabel = isSecondRed
-          ? `📺🟨🟥 VAR เหลืองที่สอง! ${vr.culpritShort || ''} โดนไล่ออก`
-          : `📺🟨 VAR ให้ใบเหลือง ${vr.culpritShort || ''} · ฟรีคิก`;
+          ? `🖥🟨🟥 VAR เหลืองที่สอง! ${vr.culpritShort || ''} โดนไล่ออก`
+          : `🖥🟨 VAR ให้ใบเหลือง ${vr.culpritShort || ''} · ฟรีคิก`;
         w.phaseTone = isSecondRed ? 'danger' : 'setpiece';
         pushLog(
           curMin,
           isSecondRed
-            ? `📺🟨🟥 VAR ให้ใบเหลืองที่สองไล่ออก ${vr.culpritId || ''} (${defTeam.name})!`
-            : `📺🟨 VAR ให้ใบเหลืองแก่ ${vr.culpritId || ''} (${defTeam.name}) รอดพ้นใบแดงหวุดหวิด`,
+            ? `🖥🟨🟥 VAR ให้ใบเหลืองที่สองไล่ออก ${vr.culpritId || ''} (${defTeam.name})!`
+            : `🖥🟨 VAR ให้ใบเหลืองแก่ ${vr.culpritId || ''} (${defTeam.name}) รอดพ้นใบแดงหวุดหวิด`,
           'card'
         );
       }
@@ -5131,16 +5275,16 @@ export const MatchModal: React.FC<{
         type: 'var',
         x: edgeX,
         y: vr.y,
-        label: `📺 VAR: ฟาวล์นอกเขต${fkCardTxt}`,
+        label: `🖥 VAR: ฟาวล์นอกเขต${fkCardTxt}`,
         color: '#38bdf8',
         ttl: 3.0,
         maxTtl: 3.0
       });
-      triggerDramaSlow(w, 1.8, `📺 VAR ฟาวล์นอกเขต${fkCardTxt}`);
+      triggerDramaSlow(w, 1.8, `🖥 VAR ฟาวล์นอกเขต${fkCardTxt}`);
       w.pendingSetPiece = { type: 'freekick', side: vr.side, x: edgeX, y: vr.y, waitSec: 1.65 };
-      w.phaseLabel = `📺 VAR ชี้ฟาวล์นอกเขต${fkCardTxt} (${attTeam.name})`;
+      w.phaseLabel = `🖥 VAR ชี้ฟาวล์นอกเขต${fkCardTxt} (${attTeam.name})`;
       w.phaseTone = 'setpiece';
-      pushLog(curMin, `📺 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys');
+      pushLog(curMin, `🖥 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys');
     } else {
       SFX.foul();
       SFX.boo(0.85);
@@ -5161,16 +5305,16 @@ export const MatchModal: React.FC<{
         type: 'penalty',
         x: spotX,
         y: 50,
-        label: `📺✅ VAR จุดโทษ!${penCardTxt}`,
+        label: `🖥✅ VAR จุดโทษ!${penCardTxt}`,
         color: '#ef4444',
         ttl: 3.2,
         maxTtl: 3.2
       });
-      triggerDramaSlow(w, 2.2, `📺🚨 VAR จุดโทษ!!${penCardTxt}`);
+      triggerDramaSlow(w, 2.2, `🖥🚨 VAR จุดโทษ!!${penCardTxt}`);
       w.pendingSetPiece = { type: 'penalty', side: vr.side, x: spotX, y: 50, waitSec: 2.0 };
-      w.phaseLabel = `📺🚨 VAR ให้จุดโทษ${penCardTxt} (${attTeam.name})!`;
+      w.phaseLabel = `🖥🚨 VAR ให้จุดโทษ${penCardTxt} (${attTeam.name})!`;
       w.phaseTone = 'danger';
-      pushLog(curMin, `📺🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card');
+      pushLog(curMin, `🖥🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card');
       pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, 'VAR ชี้จุดโทษ');
     }
   };
@@ -5790,17 +5934,17 @@ export const MatchModal: React.FC<{
             type: 'var',
             x: b.toX,
             y: b.toY,
-            label: '📺 VAR เช็กประตู!',
+            label: '🖥 VAR เช็กประตู!',
             color: '#38bdf8',
             ttl: 3.5,
             maxTtl: 3.5
           });
-          triggerDramaSlow(w, 3.5, `📺 VAR เช็กประตู · ${scorerShort}`);
+          triggerDramaSlow(w, 3.5, `🖥 VAR เช็กประตู · ${scorerShort}`);
           SFX.var();
           b.shotStyle = undefined;
-          w.phaseLabel = `📺 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
+          w.phaseLabel = `🖥 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
           w.phaseTone = 'setpiece';
-          pushLog(curMin, `📺 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`, 'sys');
+          pushLog(curMin, `🖥 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`, 'sys');
           return;
         }
 
@@ -8814,7 +8958,7 @@ export const MatchModal: React.FC<{
         case 'injury':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🩹</span>;
         case 'var_no_goal':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] shrink-0">📺</span>;
+          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] shrink-0">🖥</span>;
         case 'miracle':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[11px] shrink-0">⚡</span>;
         case 'blessed':
@@ -9392,58 +9536,20 @@ export const MatchModal: React.FC<{
                   </>
                 ) : (
                   <>
-                    {state.mode === 'm' && (
-                      <button
-                        type="button"
-                        title={
-                          autoSubEnabled
-                            ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
-                            : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
-                        }
-                        aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
-                        onClick={() => {
-                          SFX.tap();
-                          setAutoSubEnabled((v) => {
-                            const next = !v;
-                            saveSettings({ ...getSettings(), autoSubMatch: next });
-                            if (next && worldRef.current && !simRef.current.done) {
-                              runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
-                            }
-                            pushLog(
-                              minute,
-                              next
-                                ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
-                                : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
-                              'sys'
-                            );
-                            return next;
-                          });
-                        }}
-                        className={`btn h-8 sm:h-9 mland:h-7 px-2 sm:px-2.5 mland:px-1.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] gap-1 shrink-0 ${
-                          autoSubEnabled
-                            ? 'btn-primary'
-                            : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        <Bot className="w-3.5 h-3.5 shrink-0" />
-                        <span>ออโต้</span>
-                      </button>
-                    )}
-
                     <div className="inline-flex items-center h-8 sm:h-9 mland:h-7 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs shrink-0">
                       <button
                         type="button"
                         title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         onClick={() => setPaused((p) => !p)}
-                        className={`h-full px-2 sm:px-2.5 mland:px-1.5 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                        className={`h-full w-8 sm:w-9 lg:w-[86px] mland:w-7 px-0 lg:px-2 mland:px-0 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                           paused
                             ? 'bg-[var(--g)] text-white shadow-2xs'
                             : 'text-[var(--ink)] hover:bg-[var(--surface-2)]'
                         }`}
                       >
                         {paused ? <Play className="w-3.5 h-3.5 fill-current shrink-0" /> : <Pause className="w-3.5 h-3.5 shrink-0" />}
-                        <span className="hidden lg:inline">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
+                        <span className="hidden lg:inline mland:hidden">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
                       </button>
                       <span className="w-px h-4 bg-[var(--line)] mx-0.5 shrink-0" />
                       <button
@@ -9451,10 +9557,10 @@ export const MatchModal: React.FC<{
                         title="ปรับความเร็วการแข่งขัน"
                         aria-label="ปรับความเร็วการแข่งขัน"
                         onClick={cycleMatchSpeed}
-                        className="h-full px-2 sm:px-2.5 mland:px-1.5 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold text-[var(--ink)] hover:bg-[var(--surface-2)] tabular transition-colors cursor-pointer whitespace-nowrap"
+                        className="h-full w-[58px] sm:w-[62px] lg:w-[68px] mland:w-[50px] px-1 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold text-[var(--ink)] hover:bg-[var(--surface-2)] tabular transition-colors cursor-pointer whitespace-nowrap shrink-0"
                       >
                         <Gauge className="w-3.5 h-3.5 opacity-80 shrink-0" />
-                        <span className="min-w-[3.2ch] text-center">{speed}x</span>
+                        <span className="w-[4.6ch] text-center">{speed}x</span>
                       </button>
                     </div>
 
@@ -10642,35 +10748,74 @@ export const MatchModal: React.FC<{
 
             {/* Right Stage: Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
-              <div className={`seg-bar grid shrink-0 w-full ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                <button
-                  type="button"
-                  onClick={() => setMlandMatchTab('stats')}
-                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
-                >
-                  <span>📊 สถิติ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMlandMatchTab('chat')}
-                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
-                >
-                  <MessageSquare className="w-3 h-3 shrink-0" />
-                  <span>ไลฟ์สด</span>
-                  <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
-                    {fmtFansShort(liveViewers)}
-                  </span>
-                </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <div className={`seg-bar grid flex-1 min-w-0 ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setMlandMatchTab('stats')}
+                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                  >
+                    <span>📊 สถิติ</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMlandMatchTab('chat')}
+                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
+                  >
+                    <MessageSquare className="w-3 h-3 shrink-0" />
+                    <span>ไลฟ์สด</span>
+                    <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                      {fmtFansShort(liveViewers)}
+                    </span>
+                  </button>
+                  {state.mode === 'm' && !done && (
+                    <button
+                      type="button"
+                      onClick={() => openTacticsStudio()}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+                        {5 - subsUsed.length}
+                      </span>
+                      <span>📋 แผน</span>
+                    </button>
+                  )}
+                </div>
                 {state.mode === 'm' && !done && (
                   <button
                     type="button"
-                    onClick={() => openTacticsStudio()}
-                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                    title={
+                      autoSubEnabled
+                        ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
+                        : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
+                    }
+                    aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
+                    onClick={() => {
+                      SFX.tap();
+                      setAutoSubEnabled((v) => {
+                        const next = !v;
+                        saveSettings({ ...getSettings(), autoSubMatch: next });
+                        if (next && worldRef.current && !simRef.current.done) {
+                          runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
+                        }
+                        pushLog(
+                          minute,
+                          next
+                            ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
+                            : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
+                          'sys'
+                        );
+                        return next;
+                      });
+                    }}
+                    className={`btn h-[30px] mland:h-[24px] px-2 mland:px-1.5 rounded-xl mland:rounded-lg text-[10.5px] mland:text-[9px] gap-1 shrink-0 ${
+                      autoSubEnabled
+                        ? 'btn-primary'
+                        : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
+                    }`}
                   >
-                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-                      {5 - subsUsed.length}
-                    </span>
-                    <span>📋 แผน</span>
+                    <Bot className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                    <span className="hidden xl:inline">ออโต้</span>
                   </button>
                 )}
               </div>

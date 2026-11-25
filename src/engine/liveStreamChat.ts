@@ -463,7 +463,7 @@ export function generateLiveStreamComment(ctx: LiveCommentContext): LiveCommentI
     case 'var': {
       text = pickUnique(
         [
-          `VAR อีกละ 📺`,
+          `VAR อีกละ 🖥`,
           `วุ๊ ลุ้น VAR`,
           `เช็กไรนานจัง`,
           `ล้ำป่าว`,
@@ -475,7 +475,7 @@ export function generateLiveStreamComment(ctx: LiveCommentContext): LiveCommentI
           `เสียวสันหลังวาบ`,
           `555 นั่งลุ้นหน้าจอ`,
           `จุดเปลี่ยนเลยนะเนี่ย`,
-          `เถียงกันยับ 📺`,
+          `เถียงกันยับ 🖥`,
           `เอาให้ชัวร์จารย์`
         ],
         ctx.usedTexts
