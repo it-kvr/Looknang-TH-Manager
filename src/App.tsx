@@ -13,7 +13,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
@@ -763,40 +763,55 @@ export default function App() {
 
       if (d.mode === 'm') {
         const isHomeMatch = homeId === d.me;
-        const tpIdx = d.tp ?? 1;
-        const spIdx = d.sp ?? 0;
-        const ticketMult = [0.82, 1.0, 1.24][tpIdx];
+        const tPlan = resolveTicketPlan(d);
         const fanEff = clamp((d.fan ?? 55) + getActiveBoardModifiers(d).fan, 5, 100);
+        const myFans = ensureTeamFans(me);
+        const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
         const stCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'st') / 100);
         const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'merchLv') / 100);
         const ticket = isHomeMatch
-          ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1) * stCondMul)
+          ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * fanScale * tPlan.revMult * (d.promo === 1 ? 1.35 : 1) * stCondMul)
           : 0;
         const merchLv = clamp(d.merchLv ?? 1, 0, 10);
-        const merch = isHomeMatch && merchLv > 0
-          ? Math.round((2 + merchLv * 2.5) * (fanEff / 55) * merchCondMul)
-          : 0;
-        const baseSp = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
-        const winSpBonus = spIdx === 1 && diff > 0 ? 10 + me.tier * 6 : 0;
-        const derbySpBonus = spIdx === 2 && isDerby ? 18 + me.tier * 8 : 0;
-        const sponsor = Math.round((baseSp + winSpBonus + derbySpBonus) * (d.promo === 2 ? 1.35 : 1));
+        const partnerMerchBoost = getActivePartnerDeals(d).reduce((sum, x) => sum + (x.merchBoost || 0), 0);
+        const attPct = isHomeMatch && payload.cap ? Math.round(((payload.att || 0) / Math.max(1, payload.cap)) * 100) : 0;
+        const mainSp = calcMainSponsorPayout(d, me, {
+          diff,
+          isDerby,
+          myGoals,
+          oppGoals,
+          isHome: isHomeMatch,
+          attPct
+        });
+        const merchBatch =
+          isHomeMatch && merchLv > 0
+            ? simulateHomeMegastoreMatchSales(d, me, fanEff, merchCondMul, tPlan.merchMult * (1 + mainSp.merchBoost + partnerMerchBoost))
+            : null;
+        const merch = merchBatch ? merchBatch.netClubCashK : 0;
+        const sponsor = mainSp.total;
         if (ticket) {
           d.money += ticket;
-          logFin(d, `ค่าตั๋วเข้าชมเกมเหย้า (${d.promo === 1 ? 'โปรโมชั่น' : ['ราคาถูก', 'ราคากลาง', 'ราคาแพง'][tpIdx]})`, ticket);
+          logFin(d, `ค่าตั๋วเข้าชมเกมเหย้า (${d.promo === 1 ? 'โปรโมชั่น' : tPlan.label})`, ticket);
         }
         if (merch) {
           d.money += merch;
-          logFin(d, 'ขายของที่ระลึกวันแข่งเหย้า', merch);
+          logFin(d, 'เมกะสโตร์ (เสื้อ & ของชำร่วยเหย้า)', merch);
         }
         d.money += sponsor;
-        logFin(d, `สปอนเซอร์หลัก${winSpBonus ? ' + โบนัสชนะ' : derbySpBonus ? ' + โบนัสดาร์บี้' : ''}`, sponsor);
+        logFin(d, `สปอนเซอร์หลัก${mainSp.bonusLabel ? ` + ${mainSp.bonusLabel}` : ''}`, sponsor);
         if (d.winBonus && diff > 0) {
           d.money -= d.winBonus;
           logFin(d, 'จ่ายโบนัสอัดฉีดชัยชนะ', -d.winBonus);
         }
-        const ticketFanAdj = isHomeMatch ? (tpIdx === 0 ? 1 : tpIdx === 2 && diff <= 0 ? -1 : 0) : 0;
+        const ticketFanAdj = isHomeMatch
+          ? tPlan.fanMoodDelta > 0
+            ? tPlan.fanMoodDelta
+            : tPlan.fanMoodDelta < 0 && diff <= 0
+              ? tPlan.fanMoodDelta
+              : 0
+          : 0;
         if (d.promo === 1 || ticketFanAdj !== 0) {
-          adjustTeamFans(me, (d.promo === 1 ? 350 : 0) + ticketFanAdj * 140);
+          adjustTeamFans(me, (d.promo === 1 ? 350 : 0) + ticketFanAdj * 130);
         }
         d.promo = 0;
         d.winBonus = 0;
@@ -1187,6 +1202,7 @@ export default function App() {
               state={state}
               tab={curTab}
               onUpdateState={updateState}
+              onNavigate={navigateToTab}
               onToast={showToast}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onOpenSeasonStats={(seasonNum) =>

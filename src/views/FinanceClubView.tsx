@@ -12,12 +12,26 @@ import {
   Tooltip,
   ReferenceLine
 } from 'recharts';
-import type { Position, MainTab, Player, Team, ClubIdentity, CoachStyleId, CoachOutfitId, GameState, FacilityKey, StaffRoleKey } from '../types/game';
+import type {
+  Position,
+  MainTab,
+  Player,
+  Team,
+  ClubIdentity,
+  CoachStyleId,
+  CoachOutfitId,
+  GameState,
+  FacilityKey,
+  StaffRoleKey,
+  ClubMegastoreState,
+  MegastoreSeasonArchive,
+  PlayerJerseySaleRecord
+} from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
 import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis } from '../engine/playerCore';
+import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis, getShirtNo } from '../engine/playerCore';
 import {
   sortTable,
   getStaffState,
@@ -40,6 +54,19 @@ import {
   fmtFans,
   fmtFansShort,
   adjustTeamFans,
+  TICKET_PRICING_PLANS,
+  resolveTicketPlan,
+  MAIN_SPONSOR_PACKAGES,
+  evaluateMainSponsorEligibility,
+  calcMainSponsorPayout,
+  PARTNER_DEAL_CATALOG,
+  getMaxPartnerSlots,
+  getActivePartnerDeals,
+  syncPartnerDealsField,
+  SOUVENIR_CATALOG,
+  MEGASTORE_STOCK_TIERS,
+  ensureMegastoreState,
+  getMegastoreProjection,
   type ClubFinanceChartPoint
 } from '../engine/simulation';
 import { renderCrestPattern, ClubCrest, KitJersey, PlayerFace } from '../components/SvgVisuals';
@@ -93,12 +120,15 @@ export const FinanceClubView: React.FC<{
   tab: 'f' | 'u';
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
+  onNavigate?: (tab: MainTab, sub?: string) => void;
   onToast: (msg: string) => void;
   onInspectPlayer?: (p: Player, t: Team | null) => void;
   onOpenSeasonStats?: (season?: number) => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
-}> = ({ tab, state, onUpdateState, onToast, onInspectPlayer, onOpenSeasonStats, navIntent }) => {
-  const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'ledger'>('overview');
+}> = ({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, navIntent }) => {
+  const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'megastore' | 'ledger'>('overview');
+  const [merchPeriod, setMerchPeriod] = useState<'season' | 'alltime' | 'seasons'>('season');
+  const [partnerFilter, setPartnerFilter] = useState<'all' | 'ready' | 'merch'>('all');
   const [finChartMode, setFinChartMode] = useState<'balance' | 'cashflow'>('balance');
   const [clubTab, setClubTab] = useState<'info' | 'infra' | 'identity' | 'activities' | 'legacy'>('info');
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
@@ -130,7 +160,10 @@ export const FinanceClubView: React.FC<{
   } | null>(null);
 
   useEffect(() => {
-    if (navIntent?.tab === 'f' && (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'ledger')) {
+    if (
+      navIntent?.tab === 'f' &&
+      (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'megastore' || navIntent.sub === 'ledger')
+    ) {
       setFinTab(navIntent.sub);
     } else if (
       navIntent?.tab === 'u' &&
@@ -163,6 +196,12 @@ export const FinanceClubView: React.FC<{
   const me = state.teams[state.me];
   const est = calcMatchdayFinanceEstimate(state, me);
   const stf = getStaffState(state);
+  const megastoreSnap = useMemo<ClubMegastoreState>(() => {
+    if (state.megastore) return state.megastore;
+    const temp: GameState = { ...state };
+    return ensureMegastoreState(temp);
+  }, [state]);
+  const megastoreProj = useMemo(() => getMegastoreProjection(state, me), [state, me]);
   const chartData = useMemo(
     () => getClubFinanceChartData(state, est, true),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -323,35 +362,30 @@ export const FinanceClubView: React.FC<{
     const totalDebt = bankRemain + (state.payDue || 0);
     const tierMult = 1 + me.tier * 0.45;
 
-    const partnerDeals = [
-      {
-        id: 'drink',
-        name: 'เครื่องดื่มเกลือแร่สปอร์ต',
-        perMatch: Math.round(5 * tierMult),
-        matches: 8,
-        signBonus: Math.round(12 * tierMult),
-        reqOk: true,
-        reqText: 'พร้อมเซ็นสัญญาได้ทันที'
-      },
-      {
-        id: 'apparel',
-        name: 'แบรนด์ชุดกีฬาลูกหนังไทย',
-        perMatch: Math.round(7 * tierMult),
-        matches: 10,
-        signBonus: Math.round(15 * tierMult),
-        reqOk: (state.fan ?? 55) >= 45,
-        reqText: 'ต้องการขวัญแฟนบอล ≥ 45%'
-      },
-      {
-        id: 'telecom',
-        name: 'เครือข่ายมือถือ & ถ่ายทอดสด',
-        perMatch: Math.round(10 * tierMult),
-        matches: 12,
-        signBonus: Math.round(22 * tierMult),
-        reqOk: me.tier >= 1 || (state.fan ?? 55) >= 65,
-        reqText: 'ต้องการอยู่ระดับ D2 ขึ้นไป หรือแฟนบอล ≥ 65%'
-      }
-    ];
+    const activeDeals = getActivePartnerDeals(state);
+    const maxPartnerSlots = getMaxPartnerSlots(state);
+    const partnerDeals = PARTNER_DEAL_CATALOG.map((cat) => {
+      const req = cat.checkReq(state, me);
+      const isSigned = activeDeals.some((d) => d.id === cat.id);
+      return {
+        id: cat.id,
+        category: cat.category,
+        name: cat.name,
+        perMatch: Math.round(cat.basePerMatch * tierMult),
+        matches: cat.matches,
+        signBonus: Math.round(cat.baseSignBonus * tierMult),
+        merchBoost: cat.merchBoost || 0,
+        reqOk: req.ok,
+        reqText: req.text,
+        isSigned
+      };
+    });
+    const visiblePartnerDeals = partnerDeals.filter((d) => {
+      if (partnerFilter === 'ready') return d.reqOk && !d.isSigned;
+      if (partnerFilter === 'merch') return d.merchBoost > 0;
+      return true;
+    });
+    const currentTicketPlan = resolveTicketPlan(state);
 
     const loanPackages = [
       { id: 'short', title: 'สินเชื่อหมุนเวียนระยะสั้น', amount: 80, per: 9, left: 10, desc: 'ดอกเบี้ยต่ำ เหมาะอุดงบขาดมือชั่วคราว' },
@@ -417,12 +451,13 @@ export const FinanceClubView: React.FC<{
           </div>
         </div>
 
-        {/* Finance Sub-navigation (3 Focused Commercial & Cashflow Tabs) */}
-        <div className="seg-bar grid grid-cols-3 w-full bg-[var(--surface)] shrink-0">
+        {/* Finance Sub-navigation (4 Focused Commercial, Megastore & Cashflow Tabs) */}
+        <div className="seg-bar grid grid-cols-4 w-full bg-[var(--surface)] shrink-0">
           {(
             [
               ['overview', '📊 กระแสเงิน & แคมเปญ'],
               ['commercial', '💼 สปอนเซอร์ & ตั๋ว'],
+              ['megastore', '🛍️ เมกะสโตร์ & ยอดขาย'],
               ['ledger', '📒 ธนาคาร & บัญชี']
             ] as const
           ).map(([id, label]) => (
@@ -430,7 +465,7 @@ export const FinanceClubView: React.FC<{
               key={id}
               type="button"
               onClick={() => setFinTab(id)}
-              className={`seg-btn truncate ${
+              className={`seg-btn truncate whitespace-nowrap ${
                 finTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
               }`}
             >
@@ -451,9 +486,9 @@ export const FinanceClubView: React.FC<{
                       <span>🏠 เกมเหย้า</span>
                       <span className="tabular">{est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}</span>
                     </div>
-                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าตั๋วเข้าชม (~{est.estAtt.toLocaleString()} คน)</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estTicket)}</b></div>
-                    <div className="flex justify-between text-[var(--mut)]"><span>ขายของที่ระลึก (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</b></div>
-                    <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าตั๋ว (~{est.estAtt.toLocaleString()} คน · {est.ticketPlan.priceBaht}฿)</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estTicket)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>เมกะสโตร์สโมสร (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์ ({est.activeDealsCount})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
                     <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>รายจ่ายรวม/นัด</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.totalOut)}</b></div>
                   </div>
 
@@ -500,8 +535,10 @@ export const FinanceClubView: React.FC<{
                     <div className="font-bold text-xs tabular">{est.attPct}%</div>
                   </div>
                   <div className="p-2 rounded-xl bg-[var(--surface-2)]">
-                    <div className="text-[10px] text-[var(--mut)]">สปอนเซอร์พาร์ทเนอร์</div>
-                    <div className="font-bold text-xs tabular">{state.sponsorDeal ? `เหลือ ${state.sponsorDeal.left}น` : 'ว่าง'}</div>
+                    <div className="text-[10px] text-[var(--mut)]">พาร์ทเนอร์ ({activeDeals.length}/{maxPartnerSlots})</div>
+                    <div className="font-bold text-xs tabular">
+                      {activeDeals.length > 0 ? `+${fmtMoneyNum(est.dealIncome)}/นัด` : 'ว่าง'}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -729,126 +766,245 @@ export const FinanceClubView: React.FC<{
           </div>
         )}
 
-        {/* Sub-tab 2: Sponsors, Partner Deals, Tickets & Merch */}
+        {/* Sub-tab 2: Expanded Main Sponsors (8), Multi-Slot Partners (10) & Ticket Tiers (7) */}
         {finTab === 'commercial' && (
           <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
             <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
-              <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
-                <h3 className="font-bold text-sm">🤝 สปอนเซอร์หลักคาดอกเสื้อ</h3>
-                <div className="space-y-2">
-                  {[
-                    { idx: 0, title: 'แพ็กเกจมั่นคงสม่ำเสมอ', base: `${fmtMoneyNum(8 + me.tier * 6)} / นัด`, note: 'รับรายได้คงที่ทุกแมตช์ทั้งเหย้าและเยือน' },
-                    { idx: 1, title: 'แพ็กเกจโบนัสชัยชนะ', base: `${fmtMoneyNum(4 + me.tier * 4)} + โบนัสชนะ ${fmtMoneyNum(10 + me.tier * 6)}`, note: 'พื้นฐานต่ำกว่า แต่ถ้าชนะรับเงินก้อนโต' },
-                    { idx: 2, title: 'แพ็กเกจบิ๊กแมตช์ & ดาร์บี้', base: `${fmtMoneyNum(5 + me.tier * 5)} + ดาร์บี้ ${fmtMoneyNum(18 + me.tier * 8)}`, note: 'จ่ายหนักพิเศษเมื่อลงเล่นเกมดาร์บี้แมตช์' }
-                  ].map((opt) => {
-                    const active = (state.sp ?? 0) === opt.idx;
+              {/* Main Sponsors (8 options) */}
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-sm mland:text-xs">🤝 สปอนเซอร์หลักคาดอกเสื้อ ({MAIN_SPONSOR_PACKAGES.length} แพ็กเกจ)</h3>
+                  <span className="text-[10.5px] font-bold text-[var(--g)] tabular shrink-0">
+                    รับปัจจุบัน {fmtMoneyNum(est.estSponsor)}/นัด
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {MAIN_SPONSOR_PACKAGES.map((pkg) => {
+                    const active = (state.sp ?? 0) === pkg.idx;
+                    const elig = evaluateMainSponsorEligibility(pkg.idx, state, me);
+                    const preview = calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me);
                     return (
                       <button
-                        key={opt.idx}
+                        key={pkg.idx}
                         type="button"
-                        onClick={() => onUpdateState((d) => { d.sp = opt.idx; })}
-                        className={`w-full p-3 rounded-xl border text-left cursor-pointer transition-colors ${
-                          active ? 'bg-[var(--g-soft)] border-[var(--g)]' : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--line)]'
+                        disabled={!elig.ok}
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => {
+                            d.sp = pkg.idx;
+                          });
+                          onToast(`เปลี่ยนสปอนเซอร์หลักเป็น ${pkg.brand} แล้ว`);
+                        }}
+                        className={`w-full p-2.5 mland:p-2 rounded-xl border text-left transition-colors ${
+                          !elig.ok
+                            ? 'bg-[var(--surface-2)]/40 border-transparent opacity-65 cursor-not-allowed'
+                            : active
+                              ? 'bg-[var(--g-soft)] border-[var(--g)] cursor-pointer'
+                              : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--line)] cursor-pointer'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                          <span>{opt.title}</span>
-                          <span className="text-[var(--g)] tabular">{opt.base}</span>
+                          <span className="truncate">
+                            {pkg.title} · <span className="text-[var(--mut)] font-semibold">{pkg.brand}</span>
+                          </span>
+                          <span className="text-[var(--g)] tabular shrink-0">{preview.previewText}</span>
                         </div>
-                        <div className="text-[11px] text-[var(--mut)] mt-0.5">{opt.note}</div>
+                        <div className="flex items-center justify-between gap-2 text-[10.5px] text-[var(--mut)] mt-0.5">
+                          <span className="truncate">{pkg.desc}</span>
+                          <span className={`shrink-0 font-semibold ${elig.ok ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                            {active ? 'ใช้งานอยู่' : elig.ok ? pkg.tag : elig.reqText}
+                          </span>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm">📄 ดีลพาร์ทเนอร์ระยะสั้น</h3>
-                  <span className="text-[11px] text-[var(--mut)]">{state.sponsorDeal ? 'มีสัญญาใช้งานอยู่' : 'เลือกเซ็นสัญญาเพิ่มรายได้'}</span>
-                </div>
-                {state.sponsorDeal ? (
-                  <div className="p-3.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/50 space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span>{state.sponsorDeal.name}</span>
-                      <span className="text-[var(--g)] tabular">+{fmtMoneyNum(state.sponsorDeal.perMatch)} / นัด</span>
-                    </div>
-                    <div className="text-[11px] text-[var(--mut)] tabular">
-                      เหลืออายุสัญญาอีก {state.sponsorDeal.left} นัด (คาดการณ์รับเพิ่ม {fmtMoney(state.sponsorDeal.left * state.sponsorDeal.perMatch)})
+              {/* Multi-Slot Partner Deals (10 options) */}
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <h3 className="font-bold text-sm mland:text-xs">
+                      📄 ดีลพาร์ทเนอร์ธุรกิจ ({PARTNER_DEAL_CATALOG.length} ราย · ช่องสัญญา {activeDeals.length}/{maxPartnerSlots})
+                    </h3>
+                    <div className="text-[10px] text-[var(--mut)]">
+                      {maxPartnerSlots < 3
+                        ? 'อัปเกรดเมกะสโตร์ Lv.5 เพื่อปลดล็อกช่องพาร์ทเนอร์ที่ 3'
+                        : 'ปลดล็อกช่องสัญญาครบ 3 ช่องแล้ว'}
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    {partnerDeals.map((deal) => (
-                      <div key={deal.id} className="p-3 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-3">
+                  <div className="seg-bar shrink-0">
+                    {(
+                      [
+                        ['all', 'ทั้งหมด'],
+                        ['ready', 'พร้อมเซ็น'],
+                        ['merch', '+สโตร์']
+                      ] as const
+                    ).map(([fid, flbl]) => (
+                      <button
+                        key={fid}
+                        type="button"
+                        onClick={() => setPartnerFilter(fid)}
+                        className={`seg-btn whitespace-nowrap ${partnerFilter === fid ? 'seg-btn-active' : ''}`}
+                      >
+                        {flbl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {activeDeals.length > 0 && (
+                  <div className="space-y-1.5">
+                    {activeDeals.map((ad) => (
+                      <div
+                        key={ad.id}
+                        className="p-2.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/50 flex items-center justify-between gap-2"
+                      >
                         <div className="min-w-0">
-                          <div className="font-bold text-xs truncate">{deal.name}</div>
-                          <div className="text-[11px] text-[var(--mut)] tabular">
-                            +{fmtMoneyNum(deal.perMatch)}/นัด · {deal.matches} นัด · โบนัสเซ็น +{fmtMoneyNum(deal.signBonus)}
+                          <div className="text-xs font-bold truncate">
+                            {ad.name}
+                            {ad.category ? <span className="text-[10px] text-[var(--mut)] font-normal"> · {ad.category}</span> : null}
                           </div>
-                          <div className={`text-[10px] mt-0.5 ${deal.reqOk ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{deal.reqText}</div>
+                          <div className="text-[10.5px] text-[var(--mut)] tabular">
+                            +{fmtMoneyNum(ad.perMatch)}/นัด · เหลือ {ad.left} นัด (รวมอีก ~{fmtMoney(ad.left * ad.perMatch)})
+                            {ad.merchBoost ? ` · บูสต์สโตร์ +${Math.round(ad.merchBoost * 100)}%` : ''}
+                          </div>
                         </div>
                         <button
                           type="button"
-                          disabled={!deal.reqOk}
                           onClick={() => {
                             SFX.tap();
                             onUpdateState((d) => {
-                              d.sponsorDeal = { id: deal.id, name: deal.name, perMatch: deal.perMatch, left: deal.matches };
-                              d.money += deal.signBonus;
-                              logFin(d, `โบนัสเซ็นสัญญา: ${deal.name}`, deal.signBonus);
+                              const nextDeals = getActivePartnerDeals(d).filter((x) => x.id !== ad.id);
+                              syncPartnerDealsField(d, nextDeals);
                             });
-                            onToast(`เซ็นสัญญากับ ${deal.name} สำเร็จ (+${fmtMoney(deal.signBonus)})`);
+                            onToast(`ยกเลิกสัญญาพาร์ทเนอร์ ${ad.name} แล้ว`);
                           }}
-                          className="btn btn-sm btn-primary shrink-0"
+                          className="btn btn-xs btn-surface text-[var(--red)] shrink-0 whitespace-nowrap"
                         >
-                          เซ็นสัญญา
+                          ยกเลิกดีล
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
+
+                <div className="space-y-1.5">
+                  {visiblePartnerDeals.map((deal) => {
+                    const slotsFull = activeDeals.length >= maxPartnerSlots;
+                    const disabled = deal.isSigned || slotsFull || !deal.reqOk;
+                    return (
+                      <div key={deal.id} className="p-2.5 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-2.5">
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs truncate">
+                            {deal.name} <span className="text-[10px] font-medium text-[var(--mut)]">· {deal.category}</span>
+                          </div>
+                          <div className="text-[10.5px] text-[var(--mut)] tabular">
+                            +{fmtMoneyNum(deal.perMatch)}/นัด · {deal.matches} นัด · โบนัสเซ็น +{fmtMoneyNum(deal.signBonus)}
+                          </div>
+                          <div className={`text-[10px] mt-0.5 ${deal.reqOk ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                            {deal.reqText}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => {
+                            SFX.tap();
+                            onUpdateState((d) => {
+                              const cur = getActivePartnerDeals(d);
+                              if (cur.length >= getMaxPartnerSlots(d) || cur.some((x) => x.id === deal.id)) return;
+                              syncPartnerDealsField(d, [
+                                ...cur,
+                                {
+                                  id: deal.id,
+                                  name: deal.name,
+                                  category: deal.category,
+                                  perMatch: deal.perMatch,
+                                  left: deal.matches,
+                                  merchBoost: deal.merchBoost
+                                }
+                              ]);
+                              d.money += deal.signBonus;
+                              logFin(d, `โบนัสเซ็นสัญญาพาร์ทเนอร์: ${deal.name}`, deal.signBonus);
+                            });
+                            onToast(`เซ็นสัญญากับ ${deal.name} สำเร็จ (+${fmtMoney(deal.signBonus)})`);
+                          }}
+                          className="btn btn-sm btn-primary shrink-0 whitespace-nowrap"
+                        >
+                          {deal.isSigned ? 'ใช้งานอยู่' : slotsFull ? 'ช่องเต็ม' : 'เซ็นสัญญา'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
+            {/* Right Column: Ticket Pricing Tiers (7) + Unified Store Architecture Card */}
             <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
-              <div className="p-4 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-sm">🎫 นโยบายราคาตั๋วเข้าชม</h3>
-                  <span className="text-xs font-bold text-[var(--g)] tabular">~{est.estAtt.toLocaleString()} / {est.cap.toLocaleString()} ({est.attPct}%)</span>
+              <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="font-bold text-sm mland:text-xs">🎫 นโยบายราคาตั๋วเข้าชม ({TICKET_PRICING_PLANS.length} ระดับ)</h3>
+                  <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
+                    ~{est.estAtt.toLocaleString()} / {est.cap.toLocaleString()} ({est.attPct}%)
+                  </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { idx: 0, label: 'ตั๋วถูก', desc: 'คนดูเยอะ +ขวัญแฟน' },
-                    { idx: 1, label: 'ตั๋วกลาง', desc: 'สมดุลคนดู & รายรับ' },
-                    { idx: 2, label: 'ตั๋วแพง', desc: 'ทำเงินสูง / คนดูลด' }
-                  ].map((opt) => (
-                    <button
-                      key={opt.idx}
-                      type="button"
-                      onClick={() => onUpdateState((d) => { d.tp = opt.idx; })}
-                      className={`p-2.5 rounded-xl text-left border cursor-pointer ${
-                        (state.tp ?? 1) === opt.idx ? 'bg-[var(--g)] text-white border-[var(--g)]' : 'bg-[var(--surface-2)] border-transparent'
-                      }`}
-                    >
-                      <div className="font-bold text-xs">{opt.label}</div>
-                      <div className={`text-[10px] mt-0.5 ${(state.tp ?? 1) === opt.idx ? 'text-white/85' : 'text-[var(--mut)]'}`}>{opt.desc}</div>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-2 gap-1.5">
+                  {TICKET_PRICING_PLANS.map((plan) => {
+                    const active = currentTicketPlan.id === plan.id;
+                    const stLv = state.st ?? 1;
+                    const locked = !!(plan.minStadiumLv && stLv < plan.minStadiumLv);
+                    return (
+                      <button
+                        key={plan.id}
+                        type="button"
+                        disabled={locked}
+                        onClick={() => {
+                          SFX.tap();
+                          onUpdateState((d) => {
+                            d.ticketPlan = plan.id;
+                            d.tp = plan.legacyIdx;
+                          });
+                          onToast(`ตั้งราคาตั๋วเป็น ${plan.label} (${plan.priceBaht}฿/ใบ) แล้ว`);
+                        }}
+                        className={`p-2.5 mland:p-2 rounded-xl text-left border transition-colors ${
+                          locked
+                            ? 'bg-[var(--surface-2)]/40 border-transparent opacity-60 cursor-not-allowed'
+                            : active
+                              ? 'bg-[var(--g)] text-white border-[var(--g)] cursor-pointer'
+                              : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--line)] cursor-pointer'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5 text-xs font-bold">
+                          <span className="truncate">{plan.label}</span>
+                          <span className="tabular shrink-0">{plan.priceBaht}฿</span>
+                        </div>
+                        <div className={`text-[10px] mt-0.5 tabular ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>
+                          ผู้ชม {Math.round(plan.attMult * 100)}% · รายรับ {Math.round(plan.revMult * 100)}% · สโตร์ +{Math.round((plan.merchMult - 1) * 100)}%
+                        </div>
+                        <div className={`text-[10px] mt-0.5 truncate ${active ? 'text-white/85' : locked ? 'text-[var(--red)]' : 'text-[var(--mut)]'}`}>
+                          {locked ? `ต้องอัปสนามเหย้า Lv.${plan.minStadiumLv}+` : plan.desc}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="p-2.5 rounded-xl bg-[var(--surface-2)] flex items-center justify-between text-xs">
-                  <span className="text-[var(--mut)]">รายได้ค่าตั๋วเหย้าโดยประมาณ</span>
-                  <b className="text-[var(--g)] tabular">+{fmtMoney(est.estTicket)} / นัดเหย้า</b>
+                <div className="p-2.5 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-2 text-xs">
+                  <span className="text-[var(--mut)]">
+                    ใช้งาน: <b className="text-[var(--ink)]">{currentTicketPlan.label} ({currentTicketPlan.priceBaht}฿)</b>
+                  </span>
+                  <b className="text-[var(--g)] tabular shrink-0">+{fmtMoney(est.estTicket)} / นัดเหย้า</b>
                 </div>
               </div>
 
+              {/* Clean Bridge Card resolving "Souvenir Shop vs Megastore" duplication */}
               {(() => {
                 const merchLv = clamp(state.merchLv ?? 1, 0, MAX_FACILITY_LV);
                 const merchCond = getFacilityCondition(state, 'merchLv');
-                const merchUpgradeCost = getFacilityUpgradeCost(75, merchLv);
-                const merchRenovateCost = getFacilityRenovateCost(75, merchLv, merchCond);
                 return (
-                  <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3">
+                  <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
                     <div className="flex items-start gap-3">
                       <FacilityUpgradeSvg
                         kind="merchLv"
@@ -856,82 +1012,59 @@ export const FinanceClubView: React.FC<{
                         condition={merchCond}
                         c1={me.kc[0]}
                         c2={me.kc[1]}
-                        className="w-24 h-16"
+                        className="w-20 h-14 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <h3 className="font-bold text-sm truncate">🛍️ ร้านค้าของที่ระลึกสโมสร</h3>
-                          <span className={`text-xs font-bold tabular shrink-0 ${merchLv === 0 ? 'text-[var(--red)]' : ''}`}>
+                          <h3 className="font-bold text-sm truncate">🛍️ เมกะสโตร์ &amp; ของที่ระลึกสโมสร</h3>
+                          <span className={`text-xs font-bold tabular shrink-0 ${merchLv === 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
                             Lv.{merchLv}/{MAX_FACILITY_LV}
                           </span>
                         </div>
-                        <div className={`text-[10.5px] font-semibold mt-0.5 ${merchLv === 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                          {getFacilityTierLabel(merchLv)}
-                        </div>
-                        <p className="text-xs text-[var(--mut)] mt-0.5">
-                          รายได้เสริมเหย้า ({fmtMoney(est.estMerch)}/นัด) · ขยายเพดานค่าเหนื่อย +4%/Lv
+                        <p className="text-[11px] text-[var(--mut)] mt-0.5 leading-snug">
+                          ร้านขายของที่ระลึกและเมกะสโตร์ถูกรวมเป็นระบบเดียว: อัปเกรด/ซ่อมอาคารที่แท็บ <b>สโมสร → สิ่งอำนวยความสะดวก</b> และดูยอดขายเสื้อ-ของชำร่วย-เติมเงินทุนได้ที่แท็บ <b>เมกะสโตร์ &amp; ยอดขาย</b>
                         </p>
                       </div>
                     </div>
 
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10.5px]">
-                        <span className="text-[var(--mut)]">ระดับพัฒนา (สูงสุด Lv.{MAX_FACILITY_LV})</span>
-                        {merchLv === 0 ? (
-                          <span className="font-bold text-[var(--red)]">ถูกทำลาย · ไม่มีรายได้</span>
-                        ) : (
-                          <span className={`font-bold tabular ${merchCond < 75 ? 'text-[var(--red)]' : merchCond < 90 ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
-                            สภาพอาคาร {merchCond}%{merchCond < 55 ? ' (ชำรุดหนัก)' : merchCond < 75 ? ' (ควรปรับปรุง)' : ''}
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-10 gap-1">
-                        {Array.from({ length: MAX_FACILITY_LV }, (_, idx) => idx + 1).map((lv) => (
-                          <span key={lv} className={`h-1.5 rounded-full ${lv <= merchLv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
-                        ))}
-                      </div>
-                      {merchLv > 0 && (
-                        <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                          <div
-                            className={`h-full transition-all ${merchCond < 75 ? 'bg-[var(--red)]' : merchCond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
-                            style={{ width: `${merchCond}%` }}
-                          />
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">สภาพอาคาร</div>
+                        <div className={`font-bold tabular ${merchLv <= 0 || merchCond < 75 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                          {merchLv <= 0 ? 'ปิดทำการ' : `${merchCond}%`}
                         </div>
-                      )}
+                      </div>
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">เงินทุนร้าน</div>
+                        <div className="font-bold tabular">{fmtMoney(megastoreSnap.capital)}</div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">คาดการณ์/นัดเหย้า</div>
+                        <div className="font-bold text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</div>
+                      </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
-                      {merchLv > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => setDemolishTarget({ key: 'merchLv', title: 'ร้านค้าของที่ระลึก', baseCost: 75, minLv: 0 })}
-                          className="btn btn-sm btn-danger shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>ทำลาย</span>
-                        </button>
-                      )}
-                      {merchLv > 0 && merchCond < 100 && (
-                        <button
-                          type="button"
-                          disabled={state.money < merchRenovateCost}
-                          onClick={() => renovateFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
-                          className="btn btn-sm btn-surface hover:border-[var(--lamp)] shrink-0"
-                        >
-                          🔧 ปรับปรุง {fmtMoneyNum(merchRenovateCost)}
-                        </button>
-                      )}
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="button"
-                        disabled={merchLv >= MAX_FACILITY_LV || state.money < merchUpgradeCost}
-                        onClick={() => upgradeFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
-                        className="btn btn-sm btn-primary shrink-0"
+                        onClick={() => {
+                          SFX.tap();
+                          setFinTab('megastore');
+                        }}
+                        className="btn btn-sm btn-primary flex-1 whitespace-nowrap"
                       >
-                        {merchLv >= MAX_FACILITY_LV
-                          ? `Lv.${MAX_FACILITY_LV} เต็ม`
-                          : merchLv === 0
-                            ? `🏗️ สร้างใหม่ ${fmtMoneyNum(merchUpgradeCost)}`
-                            : `ขยายร้าน ${fmtMoneyNum(merchUpgradeCost)}`}
+                        🛍️ เปิดเมกะสโตร์ &amp; ยอดขายเสื้อ
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          if (onNavigate) onNavigate('u', 'infra');
+                          else onToast('กรุณาเปิดแท็บ สโมสร → สิ่งอำนวยความสะดวก เพื่ออัปเกรดอาคาร');
+                        }}
+                        className="btn btn-sm btn-surface shrink-0 whitespace-nowrap"
+                      >
+                        🏟️ อัปเกรดอาคาร (สโมสร)
                       </button>
                     </div>
                   </div>
@@ -940,6 +1073,485 @@ export const FinanceClubView: React.FC<{
             </div>
           </div>
         )}
+
+        {/* Sub-tab 3: Club Megastore Working Capital, Blank/Player Jersey Rankings & Souvenirs */}
+        {finTab === 'megastore' && (() => {
+          const merchLv = clamp(state.merchLv ?? 1, 0, MAX_FACILITY_LV);
+          const merchCond = getFacilityCondition(state, 'merchLv');
+          const curTierDef = megastoreProj.tierDef;
+
+          // Aggregate per-SKU all-time souvenir counts by summing archived seasons + active season
+          const computeSouvenirRows = (period: 'season' | 'alltime'): {
+            id: string;
+            name: string;
+            icon: string;
+            unitPriceBaht: number;
+            units: number;
+            revenue: number;
+          }[] => {
+            return SOUVENIR_CATALOG.map((sku) => {
+              let units = megastoreSnap.souvenirs[sku.id] || 0;
+              let rev = megastoreSnap.souvenirRevs[sku.id] || 0;
+              if (period === 'alltime') {
+                megastoreSnap.seasonHistory.forEach((arch) => {
+                  const found = arch.souvenirs.find((x) => x.id === sku.id);
+                  if (found) {
+                    units += found.units;
+                    rev += found.revenue;
+                  }
+                });
+              }
+              return {
+                id: sku.id,
+                name: sku.name,
+                icon: sku.icon,
+                unitPriceBaht: Math.round(sku.unitPriceBaht * curTierDef.souvenirPriceMult),
+                units,
+                revenue: +rev.toFixed(2)
+              };
+            }).sort((a, b) => b.revenue - a.revenue);
+          };
+
+          const curSeasonPlayerRows = Object.values(megastoreSnap.playerJerseys)
+            .slice()
+            .sort((a, b) => b.units - a.units || b.revenue - a.revenue);
+          const curPrintedUnits = curSeasonPlayerRows.reduce((s, r) => s + r.units, 0);
+          const curPrintedRev = +curSeasonPlayerRows.reduce((s, r) => s + r.revenue, 0).toFixed(2);
+          const curSouvRows = computeSouvenirRows('season');
+          const curSouvUnits = curSouvRows.reduce((s, r) => s + r.units, 0);
+          const curSouvRev = +curSouvRows.reduce((s, r) => s + r.revenue, 0).toFixed(2);
+          const curSeasonTotalRev = +(megastoreSnap.seasonRev || megastoreSnap.blankJerseyRev + curPrintedRev + curSouvRev).toFixed(2);
+          const curSeasonNet = +(curSeasonTotalRev - megastoreSnap.seasonCost).toFixed(2);
+
+          const allTimePlayerRows = Object.values(megastoreSnap.allTimePlayerJerseys)
+            .slice()
+            .sort((a, b) => b.units - a.units || b.revenue - a.revenue);
+          const allTimeSouvRows = computeSouvenirRows('alltime');
+
+          const activeBlankUnits = merchPeriod === 'alltime' ? megastoreSnap.allTimeBlankUnits : megastoreSnap.blankJerseyUnits;
+          const activeBlankRev = merchPeriod === 'alltime' ? megastoreSnap.allTimeBlankRev : megastoreSnap.blankJerseyRev;
+          const activePrintedRows: PlayerJerseySaleRecord[] = merchPeriod === 'alltime' ? allTimePlayerRows : curSeasonPlayerRows;
+          const activePrintedUnits =
+            merchPeriod === 'alltime'
+              ? Math.max(megastoreSnap.allTimePrintedUnits, allTimePlayerRows.reduce((s, r) => s + r.units, 0))
+              : curPrintedUnits;
+          const activePrintedRev =
+            merchPeriod === 'alltime'
+              ? +Math.max(megastoreSnap.allTimePrintedRev, allTimePlayerRows.reduce((s, r) => s + r.revenue, 0)).toFixed(2)
+              : curPrintedRev;
+          const activeSouvRows = merchPeriod === 'alltime' ? allTimeSouvRows : curSouvRows;
+          const activeSouvUnits = activeSouvRows.reduce((s, r) => s + r.units, 0);
+          const activeSouvRev = +activeSouvRows.reduce((s, r) => s + r.revenue, 0).toFixed(2);
+          const topSeller = activePrintedRows[0] || null;
+          const topSellerPlayer = topSeller ? me.sq.find((p) => p.n === topSeller.name) || null : null;
+          const maxSouvRev = Math.max(0.1, ...activeSouvRows.map((x) => x.revenue));
+          const maxJerseyUnits = Math.max(1, ...activePrintedRows.map((x) => x.units));
+
+          const currentLiveArchive: MegastoreSeasonArchive = {
+            season: state.season,
+            capitalInvested: megastoreSnap.capitalInvestedSeason,
+            productionCost: megastoreSnap.seasonCost,
+            totalRevenue: curSeasonTotalRev,
+            netProfit: curSeasonNet,
+            blankJerseys: { units: megastoreSnap.blankJerseyUnits, revenue: megastoreSnap.blankJerseyRev },
+            printedJerseysTotal: { units: curPrintedUnits, revenue: curPrintedRev },
+            souvenirsTotal: { units: curSouvUnits, revenue: curSouvRev },
+            topPlayer: curSeasonPlayerRows[0] || null,
+            playerJerseys: curSeasonPlayerRows,
+            souvenirs: curSouvRows.map((s) => ({
+              id: s.id as 'scarf' | 'cap' | 'keychain' | 'mug' | 'ball' | 'poster',
+              name: s.name,
+              icon: s.icon,
+              unitPriceBaht: s.unitPriceBaht,
+              units: s.units,
+              revenue: s.revenue
+            }))
+          };
+          const combinedSeasons: MegastoreSeasonArchive[] = [
+            currentLiveArchive,
+            ...megastoreSnap.seasonHistory.filter((h) => h.season !== state.season)
+          ].sort((a, b) => b.season - a.season);
+
+          const topUpCapital = (amt: number) => {
+            if (state.money < amt) {
+              onToast(`งบสโมสรไม่พอ (ต้องการ ${fmtMoney(amt)})`);
+              return;
+            }
+            SFX.tap();
+            onUpdateState((d) => {
+              const ms = ensureMegastoreState(d);
+              d.money -= amt;
+              ms.capital = +(ms.capital + amt).toFixed(2);
+              ms.capitalInvestedSeason = +(ms.capitalInvestedSeason + amt).toFixed(2);
+              logFin(d, `เพิ่มเงินทุนหมุนเวียนเมกะสโตร์`, -amt);
+            });
+            onToast(`เติมเงินทุนหมุนเวียนเมกะสโตร์ +${fmtMoney(amt)} สำเร็จ!`);
+          };
+
+          return (
+            <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
+              {/* Store Status & Physical Building Link Strip */}
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="font-bold text-xs sm:text-sm truncate">
+                    🛍️ เมกะสโตร์สโมสร (Lv.{merchLv}/{MAX_FACILITY_LV})
+                  </span>
+                  <span className="text-[11px] text-[var(--mut)] tabular">
+                    สภาพอาคาร <b className={merchLv <= 0 || merchCond < 75 ? 'text-[var(--red)]' : 'text-[var(--g)]'}>{merchLv <= 0 ? 'ถูกทำลาย' : `${merchCond}%`}</b>
+                    {' · '}ตัวคูณสโตร์จากตั๋ว/สปอนเซอร์ <b className="text-[var(--ink)] tabular">×{megastoreProj.extraMerchMult.toFixed(2)}</b>
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    if (onNavigate) onNavigate('u', 'infra');
+                    else onToast('กรุณาไปที่แท็บ สโมสร → สิ่งอำนวยความสะดวก');
+                  }}
+                  className="btn btn-xs btn-surface shrink-0 whitespace-nowrap"
+                >
+                  🏟️ {merchLv <= 0 ? 'สร้างร้านเมกะสโตร์ใหม่' : 'อัปเกรด / ซ่อมอาคารร้าน'}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+                {/* Left Column: Working Capital, Stock Quality & Souvenirs Breakdown */}
+                <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+                  <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-sm mland:text-xs">💼 เงินทุนหมุนเวียน &amp; ผลประกอบการ (ซ.{state.season})</h3>
+                      <span className={`text-[10.5px] font-bold tabular ${megastoreProj.stockReady ? 'text-[var(--g)]' : 'text-[#b47b00] dark:text-[var(--lamp)]'}`}>
+                        {megastoreProj.stockReady ? 'สต็อกพร้อมขายเต็มที่' : 'ทุนหมุนเวียนต่ำ'}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5 text-center">
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">เงินทุนร้าน</div>
+                        <div className={`font-bold text-xs tabular mt-0.5 ${megastoreSnap.capital < 3 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                          {fmtMoney(megastoreSnap.capital)}
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">ต้นทุนผลิต</div>
+                        <div className="font-bold text-xs text-[var(--red)] tabular mt-0.5">
+                          {fmtMoney(megastoreSnap.seasonCost)}
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">ยอดขายรวม</div>
+                        <div className="font-bold text-xs text-[var(--g)] tabular mt-0.5">
+                          {fmtMoney(curSeasonTotalRev)}
+                        </div>
+                      </div>
+                      <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                        <div className="text-[10px] text-[var(--mut)]">กำไรสุทธิ</div>
+                        <div className={`font-bold text-xs tabular mt-0.5 ${curSeasonNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                          {curSeasonNet >= 0 ? `+${fmtMoney(curSeasonNet)}` : fmtMoney(curSeasonNet)}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] bg-[var(--surface-2)] p-2 rounded-xl">
+                      <span className="text-[var(--mut)]">
+                        ทุนลงซีซั่นนี้: <b className="text-[var(--ink)] tabular">{fmtMoney(megastoreSnap.capitalInvestedSeason)}</b>
+                        {' · '}คาดเหย้าหน้า <b className="text-[var(--g)] tabular">+{fmtMoney(megastoreProj.estMatchSales)}</b>
+                      </span>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {([25, 50, 100] as const).map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            disabled={state.money < amt}
+                            onClick={() => topUpCapital(amt)}
+                            className="btn btn-xs btn-primary whitespace-nowrap"
+                          >
+                            +ทุน {amt}k
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="text-[11px] font-bold text-[var(--mut)]">เกรดสต็อกเสื้อ &amp; ราคาจำหน่ายหน้าร้าน</div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {MEGASTORE_STOCK_TIERS.map((tier) => {
+                          const active = (megastoreSnap.stockTier ?? 1) === tier.idx;
+                          return (
+                            <button
+                              key={tier.idx}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                onUpdateState((d) => {
+                                  ensureMegastoreState(d).stockTier = tier.idx;
+                                });
+                                onToast(`เปลี่ยนเกรดสต็อกเป็น ${tier.label} แล้ว`);
+                              }}
+                              className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-[var(--g-soft)] border-[var(--g)]'
+                                  : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--line)]'
+                              }`}
+                            >
+                              <div className="font-bold text-[11px] truncate">{tier.label}</div>
+                              <div className="text-[10px] text-[var(--mut)] tabular mt-0.5">
+                                เปล่า {tier.blankJerseyBaht}฿ · สกรีน {tier.printedJerseyBaht}฿
+                              </div>
+                              <div className="text-[9.5px] text-[var(--g)] font-semibold tabular mt-0.5">
+                                ต้นทุน {(tier.costRate * 100).toFixed(0)}%
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Souvenirs Sales Breakdown */}
+                  <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-sm mland:text-xs">
+                        🎁 ของชำร่วยสโมสร ({merchPeriod === 'alltime' ? 'รวมตลอดกาล' : `ซีซั่น ${state.season}`})
+                      </h3>
+                      <span className="text-xs font-bold text-[var(--g)] tabular">
+                        {activeSouvUnits.toLocaleString()} ชิ้น · {fmtMoney(activeSouvRev)}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      {activeSouvRows.map((sku) => {
+                        const pct = Math.max(4, Math.round((sku.revenue / maxSouvRev) * 100));
+                        return (
+                          <div key={sku.id} className="p-2 rounded-xl bg-[var(--surface-2)] space-y-1">
+                            <div className="flex items-center justify-between gap-2 text-xs">
+                              <span className="font-semibold truncate">
+                                {sku.icon} {sku.name}{' '}
+                                <span className="text-[10px] text-[var(--mut)] font-normal tabular">({sku.unitPriceBaht}฿)</span>
+                              </span>
+                              <span className="tabular shrink-0 font-bold">
+                                {sku.units.toLocaleString()} ชิ้น · <span className="text-[var(--g)]">{fmtMoney(sku.revenue)}</span>
+                              </span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-emerald-500 transition-all"
+                                style={{ width: `${sku.units > 0 ? pct : 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column: Blank vs Printed Jerseys + Per-Player Rankings + Season Champions */}
+                <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 gap-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+                    <h3 className="font-bold text-sm mland:text-xs">👕 ยอดขายเสื้อแข่ง &amp; แชมป์ขายเสื้อ</h3>
+                    <div className="seg-bar shrink-0">
+                      {(
+                        [
+                          ['season', `ซ.${state.season}`],
+                          ['alltime', 'รวมทุกซีซั่น'],
+                          ['seasons', `แชมป์รายซีซั่น (${combinedSeasons.length})`]
+                        ] as const
+                      ).map(([pid, plbl]) => (
+                        <button
+                          key={pid}
+                          type="button"
+                          onClick={() => setMerchPeriod(pid)}
+                          className={`seg-btn whitespace-nowrap ${merchPeriod === pid ? 'seg-btn-active' : ''}`}
+                        >
+                          {plbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {merchPeriod !== 'seasons' ? (
+                    <>
+                      {/* 3 Comparison KPIs: Unprinted vs Printed Total vs Grand Jersey Total */}
+                      <div className="grid grid-cols-3 gap-2 text-center shrink-0">
+                        <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                          <div className="text-[10px] text-[var(--mut)]">เสื้อไม่สกรีนเบอร์/ชื่อ</div>
+                          <div className="font-bold text-xs tabular mt-0.5">{activeBlankUnits.toLocaleString()} ตัว</div>
+                          <div className="text-[10.5px] font-bold text-[var(--g)] tabular">{fmtMoney(activeBlankRev)}</div>
+                        </div>
+                        <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                          <div className="text-[10px] text-[var(--mut)]">เสื้อสกรีนนักเตะรวม</div>
+                          <div className="font-bold text-xs tabular mt-0.5">{activePrintedUnits.toLocaleString()} ตัว</div>
+                          <div className="text-[10.5px] font-bold text-[var(--g)] tabular">{fmtMoney(activePrintedRev)}</div>
+                        </div>
+                        <div className="p-2 rounded-xl bg-[var(--surface-2)]">
+                          <div className="text-[10px] text-[var(--mut)]">รวมเสื้อทุกแบบ</div>
+                          <div className="font-bold text-xs tabular mt-0.5">
+                            {(activeBlankUnits + activePrintedUnits).toLocaleString()} ตัว
+                          </div>
+                          <div className="text-[10.5px] font-bold text-[var(--g)] tabular">
+                            {fmtMoney(activeBlankRev + activePrintedRev)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* #1 Best Selling Player Spotlight */}
+                      <div className="p-2.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/45 flex items-center justify-between gap-2.5 shrink-0">
+                        {topSeller ? (
+                          <>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <KitJersey
+                                club={ensureClubIdentity(state)}
+                                team={me}
+                                shirtNo={topSeller.no}
+                                isGK={topSeller.pos === 'GK'}
+                                size={36}
+                              />
+                              {topSellerPlayer && <PlayerFace player={topSellerPlayer} team={me} state={state} size={34} />}
+                              <div className="min-w-0">
+                                <div className="text-[10px] font-bold text-[var(--g)]">
+                                  🏆 ขายเสื้ออันดับ 1 {merchPeriod === 'alltime' ? 'ตลอดกาล' : `ซีซั่น ${state.season}`}
+                                </div>
+                                <div className="font-bold text-xs sm:text-sm truncate">
+                                  #{topSeller.no} {topSeller.name}
+                                </div>
+                                <div className="text-[10.5px] text-[var(--mut)] tabular">
+                                  {topSeller.ro} ({topSeller.pos}) · ครองส่วนแบ่ง {activePrintedUnits > 0 ? Math.round((topSeller.units / activePrintedUnits) * 100) : 0}%
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 tabular">
+                              <div className="font-extrabold text-sm text-[var(--ink)]">{topSeller.units.toLocaleString()} ตัว</div>
+                              <div className="font-bold text-xs text-[var(--g)]">{fmtMoney(topSeller.revenue)}</div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-[var(--mut)] w-full text-center py-1">
+                            ยังไม่มีสถิติยอดขายเสื้อในซีซั่นนี้ — ยอดขายเสื้อรายเบอร์จะบันทึกหลังจบเกมเหย้าแรก
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Per-Player Printed Shirt Leaderboard */}
+                      <div className="flex-1 min-h-0 overflow-y-auto space-y-1 pr-0.5">
+                        {activePrintedRows.length === 0 ? (
+                          <div className="text-xs text-[var(--mut)] text-center py-8">ยังไม่มีข้อมูลการขายเสื้อนักเตะรายบุคคล</div>
+                        ) : (
+                          activePrintedRows.map((row, idx) => {
+                            const squadPl = me.sq.find((p) => p.n === row.name) || null;
+                            const sharePct = activePrintedUnits > 0 ? Math.round((row.units / activePrintedUnits) * 100) : 0;
+                            const barPct = Math.max(4, Math.round((row.units / maxJerseyUnits) * 100));
+                            return (
+                              <button
+                                key={`${row.name}-${row.no}`}
+                                type="button"
+                                disabled={!squadPl || !onInspectPlayer}
+                                onClick={() => {
+                                  if (squadPl && onInspectPlayer) onInspectPlayer(squadPl, me);
+                                }}
+                                className={`w-full p-2 rounded-xl bg-[var(--surface-2)] text-left flex items-center gap-2.5 transition-colors ${
+                                  squadPl && onInspectPlayer ? 'hover:bg-[var(--surface-2)]/70 cursor-pointer' : 'cursor-default'
+                                }`}
+                              >
+                                <span className={`w-5 text-center font-extrabold text-xs tabular shrink-0 ${idx === 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                  {idx + 1}
+                                </span>
+                                <span
+                                  className="w-7 h-7 rounded-lg font-extrabold text-[11px] flex items-center justify-center tabular shrink-0 border border-[var(--line)]/60"
+                                  style={{ background: me.kc[0], color: me.kc[1] }}
+                                >
+                                  {squadPl ? getShirtNo(me, squadPl) : row.no}
+                                </span>
+                                <div className="flex-1 min-w-0 space-y-1">
+                                  <div className="flex items-center justify-between gap-2 text-xs">
+                                    <span className="font-bold truncate">
+                                      {row.name} <span className="text-[10px] font-medium text-[var(--mut)]">· {row.ro}</span>
+                                    </span>
+                                    <span className="tabular shrink-0 font-bold">
+                                      {row.units.toLocaleString()} ตัว{' '}
+                                      <span className="text-[var(--mut)] font-normal text-[10.5px]">({sharePct}%)</span>
+                                    </span>
+                                  </div>
+                                  <div className="h-1 rounded-full bg-[var(--surface)] overflow-hidden">
+                                    <div className="h-full rounded-full bg-[var(--g)]" style={{ width: `${barPct}%` }} />
+                                  </div>
+                                </div>
+                                <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
+                                  {fmtMoney(row.revenue)}
+                                </span>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    /* Season-by-Season Jersey Champion & Merch History */
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-0.5">
+                      {combinedSeasons.map((arch) => (
+                        <div key={arch.season} className="p-3 rounded-xl bg-[var(--surface-2)] border border-[var(--line)]/70 space-y-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-bold text-xs sm:text-sm">
+                              ซีซั่น {arch.season} {arch.season === state.season ? '· กำลังดำเนินอยู่' : ''}
+                            </span>
+                            <div className="text-[11px] tabular flex items-center gap-2">
+                              <span className="text-[var(--mut)]">ยอดขาย {fmtMoney(arch.totalRevenue)}</span>
+                              <span className="text-[var(--red)]">ต้นทุน -{fmtMoney(arch.productionCost)}</span>
+                              <b className={arch.netProfit >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                                สุทธิ {arch.netProfit >= 0 ? `+${fmtMoney(arch.netProfit)}` : fmtMoney(arch.netProfit)}
+                              </b>
+                            </div>
+                          </div>
+
+                          <div className="p-2 rounded-lg bg-[var(--surface)] flex items-center justify-between gap-2 text-xs">
+                            <span className="truncate">
+                              🏆 แชมป์ขายเสื้อ:{' '}
+                              {arch.topPlayer ? (
+                                <b>#{arch.topPlayer.no} {arch.topPlayer.name}</b>
+                              ) : (
+                                <span className="text-[var(--mut)]">ยังไม่มียอดขาย</span>
+                              )}
+                            </span>
+                            {arch.topPlayer && (
+                              <b className="text-[var(--g)] tabular shrink-0">
+                                {arch.topPlayer.units.toLocaleString()} ตัว · {fmtMoney(arch.topPlayer.revenue)}
+                              </b>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-1.5 text-[10.5px] text-center tabular">
+                            <div className="p-1.5 rounded-lg bg-[var(--surface)]">
+                              <div className="text-[var(--mut)]">สกรีนนักเตะ</div>
+                              <b>{arch.printedJerseysTotal.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.printedJerseysTotal.revenue)}
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-[var(--surface)]">
+                              <div className="text-[var(--mut)]">เสื้อไม่สกรีน</div>
+                              <b>{arch.blankJerseys.units.toLocaleString()} ตัว</b> · {fmtMoney(arch.blankJerseys.revenue)}
+                            </div>
+                            <div className="p-1.5 rounded-lg bg-[var(--surface)]">
+                              <div className="text-[var(--mut)]">ของชำร่วย</div>
+                              <b>{arch.souvenirsTotal.units.toLocaleString()} ชิ้น</b> · {fmtMoney(arch.souvenirsTotal.revenue)}
+                            </div>
+                          </div>
+
+                          {arch.playerJerseys.length > 1 && (
+                            <div className="text-[10.5px] text-[var(--mut)] flex flex-wrap gap-x-3 gap-y-0.5 pt-0.5">
+                              {arch.playerJerseys.slice(0, 3).map((pj, rank) => (
+                                <span key={`${pj.name}-${pj.no}`} className="tabular">
+                                  {rank + 1}. #{pj.no} {pj.name} ({pj.units} ตัว)
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Bank Loans, Wage Structure & Filterable Ledger */}
         {finTab === 'ledger' && (

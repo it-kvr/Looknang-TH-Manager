@@ -1,7 +1,7 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, PlayerJerseySaleRecord, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord } from './history';
 
@@ -1333,6 +1333,797 @@ export function getTeamStadiumCapacity(t: Team, s?: GameState | null): number {
   return Math.max(tierFloor, STADIUM_CAPACITIES[estLvIdx] || 13000);
 }
 
+export interface TicketPricingPlanDef {
+  id: string;
+  legacyIdx: number;
+  label: string;
+  priceBaht: number;
+  attMult: number;
+  revMult: number;
+  merchMult: number;
+  fanMoodDelta: number;
+  minStadiumLv?: number;
+  desc: string;
+}
+
+export const TICKET_PRICING_PLANS: readonly TicketPricingPlanDef[] = [
+  {
+    id: 'student',
+    legacyIdx: 0,
+    label: 'ตั๋วชุมชน & นักเรียน',
+    priceBaht: 80,
+    attMult: 1.24,
+    revMult: 0.64,
+    merchMult: 1.06,
+    fanMoodDelta: 2,
+    desc: 'ดันคนดูเต็มสนาม ขวัญแฟนพุ่ง (+2/เกมเหย้า)'
+  },
+  {
+    id: 'budget',
+    legacyIdx: 0,
+    label: 'ตั๋วประหยัดเต็มสนาม',
+    priceBaht: 120,
+    attMult: 1.14,
+    revMult: 0.82,
+    merchMult: 1.03,
+    fanMoodDelta: 1,
+    desc: 'ราคาเข้าถึงง่าย เพิ่มฐานแฟนบอล (+1/เกมเหย้า)'
+  },
+  {
+    id: 'standard',
+    legacyIdx: 1,
+    label: 'ตั๋วราคากลางมาตรฐาน',
+    priceBaht: 180,
+    attMult: 1.0,
+    revMult: 1.0,
+    merchMult: 1.0,
+    fanMoodDelta: 0,
+    desc: 'สมดุลระหว่างจำนวนผู้ชมและรายได้สโมสร'
+  },
+  {
+    id: 'prime',
+    legacyIdx: 1,
+    label: 'ตั๋วโซนมีหลังคา',
+    priceBaht: 240,
+    attMult: 0.91,
+    revMult: 1.13,
+    merchMult: 1.04,
+    fanMoodDelta: 0,
+    desc: 'ราคาพรีเมียมระดับกลาง ไม่เสียความนิยมแฟน'
+  },
+  {
+    id: 'premium',
+    legacyIdx: 2,
+    label: 'ตั๋วราคาแพงพรีเมียม',
+    priceBaht: 320,
+    attMult: 0.82,
+    revMult: 1.24,
+    merchMult: 1.06,
+    fanMoodDelta: -1,
+    desc: 'เน้นทำกำไรสูง คนดูบางตาลงเล็กน้อย'
+  },
+  {
+    id: 'vip',
+    legacyIdx: 2,
+    label: 'ตั๋ว VIP ฮอสพิทอลลิตี้',
+    priceBaht: 450,
+    attMult: 0.68,
+    revMult: 1.4,
+    merchMult: 1.16,
+    fanMoodDelta: -1,
+    minStadiumLv: 2,
+    desc: 'โซน VIP พร้อมแพ็กเกจอาหาร ผู้ชมช้อปของสโมสรหนัก (+16%)'
+  },
+  {
+    id: 'royal',
+    legacyIdx: 2,
+    label: 'บ็อกซ์หรูเอ็กซ์คลูซีฟ',
+    priceBaht: 620,
+    attMult: 0.56,
+    revMult: 1.56,
+    merchMult: 1.26,
+    fanMoodDelta: -2,
+    minStadiumLv: 4,
+    desc: 'ห้องรับรองพิเศษระดับองค์กร รายได้ต่อใบสูงสุด (+26% สโตร์)'
+  }
+];
+
+export function resolveTicketPlan(s?: Pick<GameState, 'ticketPlan' | 'tp' | 'st'> | null): TicketPricingPlanDef {
+  const stLv = s?.st ?? 1;
+  if (s?.ticketPlan) {
+    const found = TICKET_PRICING_PLANS.find((p) => p.id === s.ticketPlan);
+    if (found && (!found.minStadiumLv || stLv >= found.minStadiumLv)) return found;
+  }
+  const legacyTp = s?.tp ?? 1;
+  if (legacyTp === 0) return TICKET_PRICING_PLANS[1];
+  if (legacyTp === 2) return TICKET_PRICING_PLANS[4];
+  return TICKET_PRICING_PLANS[2];
+}
+
+export interface MainSponsorPackageDef {
+  idx: number;
+  title: string;
+  brand: string;
+  tag: string;
+  desc: string;
+  merchBoost?: number;
+}
+
+export const MAIN_SPONSOR_PACKAGES: readonly MainSponsorPackageDef[] = [
+  {
+    idx: 0,
+    title: 'แพ็กเกจมั่นคงสม่ำเสมอ',
+    brand: 'ไทยลีก อินชัวรันซ์',
+    tag: 'คงที่ทุกนัด',
+    desc: 'รับรายได้คงที่ทุกแมตช์ทั้งเหย้าและเยือน ไม่เสี่ยงตามผล'
+  },
+  {
+    idx: 1,
+    title: 'แพ็กเกจโบนัสชัยชนะ',
+    brand: 'กระทิงทอง เอเนอร์จี',
+    tag: 'ชนะรับหนัก',
+    desc: 'รายได้พื้นฐานต่ำกว่านิด แต่รับเงินก้อนโตเมื่อชนะ'
+  },
+  {
+    idx: 2,
+    title: 'แพ็กเกจบิ๊กแมตช์ & ดาร์บี้',
+    brand: 'สยาม ออโต้ โมบิล',
+    tag: 'โบนัสดาร์บี้',
+    desc: 'จ่ายหนักเป็นพิเศษเมื่อลงสนามเจอกับคู่ปรับร่วมเมือง'
+  },
+  {
+    idx: 3,
+    title: 'แพ็กเกจเกมรุกยิงกระหน่ำ',
+    brand: 'สเตเดียม ทีวี พลัส',
+    tag: 'โบนัสยิงประตู',
+    desc: 'ยิงได้ ≥ 2 ลูก รับโบนัสเพิ่ม และยิง ≥ 3 ลูก รับโบนัสสองเท่า'
+  },
+  {
+    idx: 4,
+    title: 'แพ็กเกจคลีนชีตเกมรับแกร่ง',
+    brand: 'แอโร่การ์ด คอร์ป',
+    tag: 'โบนัสคลีนชีต',
+    desc: 'ไม่เสียประตูในแมตช์นั้น รับโบนัสเกมรับทันที'
+  },
+  {
+    idx: 5,
+    title: 'แพ็กเกจทัวร์ & ผู้ชมเต็มสนาม',
+    brand: 'สยามสกาย แอร์เวย์ส',
+    tag: 'เยือน/คนดูแน่น',
+    desc: 'รับโบนัสเมื่อชนะเกมเยือน หรือเกมเหย้ามีผู้ชม ≥ 75%'
+  },
+  {
+    idx: 6,
+    title: 'แพ็กเกจพันธมิตรลีกใหญ่',
+    brand: 'บางกอก แบงก์ พรีเมียร์',
+    tag: 'ฐานสูง',
+    desc: 'รายได้พื้นฐานสูง พร้อมโบนัสเพิ่มเมื่อคว้าชัยในบ้าน'
+  },
+  {
+    idx: 7,
+    title: 'ไทเทิลสปอนเซอร์ระดับแชมป์',
+    brand: 'อัลตร้า 5G ไทยแลนด์',
+    tag: 'ท็อปไทเทิล',
+    desc: 'รายได้สูงสุด + โบนัสชนะ + ช่วยบูสต์ยอดขายเมกะสโตร์ +10%',
+    merchBoost: 0.1
+  }
+];
+
+export function evaluateMainSponsorEligibility(pkgIdx: number, s: Pick<GameState, 'fan' | 'mgrRep'>, me: Team): { ok: boolean; reqText: string } {
+  const fans = s.fan ?? 55;
+  const rep = s.mgrRep ?? 50;
+  if (pkgIdx <= 3) return { ok: true, reqText: 'พร้อมเลือกใช้งานทันที' };
+  if (pkgIdx === 4) return { ok: true, reqText: 'พร้อมเลือกใช้งานทันที' };
+  if (pkgIdx === 5) {
+    const ok = me.tier >= 1 || fans >= 45;
+    return { ok, reqText: ok ? 'ปลดล็อกแล้ว' : 'ต้องการลีก D2+ หรือขวัญแฟน ≥ 45%' };
+  }
+  if (pkgIdx === 6) {
+    const ok = me.tier >= 1 || fans >= 65;
+    return { ok, reqText: ok ? 'ปลดล็อกแล้ว' : 'ต้องการลีก D2+ หรือขวัญแฟน ≥ 65%' };
+  }
+  const ok = me.tier >= 2 || rep >= 85;
+  return { ok, reqText: ok ? 'ปลดล็อกแล้ว' : 'ต้องการลีกสูงสุด (D1) หรือชื่อเสียงผู้จัดการ ≥ 85' };
+}
+
+export function calcMainSponsorPayout(
+  s: Pick<GameState, 'sp' | 'promo'>,
+  me: Team,
+  opts?: { diff?: number; isDerby?: boolean; myGoals?: number; oppGoals?: number; isHome?: boolean; attPct?: number }
+) {
+  const spIdx = clamp(s.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
+  const t = me.tier;
+  const promoMul = s.promo === 2 ? 1.35 : 1;
+  const diff = opts?.diff ?? 0;
+  const myG = opts?.myGoals ?? 0;
+  const oppG = opts?.oppGoals ?? 0;
+  let base = 8 + t * 6;
+  let bonus = 0;
+  let bonusLabel = '';
+  let previewText = '';
+
+  switch (spIdx) {
+    case 0:
+      base = 8 + t * 6;
+      previewText = `${fmtMoneyNum(base)} / นัด`;
+      break;
+    case 1:
+      base = 4 + t * 4;
+      previewText = `${fmtMoneyNum(base)} + ชนะ ${fmtMoneyNum(10 + t * 6)}`;
+      if (diff > 0) {
+        bonus = 10 + t * 6;
+        bonusLabel = 'โบนัสชนะ';
+      }
+      break;
+    case 2:
+      base = 5 + t * 5;
+      previewText = `${fmtMoneyNum(base)} + ดาร์บี้ ${fmtMoneyNum(18 + t * 8)}`;
+      if (opts?.isDerby) {
+        bonus = 18 + t * 8;
+        bonusLabel = 'โบนัสดาร์บี้';
+      }
+      break;
+    case 3:
+      base = 5 + t * 4;
+      previewText = `${fmtMoneyNum(base)} + ยิง 2+/3+ ลูก (${fmtMoneyNum(6 + t * 3)}/${fmtMoneyNum(11 + t * 5)})`;
+      if (myG >= 3) {
+        bonus = 11 + t * 5;
+        bonusLabel = 'โบนัสยิง 3+ ลูก';
+      } else if (myG >= 2) {
+        bonus = 6 + t * 3;
+        bonusLabel = 'โบนัสยิง 2+ ลูก';
+      }
+      break;
+    case 4:
+      base = 6 + t * 4;
+      previewText = `${fmtMoneyNum(base)} + คลีนชีต ${fmtMoneyNum(9 + t * 4)}`;
+      if (opts && oppG === 0) {
+        bonus = 9 + t * 4;
+        bonusLabel = 'โบนัสคลีนชีต';
+      }
+      break;
+    case 5:
+      base = 6 + t * 5;
+      previewText = `${fmtMoneyNum(base)} + ชนะเยือน/คนดู 75% ${fmtMoneyNum(8 + t * 4)}`;
+      if (opts && ((!opts.isHome && diff > 0) || (opts.isHome && (opts.attPct ?? 0) >= 75))) {
+        bonus = 8 + t * 4;
+        bonusLabel = opts.isHome ? 'โบนัสผู้ชมแน่นสนาม' : 'โบนัสชนะเกมเยือน';
+      }
+      break;
+    case 6:
+      base = 10 + t * 6;
+      previewText = `${fmtMoneyNum(base)} + ชนะเหย้า ${fmtMoneyNum(6 + t * 3)}`;
+      if (opts?.isHome && diff > 0) {
+        bonus = 6 + t * 3;
+        bonusLabel = 'โบนัสชนะเหย้า';
+      }
+      break;
+    case 7:
+      base = 13 + t * 7;
+      previewText = `${fmtMoneyNum(base)} + ชนะ ${fmtMoneyNum(9 + t * 4)} (+สโตร์ 10%)`;
+      if (diff > 0) {
+        bonus = 9 + t * 4;
+        bonusLabel = 'โบนัสแชมป์';
+      }
+      break;
+  }
+
+  return {
+    base,
+    bonus,
+    bonusLabel,
+    previewText,
+    total: Math.round((base + bonus) * promoMul),
+    merchBoost: MAIN_SPONSOR_PACKAGES[spIdx]?.merchBoost || 0
+  };
+}
+
+export interface PartnerDealCatalogDef {
+  id: string;
+  category: string;
+  name: string;
+  basePerMatch: number;
+  matches: number;
+  baseSignBonus: number;
+  merchBoost?: number;
+  checkReq: (s: Pick<GameState, 'fan' | 'merchLv' | 'st' | 'money' | 'mgrRep'>, me: Team) => { ok: boolean; text: string };
+}
+
+export const PARTNER_DEAL_CATALOG: readonly PartnerDealCatalogDef[] = [
+  {
+    id: 'drink',
+    category: 'เครื่องดื่ม',
+    name: 'น้ำแร่ & เกลือแร่ สปอร์ตไทย',
+    basePerMatch: 5,
+    matches: 8,
+    baseSignBonus: 12,
+    checkReq: () => ({ ok: true, text: 'พร้อมเซ็นสัญญาได้ทันที' })
+  },
+  {
+    id: 'snack',
+    category: 'อาหารว่าง',
+    name: 'ทาโร่ & สแน็คเชียร์บอล',
+    basePerMatch: 5,
+    matches: 10,
+    baseSignBonus: 10,
+    checkReq: () => ({ ok: true, text: 'พร้อมเซ็นสัญญาได้ทันที' })
+  },
+  {
+    id: 'apparel',
+    category: 'อุปกรณ์กีฬา',
+    name: 'แบรนด์ชุดกีฬาลูกหนังไทย',
+    basePerMatch: 7,
+    matches: 10,
+    baseSignBonus: 15,
+    merchBoost: 0.06,
+    checkReq: (s) => {
+      const ok = (s.fan ?? 55) >= 45;
+      return { ok, text: 'ต้องการขวัญแฟนบอล ≥ 45% (+สโตร์ 6%)' };
+    }
+  },
+  {
+    id: 'tyre',
+    category: 'ยานยนต์',
+    name: 'ยางรถยนต์สยามไดร์ฟ',
+    basePerMatch: 7,
+    matches: 12,
+    baseSignBonus: 18,
+    checkReq: (s) => {
+      const ok = (s.st ?? 1) >= 2 || (s.fan ?? 55) >= 50;
+      return { ok, text: 'ต้องการสนาม Lv.2+ หรือขวัญแฟน ≥ 50%' };
+    }
+  },
+  {
+    id: 'convenience',
+    category: 'ค้าปลีก',
+    name: 'มาร์ท 24 ชม. & คูปองแฟนคลับ',
+    basePerMatch: 8,
+    matches: 10,
+    baseSignBonus: 16,
+    merchBoost: 0.08,
+    checkReq: (s) => {
+      const ok = (s.merchLv ?? 1) >= 2 || (s.fan ?? 55) >= 52;
+      return { ok, text: 'ต้องการเมกะสโตร์ Lv.2+ หรือแฟน ≥ 52% (+สโตร์ 8%)' };
+    }
+  },
+  {
+    id: 'ecom',
+    category: 'อีคอมเมิร์ซ',
+    name: 'ไทยมอลล์ ออนไลน์สโตร์',
+    basePerMatch: 9,
+    matches: 12,
+    baseSignBonus: 20,
+    merchBoost: 0.15,
+    checkReq: (s) => {
+      const ok = (s.merchLv ?? 1) >= 3;
+      return { ok, text: 'ต้องการเมกะสโตร์ Lv.3+ (+สโตร์ 15%)' };
+    }
+  },
+  {
+    id: 'telecom',
+    category: 'โทรคมนาคม',
+    name: 'เครือข่าย 5G & ถ่ายทอดสด',
+    basePerMatch: 10,
+    matches: 12,
+    baseSignBonus: 22,
+    checkReq: (s, me) => {
+      const ok = me.tier >= 1 || (s.fan ?? 55) >= 65;
+      return { ok, text: 'ต้องการอยู่ระดับ D2+ หรือขวัญแฟน ≥ 65%' };
+    }
+  },
+  {
+    id: 'fintech',
+    category: 'การเงิน',
+    name: 'ดิจิทัลเพย์ & บัตรสมาชิกคลับ',
+    basePerMatch: 11,
+    matches: 14,
+    baseSignBonus: 25,
+    merchBoost: 0.05,
+    checkReq: (s, me) => {
+      const ok = me.tier >= 1 && (s.money ?? 0) >= 0;
+      return { ok, text: 'ต้องการอยู่ระดับ D2+ และงบสโมสรไม่ติดลบ' };
+    }
+  },
+  {
+    id: 'airline',
+    category: 'สายการบิน',
+    name: 'ไทยวิงส์ แอร์ไลน์',
+    basePerMatch: 13,
+    matches: 14,
+    baseSignBonus: 32,
+    checkReq: (s, me) => {
+      const ok = me.tier >= 2 || (s.mgrRep ?? 50) >= 75;
+      return { ok, text: 'ต้องการลีกสูงสุด (D1) หรือชื่อเสียงผู้จัดการ ≥ 75' };
+    }
+  },
+  {
+    id: 'asia_tech',
+    category: 'ระดับทวีป',
+    name: 'เอเชีย โปร-เทค & คอนเทนต์',
+    basePerMatch: 15,
+    matches: 15,
+    baseSignBonus: 40,
+    merchBoost: 0.12,
+    checkReq: (s, me) => {
+      const ok = me.tier >= 2 && (s.fan ?? 55) >= 72;
+      return { ok, text: 'ต้องการลีกสูงสุด (D1) และขวัญแฟน ≥ 72% (+สโตร์ 12%)' };
+    }
+  }
+];
+
+export function getMaxPartnerSlots(s: Pick<GameState, 'merchLv'>): number {
+  return (s.merchLv ?? 1) >= 5 ? 3 : 2;
+}
+
+export function getActivePartnerDeals(s: Pick<GameState, 'sponsorDeal' | 'sponsorDeals'>): ActivePartnerDeal[] {
+  if (Array.isArray(s.sponsorDeals)) return s.sponsorDeals.filter((d) => d && d.left > 0);
+  if (s.sponsorDeal && s.sponsorDeal.left > 0) return [s.sponsorDeal];
+  return [];
+}
+
+export function syncPartnerDealsField(s: GameState, deals: ActivePartnerDeal[]) {
+  const clean = deals.filter((d) => d && d.left > 0);
+  s.sponsorDeals = clean;
+  s.sponsorDeal = clean[0] || null;
+}
+
+export interface SouvenirCatalogDef {
+  id: SouvenirSaleRecord['id'];
+  name: string;
+  icon: string;
+  unitPriceBaht: number;
+  demandWeight: number;
+}
+
+export const SOUVENIR_CATALOG: readonly SouvenirCatalogDef[] = [
+  { id: 'scarf', name: 'ผ้าพันคอเชียร์สโมสร', icon: '🧣', unitPriceBaht: 250, demandWeight: 1.45 },
+  { id: 'keychain', name: 'พวงกุญแจโลหะตราทีม', icon: '🔑', unitPriceBaht: 120, demandWeight: 1.8 },
+  { id: 'cap', name: 'หมวกแก๊ปตราสโมสร', icon: '🧢', unitPriceBaht: 320, demandWeight: 0.95 },
+  { id: 'mug', name: 'แก้วมัคสโมสร', icon: '☕', unitPriceBaht: 190, demandWeight: 0.85 },
+  { id: 'poster', name: 'โปสเตอร์ & การ์ดทีม', icon: '🖼️', unitPriceBaht: 150, demandWeight: 1.1 },
+  { id: 'ball', name: 'ลูกฟุตบอลมินิที่ระลึก', icon: '⚽', unitPriceBaht: 390, demandWeight: 0.7 }
+];
+
+export interface MegastoreStockTierDef {
+  idx: number;
+  label: string;
+  desc: string;
+  blankJerseyBaht: number;
+  printedJerseyBaht: number;
+  souvenirPriceMult: number;
+  volumeMult: number;
+  costRate: number;
+}
+
+export const MEGASTORE_STOCK_TIERS: readonly MegastoreStockTierDef[] = [
+  {
+    idx: 0,
+    label: 'เกรดแฟนบอล (ประหยัด)',
+    desc: 'ต้นทุนต่ำ ราคาย่อมเยา ขายออกง่ายสำหรับทีมเริ่มสร้างฐานแฟน',
+    blankJerseyBaht: 490,
+    printedJerseyBaht: 690,
+    souvenirPriceMult: 0.9,
+    volumeMult: 0.94,
+    costRate: 0.42
+  },
+  {
+    idx: 1,
+    label: 'เกรดสโมสร (มาตรฐาน)',
+    desc: 'คุณภาพผ้าแข่งมาตรฐาน สกรีนชื่อเบอร์คมชัด สมดุลกำไรและปริมาณขาย',
+    blankJerseyBaht: 590,
+    printedJerseyBaht: 840,
+    souvenirPriceMult: 1.0,
+    volumeMult: 1.04,
+    costRate: 0.37
+  },
+  {
+    idx: 2,
+    label: 'เกรดนักเตะ (พรีเมียม)',
+    desc: 'ผ้าแข่งเกรดโปรพร้อมอาร์มลีก ราคาต่อตัวสูงสุด สร้างกำไรระยะยาวเมื่อมีทุนสต็อก',
+    blankJerseyBaht: 690,
+    printedJerseyBaht: 990,
+    souvenirPriceMult: 1.15,
+    volumeMult: 1.15,
+    costRate: 0.33
+  }
+];
+
+function createEmptyMegastoreState(initialCapital = 35): ClubMegastoreState {
+  return {
+    capital: initialCapital,
+    stockTier: 1,
+    capitalInvestedSeason: initialCapital,
+    blankJerseyUnits: 0,
+    blankJerseyRev: 0,
+    playerJerseys: {},
+    souvenirs: {},
+    souvenirRevs: {},
+    seasonCost: 0,
+    seasonRev: 0,
+    allTimeBlankUnits: 0,
+    allTimeBlankRev: 0,
+    allTimePrintedUnits: 0,
+    allTimePrintedRev: 0,
+    allTimeSouvenirUnits: 0,
+    allTimeSouvenirRev: 0,
+    allTimePlayerJerseys: {},
+    seasonHistory: []
+  };
+}
+
+function getSquadJerseyPopularityWeights(me: Team): { q: Player; no: number; weight: number }[] {
+  const starters = new Set(xi(me).map((z) => z.n));
+  const list = me.sq.map((q) => {
+    const no = q.no || getShirtNo(me, q);
+    const ovFactor = Math.pow(Math.max(1, q.ov - 35), 1.48);
+    const perfFactor = (q.sg || 0) * 16 + (q.sa || 0) * 10 + (q.motm || 0) * 14 + (q.cs || 0) * 7 + (q.sp || 0) * 1.2;
+    const roleMul =
+      (q.me ? 1.4 : 1) *
+      (me.cap === q.n ? 1.28 : 1) *
+      (q.pos === 'FW' ? 1.32 : q.pos === 'MF' ? 1.16 : q.pos === 'DF' ? 0.92 : 0.85) *
+      ([7, 9, 10, 11].includes(no) ? 1.18 : 1) *
+      (starters.has(q.n) ? 1.38 : 0.45);
+    return {
+      q,
+      no,
+      weight: Math.max(1, (ovFactor + perfFactor) * roleMul)
+    };
+  });
+  return list.sort((a, b) => b.weight - a.weight);
+}
+
+function applyMerchSalesBatch(
+  ms: ClubMegastoreState,
+  me: Team,
+  grossTargetK: number,
+  options?: { isDeterministicSeed?: boolean; chargeCapital?: boolean }
+): { grossRevK: number; prodCostK: number; netClubCashK: number } {
+  const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const jitter = options?.isDeterministicSeed ? 1 : 0.94 + Math.random() * 0.14;
+  const targetK = Math.max(1.5, grossTargetK * tierDef.volumeMult * jitter);
+
+  const printedBudget = targetK * 0.48;
+  const blankBudget = targetK * 0.23;
+  const souvenirBudget = targetK * 0.29;
+
+  // 1. Blank unprinted jerseys
+  const blankUnitPriceK = tierDef.blankJerseyBaht / 1000;
+  const blankUnits = Math.max(1, Math.round(blankBudget / blankUnitPriceK));
+  const blankRev = +(blankUnits * blankUnitPriceK).toFixed(2);
+  ms.blankJerseyUnits += blankUnits;
+  ms.blankJerseyRev = +(ms.blankJerseyRev + blankRev).toFixed(2);
+  ms.allTimeBlankUnits += blankUnits;
+  ms.allTimeBlankRev = +(ms.allTimeBlankRev + blankRev).toFixed(2);
+
+  // 2. Player printed jerseys (name + number)
+  const printedUnitPriceK = tierDef.printedJerseyBaht / 1000;
+  const totalPrintedUnits = Math.max(1, Math.round(printedBudget / printedUnitPriceK));
+  const weightedSquad = getSquadJerseyPopularityWeights(me);
+  const weightSum = weightedSquad.reduce((s, x) => s + x.weight, 0) || 1;
+  let remainingUnits = totalPrintedUnits;
+  let printedRevTotal = 0;
+  let printedUnitsAdded = 0;
+
+  weightedSquad.forEach((item, idx) => {
+    if (remainingUnits <= 0) return;
+    const share = item.weight / weightSum;
+    const uJitter = options?.isDeterministicSeed ? 1 : 0.85 + Math.random() * 0.32;
+    let units =
+      idx === 0
+        ? Math.max(1, Math.round(totalPrintedUnits * share * uJitter))
+        : Math.round(totalPrintedUnits * share * uJitter);
+    units = Math.min(remainingUnits, Math.max(0, units));
+    if (idx === weightedSquad.length - 1 && remainingUnits > 0 && weightedSquad.length <= 6) {
+      units = remainingUnits;
+    }
+    if (units <= 0) return;
+    remainingUnits -= units;
+    const rev = +(units * printedUnitPriceK).toFixed(2);
+    printedRevTotal += rev;
+    printedUnitsAdded += units;
+
+    const prevSeason = ms.playerJerseys[item.q.n];
+    ms.playerJerseys[item.q.n] = {
+      name: item.q.n,
+      no: item.no,
+      pos: item.q.pos,
+      ro: item.q.ro,
+      units: (prevSeason?.units || 0) + units,
+      revenue: +((prevSeason?.revenue || 0) + rev).toFixed(2)
+    };
+
+    const prevAll = ms.allTimePlayerJerseys[item.q.n];
+    ms.allTimePlayerJerseys[item.q.n] = {
+      name: item.q.n,
+      no: item.no,
+      pos: item.q.pos,
+      ro: item.q.ro,
+      units: (prevAll?.units || 0) + units,
+      revenue: +((prevAll?.revenue || 0) + rev).toFixed(2)
+    };
+  });
+
+  if (remainingUnits > 0 && weightedSquad[0]) {
+    const star = weightedSquad[0];
+    const extraRev = +(remainingUnits * printedUnitPriceK).toFixed(2);
+    printedRevTotal += extraRev;
+    printedUnitsAdded += remainingUnits;
+    const prevS = ms.playerJerseys[star.q.n];
+    ms.playerJerseys[star.q.n] = {
+      name: star.q.n,
+      no: star.no,
+      pos: star.q.pos,
+      ro: star.q.ro,
+      units: (prevS?.units || 0) + remainingUnits,
+      revenue: +((prevS?.revenue || 0) + extraRev).toFixed(2)
+    };
+    const prevA = ms.allTimePlayerJerseys[star.q.n];
+    ms.allTimePlayerJerseys[star.q.n] = {
+      name: star.q.n,
+      no: star.no,
+      pos: star.q.pos,
+      ro: star.q.ro,
+      units: (prevA?.units || 0) + remainingUnits,
+      revenue: +((prevA?.revenue || 0) + extraRev).toFixed(2)
+    };
+  }
+  ms.allTimePrintedUnits += printedUnitsAdded;
+  ms.allTimePrintedRev = +(ms.allTimePrintedRev + printedRevTotal).toFixed(2);
+
+  // 3. Club souvenirs
+  const totalSouvWeight = SOUVENIR_CATALOG.reduce((s, item) => s + item.demandWeight, 0);
+  let souvRevTotal = 0;
+  let souvUnitsAdded = 0;
+  SOUVENIR_CATALOG.forEach((sku) => {
+    const unitPriceK = (sku.unitPriceBaht * tierDef.souvenirPriceMult) / 1000;
+    const shareBudget = souvenirBudget * (sku.demandWeight / totalSouvWeight);
+    const uJitter = options?.isDeterministicSeed ? 1 : 0.84 + Math.random() * 0.34;
+    const units = Math.max(1, Math.round((shareBudget / unitPriceK) * uJitter));
+    const rev = +(units * unitPriceK).toFixed(2);
+    ms.souvenirs[sku.id] = (ms.souvenirs[sku.id] || 0) + units;
+    ms.souvenirRevs[sku.id] = +((ms.souvenirRevs[sku.id] || 0) + rev).toFixed(2);
+    souvRevTotal += rev;
+    souvUnitsAdded += units;
+  });
+  ms.allTimeSouvenirUnits += souvUnitsAdded;
+  ms.allTimeSouvenirRev = +(ms.allTimeSouvenirRev + souvRevTotal).toFixed(2);
+
+  const grossRevK = +(blankRev + printedRevTotal + souvRevTotal).toFixed(2);
+  const rawCostK = +(grossRevK * tierDef.costRate).toFixed(2);
+
+  let netClubCashK = Math.round(grossRevK);
+  if (options?.chargeCapital !== false) {
+    if (ms.capital >= rawCostK) {
+      ms.capital = +(ms.capital - rawCostK).toFixed(2);
+      netClubCashK = Math.max(1, Math.round(grossRevK));
+    } else {
+      const capUsed = ms.capital;
+      const shortfall = +(rawCostK - capUsed).toFixed(2);
+      ms.capital = 0;
+      const consignmentFee = +(shortfall * 1.15).toFixed(2);
+      netClubCashK = Math.max(1, Math.round(grossRevK - consignmentFee));
+    }
+  }
+
+  ms.seasonCost = +(ms.seasonCost + rawCostK).toFixed(2);
+  ms.seasonRev = +(ms.seasonRev + grossRevK).toFixed(2);
+
+  return {
+    grossRevK,
+    prodCostK: rawCostK,
+    netClubCashK
+  };
+}
+
+export function ensureMegastoreState(s: GameState): ClubMegastoreState {
+  if (!s.megastore) {
+    const fresh = createEmptyMegastoreState(35);
+    const me = s.teams[s.me];
+    const priorMerchLogs = (s.finLog || []).filter(
+      (item) => item.s === (s.season ?? 1) && item.amt > 0 && /ของที่ระลึก|เมกะสโตร์/.test(item.t)
+    );
+    if (me && priorMerchLogs.length > 0) {
+      const totalPriorRev = priorMerchLogs.reduce((sum, x) => sum + x.amt, 0);
+      applyMerchSalesBatch(fresh, me, totalPriorRev, { isDeterministicSeed: true, chargeCapital: false });
+      fresh.seasonCost = +(totalPriorRev * 0.37).toFixed(2);
+    }
+    s.megastore = fresh;
+  }
+  return s.megastore;
+}
+
+export function simulateHomeMegastoreMatchSales(
+  s: GameState,
+  me: Team,
+  fanEff: number,
+  merchCondMul: number,
+  extraMerchMult = 1
+): { grossRevK: number; prodCostK: number; netClubCashK: number } {
+  const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
+  if (merchLv <= 0) return { grossRevK: 0, prodCostK: 0, netClubCashK: 0 };
+  const ms = ensureMegastoreState(s);
+  const myFans = ensureTeamFans(me);
+  const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
+  const stockAvailMul = ms.capital >= 3 ? 1.16 : 0.85;
+  const targetK = (2.5 + merchLv * 2.6) * (fanEff / 55) * fanScale * merchCondMul * extraMerchMult * stockAvailMul;
+  return applyMerchSalesBatch(ms, me, targetK, { isDeterministicSeed: false, chargeCapital: true });
+}
+
+export function getMegastoreProjection(s: GameState, me: Team) {
+  const ms = s.megastore || createEmptyMegastoreState(35);
+  const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
+  const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'merchLv') / 100);
+  const bMods = getActiveBoardModifiers(s);
+  const fanEff = clamp((s.fan ?? 55) + bMods.fan, 5, 100);
+  const myFans = ensureTeamFans(me);
+  const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
+  const tPlan = resolveTicketPlan(s);
+  const mainSp = calcMainSponsorPayout(s, me);
+  const partnerBoost = getActivePartnerDeals(s).reduce((sum, d) => sum + (d.merchBoost || 0), 0);
+  const extraMerchMult = tPlan.merchMult * (1 + mainSp.merchBoost + partnerBoost);
+  const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+  const stockAvailMul = ms.capital >= 3 ? 1.16 : 0.85;
+  const estMatchSales =
+    merchLv <= 0
+      ? 0
+      : Math.round((2.5 + merchLv * 2.6) * (fanEff / 55) * fanScale * merchCondMul * extraMerchMult * stockAvailMul * tierDef.volumeMult);
+  return {
+    estMatchSales,
+    tierDef,
+    extraMerchMult,
+    stockReady: ms.capital >= Math.max(2, Math.round(estMatchSales * tierDef.costRate))
+  };
+}
+
+export function archiveSeasonMegastore(s: GameState): MegastoreSeasonArchive | null {
+  if (s.mode !== 'm') return null;
+  const ms = ensureMegastoreState(s);
+  const curSeason = s.season ?? 1;
+  const existingIdx = ms.seasonHistory.findIndex((h) => h.season === curSeason);
+
+  const playerJerseys = Object.values(ms.playerJerseys)
+    .slice()
+    .sort((a, b) => b.units - a.units || b.revenue - a.revenue);
+  const printedUnits = playerJerseys.reduce((sum, p) => sum + p.units, 0);
+  const printedRev = +playerJerseys.reduce((sum, p) => sum + p.revenue, 0).toFixed(2);
+  const tierDef = MEGASTORE_STOCK_TIERS[clamp(ms.stockTier ?? 1, 0, 2)] || MEGASTORE_STOCK_TIERS[1];
+
+  const souvenirs: SouvenirSaleRecord[] = SOUVENIR_CATALOG.map((sku) => ({
+    id: sku.id,
+    name: sku.name,
+    icon: sku.icon,
+    unitPriceBaht: Math.round(sku.unitPriceBaht * tierDef.souvenirPriceMult),
+    units: ms.souvenirs[sku.id] || 0,
+    revenue: +(ms.souvenirRevs[sku.id] || 0).toFixed(2)
+  }));
+  const souvUnits = souvenirs.reduce((sum, x) => sum + x.units, 0);
+  const souvRev = +souvenirs.reduce((sum, x) => sum + x.revenue, 0).toFixed(2);
+
+  const totalRevenue = +(ms.seasonRev || ms.blankJerseyRev + printedRev + souvRev).toFixed(2);
+  const productionCost = +ms.seasonCost.toFixed(2);
+
+  const entry: MegastoreSeasonArchive = {
+    season: curSeason,
+    capitalInvested: +ms.capitalInvestedSeason.toFixed(2),
+    productionCost,
+    totalRevenue,
+    netProfit: +(totalRevenue - productionCost).toFixed(2),
+    blankJerseys: { units: ms.blankJerseyUnits, revenue: +ms.blankJerseyRev.toFixed(2) },
+    printedJerseysTotal: { units: printedUnits, revenue: printedRev },
+    souvenirsTotal: { units: souvUnits, revenue: souvRev },
+    topPlayer: playerJerseys[0] ? { ...playerJerseys[0] } : null,
+    playerJerseys,
+    souvenirs
+  };
+
+  if (existingIdx >= 0) {
+    ms.seasonHistory[existingIdx] = entry;
+  } else {
+    ms.seasonHistory = [entry, ...ms.seasonHistory].sort((a, b) => b.season - a.season);
+  }
+  return entry;
+}
+
 export function computeMatchAttendance(
   h: Team,
   a: Team,
@@ -1343,8 +2134,8 @@ export function computeMatchAttendance(
   const homeFans = ensureTeamFans(h);
   const awayFans = ensureTeamFans(a);
   const isUserHome = !!(s && h.id === s.me);
-  const tpIdx = isUserHome ? clamp(s?.tp ?? 1, 0, 2) : 1;
-  const priceMult = [1.14, 1.0, 0.82][tpIdx];
+  const tPlan = isUserHome ? resolveTicketPlan(s) : TICKET_PRICING_PLANS[2];
+  const priceMult = tPlan.attMult;
   const promoMult = isUserHome && s?.promo === 1 ? 1.15 : 1.0;
   const moodRatio = isUserHome && s ? clamp(((s.fan ?? 55) + getActiveBoardModifiers(s).fan) / 100, 0.15, 1.0) : 0.62;
   const recentWins = (h.fm || '').slice(-4).split('').filter((c) => c === 'W').length;
@@ -1376,10 +2167,8 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
   const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
   const stCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'st') / 100);
-  const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'merchLv') / 100);
   const cap = STADIUM_CAPACITIES[stLv - 1] || 3500;
-  const tpIdx = s.tp ?? 1;
-  const spIdx = s.sp ?? 0;
+  const tPlan = resolveTicketPlan(s);
   const bMods = getActiveBoardModifiers(s);
   const fanVal = clamp((s.fan ?? 55) + bMods.fan, 5, 100);
   const myFans = ensureTeamFans(me);
@@ -1390,12 +2179,13 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const attEst = computeMatchAttendance(me, oppTeam || me, s, { kind: 'league', derby: !!s.derby });
   const estAtt = attEst.att;
   const attRate = attEst.pct / 100;
-  const ticketPriceMult = [0.82, 1.0, 1.24][tpIdx];
+  const ticketPriceMult = tPlan.revMult;
   const estTicket = Math.round((8 + stLv * 6) * (fanVal / 60) * fanScale * ticketPriceMult * (s.promo === 1 ? 1.35 : 1) * stCondMul);
-  const estMerch = merchLv <= 0 ? 0 : Math.round((2 + merchLv * 2.5) * (fanVal / 55) * fanScale * merchCondMul);
-  const baseSponsor = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
-  const estSponsor = Math.round(baseSponsor * (s.promo === 2 ? 1.35 : 1));
-  const dealIncome = s.sponsorDeal ? s.sponsorDeal.perMatch : 0;
+  const estMerch = merchLv <= 0 ? 0 : getMegastoreProjection(s, me).estMatchSales;
+  const mainSp = calcMainSponsorPayout(s, me);
+  const estSponsor = mainSp.total;
+  const activeDeals = getActivePartnerDeals(s);
+  const dealIncome = activeDeals.reduce((sum, d) => sum + d.perMatch, 0);
   const wageCost = squadWage(me);
   const staffCost = Math.round(getStaffWage(s));
   const loanCost = s.bankLoan ? s.bankLoan.per : 0;
@@ -1410,6 +2200,8 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
     estMerch,
     estSponsor,
     dealIncome,
+    activeDealsCount: activeDeals.length,
+    ticketPlan: tPlan,
     wageCost,
     staffCost,
     loanCost,
@@ -1685,6 +2477,17 @@ export function startSeason(s: GameState) {
 
   const mt = s.teams[s.me].tier;
   s.lg = mt;
+  if (s.mode === 'm') {
+    const ms = ensureMegastoreState(s);
+    ms.blankJerseyUnits = 0;
+    ms.blankJerseyRev = 0;
+    ms.playerJerseys = {};
+    ms.souvenirs = {};
+    ms.souvenirRevs = {};
+    ms.seasonCost = 0;
+    ms.seasonRev = 0;
+    ms.capitalInvestedSeason = 0;
+  }
   s.fx = doubleRoundRobin(s.teams.filter((t) => t.tier === mt).map((t) => t.id));
   s.fxo = {};
   [0, 1, 2]
@@ -3781,14 +4584,20 @@ export function afterMatchDay(
     logFin(s, `ค่าเหนื่อยนักเตะ (${me.sq.length} คน)`, -wg);
     if (stfWg > 0) logFin(s, 'ค่าจ้างทีมงานสตาฟฟ์โค้ช', -stfWg);
 
-    if (s.sponsorDeal && s.sponsorDeal.left > 0) {
-      s.money += s.sponsorDeal.perMatch;
-      logFin(s, `ดีลพาร์ทเนอร์: ${s.sponsorDeal.name}`, s.sponsorDeal.perMatch);
-      s.sponsorDeal.left--;
-      if (s.sponsorDeal.left <= 0) {
-        pushFeed(s, 'การเงิน', `📄 สัญญาสปอนเซอร์ "${s.sponsorDeal.name}" ครบกำหนดแล้ว`, '');
-        s.sponsorDeal = null;
-      }
+    const curDeals = getActivePartnerDeals(s);
+    if (curDeals.length > 0) {
+      const remainingDeals: ActivePartnerDeal[] = [];
+      curDeals.forEach((deal) => {
+        s.money += deal.perMatch;
+        logFin(s, `ดีลพาร์ทเนอร์: ${deal.name}`, deal.perMatch);
+        const nextLeft = deal.left - 1;
+        if (nextLeft > 0) {
+          remainingDeals.push({ ...deal, left: nextLeft });
+        } else {
+          pushFeed(s, 'การเงิน', `📄 สัญญาพาร์ทเนอร์ "${deal.name}" ครบกำหนดแล้ว`, '');
+        }
+      });
+      syncPartnerDealsField(s, remainingDeals);
     }
 
     if (s.bankLoan && s.bankLoan.left > 0) {
@@ -5147,6 +5956,10 @@ export function finishSeasonComputation(s: GameState) {
       : null,
     players: playerStats
   };
+
+  if (s.mode === 'm') {
+    archiveSeasonMegastore(s);
+  }
 
   const existingArchives = (s.seasonArchives || []).filter((rec) => rec.season !== s.season);
   s.seasonArchives = [...existingArchives, archive].sort((a, b) => b.season - a.season);

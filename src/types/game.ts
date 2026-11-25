@@ -665,6 +665,68 @@ export interface FinanceHistoryPoint {
   exp: number;
 }
 
+export interface ActivePartnerDeal {
+  id: string;
+  name: string;
+  category?: string;
+  perMatch: number;
+  left: number;
+  merchBoost?: number;
+}
+
+export interface PlayerJerseySaleRecord {
+  name: string;
+  no: number;
+  pos: Position;
+  ro: SubRole;
+  units: number;
+  revenue: number;
+}
+
+export interface SouvenirSaleRecord {
+  id: 'scarf' | 'cap' | 'keychain' | 'mug' | 'ball' | 'poster';
+  name: string;
+  icon: string;
+  unitPriceBaht: number;
+  units: number;
+  revenue: number;
+}
+
+export interface MegastoreSeasonArchive {
+  season: number;
+  capitalInvested: number;
+  productionCost: number;
+  totalRevenue: number;
+  netProfit: number;
+  blankJerseys: { units: number; revenue: number };
+  printedJerseysTotal: { units: number; revenue: number };
+  souvenirsTotal: { units: number; revenue: number };
+  topPlayer: PlayerJerseySaleRecord | null;
+  playerJerseys: PlayerJerseySaleRecord[];
+  souvenirs: SouvenirSaleRecord[];
+}
+
+export interface ClubMegastoreState {
+  capital: number;
+  stockTier: number;
+  capitalInvestedSeason: number;
+  blankJerseyUnits: number;
+  blankJerseyRev: number;
+  playerJerseys: Record<string, PlayerJerseySaleRecord>;
+  souvenirs: Record<string, number>;
+  souvenirRevs: Record<string, number>;
+  seasonCost: number;
+  seasonRev: number;
+  allTimeBlankUnits: number;
+  allTimeBlankRev: number;
+  allTimePrintedUnits: number;
+  allTimePrintedRev: number;
+  allTimeSouvenirUnits: number;
+  allTimeSouvenirRev: number;
+  allTimePlayerJerseys: Record<string, PlayerJerseySaleRecord>;
+  seasonHistory: MegastoreSeasonArchive[];
+}
+
 export interface GameState {
   ver: number;
   mode: GameMode;
@@ -714,6 +776,7 @@ export interface GameState {
   derby?: number;
   diff?: number;
   tp?: number;
+  ticketPlan?: string;
   sp?: number;
   winBonus?: number;
   promo?: number;
@@ -751,7 +814,9 @@ export interface GameState {
   analyticsLv?: number;
   facCond?: Partial<Record<FacilityKey, number>>;
   staff?: { asst: number; fit: number; scout: number; physio: number; gkCoach?: number; setPieceCoach?: number };
-  sponsorDeal?: { id: string; name: string; perMatch: number; left: number } | null;
+  sponsorDeal?: ActivePartnerDeal | null;
+  sponsorDeals?: ActivePartnerDeal[];
+  megastore?: ClubMegastoreState;
   seasonArchives?: SeasonArchiveRecord[];
 }
 
