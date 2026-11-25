@@ -268,7 +268,7 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
                   </div>
                 </div>
 
-                {/* Visual Hairstyle Grid (All 20 styles with live face preview) */}
+                {/* Visual Hairstyle Grid (All styles with live face preview) */}
                 <div className="space-y-1.5 pt-2 border-t border-[var(--line)]/65">
                   <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
                     เลือกทรงผม ({HS_N.length} ทรง)
@@ -308,7 +308,7 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
                             />
                           </div>
                           <span
-                            className={`text-[10px] mland:text-[8.5px] font-bold truncate w-full text-center ${
+                            className={`text-[10px] mland:text-[8.5px] font-bold leading-tight w-full text-center break-words ${
                               active ? 'text-[var(--g)]' : 'text-[var(--ink)]'
                             }`}
                           >

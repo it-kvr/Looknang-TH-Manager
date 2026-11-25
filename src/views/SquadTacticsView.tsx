@@ -735,7 +735,7 @@ export const SquadTacticsView: React.FC<{
                           SFX.tap();
                           setShowFormationSheet((v) => !v);
                         }}
-                        title="กดเพื่อเปลี่ยนแผนและสไตล์การเล่น"
+                        title="กดเพื่อเปลี่ยนแผนและสไตล์คุมทีม"
                         className={`inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border backdrop-blur-xs shadow-md cursor-pointer transition-colors max-w-full overflow-x-auto no-scrollbar ${
                           showFormationSheet
                             ? 'bg-[var(--surface)] border-[var(--g)] ring-1 ring-[var(--g)]/40 text-[var(--ink)]'
@@ -754,7 +754,7 @@ export const SquadTacticsView: React.FC<{
                     {isMgr && showFormationSheet && (
                       <div className="mt-1.5 w-[275px] sm:w-[310px] mland:w-[250px] max-w-[calc(100%-4px)] p-2 mland:p-1.5 rounded-xl bg-[var(--surface)]/96 backdrop-blur-md border border-[var(--g)]/55 shadow-xl space-y-1.5 mland:space-y-1">
                         <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-                          <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์การเล่น</span>
+                          <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์คุมทีม</span>
                           <button
                             type="button"
                             onClick={() => setShowFormationSheet(false)}
@@ -952,7 +952,7 @@ export const SquadTacticsView: React.FC<{
               <p className="text-[11px] mland:text-[10px] text-[var(--mut)]">ความเข้าใจแผน: <b className="text-[var(--g)]">{me.tacFam ?? 65}%</b> · ยิ่งใช้แผนเดิมนาน ยิ่งได้โบนัสพลังทีม</p>
             </div>
             <div className="flex flex-wrap gap-1.5 text-[11px] mland:text-[10px]">
-              <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">สไตล์: {AR_T[me.tac]}</span>
+              <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">สไตล์คุมทีม: {AR_T[me.tac]}</span>
               <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">เพรส: {['ต่ำ', 'กลาง', 'สูง'][me.press ?? 1]}</span>
               <span className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] font-semibold">จังหวะ: {['ช้า', 'กลาง', 'เร็ว'][me.tempo ?? 1]}</span>
             </div>
@@ -1052,7 +1052,7 @@ export const SquadTacticsView: React.FC<{
 
               <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-1">
                 <div>
-                  <div className="text-xs font-bold mb-1">สไตล์การเล่น (Mentality)</div>
+                  <div className="text-xs font-bold mb-1">สไตล์คุมทีม (Mentality)</div>
                   <div className="flex flex-wrap gap-1.5">
                     {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
                       <button key={k} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })} className={`btn btn-sm ${me.tac === k ? 'btn-primary' : 'btn-secondary'}`}>
@@ -1101,7 +1101,7 @@ export const SquadTacticsView: React.FC<{
                 </div>
 
                 <div>
-                  <div className="text-xs font-bold mb-1">สไตล์การจ่ายบอล</div>
+                  <div className="text-xs font-bold mb-1">สไตล์การจ่ายบอลของทีม</div>
                   <div className="flex flex-wrap gap-1.5">
                     {['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'].map((l, k) => (
                       <button key={l} type="button" onClick={() => onUpdateState((d) => { d.teams[d.me].pass = k; })} className={`btn btn-sm ${(me.pass ?? 1) === k ? 'btn-primary' : 'btn-secondary'}`}>{l}</button>
@@ -1197,7 +1197,7 @@ export const SquadTacticsView: React.FC<{
                   <div className="font-bold mt-0.5">{formName(me)}</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
-                  <div className="text-[11px] text-[var(--mut)]">สไตล์ & การจ่าย</div>
+                  <div className="text-[11px] text-[var(--mut)]">สไตล์คุมทีม &amp; การจ่ายบอล</div>
                   <div className="font-bold mt-0.5">{AR_T[me.tac]} · {['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'][me.pass ?? 1]}</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">

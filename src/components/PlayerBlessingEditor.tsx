@@ -603,7 +603,7 @@ export const PlayerBlessingEditor: React.FC<{
           </label>
 
           <label className="block space-y-0.5">
-            <span className="text-[10px] font-semibold text-[var(--mut)]">🌟 ท่าไม้ตาย (+8 ค่าพลัง)</span>
+            <span className="text-[10px] font-semibold text-[var(--mut)]">⚡ อาวุธประจำตัว (+8 ค่าพลังย่อย)</span>
             <select
               value={sig}
               onChange={(e) => { SFX.tap(); setSig(e.target.value); }}
@@ -652,9 +652,9 @@ export const PlayerBlessingEditor: React.FC<{
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1.5">
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
-            <div className="flex items-center justify-between text-[10px]">
-              <span className="text-[var(--mut)] font-semibold">พรสวรรค์ (TL)</span>
-              <TalentBadge talent={talent} variant="inline" showLabel compactLabel size="xs" />
+            <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
+              <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์ (TL)</span>
+              <TalentBadge talent={talent} variant="inline" showLabel size="xs" />
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setTalent((v) => clamp(v - 1, 25, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>
@@ -737,7 +737,7 @@ export const PlayerBlessingEditor: React.FC<{
         <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5">
           <div className="flex flex-wrap items-center justify-between gap-1.5">
             <span className="text-[10.5px] font-bold text-[var(--ink)]">
-              🎭 สกิลติดตัว / นิสัยลูกหนัง ({traits.length}/6) <span className="font-normal text-[var(--mut)]">· มีผลจริงในการแข่งขัน</span>
+              🧬 สไตล์การเล่นเฉพาะตัว ({traits.length}/6) <span className="font-normal text-[var(--mut)]">· มีผลจริงในการแข่งขัน</span>
             </span>
             <div className="flex flex-wrap items-center gap-1">
               <button
@@ -767,7 +767,7 @@ export const PlayerBlessingEditor: React.FC<{
             type="text"
             value={traitSearch}
             onChange={(e) => setTraitSearch(e.target.value)}
-            placeholder="🔍 ค้นหาสกิลติดตัว..."
+            placeholder="🔍 ค้นหาสไตล์การเล่น..."
             className="w-full px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px]"
           />
           <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
@@ -801,6 +801,32 @@ export const PlayerBlessingEditor: React.FC<{
               );
             })}
           </div>
+          {traits.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1 border-t border-[var(--line)]/55">
+              {traits.map((tid) => {
+                const tr = FOOTBALL_TRAITS.find((x) => x.id === tid);
+                if (!tr) return null;
+                const isRisk = RISKY_TRAIT_IDS.has(tr.id);
+                return (
+                  <div
+                    key={tr.id}
+                    className={`px-2 py-1 rounded-lg border space-y-0.5 ${
+                      isRisk
+                        ? 'bg-amber-500/10 border-amber-500/35'
+                        : 'bg-[var(--g-soft)]/60 border-[var(--g)]/30'
+                    }`}
+                  >
+                    <div className={`text-[10px] font-extrabold leading-snug ${isRisk ? 'text-amber-800 dark:text-amber-200' : 'text-[var(--g)]'}`}>
+                      {tr.icon} {tr.name}
+                    </div>
+                    <p className="text-[9.5px] leading-snug text-[var(--mut)] whitespace-normal break-words">
+                      {tr.desc}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Career Perks (Player Career Mode only) */}
@@ -808,7 +834,7 @@ export const PlayerBlessingEditor: React.FC<{
           <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10.5px] font-bold text-[var(--ink)]">
-                👑 สกิลอาชีพ (Career Perks {perks.length}/{CAREER_PERKS.length})
+                👑 สกิลติดตัวระดับอาชีพ ({perks.length}/{CAREER_PERKS.length})
               </span>
               <div className="flex gap-1">
                 <button
@@ -854,6 +880,27 @@ export const PlayerBlessingEditor: React.FC<{
                 );
               })}
             </div>
+            {perks.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1 border-t border-[var(--line)]/55">
+                {perks.map((pid) => {
+                  const pk = CAREER_PERKS.find((x) => x.id === pid);
+                  if (!pk) return null;
+                  return (
+                    <div
+                      key={pk.id}
+                      className="px-2 py-1 rounded-lg border bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/40 space-y-0.5"
+                    >
+                      <div className="text-[10px] font-extrabold text-[#7a4f00] dark:text-[#fde047] leading-snug">
+                        {pk.name}
+                      </div>
+                      <p className="text-[9.5px] leading-snug text-[var(--mut)] whitespace-normal break-words">
+                        {pk.desc}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

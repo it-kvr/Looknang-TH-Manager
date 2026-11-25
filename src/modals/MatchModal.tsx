@@ -10720,7 +10720,7 @@ export const MatchModal: React.FC<{
                       [
                         ['all', 'ทั้งหมด'],
                         ['goal', '⚽ ประตู'],
-                        ['card', '🟨 VAR'],
+                        ['card', '🖥 VAR'],
                         ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
                       ] as const
                     ).map(([k, lbl]) => (

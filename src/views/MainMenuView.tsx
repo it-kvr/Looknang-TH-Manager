@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, 
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
+import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
@@ -280,7 +280,7 @@ export const MainMenu: React.FC<{
     c: P(['#e4572e', '#2f6fd6', '#f4c63d', '#7c3aed', '#111111', '#158049', '#0ea5e9', '#be185d']),
     k: P([SKIN_P[0], SKIN_P[1], SKIN_P[2], SKIN_P[5], SKIN_P[6]]),
     h: P([HAIR_P[0], HAIR_P[0], HAIR_P[1], HAIR_P[2], HAIR_P[5]]),
-    hs: P([14, 15, 16, 17, 18, 19, 9, 7, 5, 2]),
+    hs: P([20, 21, 22, 23, 24, 25, 14, 15, 16, 17, 18, 19, 9, 7, 5, 2]),
     fh: P([0, 0, 0, 4, 1]),
     fs: P([0, 2, 3, 5, 4]),
     ey: P([9, 8, 5, 2, 0, 3]),
@@ -313,6 +313,7 @@ export const MainMenu: React.FC<{
   const [cAttrs, setCAttrs] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
   const [cTalent, setCTalent] = useState<number>(() => R(62, 93));
   const [cTalentTier, setCTalentTier] = useState<'any' | 'grind' | 'pro' | 'high' | 'legend'>('any');
+  const [cPers, setCPers] = useState<number>(() => R(0, PLAYER_PERSONALITIES.length - 1));
   const [cTraits, setCTraits] = useState<string[]>(() => rollPlayerTraits('FW', 'ST', 55, 78));
   const [customRosterCount, setCustomRosterCount] = useState<number>(() => loadCustomPlayers().length);
 
@@ -446,6 +447,7 @@ export const MainMenu: React.FC<{
     setCAttrs(rolled.attrs);
     setCSubMap(rolled.subMap);
     setCTalent(initTalent);
+    setCPers(R(0, PLAYER_PERSONALITIES.length - 1));
     setCTraits(rollPlayerTraits('FW', 'ST', initOv, initTalent));
     setCustomRosterCount(loadCustomPlayers().length);
     goStep('cr');
@@ -1113,12 +1115,12 @@ export const MainMenu: React.FC<{
     );
     const previewName = cName.trim() || 'นักเตะใหม่';
     const previewPlayer: Player = {
-      n: previewName, pos: cPos, ro: cSp, ov, age: cAge, ht: cHt, wt: cWt, foot: cFoot, pot: estPot, talent: cTalent, traits: cTraits, fit: 100, inj: 0, no: cNo, me: 1, hg: 1, customCreated: 1
+      n: previewName, pos: cPos, ro: cSp, ov, age: cAge, ht: cHt, wt: cWt, foot: cFoot, pot: estPot, talent: cTalent, traits: cTraits, customPers: cPers, fit: 100, inj: 0, no: cNo, me: 1, hg: 1, customCreated: 1
     };
     const previewProfile: PlayerCareerProfile = {
       name: previewName, pos: cPos, sp: cSp, no: cNo, tr: curArch.tr, sig: curArch.sig, archName: `${curArch.icon} ${curArch.name}`,
       sb: combinedSb, c: cColor, k: cSkin, h: cHair, hs: cHs, fh: cFh, fs: cFs, ey: cEy, acc: cAcc, pts: 0, b: cBase, a: cAttrs,
-      talent: cTalent, traits: cTraits,
+      talent: cTalent, traits: cTraits, customPers: cPers,
       age: cAge, ht: cHt, wt: cWt, foot: cFoot, gl: 0, as: 0, ap: 0, rs: 0, en: 100, plan: 1
     };
     const previewDt = dtInfo(previewPlayer, previewProfile);
@@ -1186,12 +1188,14 @@ export const MainMenu: React.FC<{
     };
 
     const talentRanges = [
-      { id: 'any', label: '🎲 สุ่มอิสระ', rangeLabel: '50–95', min: 50, max: 95 },
-      { id: 'grind', label: '🧱 ฝึกหนัก', rangeLabel: '35–49', min: 35, max: 49 },
-      { id: 'pro', label: '⚡ มาตรฐาน', rangeLabel: '50–69', min: 50, max: 69 },
-      { id: 'high', label: '🌟 พรสวรรค์สูง', rangeLabel: '70–84', min: 70, max: 84 },
-      { id: 'legend', label: '💎 อัจฉริยะ', rangeLabel: '85–97', min: 85, max: 97 }
+      { id: 'any', label: '🎲 สุ่มอิสระ', rangeLabel: '50–95', min: 50, max: 95, desc: 'สุ่มเพดานพรสวรรค์แบบอิสระตั้งแต่ระดับมาตรฐานอาชีพไปจนถึงอัจฉริยะลูกหนัง' },
+      { id: 'grind', label: '🧱 ต้องฝึกหนักเป็นพิเศษ', rangeLabel: '35–49', min: 35, max: 49, desc: 'เติบโตช้ากว่าสายพรสวรรค์ ต้องอาศัยความขยัน ภารกิจ และสนามซ้อมระดับสูงช่วยหนุน' },
+      { id: 'pro', label: '⚡ มาตรฐานอาชีพ', rangeLabel: '50–69', min: 50, max: 69, desc: 'พัฒนาตามมาตรฐานนักเตะอาชีพ เติบโตต่อเนื่องเมื่อซ้อมและลงเล่นสม่ำเสมอ' },
+      { id: 'high', label: '🌟 พรสวรรค์สูง', rangeLabel: '70–84', min: 70, max: 84, desc: 'มีแววระดับตัวท็อป เติบโตไวและมีโอกาสอัปพลังจากภารกิจสูง' },
+      { id: 'legend', label: '💎 อัจฉริยะลูกหนัง', rangeLabel: '85–97', min: 85, max: 97, desc: 'พรสวรรค์ระดับสูงสุด พัฒนาค่าพลังไวมากและทำภารกิจอัปพลังติดง่ายที่สุด' }
     ] as const;
+    const activeTalentInfo = cTalent < 50 ? talentRanges[1] : cTalent < 70 ? talentRanges[2] : cTalent < 85 ? talentRanges[3] : talentRanges[4];
+    const curPersDef = PLAYER_PERSONALITIES[cPers] || PLAYER_PERSONALITIES[3];
 
     const rerollTalent = (tierOverride?: typeof cTalentTier) => {
       SFX.tap();
@@ -1259,6 +1263,7 @@ export const MainMenu: React.FC<{
       setCWt(nextBio.wt);
       setCFoot(nextBio.foot);
       const rolled = applyRolledStats(cPos, rSp, rArch);
+      setCPers(R(0, PLAYER_PERSONALITIES.length - 1));
       setCTraits(rollPlayerTraits(cPos, rSp, OVF(cPos, rolled.attrs), nextTalent));
     };
 
@@ -1286,6 +1291,7 @@ export const MainMenu: React.FC<{
         a: { ...cAttrs },
         talent: cTalent,
         traits: cTraits,
+        customPers: cPers,
         age: cAge,
         ht: cHt,
         wt: cWt,
@@ -1389,8 +1395,8 @@ export const MainMenu: React.FC<{
               bio={previewBio}
               categories={summarizeStatGroups(subStats)}
               renderBadges={(palette) => (
-                <span className={`text-[8.5px] mland:text-[7px] font-bold truncate max-w-[110px] ${palette.clubText}`}>
-                  {cTraits.length > 0 ? `✨ ${cTraits.length} นิสัยติดตัว` : 'นักเตะใหม่'}
+                <span className={`text-[8.5px] mland:text-[7px] font-bold truncate max-w-[115px] ${palette.clubText}`}>
+                  {cTraits.length > 0 ? `🧬 ${cTraits.length} สไตล์การเล่น` : 'นักเตะใหม่'}
                 </span>
               )}
             />
@@ -1415,7 +1421,7 @@ export const MainMenu: React.FC<{
                 [
                   ['info', '📝 ข้อมูล & ตำแหน่ง'],
                   ['face', '🎭 หน้าตา & ชุด'],
-                  ['arch', '✨ สไตล์ & นิสัย'],
+                  ['arch', '✨ สาย · นิสัย · สไตล์'],
                   ['stats', '📊 พลังละเอียด']
                 ] as const
               ).map(([tid, tlbl]) => (
@@ -1709,7 +1715,7 @@ export const MainMenu: React.FC<{
                           }`}
                         >
                           <PlayerFace player={previewPlayer} careerProfile={sampleProfile} kitColor={f.c} trimColor="#fad05a" size={38} />
-                          <span className="text-[9.5px] mland:hidden font-semibold text-[var(--mut)] truncate w-full text-center">
+                          <span className="text-[9.5px] mland:hidden font-semibold text-[var(--mut)] leading-tight break-words w-full text-center">
                             {HS_N[f.hs]}
                           </span>
                         </button>
@@ -1784,24 +1790,18 @@ export const MainMenu: React.FC<{
                 </div>
               </div>
 
-              {/* Tab 3: Archetype, Talent & Football Traits */}
+              {/* Tab 3: Archetype, Talent Ceiling, Personality & Playing Styles */}
               <div className={`divide-y divide-[var(--line)]/65 ${crMobTab === 'arch' ? '' : 'hidden'}`}>
-                <div className="pb-2.5 mland:pb-1.5 space-y-2 mland:space-y-1.5">
+                {/* 3.1: สายการเล่นประจำตำแหน่ง + พลังหลัก */}
+                <div className="pb-3 mland:pb-2 space-y-2.5 mland:space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">สไตล์ประจำตำแหน่ง</span>
+                      <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">🎯 สายการเล่นประจำตำแหน่ง</span>
                       <span className="ml-2 text-[11px] mland:text-[9px] text-[var(--mut)]">
-                        ท่าประจำสาย: <b className="text-[var(--g)]">🔥 {activeTabStatsBadge} (+8)</b>
+                        อาวุธประจำตัว: <b className="text-[var(--g)]">⚡ {activeTabStatsBadge} (+8)</b>
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => rerollTalent()}
-                        className="btn btn-xs btn-secondary"
-                      >
-                        🌟 สุ่มพรสวรรค์ ({cTalent})
-                      </button>
                       <button
                         type="button"
                         onClick={rerollStartingPoints}
@@ -1812,7 +1812,7 @@ export const MainMenu: React.FC<{
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-[1.32fr_0.88fr] mland:grid-cols-[1.28fr_0.9fr] gap-3 mland:gap-2 items-start">
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.35fr_0.85fr] mland:grid-cols-[1.3fr_0.88fr] gap-3 mland:gap-2 items-start">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {posArchs.map((arch) => {
                         const active = curArch.id === arch.id;
@@ -1824,19 +1824,19 @@ export const MainMenu: React.FC<{
                             key={arch.id}
                             type="button"
                             onClick={() => changeArchetype(arch)}
-                            className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg text-left border cursor-pointer transition-all ${
+                            className={`p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg text-left border cursor-pointer transition-all ${
                               active
                                 ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
                                 : 'bg-[var(--surface-2)]/50 border-[var(--line)] hover:border-[var(--g)]'
                             }`}
                           >
-                            <div className="flex items-center justify-between gap-1">
-                              <span className="font-bold text-xs mland:text-[10px] truncate">{arch.icon} {arch.name}</span>
-                              <span className={`text-[9.5px] mland:text-[8px] font-bold shrink-0 ${active ? 'text-white/90' : 'text-[#8a5b00] dark:text-[var(--lamp)]'}`}>
-                                🔥 {SIGL[arch.sig] || arch.sig}
+                            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+                              <span className="font-bold text-xs mland:text-[10px] leading-snug">{arch.icon} {arch.name}</span>
+                              <span className={`text-[9.5px] mland:text-[8px] font-bold shrink-0 ${active ? 'text-white/95' : 'text-[#8a5b00] dark:text-[var(--lamp)]'}`}>
+                                ⚡ {SIGL[arch.sig] || arch.sig} +8
                               </span>
                             </div>
-                            <div className={`text-[10.5px] mland:text-[8.5px] mt-0.5 leading-snug whitespace-normal ${active ? 'text-white/92' : 'text-[var(--mut)]'}`}>
+                            <div className={`text-[10.5px] mland:text-[8.5px] mt-1 leading-snug whitespace-normal ${active ? 'text-white/92' : 'text-[var(--mut)]'}`}>
                               {arch.desc}
                             </div>
                             <div className={`text-[9.5px] mland:text-[8px] font-semibold mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 ${active ? 'text-white/95' : 'text-[var(--g)]'}`}>
@@ -1859,7 +1859,7 @@ export const MainMenu: React.FC<{
                         const archCoreAdd = curArch.coreBonus[k] || 0;
                         return (
                           <div key={k} className="flex items-center gap-2 text-xs mland:text-[9.5px]">
-                            <span className="w-24 mland:w-20 flex items-center gap-1 truncate shrink-0">
+                            <span className="w-24 mland:w-20 flex items-center gap-1 shrink-0">
                               <span className="font-semibold text-[var(--ink)]">{l}</span>
                               {archCoreAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--g)]">+{archCoreAdd}</span>}
                               {rolledAdd > 0 && <span className="text-[9.5px] font-bold text-[#9a6700] dark:text-[var(--lamp)]">+{rolledAdd}</span>}
@@ -1871,77 +1871,178 @@ export const MainMenu: React.FC<{
                           </div>
                         );
                       })}
-                      <div className="pt-2 border-t border-[var(--line)]/60 space-y-1.5">
-                        <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
-                          <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์ (เลือกช่วงได้)</span>
-                          <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
-                        </div>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-1">
-                          {talentRanges.map((tr) => {
-                            const selected = cTalentTier === tr.id;
-                            return (
-                              <button
-                                key={tr.id}
-                                type="button"
-                                onClick={() => rerollTalent(tr.id)}
-                                className={`px-2 py-1 mland:py-0.5 rounded-lg border text-left cursor-pointer transition-colors flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px] font-bold ${
-                                  selected
-                                    ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)]'
-                                    : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                                }`}
-                              >
-                                <span className="truncate">{tr.label}</span>
-                                <span className="tabular opacity-80 shrink-0">{tr.rangeLabel}</span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="flex items-center gap-1.5 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => { SFX.tap(); setExactTalent(cTalent - 1); }}
-                            className="btn-icon w-6 h-6 mland:w-5 mland:h-5 text-xs"
-                            aria-label="ลดค่าพรสวรรค์"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="range"
-                            min={35}
-                            max={97}
-                            value={cTalent}
-                            onChange={(e) => setExactTalent(Number(e.target.value))}
-                            aria-label="ปรับค่าพรสวรรค์"
-                            className="flex-1 min-w-0 accent-[var(--g)]"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => { SFX.tap(); setExactTalent(cTalent + 1); }}
-                            className="btn-icon w-6 h-6 mland:w-5 mland:h-5 text-xs"
-                            aria-label="เพิ่มค่าพรสวรรค์"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Football Personality Traits Selector */}
-                <div className="pt-2.5 mland:pt-1.5 space-y-2 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-xs mland:text-[10px] truncate text-[var(--ink)]">
-                      ✨ นิสัยลูกหนัง (เลือก 1–4 อย่าง · {cTraits.length}/4)
-                    </span>
+                {/* 3.2: เพดานพรสวรรค์ (Full Width — Zero Truncation) */}
+                <div className="py-3 mland:py-2 space-y-2 mland:space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="text-xs sm:text-sm mland:text-xs font-bold text-[var(--ink)]">
+                        🌟 เพดานพรสวรรค์ (เลือกช่วงหรือปรับละเอียดได้)
+                      </div>
+                      <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
+                        ส่งผลโดยตรงต่ออัตราการเติบโตของค่าพลังและโอกาสอัปพลังจากภารกิจ
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
+                      <button
+                        type="button"
+                        onClick={() => rerollTalent()}
+                        className="btn btn-xs btn-secondary shrink-0"
+                      >
+                        🎲 สุ่มช่วงนี้
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+                    {talentRanges.map((tr) => {
+                      const selected = cTalentTier === tr.id;
+                      return (
+                        <button
+                          key={tr.id}
+                          type="button"
+                          onClick={() => rerollTalent(tr.id)}
+                          className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer transition-all flex flex-col justify-between gap-0.5 ${
+                            selected
+                              ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] ring-1 ring-[var(--g)]/40 shadow-xs'
+                              : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          <span className="text-[10.5px] mland:text-[8.5px] font-bold leading-snug whitespace-normal break-words">
+                            {tr.label}
+                          </span>
+                          <span className="text-[10px] mland:text-[8px] font-extrabold tabular opacity-85">
+                            TL {tr.rangeLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/50 border border-[var(--line)]/80 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { SFX.tap(); setExactTalent(cTalent - 1); }}
+                        className="btn-icon w-6 h-6 mland:w-5 mland:h-5 text-xs shrink-0"
+                        aria-label="ลดค่าพรสวรรค์"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="range"
+                        min={35}
+                        max={97}
+                        value={cTalent}
+                        onChange={(e) => setExactTalent(Number(e.target.value))}
+                        aria-label="ปรับค่าพรสวรรค์"
+                        className="flex-1 min-w-0 accent-[var(--g)]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { SFX.tap(); setExactTalent(cTalent + 1); }}
+                        className="btn-icon w-6 h-6 mland:w-5 mland:h-5 text-xs shrink-0"
+                        aria-label="เพิ่มค่าพรสวรรค์"
+                      >
+                        +
+                      </button>
+                      <span className="text-[11px] mland:text-[9px] font-extrabold tabular text-[var(--ink)] shrink-0">
+                        {cTalent}/99
+                      </span>
+                    </div>
+                    <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal">
+                      <b className="text-[var(--ink)]">{activeTalentInfo.label} (TL {activeTalentInfo.rangeLabel}):</b> {activeTalentInfo.desc}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3.3: นิสัยประจำตัว (Personality Selector + Full Description) */}
+                <div className="py-3 mland:py-2 space-y-2 mland:space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
+                        🧠 นิสัยประจำตัว ({PLAYER_PERSONALITIES.length} แบบ)
+                      </span>
+                      <span className="ml-2 text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
+                        บุคลิกภาพที่ส่งผลต่อฟอร์ม วินัย ความฟิต และความสัมพันธ์ในทีม
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setCPers(Math.floor(Math.random() * PLAYER_PERSONALITIES.length));
+                      }}
+                      className="btn btn-xs btn-secondary shrink-0"
+                    >
+                      🎲 สุ่มนิสัย
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {PLAYER_PERSONALITIES.map((pDef) => {
+                      const active = cPers === pDef.id;
+                      const activeTone =
+                        pDef.tone === 'warn'
+                          ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                          : pDef.tone === 'gold'
+                            ? 'bg-amber-500 text-[#211500] border-amber-500 shadow-xs'
+                            : 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs';
+                      return (
+                        <button
+                          key={pDef.id}
+                          type="button"
+                          title={pDef.desc}
+                          onClick={() => {
+                            SFX.tap();
+                            setCPers(pDef.id);
+                          }}
+                          className={`px-2 py-1 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[8.5px] font-semibold border cursor-pointer transition-colors ${
+                            active
+                              ? activeTone
+                              : 'bg-[var(--surface-2)]/65 text-[var(--ink)] border-[var(--line)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          {pDef.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-0.5">
+                    <div className="text-[11px] mland:text-[9px] font-extrabold text-[var(--ink)]">
+                      {curPersDef.label}
+                    </div>
+                    <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal">
+                      {curPersDef.desc}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3.4: สไตล์การเล่นเฉพาะตัว (Football Traits + Full Descriptions) */}
+                <div className="pt-3 mland:pt-2 space-y-2 mland:space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
+                        🧬 สไตล์การเล่นเฉพาะตัว (เลือก 1–4 อย่าง · {cTraits.length}/4)
+                      </span>
+                      <span className="ml-2 text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
+                        จังหวะการเล่นถนัดที่มีผลจริงในการจำลองแข่งขัน
+                      </span>
+                    </div>
                     <button
                       type="button"
                       onClick={rerollTraits}
                       className="btn btn-xs btn-secondary shrink-0"
                     >
-                      🎲 สุ่มนิสัยใหม่
+                      🎲 สุ่มสไตล์ใหม่
                     </button>
                   </div>
+
                   <div className="flex flex-wrap gap-1.5">
                     {posTraits.map((tr) => {
                       const active = cTraits.includes(tr.id);
@@ -1965,13 +2066,22 @@ export const MainMenu: React.FC<{
                       );
                     })}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 pt-0.5 text-[10.5px] mland:text-[9px] text-[var(--mut)]">
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
                     {cTraits.map((tid) => {
                       const tr = TRAIT_BY_ID[tid];
                       if (!tr) return null;
                       return (
-                        <div key={tid} className="truncate">
-                          <b className="text-[var(--ink)]">{tr.icon} {tr.name}</b> — {tr.desc}
+                        <div
+                          key={tid}
+                          className="p-2 mland:p-1.5 rounded-xl bg-[var(--g-soft)]/70 border border-[var(--g)]/35 space-y-0.5"
+                        >
+                          <div className="text-[11px] mland:text-[9px] font-extrabold text-[var(--g)] leading-snug">
+                            {tr.icon} {tr.name}
+                          </div>
+                          <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal break-words">
+                            {tr.desc}
+                          </p>
                         </div>
                       );
                     })}
@@ -1983,9 +2093,9 @@ export const MainMenu: React.FC<{
               <div className={`space-y-2.5 mland:space-y-1.5 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/65">
                   <div className="flex flex-wrap items-center gap-2 text-[11px] mland:text-[9px] text-[var(--mut)]">
-                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)]">ค่าพลังเฉพาะด้าน</span>
+                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)]">ค่าพลังย่อยเฉพาะด้าน</span>
                     <span>
-                      ★ <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">ท่าประจำสาย (+8)</span> · <span className="text-[var(--g)] font-semibold">โบนัสสาย</span> · <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">แต้มสุ่ม</span>
+                      ★ <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">อาวุธประจำตัว (+8)</span> · <span className="text-[var(--g)] font-semibold">โบนัสสายการเล่น</span> · <span className="text-[#9a6700] dark:text-[var(--lamp)] font-semibold">แต้มสุ่ม</span>
                     </span>
                   </div>
                   <button
@@ -2013,7 +2123,7 @@ export const MainMenu: React.FC<{
                         return (
                           <div key={lbl} className="flex items-center gap-1.5 text-[11px] mland:text-[9px]">
                             <span className="w-[88px] sm:w-[96px] mland:w-[72px] shrink-0 truncate flex items-center gap-1 min-w-0">
-                              {isSig && <span className="text-[#9a6700] dark:text-[var(--lamp)] font-black shrink-0" title="ท่าไม้ตายประจำสาย">★</span>}
+                              {isSig && <span className="text-[#9a6700] dark:text-[var(--lamp)] font-black shrink-0" title="ทักษะอาวุธประจำตัว (+8)">★</span>}
                               <span className={`truncate ${isSig ? 'font-bold text-[var(--ink)]' : archBonus > 0 ? 'font-semibold text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                                 {lbl}
                               </span>

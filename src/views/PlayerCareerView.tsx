@@ -438,7 +438,7 @@ export const PlayerCareerView: React.FC<{
           {([
             ['plan', '📅 แผนฝึก'],
             ['missions', '🎯 ภารกิจ'],
-            ['perks', '🌟 สกิล'],
+            ['perks', '🌟 สกิล & สไตล์'],
             ['stats', '📊 ค่าพลัง'],
             ['history', '📜 ประวัติ']
           ] as const).map(([k, lbl]) => (
@@ -557,18 +557,18 @@ export const PlayerCareerView: React.FC<{
           {careerTab === 'perks' && (
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
               <div className="flex items-center justify-between gap-2 shrink-0">
-                <div className="seg-bar grid grid-cols-4 flex-1 min-w-0">
+                <div className="seg-bar flex items-stretch flex-1 min-w-0 overflow-x-auto no-scrollbar">
                   {([
-                    ['perks', `🌟 ติดตัว (${perks.length})`],
-                    ['traits', `🧬 สไตล์ (${(p.traits || []).length}/6)`],
-                    ['roles', `🎯 ตำแหน่ง (${(p.altRoles || []).length})`],
-                    ['sig', '⚡ อาวุธ']
+                    ['perks', `🌟 สกิลติดตัว (${perks.length})`],
+                    ['traits', `🧬 สไตล์การเล่น (${(p.traits || []).length}/6)`],
+                    ['roles', `🎯 ตำแหน่งถนัด (${(p.altRoles || []).length})`],
+                    ['sig', '⚡ อาวุธประจำตัว']
                   ] as const).map(([sk, slbl]) => (
                     <button
                       key={sk}
                       type="button"
                       onClick={() => { SFX.tap(); setSkillSubTab(sk); }}
-                      className={`seg-btn whitespace-nowrap px-1.5 ${skillSubTab === sk ? 'seg-btn-active' : ''}`}
+                      className={`seg-btn flex-1 min-w-fit whitespace-nowrap px-2 mland:px-1.5 text-[10px] sm:text-[11px] mland:text-[8.5px] ${skillSubTab === sk ? 'seg-btn-active' : ''}`}
                     >
                       {slbl}
                     </button>
@@ -584,35 +584,40 @@ export const PlayerCareerView: React.FC<{
 
               <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
                 {skillSubTab === 'perks' && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5 content-start">
-                    {CAREER_PERKS.map((pk) => {
-                      const owned = perks.includes(pk.id);
-                      const canBuy = !owned && (p.rep ?? 10) >= pk.cost;
-                      return (
-                        <div key={pk.id} className={`p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 ${owned ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
-                          <div className="min-w-0">
-                            <div className="font-bold text-xs mland:text-[10px] truncate">{pk.name}</div>
-                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{pk.desc}</div>
+                  <div className="space-y-2">
+                    <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">
+                      สกิลติดตัวระดับอาชีพ (ใช้ ★ ชื่อเสียงปลดล็อกถาวรเพื่อเสริมศักยภาพเฉพาะด้านของอาชีพ)
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5 content-start">
+                      {CAREER_PERKS.map((pk) => {
+                        const owned = perks.includes(pk.id);
+                        const canBuy = !owned && (p.rep ?? 10) >= pk.cost;
+                        return (
+                          <div key={pk.id} className={`p-2.5 mland:p-1.5 rounded-xl border flex items-start justify-between gap-2 ${owned ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="font-bold text-xs mland:text-[10px] leading-snug">{pk.name}</div>
+                              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal break-words">{pk.desc}</div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={owned || !canBuy}
+                              onClick={() => {
+                                SFX.win();
+                                onUpdateState((d) => {
+                                  if (!d.p) return;
+                                  d.p.rep = (d.p.rep ?? 10) - pk.cost;
+                                  d.p.perks = [...(d.p.perks || []), pk.id];
+                                });
+                                onToast(`ปลดล็อกสกิลติดตัว "${pk.name}" แล้ว!`);
+                              }}
+                              className={`btn btn-sm shrink-0 whitespace-nowrap ${owned ? 'btn-primary opacity-80' : 'btn-gold'}`}
+                            >
+                              {owned ? '✓ มีแล้ว' : `ปลด ${pk.cost}★`}
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            disabled={owned || !canBuy}
-                            onClick={() => {
-                              SFX.win();
-                              onUpdateState((d) => {
-                                if (!d.p) return;
-                                d.p.rep = (d.p.rep ?? 10) - pk.cost;
-                                d.p.perks = [...(d.p.perks || []), pk.id];
-                              });
-                              onToast(`ปลดล็อกสกิล "${pk.name}" แล้ว!`);
-                            }}
-                            className={`btn btn-sm shrink-0 whitespace-nowrap ${owned ? 'btn-primary opacity-80' : 'btn-gold'}`}
-                          >
-                            {owned ? '✓ มีแล้ว' : `ปลด ${pk.cost}★`}
-                          </button>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
@@ -630,18 +635,18 @@ export const PlayerCareerView: React.FC<{
                         return (
                           <div
                             key={tr.id}
-                            className={`p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 ${
+                            className={`p-2.5 mland:p-1.5 rounded-xl border flex items-start justify-between gap-2 ${
                               owned
                                 ? 'bg-[var(--g-soft)]/60 border-[var(--g)]/55'
                                 : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
                             }`}
                           >
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs mland:text-[10px] truncate">
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="font-bold text-xs mland:text-[10px] leading-snug">
                                 {tr.icon} {tr.name}
                                 {isFitRole && !owned && <span className="ml-1 text-[9.5px] text-[var(--g)]">· ถนัด</span>}
                               </div>
-                              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">
+                              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal break-words">
                                 {tr.desc}
                               </div>
                               {conflictId && !owned && (
@@ -702,7 +707,7 @@ export const PlayerCareerView: React.FC<{
                         )}
                       </div>
                       <div className="text-[var(--mut)] leading-snug">
-                        <b className="text-[var(--ink)]">ผลจริงในเกม:</b> เล่นตำแหน่งที่ปลดล็อกได้ <b className="text-[var(--g)]">เต็ม 100%</b> (ไม่โดนหักพลังหลุดตำแหน่ง -6% ถึง -15%) + เพิ่มความยืดหยุ่นแท็กติก และระหว่างฝึก/ปลดล็อกจะปรับ <b className="text-[var(--ink)]">+1 พลังหลัก &amp; +3 สกิลประจำตำแหน่ง</b> (ต้องเก็บ {ROLE_ADAPT_THRESHOLD_ADJ} ขั้นสำหรับตำแหน่งใกล้เคียง หรือ {ROLE_ADAPT_THRESHOLD_CROSS} ขั้นสำหรับตำแหน่งข้ามสาย)
+                        <b className="text-[var(--ink)]">ผลจริงในเกม:</b> เล่นตำแหน่งที่ปลดล็อกได้ <b className="text-[var(--g)]">เต็ม 100%</b> (ไม่โดนหักพลังหลุดตำแหน่ง -6% ถึง -15%) + เพิ่มความยืดหยุ่นแท็กติก และระหว่างฝึก/ปลดล็อกจะปรับ <b className="text-[var(--ink)]">+1 ค่าพลังหลัก &amp; +3 ค่าพลังย่อยประจำตำแหน่ง</b> (ต้องเก็บ {ROLE_ADAPT_THRESHOLD_ADJ} ขั้นสำหรับตำแหน่งใกล้เคียง หรือ {ROLE_ADAPT_THRESHOLD_CROSS} ขั้นสำหรับตำแหน่งข้ามสาย)
                       </div>
                     </div>
 
@@ -736,7 +741,7 @@ export const PlayerCareerView: React.FC<{
                                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
                                   {unlocked ? '✓ ปลดล็อกเล่นเต็ม 100% แล้ว' : `ความคุ้นเคย: ${exp}/${need} นัด/ขั้น`}
                                 </div>
-                                <div className="text-[9.5px] mland:text-[8px] text-[var(--g)] font-semibold truncate">
+                                <div className="text-[9.5px] mland:text-[8px] text-[var(--g)] font-semibold leading-snug whitespace-normal break-words">
                                   {unlocked ? 'รับโบนัสค่าพลังตำแหน่งนี้แล้ว' : `ปลดล็อกได้: ${coreName} +1 · ${sub1Name} +2 · ${sub2Name} +1`}
                                 </div>
                               </div>
@@ -781,7 +786,7 @@ export const PlayerCareerView: React.FC<{
                           <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)]/55 border border-[var(--lamp)]/60 flex flex-wrap items-center justify-between gap-2">
                             <div>
                               <div className="text-xs sm:text-sm font-extrabold text-[var(--ink)]">
-                                ⚡ อาวุธประจำตัวปัจจุบัน: <span className="text-[#8a5b00] dark:text-[var(--lamp)]">{SIGL[activeSig] || activeSig}</span> (+8 สกิลพื้นฐาน)
+                                ⚡ อาวุธประจำตัวปัจจุบัน: <span className="text-[#8a5b00] dark:text-[var(--lamp)]">{SIGL[activeSig] || activeSig}</span> (+8 ค่าพลังพื้นฐาน)
                               </div>
                               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
                                 โบนัสซ้อมพิเศษสะสม: <b className="text-[var(--g)]">+{sigBonus}/12</b> · ติวเฉพาะทางเพิ่ม +1 ถาวร (ใช้ 4 ★ และพลังกาย 6%)

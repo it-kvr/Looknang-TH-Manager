@@ -2881,6 +2881,7 @@ export function createNewGame(
       signedSeason: 1,
       careerLog: [startLog],
       history: [],
+      ...(p.customPers != null ? { customPers: p.customPers } : {}),
       vis: [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, chosenNo, p.fs ?? 0, p.acc ?? 0]
     });
     assignTeamShirtNumbers(t);

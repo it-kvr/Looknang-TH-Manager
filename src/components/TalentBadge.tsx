@@ -119,10 +119,10 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-center gap-1 font-extrabold tabular leading-none align-middle ${meta.textCls} ${sizeCls} ${className}`}
+        className={`inline-flex flex-wrap items-center gap-1 font-extrabold tabular leading-snug align-middle max-w-full ${meta.textCls} ${sizeCls} ${className}`}
       >
         <TalentTierIcon tierKey={meta.tierKey} size={size} />
-        <span>
+        <span className="whitespace-normal break-words">
           {prefix} {tl}
           {showLabel ? ` · ${tierText}` : ''}
         </span>
@@ -164,19 +164,19 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
   if (variant === 'meter') {
     const sizeCls =
       size === 'xs'
-        ? 'px-1.5 py-[2px] text-[10px] mland:text-[8.5px]'
+        ? 'px-2 py-[3px] text-[10px] mland:text-[8.5px]'
         : size === 'md'
           ? 'px-2.5 py-0.5 text-xs mland:text-[10px]'
-          : 'px-2 py-[2px] text-[10.5px] mland:text-[9px]';
+          : 'px-2 py-[3px] text-[10.5px] mland:text-[9px]';
     return (
-      <div className={`inline-flex flex-col items-end gap-1 ${className}`} title={resolvedTitle}>
+      <div className={`inline-flex flex-col items-end gap-1 max-w-full ${className}`} title={resolvedTitle}>
         <span
-          className={`inline-flex items-center gap-1 rounded-lg border font-bold leading-tight tabular select-none ${meta.badgeCls} ${sizeCls}`}
+          className={`inline-flex flex-wrap items-center gap-1 rounded-lg border font-bold leading-tight tabular select-none max-w-full ${meta.badgeCls} ${sizeCls}`}
         >
           <TalentTierIcon tierKey={meta.tierKey} size={size} />
           <span className="text-[0.86em] opacity-75 font-extrabold tracking-wide">{prefix}</span>
           <span className="font-extrabold">{tl}</span>
-          {showLabel && <span className="font-semibold opacity-90">· {tierText}</span>}
+          {showLabel && <span className="font-semibold opacity-95 whitespace-normal">· {tierText}</span>}
         </span>
         <div className="w-full min-w-[92px] h-1.5 rounded-full bg-[var(--surface)] border border-[var(--line)]/65 overflow-hidden">
           <div
@@ -198,12 +198,12 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
   return (
     <span
       title={resolvedTitle}
-      className={`inline-flex items-center gap-1 rounded-lg border font-bold leading-tight tabular select-none shrink-0 ${meta.badgeCls} ${sizeCls} ${className}`}
+      className={`inline-flex flex-wrap items-center gap-1 rounded-lg border font-bold leading-tight tabular select-none max-w-full ${meta.badgeCls} ${sizeCls} ${className}`}
     >
       <TalentTierIcon tierKey={meta.tierKey} size={size} />
       <span className="text-[0.86em] opacity-75 font-extrabold tracking-wide">{prefix}</span>
       <span className="font-extrabold">{tl}</span>
-      {showLabel && <span className="font-semibold opacity-90">· {tierText}</span>}
+      {showLabel && <span className="font-semibold opacity-95 whitespace-normal">· {tierText}</span>}
     </span>
   );
 };

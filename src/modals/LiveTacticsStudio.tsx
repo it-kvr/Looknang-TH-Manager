@@ -1053,7 +1053,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 text-[10.5px] mland:text-[9px]">
               <div>
-                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">🎯 สไตล์ (Mentality)</div>
+                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">🎯 สไตล์คุมทีม (Mentality)</div>
                 <div className="flex flex-wrap gap-1">
                   {([
                     { m: 'X' as Mentality, icon: '🔥' },
@@ -1079,7 +1079,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">⚽ สไตล์จ่ายบอล</div>
+                <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] mb-0.5">⚽ สไตล์จ่ายบอลของทีม</div>
                 <div className="flex flex-wrap gap-1">
                   {[
                     { lbl: 'บอลสั้น', icon: '🎯' },

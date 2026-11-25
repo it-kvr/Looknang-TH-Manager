@@ -145,7 +145,7 @@ export const SecretBoostModal: React.FC<{
                   className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 hover:brightness-105 text-left cursor-pointer"
                 >
                   <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-[var(--lamp)]">⭐ ชื่อเสียง +15 ★</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ใช้ปลดสกิล & กายภาพ</div>
+                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ใช้ปลดล็อกสกิลติดตัว &amp; ซ้อม</div>
                 </button>
                 <button
                   type="button"
@@ -185,8 +185,8 @@ export const SecretBoostModal: React.FC<{
                   onClick={() => runPlayerBoost('unlockPerks')}
                   className="p-2.5 mland:p-1.5 rounded-xl bg-purple-500/12 border border-purple-500/35 hover:brightness-105 text-left cursor-pointer"
                 >
-                  <div className="font-bold text-xs mland:text-[10.5px] text-purple-700 dark:text-purple-300">🔓 ปลดสกิลครบ</div>
-                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ได้ Career Perks ทั้งหมด</div>
+                  <div className="font-bold text-xs mland:text-[10.5px] text-purple-700 dark:text-purple-300">🔓 ปลดสกิลติดตัวครบ</div>
+                  <div className="text-[10px] mland:text-[9px] text-[var(--mut)] mt-0.5">ได้สกิลติดตัวระดับอาชีพทั้งหมด</div>
                 </button>
 
                 <button

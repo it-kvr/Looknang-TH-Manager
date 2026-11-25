@@ -557,7 +557,7 @@ export function assignTeamShirtNumbers(
   });
 }
 
-const HANDSOME_HAIR_POOL = [14, 15, 16, 17, 18, 19, 9, 7, 5, 2, 0, 1, 6, 10];
+const HANDSOME_HAIR_POOL = [20, 21, 22, 23, 24, 25, 14, 15, 16, 17, 18, 19, 9, 7, 5, 2, 0, 1, 6, 10];
 const HANDSOME_EYE_POOL = [0, 2, 5, 8, 9, 3, 6, 7];
 const HANDSOME_SHAPE_POOL = [0, 2, 3, 5, 4];
 
@@ -2131,7 +2131,7 @@ export function switchCareerSignature(d: GameState, sigKey: string): { ok: boole
   const meSq = d.teams[d.me]?.sq.find((q) => q.me);
   if (meSq && meSq.blessed) meSq.customSig = sigKey;
   syncMe(d);
-  return { ok: true, msg: `⚡ เปลี่ยนอาวุธประจำตัวเป็น "${SIGL[sigKey]}" (+8 โบนัสสกิล) สำเร็จ! (-${cost} ★)` };
+  return { ok: true, msg: `⚡ เปลี่ยนอาวุธประจำตัวเป็น "${SIGL[sigKey]}" (+8 โบนัสค่าพลังย่อย) สำเร็จ! (-${cost} ★)` };
 }
 
 export function trainCareerSignatureDrill(d: GameState): { ok: boolean; msg: string } {
