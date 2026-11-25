@@ -1219,6 +1219,56 @@ export interface MatchPitchPuddle {
 
 export type TurfGradeId = 'local' | 'regional' | 'pro' | 'elite' | 'fifa_hybrid';
 
+export interface TurfMatchModifiers {
+  grade: 'D' | 'C' | 'B' | 'A' | 'S';
+  gradeName: string;
+  passPaceMult: number;
+  sprintSpeedMult: number;
+  slipMult: number;
+  whiffMult: number;
+  interceptChaosMult: number;
+  fatigueMult: number;
+  injuryMult: number;
+  statDeltas: Record<string, number>;
+  effectsSummary: string[];
+}
+
+export interface TeamFacilityMatchModifiers {
+  isHome: boolean;
+  levels: {
+    st: number;
+    tr: number;
+    med: number;
+    turfLv: number;
+    analyticsLv: number;
+    merchLv: number;
+  };
+  conditions: {
+    st: number;
+    tr: number;
+    med: number;
+    turfLv: number;
+    analyticsLv: number;
+    merchLv: number;
+  };
+  statDeltas: Record<string, number>;
+  fatigueDrainMult: number;
+  injuryRiskMult: number;
+  sprintBonusMult: number;
+  interceptionMult: number;
+  offsideTimingBonus: number;
+  lowFitResilience: number;
+  slipResistMult: number;
+  ratingAtDelta: number;
+  ratingDfDelta: number;
+  breakdown: {
+    key: string;
+    label: string;
+    deltaText: string;
+    tone: 'pos' | 'neg' | 'neu';
+  }[];
+}
+
 export interface MatchEnvironment {
   season: 'rainy' | 'summer';
   timeOfDay: 'day' | 'night';

@@ -3664,18 +3664,18 @@ export const FinanceClubView: React.FC<{
       {/* Club Tab 2: Facilities & Backroom Staff (Unique evolving illustrations, Lv.10/Lv.6 progression & Renovations) */}
       {clubTab === 'infra' && (() => {
         const infraFacilityDefs: readonly { key: FacilityKey; title: string; desc: string; baseCost: number }[] = [
-          { key: 'st', title: 'สนามเหย้า & อัฒจันทร์', desc: `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มค่าตั๋ว & เพดานค่าจ้าง +8%/Lv`, baseCost: 110 },
-          { key: 'tr', title: 'ศูนย์ฝึกซ้อมครบวงจร', desc: 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นฟูความฟิตระหว่างสัปดาห์', baseCost: 90 },
+          { key: 'st', title: 'สนามเหย้า & อัฒจันทร์', desc: `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มสเตตัสความนิ่ง/มุ่งมั่นนัดเหย้า + ค่าตั๋ว & เพดานค่าจ้าง`, baseCost: 110 },
+          { key: 'tr', title: 'ศูนย์ฝึกซ้อมครบวงจร', desc: 'เพิ่มสเตตัสสปีด/ความคม/พละกำลังในสนาม & ลดเสียแรงแข่ง + อัปค่าพลังซ้อม', baseCost: 90 },
           { key: 'ya', title: 'อะคาเดมี่เยาวชน', desc: 'ปั้นดาวรุ่ง OVR สูงขึ้นทุกซีซั่น & เพิ่มคุณภาพงานแมวมอง', baseCost: 85 },
-          { key: 'med', title: 'ศูนย์การแพทย์ & กายภาพ', desc: 'ลดโอกาสบาดเจ็บ & เร่งระยะเวลาฟื้นฟูอาการบาดเจ็บ', baseCost: 80 },
+          { key: 'med', title: 'ศูนย์การแพทย์ & กายภาพ', desc: 'เพิ่มความอึด/ทรงตัว/ฟื้นตัวในเกม ลดความเร็วตกเมื่อล้า & ลดเจ็บหนักในสนาม', baseCost: 80 },
           {
             key: 'turfLv',
             title: 'พื้นสนามหญ้า & ระบายน้ำ',
-            desc: `${getTurfGradeForLevel(state.turfLv ?? 1, getFacilityCondition(state, 'turfLv')).name} · ลดความล้าและอาการบาดเจ็บจากฝน`,
+            desc: `${getTurfGradeForLevel(state.turfLv ?? 1, getFacilityCondition(state, 'turfLv')).name} · เร่งบอลบนพื้น คุมบอล/จ่ายบอลดีขึ้น ลดลื่น/เสียแรง/เจ็บ`,
             baseCost: 75
           },
-          { key: 'analyticsLv', title: 'ห้องวิเคราะห์เกม & วีดิทัศน์', desc: 'เร่งความคุ้นเคยแท็กติก เสริมภารกิจนักเตะ & แมวมอง', baseCost: 85 },
-          { key: 'merchLv', title: 'เมกะสโตร์ & แฟนโซน', desc: `สร้างรายได้วันแข่งเหย้า (+${fmtMoneyNum(est.estMerch)}) & เพดานค่าจ้าง +4%/Lv`, baseCost: 75 }
+          { key: 'analyticsLv', title: 'ห้องวิเคราะห์เกม & วีดิทัศน์', desc: 'เพิ่มสเตตัสอ่านเกม/จ่ายบอล/จับจังหวะล้ำหน้าในสนาม + เร่งความคุ้นเคยแท็กติก', baseCost: 85 },
+          { key: 'merchLv', title: 'เมกะสโตร์ & แฟนโซน', desc: `เสริมบรรยากาศกองเชียร์นัดเหย้า รายได้วันแข่ง (+${fmtMoneyNum(est.estMerch)}) & เพดานค่าจ้าง`, baseCost: 75 }
         ];
         const staffDefs: readonly { role: StaffRoleKey; title: string; desc: string }[] = [
           { role: 'asst', title: 'ผู้ช่วยผู้จัดการทีม', desc: 'เร่งความคุ้นเคยแท็กติก & เพิ่มโอกาสอัป OVR ตอนซ้อม +1.5%/Lv' },

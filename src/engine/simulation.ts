@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, PlayerJerseySaleRecord, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, PlayerJerseySaleRecord, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
@@ -11,7 +11,8 @@ export function rate(
   big?: boolean,
   matchMin?: number,
   subsEntered?: string[],
-  sentOffNames?: string[]
+  sentOffNames?: string[],
+  isHome?: boolean
 ): { at: number; df: number; x: Player[] } {
   const x = xi(t).filter((q) => !sentOffNames?.includes(q.n));
   const f = getFormationCounts(t);
@@ -46,11 +47,12 @@ export function rate(
   if (matchMin && matchMin > 60) {
     const pressLoad = 0.7 + ((t.press ?? 1) + (t.tempo ?? 1)) * 0.25;
     const minFactor = (matchMin - 60) / 30;
+    const facFatMul = s ? computeTeamFacilityMatchModifiers(t, s, { isHome: Boolean(isHome) }).fatigueDrainMult : 1;
     const fatiguePenalty =
       DL.reduce((sum, [q, D]) => {
         if (subsEntered?.includes(q.n)) return sum;
         const resist = clamp((D.d.sta * 0.7 + (q.fit ?? 100) * 0.3) / 100, 0.35, 1.05);
-        return sum + Math.max(0, 1.05 - resist) * 5.2 * pressLoad * minFactor;
+        return sum + Math.max(0, 1.05 - resist) * 5.2 * pressLoad * minFactor * facFatMul;
       }, 0) / (DL.length || 1);
     at -= fatiguePenalty;
     df -= fatiguePenalty;
@@ -311,6 +313,11 @@ export function rate(
     at += mo + bMods.att;
     df += mo + bMods.df;
   }
+  if (s) {
+    const facMods = computeTeamFacilityMatchModifiers(t, s, { isHome: Boolean(isHome) });
+    at += facMods.ratingAtDelta;
+    df += facMods.ratingDfDelta;
+  }
   if (sentOffNames && sentOffNames.length) {
     at -= sentOffNames.length * 4.5;
     df -= sentOffNames.length * 4.5;
@@ -531,8 +538,8 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
 
 export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   const bg = !!(s && (s.pc || s.pa || (s.derby && (h.id === s.me || a.id === s.me))));
-  const H = rate(h, s, bg);
-  const G = rate(a, s, bg);
+  const H = rate(h, s, bg, undefined, undefined, undefined, true);
+  const G = rate(a, s, bg, undefined, undefined, undefined, false);
   if (h.pass === 3 && G.at > H.at) H.at += 3;
   if (a.pass === 3 && H.at > G.at) G.at += 3;
 
@@ -1344,6 +1351,220 @@ export function getTeamStadiumCapacity(t: Team, s?: GameState | null): number {
     STADIUM_CAPACITIES.length - 1
   );
   return Math.max(tierFloor, STADIUM_CAPACITIES[estLvIdx] || 13000);
+}
+
+export function computeTeamFacilityMatchModifiers(
+  t: Team,
+  s?: GameState | null,
+  opts?: { isHome?: boolean; attendancePct?: number; turfLvOverride?: number; turfCondOverride?: number }
+): TeamFacilityMatchModifiers {
+  const isHome = Boolean(opts?.isHome);
+  const isUserMgr = Boolean(s && s.mode === 'm' && t.id === s.me);
+  const clubSeed = (t.id + 1) * 37 + (t.name?.length || 5) * 13;
+
+  const avgOv = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / Math.max(1, t.sq.length));
+  const aiTier = clamp(t.tier ?? 0, 0, 3);
+  const aiOvAdj = clamp(Math.round((avgOv - [50, 58, 66, 73][aiTier]) / 4), -1, 2);
+
+  const levels = isUserMgr && s
+    ? {
+        st: clamp(s.st ?? 1, 1, MAX_FACILITY_LV),
+        tr: clamp(s.tr ?? 1, 0, MAX_FACILITY_LV),
+        med: clamp(s.med ?? 1, 0, MAX_FACILITY_LV),
+        turfLv: clamp(opts?.turfLvOverride ?? s.turfLv ?? 1, 0, MAX_FACILITY_LV),
+        analyticsLv: clamp(s.analyticsLv ?? 1, 0, MAX_FACILITY_LV),
+        merchLv: clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV)
+      }
+    : {
+        st: clamp(Math.floor(ensureTeamFans(t) / 18000) + aiTier * 2 + 1, 1, MAX_FACILITY_LV),
+        tr: clamp([2, 4, 6, 8][aiTier] + aiOvAdj + (clubSeed % 2), 1, MAX_FACILITY_LV),
+        med: clamp([2, 4, 6, 8][aiTier] + aiOvAdj, 1, MAX_FACILITY_LV),
+        turfLv: clamp(opts?.turfLvOverride ?? ([2, 4, 7, 9][aiTier] + aiOvAdj + (clubSeed % 3) - 1), 1, MAX_FACILITY_LV),
+        analyticsLv: clamp([1, 3, 6, 8][aiTier] + aiOvAdj, 1, MAX_FACILITY_LV),
+        merchLv: clamp([1, 3, 6, 8][aiTier] + (clubSeed % 2), 1, MAX_FACILITY_LV)
+      };
+
+  const conditions = isUserMgr && s
+    ? {
+        st: getFacilityCondition(s, 'st'),
+        tr: levels.tr <= 0 ? 40 : getFacilityCondition(s, 'tr'),
+        med: levels.med <= 0 ? 40 : getFacilityCondition(s, 'med'),
+        turfLv: opts?.turfCondOverride ?? (levels.turfLv <= 0 ? 40 : getFacilityCondition(s, 'turfLv')),
+        analyticsLv: levels.analyticsLv <= 0 ? 40 : getFacilityCondition(s, 'analyticsLv'),
+        merchLv: levels.merchLv <= 0 ? 40 : getFacilityCondition(s, 'merchLv')
+      }
+    : {
+        st: 88 + (clubSeed % 10),
+        tr: 88 + ((clubSeed + 3) % 10),
+        med: 88 + ((clubSeed + 5) % 10),
+        turfLv: opts?.turfCondOverride ?? 86 + ((clubSeed + 7) % 12),
+        analyticsLv: 86 + ((clubSeed + 2) % 12),
+        merchLv: 86 + ((clubSeed + 4) % 12)
+      };
+
+  const scaleFacilityScore = (lv: number, cond: number, maxPos: number, destroyedPen: number) => {
+    if (lv <= 0) return destroyedPen;
+    const raw = ((lv - 1) / (MAX_FACILITY_LV - 1)) * maxPos;
+    const condMul = cond >= 75 ? 0.8 + (cond - 75) * 0.008 : 0.45 + ((cond - 40) / 35) * 0.35;
+    const wornPenalty = cond < 58 ? -1 : 0;
+    return Math.round(raw * condMul) + wornPenalty;
+  };
+
+  // 1. Training Complex -> Physical & Technical match sharpness
+  const trDelta = scaleFacilityScore(levels.tr, conditions.tr, 4, -3);
+  const trCondNorm = levels.tr <= 0 ? 0 : (levels.tr / MAX_FACILITY_LV) * (conditions.tr / 100);
+  const fatigueDrainMult = Number(clamp(1.06 - trCondNorm * 0.14, 0.91, 1.07).toFixed(3));
+  const sprintBonusMult = Number(clamp(0.97 + trCondNorm * 0.07, 0.96, 1.04).toFixed(3));
+
+  // 2. Analytics & Video Lab -> Tactical IQ, Vision, Passing & Interceptions
+  const anDelta = scaleFacilityScore(levels.analyticsLv, conditions.analyticsLv, 4, -2);
+  const anCondNorm = levels.analyticsLv <= 0 ? 0 : (levels.analyticsLv / MAX_FACILITY_LV) * (conditions.analyticsLv / 100);
+  const interceptionMult = Number(clamp(0.93 + anCondNorm * 0.19, 0.92, 1.13).toFixed(3));
+  const offsideTimingBonus = Number(clamp(anCondNorm * 0.08, 0, 0.08).toFixed(3));
+
+  // 3. Medical & Physio Center -> Resilience, Balance, Injury prevention
+  const medDelta = scaleFacilityScore(levels.med, conditions.med, 3, -2);
+  const medCondNorm = levels.med <= 0 ? 0 : (levels.med / MAX_FACILITY_LV) * (conditions.med / 100);
+  const injuryRiskMult = Number(clamp(1.16 - medCondNorm * 0.56, 0.56, 1.2).toFixed(3));
+  const lowFitResilience = Number(clamp(0.7 + medCondNorm * 0.3, 0.65, 1).toFixed(2));
+
+  // 4. Home Stadium & Fan Zone Atmosphere -> Composure, Determination & Home Edge
+  const attFill = clamp(opts?.attendancePct ?? (isHome ? 65 : 50), 20, 100);
+  const stRaw = isHome
+    ? ((levels.st - 1) / (MAX_FACILITY_LV - 1)) * 2.8 * (conditions.st / 100) +
+      (attFill >= 75 ? 1.0 : attFill >= 55 ? 0.4 : -0.4) +
+      (levels.merchLv >= 5 && conditions.merchLv >= 70 ? 0.6 : 0) -
+      (conditions.st < 60 ? 1.2 : 0)
+    : levels.st >= 8 && conditions.st >= 80
+      ? 0.7
+      : 0;
+  const crowdDelta = clamp(Math.round(stRaw), -1, 4);
+
+  // 5. Home Turf Familiarity -> Extra ball control & footing at home
+  const homeTurfFamDelta =
+    isHome && levels.turfLv >= 4 && conditions.turfLv >= 70
+      ? levels.turfLv >= 8 && conditions.turfLv >= 82
+        ? 2
+        : 1
+      : isHome && (levels.turfLv <= 0 || conditions.turfLv < 52)
+        ? -1
+        : 0;
+  const slipResistMult =
+    isHome && levels.turfLv >= 4 && conditions.turfLv >= 70
+      ? Number(clamp(0.95 - (levels.turfLv - 4) * 0.02, 0.82, 0.96).toFixed(2))
+      : 1;
+
+  const statDeltas: Record<string, number> = {
+    spd: clamp(trDelta, -4, 4),
+    sta: clamp(trDelta + (crowdDelta > 1 ? 1 : 0), -4, 5),
+    str: clamp(trDelta, -3, 4),
+    fin: clamp(Math.round(trDelta * 0.85) + (crowdDelta >= 3 ? 1 : 0), -3, 4),
+    pw: clamp(Math.round(trDelta * 0.75), -3, 3),
+    cur: clamp(Math.round(trDelta * 0.75) + homeTurfFamDelta, -4, 5),
+    vis: clamp(anDelta, -3, 4),
+    rd: clamp(anDelta + (crowdDelta > 2 ? 1 : 0), -3, 5),
+    pos: clamp(anDelta + homeTurfFamDelta, -3, 5),
+    mrk: clamp(anDelta, -3, 4),
+    spass: clamp(anDelta + homeTurfFamDelta, -3, 5),
+    lpass: clamp(anDelta, -3, 4),
+    crs: clamp(Math.round((trDelta + anDelta) * 0.5), -3, 4),
+    run: clamp(Math.round((trDelta + anDelta) * 0.55), -3, 4),
+    tkl: clamp(Math.round((trDelta + anDelta) * 0.45), -3, 4),
+    blk: clamp(Math.round((anDelta + medDelta) * 0.45), -3, 4),
+    hd: clamp(Math.round((trDelta + medDelta) * 0.45), -3, 4),
+    agi: clamp(Math.round((trDelta + medDelta) * 0.5), -3, 4),
+    jmp: clamp(medDelta, -3, 3),
+    tol: clamp(medDelta, -3, 3),
+    rec: clamp(medDelta, -3, 3),
+    bal: clamp(medDelta + homeTurfFamDelta, -3, 4),
+    comp: clamp(crowdDelta + (anDelta >= 3 ? 1 : 0), -2, 5),
+    det: clamp(crowdDelta + (trDelta >= 3 ? 1 : 0), -2, 5),
+    sv: clamp(Math.round((trDelta + anDelta) * 0.5) + (crowdDelta >= 3 ? 1 : 0), -3, 4),
+    rfx: clamp(Math.round((trDelta + medDelta) * 0.5), -3, 4),
+    hnd: clamp(Math.round((trDelta + medDelta) * 0.45) + homeTurfFamDelta, -3, 4),
+    cl: clamp(Math.round((anDelta + crowdDelta) * 0.45), -2, 4),
+    dist: clamp(anDelta, -3, 4)
+  };
+
+  const ratingAtDelta = Number(
+    clamp((trDelta * 0.34 + anDelta * 0.32 + crowdDelta * 0.24 + homeTurfFamDelta * 0.2), -2.2, 3.2).toFixed(2)
+  );
+  const ratingDfDelta = Number(
+    clamp((anDelta * 0.36 + medDelta * 0.28 + crowdDelta * 0.24 + homeTurfFamDelta * 0.16), -2.2, 3.2).toFixed(2)
+  );
+
+  const fmtSign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+  const toneOf = (n: number): 'pos' | 'neg' | 'neu' => (n > 0 ? 'pos' : n < 0 ? 'neg' : 'neu');
+
+  const breakdown = [
+    {
+      key: 'st',
+      label: isHome ? `🏟️ สนาม & แฟนโซน (Lv.${levels.st})` : `🏟️ ประสบการณ์สนามใหญ่ (Lv.${levels.st})`,
+      deltaText: `นิ่ง/มุ่งมั่น ${fmtSign(crowdDelta)}`,
+      tone: toneOf(crowdDelta)
+    },
+    {
+      key: 'tr',
+      label: `🏋️ ศูนย์ฝึกซ้อม (${levels.tr > 0 ? `Lv.${levels.tr} · ${conditions.tr}%` : 'ไม่มี'})`,
+      deltaText: `กาย/คม/แรง ${fmtSign(trDelta)} · เสียแรง ${Math.round((fatigueDrainMult - 1) * 100) >= 0 ? `+${Math.round((fatigueDrainMult - 1) * 100)}` : Math.round((fatigueDrainMult - 1) * 100)}%`,
+      tone: toneOf(trDelta)
+    },
+    {
+      key: 'analyticsLv',
+      label: `📊 ห้องวิเคราะห์ (${levels.analyticsLv > 0 ? `Lv.${levels.analyticsLv} · ${conditions.analyticsLv}%` : 'ไม่มี'})`,
+      deltaText: `อ่านเกม/จ่าย ${fmtSign(anDelta)}`,
+      tone: toneOf(anDelta)
+    },
+    {
+      key: 'med',
+      label: `🏥 ศูนย์แพทย์ (${levels.med > 0 ? `Lv.${levels.med} · ${conditions.med}%` : 'ไม่มี'})`,
+      deltaText: `ทรงตัว/อึด ${fmtSign(medDelta)} · เสี่ยงเจ็บ x${injuryRiskMult.toFixed(2)}`,
+      tone: toneOf(medDelta)
+    }
+  ];
+  if (isHome) {
+    breakdown.push({
+      key: 'turfLv',
+      label: `🌱 คุ้นเคยสนามเหย้า (${levels.turfLv > 0 ? `Lv.${levels.turfLv}` : 'ไม่มี'})`,
+      deltaText: `คุมบอล/ยืนตำแหน่ง ${fmtSign(homeTurfFamDelta)}`,
+      tone: toneOf(homeTurfFamDelta)
+    });
+  }
+
+  return {
+    isHome,
+    levels,
+    conditions,
+    statDeltas,
+    fatigueDrainMult,
+    injuryRiskMult,
+    sprintBonusMult,
+    interceptionMult,
+    offsideTimingBonus,
+    lowFitResilience,
+    slipResistMult,
+    ratingAtDelta,
+    ratingDfDelta,
+    breakdown
+  };
+}
+
+export function combineMatchStatDeltas(
+  turfDeltas?: Record<string, number> | null,
+  facDeltas?: Record<string, number> | null
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (turfDeltas) {
+    Object.entries(turfDeltas).forEach(([k, v]) => {
+      out[k] = (out[k] || 0) + v;
+    });
+  }
+  if (facDeltas) {
+    Object.entries(facDeltas).forEach(([k, v]) => {
+      out[k] = (out[k] || 0) + v;
+    });
+  }
+  return out;
 }
 
 export interface TicketPricingPlanDef {

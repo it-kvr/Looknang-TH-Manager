@@ -19,7 +19,7 @@ import {
 import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle, CoachOutfitId } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
-import { getTurfGradeForLevel, getTurfGradeSpec } from '../data/crestAndKitData';
+import { getTurfGradeForLevel, getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
 import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
 
 type TimelineKind =
@@ -52,7 +52,7 @@ interface MatchTimelineItem {
   detail?: string;
 }
 import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen } from '../engine/playerCore';
-import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, getFacilityCondition } from '../engine/simulation';
+import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, getFacilityCondition, computeTeamFacilityMatchModifiers, combineMatchStatDeltas } from '../engine/simulation';
 import { generateLiveStreamComment, getMatchBroadcastChannel, getStreamViewerTier, getViewerTierMeta, type LiveCommentItem, type LiveCommentKind } from '../engine/liveStreamChat';
 import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
@@ -459,6 +459,7 @@ export const MatchModal: React.FC<{
     };
   }, [homeOrig.id, homeOrig.name, homeOrig.tier, homeOrig.sq, kind, meIsHome, state.turfLv, state.facCond?.turfLv, state.money, state.md]);
   const turfSpec = useMemo(() => getTurfGradeSpec(matchEnv.turfGrade), [matchEnv.turfGrade]);
+  const turfMatchMods = useMemo(() => computeTurfMatchModifiers(matchEnv), [matchEnv]);
 
   const initialHomeXi = useMemo(() => xi(homeOrig).map((q) => q.n), [homeOrig]);
   const initialAwayXi = useMemo(() => xi(awayOrig).map((q) => q.n), [awayOrig]);
@@ -487,6 +488,34 @@ export const MatchModal: React.FC<{
     () => computeMatchAttendance(homeOrig, awayOrig, state, { kind, derby: isDerby }),
     [homeOrig, awayOrig, state, kind, isDerby]
   );
+
+  const homeFacMods = useMemo(
+    () =>
+      computeTeamFacilityMatchModifiers(homeOrig, state, {
+        isHome: true,
+        attendancePct: matchAttendance.pct,
+        turfCondOverride: matchEnv.turfCond
+      }),
+    [homeOrig, state, matchAttendance.pct, matchEnv.turfCond]
+  );
+  const awayFacMods = useMemo(
+    () =>
+      computeTeamFacilityMatchModifiers(awayOrig, state, {
+        isHome: false,
+        attendancePct: matchAttendance.pct
+      }),
+    [awayOrig, state, matchAttendance.pct]
+  );
+  const homeStatDeltas = useMemo(
+    () => combineMatchStatDeltas(turfMatchMods.statDeltas, homeFacMods.statDeltas),
+    [turfMatchMods.statDeltas, homeFacMods.statDeltas]
+  );
+  const awayStatDeltas = useMemo(
+    () => combineMatchStatDeltas(turfMatchMods.statDeltas, awayFacMods.statDeltas),
+    [turfMatchMods.statDeltas, awayFacMods.statDeltas]
+  );
+  const getSideFacMods = (side: 'H' | 'A') => (side === 'H' ? homeFacMods : awayFacMods);
+  const [showEnvModsPopover, setShowEnvModsPopover] = useState(false);
 
   const [minute, setMinute] = useState(0);
   const [clockLabel, setClockLabel] = useState("0'");
@@ -866,10 +895,26 @@ export const MatchModal: React.FC<{
     };
   }
 
+  function buildTeamAgents(team: Team, side: 'H' | 'A', luNames: string[], secondHalf = false) {
+    const sr = simRef.current;
+    return buildAgentsForTeam(
+      team,
+      side,
+      luNames,
+      sr.sentOff,
+      sr.yellows,
+      sr.liveFit,
+      state.p,
+      myPlayerName,
+      secondHalf,
+      side === 'H' ? homeStatDeltas : awayStatDeltas
+    );
+  }
+
   function buildInitialWorld(): LiveMatchWorld {
     const sr = simRef.current;
-    const hAgents = buildAgentsForTeam(getLiveHomeTeam(), 'H', sr.homeLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
-    const aAgents = buildAgentsForTeam(getLiveAwayTeam(), 'A', sr.awayLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
+    const hAgents = buildTeamAgents(getLiveHomeTeam(), 'H', sr.homeLu, false);
+    const aAgents = buildTeamAgents(getLiveAwayTeam(), 'A', sr.awayLu, false);
     const firstCarrier = hAgents.find((a) => a.pos === 'FW') || hAgents.find((a) => a.pos === 'MF') || hAgents[9];
     if (firstCarrier) {
       firstCarrier.x = 49;
@@ -1240,7 +1285,7 @@ export const MatchModal: React.FC<{
 
     const effTeam = side === 'H' ? getLiveHomeTeam() : getLiveAwayTeam();
     const updatedLu = side === 'H' ? sr.homeLu : sr.awayLu;
-    const rebuilt = buildAgentsForTeam(effTeam, side, updatedLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+    const rebuilt = buildTeamAgents(effTeam, side, updatedLu, w.secondHalf);
     rebuilt.forEach((nextAg) => {
       const oldIdx = w.agents.findIndex((a) => a.side === side && a.id === nextAg.id);
       if (oldIdx >= 0) {
@@ -1390,7 +1435,7 @@ export const MatchModal: React.FC<{
       if (nextItem) created.push(nextItem);
     }
     if (created.length > 0) {
-      setLiveComments((prev) => [...created, ...prev].slice(0, 65));
+      setLiveComments((prev) => [...created, ...prev].slice(0, 85));
     }
   };
 
@@ -1399,25 +1444,34 @@ export const MatchModal: React.FC<{
     setLogs((prev) => [{ id: logId, m, text, tone }, ...prev].slice(0, 100));
     const vTier = getStreamViewerTier(liveViewersRef.current);
     const baseSurge = Math.max(40, Math.round(streamProj.baseViewers * 0.05));
+    const findNamedInLog = (exclude?: string) =>
+      [...homeOrig.sq, ...awayOrig.sq]
+        .filter((q) => q.n && q.n !== exclude && text.includes(q.n))
+        .sort((a, b) => b.n.length - a.n.length)[0];
     if (tone === 'goal') {
       const isMyGoal = text.includes(meTeamOrig.name);
+      const actorObj = findNamedInLog();
       const actorMatch = text.match(/([ก-ฮA-Za-z0-9._-]+)\s*(?:\(|!|ซัด|โหม่ง|ยิง|ปั่น)/);
       pushStreamComment(m, isMyGoal ? 'goal' : 'concede', {
-        actor: actorMatch?.[1],
+        actor: actorObj?.n || actorMatch?.[1],
         viewerBoost: baseSurge * 1.6,
-        burst: vTier === 'viral' || vTier === 'high' ? 2 : 1
+        burst: vTier === 'viral' ? 3 : vTier === 'high' ? 2 : Math.random() < 0.45 ? 2 : 1
       });
     } else if (tone === 'card') {
       if (text.includes('VAR')) {
         pushStreamComment(m, 'var', { viewerBoost: baseSurge });
       } else {
+        const cardObj = findNamedInLog();
         const cardMatch = text.match(/!\s*([^\s(]+)/);
-        pushStreamComment(m, 'card', { actor: cardMatch?.[1], viewerBoost: Math.round(baseSurge * 0.6) });
+        pushStreamComment(m, 'card', { actor: cardObj?.n || cardMatch?.[1], viewerBoost: Math.round(baseSurge * 0.6) });
       }
     } else if (tone === 'sub') {
       const inMatch = text.match(/🟢\s*([^\s(]+)/);
+      const subObj = inMatch?.[1]
+        ? [...homeOrig.sq, ...awayOrig.sq].find((q) => q.n === inMatch[1] || text.includes(`🟢 ${q.n}`))
+        : undefined;
       if (vTier !== 'low' || Math.random() < 0.6) {
-        pushStreamComment(m, 'sub', { actor: inMatch?.[1] });
+        pushStreamComment(m, 'sub', { actor: subObj?.n || inMatch?.[1] });
       }
     } else if (text.includes('เซฟ') || text.includes('ปัด')) {
       if (Math.random() < (vTier === 'low' ? 0.55 : 0.85)) {
@@ -1427,7 +1481,8 @@ export const MatchModal: React.FC<{
         pushStreamComment(m, 'save', {
           actor: gkObj?.n,
           gkName: gkObj?.n,
-          viewerBoost: Math.round(baseSurge * 0.45)
+          viewerBoost: Math.round(baseSurge * 0.45),
+          burst: vTier === 'viral' || (vTier === 'high' && Math.random() < 0.5) ? 2 : 1
         });
       }
     } else if (text.includes('VAR')) {
@@ -1605,10 +1660,13 @@ export const MatchModal: React.FC<{
     if (!pl) return false;
     const D = DT(pl, state.p);
     const curFit = sr.liveFit[victim.id] ?? victim.fit ?? 100;
-    const medLv = isMySide ? (state.med ?? 1) : 1;
-    const turfLv = isMySide ? (state.turfLv ?? 1) : 1;
+    const victimFacMods = getSideFacMods(victim.side);
     const physioLv = isMySide ? (state.staff?.physio ?? 0) : 0;
-    const medMult = Math.max(0.4, 1 - (medLv - 1) * 0.045 - physioLv * 0.05 - (turfLv - 1) * 0.02) * (isMySide && state.tf === 'F' ? 0.55 : 1);
+    const medMult = clamp(
+      victimFacMods.injuryRiskMult * turfMatchMods.injuryMult * (1 - physioLv * 0.05) * (isMySide && state.tf === 'F' ? 0.55 : 1),
+      0.35,
+      1.5
+    );
     const tolMult = clamp((132 - (D.d.tol || 65)) / 65, 0.55, 1.45);
     const fitMult = curFit < 54 ? 1.8 : curFit < 65 ? 1.25 : 0.85;
     const traitInjMult = agentHasTrait(victim, 'glass_cannon') ? 1.45 : agentHasTrait(victim, 'iron_lungs') ? 0.78 : 1;
@@ -1695,7 +1753,7 @@ export const MatchModal: React.FC<{
       else sr.awaySubsCount++;
       sr.subs.push({ m: curMin, t: sideOrig.id, inPlayer: subIn.n, outPlayer: victim.id });
       const effSubTeam = victim.side === 'H' ? getLiveHomeTeam() : getLiveAwayTeam();
-      const rep = buildAgentsForTeam(effSubTeam, victim.side, curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+      const rep = buildTeamAgents(effSubTeam, victim.side, curLu, w.secondHalf);
       const agIdx = w.agents.findIndex((a) => a.id === victim.id);
       if (agIdx >= 0 && rep[idx]) {
         rep[idx].x = w.agents[agIdx].x;
@@ -2430,7 +2488,8 @@ export const MatchModal: React.FC<{
     p -= (finComp - 60) * 0.0006;
     if ((shooter.blessedMins ?? 0) > 0) p *= 0.22;
     if (agentHasTrait(shooter, 'poacher_instinct') || agentHasTrait(shooter, 'consistency_pro')) p *= 0.72;
-    return Math.random() < clamp(p, 0.01, 0.13);
+    p *= turfMatchMods.whiffMult;
+    return Math.random() < clamp(p, 0.01, 0.15);
   };
 
   const launchWhiffLooseBall = (
@@ -2812,8 +2871,8 @@ export const MatchModal: React.FC<{
 
     // 3. On-Target: Goal vs GK Save!
     const onTargetY = isPanenka ? 50 + (Math.random() - 0.5) * 3 : 42.8 + Math.random() * 14.4;
-    const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
-    const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
+    const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, true);
+    const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, false);
     const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
     const gkSaveScore = gk
       ? (gk.d.sv + (gk.sig === 'sv' ? 7 : 0) + (agentHasTrait(gk, 'reflex_cat') ? 8 : 0) + (flightType === 'penalty' && agentHasTrait(gk, 'penalty_saver') ? 12 : 0)) * 0.34 +
@@ -3410,7 +3469,7 @@ export const MatchModal: React.FC<{
         b.startZ = 0;
         b.endZ = 0;
         b.progress = 0;
-        b.duration = useLofted ? clamp(distGk / 42, 0.56, 0.82) : clamp(distGk / 52, 0.32, 0.54);
+        b.duration = useLofted ? clamp(distGk / 42, 0.56, 0.82) : clamp(distGk / 52, 0.32, 0.54) / turfMatchMods.passPaceMult;
         b.flightType = useLofted ? 'lofted' : 'pass';
         b.shotStyle = undefined;
         b.carrierId = null;
@@ -3486,7 +3545,14 @@ export const MatchModal: React.FC<{
       const isRainy = w.env?.season === 'rainy';
       const slipBase = 0.0085 + (isRainy ? 0.008 : 0) + (onPuddle ? 0.024 : 0) + (carrier.fit < 55 ? 0.014 : 0) + (nearestDefDist < 7.5 ? 0.007 : 0);
       const slipAgilAdj = ((carrier.d.spd || 60) + (carrier.d.comp || 60) - 120) * 0.00012;
-      const carrierSlipProb = clamp((slipBase - slipAgilAdj) * ((carrier.blessedMins ?? 0) > 0 ? 0.35 : 1), 0.004, 0.065);
+      const carrierSlipProb = clamp(
+        (slipBase - slipAgilAdj) *
+          ((carrier.blessedMins ?? 0) > 0 ? 0.35 : 1) *
+          turfMatchMods.slipMult *
+          getSideFacMods(side).slipResistMult,
+        0.004,
+        0.08
+      );
       if (Math.random() < carrierSlipProb) {
         triggerAgentSlipFx(w, carrier, `💦 ${carrier.shortName} ลื่นล้ม!`, inOwnPenaltyBox ? -0.22 : -0.15);
         triggerCoachMood(w, side, '🤦', 1.9);
@@ -3656,9 +3722,11 @@ export const MatchModal: React.FC<{
       const defOnPuddle = isOnRainyPuddle(w, nearestDef.x, nearestDef.y);
       const defSlipProb = clamp(
         (0.0085 + (w.env?.season === 'rainy' ? 0.007 : 0) + (defOnPuddle ? 0.024 : 0) + (nearestDef.fit < 55 ? 0.013 : 0) - ((nearestDef.d.pos || 60) - 60) * 0.00015) *
-          ((nearestDef.blessedMins ?? 0) > 0 ? 0.35 : 1),
+          ((nearestDef.blessedMins ?? 0) > 0 ? 0.35 : 1) *
+          turfMatchMods.slipMult *
+          getSideFacMods(defSide).slipResistMult,
         0.004,
-        0.055
+        0.07
       );
       if (curMin >= 2 && Math.random() < defSlipProb) {
         triggerAgentSlipFx(w, nearestDef, `💦 ${nearestDef.shortName} ลื่น!`, -0.18);
@@ -4330,7 +4398,7 @@ export const MatchModal: React.FC<{
         b.startZ = 0;
         b.endZ = 0;
         b.progress = 0;
-        b.duration = 0.42;
+        b.duration = 0.42 / turfMatchMods.passPaceMult;
         b.flightType = 'cutback';
         b.shotStyle = undefined;
         b.carrierId = null;
@@ -4454,7 +4522,7 @@ export const MatchModal: React.FC<{
         b.startZ = 0;
         b.endZ = 0;
         b.progress = 0;
-        b.duration = attCfg.tempo === 2 ? 0.28 : 0.34;
+        b.duration = (attCfg.tempo === 2 ? 0.28 : 0.34) / turfMatchMods.passPaceMult;
         b.flightType = 'onetwo';
         b.shotStyle = undefined;
         b.carrierId = null;
@@ -4515,9 +4583,13 @@ export const MatchModal: React.FC<{
 
       if (offChk.isOffside) {
         const timeRunProb = clamp(
-          0.60 + (runner.d.run - 60) * 0.006 + (agentHasTrait(runner, 'offside_trap_breaker') ? 0.24 : 0) + (agentHasTrait(carrier, 'killer_passer') ? 0.10 : 0),
+          0.60 +
+            (runner.d.run - 60) * 0.006 +
+            (agentHasTrait(runner, 'offside_trap_breaker') ? 0.24 : 0) +
+            (agentHasTrait(carrier, 'killer_passer') ? 0.10 : 0) +
+            getSideFacMods(side).offsideTimingBonus,
           0.42,
-          0.92
+          0.94
         );
         if (Math.random() >= timeRunProb) {
           triggerOffsideCall(w, curMin, side, carrier, runner, offChk.oppLineX, 'through', 'ยืนล้ำแนวรับจังหวะแทงทะลุช่อง');
@@ -4548,7 +4620,7 @@ export const MatchModal: React.FC<{
       b.progress = 0;
       const passSkill = isLoftedThrough ? (carrier.d.lpass ?? 60) : (carrier.d.spass ?? 60);
       const passPaceFactor = clamp(1 - (passSkill - 60) * 0.0022, 0.88, 1.08);
-      b.duration = (isLoftedThrough ? 0.62 : attCfg.tempo === 2 ? 0.40 : 0.48) * passPaceFactor;
+      b.duration = ((isLoftedThrough ? 0.62 : attCfg.tempo === 2 ? 0.40 : 0.48) * passPaceFactor) / (isLoftedThrough ? 1 : turfMatchMods.passPaceMult);
       b.flightType = isLoftedThrough ? 'lofted' : 'through';
       b.shotStyle = undefined;
       b.carrierId = null;
@@ -4691,7 +4763,7 @@ export const MatchModal: React.FC<{
       b.progress = 0;
       const basePassDur = isLofted ? clamp(dist / 44, 0.54, 0.82) : isTrivelaPass ? clamp(dist / 52, 0.36, 0.62) : clamp(dist / (attCfg.tempo === 2 ? 78 : attCfg.tempo === 0 ? 48 : 58), 0.26, 0.60);
       const passStat = isLofted ? (carrier.d.lpass ?? 60) : (carrier.d.spass ?? 60);
-      b.duration = basePassDur * clamp(1 - (passStat - 60) * 0.002, 0.88, 1.08);
+      b.duration = (basePassDur * clamp(1 - (passStat - 60) * 0.002, 0.88, 1.08)) / (isLofted ? 1 : turfMatchMods.passPaceMult);
       b.flightType = isLofted ? 'lofted' : isTrivelaPass ? 'trivela_pass' : 'pass';
       b.shotStyle = undefined;
       b.carrierId = null;
@@ -5635,8 +5707,8 @@ export const MatchModal: React.FC<{
 
       let isGoal = plan?.outcome === 'goal';
       if (!plan) {
-        const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
-        const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
+        const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, true);
+        const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, false);
         const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
         const gkSaveScore = gk
           ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.36 +
@@ -6067,9 +6139,10 @@ export const MatchModal: React.FC<{
           );
           const defWhiffProb = clamp(
             (0.048 + (w.env?.season === 'rainy' ? 0.016 : 0) + (defInPuddle ? 0.02 : 0) + (topDef.fit < 55 ? 0.02 : 0)) *
-              ((topDef.blessedMins ?? 0) > 0 ? 0.3 : 1),
+              ((topDef.blessedMins ?? 0) > 0 ? 0.3 : 1) *
+              turfMatchMods.whiffMult,
             0.02,
-            0.10
+            0.12
           );
           const defErrRoll = Math.random();
           if (defErrRoll < defOgProb) {
@@ -6295,7 +6368,14 @@ export const MatchModal: React.FC<{
               0.58
             )
           : 0;
-      const interceptProb = rawInterceptProb * (passerBlessed ? 0.35 : 1);
+      const interceptProb = clamp(
+        rawInterceptProb *
+          (passerBlessed ? 0.35 : 1) *
+          (b.flightType === 'lofted' ? 1 : turfMatchMods.interceptChaosMult) *
+          getSideFacMods(defSide).interceptionMult,
+        0.04,
+        0.64
+      );
       if (nearestOpp && Math.random() < interceptProb) {
         b.possessionSide = defSide;
         b.carrierId = nearestOpp.id;
@@ -6348,7 +6428,7 @@ export const MatchModal: React.FC<{
           b.startZ = 0;
           b.endZ = 0;
           b.progress = 0;
-          b.duration = 0.34;
+          b.duration = 0.34 / turfMatchMods.passPaceMult;
           b.flightType = 'through';
           b.shotStyle = undefined;
           b.carrierId = null;
@@ -6592,7 +6672,14 @@ export const MatchModal: React.FC<{
       const plTraits = pl.traits || [];
       const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
       const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
-      const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * pressLoad * turfSpec.fatigueMult * (pl.pos === 'GK' ? 0.25 : 1);
+      const sideFacMods = getSideFacMods(isH ? 'H' : 'A');
+      const drain =
+        (0.34 - (D.d.sta - 65) * 0.0022) *
+        staBonus *
+        pressLoad *
+        turfMatchMods.fatigueMult *
+        sideFacMods.fatigueDrainMult *
+        (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
@@ -6669,7 +6756,7 @@ export const MatchModal: React.FC<{
       const agIdx = w.agents.findIndex((a) => a.id === outPlayer!.n);
       if (agIdx >= 0) {
         const effSideTeam = isHomeSide ? getLiveHomeTeam() : getLiveAwayTeam();
-        const rep = buildAgentsForTeam(effSideTeam, isHomeSide ? 'H' : 'A', curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+        const rep = buildTeamAgents(effSideTeam, isHomeSide ? 'H' : 'A', curLu, w.secondHalf);
         if (rep[idx]) {
           rep[idx].x = w.agents[agIdx].x;
           rep[idx].y = w.agents[agIdx].y;
@@ -6762,7 +6849,14 @@ export const MatchModal: React.FC<{
       const plTraits = pl.traits || [];
       const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
       const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
-      const drain = (0.34 - (D.d.sta - 65) * 0.0022) * staBonus * pressLoad * turfSpec.fatigueMult * (pl.pos === 'GK' ? 0.25 : 1);
+      const sideFacMods = getSideFacMods(isH ? 'H' : 'A');
+      const drain =
+        (0.34 - (D.d.sta - 65) * 0.0022) *
+        staBonus *
+        pressLoad *
+        turfMatchMods.fatigueMult *
+        sideFacMods.fatigueDrainMult *
+        (pl.pos === 'GK' ? 0.25 : 1);
       sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
@@ -6840,7 +6934,7 @@ export const MatchModal: React.FC<{
       const agIdx = w.agents.findIndex((a) => a.id === outPlayer!.n);
       if (agIdx >= 0) {
         const effSideTeam = isHomeSide ? getLiveHomeTeam() : getLiveAwayTeam();
-        const rep = buildAgentsForTeam(effSideTeam, isHomeSide ? 'H' : 'A', curLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+        const rep = buildTeamAgents(effSideTeam, isHomeSide ? 'H' : 'A', curLu, w.secondHalf);
         if (rep[idx]) {
           rep[idx].x = w.agents[agIdx].x;
           rep[idx].y = w.agents[agIdx].y;
@@ -7137,7 +7231,7 @@ export const MatchModal: React.FC<{
         const myOn = (meIsHome ? sr.homeLu : sr.awayLu).filter((n) => !sr.sentOff.includes(n));
         pushStreamComment(nextMin, 'ambient', {
           actor: myOn.length ? P(myOn) : undefined,
-          burst: vTier === 'viral' && Math.random() < 0.45 ? 2 : 1
+          burst: vTier === 'viral' ? (Math.random() < 0.5 ? 3 : 2) : vTier === 'high' && Math.random() < 0.45 ? 2 : 1
         });
       }
     }
@@ -7259,17 +7353,7 @@ export const MatchModal: React.FC<{
     myLu[bestI] = nameB;
     myLu[bestJ] = nameA;
 
-    const updated = buildAgentsForTeam(
-      meTeamOrig,
-      mySide,
-      myLu,
-      sr.sentOff,
-      sr.yellows,
-      sr.liveFit,
-      state.p,
-      myPlayerName,
-      w.secondHalf
-    );
+    const updated = buildTeamAgents(meTeamOrig, mySide, myLu, w.secondHalf);
     updated.forEach((nextAg) => {
       const oldIdx = w.agents.findIndex((a) => a.side === mySide && a.id === nextAg.id);
       if (oldIdx >= 0) {
@@ -7398,7 +7482,7 @@ export const MatchModal: React.FC<{
 
       const agIdx = w.agents.findIndex((a) => a.id === outPl.n);
       if (agIdx >= 0) {
-        const rep = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+        const rep = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
         if (rep[outPick.idx]) {
           rep[outPick.idx].x = w.agents[agIdx].x;
           rep[outPick.idx].y = w.agents[agIdx].y;
@@ -7958,10 +8042,14 @@ export const MatchModal: React.FC<{
           const dx = ag.tx - ag.x;
           const dy = ag.ty - ag.y;
           const dist = Math.hypot(dx, dy);
+          const agFacMods = getSideFacMods(ag.side);
+          const lowFitSpd = ag.fit < 50 ? clamp(0.76 + (agFacMods.lowFitResilience - 0.7) * 0.45, 0.76, 0.94) : 1.0;
           const maxSpd =
             (18 + ((ag.d.spd || 60) - 55) * 0.22) *
             (ag.intent === 'MAKE_RUN' || ag.intent === 'OVERLAP' || ag.intent === 'PRESS' || ag.intent === 'RESET' || ag.intent === 'PASS_TARGET' ? 1.38 : 1.0) *
-            (ag.fit < 50 ? 0.82 : 1.0) *
+            lowFitSpd *
+            turfMatchMods.sprintSpeedMult *
+            agFacMods.sprintBonusMult *
             ((ag.blessedMins ?? 0) > 0 ? 1.14 : 1.0) *
             (w.miracle?.side === ag.side && w.miracle.minsLeft > 0 ? (w.miracle.maxDeficit >= 3 ? 1.2 : 1.16) : 1.0) *
             moveScale;
@@ -8201,8 +8289,8 @@ export const MatchModal: React.FC<{
           if (m === 46) {
             w.secondHalf = true;
             w.pendingSetPiece = null;
-            w.agents = buildAgentsForTeam(getLiveHomeTeam(), 'H', simRef.current.homeLu, simRef.current.sentOff, simRef.current.yellows, simRef.current.liveFit, state.p, myPlayerName, true).concat(
-              buildAgentsForTeam(getLiveAwayTeam(), 'A', simRef.current.awayLu, simRef.current.sentOff, simRef.current.yellows, simRef.current.liveFit, state.p, myPlayerName, true)
+            w.agents = buildTeamAgents(getLiveHomeTeam(), 'H', simRef.current.homeLu, true).concat(
+              buildTeamAgents(getLiveAwayTeam(), 'A', simRef.current.awayLu, true)
             );
             const ko2 = w.agents.find((a) => a.side === 'A' && !a.sentOff && a.pos !== 'GK') || w.agents[0];
             w.ball.x = 50;
@@ -8278,7 +8366,7 @@ export const MatchModal: React.FC<{
     // Swap live pitch agent immediately so the sub enters right on the pitch!
     const agIdx = w.agents.findIndex((a) => a.id === outName);
     if (agIdx >= 0) {
-      const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+      const updated = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
       if (updated[idx]) {
         updated[idx].x = w.agents[agIdx].x;
         updated[idx].y = w.agents[agIdx].y;
@@ -8316,7 +8404,7 @@ export const MatchModal: React.FC<{
     myLu[idxB] = tmp;
 
     const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
-    const updated = buildAgentsForTeam(meTeamOrig, mySide, myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+    const updated = buildTeamAgents(meTeamOrig, mySide, myLu, w.secondHalf);
     updated.forEach((nextAg) => {
       const oldIdx = w.agents.findIndex((a) => a.side === mySide && a.id === nextAg.id);
       if (oldIdx >= 0) {
@@ -8363,7 +8451,7 @@ export const MatchModal: React.FC<{
 
     const agIdx = w.agents.findIndex((a) => a.id === injuryAlert.name);
     if (agIdx >= 0) {
-      const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+      const updated = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
       if (updated[idx]) {
         updated[idx].x = w.agents[agIdx].x;
         updated[idx].y = w.agents[agIdx].y;
@@ -8434,7 +8522,7 @@ export const MatchModal: React.FC<{
 
     const agIdx = w.agents.findIndex((a) => a.id === outName);
     if (agIdx >= 0) {
-      const updated = buildAgentsForTeam(meTeamOrig, meIsHome ? 'H' : 'A', myLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName, w.secondHalf);
+      const updated = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
       if (updated[idx]) {
         updated[idx].x = w.agents[agIdx].x;
         updated[idx].y = w.agents[agIdx].y;
@@ -9079,39 +9167,92 @@ export const MatchModal: React.FC<{
                 <span className="hidden lg:inline">{compTitle}</span>
               </span>
               <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
-              <span
-                className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold shrink-0 ${
-                  matchEnv.timeOfDay === 'night'
-                    ? matchEnv.season === 'rainy'
-                      ? 'text-sky-600 dark:text-sky-300'
-                      : 'text-amber-600 dark:text-amber-300'
-                    : matchEnv.season === 'rainy'
-                      ? 'text-sky-600 dark:text-sky-300'
-                      : 'text-amber-700 dark:text-amber-300'
-                }`}
-                title={
-                  matchEnv.season === 'rainy'
-                    ? matchEnv.timeOfDay === 'night'
-                      ? 'หน้าฝน · เตะตอนกลางคืน (สนามมีน้ำเล็กน้อย)'
-                      : 'หน้าฝน · กลางวัน (สนามมีน้ำเล็กน้อย)'
-                    : matchEnv.timeOfDay === 'night'
-                      ? 'หน้าร้อน · เตะตอนกลางคืน'
-                      : 'หน้าร้อน · แดดออก'
-                }
-              >
-                <span>
-                  {matchEnv.timeOfDay === 'night'
-                    ? matchEnv.season === 'rainy'
-                      ? '🌙💧'
-                      : '🌙'
-                    : matchEnv.season === 'rainy'
-                      ? '💧'
-                      : '☀️'}
-                </span>
-                <span className="hidden xl:inline">
-                  {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
-                </span>
-              </span>
+              <div className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowEnvModsPopover((v) => !v)}
+                  className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold shrink-0 cursor-pointer rounded px-1 py-0.5 transition-colors hover:bg-[var(--surface-2)] ${
+                    matchEnv.timeOfDay === 'night'
+                      ? matchEnv.season === 'rainy'
+                        ? 'text-sky-600 dark:text-sky-300'
+                        : 'text-amber-600 dark:text-amber-300'
+                      : matchEnv.season === 'rainy'
+                        ? 'text-sky-600 dark:text-sky-300'
+                        : 'text-amber-700 dark:text-amber-300'
+                  }`}
+                  title="ดูผลกระทบสภาพสนามหญ้า & สิ่งอำนวยความสะดวกต่อนักเตะในนัดนี้"
+                >
+                  <span>
+                    {matchEnv.timeOfDay === 'night'
+                      ? matchEnv.season === 'rainy'
+                        ? '🌙💧'
+                        : '🌙'
+                      : matchEnv.season === 'rainy'
+                        ? '💧'
+                        : '☀️'}
+                  </span>
+                  <span className="hidden xl:inline">
+                    {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
+                  </span>
+                </button>
+                {showEnvModsPopover && (
+                  <div className="absolute left-0 top-full mt-1.5 z-50 w-[305px] sm:w-[360px] rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl p-2.5 text-[10.5px] space-y-2">
+                    <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] pb-1">
+                      <span className="font-extrabold text-[var(--ink)]">🌱 สภาพพื้นสนาม & โบนัสสิ่งอำนวยความสะดวก</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowEnvModsPopover(false)}
+                        className="text-[var(--mut)] hover:text-[var(--ink)] font-bold px-1 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/60 p-1.5 space-y-1">
+                      <div className="font-bold text-[10px] text-[var(--ink)] flex items-center justify-between gap-1">
+                        <span>{turfMatchMods.gradeName}</span>
+                        <span className="text-[var(--mut)] tabular">
+                          สภาพ {matchEnv.turfCond}% · หญ้า{matchEnv.grassLength === 'short' ? 'สั้น' : matchEnv.grassLength === 'long' ? 'ยาว' : 'กลาง'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-[9.5px]">
+                        {turfMatchMods.effectsSummary.map((line, idx) => (
+                          <div key={idx} className="text-[var(--mut)] truncate">
+                            • {line}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { title: `${homeOrig.name} (เหย้า)`, mods: homeFacMods },
+                        { title: `${awayOrig.name} (เยือน)`, mods: awayFacMods }
+                      ].map((sideBox, sIdx) => (
+                        <div key={sIdx} className="rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)]/60 p-1.5 space-y-1">
+                          <div className="font-bold text-[9.5px] text-[var(--ink)] truncate">{sideBox.title}</div>
+                          <div className="space-y-0.5 text-[9px]">
+                            {sideBox.mods.breakdown.map((b) => (
+                              <div key={b.key} className="flex items-center justify-between gap-1">
+                                <span className="text-[var(--mut)] truncate">{b.label}</span>
+                                <span
+                                  className={`font-bold shrink-0 tabular ${
+                                    b.tone === 'pos'
+                                      ? 'text-[var(--g)]'
+                                      : b.tone === 'neg'
+                                        ? 'text-[var(--red)]'
+                                        : 'text-[var(--mut)]'
+                                  }`}
+                                >
+                                  {b.deltaText}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
               <span
                 className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular shrink-0"

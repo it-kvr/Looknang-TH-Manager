@@ -1,3 +1,5 @@
+import type { MatchEnvironment, TurfMatchModifiers } from '../types/game';
+
 export const CREST_SHAPES: { label: string; d: string }[] = [
   { label: 'โล่คลาสสิก', d: 'M3 2h18v11c0 5-4 8-9 10-5-2-9-5-9-10z' },
   { label: 'วงกลม', d: 'M12 1.2a10.8 10.8 0 100 21.6 10.8 10.8 0 000-21.6z' },
@@ -249,4 +251,98 @@ export const getTurfGradeForLevel = (turfLv: number, turfCond = 100): TurfGradeS
 
 export const getTurfGradeSpec = (id?: string): TurfGradeSpec =>
   TURF_GRADE_SPECS.find((t) => t.id === id) || TURF_GRADE_SPECS[2];
+
+export const computeTurfMatchModifiers = (
+  env?: Partial<Pick<MatchEnvironment, 'turfGrade' | 'turfCond' | 'grassLength' | 'dirtMix' | 'season'>> | null
+): TurfMatchModifiers => {
+  const spec = getTurfGradeSpec(env?.turfGrade);
+  const cond = Math.max(30, Math.min(100, Math.round(env?.turfCond ?? 90)));
+  const grassLen =
+    env?.grassLength ||
+    (spec.cutStyle === 'patchy' ? 'long' : spec.cutStyle === 'checker' || spec.cutStyle === 'hybrid_pro' ? 'short' : 'medium');
+  const dirtMix = Math.max(0, Math.min(0.92, env?.dirtMix ?? 0));
+  const isRainy = env?.season === 'rainy';
+
+  const grassPassAdj = grassLen === 'short' ? 0.03 : grassLen === 'long' ? -0.05 : 0;
+  const dirtPassAdj = -dirtMix * 0.085;
+  const rainDirtPassAdj = isRainy && dirtMix > 0.18 ? -0.03 : 0;
+  const condPassAdj = cond < 65 ? -((65 - cond) * 0.0012) : cond >= 90 ? 0.01 : 0;
+  const passPaceMult = Number(
+    Math.max(0.84, Math.min(1.09, 1 + spec.passPaceBonus + grassPassAdj + dirtPassAdj + rainDirtPassAdj + condPassAdj)).toFixed(3)
+  );
+
+  const gradeIdx = spec.grade === 'S' ? 4 : spec.grade === 'A' ? 3 : spec.grade === 'B' ? 2 : spec.grade === 'C' ? 1 : 0;
+  const basePassDelta = [-3, -1, 0, 2, 3][gradeIdx] ?? 0;
+  const baseTouchDelta = [-2, -1, 0, 1, 2][gradeIdx] ?? 0;
+  const baseSpeedDelta = [-2, -1, 0, 1, 2][gradeIdx] ?? 0;
+
+  const grassCtrlAdj = grassLen === 'short' ? 1 : grassLen === 'long' ? -1 : 0;
+  const dirtPenalty = dirtMix >= 0.45 ? -2 : dirtMix >= 0.2 ? -1 : 0;
+  const condPenalty = cond < 55 ? -1 : 0;
+
+  const passDelta = Math.max(-5, Math.min(4, basePassDelta + grassCtrlAdj + dirtPenalty + condPenalty));
+  const touchDelta = Math.max(-5, Math.min(4, baseTouchDelta + grassCtrlAdj + dirtPenalty + condPenalty));
+  const speedDelta = Math.max(-5, Math.min(4, baseSpeedDelta + (grassLen === 'long' ? -1 : 0) + dirtPenalty + condPenalty));
+  const finDelta = Math.max(-3, Math.min(3, (gradeIdx >= 3 ? 1 : gradeIdx === 0 ? -1 : 0) + (dirtMix >= 0.45 ? -1 : 0)));
+  const defReadDelta = Math.max(-3, Math.min(3, (gradeIdx >= 3 ? 1 : gradeIdx === 0 ? -1 : 0) + condPenalty));
+
+  const sprintSpeedMult = Number(
+    Math.max(0.92, Math.min(1.05, 1 + speedDelta * 0.012 - (isRainy && dirtMix > 0.25 ? 0.015 : 0))).toFixed(3)
+  );
+  const slipMult = Number(
+    Math.max(0.68, Math.min(1.55, (gradeIdx === 4 ? 0.72 : gradeIdx === 3 ? 0.85 : gradeIdx === 2 ? 1 : gradeIdx === 1 ? 1.15 : 1.32) + dirtMix * 0.35 + (cond < 65 ? 0.1 : 0))).toFixed(2)
+  );
+  const whiffMult = Number(
+    Math.max(0.75, Math.min(1.4, (gradeIdx === 4 ? 0.78 : gradeIdx === 3 ? 0.88 : gradeIdx === 2 ? 1 : gradeIdx === 1 ? 1.1 : 1.22) + dirtMix * 0.26)).toFixed(2)
+  );
+  const interceptChaosMult = Number(
+    Math.max(0.92, Math.min(1.16, 1 + (grassLen === 'long' ? 0.04 : grassLen === 'short' ? -0.04 : 0) + dirtMix * 0.12 - (gradeIdx >= 3 ? 0.03 : 0))).toFixed(2)
+  );
+  const fatigueMult = Number(
+    Math.max(0.9, Math.min(1.18, spec.fatigueMult + (grassLen === 'long' ? 0.03 : 0) + (cond < 65 ? 0.04 : 0) + dirtMix * 0.04)).toFixed(3)
+  );
+  const injuryMult = Number(
+    Math.max(0.84, Math.min(1.36, spec.injuryMult + dirtMix * 0.15 + (cond < 60 ? 0.06 : 0))).toFixed(3)
+  );
+
+  const statDeltas: Record<string, number> = {
+    spd: speedDelta,
+    agi: speedDelta,
+    bal: Math.max(-4, Math.min(3, touchDelta + (gradeIdx >= 3 ? 1 : 0))),
+    spass: passDelta,
+    lpass: passDelta,
+    crs: passDelta,
+    cur: touchDelta,
+    run: Math.max(-4, Math.min(3, touchDelta)),
+    fin: finDelta,
+    rd: defReadDelta,
+    pos: defReadDelta,
+    sv: finDelta,
+    rfx: gradeIdx >= 3 ? 1 : dirtMix >= 0.5 ? -1 : 0
+  };
+
+  const passPct = Math.round((passPaceMult - 1) * 100);
+  const fatPct = Math.round((fatigueMult - 1) * 100);
+  const slipPct = Math.round((slipMult - 1) * 100);
+
+  return {
+    grade: spec.grade,
+    gradeName: spec.name,
+    passPaceMult,
+    sprintSpeedMult,
+    slipMult,
+    whiffMult,
+    interceptChaosMult,
+    fatigueMult,
+    injuryMult,
+    statDeltas,
+    effectsSummary: [
+      `ความเร็วบอลบนพื้น ${passPct >= 0 ? `+${passPct}` : passPct}%`,
+      `สปีด/จ่าย/คุมบอล ${speedDelta >= 0 ? `+${speedDelta}` : speedDelta} / ${passDelta >= 0 ? `+${passDelta}` : passDelta} / ${touchDelta >= 0 ? `+${touchDelta}` : touchDelta}`,
+      `การใช้แรง ${fatPct >= 0 ? `+${fatPct}` : fatPct}%`,
+      `โอกาสลื่น ${slipPct >= 0 ? `+${slipPct}` : slipPct}%`
+    ]
+  };
+};
+
 
