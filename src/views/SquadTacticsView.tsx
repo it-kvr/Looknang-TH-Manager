@@ -248,9 +248,9 @@ export const SquadTacticsView: React.FC<{
     const h = Math.max(1, rect.height);
     return {
       px: ((clientX - rect.left) / w) * 300,
-      py: ((effectiveY - rect.top) / h) * 340,
+      py: ((effectiveY - rect.top) / h) * 380,
       rawPx: ((clientX - rect.left) / w) * 300,
-      rawPy: ((clientY - rect.top) / h) * 340,
+      rawPy: ((clientY - rect.top) / h) * 380,
       inside
     };
   };
@@ -265,7 +265,7 @@ export const SquadTacticsView: React.FC<{
       const oz = curSlots[idx];
       if (!oz) return;
       const ox = 18 + oz.x * 2.64;
-      const oy = 24 + oz.y * 2.9;
+      const oy = 16 + oz.y * 3.48;
       const d = Math.hypot(pitchPt.px - ox, pitchPt.py - oy);
       if (d <= 24 && (!best || d < best.dist)) {
         best = { name: other.n, slot: oz.sp, dist: d };
@@ -404,7 +404,7 @@ export const SquadTacticsView: React.FC<{
         if (d.isTouch) {
           setTouchAnchorPt({
             px: clamp(pitchPt.rawPx, 8, 292),
-            py: clamp(pitchPt.rawPy, 8, 332)
+            py: clamp(pitchPt.rawPy, 8, 372)
           });
         } else {
           setTouchAnchorPt(null);
@@ -417,7 +417,7 @@ export const SquadTacticsView: React.FC<{
           const oz = curSlots[idx];
           if (!oz) return;
           const ox = 18 + oz.x * 2.64;
-          const oy = 24 + oz.y * 2.9;
+          const oy = 16 + oz.y * 3.48;
           const sDist = Math.hypot(pitchPt.px - ox, pitchPt.py - oy);
           if (sDist < 15.5 && (!closestSwap || sDist < closestSwap.dist)) {
             closestSwap = { name: other.n, slot: oz.sp, dist: sDist };
@@ -433,7 +433,7 @@ export const SquadTacticsView: React.FC<{
         }
 
         const nx = clamp(Math.round((pitchPt.px - 18) / 2.64), 4, 96);
-        const ny = clamp(Math.round((pitchPt.py - 24) / 2.9), 8, 84);
+        const ny = clamp(Math.round((pitchPt.py - 16) / 3.48), 8, 84);
         const zone = getPitchZoneAt(nx, ny);
         const resolvedSp: SubRole = zone.sp;
         const preview: PitchDragPreview = {
@@ -688,281 +688,275 @@ export const SquadTacticsView: React.FC<{
         </div>
       )}
 
-      <div className="flex items-center justify-between gap-1.5 flex-nowrap overflow-x-auto shrink-0">
-        <div className="seg-bar shrink-0">
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`seg-btn ${sub === 0 ? 'seg-btn-active' : ''}`}>
-            ⚽ ตัวจริง
-          </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`seg-btn ${sub === 1 ? 'seg-btn-active' : ''}`}>
-            🧭 แผนเกม
-          </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`seg-btn ${sub === 2 ? 'seg-btn-active' : ''}`}>
-            📋 ทั้งทีม ({me.sq.length})
-          </button>
-          <button type="button" onClick={() => onUpdateState((d) => { d.sub = 3; })} className={`seg-btn ${sub === 3 ? 'seg-btn-active' : ''}`}>
-            👕 ล็อกเกอร์
-          </button>
-        </div>
-
-        <div className="inline-flex items-center gap-1 text-[11px] mland:text-[9.5px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-          <span className="font-bold text-[var(--ink)]">แผน {formName(me, pitchDragPreview)}</span>
-          <span className="opacity-35">·</span>
-          <span>{AR_T[me.tac]}</span>
-          <span className="opacity-35">·</span>
-          <span>⚔️{Math.round(r.at)}</span>
-          <span>🛡️{Math.round(r.df)}</span>
-          <span className="opacity-35">·</span>
-          <span className={`font-bold ${avgFit >= 76 ? 'text-[var(--g)]' : avgFit >= 65 ? 'text-[#b45309] dark:text-[#fbbf24]' : 'text-[var(--red)]'}`}>
-            ⚡{avgFit}%
-          </span>
-          {restNeededStarters.length > 0 && (
-            <>
-              <span className="opacity-35">·</span>
-              <span className="text-[var(--red)] font-bold" title="จำนวนตัวจริงที่ความฟิตต่ำกว่า 65% แนะนำให้พักนัดถัดไป">
-                🔴ควรพัก {restNeededStarters.length}
-              </span>
-            </>
-          )}
-          {offPosCount > 0 && (
-            <>
-              <span className="opacity-35">·</span>
-              <span className="text-[var(--red)] font-bold" title="จำนวนนักเตะที่ลงเล่นนอกตำแหน่งถนัด">⚠️นอก {offPosCount}</span>
-            </>
-          )}
-        </div>
-      </div>
-
-      {sub === 0 ? (
-        isMgr ? (
-          <div className="grid grid-cols-[1.18fr_0.82fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
-            {/* CENTER STAGE: Full-Size Pitch Only + Collapsed 🧭 เปลี่ยนแผน Bar at Bottom */}
-            <div className="relative p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-1.5 mland:gap-1 h-full min-h-0 overflow-hidden">
-              {pitchDragPreview && (
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-2.5 py-0.5 rounded-lg bg-[var(--surface)]/95 border border-[var(--g)]/60 text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shadow-md">
-                  📍 {pitchDragPreview.player.n.split(' ')[0]} → {pitchDragPreview.sp} ({pitchDragPreview.zoneLabel}) · {formName(me, pitchDragPreview)}
-                </div>
-              )}
-
-              <div className="w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
-                <FormationPitch
-                  team={me}
-                  state={state}
-                  svgRef={pitchSvgRef}
-                  showPositionZones={Boolean(pitchDragPreview)}
-                  subAlertFitTh={65}
-                  dragSourceName={dragUi?.player.n || null}
-                  dropTargetName={dropTarget?.name || null}
-                  dragPreview={pitchDragPreview}
-                  touchPointerPitchPt={touchAnchorPt}
-                  onPlayerPointerDown={handlePlayerPointerDown}
-                />
-              </div>
-
-              {showFormationSheet && (
-                <div className="absolute inset-x-2 bottom-11 mland:inset-x-1.5 mland:bottom-8 z-20 p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)]/98 backdrop-blur-md border border-[var(--g)]/50 shadow-2xl space-y-2 mland:space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 text-xs mland:text-[10px]">
-                    <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน & สไตล์การเล่น</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowFormationSheet(false)}
-                      className="btn btn-xs btn-secondary"
-                    >
-                      ✕ ปิด
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-5 gap-1">
-                    {Object.keys(FSD).map((f) => (
-                      <button
-                        key={f}
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          onUpdateState((d) => {
-                            const t = d.teams[d.me];
-                            if (t.form !== f) {
-                              t.form = f;
-                              t.lu = null;
-                              t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
-                            }
-                          });
-                        }}
-                        className={`btn btn-xs truncate ${
-                          me.form === f ? 'btn-primary' : 'btn-secondary'
-                        }`}
-                      >
-                        {f}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-5 gap-1">
-                    {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
-                        className={`btn btn-xs truncate ${
-                          me.tac === k ? 'btn-gold' : 'btn-secondary text-[var(--mut)]'
-                        }`}
-                      >
-                        {AR_T[k]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Collapsed Slim Trigger Bar at Bottom */}
-              <div className="pt-1 mland:pt-0.5 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setShowFormationSheet((v) => !v);
-                  }}
-                  className="btn btn-sm btn-secondary w-full justify-between"
-                >
-                  <span className="truncate">
-                    🧭 เปลี่ยนแผน · <span className="text-[var(--g)]">{formName(me, pitchDragPreview)}</span> · <span className="text-[var(--mut)]">{AR_T[me.tac]}</span>
-                  </span>
-                  <span className="text-[10.5px] mland:text-[9px] text-[var(--g)] shrink-0">
-                    {showFormationSheet ? 'ซ่อน ▾' : 'เลือกแผน ▲'}
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* RIGHT: Squad & Bench List */}
-            <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
-              <div className="flex items-center justify-between gap-1 mb-1.5 mland:mb-1 shrink-0">
-                <div className="seg-bar min-w-0">
-                  {([['ทั้งหมด', 0], ['ตัวจริง 11', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
-                    <button
-                      key={k}
-                      type="button"
-                      onClick={() => setLuTab(k)}
-                      className={`seg-btn ${luTab === k ? 'seg-btn-active' : ''}`}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
-                    <button
-                      type="button"
-                      onClick={restTiredStarters}
-                      title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
-                      className={`btn btn-xs ${
-                        restNeededStarters.length > 0
-                          ? 'btn-danger'
-                          : 'bg-amber-500/15 border border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
-                      }`}
-                    >
-                      🛌 พักตัวล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
-                    onClick={() => {
-                      SFX.tap();
-                      onUpdateState((d) => { d.teams[d.me].lu = null; });
-                      onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
-                    }}
-                    className={`btn btn-xs shrink-0 ${
-                      !me.lu
-                        ? 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)]'
-                        : 'btn-secondary hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
-                    }`}
-                  >
-                    {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
-                  </button>
-                </div>
-              </div>
-              {/* Compact Stamina Spectrum Legend */}
-              <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 mb-1 rounded-md bg-[var(--surface-2)]/70 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] shrink-0">
-                <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
-                <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
-                  <span className="inline-flex items-center gap-1 text-[#dc2626] dark:text-[#f87171] font-bold">
-                    <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[#b45309] dark:text-[#fbbf24] font-bold">
-                    <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-[var(--g)] font-bold">
-                    <span className="w-2 h-2 rounded-full bg-[#10b981]" /> ≥75% พร้อม
-                  </span>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
-                {luTab !== 2 && (
-                  <>
-                    {luTab === 0 && (
-                      <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] pt-0.5">
-                        <span>ตัวจริง (11 คน)</span>
-                      </div>
-                    )}
-                    {starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}
-                  </>
-                )}
-                {luTab !== 1 && (
-                  <>
-                    {luTab === 0 && (
-                      <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">
-                        <span>ตัวสำรอง ({bench.length} คน)</span>
-                      </div>
-                    )}
-                    {bench.map((q) => renderPlayerRow(q))}
-                  </>
-                )}
-              </div>
-            </div>
+      {(() => {
+        const subTabBar = (
+          <div className="seg-bar shrink-0">
+            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`seg-btn ${sub === 0 ? 'seg-btn-active' : ''}`}>
+              ⚽ ตัวจริง
+            </button>
+            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`seg-btn ${sub === 1 ? 'seg-btn-active' : ''}`}>
+              🧭 แผนเกม
+            </button>
+            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`seg-btn ${sub === 2 ? 'seg-btn-active' : ''}`}>
+              📋 ทั้งทีม ({me.sq.length})
+            </button>
+            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 3; })} className={`seg-btn ${sub === 3 ? 'seg-btn-active' : ''}`}>
+              👕 ล็อกเกอร์
+            </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-[1.18fr_0.82fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
-            <div className="p-2 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-1.5 mland:gap-1 h-full min-h-0 overflow-hidden">
-              <div className="w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
-                <FormationPitch
-                  team={me}
-                  state={state}
-                  showPositionZones={false}
-                  subAlertFitTh={65}
-                  onPlayerPointerDown={handlePlayerPointerDown}
-                />
+        );
+
+        const formationStatusSummary = (
+          <>
+            <span className="font-bold text-[var(--ink)]">แผน {formName(me, pitchDragPreview)}</span>
+            <span className="opacity-35">·</span>
+            <span>{AR_T[me.tac]}</span>
+            <span className="opacity-35">·</span>
+            <span>⚔️{Math.round(r.at)}</span>
+            <span>🛡️{Math.round(r.df)}</span>
+            <span className="opacity-35">·</span>
+            <span className={`font-bold ${avgFit >= 76 ? 'text-[var(--g)]' : avgFit >= 65 ? 'text-[#b45309] dark:text-[#fbbf24]' : 'text-[var(--red)]'}`}>
+              ⚡{avgFit}%
+            </span>
+            {restNeededStarters.length > 0 && (
+              <>
+                <span className="opacity-35">·</span>
+                <span className="text-[var(--red)] font-bold" title="จำนวนตัวจริงที่ความฟิตต่ำกว่า 65% แนะนำให้พักนัดถัดไป">
+                  🔴{restNeededStarters.length}
+                </span>
+              </>
+            )}
+            {offPosCount > 0 && (
+              <>
+                <span className="opacity-35">·</span>
+                <span className="text-[var(--red)] font-bold" title="จำนวนนักเตะที่ลงเล่นนอกตำแหน่งถนัด">
+                  ⚠️{offPosCount}
+                </span>
+              </>
+            )}
+          </>
+        );
+
+        if (sub === 0) {
+          return (
+            <div className="grid grid-cols-[1.04fr_0.96fr] mland:grid-cols-[1.02fr_0.98fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+              {/* LEFT: Full-Height Pitch (Maximized Height) */}
+              <div className="relative p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col h-full min-h-0 overflow-hidden">
+                {isMgr && pitchDragPreview && (
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-2.5 py-0.5 rounded-lg bg-[var(--surface)]/95 border border-[var(--g)]/60 text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shadow-md">
+                    📍 {pitchDragPreview.player.n.split(' ')[0]} → {pitchDragPreview.sp} ({pitchDragPreview.zoneLabel}) · {formName(me, pitchDragPreview)}
+                  </div>
+                )}
+
+                <div className="w-full mx-auto flex-1 min-h-0 h-full flex items-center justify-center">
+                  <FormationPitch
+                    team={me}
+                    state={state}
+                    svgRef={isMgr ? pitchSvgRef : undefined}
+                    showPositionZones={isMgr && Boolean(pitchDragPreview)}
+                    subAlertFitTh={65}
+                    dragSourceName={isMgr ? (dragUi?.player.n || null) : null}
+                    dropTargetName={isMgr ? (dropTarget?.name || null) : null}
+                    dragPreview={isMgr ? pitchDragPreview : null}
+                    touchPointerPitchPt={isMgr ? touchAnchorPt : null}
+                    onPlayerPointerDown={handlePlayerPointerDown}
+                  />
+                </div>
               </div>
 
-              {(() => {
-                const myIdx = starters.findIndex((q) => q.me || q.n === state.p?.name);
-                const mySlot = myIdx >= 0 ? slots[myIdx]?.sp : null;
-                const mySq = me.sq.find((q) => q.me || q.n === state.p?.name);
-                const isBanned = (mySq?.sus || state.p?.sus || 0) > 0;
-                return (
-                  <div className="pt-1.5 mland:pt-1 border-t border-[var(--line)] text-center space-y-0.5 shrink-0">
-                    <div className="text-[11px] mland:text-[10px]">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full font-bold ${isBanned ? 'bg-[var(--red-soft)] text-[var(--red)]' : mySlot ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                        {isBanned ? `🟥 ติดโทษแบน (เหลือ ${mySq?.sus || state.p?.sus} นัด)` : mySlot ? `★ ตัวจริง (${mySlot})` : '🪑 ตัวสำรอง (มีโอกาสลงสำรองครึ่งหลัง)'}
+              {/* RIGHT: Top-Right Navigation Tabs + Squad List with Plan Right After "รายชื่อทีม" */}
+              <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 h-full overflow-hidden">
+                {/* Top-Right Tabs Corner */}
+                <div className="flex items-center justify-end shrink-0 overflow-x-auto no-scrollbar">
+                  {subTabBar}
+                </div>
+
+                {/* Squad Panel */}
+                <div className="flex-1 min-h-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden">
+                  {/* "รายชื่อทีม" followed directly by "แผน ..." */}
+                  <div className="flex items-center justify-between gap-1.5 mb-1.5 mland:mb-1 shrink-0 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-x-auto no-scrollbar">
+                      <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0">
+                        👥 รายชื่อทีม
                       </span>
+                      {isMgr ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            setShowFormationSheet((v) => !v);
+                          }}
+                          title="กดเพื่อเปลี่ยนแผนและสไตล์การเล่น"
+                          className={`inline-flex items-center gap-1 text-[10.5px] mland:text-[9px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-0.5 rounded-lg border cursor-pointer transition-colors ${
+                            showFormationSheet
+                              ? 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--ink)]'
+                              : 'bg-[var(--surface-2)]/85 border-[var(--line)] hover:border-[var(--g)]/60'
+                          }`}
+                        >
+                          {formationStatusSummary}
+                          <span className="text-[9.5px] text-[var(--g)] ml-0.5">{showFormationSheet ? '▴' : '▾'}</span>
+                        </button>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 text-[10.5px] mland:text-[9px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-0.5 rounded-lg bg-[var(--surface-2)]/85 border border-[var(--line)]">
+                          {formationStatusSummary}
+                        </div>
+                      )}
                     </div>
                   </div>
-                );
-              })()}
-            </div>
 
-            <div className="p-2 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 h-full overflow-hidden">
-              <div className="font-bold text-xs mland:text-[10.5px] mb-1.5 mland:mb-1 shrink-0">👥 รายชื่อทีม</div>
-              <div className="seg-bar grid grid-cols-3 w-full mb-1.5 mland:mb-1 shrink-0">
-                {([['ทั้งหมด', 0], ['ตัวจริง (11)', 1], [`สำรอง (${bench.length})`, 2]] as const).map(([l, k]) => (
-                  <button key={k} type="button" onClick={() => setLuTab(k)} className={`seg-btn truncate ${luTab === k ? 'seg-btn-active' : ''}`}>{l}</button>
-                ))}
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
-                {luTab !== 2 && (<><div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--g)] pt-0.5">ตัวจริง (11 คน)</div>{starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}</>)}
-                {luTab !== 1 && (<><div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">ตัวสำรอง ({bench.length} คน)</div>{bench.map((q) => renderPlayerRow(q))}</>)}
+                  {/* Inline Quick Formation & Mentality Picker inside Right Panel (never covers pitch) */}
+                  {isMgr && showFormationSheet && (
+                    <div className="mb-1.5 mland:mb-1 p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/85 border border-[var(--g)]/45 space-y-1.5 mland:space-y-1 shrink-0">
+                      <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
+                        <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์การเล่น</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowFormationSheet(false)}
+                          className="btn btn-xs btn-secondary"
+                        >
+                          ✕ ปิด
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-5 gap-1">
+                        {Object.keys(FSD).map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              onUpdateState((d) => {
+                                const t = d.teams[d.me];
+                                if (t.form !== f) {
+                                  t.form = f;
+                                  t.lu = null;
+                                  t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
+                                }
+                              });
+                            }}
+                            className={`btn btn-xs truncate ${
+                              me.form === f ? 'btn-primary' : 'btn-secondary'
+                            }`}
+                          >
+                            {f}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-5 gap-1">
+                        {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
+                            className={`btn btn-xs truncate ${
+                              me.tac === k ? 'btn-gold' : 'btn-secondary text-[var(--mut)]'
+                            }`}
+                          >
+                            {AR_T[k]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Squad Filter & Action Controls */}
+                  <div className="flex items-center justify-between gap-1 mb-1.5 mland:mb-1 shrink-0">
+                    <div className="seg-bar min-w-0">
+                      {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setLuTab(k)}
+                          className={`seg-btn ${luTab === k ? 'seg-btn-active' : ''}`}
+                        >
+                          {l}
+                        </button>
+                      ))}
+                    </div>
+                    {isMgr && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                          <button
+                            type="button"
+                            onClick={restTiredStarters}
+                            title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
+                            className={`btn btn-xs ${
+                              restNeededStarters.length > 0
+                                ? 'btn-danger'
+                                : 'bg-amber-500/15 border border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                            }`}
+                          >
+                            🛌 พักตัวล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
+                          onClick={() => {
+                            SFX.tap();
+                            onUpdateState((d) => { d.teams[d.me].lu = null; });
+                            onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                          }}
+                          className={`btn btn-xs shrink-0 ${
+                            !me.lu
+                              ? 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)]'
+                              : 'btn-secondary hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
+                          }`}
+                        >
+                          {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Compact Stamina Spectrum Legend */}
+                  {isMgr && (
+                    <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 mb-1 rounded-md bg-[var(--surface-2)]/70 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] shrink-0">
+                      <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
+                      <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
+                        <span className="inline-flex items-center gap-1 text-[#dc2626] dark:text-[#f87171] font-bold">
+                          <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[#b45309] dark:text-[#fbbf24] font-bold">
+                          <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-[var(--g)] font-bold">
+                          <span className="w-2 h-2 rounded-full bg-[#10b981]" /> ≥75% พร้อม
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Player Rows (No "ตัวจริง ()" heading) */}
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
+                    {luTab !== 2 && starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}
+                    {luTab !== 1 && (
+                      <>
+                        {luTab === 0 && (
+                          <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">
+                            <span>ตัวสำรอง ({bench.length} คน)</span>
+                          </div>
+                        )}
+                        {bench.map((q) => renderPlayerRow(q))}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
+          );
+        }
+
+        return (
+          <div className="flex items-center justify-between gap-1.5 flex-nowrap overflow-x-auto shrink-0">
+            <div className="inline-flex items-center gap-1 text-[11px] mland:text-[9.5px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-1 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+              {formationStatusSummary}
+            </div>
+            {subTabBar}
           </div>
-        )
-      ) : sub === 1 ? (
+        );
+      })()}
+
+      {sub === 0 ? null : sub === 1 ? (
         <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)] shrink-0">
             <div>

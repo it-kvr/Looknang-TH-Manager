@@ -615,7 +615,7 @@ export const TeamInspectorModal: React.FC<{
                 <FormationPitch
                   team={team}
                   state={state}
-                  className="aspect-[300/340] h-full max-h-full w-auto max-w-full mx-auto rounded-xl block select-none"
+                  className="aspect-[300/380] h-full max-h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                   onPlayerPointerDown={(e, q) => {
                     e.stopPropagation();
                     SFX.tap();

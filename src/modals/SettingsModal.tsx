@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { GameState, AppSettings } from '../types/game';
 import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
-import { enterImmersiveFullscreen, exitFullscreenSafe, isMobileDevice } from '../utils/fullscreen';
+import { enterLandscapeFullscreen, exitFullscreenSafe, isMobileDevice } from '../utils/fullscreen';
 import { exportSaveCode } from '../engine/saveCodec';
 
 const VIP_UNLOCKED_KEY = 'lk_vip_unlocked';
@@ -244,12 +244,10 @@ export const SettingsModal: React.FC<{
                   update({ preferFullscreen: nextVal });
                   if (!nextVal) {
                     exitFullscreenSafe().catch(() => undefined);
-                    onToast('ปิดเต็มจออัตโนมัติบนมือถือแล้ว');
-                  } else if (onMobile) {
-                    enterImmersiveFullscreen().catch(() => undefined);
-                    onToast('📱 เปิดเต็มจออัตโนมัติบนมือถือแล้ว');
+                    onToast('ปิดเต็มจออัตโนมัติแล้ว');
                   } else {
-                    onToast('📱 เปิดเต็มจออัตโนมัติแล้ว (ทำงานเมื่อเล่นบนมือถือ)');
+                    enterLandscapeFullscreen(true).catch(() => undefined);
+                    onToast(onMobile ? '📱 เปิดเต็มจอและแนวนอนอัตโนมัติแล้ว' : '🖥️ เปิดเต็มจออัตโนมัติแล้ว');
                   }
                 }}
                 className={`w-full flex items-center justify-between gap-2.5 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer transition-colors ${
@@ -257,12 +255,12 @@ export const SettingsModal: React.FC<{
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="text-xs mland:text-[10px] font-bold truncate">📱 เต็มจออัตโนมัติบนมือถือ</div>
+                  <div className="text-xs mland:text-[10px] font-bold truncate">🖥️ เต็มจออัตโนมัติ &amp; แนวนอน</div>
                   <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
                     {autoFsMobileOn
                       ? onMobile
                         ? 'เข้าเต็มจอและล็อกแนวนอนอัตโนมัติขณะเล่น'
-                        : 'พร้อมเข้าเต็มจออัตโนมัติเมื่อเปิดเล่นบนมือถือ'
+                        : 'เข้าสู่โหมดเต็มจออัตโนมัติเมื่อเปิดเล่น'
                       : 'ปิดเต็มจออัตโนมัติ (แสดงแถบเบราว์เซอร์ปกติ)'}
                   </div>
                 </div>

@@ -823,7 +823,7 @@ export const PlayerFace: React.FC<{
 };
 
 export const PITCH_SVG_BASE =
-  '<rect width="300" height="340" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v42H0zM0 85h300v42H0zM0 170h300v42H0zM0 255h300v42H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="328"/><path d="M6 170h288M90 6v52h120V6M90 334v-62h120v62"/><circle cx="150" cy="170" r="34"/></g>';
+  '<rect width="300" height="380" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v47.5H0zM0 95h300v47.5H0zM0 190h300v47.5H0zM0 285h300v47.5H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="368"/><path d="M6 190h288M90 6v56h120V6M90 374v-66h120v66"/><circle cx="150" cy="190" r="36"/></g>';
 
 export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }> = ({ team, state }) => {
   const uid = React.useId().replace(/:/g, '');
@@ -833,7 +833,7 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
   const slots = getFormationSlots(team);
   const starters = xi(team);
   return (
-    <svg className="w-full max-w-[200px] mx-auto rounded-xl block" viewBox="0 0 300 340" role="img" aria-label={`ผังแผน ${team.form}`}>
+    <svg className="w-full max-w-[200px] mx-auto rounded-xl block" viewBox="0 0 300 380" role="img" aria-label={`ผังแผน ${team.form}`}>
       <defs>
         <clipPath id={`mfc-${uid}`}>
           <circle cx="30" cy="31" r="27" />
@@ -843,7 +843,7 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
       {slots.map((z, idx) => {
         const q = starters[idx];
         const cx = 18 + z.x * 2.64;
-        const cy = 24 + z.y * 2.9;
+        const cy = 16 + z.y * 3.48;
         const kc = z.sp === 'GK' ? gkCol : col;
         const isMe = !!(q?.me || (state?.mode === 'p' && state?.p?.name === q?.n));
         const sc = 0.5;
@@ -1003,8 +1003,8 @@ export const FormationPitch: React.FC<{
       ref={svgRef}
       onContextMenu={(e) => e.preventDefault()}
       style={{ touchAction: onPlayerPointerDown ? 'none' : 'manipulation', WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-      className={className || 'aspect-[300/340] h-full max-h-full w-auto max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none'}
-      viewBox="0 0 300 340"
+      className={className || 'aspect-[300/380] h-full max-h-full w-auto max-w-full mx-auto rounded-2xl mland:rounded-xl block select-none'}
+      viewBox="0 0 300 380"
     >
       <defs>
         <clipPath id={`fc-${uid}`}>
@@ -1017,9 +1017,9 @@ export const FormationPitch: React.FC<{
         <g className="pointer-events-none">
           {PITCH_POSITION_ZONES.map((z) => {
             const x = 18 + z.x1 * 2.64 + 1.2;
-            const y = 24 + z.y1 * 2.9 + 1.2;
+            const y = 16 + z.y1 * 3.48 + 1.2;
             const w = Math.max(8, (z.x2 - z.x1) * 2.64 - 2.4);
-            const h = Math.max(8, (z.y2 - z.y1) * 2.9 - 2.4);
+            const h = Math.max(8, (z.y2 - z.y1) * 3.48 - 2.4);
             const isActiveZone = dragPreview?.zoneId === z.id;
             const pal = zoneLineColors[z.line];
             const fitPen = isActiveZone && dragPreview ? playerPen(dragPreview.player, z.sp) : 0;
@@ -1063,7 +1063,7 @@ export const FormationPitch: React.FC<{
       {starters.map((q, i) => {
         const z = slots[i] || { sp: 'CM', x: 50, y: 50 };
         const cx = 18 + z.x * 2.64;
-        const cy = 24 + z.y * 2.9;
+        const cy = 16 + z.y * 3.48;
         const meta = matchMeta?.[q.n];
         const pn = meta?.offPosPen ?? playerPen(q, z.sp);
         const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
@@ -1092,8 +1092,8 @@ export const FormationPitch: React.FC<{
                     ? '#f59e0b'
                     : PCOL[pn];
         const kc = z.sp === 'GK' ? gkCol : col;
-        const rad = isTarget ? 19 : 16;
-        const sc = isTarget ? 0.58 : 0.5;
+        const rad = isTarget ? 18 : 15;
+        const sc = isTarget ? 0.56 : 0.48;
         const no = getShirtNo(team, q);
 
         const ratingVal = meta?.rating;
@@ -1174,23 +1174,23 @@ export const FormationPitch: React.FC<{
 
             {/* Top Center: Role Tag */}
             {isMe ? (
-              <g transform={`translate(${cx},${cy - (isTarget ? 27 : 24)})`}>
-                <rect x="-18" y="-9.5" width="36" height="12.5" rx="6" fill="#f5c242" stroke="#111" strokeWidth="0.9" />
-                <text x="0" y="-0.6" textAnchor="middle" fontSize="8.5" fontWeight="800" fontFamily="Sarabun" fill="#1a1200">
+              <g transform={`translate(${cx},${cy - (isTarget ? 23 : 20.5)})`}>
+                <rect x="-17" y="-8.5" width="34" height="11.5" rx="5.5" fill="#f5c242" stroke="#111" strokeWidth="0.9" />
+                <text x="0" y="-0.3" textAnchor="middle" fontSize="8" fontWeight="800" fontFamily="Sarabun" fill="#1a1200">
                   ★ {z.sp}
                 </text>
               </g>
             ) : (
               <text
                 x={cx}
-                y={cy - (isTarget ? 24 : 21)}
+                y={cy - (isTarget ? 21.5 : 18.5)}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="9"
                 fontWeight="700"
                 fontFamily="Sarabun"
                 fill={PCOL[pn]}
                 stroke="#0b2018"
-                strokeWidth="2.6"
+                strokeWidth="2.5"
                 paintOrder="stroke"
               >
                 {z.sp}
@@ -1325,17 +1325,17 @@ export const FormationPitch: React.FC<{
             {/* Bottom Stamina Bar + Player Name */}
             {showFitBar && !isRed && (
               <>
-                <rect x={cx - 23} y={cy + 18.5} width="28" height="4.8" rx="2.4" fill="#0b2018" stroke={efVal < restTh ? '#ef4444' : '#fff7'} strokeWidth={efVal < restTh ? '0.9' : '0.6'} />
-                <rect x={cx - 23} y={cy + 18.5} width={(28 * efVal) / 100} height="4.8" rx="2.4" fill={efc} />
+                <rect x={cx - 22} y={cy + 17} width="27" height="4.4" rx="2.2" fill="#0b2018" stroke={efVal < restTh ? '#ef4444' : '#fff7'} strokeWidth={efVal < restTh ? '0.9' : '0.6'} />
+                <rect x={cx - 22} y={cy + 17} width={(27 * efVal) / 100} height="4.4" rx="2.2" fill={efc} />
                 <text
                   x={cx + 7}
-                  y={cy + 23.2}
-                  fontSize="8"
+                  y={cy + 21.5}
+                  fontSize="7.6"
                   fontWeight="800"
                   fontFamily="Sarabun"
                   fill={efVal < restTh ? '#fca5a5' : efc}
                   stroke="#0b2018"
-                  strokeWidth="2.2"
+                  strokeWidth="2.1"
                   paintOrder="stroke"
                 >
                   {efVal}%
@@ -1344,14 +1344,14 @@ export const FormationPitch: React.FC<{
             )}
             <text
               x={clamp(cx, 26, 274)}
-              y={showFitBar && !isRed ? cy + 32 : cy + 28.5}
+              y={showFitBar && !isRed ? cy + 29.5 : cy + 26}
               textAnchor="middle"
-              fontSize={isMe || meta?.isMotm ? '9.6' : '9.2'}
+              fontSize={isMe || meta?.isMotm ? '9.2' : '8.8'}
               fontWeight={isMe || meta?.isMotm ? '800' : '600'}
               fontFamily="Sarabun"
               fill={meta?.isMotm || isMe ? '#fde047' : '#fff'}
               stroke="#0b2018"
-              strokeWidth="2.5"
+              strokeWidth="2.4"
               paintOrder="stroke"
             >
               {q.n.split(' ')[0]}
@@ -1364,7 +1364,7 @@ export const FormationPitch: React.FC<{
       {dragPreview && (() => {
         const pq = dragPreview.player;
         const gx = 18 + dragPreview.x * 2.64;
-        const gy = 24 + dragPreview.y * 2.9;
+        const gy = 16 + dragPreview.y * 3.48;
         const pn = playerPen(pq, dragPreview.sp);
         const ed = pn === 0 ? '#4ade80' : pn === 1 ? '#facc15' : '#f87171';
         const kc = dragPreview.sp === 'GK' ? gkCol : col;

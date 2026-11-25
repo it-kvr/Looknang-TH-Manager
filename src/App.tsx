@@ -1,7 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Settings } from 'lucide-react';
+import { Maximize2, RotateCw, Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
-import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen } from './utils/fullscreen';
+import {
+  bindAutoLandscapeFullscreen,
+  enterAutoMobileFullscreen,
+  enterLandscapeFullscreen,
+  isMobileDevice,
+  isPortraitViewport
+} from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
@@ -44,10 +50,89 @@ export default function App() {
   const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
+  const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(() => isMobileDevice() && isPortraitViewport());
+  const [dismissedRotatePrompt, setDismissedRotatePrompt] = useState(false);
+  const [rotateHint, setRotateHint] = useState<string | null>(null);
 
   useEffect(() => {
-    return bindAutoLandscapeFullscreen();
+    const unbindFs = bindAutoLandscapeFullscreen();
+    const checkOri = () => {
+      const portraitMob = isMobileDevice() && isPortraitViewport();
+      setIsPortraitMobile(portraitMob);
+      if (!portraitMob) {
+        setRotateHint(null);
+      }
+    };
+    window.addEventListener('resize', checkOri, { passive: true });
+    window.addEventListener('orientationchange', checkOri, { passive: true });
+    return () => {
+      window.removeEventListener('resize', checkOri);
+      window.removeEventListener('orientationchange', checkOri);
+      unbindFs();
+    };
   }, []);
+
+  const handleEnterLandscapeFullscreen = async () => {
+    unlockAudio();
+    SFX.tap();
+    const res = await enterLandscapeFullscreen(true);
+    window.setTimeout(() => {
+      if (isPortraitViewport()) {
+        setRotateHint(
+          res.fullscreen
+            ? 'เปิดเต็มจอแล้ว — กรุณาเอียงเครื่องเป็นแนวนอนเพื่อมุมมองเต็มสนาม'
+            : 'กรุณาหมุนเครื่องเป็นแนวนอน (อุปกรณ์/เบราว์เซอร์นี้ไม่รองรับการล็อกหมุนอัตโนมัติ)'
+        );
+      }
+    }, 280);
+  };
+
+  const landscapeOverlay =
+    isPortraitMobile && !dismissedRotatePrompt && appSettings.preferFullscreen !== false ? (
+      <div
+        data-no-auto-fs="1"
+        className="fixed inset-0 z-[90] bg-[#040d08]/94 backdrop-blur-md flex items-center justify-center p-5 safe-all text-white"
+      >
+        <div className="w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#12261c] to-[#09150f] border border-emerald-400/30 shadow-2xl p-5 text-center space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--g-soft)] border border-[var(--g)]/45 flex items-center justify-center text-emerald-300 shadow-inner">
+            <RotateCw className="w-8 h-8 animate-[spin_6s_linear_infinite]" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="text-lg font-extrabold font-display tracking-wide text-white">
+              เปิดโหมดแนวนอนเต็มจอ
+            </h2>
+            <p className="text-xs text-emerald-100/80 leading-relaxed">
+              ลูกหนังไทยออกแบบมาสำหรับหน้าจอแนวนอนเต็มจอ แตะปุ่มด้านล่างเพื่อเข้าเต็มจอและล็อกแนวนอนทันที
+            </p>
+          </div>
+          {rotateHint && (
+            <div className="px-3 py-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[11px] font-semibold text-[#ffe89e] leading-snug">
+              {rotateHint}
+            </div>
+          )}
+          <div className="space-y-2 pt-1">
+            <button
+              type="button"
+              onClick={handleEnterLandscapeFullscreen}
+              className="btn btn-gold btn-lg w-full font-extrabold shadow-lg"
+            >
+              <Maximize2 className="w-4 h-4 shrink-0" />
+              <span>เข้าโหมดแนวนอนเต็มจอเลย</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setDismissedRotatePrompt(true);
+              }}
+              className="w-full py-2 text-[11.5px] font-semibold text-emerald-100/65 hover:text-white cursor-pointer"
+            >
+              เล่นแนวตั้งชั่วคราว
+            </button>
+          </div>
+        </div>
+      </div>
+    ) : null;
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -836,6 +921,7 @@ export default function App() {
           onLoadSave={handleLoadSave}
           onToast={showToast}
         />
+        {landscapeOverlay}
         {toast && (
           <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
             {toast}
@@ -869,10 +955,11 @@ export default function App() {
   const curTab: MainTab = tabs.some(([k]) => k === resolvedView) ? resolvedView : tabs[0][0];
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
-      {/* Pinned Single-Row Horizontal Top HUD Bar */}
-      <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)] safe-top safe-x">
-        <div className="max-w-7xl mland:max-w-none mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
+    <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] text-[var(--ink)] p-2.5 sm:p-5 md:p-6 mland:p-2 safe-all">
+      <div className="w-full max-w-[1380px] h-full max-h-[90dvh] sm:max-h-[min(86dvh,790px)] mland:max-h-[91dvh] flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--bg)] shadow-2xl">
+        {/* Pinned Single-Row Horizontal Top HUD Bar */}
+        <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+          <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
           <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 shrink max-w-[36%]">
             <button
               type="button"
@@ -1041,8 +1128,8 @@ export default function App() {
 
       <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
         {/* Center Game Stage */}
-        <main ref={mainRef} className="flex-1 min-h-0 overflow-hidden flex flex-col overflow-x-hidden pr-[var(--sar,env(safe-area-inset-right,0px))]">
-          <div className="max-w-7xl mland:max-w-none w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5">
+        <main ref={mainRef} className="flex-1 min-h-0 overflow-hidden flex flex-col overflow-x-hidden">
+          <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5">
 
           {curTab === 't' && (
             <LeagueView
@@ -1126,7 +1213,7 @@ export default function App() {
         </main>
 
         {/* Pinned Left-Rail Game Console Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/98 border-r border-[var(--line)] pl-[var(--sal,env(safe-area-inset-left,0px))] order-first w-[calc(70px+var(--sal,env(safe-area-inset-left,0px)))] mland:w-[calc(62px+var(--sal,env(safe-area-inset-left,0px)))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/98 border-r border-[var(--line)] order-first w-[70px] mland:w-[60px] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto">
           <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
@@ -1168,6 +1255,7 @@ export default function App() {
             })}
           </div>
         </nav>
+      </div>
       </div>
 
       {/* Modals */}
@@ -1283,6 +1371,7 @@ export default function App() {
         />
       )}
 
+      {landscapeOverlay}
       {toast && (
         <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
           {toast}

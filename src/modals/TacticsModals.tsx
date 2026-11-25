@@ -35,13 +35,13 @@ export const CustomFormationModal: React.FC<{
     const rect = e.currentTarget.getBoundingClientRect();
     const isTouch = e.pointerType !== 'mouse' || dragIsTouch;
     const rawPx = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 300;
-    const rawPy = ((e.clientY - rect.top) / Math.max(1, rect.height)) * 340;
+    const rawPy = ((e.clientY - rect.top) / Math.max(1, rect.height)) * 380;
     const liftClientY = isTouch ? e.clientY - 38 : e.clientY;
     const px = ((e.clientX - rect.left) / Math.max(1, rect.width)) * 300;
-    const py = ((liftClientY - rect.top) / Math.max(1, rect.height)) * 340;
+    const py = ((liftClientY - rect.top) / Math.max(1, rect.height)) * 380;
     const nx = Math.max(3, Math.min(97, Math.round((px - 18) / 2.64)));
-    const ny = Math.max(8, Math.min(86, Math.round((py - 24) / 2.9)));
-    if (isTouch) setFingerSvgPt({ px: Math.max(8, Math.min(292, rawPx)), py: Math.max(8, Math.min(332, rawPy)) });
+    const ny = Math.max(8, Math.min(86, Math.round((py - 16) / 3.48)));
+    if (isTouch) setFingerSvgPt({ px: Math.max(8, Math.min(292, rawPx)), py: Math.max(8, Math.min(372, rawPy)) });
     setSlots((prev) => prev.map((z, idx) => (idx === dragIdx ? [autoRole(nx, ny), nx, ny] : z)));
   };
 
@@ -59,7 +59,7 @@ export const CustomFormationModal: React.FC<{
         <div className="flex-1 min-h-0 overflow-hidden p-3 mland:p-2 grid grid-cols-[245px_1fr] mland:grid-cols-[205px_1fr] gap-3.5 mland:gap-2.5 items-stretch">
           <div className="flex flex-col items-center justify-center h-full min-h-0">
             <svg
-              viewBox="0 0 300 340"
+              viewBox="0 0 300 380"
               className="h-full max-h-[300px] mland:max-h-[210px] w-auto max-w-full mx-auto rounded-xl select-none touch-none border border-[var(--line)]"
               onPointerMove={handlePointerMove}
               onPointerUp={() => { setDragIdx(-1); setDragIsTouch(false); setFingerSvgPt(null); }}
@@ -68,7 +68,7 @@ export const CustomFormationModal: React.FC<{
               <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
               {dragIdx > 0 && fingerSvgPt && slots[dragIdx] && (() => {
                 const tx = 18 + slots[dragIdx][1] * 2.64;
-                const ty = 24 + slots[dragIdx][2] * 2.9;
+                const ty = 16 + slots[dragIdx][2] * 3.48;
                 return (
                   <g className="pointer-events-none">
                     <line x1={fingerSvgPt.px} y1={fingerSvgPt.py} x2={tx} y2={ty} stroke="#fde047" strokeWidth="1.6" strokeDasharray="3.5 2.5" />
@@ -78,7 +78,7 @@ export const CustomFormationModal: React.FC<{
               })()}
               {slots.map((z, i) => {
                 const cx = 18 + z[1] * 2.64;
-                const cy = 24 + z[2] * 2.9;
+                const cy = 16 + z[2] * 3.48;
                 return (
                   <g
                     key={i}

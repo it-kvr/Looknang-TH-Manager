@@ -8,7 +8,7 @@ import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { cleanImportJson } from '../engine/saveCodec';
-import { ovColor, statBarColor, statTierMeta } from '../engine/missions';
+import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip, FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge } from '../components/TalentBadge';
@@ -22,6 +22,9 @@ interface StarPosterCard {
   pos: SubRole;
   no: number;
   ov: number;
+  pot: number;
+  talent: number;
+  age: number;
   clubName: string;
   sourceLabel: string;
   archLabel: string;
@@ -64,9 +67,12 @@ function buildStarPosterPool(): StarPosterCard[] {
           pos: top.ro,
           no: top.no || 10,
           ov: top.ov,
+          pot: top.pot || top.ov,
+          talent: getPlayerTalent(top),
+          age: top.age || 22,
           clubName,
-          sourceLabel: `สตาร์จากเซฟ #${k}`,
-          archLabel: `${SPN[top.ro] || top.ro} · อายุ ${top.age} ปี`,
+          sourceLabel: `เซฟ #${k}`,
+          archLabel: SPN[top.ro] || top.ro,
           attrs: top.customA || dtInfo(top).a,
           kit1,
           kit2,
@@ -82,14 +88,19 @@ function buildStarPosterPool(): StarPosterCard[] {
       const mePl = meT?.sq?.find((q) => q.me);
       const attrs = ps.p.a || ROLE_BASE_ATTRS(ps.p.pos, ps.p.sp);
       const ov = mePl?.ov || OVF(ps.p.pos, attrs);
+      const talent = ps.p.talent ?? getPlayerTalent(mePl || { n: ps.p.name, pos: ps.p.pos, ro: ps.p.sp, ov, age: ps.p.age, pot: 92, fit: 100, inj: 0 }, ps.p);
+      const pot = mePl?.pot ?? clamp(Math.max(88, talent + 6), ov + 8, 96);
       pool.push({
         id: `save_p_${k}`,
         name: ps.p.name,
         pos: ps.p.sp,
         no: ps.p.no || 10,
         ov,
+        pot,
+        talent,
+        age: ps.p.age || 18,
         clubName: meT?.name || 'ทีมชาติไทย',
-        sourceLabel: `นักเตะของคุณ #${k}`,
+        sourceLabel: `เซฟอาชีพ #${k}`,
         archLabel: ps.p.archName || SPN[ps.p.sp] || ps.p.sp,
         attrs,
         kit1: meT?.kc?.[0] || ps.p.c || '#158049',
@@ -113,6 +124,9 @@ function buildStarPosterPool(): StarPosterCard[] {
       ph: clamp(base.ph + (arch.coreBonus.ph || 0) + 18, 45, 92)
     };
     const ov = OVF(preset.pos, attrs);
+    const age = 21 + (idx % 6);
+    const talent = clamp(ov + 6 + (idx % 5) * 2, 74, 94);
+    const pot = clamp(Math.max(ov + 4, talent + 2), ov + 2, 95);
     const starName = genPlayerName();
     const teamStub: Team = {
       id: 900 + idx,
@@ -124,14 +138,27 @@ function buildStarPosterPool(): StarPosterCard[] {
       kc: preset.kit,
       sq: []
     };
+    const curatedVis: Array<[number, number, number, number, number, number, number]> = [
+      [5, 0, 15, 0, 9, preset.no, 2],
+      [0, 0, 14, 0, 5, preset.no, 0],
+      [1, 0, 16, 4, 8, preset.no, 2],
+      [2, 1, 17, 0, 0, preset.no, 3],
+      [5, 0, 19, 1, 1, preset.no, 2],
+      [1, 2, 7, 0, 3, preset.no, 4],
+      [0, 0, 5, 4, 9, preset.no, 5],
+      [2, 0, 9, 0, 2, preset.no, 0]
+    ];
     pool.push({
       id: `league_star_${idx}`,
       name: starName,
       pos: preset.sp,
       no: preset.no,
       ov,
+      pot,
+      talent,
+      age,
       clubName: preset.name,
-      sourceLabel: 'ซูเปอร์สตาร์ลีกสูงสุด',
+      sourceLabel: 'ลีกสูงสุด',
       archLabel: `${arch.icon} ${arch.name}`,
       attrs,
       kit1: preset.kit[0],
@@ -142,8 +169,8 @@ function buildStarPosterPool(): StarPosterCard[] {
         ro: preset.sp,
         no: preset.no,
         ov,
-        age: 21 + (idx % 6),
-        vis: [idx % 5, idx % 5, idx % 8, idx % 2 === 0 ? 0 : idx % 4, idx % 4, preset.no, idx % 3]
+        age,
+        vis: curatedVis[idx % curatedVis.length]
       },
       team: teamStub
     });
@@ -515,57 +542,58 @@ export const MainMenu: React.FC<{
           : 'คู่แข่งแข็งแกร่งขึ้น ท้าทายฝีมือคุมทีม';
 
     return (
-      <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)]">
-        {/* Top Navigation Bar: 3 clean zones */}
-        <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-6xl mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 flex items-center justify-between gap-3 sm:gap-6">
-            <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-              <button
-                type="button"
-                onClick={() => { SFX.tap(); goStep('menu'); }}
-                className="btn btn-sm btn-secondary shrink-0"
-              >
-                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
-                <span>กลับ</span>
-              </button>
-              <div className="min-w-0">
-                <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-tight">
-                  เลือกสโมสรเริ่มต้น
-                </h2>
-                <p className="hidden sm:block mland:hidden text-[11px] text-[var(--mut)] truncate">
-                  ลีกระดับจังหวัด · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
-                </p>
+      <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] p-2.5 sm:p-6 md:p-8 mland:p-2.5 safe-all">
+        <div className="w-full max-w-6xl h-full max-h-[86dvh] sm:max-h-[min(84dvh,700px)] mland:max-h-[89dvh] flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
+          {/* Top Navigation Bar: 3 clean zones */}
+          <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
+            <div className="w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 flex items-center justify-between gap-3 sm:gap-6">
+              <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); goStep('menu'); }}
+                  className="btn btn-sm btn-secondary shrink-0"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                  <span>กลับ</span>
+                </button>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-tight">
+                    เลือกสโมสรเริ่มต้น
+                  </h2>
+                  <p className="hidden sm:block mland:hidden text-[11px] text-[var(--mut)] truncate">
+                    ลีกระดับจังหวัด · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+                <div className="seg-bar" role="group" aria-label="ระดับความยาก">
+                  {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
+                    <button
+                      key={lbl}
+                      type="button"
+                      onClick={() => { SFX.tap(); setDiff(idx); }}
+                      className={`seg-btn ${diff === idx ? 'seg-btn-active' : ''}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={rerollManagerClubs}
+                  title="สุ่มชุดสโมสรใหม่"
+                  className="btn btn-sm btn-secondary shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline mland:inline">สุ่มใหม่</span>
+                </button>
               </div>
             </div>
+          </header>
 
-            <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
-              <div className="seg-bar" role="group" aria-label="ระดับความยาก">
-                {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
-                  <button
-                    key={lbl}
-                    type="button"
-                    onClick={() => { SFX.tap(); setDiff(idx); }}
-                    className={`seg-btn ${diff === idx ? 'seg-btn-active' : ''}`}
-                  >
-                    {lbl}
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={rerollManagerClubs}
-                title="สุ่มชุดสโมสรใหม่"
-                className="btn btn-sm btn-secondary shrink-0"
-              >
-                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden sm:inline mland:inline">สุ่มใหม่</span>
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Main 2-Column Club Selection & Dossier Workspace */}
-        <div className="flex-1 min-h-0 max-w-6xl w-full mx-auto px-3 sm:px-5 mland:px-3 py-3 mland:py-2 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.35fr_0.95fr] mland:grid-cols-[1.32fr_0.98fr] gap-3 sm:gap-4 mland:gap-2.5 safe-bottom safe-x">
+          {/* Main 2-Column Club Selection & Dossier Workspace */}
+          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-3 mland:py-2 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.35fr_0.95fr] mland:grid-cols-[1.32fr_0.98fr] gap-3 sm:gap-4 mland:gap-2.5">
           {/* Left Column: Filter Bar + Club Roster Grid */}
           <section className="flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-1.5">
             <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
@@ -831,6 +859,7 @@ export const MainMenu: React.FC<{
               </button>
             </div>
           </aside>
+          </div>
         </div>
       </div>
     );
@@ -1034,52 +1063,53 @@ export const MainMenu: React.FC<{
     const activeTabStatsBadge = SIGL[curArch.sig] || curArch.sig;
 
     return (
-      <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)]">
-        {/* Studio Header */}
-        <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-6xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5">
-                <span>⚽</span>
-                <span>สตูดิโอสร้างนักเตะ</span>
-                {customRosterCount > 0 && (
-                  <span className="hidden sm:inline mland:inline px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold">
-                    ทำเนียบ {customRosterCount} คน
-                  </span>
-                )}
-              </h2>
-              <p className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
-                ปรับแต่งข้อมูล หน้าตา สไตล์การเล่น และพลัง — เล่นอาชีพหรือดึงเป็นเด็กปั้นในทีมได้
-              </p>
+      <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] p-2.5 sm:p-6 md:p-8 mland:p-2.5 safe-all">
+        <div className="w-full max-w-6xl h-full max-h-[88dvh] sm:max-h-[min(85dvh,720px)] mland:max-h-[90dvh] flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
+          {/* Studio Header */}
+          <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
+            <div className="w-full mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5">
+                  <span>⚽</span>
+                  <span>สตูดิโอสร้างนักเตะ</span>
+                  {customRosterCount > 0 && (
+                    <span className="hidden sm:inline mland:inline px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold">
+                      ทำเนียบ {customRosterCount} คน
+                    </span>
+                  )}
+                </h2>
+                <p className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
+                  ปรับแต่งข้อมูล หน้าตา สไตล์การเล่น และพลัง — เล่นอาชีพหรือดึงเป็นเด็กปั้นในทีมได้
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={randomizeFaceOnly}
+                  className="btn btn-sm btn-secondary"
+                >
+                  🎭 สุ่มหน้า
+                </button>
+                <button
+                  type="button"
+                  onClick={randomizeAll}
+                  className="btn btn-sm btn-secondary"
+                >
+                  🔄 สุ่มทั้งหมด
+                </button>
+                <button
+                  type="button"
+                  onClick={() => goStep('menu')}
+                  className="btn btn-sm btn-secondary"
+                >
+                  ‹ กลับ
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={randomizeFaceOnly}
-                className="btn btn-sm btn-secondary"
-              >
-                🎭 สุ่มหน้า
-              </button>
-              <button
-                type="button"
-                onClick={randomizeAll}
-                className="btn btn-sm btn-secondary"
-              >
-                🔄 สุ่มทั้งหมด
-              </button>
-              <button
-                type="button"
-                onClick={() => goStep('menu')}
-                className="btn btn-sm btn-secondary"
-              >
-                ‹ กลับ
-              </button>
-            </div>
-          </div>
-        </header>
+          </header>
 
-        {/* Responsive Studio Grid */}
-        <div className="flex-1 min-h-0 max-w-6xl w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[235px_1fr] md:grid-cols-[265px_1fr] mland:grid-cols-[205px_1fr] gap-3 mland:gap-2 safe-bottom safe-x">
+          {/* Responsive Studio Grid */}
+          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[235px_1fr] md:grid-cols-[265px_1fr] mland:grid-cols-[205px_1fr] gap-3 mland:gap-2">
           {/* Left Column: Collector Athlete Card + Action Buttons */}
           <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0 shrink-0">
             <div className="relative flex-1 min-h-0 rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#070d0a] text-white shadow-xl overflow-hidden flex flex-col justify-between">
@@ -1775,6 +1805,7 @@ export const MainMenu: React.FC<{
               </div>
             </div>
           </div>
+          </div>
         </div>
       </div>
     );
@@ -1795,7 +1826,7 @@ export const MainMenu: React.FC<{
   };
 
   return (
-    <div className="relative h-full w-full flex flex-col justify-center overflow-hidden bg-[#040c08] safe-all">
+    <div className="relative h-full w-full flex items-center justify-center overflow-hidden bg-[#040c08] p-3 sm:p-6 md:p-8 mland:p-2.5 safe-all">
       {/* Full-Bleed Stadium Artwork Canvas — Blurred & Dark Moody Night Atmosphere */}
       <div
         aria-hidden="true"
@@ -1811,8 +1842,8 @@ export const MainMenu: React.FC<{
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(16,68,40,0.16),rgba(2,8,5,0.62)_78%)]" />
       </div>
 
-      {/* Landscape-First Main Hub: Centered Stage with Breathing Room Top/Bottom */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto h-full sm:max-h-[500px] mland:max-h-[min(360px,calc(var(--app-dvh,1dvh)*100-28px))] px-4 sm:px-7 mland:px-5 py-4 sm:py-5 mland:py-2.5 flex flex-col gap-3 sm:gap-3.5 mland:gap-2.5 overflow-hidden">
+      {/* Framed Main Hub Stage with Comfortable Breathing Room */}
+      <div className="relative z-10 w-full max-w-6xl h-full max-h-[85dvh] sm:max-h-[min(83dvh,680px)] mland:max-h-[89dvh] rounded-3xl mland:rounded-2xl border border-white/12 bg-[#06110b]/50 backdrop-blur-sm shadow-[0_24px_64px_rgba(0,0,0,0.68)] px-3.5 sm:px-5 mland:px-3.5 py-3 sm:py-4 mland:py-2.5 flex flex-col gap-3 mland:gap-2 overflow-hidden">
         {/* Top Stadium Masthead */}
         <header className="shrink-0 flex items-center justify-between gap-3 mland:gap-2">
           <div className="flex items-center gap-3 mland:gap-2 min-w-0">
@@ -1860,116 +1891,112 @@ export const MainMenu: React.FC<{
           </div>
         </header>
 
-        {/* Main 2 Columns: Col 1 = Randomized In-Game Star Poster | Col 2 = 2-Column Save & Mode Hub */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] mland:grid-cols-[0.74fr_1.46fr] gap-3 sm:gap-4 mland:gap-3 overflow-hidden items-stretch">
-          {/* Column 1: Premium Collector Star Footballer Poster */}
-          <aside className="relative min-h-0 rounded-2xl mland:rounded-xl p-[1px] bg-gradient-to-b from-[#fad05a]/60 via-white/20 to-[#1f6a42]/60 shadow-[0_20px_48px_rgba(0,0,0,0.72)] overflow-hidden">
-            <div className="relative h-full w-full rounded-[15px] mland:rounded-[11px] bg-gradient-to-b from-[#131e18] via-[#0c1410] to-[#060b08] overflow-hidden flex flex-col justify-between text-white">
-              {/* Top Team Ribbon Accent */}
-              <div
-                aria-hidden="true"
-                className="h-1 w-full shrink-0"
-                style={{ background: `linear-gradient(90deg, ${activeStar.kit1}, #fad05a 50%, ${activeStar.kit2})` }}
-              />
+        {/* Main 2 Columns: Col 1 = In-Game Collector Athlete Card | Col 2 = 2-Column Save & Mode Hub */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] mland:grid-cols-[0.74fr_1.46fr] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
+          {/* Column 1: Signature In-Game Athlete Card */}
+          <aside className="relative min-h-0 rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-[0_18px_42px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col justify-between">
+            {/* Top Kit Accent Strip */}
+            <div
+              aria-hidden="true"
+              className="h-1 w-full shrink-0"
+              style={{ background: `linear-gradient(90deg, ${activeStar.kit1}, #fad05a 50%, ${activeStar.kit2})` }}
+            />
 
-              {/* Top Poster Header: OVR Shield + Club Identity + Reroll */}
-              <div className="relative z-10 px-3 pt-2.5 mland:px-2.5 mland:pt-1.5 flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
-                  <div className="leading-none pr-2 border-r border-white/15 shrink-0 text-center">
-                    <div className="text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular bg-gradient-to-b from-[#fff2b2] via-[#fad05a] to-[#d69514] bg-clip-text text-transparent drop-shadow-xs">
-                      {activeStar.ov}
-                    </div>
-                    <div className="text-[9.5px] mland:text-[8px] font-bold text-white/80 tracking-wider mt-0.5">
-                      {activeStar.pos} · #{activeStar.no}
-                    </div>
+            {/* Top Corners: OVR / POS #NO + POT / TalentBadge / Club / Switch */}
+            <div className="px-3 pt-2 mland:px-2 mland:pt-1.5 flex items-start justify-between gap-2 shrink-0">
+              <div className="leading-none">
+                <div className={`text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular leading-none ${statTierMeta(activeStar.ov).darkTextClass}`}>
+                  {activeStar.ov}
+                </div>
+                <div className="text-[10px] mland:text-[8px] font-bold text-white/80 tracking-wide mt-0.5 tabular">
+                  {activeStar.pos} · #{activeStar.no}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-1.5 mland:gap-1 min-w-0">
+                <div className="flex flex-col items-end gap-0.5 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <span className={`text-[10px] mland:text-[8px] font-bold tabular ${statTierMeta(activeStar.pot).darkTextClass}`}>
+                      POT {activeStar.pot}
+                    </span>
+                    <TalentBadge talent={activeStar.talent} variant="card" size="xs" />
                   </div>
-                  <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/8 border border-white/12 flex items-center justify-center shrink-0 [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-                    <ClubCrest name={activeStar.clubName} size={20} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-[10px] mland:text-[8.5px] font-bold text-[#fad05a] truncate leading-tight">
-                      {activeStar.sourceLabel}
+                  <div className="flex items-center gap-1 max-w-[140px] mland:max-w-[105px]">
+                    <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
+                      <ClubCrest name={activeStar.clubName} size={14} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
                     </div>
-                    <div className="text-[11px] mland:text-[9.5px] font-semibold text-white/95 truncate leading-tight">
+                    <span className="text-[9.5px] mland:text-[7.5px] font-semibold text-white/75 truncate">
                       {activeStar.clubName}
-                    </div>
+                    </span>
                   </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={cycleStarPoster}
-                  title="สุ่มโปสเตอร์นักเตะคนอื่น"
-                  aria-label="สุ่มโปสเตอร์นักเตะคนอื่น"
-                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/10 hover:bg-[#fad05a]/25 border border-white/15 hover:border-[#fad05a]/50 text-xs mland:text-[10px] flex items-center justify-center cursor-pointer transition-all shrink-0"
+                  title="สลับนักเตะแนะนำ"
+                  aria-label="สลับนักเตะแนะนำ"
+                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/8 hover:bg-white/15 border border-white/12 hover:border-[#f5c242]/50 text-white/80 hover:text-[#f5c242] flex items-center justify-center cursor-pointer transition-colors shrink-0"
                 >
-                  🎲
+                  <RefreshCw className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
                 </button>
               </div>
+            </div>
 
-              {/* Center Contrasting Neutral Studio Showcase */}
-              <div className="relative z-10 flex-1 min-h-0 mx-3 my-1.5 mland:mx-2.5 mland:my-1 rounded-xl border border-[#fad05a]/20 bg-gradient-to-b from-[#24332d] via-[#17221d] to-[#0f1713] flex items-end justify-center overflow-hidden shadow-inner">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    backgroundImage: 'radial-gradient(circle at 50% 44%, rgba(248, 252, 250, 0.28) 0%, rgba(212, 228, 220, 0.08) 48%, transparent 74%)'
-                  }}
+            {/* Studio Spotlight Portrait Stage (In-Game Style) */}
+            <div className="relative flex-1 min-h-0 mx-3 my-1.5 mland:mx-2 mland:my-1 rounded-xl mland:rounded-lg border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-1.5 flex items-end justify-center overflow-hidden shadow-inner">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0"
+                style={{
+                  backgroundImage: 'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)'
+                }}
+              />
+              <div className="relative z-10 [&>svg]:w-[96px] [&>svg]:h-[102px] sm:[&>svg]:w-[112px] sm:[&>svg]:h-[119px] mland:[&>svg]:w-[66px] mland:[&>svg]:h-[70px] drop-shadow-[0_10px_16px_rgba(0,0,0,0.72)]">
+                <PlayerFace
+                  player={activeStar.player}
+                  team={activeStar.team}
+                  club={activeStar.club}
+                  isMyClub={!!activeStar.club}
+                  careerProfile={activeStar.profile}
+                  kitColor={activeStar.kit1}
+                  trimColor={activeStar.kit2}
+                  size={112}
+                  bare
                 />
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute bottom-0 inset-x-6 h-3 rounded-full bg-black/55 blur-sm"
-                />
-                <div className="relative z-10 [&>svg]:w-[98px] [&>svg]:h-[104px] sm:[&>svg]:w-[116px] sm:[&>svg]:h-[123px] mland:[&>svg]:w-[74px] mland:[&>svg]:h-[79px] drop-shadow-[0_12px_20px_rgba(0,0,0,0.78)]">
-                  <PlayerFace
-                    player={activeStar.player}
-                    team={activeStar.team}
-                    club={activeStar.club}
-                    isMyClub={!!activeStar.club}
-                    careerProfile={activeStar.profile}
-                    kitColor={activeStar.kit1}
-                    trimColor={activeStar.kit2}
-                    size={116}
-                    bare
-                  />
-                </div>
               </div>
+            </div>
 
-              {/* Gold Divider + Nameplate & 5 Color-Coded Stats */}
-              <div className="relative z-10 bg-[#050a07]/92 px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5 mland:space-y-1">
-                <div
-                  aria-hidden="true"
-                  className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-[#fad05a]/50 to-transparent"
-                />
-                <div className="text-center">
-                  <div className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-white truncate leading-tight tracking-wide">
-                    {activeStar.name}
-                  </div>
-                  <div className="text-[10px] mland:text-[8.5px] text-emerald-100/75 truncate mt-0.5 mland:mt-0">
-                    {activeStar.archLabel}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-5 gap-1 pt-1 border-t border-white/10 text-center">
-                  {ATT.map(([k, l]) => {
-                    const val = activeStar.attrs[k];
-                    return (
-                      <div key={k} className="space-y-0.5">
-                        <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-tight text-white">
-                          {val}
-                        </div>
-                        <div className="h-2 mland:h-1.5 rounded-full bg-white/15 overflow-hidden mx-0.5">
-                          <div
-                            className="h-full rounded-full"
-                            style={{ width: `${clamp(val, 10, 100)}%`, background: statBarColor(val) }}
-                          />
-                        </div>
-                        <div className="text-[9px] mland:text-[7.5px] text-white/65 leading-tight">{l}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+            {/* Athlete Identity */}
+            <div className="px-3 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-0.5 shrink-0">
+              <div className="font-display font-extrabold text-sm sm:text-[15px] mland:text-xs text-white truncate leading-tight">
+                {activeStar.name}
               </div>
+              <div className="text-[10px] mland:text-[8px] text-emerald-100/80 truncate tabular">
+                อายุ {activeStar.age} ปี · {activeStar.archLabel} · {activeStar.sourceLabel}
+              </div>
+            </div>
+
+            {/* Bottom 5 Core Stats Strip with Color Tiers (Matches In-Game Card) */}
+            <div className="bg-[#060c09]/92 border-t border-white/10 px-2 py-1.5 mland:px-1.5 mland:py-1 grid grid-cols-5 gap-1 mland:gap-0.5 text-center shrink-0">
+              {ATT.map(([k, l]) => {
+                const val = activeStar.attrs[k];
+                const tier = statTierMeta(val);
+                return (
+                  <div key={k} className="rounded-lg bg-white/[0.04] py-1 mland:py-0.5 px-0.5 space-y-0.5">
+                    <div className="text-[9px] mland:text-[7px] text-white/60 leading-tight truncate">{l}</div>
+                    <div className={`text-xs sm:text-[13px] mland:text-[10px] font-extrabold font-display tabular leading-none ${tier.darkTextClass}`}>
+                      {val}
+                    </div>
+                    <div className="h-1.5 mland:h-1 rounded-full bg-white/15 overflow-hidden mx-0.5">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </aside>
 
