@@ -927,30 +927,44 @@ export const SaveFolderModal: React.FC<{
                         })}
                       </div>
 
-                      <div className="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
+                      <div className="inline-flex items-center rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] p-0.5 shadow-2xs shrink-0 self-end sm:self-auto">
                         <button
                           type="button"
                           onClick={() => handleAdjustSlotCount(activeSlotMgmtMode, -1)}
                           disabled={activeStats.cap <= MIN_SLOTS}
+                          title="ลดจำนวนช่องเซฟ"
                           aria-label="ลดจำนวนช่องเซฟ"
-                          className="h-10 sm:h-11 mland:h-8 px-3.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--red)]/60 hover:bg-[var(--red-soft)]/50 hover:text-[var(--red)] disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-colors whitespace-nowrap"
+                          className="w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface-2)]/80 text-[var(--ink)] hover:bg-[var(--red-soft)]/70 hover:text-[var(--red)] disabled:opacity-35 cursor-pointer flex items-center justify-center transition-colors shrink-0"
                         >
-                          <Minus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
-                          <span>ลดช่อง ({activeStats.cap})</span>
+                          <Minus className="w-4 h-4 sm:w-[18px] sm:h-[18px] mland:w-3.5 mland:h-3.5 stroke-[2.6]" />
                         </button>
+                        <div
+                          className={`min-w-[68px] sm:min-w-[76px] mland:min-w-[56px] px-2.5 text-center font-extrabold tabular leading-tight select-none ${
+                            isActiveFull
+                              ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                              : 'text-[var(--ink)]'
+                          }`}
+                        >
+                          <div className="text-xs sm:text-[13px] mland:text-[10.5px]">
+                            {activeStats.used}/{activeStats.cap} ช่อง
+                          </div>
+                          {isActiveFull && (
+                            <div className="text-[9px] mland:text-[7.5px] font-bold opacity-85">เต็ม</div>
+                          )}
+                        </div>
                         <button
                           type="button"
                           onClick={() => handleAdjustSlotCount(activeSlotMgmtMode, 1)}
                           disabled={activeStats.cap >= MAX_SLOTS}
+                          title="เพิ่มจำนวนช่องเซฟ"
                           aria-label="เพิ่มจำนวนช่องเซฟ"
-                          className={`h-10 sm:h-11 mland:h-8 px-4 rounded-xl mland:rounded-lg border disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-all whitespace-nowrap ${
+                          className={`w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-lg disabled:opacity-35 cursor-pointer flex items-center justify-center transition-all shrink-0 ${
                             isActiveFull && activeStats.cap < MAX_SLOTS
-                              ? 'bg-[var(--g)] border-[var(--g)] text-white hover:brightness-110 shadow-xs'
-                              : 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                              ? 'bg-[var(--g)] text-white hover:brightness-110 shadow-xs'
+                              : 'bg-[var(--g-soft)] text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
                           }`}
                         >
-                          <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
-                          <span>เพิ่มช่อง</span>
+                          <Plus className="w-4 h-4 sm:w-[18px] sm:h-[18px] mland:w-3.5 mland:h-3.5 stroke-[2.6]" />
                         </button>
                       </div>
                     </div>

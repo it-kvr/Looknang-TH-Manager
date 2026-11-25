@@ -2127,47 +2127,48 @@ export const MainMenu: React.FC<{
               </button>
 
               <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
-                <div className="shrink-0 px-2.5 mland:px-2 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/75 space-y-1.5 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
-                      เซฟผู้จัดการทีม
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10.5px] mland:text-[8.5px] font-bold tabular shrink-0 border ${
-                        mCount >= slotCounts.m
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[#9c6900] dark:text-[var(--lamp)]'
-                      }`}
-                    >
-                      {mCount >= slotCounts.m ? `เต็ม ${mCount}/${slotCounts.m}` : `${mCount}/${slotCounts.m} ช่อง`}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
+                <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/75 flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] text-[var(--ink)] truncate min-w-0">
+                    เซฟผู้จัดการทีม
+                  </span>
+                  <div className="inline-flex items-center rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] p-0.5 shadow-2xs shrink-0">
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('m', -1)}
                       disabled={slotCounts.m <= MIN_SLOTS}
                       title="ลดจำนวนช่องเซฟ"
                       aria-label="ลดจำนวนช่องเซฟผู้จัดการ"
-                      className="h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:text-[var(--red)] hover:border-[var(--red)]/55 hover:bg-[var(--red-soft)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-colors whitespace-nowrap"
+                      className="w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface-2)]/80 text-[var(--ink)] hover:text-[var(--red)] hover:bg-[var(--red-soft)]/70 disabled:opacity-35 cursor-pointer flex items-center justify-center transition-colors shrink-0"
                     >
-                      <Minus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
-                      <span>ลดช่อง</span>
+                      <Minus className="w-4 h-4 sm:w-[18px] sm:h-[18px] mland:w-3.5 mland:h-3.5 stroke-[2.6]" />
                     </button>
+                    <div
+                      className={`min-w-[52px] sm:min-w-[58px] mland:min-w-[46px] px-2 text-center font-extrabold tabular leading-tight select-none ${
+                        mCount >= slotCounts.m
+                          ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                          : 'text-[var(--ink)]'
+                      }`}
+                    >
+                      <div className="text-xs sm:text-[13px] mland:text-[10.5px]">
+                        {mCount}/{slotCounts.m}
+                      </div>
+                      {mCount >= slotCounts.m && (
+                        <div className="text-[9px] mland:text-[7.5px] font-bold opacity-85">เต็ม</div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('m', 1)}
                       disabled={slotCounts.m >= MAX_SLOTS}
                       title="เพิ่มช่องเซฟ"
                       aria-label="เพิ่มช่องเซฟผู้จัดการ"
-                      className={`h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-all whitespace-nowrap ${
+                      className={`w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-lg disabled:opacity-35 cursor-pointer flex items-center justify-center transition-all shrink-0 ${
                         mCount >= slotCounts.m && slotCounts.m < MAX_SLOTS
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white hover:brightness-110 shadow-xs'
-                          : 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                          ? 'bg-[var(--g)] text-white hover:brightness-110 shadow-xs'
+                          : 'bg-[var(--g-soft)] text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
                       }`}
                     >
-                      <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
-                      <span>เพิ่มช่อง</span>
+                      <Plus className="w-4 h-4 sm:w-[18px] sm:h-[18px] mland:w-3.5 mland:h-3.5 stroke-[2.6]" />
                     </button>
                   </div>
                 </div>
@@ -2201,47 +2202,48 @@ export const MainMenu: React.FC<{
               </button>
 
               <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
-                <div className="shrink-0 px-2.5 mland:px-2 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/75 space-y-1.5 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
-                      เซฟนักเตะอาชีพ
-                    </span>
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10.5px] mland:text-[8.5px] font-bold tabular shrink-0 border ${
-                        pCount >= slotCounts.p
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]'
-                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--g)]'
-                      }`}
-                    >
-                      {pCount >= slotCounts.p ? `เต็ม ${pCount}/${slotCounts.p}` : `${pCount}/${slotCounts.p} ช่อง`}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
+                <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/75 flex items-center justify-between gap-2">
+                  <span className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] text-[var(--ink)] truncate min-w-0">
+                    เซฟนักเตะอาชีพ
+                  </span>
+                  <div className="inline-flex items-center rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] p-0.5 shadow-2xs shrink-0">
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('p', -1)}
                       disabled={slotCounts.p <= MIN_SLOTS}
                       title="ลดจำนวนช่องเซฟ"
                       aria-label="ลดจำนวนช่องเซฟนักเตะ"
-                      className="h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:text-[var(--red)] hover:border-[var(--red)]/55 hover:bg-[var(--red-soft)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-colors whitespace-nowrap"
+                      className="w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface-2)]/80 text-[var(--ink)] hover:text-[var(--red)] hover:bg-[var(--red-soft)]/70 disabled:opacity-35 cursor-pointer flex items-center justify-center transition-colors shrink-0"
                     >
-                      <Minus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
-                      <span>ลดช่อง</span>
+                      <Minus className="w-4 h-4 sm:w-[18px] sm:h-[18px] mland:w-3.5 mland:h-3.5 stroke-[2.6]" />
                     </button>
+                    <div
+                      className={`min-w-[52px] sm:min-w-[58px] mland:min-w-[46px] px-2 text-center font-extrabold tabular leading-tight select-none ${
+                        pCount >= slotCounts.p
+                          ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                          : 'text-[var(--g)]'
+                      }`}
+                    >
+                      <div className="text-xs sm:text-[13px] mland:text-[10.5px]">
+                        {pCount}/{slotCounts.p}
+                      </div>
+                      {pCount >= slotCounts.p && (
+                        <div className="text-[9px] mland:text-[7.5px] font-bold opacity-85">เต็ม</div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('p', 1)}
                       disabled={slotCounts.p >= MAX_SLOTS}
                       title="เพิ่มช่องเซฟ"
                       aria-label="เพิ่มช่องเซฟนักเตะ"
-                      className={`h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-all whitespace-nowrap ${
+                      className={`w-9 h-9 sm:w-10 sm:h-10 mland:w-8 mland:h-8 rounded-lg disabled:opacity-35 cursor-pointer flex items-center justify-center transition-all shrink-0 ${
                         pCount >= slotCounts.p && slotCounts.p < MAX_SLOTS
-                          ? 'bg-[var(--g)] border-[var(--g)] text-white hover:brightness-110 shadow-xs'
-                          : 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                          ? 'bg-[var(--g)] text-white hover:brightness-110 shadow-xs'
+                          : 'bg-[var(--g-soft)] text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
                       }`}
                     >
-                      <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
-                      <span>เพิ่มช่อง</span>
+                      <Plus className="w-4 h-4 sm:w-[18px] sm:h-[18px] mland:w-3.5 mland:h-3.5 stroke-[2.6]" />
                     </button>
                   </div>
                 </div>

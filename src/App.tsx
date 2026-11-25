@@ -834,6 +834,7 @@ export default function App() {
     setNavIntent(null);
     if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
+    skipNextSaveRef.current = false;
     setState(clone);
     if (outcome.shouldConfetti) triggerConfetti();
     if (outcome.missionToast) showToast(outcome.missionToast);
@@ -858,6 +859,7 @@ export default function App() {
         setNavIntent(null);
         if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
         if (mainRef.current) mainRef.current.scrollTop = 0;
+        skipNextSaveRef.current = false;
         setState(clone);
         if (outcome.shouldConfetti) triggerConfetti();
         if (myGf > myGa) SFX.win();
