@@ -138,6 +138,7 @@ export const FinanceClubView: React.FC<{
   const [editingClubInfo, setEditingClubInfo] = useState(false);
   const [clubEditFocusField, setClubEditFocusField] = useState<'name' | 'nick' | 'std' | 'managerName' | 'motto' | 'founded'>('name');
   const [editingCaptain, setEditingCaptain] = useState(false);
+  const [autoSyncStadium, setAutoSyncStadium] = useState(true);
   const [clubDraft, setClubDraft] = useState({
     name: '',
     nick: '',
@@ -1942,9 +1943,9 @@ export const FinanceClubView: React.FC<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      {/* Club Hero Identity Banner (unifies live preview when on identity tab so crests/kits never duplicate) */}
+      {/* Club Hero Identity Banner — 2-row layout so full club name & tall crest/kits stand out */}
       <div
-        className={`relative px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 overflow-hidden ${
+        className={`relative px-3.5 py-2.5 mland:px-2.5 mland:py-2 rounded-2xl mland:rounded-xl border shrink-0 overflow-hidden ${
           clubTab === 'identity' ? 'border-[var(--g)]/40 shadow-sm' : 'border-[var(--line)]'
         }`}
         style={{
@@ -1956,13 +1957,14 @@ export const FinanceClubView: React.FC<{
           className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
           style={{ background: `linear-gradient(90deg, ${dk.c1}, ${dk.c2})` }}
         />
-        <div className="flex flex-col sm:flex-row mland:flex-row sm:items-center mland:items-center justify-between gap-2 sm:gap-3 mland:gap-2">
-          <div className="flex items-center gap-2.5 mland:gap-2 text-left min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 mland:gap-1 px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/75 border border-[var(--line)]/70 shrink-0 shadow-2xs">
-              <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-center justify-center">
-                <ClubCrest name={me.name} size={48} team={me} club={dk} isMyClub />
+        <div className="flex flex-col gap-2 mland:gap-1.5">
+          {/* Row 1: Tall Crest + Jerseys & Full Club Name / Details */}
+          <div className="flex items-center gap-3 sm:gap-4 mland:gap-2.5 text-left min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 px-2.5 py-2 sm:px-3.5 sm:py-2.5 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0 shadow-2xs">
+              <div className="shrink-0 [&>svg]:w-15 [&>svg]:h-15 sm:[&>svg]:w-[74px] sm:[&>svg]:h-[74px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
+                <ClubCrest name={me.name} size={74} team={me} club={dk} isMyClub />
               </div>
-              <div className="w-px h-7 mland:h-5 bg-[var(--line)]/75 mx-0.5" aria-hidden="true" />
+              <div className="w-px h-12 sm:h-15 mland:h-10 bg-[var(--line)]/75 mx-0.5" aria-hidden="true" />
               {clubTab === 'identity' ? (
                 <>
                   <button
@@ -1977,10 +1979,10 @@ export const FinanceClubView: React.FC<{
                       kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
                     }`}
                   >
-                    <div className="[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                      <KitJersey club={dk} away={false} size={40} />
+                    <div className="[&>svg]:w-13 [&>svg]:h-13 sm:[&>svg]:w-15 sm:[&>svg]:h-15 mland:[&>svg]:w-11 mland:[&>svg]:h-11 flex items-center justify-center">
+                      <KitJersey club={dk} away={false} size={62} />
                     </div>
-                    <span className={`text-[8.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                    <span className={`text-[9px] mland:text-[8px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                       เหย้า
                     </span>
                   </button>
@@ -1996,30 +1998,30 @@ export const FinanceClubView: React.FC<{
                       kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
                     }`}
                   >
-                    <div className="[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                      <KitJersey club={dk} away={true} size={40} />
+                    <div className="[&>svg]:w-13 [&>svg]:h-13 sm:[&>svg]:w-15 sm:[&>svg]:h-15 mland:[&>svg]:w-11 mland:[&>svg]:h-11 flex items-center justify-center">
+                      <KitJersey club={dk} away={true} size={62} />
                     </div>
-                    <span className={`text-[8.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                    <span className={`text-[9px] mland:text-[8px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                       เยือน
                     </span>
                   </button>
                 </>
               ) : (
                 <>
-                  <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                    <KitJersey club={dk} away={false} size={44} />
+                  <div className="shrink-0 [&>svg]:w-14 [&>svg]:h-14 sm:[&>svg]:w-[68px] sm:[&>svg]:h-[68px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
+                    <KitJersey club={dk} away={false} size={68} />
                   </div>
-                  <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                    <KitJersey club={dk} away={true} size={44} />
+                  <div className="shrink-0 [&>svg]:w-14 [&>svg]:h-14 sm:[&>svg]:w-[68px] sm:[&>svg]:h-[68px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
+                    <KitJersey club={dk} away={true} size={68} />
                   </div>
                 </>
               )}
             </div>
 
-            <div className="space-y-0.5 min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 min-w-0 text-[10.5px] mland:text-[9px] font-bold leading-tight">
+            <div className="space-y-1 mland:space-y-0.5 min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px] mland:text-[9px] font-bold leading-tight">
                 {clubTab === 'identity' ? (
-                  <span className={hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)] truncate' : 'text-[var(--g)] truncate'}>
+                  <span className={hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}>
                     {hasIdentityChanges
                       ? 'ตัวอย่างตรา & ชุดแข่ง (มีรายการแก้ไขที่ยังไม่บันทึก)'
                       : 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์'}
@@ -2028,7 +2030,7 @@ export const FinanceClubView: React.FC<{
                   <>
                     <span className="text-[var(--g)] shrink-0">{TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}</span>
                     {k.motto && (
-                      <span className="hidden md:inline mland:hidden text-[var(--mut)] font-medium italic truncate">
+                      <span className="hidden sm:inline text-[var(--mut)] font-medium italic truncate">
                         · &ldquo;{k.motto}&rdquo;
                       </span>
                     )}
@@ -2036,15 +2038,15 @@ export const FinanceClubView: React.FC<{
                 )}
               </div>
 
-              <h2 className="font-bold text-base sm:text-lg mland:text-sm font-display leading-tight truncate text-[var(--ink)]">
+              <h2 className="font-bold text-base sm:text-xl mland:text-sm font-display leading-snug text-[var(--ink)] break-words">
                 {me.name}
                 {k.nick ? (
-                  <span className="ml-1.5 text-xs sm:text-sm mland:text-[11px] font-semibold text-[var(--mut)]">«{k.nick}»</span>
+                  <span className="ml-1.5 text-xs sm:text-sm mland:text-[11px] font-semibold text-[var(--mut)] whitespace-nowrap">«{k.nick}»</span>
                 ) : null}
               </h2>
 
               {clubTab === 'identity' ? (
-                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate leading-tight">
+                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-tight">
                   ตรา: <b className="text-[var(--ink)]">{CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}</b> ·{' '}
                   <b className="text-[var(--ink)]">{CREST_PATTERNS[dk.pat] || 'แถบขวาง'}</b> · เสื้อ:{' '}
                   <b className="text-[var(--ink)]">{KIT_PATTERNS[dk.kit || 0]}</b> / เยือน{' '}
@@ -2052,10 +2054,10 @@ export const FinanceClubView: React.FC<{
                   <b className="text-[var(--ink)]">{KIT_COLLARS[(dk.collar ?? 0) % 4]}</b>
                 </p>
               ) : (
-                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate flex items-center gap-1.5 leading-tight">
-                  <span className="truncate">🏟️ {k.std} ({cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
-                  <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
-                  <span className="truncate font-semibold text-[var(--ink)]">
+                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-tight">
+                  <span>🏟️ {k.std} ({cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
+                  <span aria-hidden="true" className="opacity-45">·</span>
+                  <span className="font-semibold text-[var(--ink)]">
                     👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'} ({COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.icon}{' '}
                     {COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.name})
                   </span>
@@ -2064,93 +2066,101 @@ export const FinanceClubView: React.FC<{
             </div>
           </div>
 
-          {clubTab === 'identity' ? (
-            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  const kp = P(KIT_P);
-                  const icons = Object.keys(CREST_IC);
-                  patchIdentityDraft((cl) => {
-                    cl.c1 = kp[0];
-                    cl.c2 = kp[1];
-                    cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
-                    cl.shape = R(0, CREST_SHAPES.length - 1);
-                    cl.pat = R(0, CREST_PATTERNS.length - 1);
-                    cl.crestBorder = R(0, 3);
-                    cl.kit = R(0, KIT_PATTERNS.length - 1);
-                    const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
-                    cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
-                    cl.collar = R(0, KIT_COLLARS.length - 1);
-                    cl.cuffTrim = Math.random() < 0.75;
-                    cl.icon = P(icons);
-                    cl.iconColor = '';
-                  });
-                }}
-                className="btn btn-sm btn-gold whitespace-nowrap shrink-0"
-              >
-                <Dices className="w-3.5 h-3.5" />
-                <span>สุ่มดีไซน์</span>
-              </button>
-              {hasIdentityChanges && (
-                <button
-                  type="button"
-                  onClick={resetIdentityDraft}
-                  className="btn btn-sm btn-secondary whitespace-nowrap shrink-0"
+          {/* Row 2: Action controls (identity tab) OR Compact 4-column Club Metrics */}
+          <div className="pt-1.5 mland:pt-1 border-t border-[var(--line)]/55">
+            {clubTab === 'identity' ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--mut)]">
+                  {hasIdentityChanges ? 'กด “บันทึก” เพื่อนำตราและชุดแข่งใหม่ไปใช้ทั่วทั้งสโมสร' : 'แตะตราหรือเสื้อด้านบนเพื่อสลับปรับแต่งได้ทันที'}
+                </span>
+                <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const kp = P(KIT_P);
+                      const icons = Object.keys(CREST_IC);
+                      patchIdentityDraft((cl) => {
+                        cl.c1 = kp[0];
+                        cl.c2 = kp[1];
+                        cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
+                        cl.shape = R(0, CREST_SHAPES.length - 1);
+                        cl.pat = R(0, CREST_PATTERNS.length - 1);
+                        cl.crestBorder = R(0, 3);
+                        cl.kit = R(0, KIT_PATTERNS.length - 1);
+                        const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
+                        cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
+                        cl.collar = R(0, KIT_COLLARS.length - 1);
+                        cl.cuffTrim = Math.random() < 0.75;
+                        cl.icon = P(icons);
+                        cl.iconColor = '';
+                      });
+                    }}
+                    className="btn btn-xs sm:btn-sm btn-gold whitespace-nowrap shrink-0"
+                  >
+                    <Dices className="w-3.5 h-3.5" />
+                    <span>สุ่มดีไซน์</span>
+                  </button>
+                  {hasIdentityChanges && (
+                    <button
+                      type="button"
+                      onClick={resetIdentityDraft}
+                      className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>คืนค่าเดิม</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={!hasIdentityChanges}
+                    onClick={saveIdentityDraft}
+                    className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 w-full text-center">
+                <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
+                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</span>
+                  <b className="text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight">
+                    {ts.ovXi}/{ts.ovSq}
+                  </b>
+                </div>
+                <div
+                  className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5"
+                  title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}
                 >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>คืนค่าเดิม</span>
-                </button>
-              )}
-              <button
-                type="button"
-                disabled={!hasIdentityChanges}
-                onClick={saveIdentityDraft}
-                className="btn btn-sm btn-primary whitespace-nowrap shrink-0"
-              >
-                <Check className="w-3.5 h-3.5" />
-                <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/75 w-full sm:w-auto mland:w-auto text-center shrink-0">
-              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1">
-                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</div>
-                <b className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight block mt-0.5 mland:mt-0">
-                  {ts.ovXi}/{ts.ovSq}
-                </b>
+                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">แฟนบอล</span>
+                  <b className="text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight">
+                    {fmtFansShort(ensureTeamFans(me))}
+                  </b>
+                </div>
+                <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
+                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">บอร์ด</span>
+                  <b
+                    className={`text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular leading-tight ${
+                      (state.bd ?? 50) < 30
+                        ? 'text-[var(--red)]'
+                        : (state.bd ?? 50) >= 75
+                          ? 'text-[var(--g)]'
+                          : 'text-[var(--ink)]'
+                    }`}
+                  >
+                    {state.bd ?? 50}%
+                  </b>
+                </div>
+                <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
+                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">มูลค่าทีม</span>
+                  <b className="text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight">
+                    {fmtMoneyNum(totV)}
+                  </b>
+                </div>
               </div>
-              <div
-                className="px-2.5 py-1.5 mland:px-2 mland:py-1"
-                title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}
-              >
-                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">แฟนบอล</div>
-                <b className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight block mt-0.5 mland:mt-0">
-                  {fmtFansShort(ensureTeamFans(me))}
-                </b>
-              </div>
-              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1">
-                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">บอร์ด</div>
-                <b
-                  className={`text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular leading-tight block mt-0.5 mland:mt-0 ${
-                    (state.bd ?? 50) < 30
-                      ? 'text-[var(--red)]'
-                      : (state.bd ?? 50) >= 75
-                        ? 'text-[var(--g)]'
-                        : 'text-[var(--ink)]'
-                  }`}
-                >
-                  {state.bd ?? 50}%
-                </b>
-              </div>
-              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1">
-                <div className="text-[9.5px] mland:text-[8px] font-medium text-[var(--mut)] whitespace-nowrap">มูลค่าทีม</div>
-                <b className="text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight block mt-0.5 mland:mt-0">
-                  {fmtMoneyNum(totV)}
-                </b>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -2189,10 +2199,14 @@ export const FinanceClubView: React.FC<{
 
         const openClubEdit = (focusField: 'name' | 'nick' | 'std' | 'managerName' | 'motto' | 'founded' = 'name') => {
           SFX.tap();
+          const curName = k.name || me.name || '';
+          const curStd = k.std || '';
+          const synced = !curStd.trim() || curStd.trim() === `สนาม${curName.trim()}`;
+          setAutoSyncStadium(synced);
           setClubDraft({
-            name: k.name || me.name || '',
+            name: curName,
             nick: k.nick || '',
-            std: k.std || '',
+            std: synced ? (curName.trim() ? `สนาม${curName.trim()}` : '') : curStd,
             managerName: k.managerName || '',
             motto: k.motto || '',
             founded: String(k.founded || 2568)
@@ -2210,7 +2224,7 @@ export const FinanceClubView: React.FC<{
           const clean = (s: string) => s.replace(/["'<>`]/g, '').trim();
           const nextName = clean(clubDraft.name) || 'ทีมของฉัน';
           const nextNick = clean(clubDraft.nick);
-          const nextStd = clean(clubDraft.std) || `สนาม${nextName}`;
+          const nextStd = autoSyncStadium ? `สนาม${nextName}` : (clean(clubDraft.std) || `สนาม${nextName}`);
           const nextMgr = clean(clubDraft.managerName);
           const nextMotto = clean(clubDraft.motto);
           const parsedYear = parseInt(clubDraft.founded.replace(/\D/g, ''), 10);
@@ -2239,25 +2253,6 @@ export const FinanceClubView: React.FC<{
         const displayRandomOutfit = savedRandomOutfit;
         const displayCoachStyle = COACH_STYLES.find((s) => s.id === displayCoachStyleId) || COACH_STYLES[0];
         const displayCoachOutfit = COACH_OUTFITS.find((o) => o.id === displayCoachOutfitId) || COACH_OUTFITS[0];
-
-        const randomizeCoachVis = () => {
-          SFX.tap();
-          const nextVis = [
-            R(0, SKIN_P.length - 1),
-            R(0, HAIR_P.length - 1),
-            R(0, HS_N.length - 1),
-            R(0, FH_N.length - 1),
-            R(0, EY_N.length - 1),
-            0,
-            R(0, FS_N.length - 1),
-            Math.random() < 0.35 ? 5 : 0
-          ];
-          onUpdateState((d) => {
-            const cl = ensureClubIdentity(d);
-            cl.managerVis = nextVis;
-          });
-          onToast('สุ่มหน้าตาโค้ชใหม่แล้ว');
-        };
 
         const randomizeInlineCoachOutfit = () => {
           SFX.tap();
@@ -2534,17 +2529,8 @@ export const FinanceClubView: React.FC<{
                       </button>
                     </div>
 
-                    {/* Quick Coach Actions: Randomize Face / Randomize Outfit / Auto Per-Match Outfit */}
-                    <div className="grid grid-cols-3 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={randomizeCoachVis}
-                        title="สุ่มหน้าตาโค้ชใหม่ทันที"
-                        className="btn btn-xs btn-secondary justify-center w-full whitespace-nowrap"
-                      >
-                        <Dices className="w-3.5 h-3.5 shrink-0" />
-                        <span>สุ่มหน้า</span>
-                      </button>
+                    {/* Quick Coach Actions: Randomize Outfit / Auto Per-Match Outfit */}
+                    <div className="grid grid-cols-2 gap-1.5">
                       <button
                         type="button"
                         onClick={randomizeInlineCoachOutfit}
@@ -2968,14 +2954,27 @@ export const FinanceClubView: React.FC<{
                             value={clubDraft.name}
                             maxLength={40}
                             placeholder="ระบุชื่อสโมสร"
-                            onChange={(e) => setClubDraft((prev) => ({ ...prev, name: e.target.value }))}
+                            onChange={(e) => {
+                              const nextName = e.target.value;
+                              setClubDraft((prev) => ({
+                                ...prev,
+                                name: nextName,
+                                std: autoSyncStadium ? (nextName.trim() ? `สนาม${nextName.trim()}` : '') : prev.std
+                              }));
+                            }}
                             className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
                           />
                           {clubDraft.name && (
                             <button
                               type="button"
                               aria-label="ล้างชื่อสโมสร"
-                              onClick={() => setClubDraft((prev) => ({ ...prev, name: '' }))}
+                              onClick={() =>
+                                setClubDraft((prev) => ({
+                                  ...prev,
+                                  name: '',
+                                  std: autoSyncStadium ? '' : prev.std
+                                }))
+                              }
                               className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -3013,7 +3012,31 @@ export const FinanceClubView: React.FC<{
                       </div>
 
                       <div>
-                        <label className="text-xs font-semibold text-[var(--mut)] block mb-1">ชื่อสนามเหย้า</label>
+                        <div className="flex items-center justify-between gap-1.5 mb-1">
+                          <label className="text-xs font-semibold text-[var(--mut)]">ชื่อสนามเหย้า</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              if (autoSyncStadium) {
+                                setAutoSyncStadium(false);
+                              } else {
+                                setAutoSyncStadium(true);
+                                const nm = clubDraft.name.trim();
+                                setClubDraft((prev) => ({ ...prev, std: nm ? `สนาม${nm}` : '' }));
+                              }
+                            }}
+                            title={autoSyncStadium ? 'กำลังเปลี่ยนชื่อสนามตามชื่อสโมสรอัตโนมัติ (แตะเพื่อตั้งชื่อเอง)' : 'แตะเพื่อให้ชื่อสนามเปลี่ยนตามชื่อสโมสรอัตโนมัติ'}
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                              autoSyncStadium
+                                ? 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)]'
+                                : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/55'
+                            }`}
+                          >
+                            <Link2 className="w-2.5 h-2.5 shrink-0" />
+                            <span>{autoSyncStadium ? 'ตามชื่อสโมสร' : 'ตั้งตามชื่อสโมสร'}</span>
+                          </button>
+                        </div>
                         <div className="relative">
                           <input
                             type="text"
@@ -3023,15 +3046,21 @@ export const FinanceClubView: React.FC<{
                             spellCheck={false}
                             value={clubDraft.std}
                             maxLength={48}
-                            placeholder="ระบุชื่อสนามเหย้า"
-                            onChange={(e) => setClubDraft((prev) => ({ ...prev, std: e.target.value }))}
+                            placeholder={clubDraft.name.trim() ? `สนาม${clubDraft.name.trim()}` : 'ระบุชื่อสนามเหย้า'}
+                            onChange={(e) => {
+                              if (autoSyncStadium) setAutoSyncStadium(false);
+                              setClubDraft((prev) => ({ ...prev, std: e.target.value }));
+                            }}
                             className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
                           />
                           {clubDraft.std && (
                             <button
                               type="button"
                               aria-label="ล้างชื่อสนามเหย้า"
-                              onClick={() => setClubDraft((prev) => ({ ...prev, std: '' }))}
+                              onClick={() => {
+                                setAutoSyncStadium(false);
+                                setClubDraft((prev) => ({ ...prev, std: '' }));
+                              }}
                               className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
                             >
                               <X className="w-3.5 h-3.5" />
@@ -3934,14 +3963,14 @@ export const FinanceClubView: React.FC<{
             <button
               type="button"
               onClick={() => setIdentityMobilePane('crest')}
-              className={`seg-btn py-1.5 ${identityMobilePane === 'crest' ? 'active' : ''}`}
+              className={`seg-btn py-1.5 ${identityMobilePane === 'crest' ? 'seg-btn-active' : ''}`}
             >
               🛡️ ตราสโมสร
             </button>
             <button
               type="button"
               onClick={() => setIdentityMobilePane('kit')}
-              className={`seg-btn py-1.5 ${identityMobilePane === 'kit' ? 'active' : ''}`}
+              className={`seg-btn py-1.5 ${identityMobilePane === 'kit' ? 'seg-btn-active' : ''}`}
             >
               🎽 ชุดแข่ง &amp; สี
             </button>
@@ -3965,14 +3994,14 @@ export const FinanceClubView: React.FC<{
                   <button
                     type="button"
                     onClick={() => setCrestStudioTab('shape')}
-                    className={`seg-btn whitespace-nowrap ${crestStudioTab === 'shape' ? 'active' : ''}`}
+                    className={`seg-btn whitespace-nowrap ${crestStudioTab === 'shape' ? 'seg-btn-active' : ''}`}
                   >
                     ทรง &amp; ลาย
                   </button>
                   <button
                     type="button"
                     onClick={() => setCrestStudioTab('icon')}
-                    className={`seg-btn whitespace-nowrap ${crestStudioTab === 'icon' ? 'active' : ''}`}
+                    className={`seg-btn whitespace-nowrap ${crestStudioTab === 'icon' ? 'seg-btn-active' : ''}`}
                   >
                     สัญลักษณ์ ({Object.keys(CREST_IC).length})
                   </button>
@@ -4024,7 +4053,7 @@ export const FinanceClubView: React.FC<{
                               key={lbl}
                               type="button"
                               onClick={() => patchIdentityDraft((cl) => { cl.crestBorder = i; })}
-                              className={`seg-btn whitespace-nowrap px-1! ${(dk.crestBorder ?? 0) === i ? 'active' : ''}`}
+                              className={`seg-btn whitespace-nowrap px-1! ${(dk.crestBorder ?? 0) === i ? 'seg-btn-active' : ''}`}
                             >
                               {lbl}
                             </button>
@@ -4039,7 +4068,7 @@ export const FinanceClubView: React.FC<{
                               key={stCnt}
                               type="button"
                               onClick={() => patchIdentityDraft((cl) => { cl.stars = stCnt; })}
-                              className={`seg-btn whitespace-nowrap px-1! tabular ${(dk.stars ?? 0) === stCnt ? 'active' : ''}`}
+                              className={`seg-btn whitespace-nowrap px-1! tabular ${(dk.stars ?? 0) === stCnt ? 'seg-btn-active' : ''}`}
                             >
                               {stCnt === 0 ? 'ไม่มี' : '★'.repeat(stCnt)}
                             </button>
@@ -4264,7 +4293,7 @@ export const FinanceClubView: React.FC<{
                       <button
                         type="button"
                         onClick={() => setKitColorTarget('c1')}
-                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c1' ? 'active' : ''}`}
+                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c1' ? 'seg-btn-active' : ''}`}
                       >
                         <span className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/30 shrink-0" style={{ background: dk.c1 }} />
                         <span>สีหลัก</span>
@@ -4272,7 +4301,7 @@ export const FinanceClubView: React.FC<{
                       <button
                         type="button"
                         onClick={() => setKitColorTarget('c2')}
-                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c2' ? 'active' : ''}`}
+                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c2' ? 'seg-btn-active' : ''}`}
                       >
                         <span className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/30 shrink-0" style={{ background: dk.c2 }} />
                         <span>สีรอง/เยือน</span>
@@ -4280,7 +4309,7 @@ export const FinanceClubView: React.FC<{
                       <button
                         type="button"
                         onClick={() => setKitColorTarget('c3')}
-                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c3' ? 'active' : ''}`}
+                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c3' ? 'seg-btn-active' : ''}`}
                       >
                         <span
                           className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/30 shrink-0"
@@ -4370,14 +4399,14 @@ export const FinanceClubView: React.FC<{
                           <button
                             type="button"
                             onClick={() => setKitPatternTarget('home')}
-                            className={`seg-btn whitespace-nowrap ${!editingAway ? 'active' : ''}`}
+                            className={`seg-btn whitespace-nowrap ${!editingAway ? 'seg-btn-active' : ''}`}
                           >
                             🏠 ลายเหย้า
                           </button>
                           <button
                             type="button"
                             onClick={() => setKitPatternTarget('away')}
-                            className={`seg-btn whitespace-nowrap ${editingAway ? 'active' : ''}`}
+                            className={`seg-btn whitespace-nowrap ${editingAway ? 'seg-btn-active' : ''}`}
                           >
                             ✈️ ลายเยือน
                           </button>
@@ -4470,7 +4499,7 @@ export const FinanceClubView: React.FC<{
                           key={clbl}
                           type="button"
                           onClick={() => patchIdentityDraft((cl) => { cl.collar = ci; })}
-                          className={`seg-btn whitespace-nowrap px-1! ${(dk.collar ?? 0) === ci ? 'active' : ''}`}
+                          className={`seg-btn whitespace-nowrap px-1! ${(dk.collar ?? 0) === ci ? 'seg-btn-active' : ''}`}
                         >
                           {clbl}
                         </button>
@@ -4484,14 +4513,14 @@ export const FinanceClubView: React.FC<{
                       <button
                         type="button"
                         onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = true; })}
-                        className={`seg-btn whitespace-nowrap ${(dk.cuffTrim ?? true) ? 'active' : ''}`}
+                        className={`seg-btn whitespace-nowrap ${(dk.cuffTrim ?? true) ? 'seg-btn-active' : ''}`}
                       >
                         เปิด
                       </button>
                       <button
                         type="button"
                         onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = false; })}
-                        className={`seg-btn whitespace-nowrap ${!(dk.cuffTrim ?? true) ? 'active' : ''}`}
+                        className={`seg-btn whitespace-nowrap ${!(dk.cuffTrim ?? true) ? 'seg-btn-active' : ''}`}
                       >
                         ปิด
                       </button>

@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, FolderInput, RefreshCw, Save } from 'lucide-react';
+import { ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, MAX_SLOTS, MIN_SLOTS, getPinnedSlotIds, getSlotCount, setSlotCount, toggleSlotPin, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
@@ -14,6 +14,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge } from '../components/TalentBadge';
 import { AthleteCard } from '../components/AthleteCard';
+import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
@@ -34,7 +35,7 @@ interface StarPosterCard {
   categories: StatCategorySummary[];
   kit1: string;
   kit2: string;
-  player: Partial<Player>;
+  player: Player;
   team?: Team | null;
   club?: ClubIdentity | null;
   profile?: PlayerCareerProfile | null;
@@ -55,8 +56,11 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
   const pool: StarPosterCard[] = [];
 
   // Pull real stars from saved Manager & Player Career slots if available
-  for (let k = 1; k <= NSL; k++) {
-    const ms = preloaded ? preloaded.m[k - 1] : loadGameFromSlot('m', k);
+  const mLen = preloaded ? preloaded.m.length : getSlotCount('m');
+  const pLen = preloaded ? preloaded.p.length : getSlotCount('p');
+  const maxLen = Math.max(mLen, pLen);
+  for (let k = 1; k <= maxLen; k++) {
+    const ms = k <= mLen ? (preloaded ? preloaded.m[k - 1] : loadGameFromSlot('m', k)) : null;
     if (ms && Array.isArray(ms.teams)) {
       const meT = ms.teams[ms.me];
       const top = meT?.sq?.slice().sort((a, b) => b.ov - a.ov)[0];
@@ -85,7 +89,7 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
         });
       }
     }
-    const ps = preloaded ? preloaded.p[k - 1] : loadGameFromSlot('p', k);
+    const ps = k <= pLen ? (preloaded ? preloaded.p[k - 1] : loadGameFromSlot('p', k)) : null;
     if (ps && ps.p && Array.isArray(ps.teams)) {
       const meT = ps.teams[ps.me];
       const mePl = meT?.sq?.find((q) => q.me);
@@ -230,16 +234,21 @@ export const MainMenu: React.FC<{
   const [diff, setDiff] = useState<number>(1);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
+  const [slotCounts, setSlotCounts] = useState<{ m: number; p: number }>(() => ({
+    m: getSlotCount('m'),
+    p: getSlotCount('p')
+  }));
+  const [pinnedSlots, setPinnedSlots] = useState<string[]>(() => getPinnedSlotIds());
   const loadedSlots = useMemo(
     () => ({
-      m: Array.from({ length: NSL }, (_, idx) => loadGameFromSlot('m', idx + 1)),
-      p: Array.from({ length: NSL }, (_, idx) => loadGameFromSlot('p', idx + 1))
+      m: Array.from({ length: slotCounts.m }, (_, idx) => loadGameFromSlot('m', idx + 1)),
+      p: Array.from({ length: slotCounts.p }, (_, idx) => loadGameFromSlot('p', idx + 1))
     }),
-    [refresh]
+    [refresh, slotCounts]
   );
   const [showImport, setShowImport] = useState(false);
   useEffect(() => {
-    void migrateLocalSlotsToAutoFolderOnce(loadGameFromSlot, NSL);
+    void migrateLocalSlotsToAutoFolderOnce(loadGameFromSlot, Math.max(getSlotCount('m'), getSlotCount('p')));
   }, []);
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
   const [starPoster, setStarPoster] = useState<{ pool: StarPosterCard[]; idx: number }>(() => {
@@ -359,15 +368,23 @@ export const MainMenu: React.FC<{
   };
 
   const openManagerSetup = (slot: number) => {
-    if (!slot) {
-      onToast('เซฟเต็ม กรุณาลบเซฟเก่าก่อน');
-      return;
+    let resolvedSlot = slot;
+    if (!resolvedSlot) {
+      const cur = getSlotCount('m');
+      if (cur < MAX_SLOTS) {
+        const nextCap = setSlotCount('m', cur + 1);
+        setSlotCounts((prev) => ({ ...prev, m: nextCap }));
+        resolvedSlot = nextCap;
+      } else {
+        onToast(`เซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว กรุณาลบเซฟเก่าก่อน`);
+        return;
+      }
     }
     SFX.tap();
     clearNamePool();
     const names = genClubNames();
     const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
-    setTargetSlot(slot);
+    setTargetSlot(resolvedSlot);
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
     setClubFilter('all');
@@ -396,12 +413,20 @@ export const MainMenu: React.FC<{
   };
 
   const openPlayerSetup = (slot: number) => {
-    if (!slot) {
-      onToast('เซฟเต็ม กรุณาลบเซฟเก่าก่อน');
-      return;
+    let resolvedSlot = slot;
+    if (!resolvedSlot) {
+      const cur = getSlotCount('p');
+      if (cur < MAX_SLOTS) {
+        const nextCap = setSlotCount('p', cur + 1);
+        setSlotCounts((prev) => ({ ...prev, p: nextCap }));
+        resolvedSlot = nextCap;
+      } else {
+        onToast(`เซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว กรุณาลบเซฟเก่าก่อน`);
+        return;
+      }
     }
     SFX.tap();
-    setTargetSlot(slot);
+    setTargetSlot(resolvedSlot);
     const defaultArch = PLAYER_ARCHETYPES.find((a) => a.pos.includes('FW'))!;
     const rolled = rollStartingStats('FW', 'ST', defaultArch);
     const initTalent = R(62, 93);
@@ -432,6 +457,7 @@ export const MainMenu: React.FC<{
     const key = `${mode}_${k}`;
     if (confirmDel === key) {
       deleteSlot(mode, k);
+      setPinnedSlots(getPinnedSlotIds());
       setConfirmDel(null);
       setRefresh((x) => x + 1);
       onToast('ลบเซฟเรียบร้อย');
@@ -441,65 +467,146 @@ export const MainMenu: React.FC<{
     }
   };
 
+  const handleTogglePinSlot = (mode: GameMode, k: number) => {
+    SFX.tap();
+    const res = toggleSlotPin(mode, k);
+    setPinnedSlots(res.list);
+    onToast(res.pinned ? `📌 ปักหมุดช่องเซฟ #${k} ไว้บนสุดแล้ว` : `เลิกปักหมุดช่องเซฟ #${k} แล้ว`);
+  };
+
+  const handleAdjustSlotCount = (mode: GameMode, delta: 1 | -1) => {
+    SFX.tap();
+    const cur = slotCounts[mode];
+    if (delta === 1) {
+      if (cur >= MAX_SLOTS) {
+        onToast(`รองรับสูงสุด ${MAX_SLOTS} ช่องต่อโหมด`);
+        return;
+      }
+      const nextCap = setSlotCount(mode, cur + 1);
+      setSlotCounts((prev) => ({ ...prev, [mode]: nextCap }));
+      onToast(`➕ เพิ่มเป็น ${nextCap} ช่องเซฟแล้ว`);
+      return;
+    }
+    if (cur <= MIN_SLOTS) {
+      onToast(`ต้องมีอย่างน้อย ${MIN_SLOTS} ช่องเซฟ`);
+      return;
+    }
+    const tailData = loadedSlots[mode][cur - 1];
+    if (tailData && Array.isArray(tailData.teams) && (mode === 'm' || tailData.p)) {
+      onToast(`ช่อง #${cur} ยังมีเซฟอยู่ กรุณาลบเซฟในช่องนั้นก่อนลดจำนวนช่อง`);
+      return;
+    }
+    const nextCap = setSlotCount(mode, cur - 1);
+    setSlotCounts((prev) => ({ ...prev, [mode]: nextCap }));
+    onToast(`➖ ลดเหลือ ${nextCap} ช่องเซฟแล้ว`);
+  };
+
   const openImportModal = () => {
     setShowImport(true);
   };
 
   const renderSlotList = (m: GameMode) => {
-    const rows: React.ReactNode[] = [];
-    let shownEmpty = false;
     const isMgr = m === 'm';
     const slots = loadedSlots[m];
-    for (let k = 1; k <= NSL; k++) {
+    const totalSlots = slotCounts[m];
+    const pinnedSet = new Set(pinnedSlots);
+
+    const occupiedEntries: Array<{ k: number; d: GameState; pinned: boolean }> = [];
+    const emptySlotNums: number[] = [];
+
+    for (let k = 1; k <= totalSlots; k++) {
       const d = slots[k - 1];
       if (d && Array.isArray(d.teams) && (isMgr || d.p)) {
-        const meTeam = d.teams[d.me] || null;
-        const name = isMgr ? d.club?.name || meTeam?.name || 'สโมสร' : d.p?.name || 'นักเตะ';
-        const mePlayer = !isMgr && d.p
-          ? meTeam?.sq?.find((q) => q.me) || { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1 }
-          : null;
-        const delKey = `${m}_${k}`;
-        const isConfirm = confirmDel === delKey;
-        rows.push(
-          <div key={k} className="flex items-stretch gap-1 mland:gap-1">
+        occupiedEntries.push({ k, d, pinned: pinnedSet.has(`${m}_${k}`) });
+      } else {
+        emptySlotNums.push(k);
+      }
+    }
+
+    occupiedEntries.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.k - b.k);
+
+    const rows: React.ReactNode[] = [];
+
+    occupiedEntries.forEach(({ k, d, pinned }) => {
+      const meTeam = d.teams[d.me] || null;
+      const name = isMgr ? d.club?.name || meTeam?.name || 'สโมสร' : d.p?.name || 'นักเตะ';
+      const mePlayer = !isMgr && d.p
+        ? meTeam?.sq?.find((q) => q.me) || { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1 }
+        : null;
+      const delKey = `${m}_${k}`;
+      const isConfirm = confirmDel === delKey;
+
+      rows.push(
+        <div
+          key={k}
+          className={`rounded-xl mland:rounded-lg border overflow-hidden transition-all ${
+            pinned
+              ? 'border-[var(--lamp)]/70 bg-[var(--lamp-soft)]/18 shadow-xs'
+              : 'border-[var(--line)] bg-[var(--surface-2)]/70 hover:border-[var(--g)]/60'
+          }`}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              SFX.tap();
+              onLoadSave(m, k, d);
+            }}
+            className="group w-full text-left px-2.5 py-2 mland:px-2 mland:py-1.5 hover:bg-[var(--surface)]/65 transition-colors cursor-pointer flex items-center gap-2 mland:gap-1.5"
+          >
+            <div className="relative shrink-0 w-8 h-8 sm:w-9 sm:h-9 mland:w-7 mland:h-7 rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-center overflow-hidden">
+              {isMgr ? (
+                <div className="[&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                  <ClubCrest name={name} size={28} team={meTeam} club={d.club} isMyClub />
+                </div>
+              ) : (
+                <div className="[&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 flex items-center justify-center">
+                  <PlayerFace player={mePlayer} team={meTeam} state={d} careerProfile={d.p} size={32} bare />
+                </div>
+              )}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="font-extrabold text-[11.5px] sm:text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)] flex items-center gap-1">
+                <span
+                  className={`px-1 py-[1px] rounded text-[9px] mland:text-[8px] font-display tabular shrink-0 border ${
+                    pinned
+                      ? 'bg-[var(--lamp)]/25 border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]'
+                      : isMgr
+                        ? 'bg-[var(--surface)] border-[var(--line)] text-[#a16c00] dark:text-[var(--lamp)]'
+                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--g)]'
+                  }`}
+                >
+                  #{k}
+                </span>
+                <span className="truncate">{name}</span>
+              </div>
+              <div className="text-[9.5px] sm:text-[10px] mland:text-[8px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
+                {!isMgr && d.p ? ` · ${d.p.pos}${meTeam ? ` · ${meTeam.name}` : ''}` : ''}
+              </div>
+            </div>
+
+            <span className="text-xs mland:text-[10px] font-bold text-[var(--mut)] group-hover:text-[var(--g)] group-hover:translate-x-0.5 shrink-0 transition-all" aria-hidden="true">
+              ▶
+            </span>
+          </button>
+
+          <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 border-t border-[var(--line)]/55 bg-[var(--surface)]/55 flex items-center justify-between gap-1">
             <button
               type="button"
-              onClick={() => {
-                SFX.tap();
-                onLoadSave(m, k, d);
-              }}
-              className="group flex-1 min-w-0 min-h-[48px] mland:min-h-[42px] text-left px-2 py-1.5 sm:px-2.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer flex items-center gap-1.5 sm:gap-2.5 mland:gap-2"
+              onClick={() => handleTogglePinSlot(m, k)}
+              title={pinned ? 'เลิกปักหมุดเซฟนี้' : 'ปักหมุดเซฟนี้ไว้บนสุด'}
+              className={`px-1.5 py-0.5 rounded-md border text-[9.5px] mland:text-[8px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+                pinned
+                  ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/65 text-[#8a5b00] dark:text-[var(--lamp)]'
+                  : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[#8a5b00] hover:border-[var(--lamp)]/50'
+              }`}
             >
-              <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-center overflow-hidden">
-                {isMgr ? (
-                  <div className="[&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                    <ClubCrest name={name} size={28} team={meTeam} club={d.club} isMyClub />
-                  </div>
-                ) : (
-                  <div className="[&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                    <PlayerFace player={mePlayer} team={meTeam} state={d} careerProfile={d.p} size={32} bare />
-                  </div>
-                )}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="font-bold text-[11px] sm:text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)] flex items-center gap-1">
-                  <span className={`font-display tabular shrink-0 ${isMgr ? 'text-[#a16c00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
-                    #{k}
-                  </span>
-                  <span className="truncate">{name}</span>
-                </div>
-                <div className="text-[9.5px] sm:text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                  ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
-                  {!isMgr && d.p ? ` · ${d.p.pos}${meTeam ? ` · ${meTeam.name}` : ''}` : ''}
-                </div>
-              </div>
-
-              <span className="hidden sm:inline text-xs font-bold text-[var(--mut)] group-hover:text-[var(--g)] shrink-0 transition-colors" aria-hidden="true">
-                ▶
-              </span>
+              <Pin className={`w-2.5 h-2.5 shrink-0 ${pinned ? 'fill-current' : ''}`} />
+              <span>{pinned ? 'ปักหมุดแล้ว' : 'ปักหมุด'}</span>
             </button>
-            <div className="flex flex-col gap-1 shrink-0 w-7 mland:w-6">
+
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={async () => {
@@ -512,52 +619,53 @@ export const MainMenu: React.FC<{
                     onToast('❌ บันทึกไฟล์ลงโฟลเดอร์เกมไม่สำเร็จ');
                   }
                 }}
-                title="บันทึกจุดเซฟลงโฟลเดอร์เกม"
-                aria-label="บันทึกจุดเซฟลงโฟลเดอร์เกม"
-                className="flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--g)] hover:border-[var(--g)]/50 transition-colors cursor-pointer flex items-center justify-center"
+                title="สร้างจุดเซฟลงคลังเซฟ"
+                aria-label="สร้างจุดเซฟลงคลังเซฟ"
+                className="w-6 h-5 mland:w-5 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--g)] hover:border-[var(--g)]/50 transition-colors cursor-pointer flex items-center justify-center"
               >
                 <Save className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
               </button>
               <button
                 type="button"
                 onClick={() => handleDeleteSlot(m, k)}
+                title="ลบเซฟช่องนี้"
                 aria-label="ลบเซฟ"
-                className={`flex-1 rounded-lg border text-[9.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors flex items-center justify-center leading-none ${
+                className={`min-w-6 h-5 mland:min-w-5 mland:h-4 px-1 rounded-md border text-[9px] mland:text-[8px] font-bold cursor-pointer transition-colors flex items-center justify-center leading-none ${
                   isConfirm
                     ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
                     : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50'
                 }`}
               >
-                {isConfirm ? 'ลบ?' : '🗑'}
+                {isConfirm ? 'ลบ?' : <Trash2 className="w-3 h-3 mland:w-2.5 mland:h-2.5" />}
               </button>
             </div>
           </div>
-        );
-      } else if (!shownEmpty) {
-        shownEmpty = true;
-        rows.push(
-          <button
-            key={k}
-            type="button"
-            onClick={() => (isMgr ? openManagerSetup(k) : openPlayerSetup(k))}
-            className="w-full min-h-[48px] mland:min-h-[42px] text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/45 transition-colors cursor-pointer flex items-center gap-2.5 mland:gap-2"
-          >
-            <div className="shrink-0 w-9 h-9 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface-2)]/70 border border-dashed border-[var(--line)] flex items-center justify-center text-sm mland:text-xs font-bold text-[var(--mut)]">
-              ＋
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="font-semibold text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">
-                เปิดเซฟช่อง {k}
-              </div>
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-tight mt-0.5 truncate">
-                {isMgr ? 'เริ่มคุมสโมสรใหม่' : 'สร้างนักเตะอาชีพใหม่'}
-              </div>
-            </div>
-            <span className="text-xs font-bold text-[var(--mut)] shrink-0" aria-hidden="true">›</span>
-          </button>
-        );
-      }
-    }
+        </div>
+      );
+    });
+
+    emptySlotNums.forEach((k) => {
+      rows.push(
+        <button
+          key={k}
+          type="button"
+          onClick={() => (isMgr ? openManagerSetup(k) : openPlayerSetup(k))}
+          className="w-full min-h-[38px] mland:min-h-[32px] text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-dashed border-[var(--line)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/45 transition-colors cursor-pointer flex items-center gap-2 mland:gap-1.5"
+        >
+          <span className="shrink-0 w-6 h-6 mland:w-5 mland:h-5 rounded-md bg-[var(--surface-2)]/80 border border-dashed border-[var(--line)] flex items-center justify-center text-xs mland:text-[10px] font-bold text-[var(--mut)]">
+            ＋
+          </span>
+          <div className="min-w-0 flex-1 flex items-center justify-between gap-1.5">
+            <span className="font-bold text-[11px] mland:text-[9.5px] truncate text-[var(--ink)]">
+              ช่อง #{k} · ว่าง
+            </span>
+            <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate shrink-0">
+              เริ่มใหม่ ›
+            </span>
+          </div>
+        </button>
+      );
+    });
     return <div className="flex flex-col gap-1.5 mland:gap-1">{rows}</div>;
   };
 
@@ -648,8 +756,8 @@ export const MainMenu: React.FC<{
           <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.58fr_0.92fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.58fr_0.92fr] mland:grid-rows-[minmax(0,1fr)] gap-2 sm:gap-3 mland:gap-2">
           {/* Left Column: Filter Bar + Full 16-Club Single-Screen Grid */}
           <section className="flex-1 min-h-0 flex flex-col gap-1.5 sm:gap-2 mland:gap-1">
-            <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5">
-              <div className="seg-bar">
+            <div className="shrink-0 flex items-center justify-between gap-1.5">
+              <div className="seg-bar shrink-0 max-w-full overflow-x-auto no-scrollbar">
                 {(
                   [
                     ['all', `ทั้งหมด (${clubMetaList.length})`],
@@ -675,7 +783,7 @@ export const MainMenu: React.FC<{
                   </button>
                 ))}
               </div>
-              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--mut)] tabular">
+              <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-[var(--mut)] tabular shrink-0 whitespace-nowrap">
                 <span>เซฟช่อง #{targetSlot}</span>
                 <span aria-hidden="true">·</span>
                 <span>คลิกทีมเพื่อดูรายละเอียด</span>
@@ -697,7 +805,7 @@ export const MainMenu: React.FC<{
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-1.5 sm:gap-2 mland:gap-1 sm:h-full mland:h-full content-start sm:content-stretch mland:content-stretch auto-rows-min sm:auto-rows-fr mland:auto-rows-fr">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-1.5 sm:gap-2 mland:gap-1 sm:h-full mland:h-full auto-rows-[58px] sm:auto-rows-auto sm:grid-rows-6 lg:grid-rows-4 mland:grid-rows-4 content-start">
                   {filteredClubs.map(({ team: t, idx, squadAvg, tierBucket, tierTag }) => {
                     const isSelected = idx === activeIdx;
                     const primaryKit = t.kc?.[0] || '#158049';
@@ -1195,15 +1303,17 @@ export const MainMenu: React.FC<{
                 )}
               />
 
-              {cTraits.length > 0 && (
-                <div className="px-2 py-1 mland:py-0.5 text-center text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] leading-snug">
-                  {cTraits
-                    .map((tid) => TRAIT_BY_ID[tid])
-                    .filter(Boolean)
-                    .map((tr) => `${tr.icon} ${tr.name}`)
-                    .join(' · ')}
-                </div>
-              )}
+              <PlayerTraitsStrip
+                player={previewPlayer}
+                careerProfile={previewProfile}
+                trPair={previewDt.TR}
+                traits={previewDt.traits}
+                talent={cTalent}
+                growthStage={previewDt.gro}
+                peakAge={previewDt.D0.pk}
+                sigKey={previewDt.D0.sig}
+                archName={curArch.name}
+              />
             </div>
 
             <div className="shrink-0 space-y-1.5 mland:space-y-1">
@@ -1807,6 +1917,10 @@ export const MainMenu: React.FC<{
   const mCount = countSaves('m');
   const pCount = countSaves('p');
   const activeStar = starPool[starIdx % starPool.length];
+  const activeStarDetails = useMemo(
+    () => dtInfo(activeStar.player, activeStar.profile),
+    [activeStar]
+  );
 
   const cycleStarPoster = () => {
     SFX.tap();
@@ -1886,8 +2000,8 @@ export const MainMenu: React.FC<{
 
         {/* Main 2 Columns: Col 1 = In-Game Collector Athlete Card | Col 2 = 2-Column Save & Mode Hub */}
         <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[0.74fr_1.46fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
-          {/* Column 1: Signature In-Game Athlete Card */}
-          <aside className="min-h-0 flex flex-col">
+          {/* Column 1: Signature In-Game Athlete Card + Bottom Traits & Insights Strip */}
+          <aside className="min-h-0 flex flex-col gap-1.5 mland:gap-1 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
             <AthleteCard
               ov={activeStar.ov}
               pot={activeStar.pot}
@@ -1907,8 +2021,7 @@ export const MainMenu: React.FC<{
               subtitle={`อายุ ${activeStar.age} ปี · ${activeStar.archLabel} · ${activeStar.sourceLabel}`}
               bio={activeStar.bio}
               categories={activeStar.categories}
-              stretchStage
-              className="flex-1 min-h-0 shadow-[0_18px_42px_rgba(0,0,0,0.65)]"
+              className="shadow-[0_18px_42px_rgba(0,0,0,0.65)]"
               renderBadges={(palette) => (
                 <div className="flex items-center gap-1 max-w-[130px] mland:max-w-[95px]">
                   <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
@@ -1930,6 +2043,18 @@ export const MainMenu: React.FC<{
                   <RefreshCw className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
                 </button>
               )}
+            />
+
+            <PlayerTraitsStrip
+              player={activeStar.player}
+              careerProfile={activeStar.profile}
+              trPair={activeStarDetails.TR}
+              traits={activeStarDetails.traits}
+              talent={activeStar.talent}
+              growthStage={activeStarDetails.gro}
+              peakAge={activeStarDetails.D0.pk}
+              sigKey={activeStarDetails.D0.sig}
+              archName={activeStar.profile?.archName}
             />
           </aside>
 
@@ -1959,13 +2084,35 @@ export const MainMenu: React.FC<{
               </button>
 
               <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
-                <div className="shrink-0 px-3 mland:px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
-                  <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
+                <div className="shrink-0 px-2.5 mland:px-2 py-1.5 mland:py-1 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-1.5">
+                  <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
                     เซฟผู้จัดการทีม
                   </span>
-                  <span className="text-[10.5px] mland:text-[9px] font-bold tabular text-[#9c6900] dark:text-[var(--lamp)] shrink-0">
-                    {mCount}/{NSL}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustSlotCount('m', -1)}
+                      disabled={slotCounts.m <= MIN_SLOTS}
+                      title="ลดจำนวนช่องเซฟ"
+                      aria-label="ลดจำนวนช่องเซฟผู้จัดการ"
+                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                    >
+                      <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="px-1 text-[10.5px] mland:text-[9px] font-bold tabular text-[#9c6900] dark:text-[var(--lamp)]">
+                      {mCount}/{slotCounts.m}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustSlotCount('m', 1)}
+                      disabled={slotCounts.m >= MAX_SLOTS}
+                      title="เพิ่มช่องเซฟ"
+                      aria-label="เพิ่มช่องเซฟผู้จัดการ"
+                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--g)] hover:bg-[var(--g-soft)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto p-2 mland:p-1.5">
                   {renderSlotList('m')}
@@ -1997,13 +2144,35 @@ export const MainMenu: React.FC<{
               </button>
 
               <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
-                <div className="shrink-0 px-3 mland:px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
-                  <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
+                <div className="shrink-0 px-2.5 mland:px-2 py-1.5 mland:py-1 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-1.5">
+                  <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
                     เซฟนักเตะอาชีพ
                   </span>
-                  <span className="text-[10.5px] mland:text-[9px] font-bold tabular text-[var(--g)] shrink-0">
-                    {pCount}/{NSL}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustSlotCount('p', -1)}
+                      disabled={slotCounts.p <= MIN_SLOTS}
+                      title="ลดจำนวนช่องเซฟ"
+                      aria-label="ลดจำนวนช่องเซฟนักเตะ"
+                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                    >
+                      <Minus className="w-2.5 h-2.5" />
+                    </button>
+                    <span className="px-1 text-[10.5px] mland:text-[9px] font-bold tabular text-[var(--g)]">
+                      {pCount}/{slotCounts.p}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleAdjustSlotCount('p', 1)}
+                      disabled={slotCounts.p >= MAX_SLOTS}
+                      title="เพิ่มช่องเซฟ"
+                      aria-label="เพิ่มช่องเซฟนักเตะ"
+                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--g)] hover:bg-[var(--g-soft)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                    >
+                      <Plus className="w-2.5 h-2.5" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex-1 min-h-0 overflow-y-auto p-2 mland:p-1.5">
                   {renderSlotList('p')}
@@ -2017,11 +2186,20 @@ export const MainMenu: React.FC<{
       {showImport && (
         <SaveFolderModal
           onLoadSave={(loaded, chosenSlot) => {
+            if (chosenSlot > getSlotCount(loaded.mode)) {
+              setSlotCount(loaded.mode, chosenSlot);
+            }
+            setSlotCounts({ m: getSlotCount('m'), p: getSlotCount('p') });
+            setRefresh((x) => x + 1);
             onLoadSave(loaded.mode, chosenSlot, loaded);
             setShowImport(false);
             onToast(`โหลดเซฟลงสล็อต #${chosenSlot} แล้ว`);
           }}
-          onClose={() => setShowImport(false)}
+          onClose={() => {
+            setSlotCounts({ m: getSlotCount('m'), p: getSlotCount('p') });
+            setRefresh((x) => x + 1);
+            setShowImport(false);
+          }}
           onToast={onToast}
         />
       )}

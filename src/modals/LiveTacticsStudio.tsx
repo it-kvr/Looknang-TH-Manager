@@ -17,6 +17,7 @@ import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { ovColor } from '../engine/missions';
 import { FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
+import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
 export interface LivePlayerMatchStats {
   shots: number;
@@ -719,7 +720,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                 {isMeView ? ` · ${AR_T[liveTac]}` : ''}
               </span>
               <span className="text-[var(--mut)]/50">·</span>
-              <span className="tabular text-[var(--g)] shrink-0">{teamPitchStats.avgFit}% ⚡</span>
+              <span className={`tabular shrink-0 ${getStaminaMeta(teamPitchStats.avgFit, subAlertFitTh).txtCls}`}>
+                {teamPitchStats.avgFit}% ⚡
+              </span>
               <span className="text-[var(--mut)]/50">·</span>
               <span className="tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">{teamPitchStats.avgRt.toFixed(1)} ⭐</span>
               {teamPitchStats.offPosCount > 0 && (
@@ -941,7 +944,6 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
               <div className="space-y-1">
                 {benchList.map((pl) => {
                   const f = Math.round(pl.fit ?? 100);
-                  const fCol = f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
                   const no = getShirtNo(meTeamOrig, pl);
                   const isDraggingThis = dragUi?.source === 'bench' && dragUi.player.n === pl.n;
                   const isBenchDropTarget = dropTarget?.kind === 'bench' && dropTarget.name === pl.n;
@@ -1005,14 +1007,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0 tabular">
-                        <div className="flex flex-col items-end gap-0.5 w-9 mland:w-8" title={`พลังงาน ${f}%`}>
-                          <span className="text-[9px] mland:text-[8px] font-extrabold leading-none" style={{ color: fCol }}>
-                            {f}% ⚡
-                          </span>
-                          <div className="w-full h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${clamp(f, 4, 100)}%`, backgroundColor: fCol }} />
-                          </div>
-                        </div>
+                        <StaminaBar value={f} variant="compact" restThreshold={subAlertFitTh} className="w-11 mland:w-9" />
                         <span className="px-1.5 py-0.2 rounded-md text-white text-[10px] mland:text-[9px] font-bold" style={{ background: ovColor(pl.ov) }}>
                           {pl.ov}
                         </span>

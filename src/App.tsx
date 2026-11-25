@@ -16,6 +16,7 @@ import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlaye
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
+import { StaminaBar } from './components/StaminaBar';
 import stadiumHeroBg from './assets/images/thai_stadium_hero_1795511663761.jpg';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -1120,7 +1121,12 @@ export default function App() {
                 ) : (
                   <>
                     <span className="opacity-40 shrink-0">·</span>
-                    <span className="font-semibold text-[var(--mut)] tabular shrink-0">ฟิต {state.p?.en ?? 100}%</span>
+                    <StaminaBar
+                      value={state.p?.en ?? 100}
+                      variant="inline"
+                      label="ฟิต"
+                      barWidthClass="w-8 sm:w-10 mland:w-7"
+                    />
                     <span className="opacity-40 shrink-0">·</span>
                     <span className="shrink-0" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
                       แฟน {fmtFansShort(ensureTeamFans(me))}

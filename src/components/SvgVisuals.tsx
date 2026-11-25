@@ -82,6 +82,31 @@ interface ResolvedCrestSpec {
   icTransform: string;
 }
 
+const CREST_STAR_LAYOUTS: Record<number, readonly { cx: number; cy: number; r: number }[]> = {
+  1: [{ cx: 12, cy: 1.92, r: 1.72 }],
+  2: [
+    { cx: 9.5, cy: 2.08, r: 1.54 },
+    { cx: 14.5, cy: 2.08, r: 1.54 }
+  ],
+  3: [
+    { cx: 7.4, cy: 2.38, r: 1.4 },
+    { cx: 12, cy: 1.68, r: 1.6 },
+    { cx: 16.6, cy: 2.38, r: 1.4 }
+  ]
+};
+
+function buildStarPath(cx: number, cy: number, r: number, innerRatio = 0.43): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const rad = (((-90 + i * 36) * Math.PI) / 180);
+    const radius = i % 2 === 0 ? r : r * innerRatio;
+    const x = +(cx + Math.cos(rad) * radius).toFixed(2);
+    const y = +(cy + Math.sin(rad) * radius).toFixed(2);
+    pts.push(`${i === 0 ? 'M' : 'L'}${x} ${y}`);
+  }
+  return `${pts.join('')}Z`;
+}
+
 function resolveCrestSpec(
   name: string,
   team?: Team | null,
@@ -105,7 +130,7 @@ function resolveCrestSpec(
   const centerLum = pat !== 8 ? colLum(c1) * 0.52 + colLum(c2) * 0.48 : colLum(c1);
   const icCol = k?.iconColor ? k.iconColor : centerLum > 0.54 ? '#0f172a' : '#ffffff';
   const haloCol = colLum(icCol) > 0.52 ? 'rgba(9, 20, 15, 0.82)' : 'rgba(255, 255, 255, 0.92)';
-  const icTransform = `translate(5.2 ${stars > 0 ? 6.0 : 5.2}) scale(.57)`;
+  const icTransform = 'translate(5.2 5.2) scale(.57)';
   return {
     c1,
     c2,
@@ -154,22 +179,28 @@ function renderCrestPatternStr(pat: number, uid: string, c1: string, c2: string)
 }
 
 function buildCrestSvgMarkup(spec: ResolvedCrestSpec, uid: string, withStars = false): string {
+  const hasStars = withStars && spec.stars > 0;
   const defs = `<defs><clipPath id="mcp-${uid}"><path d="${spec.d}"/></clipPath>${
     spec.pat === 9 ? `<linearGradient id="cg-${uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="${spec.c1}"/><stop offset="100%" stop-color="${spec.c2}"/></linearGradient>` : ''
   }${
     spec.pat === 19 ? `<radialGradient id="cr-${uid}" cx="50%" cy="50%" r="55%"><stop offset="0%" stop-color="${spec.c2}"/><stop offset="100%" stop-color="${spec.c1}"/></radialGradient>` : ''
+  }${
+    hasStars ? `<linearGradient id="cs-${uid}" x1="0" y1="0" x2="0.25" y2="1"><stop offset="0%" stop-color="#fef9c3"/><stop offset="48%" stop-color="#facc15"/><stop offset="100%" stop-color="#d97706"/></linearGradient>` : ''
   }</defs>`;
   const patBody = renderCrestPatternStr(spec.pat, uid, spec.c1, spec.c2);
   const c3Stroke = spec.hasCustomC3 && spec.pat !== 8 ? `<path d="${spec.d}" fill="none" stroke="${spec.c3}" stroke-width="2.2" opacity="0.6"/>` : '';
   const borderExtra = spec.borderStyle === 2 ? `<path d="${spec.d}" fill="none" stroke="${spec.c3}" stroke-width="0.9" opacity="0.9"/>` : '';
-  const starsHtml =
-    withStars && spec.stars > 0
-      ? Array.from({ length: spec.stars })
-          .map((_, idx) => `<circle cx="${12 + (idx - (spec.stars - 1) / 2) * 4.5}" cy="2.6" r="1.25" fill="#facc15" stroke="#1e293b" stroke-width="0.35"/>`)
-          .join('')
-      : '';
+  const starsHtml = hasStars
+    ? (CREST_STAR_LAYOUTS[spec.stars] || [])
+        .map(
+          (st) =>
+            `<path d="${buildStarPath(st.cx, st.cy, st.r)}" fill="url(#cs-${uid})" stroke="#451a03" stroke-width="0.34" stroke-linejoin="round" paint-order="stroke"/>`
+        )
+        .join('')
+    : '';
   const icRaw = CREST_IC[spec.ic] || '';
-  return `${defs}<g clip-path="url(#mcp-${uid})">${patBody}${c3Stroke}</g><path d="${spec.d}" fill="none" stroke="${spec.strokeCol}" stroke-width="${spec.borderStyle === 2 ? '2.2' : '1.8'}"/>${borderExtra}${starsHtml}<g transform="${spec.icTransform}" fill="none" stroke="${spec.haloCol}" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">${icRaw}</g><g transform="${spec.icTransform}" fill="none" stroke="${spec.icCol}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icRaw}</g>`;
+  const body = `<g clip-path="url(#mcp-${uid})">${patBody}${c3Stroke}</g><path d="${spec.d}" fill="none" stroke="${spec.strokeCol}" stroke-width="${spec.borderStyle === 2 ? '2.2' : '1.8'}"/>${borderExtra}<g transform="${spec.icTransform}" fill="none" stroke="${spec.haloCol}" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">${icRaw}</g><g transform="${spec.icTransform}" fill="none" stroke="${spec.icCol}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icRaw}</g>`;
+  return `${defs}${hasStars ? `<g transform="translate(12 13.85) scale(0.815) translate(-12 -12)">${body}</g>` : body}${starsHtml}`;
 }
 
 export const ClubCrest: React.FC<{
@@ -181,6 +212,37 @@ export const ClubCrest: React.FC<{
 }> = React.memo(({ name, size = 24, team, club, isMyClub }) => {
   const uid = React.useId().replace(/:/g, '');
   const spec = resolveCrestSpec(name, team, club, isMyClub);
+  const hasStars = spec.stars > 0;
+  const starLayouts = hasStars ? CREST_STAR_LAYOUTS[spec.stars] || [] : [];
+
+  const crestBody = (
+    <>
+      <g clipPath={`url(#cp-${uid})`}>
+        {renderCrestPattern(spec.pat, uid, spec.c1, spec.c2)}
+        {spec.hasCustomC3 && spec.pat !== 8 && <path d={spec.d} fill="none" stroke={spec.c3} strokeWidth="2.2" opacity="0.6" />}
+      </g>
+      <path d={spec.d} fill="none" stroke={spec.strokeCol} strokeWidth={spec.borderStyle === 2 ? '2' : '1.5'} />
+      {spec.borderStyle === 2 && <path d={spec.d} fill="none" stroke={spec.c3} strokeWidth="0.7" opacity="0.9" />}
+      <g
+        transform={spec.icTransform}
+        fill="none"
+        stroke={spec.haloCol}
+        strokeWidth="4.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        dangerouslySetInnerHTML={{ __html: CREST_IC[spec.ic] }}
+      />
+      <g
+        transform={spec.icTransform}
+        fill="none"
+        stroke={spec.icCol}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        dangerouslySetInnerHTML={{ __html: CREST_IC[spec.ic] }}
+      />
+    </>
+  );
 
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
@@ -200,36 +262,30 @@ export const ClubCrest: React.FC<{
             <stop offset="100%" stopColor={spec.c1} />
           </radialGradient>
         )}
+        {hasStars && (
+          <linearGradient id={`cs-${uid}`} x1="0" y1="0" x2="0.25" y2="1">
+            <stop offset="0%" stopColor="#fef9c3" />
+            <stop offset="48%" stopColor="#facc15" />
+            <stop offset="100%" stopColor="#d97706" />
+          </linearGradient>
+        )}
       </defs>
-      <g clipPath={`url(#cp-${uid})`}>
-        {renderCrestPattern(spec.pat, uid, spec.c1, spec.c2)}
-        {spec.hasCustomC3 && spec.pat !== 8 && <path d={spec.d} fill="none" stroke={spec.c3} strokeWidth="2.2" opacity="0.6" />}
-      </g>
-      <path d={spec.d} fill="none" stroke={spec.strokeCol} strokeWidth={spec.borderStyle === 2 ? '2' : '1.5'} />
-      {spec.borderStyle === 2 && <path d={spec.d} fill="none" stroke={spec.c3} strokeWidth="0.7" opacity="0.9" />}
-      {spec.stars > 0 &&
-        Array.from({ length: spec.stars }).map((_, idx) => {
-          const sx = 12 + (idx - (spec.stars - 1) / 2) * 4.5;
-          return <circle key={idx} cx={sx} cy="2.6" r="1.25" fill="#facc15" stroke="#1e293b" strokeWidth="0.35" />;
-        })}
-      <g
-        transform={spec.icTransform}
-        fill="none"
-        stroke={spec.haloCol}
-        strokeWidth="4.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        dangerouslySetInnerHTML={{ __html: CREST_IC[spec.ic] }}
-      />
-      <g
-        transform={spec.icTransform}
-        fill="none"
-        stroke={spec.icCol}
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        dangerouslySetInnerHTML={{ __html: CREST_IC[spec.ic] }}
-      />
+      {hasStars ? (
+        <g transform="translate(12 13.85) scale(0.815) translate(-12 -12)">{crestBody}</g>
+      ) : (
+        crestBody
+      )}
+      {starLayouts.map((st, idx) => (
+        <path
+          key={idx}
+          d={buildStarPath(st.cx, st.cy, st.r)}
+          fill={`url(#cs-${uid})`}
+          stroke="#451a03"
+          strokeWidth="0.34"
+          strokeLinejoin="round"
+          paintOrder="stroke"
+        />
+      ))}
     </svg>
   );
 });
@@ -374,7 +430,7 @@ export const KitJersey: React.FC<{
   const numFontSize = numText.length >= 2 ? 21 : 23;
 
   return (
-    <svg width={size} viewBox="0 0 100 100" aria-hidden="true">
+    <svg width={size} height={size} viewBox="5 7 90 81" className="shrink-0" aria-hidden="true">
       <defs>
         <clipPath id={`kc-${uid}`}>
           <path d={J} />
@@ -1407,15 +1463,43 @@ export const FormationPitch: React.FC<{
             {/* Bottom Stamina Bar + Player Name */}
             {showFitBar && !isRed && (
               <>
-                <rect x={cx - 22} y={cy + 17} width="27" height="4.4" rx="2.2" fill="#0b2018" stroke={efVal < restTh ? '#ef4444' : '#fff7'} strokeWidth={efVal < restTh ? '0.9' : '0.6'} />
-                <rect x={cx - 22} y={cy + 17} width={(27 * efVal) / 100} height="4.4" rx="2.2" fill={efc} />
+                <rect
+                  x={cx - 22}
+                  y={cy + 17}
+                  width="27"
+                  height="4.6"
+                  rx="2.3"
+                  fill="rgba(7, 20, 14, 0.88)"
+                  stroke={efVal < restTh ? '#ef4444' : 'rgba(255, 255, 255, 0.36)'}
+                  strokeWidth={efVal < restTh ? '0.85' : '0.6'}
+                />
+                {efVal > 0 && (
+                  <>
+                    <rect
+                      x={cx - 21.5}
+                      y={cy + 17.5}
+                      width={Math.max(2.2, (26 * efVal) / 100)}
+                      height="3.6"
+                      rx="1.8"
+                      fill={efc}
+                    />
+                    <rect
+                      x={cx - 21.5}
+                      y={cy + 17.6}
+                      width={Math.max(2.2, (26 * efVal) / 100)}
+                      height="1.2"
+                      rx="0.6"
+                      fill="rgba(255, 255, 255, 0.3)"
+                    />
+                  </>
+                )}
                 <text
                   x={cx + 7}
-                  y={cy + 21.5}
+                  y={cy + 21.6}
                   fontSize="7.6"
                   fontWeight="800"
                   fontFamily="Sarabun"
-                  fill={efVal < restTh ? '#fca5a5' : efc}
+                  fill={efVal < restTh ? '#fda4af' : efVal < warnTh ? '#fcd34d' : '#86efac'}
                   stroke="#0b2018"
                   strokeWidth="2.1"
                   paintOrder="stroke"

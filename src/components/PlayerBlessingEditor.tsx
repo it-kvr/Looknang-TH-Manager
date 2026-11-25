@@ -693,7 +693,7 @@ export const PlayerBlessingEditor: React.FC<{
           <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10.5px] font-bold text-[var(--ink)]">
-                🧩 ตำแหน่งถนัดเพิ่ม ({altRoles.length}) <span className="font-normal text-[var(--mut)]">· ลดโทษเวลาหลุดตำแหน่ง</span>
+                🧩 ตำแหน่งถนัดเพิ่ม ({altRoles.length}) <span className="font-normal text-[var(--mut)]">· เล่นเต็ม 100% ไม่โดนหักหลุดตำแหน่ง</span>
               </span>
               {altRoles.length > 0 && (
                 <button

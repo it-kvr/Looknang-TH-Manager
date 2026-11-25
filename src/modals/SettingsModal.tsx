@@ -5,7 +5,7 @@ import type { GameState, AppSettings } from '../types/game';
 import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
 import { enterLandscapeFullscreen, exitFullscreenSafe, isMobileDevice } from '../utils/fullscreen';
 import { exportSaveCode, cleanImportJson, readSaveFileText } from '../engine/saveCodec';
-import { firstEmptySlot, loadGameFromSlot, NSL } from '../engine/playerCore';
+import { firstEmptySlot, getSlotCount, loadGameFromSlot, MAX_SLOTS, setSlotCount } from '../engine/playerCore';
 import { GAME_AUTO_FOLDER_NAME, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from './SaveFolderModal';
 
@@ -44,9 +44,30 @@ export const SettingsModal: React.FC<{
 
   const parsedImport = useMemo(() => (importRaw.trim() ? cleanImportJson(importRaw) : null), [importRaw]);
 
+  const parsedImportAlreadyInGame = useMemo(() => {
+    if (!parsedImport) return false;
+    const getKey = (s: GameState) => {
+      const n = s.mode === 'm' ? s.club?.name || s.teams[s.me]?.name || 'สโมสร' : s.p?.name || 'นักเตะ';
+      return `${s.mode}|${n.trim()}|${Number(s.season || 1)}|${Number(s.md || 0)}`;
+    };
+    const targetKey = getKey(parsedImport);
+    if (getKey(state) === targetKey) return true;
+    for (const m of ['m', 'p'] as const) {
+      const cnt = getSlotCount(m);
+      for (let k = 1; k <= cnt; k++) {
+        const occ = loadGameFromSlot(m, k);
+        if (occ && getKey(occ) === targetKey) return true;
+      }
+    }
+    return false;
+  }, [parsedImport, state]);
+
   const pickDefaultSlot = (parsed: GameState) => {
     if (parsed.mode === state.mode) return slot;
-    return firstEmptySlot(parsed.mode) || 1;
+    const empty = firstEmptySlot(parsed.mode);
+    if (empty > 0) return empty;
+    const cnt = getSlotCount(parsed.mode);
+    return cnt < MAX_SLOTS ? cnt + 1 : 1;
   };
 
   const handleSelectSaveFile = async (file: File | undefined | null) => {
@@ -314,14 +335,40 @@ export const SettingsModal: React.FC<{
               <PWAInstallButton variant="settings" onToast={onToast} />
             </div>
 
-            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
                   <span>💾</span>
-                  <span>บันทึก &amp; โหลดข้อมูลเซฟ</span>
+                  <span>จัดการเซฟเกม</span>
                 </div>
-                <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] tabular">
+                <span className="px-2 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular">
                   ช่อง #{slot}
+                </span>
+              </div>
+
+              {/* Active Save Summary Strip */}
+              <div className="px-2.5 py-2 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg border flex items-center justify-center text-sm mland:text-xs shrink-0 ${
+                      state.mode === 'm'
+                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'
+                        : 'bg-[var(--g-soft)] border-[var(--g)]/40'
+                    }`}
+                  >
+                    {state.mode === 'm' ? '📋' : '⚽'}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[11.5px] mland:text-[9.5px] font-extrabold text-[var(--ink)] truncate leading-tight">
+                      {state.mode === 'm' ? state.club?.name || state.teams[state.me]?.name || 'สโมสร' : state.p?.name || 'นักเตะ'}
+                    </div>
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular truncate">
+                      {state.mode === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ'} · ซีซัน {state.season} · นัด {state.md}
+                    </div>
+                  </div>
+                </div>
+                <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
+                  ออโต้เซฟ
                 </span>
               </div>
 
@@ -337,19 +384,7 @@ export const SettingsModal: React.FC<{
                 }}
               />
 
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  setFolderInitialTab('folder');
-                  setShowFolderModal(true);
-                }}
-                className="w-full btn btn-xs btn-gold flex items-center justify-center gap-1.5"
-              >
-                <Folder className="w-3.5 h-3.5 shrink-0" />
-                <span>เปิดโฟลเดอร์เซฟเกม ({GAME_AUTO_FOLDER_NAME})</span>
-              </button>
-
+              {/* Primary Save & Save Vault Actions */}
               <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
                 <button
                   type="button"
@@ -362,7 +397,7 @@ export const SettingsModal: React.FC<{
                       const saved = await saveGameToAutoFolder(state);
                       setLastSavedFile(`${GAME_AUTO_FOLDER_NAME}/${saved.filename}`);
                       SFX.win();
-                      onToast(`💾 บันทึกไฟล์ "${saved.filename}" ลงโฟลเดอร์เกมแล้ว`);
+                      onToast(`💾 บันทึกจุดเซฟ "${saved.filename}" ลงคลังเซฟแล้ว`);
                     } catch {
                       onToast('❌ บันทึกไฟล์ไม่สำเร็จ');
                     } finally {
@@ -372,7 +407,7 @@ export const SettingsModal: React.FC<{
                   className="btn btn-xs btn-primary flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   <Save className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
-                  <span>{savingToFolder ? 'กำลังบันทึก...' : 'บันทึกเซฟทันที'}</span>
+                  <span>{savingToFolder ? 'กำลังบันทึก...' : 'สร้างจุดเซฟทันที'}</span>
                 </button>
 
                 <button
@@ -382,20 +417,21 @@ export const SettingsModal: React.FC<{
                     setFolderInitialTab('folder');
                     setShowFolderModal(true);
                   }}
-                  className="btn btn-xs btn-secondary flex items-center justify-center gap-1 whitespace-nowrap"
+                  className="btn btn-xs btn-gold flex items-center justify-center gap-1 whitespace-nowrap"
                 >
-                  <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 text-[var(--g)]" />
-                  <span>โหลดเซฟที่บันทึกไว้</span>
+                  <Folder className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <span>เปิดคลังเซฟ</span>
                 </button>
               </div>
 
               {lastSavedFile && (
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--g)] font-semibold truncate">
-                  ✓ บันทึกแล้ว: {lastSavedFile}
+                <div className="px-2 py-1 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/35 text-[10px] mland:text-[8.5px] text-[var(--g)] font-bold truncate">
+                  ✓ บันทึกจุดเซฟแล้ว: {lastSavedFile}
                 </div>
               )}
 
-              <div className="flex items-center justify-between gap-1.5 pt-0.5">
+              {/* Quick Code Export / Import */}
+              <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -405,7 +441,7 @@ export const SettingsModal: React.FC<{
                     navigator.clipboard?.writeText(code).catch(() => undefined);
                     onToast(`คัดลอกโค้ดเซฟ (${code.length.toLocaleString()} ตัวอักษร) แล้ว`);
                   }}
-                  className="btn btn-xs btn-secondary flex-1 flex items-center justify-center gap-1"
+                  className="btn btn-xs btn-secondary flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   <Copy className="w-3 h-3 shrink-0" />
                   <span>คัดลอกโค้ดเซฟ</span>
@@ -416,23 +452,31 @@ export const SettingsModal: React.FC<{
                     SFX.tap();
                     setShowLoadBox((v) => !v);
                   }}
-                  className="btn btn-xs btn-secondary flex-1"
+                  className="btn btn-xs btn-secondary flex items-center justify-center gap-1 whitespace-nowrap"
                 >
-                  {showLoadBox ? 'ซ่อนช่องวางโค้ด' : 'วางโค้ด / ไฟล์ภายนอก'}
+                  <FolderInput className="w-3 h-3 shrink-0 text-[var(--g)]" />
+                  <span>{showLoadBox ? 'ซ่อนช่องวางโค้ด' : 'วางโค้ด / ไฟล์'}</span>
                 </button>
               </div>
 
               {saveCode && (
-                <div className="space-y-1">
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--g)] font-semibold tabular">
-                    โค้ดเซฟขนาด {saveCode.length.toLocaleString()} ตัวอักษร · คัดลอกลงคลิปบอร์ดแล้ว
+                <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px] text-[var(--g)] font-bold tabular">
+                    <span>✓ คัดลอกโค้ดแล้ว ({saveCode.length.toLocaleString()} ตัวอักษร)</span>
+                    <button
+                      type="button"
+                      onClick={() => setSaveCode('')}
+                      className="text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer"
+                    >
+                      ปิด
+                    </button>
                   </div>
                   <textarea
                     readOnly
                     value={saveCode}
                     rows={2}
                     onFocus={(e) => e.currentTarget.select()}
-                    className="w-full p-2 mland:p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] font-mono"
+                    className="w-full p-2 mland:p-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10px] font-mono"
                   />
                 </div>
               )}
@@ -499,37 +543,57 @@ export const SettingsModal: React.FC<{
                         (ซีซัน {parsedImport.season} นัด {parsedImport.md})
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          value={targetSlot}
-                          onChange={(e) => setTargetSlot(Number(e.target.value))}
-                          className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-semibold"
-                        >
-                          {Array.from({ length: NSL }, (_, idx) => idx + 1).map((k) => {
-                            const existing = loadGameFromSlot(parsedImport.mode, k);
-                            const occName = existing
-                              ? existing.mode === 'm'
-                                ? existing.club?.name || existing.teams[existing.me]?.name
-                                : existing.p?.name
-                              : '';
-                            return (
-                              <option key={k} value={k}>
-                                ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
-                              </option>
-                            );
-                          })}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.win();
-                            onLoadSaveFile?.(parsedImport, targetSlot);
-                          }}
-                          className="btn btn-xs btn-primary shrink-0"
-                        >
-                          โหลดเลย
-                        </button>
-                      </div>
+                      {parsedImportAlreadyInGame ? (
+                        <div className="px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] text-center">
+                          ✓ เซฟนี้มีอยู่ในเกมแล้ว ไม่ต้องโหลดซ้ำ
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <select
+                            value={targetSlot}
+                            onChange={(e) => setTargetSlot(Number(e.target.value))}
+                            className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-semibold"
+                          >
+                            {(() => {
+                              const cnt = getSlotCount(parsedImport.mode);
+                              const opts = Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
+                                const existing = loadGameFromSlot(parsedImport.mode, k);
+                                const occName = existing
+                                  ? existing.mode === 'm'
+                                    ? existing.club?.name || existing.teams[existing.me]?.name
+                                    : existing.p?.name
+                                  : '';
+                                return (
+                                  <option key={k} value={k}>
+                                    ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
+                                  </option>
+                                );
+                              });
+                              if (cnt < MAX_SLOTS) {
+                                opts.push(
+                                  <option key={cnt + 1} value={cnt + 1}>
+                                    ➕ เพิ่มช่องใหม่ (#{cnt + 1})
+                                  </option>
+                                );
+                              }
+                              return opts;
+                            })()}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.win();
+                              if (targetSlot > getSlotCount(parsedImport.mode)) {
+                                setSlotCount(parsedImport.mode, targetSlot);
+                              }
+                              onLoadSaveFile?.(parsedImport, targetSlot);
+                            }}
+                            className="btn btn-xs btn-primary shrink-0"
+                          >
+                            โหลดเลย
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

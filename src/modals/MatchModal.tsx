@@ -54,6 +54,7 @@ import { generateLiveStreamComment, getMatchBroadcastChannel, getStreamViewerTie
 import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { StaminaBar } from '../components/StaminaBar';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 
@@ -10137,9 +10138,13 @@ export const MatchModal: React.FC<{
                                       <div className="text-[10px] text-white/80 flex flex-wrap items-center gap-1.5 tabular">
                                         <span>{htPickedInfo.team.name}</span>
                                         <span className="px-1.5 rounded bg-[#facc15]/20 text-[#facc15] font-extrabold">⭐ {htPickedInfo.rt.toFixed(1)}</span>
-                                        <span className={`font-extrabold ${htPickedInfo.fitVal >= 70 ? 'text-emerald-300' : htPickedInfo.fitVal >= subAlertFitTh ? 'text-amber-300' : 'text-rose-300'}`}>
-                                          ⚡ {htPickedInfo.fitVal}%
-                                        </span>
+                                        <StaminaBar
+                                          value={htPickedInfo.fitVal}
+                                          variant="inline"
+                                          darkSurface
+                                          restThreshold={subAlertFitTh}
+                                          barWidthClass="w-9"
+                                        />
                                         {htPickedInfo.gl > 0 && <StatIconBadge kind="goal" count={htPickedInfo.gl} size="xs" />}
                                         {htPickedInfo.as > 0 && <StatIconBadge kind="assist" count={htPickedInfo.as} size="xs" />}
                                         {htPickedInfo.cards.map((c, idx) => (

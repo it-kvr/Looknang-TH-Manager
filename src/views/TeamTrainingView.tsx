@@ -9,6 +9,7 @@ import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { TalentBadge } from '../components/TalentBadge';
+import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
 export const TeamTrainingView: React.FC<{
   state: GameState;
@@ -128,7 +129,7 @@ export const TeamTrainingView: React.FC<{
         <div className="flex items-center gap-2 shrink-0">
           <span>
             ฟิต 11 ตัวจริง{' '}
-            <b className={`tabular ${avgFit < 72 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>{avgFit}%</b>
+            <b className={`tabular ${getStaminaMeta(avgFit).txtCls}`}>{avgFit}%</b>
             <span className="text-[var(--mut)] tabular"> (ทั้งทีม {avgAllFit}%)</span>
           </span>
           <span className="opacity-30">·</span>
@@ -423,8 +424,6 @@ export const TeamTrainingView: React.FC<{
               const isRest = indMap[q.n] === 'REST';
               const isFocus = state.focusPlayer === q.n;
               const isStarter = starters.some((s) => s.n === q.n);
-              const fCol = f >= 75 ? 'var(--g)' : f >= 55 ? 'var(--lamp)' : 'var(--red)';
-              const fTextCls = f >= 75 ? 'text-[var(--g)]' : f >= 55 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--red)]';
 
               return (
                 <div key={q.n} className={`px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 ${isRest ? 'bg-emerald-500/8' : isFocus ? 'bg-[var(--lamp-soft)]/35' : ''}`}>
@@ -437,10 +436,7 @@ export const TeamTrainingView: React.FC<{
                         {isStarter && <span className="text-[9px] shrink-0" title="ตัวจริง">⭐</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <div className="w-16 h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden shrink-0">
-                          <div className="h-full rounded-full" style={{ width: `${f}%`, background: fCol }} />
-                        </div>
-                        <span className={`text-[10px] mland:text-[8.5px] font-bold tabular ${fTextCls}`}>{f}%</span>
+                        <StaminaBar value={f} variant="inline" barWidthClass="w-14 sm:w-16 mland:w-12" />
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular inline-flex items-center gap-1 flex-wrap">
                           {q.inj > 0 ? (
                             `🩹${q.inj}นัด`

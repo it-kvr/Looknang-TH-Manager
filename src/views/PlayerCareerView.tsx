@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { Player, GameState } from '../types/game';
 import { clamp } from '../utils/math';
-import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, LINE, SPN } from '../data/thaiFootballData';
+import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, SPN, ATT } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import {
   getShirtNo,
@@ -12,15 +12,17 @@ import {
   ovMe,
   syncMe,
   tc,
+  pen,
   learnCareerTrait,
   forgetCareerTrait,
   setCareerRoleTrainTarget,
   switchCareerSignature,
   trainCareerSignatureDrill,
   ROLE_ADAPT_THRESHOLD_ADJ,
-  ROLE_ADAPT_THRESHOLD_CROSS
+  ROLE_ADAPT_THRESHOLD_CROSS,
+  ROLE_ADAPT_TARGETS
 } from '../engine/playerCore';
-import { statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
+import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
@@ -28,6 +30,7 @@ import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressi
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 import { AthleteCard } from '../components/AthleteCard';
+import { StaminaBar } from '../components/StaminaBar';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -104,17 +107,7 @@ export const PlayerCareerView: React.FC<{
         {/* Personal Info Box below Portrait Card */}
         <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
 
-          <div className="space-y-1 mland:space-y-0.5">
-            <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
-              <span>⚡ พลังกาย</span>
-              <span className={`tabular font-extrabold ${statTierMeta(p.en).textClass}`}>
-                {Math.round(p.en)}%
-              </span>
-            </div>
-            <div className="h-2 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-              <div className="h-full rounded-full transition-all" style={{ width: `${clamp(p.en, 6, 100)}%`, background: statBarColor(p.en) }} />
-            </div>
-          </div>
+          <StaminaBar value={p.en} variant="card" />
 
           <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-0.5 ${injCount > 0 || susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
             <div className="flex items-center justify-between font-bold gap-1">
@@ -335,9 +328,13 @@ export const PlayerCareerView: React.FC<{
               <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <h3 className="font-bold text-sm mland:text-xs">📅 แผนฝึกซ้อมประจำสัปดาห์</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[8.5px] font-bold tabular text-[var(--ink)]">
-                    ⚡ พลังกาย <b className={(p.en ?? 100) >= 75 ? 'text-[var(--g)]' : (p.en ?? 100) >= 55 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--red)]'}>{Math.round(p.en ?? 100)}%</b>
-                  </span>
+                  <StaminaBar
+                    value={p.en}
+                    variant="inline"
+                    label="พลังกาย"
+                    barWidthClass="w-10 mland:w-8"
+                    className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]"
+                  />
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {p.vid ? (
@@ -573,8 +570,8 @@ export const PlayerCareerView: React.FC<{
                           </span>
                         )}
                       </div>
-                      <div className="text-[var(--mut)]">
-                        เลือก 1 ตำแหน่งเพื่อเก็บประสบการณ์ซ้อมพิเศษรายสัปดาห์ควบคู่กับการลงแข่งจริงจนปลดล็อกเป็นตำแหน่งถนัดเสริม
+                      <div className="text-[var(--mut)] leading-snug">
+                        <b className="text-[var(--ink)]">ผลจริงในเกม:</b> เล่นตำแหน่งที่ปลดล็อกได้ <b className="text-[var(--g)]">เต็ม 100%</b> (ไม่โดนหักพลังหลุดตำแหน่ง -6% ถึง -15%) + เพิ่มความยืดหยุ่นแท็กติก และระหว่างฝึก/ปลดล็อกจะปรับ <b className="text-[var(--ink)]">+1 พลังหลัก &amp; +3 สกิลประจำตำแหน่ง</b> (ต้องเก็บ {ROLE_ADAPT_THRESHOLD_ADJ} ขั้นสำหรับตำแหน่งใกล้เคียง หรือ {ROLE_ADAPT_THRESHOLD_CROSS} ขั้นสำหรับตำแหน่งข้ามสาย)
                       </div>
                     </div>
 
@@ -582,9 +579,13 @@ export const PlayerCareerView: React.FC<{
                       {ALL_SUB_ROLES.filter((r) => r !== p.sp && (p.pos === 'GK' ? r === 'GK' : r !== 'GK')).map((role) => {
                         const unlocked = (p.altRoles || []).includes(role);
                         const isTarget = p.roleTrain === role;
-                        const need = LINE[role] === p.pos ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
+                        const need = pen(p.sp, role) === 1 ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
                         const exp = p.roleExp?.[role] || 0;
                         const pct = unlocked ? 100 : clamp(Math.round((exp / need) * 100), 0, 100);
+                        const rTarget = ROLE_ADAPT_TARGETS[role] || ROLE_ADAPT_TARGETS.CM;
+                        const coreName = ATT.find((x) => x[0] === rTarget.cores[0])?.[1] || rTarget.cores[0];
+                        const sub1Name = SIGL[rTarget.subs[0]] || rTarget.subs[0];
+                        const sub2Name = SIGL[rTarget.subs[1]] || rTarget.subs[1];
                         return (
                           <div
                             key={role}
@@ -602,7 +603,10 @@ export const PlayerCareerView: React.FC<{
                                   {role} · {SPN[role] || role}
                                 </div>
                                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                                  {unlocked ? '✓ ปลดล็อกเล่นได้เต็มประสิทธิภาพ' : `ความคุ้นเคย: ${exp}/${need} ขั้น`}
+                                  {unlocked ? '✓ ปลดล็อกเล่นเต็ม 100% แล้ว' : `ความคุ้นเคย: ${exp}/${need} นัด/ขั้น`}
+                                </div>
+                                <div className="text-[9.5px] mland:text-[8px] text-[var(--g)] font-semibold truncate">
+                                  {unlocked ? 'รับโบนัสค่าพลังตำแหน่งนี้แล้ว' : `ปลดล็อกได้: ${coreName} +1 · ${sub1Name} +2 · ${sub2Name} +1`}
                                 </div>
                               </div>
                               {!unlocked && (

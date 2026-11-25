@@ -70,7 +70,7 @@ export const SIMP = [
   'ST CF', 'CF CAM', 'CF LW', 'CF RW',
   'LW ST', 'RW ST', 'LW CF', 'RW CF', 'LWB LM', 'RWB RM', 'CB CDM'
 ];
-export const PM = [1, 0.97, 0.92];
+export const PM = [1, 0.94, 0.85];
 export const PCOL = ['#ffffff', '#ffc247', '#ff6b6b'];
 
 export const SPX: Record<Position, SubRole[]> = {

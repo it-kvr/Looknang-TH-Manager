@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord } from './history';
 
@@ -254,6 +254,12 @@ export function rate(
     if (q.me && cpForTrait?.perks?.includes('adaptable') && slotSp && playerPen(q, slotSp) > 0) {
       traitAt += 0.55;
       traitDf += 0.55;
+    }
+    const qAltRoles = q.me && cpForTrait?.altRoles?.length ? cpForTrait.altRoles : q.altRoles;
+    if (qAltRoles && qAltRoles.length > 0) {
+      const flexBonus = Math.min(0.45, qAltRoles.length * 0.2);
+      traitAt += flexBonus;
+      traitDf += flexBonus;
     }
     if (hasTrait(q, 'glass_cannon', cpForTrait)) {
       if ((q.fit ?? 100) > 75) {
@@ -3032,30 +3038,7 @@ export function tallyMatchPlayers(h: Team, a: Team, r: MatchResult) {
   });
 }
 
-const ROLE_ADAPT_TARGETS: Record<string, { cores: StatKey[]; subs: string[] }> = {
-  ST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
-  CF: { cores: ['sh', 'ps', 'dr'], subs: ['fin', 'vis', 'spass', 'ctrl'] },
-  LW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
-  RW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
-  CAM: { cores: ['ps', 'dr', 'sh'], subs: ['vis', 'spass', 'lsh', 'cur'] },
-  LM: { cores: ['ps', 'dr', 'ph'], subs: ['crs', 'spd', 'drb', 'sta'] },
-  RM: { cores: ['ps', 'dr', 'ph'], subs: ['crs', 'spd', 'drb', 'sta'] },
-  CM: { cores: ['ps', 'tk', 'ph'], subs: ['spass', 'lpass', 'rd', 'sta'] },
-  LCM: { cores: ['ps', 'tk', 'ph'], subs: ['spass', 'lpass', 'rd', 'sta'] },
-  RCM: { cores: ['ps', 'tk', 'ph'], subs: ['spass', 'lpass', 'rd', 'sta'] },
-  CDM: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'rd', 'pos', 'spass'] },
-  LDM: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'rd', 'pos', 'spass'] },
-  RDM: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'rd', 'pos', 'spass'] },
-  LWB: { cores: ['tk', 'dr', 'ps'], subs: ['crs', 'spd', 'tkl', 'sta'] },
-  RWB: { cores: ['tk', 'dr', 'ps'], subs: ['crs', 'spd', 'tkl', 'sta'] },
-  LB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
-  RB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
-  CB: { cores: ['tk', 'ph'], subs: ['tkl', 'mrk', 'hd', 'blk', 'str'] },
-  GK: { cores: ['ph', 'tk'], subs: ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist'] }
-};
-
-export const ROLE_ADAPT_THRESHOLD_ADJ = 4;
-export const ROLE_ADAPT_THRESHOLD_CROSS = 6;
+export { ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS };
 
 export function applyPositionAdaptation(
   s: GameState | null,
@@ -3160,27 +3143,24 @@ export function applyPositionAdaptation(
         q.altRoles = nextAlt;
         delete q.roleExp[normSlot];
 
-        // Mastery bonus on unlock
-        const masterSub = target.subs[0];
-        q.sb = { ...(q.sb || {}) };
-        q.sb[masterSub] = (q.sb[masterSub] || 0) + 1;
+        // Mastery bonus on unlock (+1 Core Stat & +3 Role Sub-skills)
+        const masteryGains = applyRoleMasteryBonus(q, normSlot, isMePlayer ? s?.p : null);
         if (isMePlayer && s?.p) {
           s.p.altRoles = [...nextAlt];
           s.p.roleExp = { ...q.roleExp };
-          s.p.sb = { ...(s.p.sb || {}) };
-          s.p.sb[masterSub] = (s.p.sb[masterSub] || 0) + 1;
         }
         if (s && (isMyTeam || isMePlayer)) {
           const roleLabel = SPN[normSlot] || normSlot;
+          const gainNote = masteryGains.length ? ` (${masteryGains.join(', ')})` : '';
           pushFeed(
             s,
             'ตำแหน่งใหม่',
-            `🧩 ${q.n} เล่นตำแหน่ง ${normSlot} (${roleLabel}) จนชำนาญและปลดล็อกเป็นตำแหน่งถนัดเพิ่มแล้ว!`,
+            `🧩 ${q.n} เล่นตำแหน่ง ${normSlot} (${roleLabel}) จนชำนาญและปลดล็อกเป็นตำแหน่งถนัดเพิ่มแล้ว!${gainNote}`,
             'ok'
           );
           appendPlayerCareerLog(
             q,
-            `🧩 ซีซั่น ${s.season}: ปลดล็อกตำแหน่งถนัดใหม่ ${normSlot} (${roleLabel})`,
+            `🧩 ซีซั่น ${s.season}: ปลดล็อกตำแหน่งถนัดใหม่ ${normSlot} (${roleLabel})${gainNote}`,
             isMePlayer ? s.p : null
           );
         }
@@ -3648,28 +3628,55 @@ export function runPlayerWeek(s: GameState) {
     const rawPen = pen(p.sp, targetRole);
     const threshold = rawPen === 1 ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
     const fastRole = perks.includes('adaptable') || hasTrait(mePlayer, 'versatile_utility', p);
-    const stepExp = fastRole && Math.random() < 0.55 ? 2 : 1;
+    const stepExp = fastRole && Math.random() < 0.45 ? 2 : 1;
     p.roleExp = { ...(p.roleExp || {}), [targetRole]: (p.roleExp?.[targetRole] || 0) + stepExp };
     if (meSq) meSq.roleExp = { ...p.roleExp };
+
+    const roleTarget = ROLE_ADAPT_TARGETS[targetRole] || ROLE_ADAPT_TARGETS.CM;
+    const roleStepNotes: string[] = [];
+    if (devProf.phase !== 'declining') {
+      const subDrillChance = (0.36 + (fastRole ? 0.1 : 0)) * (0.45 + 0.55 * ovScale) * devProf.ageMult;
+      if (Math.random() < subDrillChance) {
+        const sk = P(roleTarget.subs);
+        p.sb = { ...(p.sb || {}), [sk]: (p.sb?.[sk] || 0) + 1 };
+        if (p.customD && p.customD[sk] != null) p.customD[sk] = clamp(p.customD[sk] + 1, 1, 199);
+        if (meSq) meSq.sb = { ...p.sb };
+        roleStepNotes.push(`${SIGL[sk] || sk} +1`);
+      }
+      const coreDrillChance = (0.09 + (fastRole ? 0.04 : 0)) * ovScale * devProf.ageMult;
+      if (Math.random() < coreDrillChance) {
+        const ck = P(roleTarget.cores);
+        if ((p.a[ck] || 0) < 199) {
+          p.a[ck] = clamp((p.a[ck] || 1) + 1, 1, 199);
+          const newOv = ovMe(p);
+          if (meSq) {
+            meSq.ov = newOv;
+            meSq.pot = clamp(Math.max(meSq.pot || newOv, newOv + 1), newOv, 199);
+            if (meSq.blessed && meSq.customA) meSq.customA = { ...p.a };
+          }
+          roleStepNotes.push(`${ATT.find((x) => x[0] === ck)?.[1] || ck} +1`);
+        }
+      }
+    }
+
     if (p.roleExp[targetRole] >= threshold) {
       const nextAlt = Array.from(new Set([...(p.altRoles || []), targetRole])).filter((r) => r !== p.sp);
       p.altRoles = nextAlt;
       delete p.roleExp[targetRole];
       p.roleTrain = null;
-      const roleTarget = ROLE_ADAPT_TARGETS[targetRole] || ROLE_ADAPT_TARGETS.CM;
-      const masterSub = roleTarget.subs[0];
-      p.sb = { ...(p.sb || {}), [masterSub]: (p.sb?.[masterSub] || 0) + 1 };
+      const masteryGains = applyRoleMasteryBonus(meSq, targetRole, p);
       if (meSq) {
         meSq.altRoles = [...nextAlt];
         meSq.roleExp = { ...p.roleExp };
-        meSq.sb = { ...p.sb };
       }
       const roleLabel = SPN[targetRole] || targetRole;
-      m += ` · 🧩 ปลดล็อกตำแหน่งถนัด ${targetRole}!`;
-      pushFeed(s, 'ตำแหน่งใหม่', `🧩 ${p.name} ฝึกตำแหน่ง ${targetRole} (${roleLabel}) สำเร็จ! (${SIGL[masterSub] || masterSub} +1)`, 'ok');
-      appendPlayerCareerLog(meSq, `🧩 ซีซั่น ${s.season}: ฝึกปลดล็อกตำแหน่งถนัดใหม่ ${targetRole} (${roleLabel})`, p);
+      const gainNote = masteryGains.length ? ` (${masteryGains.join(', ')})` : '';
+      m += ` · 🧩 ปลดล็อกตำแหน่งถนัด ${targetRole}!${gainNote}`;
+      pushFeed(s, 'ตำแหน่งใหม่', `🧩 ${p.name} ฝึกตำแหน่ง ${targetRole} (${roleLabel}) สำเร็จ!${gainNote}`, 'ok');
+      appendPlayerCareerLog(meSq, `🧩 ซีซั่น ${s.season}: ฝึกปลดล็อกตำแหน่งถนัดใหม่ ${targetRole} (${roleLabel})${gainNote}`, p);
     } else {
-      m += ` · 🎯 ฝึก ${targetRole} (${p.roleExp[targetRole]}/${threshold})`;
+      const stepNote = roleStepNotes.length ? ` [${roleStepNotes.join(', ')}]` : '';
+      m += ` · 🎯 ฝึก ${targetRole}${stepNote} (${p.roleExp[targetRole]}/${threshold})`;
     }
   }
   if (meSq) {

@@ -2,8 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { FootballTraitDef, Player, PlayerCareerProfile, Position } from '../types/game';
 import { FOOTBALL_TRAITS, PLAYER_ARCHETYPES, PLAYER_PERSONALITIES, SIGL } from '../data/thaiFootballData';
-import { ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS } from '../engine/simulation';
-import { playerPen } from '../engine/playerCore';
+import { pen, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 import { TalentBadge } from './TalentBadge';
 
@@ -357,19 +356,20 @@ export const PlayerTraitsStrip: React.FC<{
                 {altRoles.map((r) => (
                   <span
                     key={r}
+                    title={`ลงเล่นตำแหน่ง ${r} ได้เต็ม 100% (ไม่โดนหักพลังหลุดตำแหน่ง) + เสริมความยืดหยุ่นแท็กติก`}
                     className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-emerald-500/12 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight"
                   >
                     🧩 {r} (ถนัดเพิ่ม)
                   </span>
                 ))}
                 {expEntries.map(([r, exp]) => {
-                  const need = playerPen({ ro: player.ro || careerProfile?.sp || 'CM', altRoles }, r as never) === 1
+                  const need = pen(player.ro || careerProfile?.sp || 'CM', r) === 1
                     ? ROLE_ADAPT_THRESHOLD_ADJ
                     : ROLE_ADAPT_THRESHOLD_CROSS;
                   return (
                     <span
                       key={r}
-                      title={`กำลังซึมซับตำแหน่ง ${r} (${exp}/${need} นัด) — ยิ่งลงตำแหน่งนี้ ค่าพลังจะพัฒนาไปตามบทบาทและปลดล็อกเป็นตำแหน่งถนัด`}
+                      title={`กำลังซึมซับตำแหน่ง ${r} (${exp}/${need} ขั้น) — ระหว่างฝึกมีโอกาสเพิ่มสกิลเฉพาะตำแหน่ง และเมื่อปลดล็อกจะได้ +1 ค่าพลังหลัก +3 สกิลย่อย พร้อมเล่นเต็ม 100%`}
                       className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-sky-500/10 border-sky-500/35 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight tabular"
                     >
                       🔄 ฝึก {r} ({exp}/{need})

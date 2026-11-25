@@ -12,6 +12,7 @@ import { LockerRoomPanel } from '../components/LockerRoomPanel';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
+import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
@@ -75,56 +76,6 @@ export const SquadTacticsView: React.FC<{
   const avgFit = Math.round(starters.reduce((s, q) => s + (q.fit ?? 100), 0) / (starters.length || 1));
   const restNeededStarters = starters.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) < 65);
   const tiredWarningStarters = starters.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) >= 65 && Math.round(q.fit ?? 100) < 75);
-
-  const getStaminaMeta = (fitRaw: number | undefined) => {
-    const f = clamp(Math.round(fitRaw ?? 100), 0, 100);
-    if (f < 65) {
-      return {
-        f,
-        label: 'ควรพัก',
-        shortLabel: 'ควรพัก',
-        barColor: '#ef4444',
-        txtCls: 'text-[#dc2626] dark:text-[#f87171]',
-        pillCls: 'bg-rose-500/15 text-[#dc2626] dark:text-[#fca5a5] border-rose-500/35',
-        rowTint: 'bg-rose-500/[0.08] border-rose-500/45 hover:border-rose-500/75',
-        needRest: true
-      };
-    }
-    if (f < 75) {
-      return {
-        f,
-        label: 'เริ่มล้า',
-        shortLabel: 'ล้า',
-        barColor: '#f59e0b',
-        txtCls: 'text-[#b45309] dark:text-[#fbbf24]',
-        pillCls: 'bg-amber-500/15 text-[#b45309] dark:text-[#fcd34d] border-amber-500/35',
-        rowTint: 'bg-amber-500/[0.06] border-amber-500/35 hover:border-amber-500/70',
-        needRest: false
-      };
-    }
-    if (f < 86) {
-      return {
-        f,
-        label: 'พร้อม',
-        shortLabel: 'พร้อม',
-        barColor: '#22c55e',
-        txtCls: 'text-[#15803d] dark:text-[#4ade80]',
-        pillCls: 'bg-emerald-500/12 text-[#15803d] dark:text-[#4ade80] border-emerald-500/30',
-        rowTint: '',
-        needRest: false
-      };
-    }
-    return {
-      f,
-      label: 'ฟิตเต็ม',
-      shortLabel: 'ฟิต',
-      barColor: '#22c55e',
-      txtCls: 'text-[var(--g)]',
-      pillCls: 'bg-emerald-500/15 text-[var(--g)] border-emerald-500/35',
-      rowTint: '',
-      needRest: false
-    };
-  };
 
   const restTiredStarters = () => {
     const threshold = restNeededStarters.length > 0 ? 65 : 75;
@@ -659,40 +610,26 @@ export const SquadTacticsView: React.FC<{
             <span className="ml-1 text-[8.5px] text-[var(--mut)]">({q.ro}{pn === 2 ? ' ⚠️' : ''})</span>
           )}
         </span>
-        {/* Clear Red-to-Green Stamina Gauge & Rotation Status */}
-        <div
-          className="flex flex-col items-stretch justify-center gap-0.5 shrink-0 w-[64px] sm:w-[74px] mland:w-[56px]"
-          title={`ความฟิต ${f}% (${stMeta.label})`}
-        >
-          {(q.sus || 0) > 0 ? (
+        {/* Unified Stamina Gauge & Rotation Status */}
+        {(q.sus || 0) > 0 ? (
+          <div className="flex flex-col items-stretch justify-center shrink-0 w-[64px] sm:w-[74px] mland:w-[56px]">
             <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
               <StatIconBadge kind="red" count={q.sus} size="xs" />
               {(q.sus || 0) <= 1 && <span>แบน</span>}
             </span>
-          ) : q.inj > 0 ? (
+          </div>
+        ) : q.inj > 0 ? (
+          <div className="flex flex-col items-stretch justify-center shrink-0 w-[64px] sm:w-[74px] mland:w-[56px]">
             <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular text-right">🩹พัก {q.inj}น</span>
-          ) : (
-            <>
-              <div className="flex items-center justify-between gap-0.5 leading-none tabular">
-                <span className={`text-[8.5px] mland:text-[7.5px] font-extrabold truncate ${stMeta.txtCls}`}>
-                  {stMeta.shortLabel}
-                </span>
-                <span className={`text-[9.5px] mland:text-[8px] font-extrabold ${stMeta.txtCls}`}>
-                  {f}%
-                </span>
-              </div>
-              <div className={`w-full h-1.5 mland:h-1 rounded-full bg-[#0b2018] border ${f < 65 ? 'border-[#ef4444]' : 'border-[var(--line)]/65 dark:border-white/30'} overflow-hidden`}>
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{
-                    width: `${clamp(f, f > 0 ? 4 : 0, 100)}%`,
-                    backgroundColor: stMeta.barColor
-                  }}
-                />
-              </div>
-            </>
-          )}
-        </div>
+          </div>
+        ) : (
+          <StaminaBar
+            value={f}
+            variant="compact"
+            showStatusLabel
+            className="w-[64px] sm:w-[74px] mland:w-[56px]"
+          />
+        )}
         <span className="px-1.5 py-0.2 rounded-md text-white text-[10px] mland:text-[9px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
           {q.ov}
         </span>
@@ -752,7 +689,7 @@ export const SquadTacticsView: React.FC<{
             <span>⚔️{Math.round(r.at)}</span>
             <span>🛡️{Math.round(r.df)}</span>
             <span className="opacity-35">·</span>
-            <span className={`font-bold ${avgFit >= 76 ? 'text-[var(--g)]' : avgFit >= 65 ? 'text-[#b45309] dark:text-[#fbbf24]' : 'text-[var(--red)]'}`}>
+            <span className={`font-bold ${getStaminaMeta(avgFit).txtCls}`}>
               ⚡{avgFit}%
             </span>
             {restNeededStarters.length > 0 && (
@@ -964,14 +901,14 @@ export const SquadTacticsView: React.FC<{
                     <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 mb-1 rounded-md bg-[var(--surface-2)]/70 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] shrink-0">
                       <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
                       <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
-                        <span className="inline-flex items-center gap-1 text-[#dc2626] dark:text-[#f87171] font-bold">
+                        <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
                           <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[#b45309] dark:text-[#fbbf24] font-bold">
+                        <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold">
                           <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[var(--g)] font-bold">
-                          <span className="w-2 h-2 rounded-full bg-[#10b981]" /> ≥75% พร้อม
+                        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                          <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> ≥75% พร้อม
                         </span>
                       </div>
                     </div>
@@ -1506,7 +1443,6 @@ export const SquadTacticsView: React.FC<{
                       const offerCount = isMgr ? incomingOfferCountsByName[q.n] || 0 : 0;
                       const con = ensureCon(q);
                       const wg = con.wg;
-                      const fitTxtCls = stMeta.txtCls;
                       const isSelected = selectedSet.has(q.n);
                       const expiringSoon = !q.loan && con.yr <= 1;
                       const bio = getPlayerBio(q);
@@ -1629,21 +1565,12 @@ export const SquadTacticsView: React.FC<{
                             <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                           </div>
 
-                          <div className={`flex-col justify-center gap-0.5 ${isMgr ? 'hidden sm:flex mland:flex' : 'flex'}`} title={`ความฟิต ${f}% (${stMeta.label})`}>
-                            <div className="flex items-center justify-between gap-1 text-[9.5px] mland:text-[8px] leading-none tabular">
-                              <span className={`font-bold truncate ${fitTxtCls}`}>{stMeta.shortLabel}</span>
-                              <span className={`font-extrabold ${fitTxtCls}`}>{f}%</span>
-                            </div>
-                            <div className={`w-full h-1.5 rounded-full bg-[#0b2018] border ${f < 65 ? 'border-[#ef4444]' : 'border-[var(--line)]/65 dark:border-white/30'} overflow-hidden`}>
-                              <div
-                                className="h-full rounded-full transition-all"
-                                style={{
-                                  width: `${clamp(f, f > 0 ? 4 : 0, 100)}%`,
-                                  backgroundColor: stMeta.barColor
-                                }}
-                              />
-                            </div>
-                          </div>
+                          <StaminaBar
+                            value={f}
+                            variant="compact"
+                            showStatusLabel
+                            className={isMgr ? 'hidden sm:flex mland:flex' : 'flex'}
+                          />
 
                           <div className={`text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] items-center justify-center gap-1 ${isMgr ? 'hidden lg:flex mland:hidden' : 'flex'}`}>
                             {q.sg || q.sa || q.cs || q.sp || q.ap ? (

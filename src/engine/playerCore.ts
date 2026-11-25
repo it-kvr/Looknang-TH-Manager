@@ -45,11 +45,112 @@ export function genClubNames(): string[][] {
 }
 
 export const NSL = 5;
+export const MIN_SLOTS = 1;
+export const MAX_SLOTS = 30;
 export const slotKey = (m: GameMode, k = 1) => (m === 'p' ? 'lk_p' : 'lk_m') + (k > 1 ? `_${k}` : '');
+const slotCountKey = (m: GameMode) => (m === 'p' ? 'lk_slots_cnt_p' : 'lk_slots_cnt_m');
+const PINNED_SLOTS_KEY = 'lk_pinned_slots_v1';
+const PINNED_FOLDER_KEY = 'lk_pinned_folder_saves_v1';
+
+export function getPinnedSlotIds(): string[] {
+  try {
+    const raw = localStorage.getItem(PINNED_SLOTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function isSlotPinned(m: GameMode, slot: number): boolean {
+  return getPinnedSlotIds().includes(`${m}_${slot}`);
+}
+
+export function setSlotPinned(m: GameMode, slot: number, pinned: boolean): string[] {
+  const id = `${m}_${slot}`;
+  const cur = getPinnedSlotIds().filter((x) => x !== id);
+  const next = pinned ? [id, ...cur] : cur;
+  try {
+    localStorage.setItem(PINNED_SLOTS_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return next;
+}
+
+export function toggleSlotPin(m: GameMode, slot: number): { pinned: boolean; list: string[] } {
+  const nextPinned = !isSlotPinned(m, slot);
+  return { pinned: nextPinned, list: setSlotPinned(m, slot, nextPinned) };
+}
+
+export function getPinnedFolderKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(PINNED_FOLDER_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function togglePinnedFolderKey(key: string): { pinned: boolean; list: string[] } {
+  const cur = getPinnedFolderKeys();
+  const isPinned = cur.includes(key);
+  const next = isPinned ? cur.filter((k) => k !== key) : [key, ...cur];
+  try {
+    localStorage.setItem(PINNED_FOLDER_KEY, JSON.stringify(next));
+  } catch {
+    // ignore
+  }
+  return { pinned: !isPinned, list: next };
+}
+
+export function hasSlotData(m: GameMode, slot: number): boolean {
+  try {
+    return !!localStorage.getItem(slotKey(m, slot));
+  } catch {
+    return false;
+  }
+}
+
+export function getHighestOccupiedSlot(m: GameMode): number {
+  for (let k = MAX_SLOTS; k >= 1; k--) {
+    if (loadGameFromSlot(m, k)) return k;
+  }
+  return 0;
+}
+
+export function getSlotCount(m: GameMode): number {
+  let stored = NSL;
+  try {
+    const raw = Number(localStorage.getItem(slotCountKey(m)));
+    if (Number.isFinite(raw) && raw >= MIN_SLOTS) {
+      stored = clamp(Math.round(raw), MIN_SLOTS, MAX_SLOTS);
+    }
+  } catch {
+    stored = NSL;
+  }
+  const highest = getHighestOccupiedSlot(m);
+  return Math.max(stored, highest, MIN_SLOTS);
+}
+
+export function setSlotCount(m: GameMode, nextCount: number): number {
+  const highest = getHighestOccupiedSlot(m);
+  const finalCount = clamp(Math.round(nextCount), Math.max(MIN_SLOTS, highest), MAX_SLOTS);
+  try {
+    localStorage.setItem(slotCountKey(m), String(finalCount));
+  } catch {
+    // ignore
+  }
+  return finalCount;
+}
 
 export function saveGameToSlot(s: GameState, slot: number) {
   try {
     localStorage.setItem(slotKey(s.mode, slot), JSON.stringify(s));
+    if (slot > getSlotCount(s.mode)) {
+      setSlotCount(s.mode, slot);
+    }
   } catch {
     // ignore quota errors
   }
@@ -93,10 +194,12 @@ export function deleteSlot(m: GameMode, slot: number) {
   } catch {
     // ignore
   }
+  setSlotPinned(m, slot, false);
 }
 
 export function firstEmptySlot(m: GameMode): number {
-  for (let k = 1; k <= NSL; k++) {
+  const total = getSlotCount(m);
+  for (let k = 1; k <= total; k++) {
     if (!loadGameFromSlot(m, k)) return k;
   }
   return 0;
@@ -1871,8 +1974,101 @@ export function getPlayerMultiSeasonProgression(
   return points;
 }
 
-export const ROLE_ADAPT_THRESHOLD_ADJ = 4;
-export const ROLE_ADAPT_THRESHOLD_CROSS = 6;
+export const ROLE_ADAPT_THRESHOLD_ADJ = 12;
+export const ROLE_ADAPT_THRESHOLD_CROSS = 20;
+
+export const ROLE_ADAPT_TARGETS: Record<string, { cores: StatKey[]; subs: string[] }> = {
+  ST: { cores: ['sh', 'ph'], subs: ['fin', 'pw', 'run', 'hd'] },
+  CF: { cores: ['sh', 'ps', 'dr'], subs: ['fin', 'vis', 'spass', 'ctrl'] },
+  LW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
+  RW: { cores: ['dr', 'sh', 'ps'], subs: ['spd', 'drb', 'crs', 'cur'] },
+  CAM: { cores: ['ps', 'dr', 'sh'], subs: ['vis', 'spass', 'lsh', 'cur'] },
+  LM: { cores: ['ps', 'dr', 'ph'], subs: ['crs', 'spd', 'drb', 'sta'] },
+  RM: { cores: ['ps', 'dr', 'ph'], subs: ['crs', 'spd', 'drb', 'sta'] },
+  CM: { cores: ['ps', 'tk', 'ph'], subs: ['spass', 'lpass', 'rd', 'sta'] },
+  LCM: { cores: ['ps', 'tk', 'ph'], subs: ['spass', 'lpass', 'rd', 'sta'] },
+  RCM: { cores: ['ps', 'tk', 'ph'], subs: ['spass', 'lpass', 'rd', 'sta'] },
+  CDM: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'rd', 'pos', 'spass'] },
+  LDM: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'rd', 'pos', 'spass'] },
+  RDM: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'rd', 'pos', 'spass'] },
+  LWB: { cores: ['tk', 'dr', 'ps'], subs: ['crs', 'spd', 'tkl', 'sta'] },
+  RWB: { cores: ['tk', 'dr', 'ps'], subs: ['crs', 'spd', 'tkl', 'sta'] },
+  LB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
+  RB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
+  CB: { cores: ['tk', 'ph'], subs: ['tkl', 'mrk', 'hd', 'blk', 'str'] },
+  GK: { cores: ['ph', 'tk'], subs: ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist'] }
+};
+
+export function applyRoleMasteryBonus(
+  q: Player | null | undefined,
+  role: SubRole,
+  careerP?: PlayerCareerProfile | null
+): string[] {
+  const target = ROLE_ADAPT_TARGETS[role] || ROLE_ADAPT_TARGETS.CM;
+  const gains: string[] = [];
+
+  // +1 Core Attribute suited to the unlocked role
+  const primaryCore = target.cores.find((ck) => (careerP ? (careerP.a[ck] || 0) < 199 : (DT(q!, null).a[ck] || 0) < 199)) || target.cores[0];
+  if (primaryCore) {
+    if (careerP) {
+      if ((careerP.a[primaryCore] || 0) < 199) {
+        careerP.a[primaryCore] = clamp((careerP.a[primaryCore] || 1) + 1, 1, 199);
+        const newOv = ovMe(careerP);
+        if (q) {
+          q.ov = newOv;
+          q.pot = clamp(Math.max(q.pot || newOv, newOv + 1), newOv, 199);
+          if (q.blessed && q.customA) q.customA = { ...careerP.a };
+        }
+        gains.push(`${ATT.find((x) => x[0] === primaryCore)?.[1] || primaryCore} +1`);
+      }
+    } else if (q) {
+      q.coreSb = { ...(q.coreSb || {}) };
+      q.coreSb[primaryCore] = (q.coreSb[primaryCore] || 0) + 1;
+      if (q.customA) q.customA[primaryCore] = clamp((q.customA[primaryCore] || 1) + 1, 1, 199);
+      const dtAfter = DT(q, null);
+      const newOv = clamp(OVF(q.pos, dtAfter.a), 1, 199);
+      if (newOv > q.ov) {
+        q.ov = newOv;
+        q.pot = clamp(Math.max(q.pot || newOv, newOv + 1), newOv, 199);
+      }
+      gains.push(`${ATT.find((x) => x[0] === primaryCore)?.[1] || primaryCore} +1`);
+    }
+  }
+
+  // +2 Primary Role Sub-skill & +1 Secondary Role Sub-skill
+  const sub1 = target.subs[0];
+  const sub2 = target.subs[1];
+  if (sub1) {
+    if (q) {
+      q.sb = { ...(q.sb || {}) };
+      q.sb[sub1] = (q.sb[sub1] || 0) + 2;
+    }
+    if (careerP) {
+      careerP.sb = { ...(careerP.sb || {}) };
+      careerP.sb[sub1] = (careerP.sb[sub1] || 0) + 2;
+      if (careerP.customD && careerP.customD[sub1] != null) {
+        careerP.customD[sub1] = clamp(careerP.customD[sub1] + 2, 1, 199);
+      }
+    }
+    gains.push(`${SIGL[sub1] || sub1} +2`);
+  }
+  if (sub2) {
+    if (q) {
+      q.sb = { ...(q.sb || {}) };
+      q.sb[sub2] = (q.sb[sub2] || 0) + 1;
+    }
+    if (careerP) {
+      careerP.sb = { ...(careerP.sb || {}) };
+      careerP.sb[sub2] = (careerP.sb[sub2] || 0) + 1;
+      if (careerP.customD && careerP.customD[sub2] != null) {
+        careerP.customD[sub2] = clamp(careerP.customD[sub2] + 1, 1, 199);
+      }
+    }
+    gains.push(`${SIGL[sub2] || sub2} +1`);
+  }
+
+  return gains;
+}
 
 export function learnCareerTrait(d: GameState, traitId: string): { ok: boolean; msg: string } {
   if (d.mode !== 'p' || !d.p) return { ok: false, msg: 'ใช้ได้เฉพาะโหมดนักเตะอาชีพ' };
@@ -2343,8 +2539,9 @@ export function listCreatedPlayersForManager(): CreatedPlayerCandidate[] {
   const out: CreatedPlayerCandidate[] = [];
   const seenNames = new Set<string>();
 
-  // 1) From saved Player Career slots (lk_p .. lk_p_5)
-  for (let k = 1; k <= NSL; k++) {
+  // 1) From saved Player Career slots (lk_p .. lk_p_N)
+  const pSlots = getSlotCount('p');
+  for (let k = 1; k <= pSlots; k++) {
     const ps = loadGameFromSlot('p', k);
     if (!ps || !ps.p || !Array.isArray(ps.teams)) continue;
     const club = ps.teams[ps.me];
@@ -2494,7 +2691,8 @@ export interface ManagedClubCandidate {
 
 export function listManagedClubsFromSaves(): ManagedClubCandidate[] {
   const out: ManagedClubCandidate[] = [];
-  for (let k = 1; k <= NSL; k++) {
+  const mSlots = getSlotCount('m');
+  for (let k = 1; k <= mSlots; k++) {
     const ms = loadGameFromSlot('m', k);
     if (!ms || !Array.isArray(ms.teams)) continue;
     const meTeam = ms.teams[ms.me];

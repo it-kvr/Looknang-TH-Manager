@@ -1907,12 +1907,26 @@ export const drawLivePitchToCanvas = (
     // Live stamina micro-bar under every player on the pitch
     const stamPct = clamp(ag.fit, 0, 100) / 100;
     const barW = playerRadius * 1.9;
-    const barH = 2.6;
+    const barH = 2.8;
     const barY = playerRadius + 1.5;
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
-    ctx.fillRect(-barW / 2 - 0.5, barY - 0.5, barW + 1, barH + 1);
-    ctx.fillStyle = ag.fit >= 70 ? '#22c55e' : ag.fit >= 45 ? '#f59e0b' : '#ef4444';
-    ctx.fillRect(-barW / 2, barY, barW * stamPct, barH);
+    ctx.fillStyle = 'rgba(7, 20, 14, 0.85)';
+    ctx.beginPath();
+    ctx.roundRect(-barW / 2 - 0.6, barY - 0.6, barW + 1.2, barH + 1.2, 2);
+    ctx.fill();
+    ctx.strokeStyle = ag.fit < 65 ? 'rgba(239, 68, 68, 0.8)' : 'rgba(255, 255, 255, 0.28)';
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+    if (stamPct > 0) {
+      const fillW = Math.max(2, barW * stamPct);
+      ctx.fillStyle = ag.fit >= 75 ? '#22c55e' : ag.fit >= 65 ? '#f59e0b' : '#ef4444';
+      ctx.beginPath();
+      ctx.roundRect(-barW / 2, barY, fillW, barH, 1.4);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.beginPath();
+      ctx.roundRect(-barW / 2, barY, fillW, 0.9, 0.45);
+      ctx.fill();
+    }
 
     // Compact label for carrier, target, shooter, blessed hot-streak, or "★ ฉัน"
     if (isCarrier || isTarget || ag.isMe || isBlessed || ag.intent === 'CELEBRATE' || ag.intent === 'MAKE_RUN') {

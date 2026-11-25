@@ -556,7 +556,7 @@ export const LeagueView: React.FC<{
       <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
           {/* Table Column Header */}
-          <div className="shrink-0 grid grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-1 bg-[var(--surface-2)]/90 text-[9.5px] sm:text-[11px] mland:text-[8.5px] text-[var(--mut)] border-b border-[var(--line)] font-bold">
+          <div className="shrink-0 grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-2 mland:py-1 text-[9.5px] sm:text-[11px] mland:text-[8.5px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
             <span className="text-center">#</span>
             <span />
             <span className="truncate">สโมสร</span>
@@ -570,7 +570,7 @@ export const LeagueView: React.FC<{
           </div>
 
           {/* Table Body */}
-          <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto">
+          <div className="divide-y divide-[var(--line)]/50 flex-1 min-h-0 overflow-y-auto flex flex-col">
             {tb.map((t, i) => {
               const isPromo = i < 3 && vt < 2;
               const isRel = i >= tb.length - 3 && vt > 0;
@@ -587,7 +587,7 @@ export const LeagueView: React.FC<{
                   key={t.id}
                   type="button"
                   onClick={() => { SFX.tap(); onInspectTeam(t.id); }}
-                  className={`w-full grid grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_22px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_17px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${
+                  className={`w-full [flex:1_0_auto] min-h-[35px] sm:min-h-[39px] mland:min-h-[28px] grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-2 sm:py-2 mland:py-1 text-left text-[11px] sm:text-xs mland:text-[10px] transition-colors cursor-pointer ${
                     isPromo
                       ? 'bg-[var(--g-soft)]/25 hover:bg-[var(--g-soft)]/55'
                       : isRel
@@ -599,11 +599,11 @@ export const LeagueView: React.FC<{
                     {i + 1}
                   </span>
                   <div className="flex items-center justify-center mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-                    <ClubCrest name={t.name} size={17} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
+                    <ClubCrest name={t.name} size={19} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                   </div>
                   <div className="min-w-0 pr-0.5">
                     <div className="flex items-center gap-1 min-w-0">
-                      <span className={`whitespace-normal break-words text-[11px] sm:text-[12.5px] mland:text-[10px] leading-[1.18] ${isMe ? 'font-bold text-[var(--ink)]' : ''}`}>
+                      <span className={`whitespace-normal break-words text-[11px] sm:text-[12.5px] mland:text-[10px] leading-[1.2] ${isMe ? 'font-bold text-[var(--ink)]' : ''}`}>
                         {t.name}
                       </span>
                       {isMe && (

@@ -4,7 +4,7 @@ import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
-import { ovColor, statBarColor, statTierMeta, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
+import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -17,6 +17,7 @@ import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { TalentBadge } from '../components/TalentBadge';
+import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -44,16 +45,13 @@ export const PlayerInspectorModal: React.FC<{
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
   const con = !isRetired && liveTeam ? ensureCon(livePlayer) : null;
-  const fitVal = Math.round(livePlayer.fit ?? 100);
+  const staminaMeta = getStaminaMeta(livePlayer.fit);
+  const fitVal = staminaMeta.f;
   const fitCol = isRetired
     ? '#d97706'
     : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0
       ? 'var(--red)'
-      : fitVal >= 75
-        ? 'var(--g)'
-        : fitVal >= 55
-          ? '#c98a00'
-          : 'var(--red)';
+      : staminaMeta.barColor;
   const kit1 = liveTeam ? tc(liveTeam, state, false) : isMePlayer && state.p ? state.p.c : ovColor(livePlayer.ov);
   const kit2 = liveTeam ? tc(liveTeam, state, true) : '#f5c242';
   const pitchStarters = liveTeam ? xi(liveTeam) : [];
@@ -68,7 +66,7 @@ export const PlayerInspectorModal: React.FC<{
       ? `ติดโทษแบน ${livePlayer.sus} นัด`
       : livePlayer.inj > 0
         ? `บาดเจ็บพัก ${livePlayer.inj} นัด`
-        : fitVal < 60
+        : fitVal < 65
           ? 'ร่างกายอ่อนล้า'
           : 'พร้อมลงสนาม';
 
@@ -254,17 +252,7 @@ export const PlayerInspectorModal: React.FC<{
               {/* Personal Info Box below Portrait Card (Unified with Career Mode) */}
               <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
 
-                <div className="space-y-1 mland:space-y-0.5">
-                  <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
-                    <span>⚡ พลังกาย</span>
-                    <span className={`tabular font-extrabold ${statTierMeta(fitVal).textClass}`}>
-                      {fitVal}%
-                    </span>
-                  </div>
-                  <div className="h-2 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                    <div className="h-full rounded-full transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" style={{ width: `${clamp(fitVal, 6, 100)}%`, background: statBarColor(fitVal) }} />
-                  </div>
-                </div>
+                <StaminaBar value={fitVal} variant="card" />
 
                 {(() => {
                   const curTurn = state.season * 40 + state.md;
@@ -273,7 +261,7 @@ export const PlayerInspectorModal: React.FC<{
                   const treatCost = Math.max(4, 14 - Math.floor(medLv * 1.1) - physioLv);
                   const alreadyTreated = livePlayer.treatedMd === curTurn;
                   return (
-                    <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${isRetired ? 'bg-amber-500/10 border-amber-500/35' : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 60 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
+                    <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${isRetired ? 'bg-amber-500/10 border-amber-500/35' : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 65 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
                       <div className="flex items-center justify-between font-bold gap-1">
                         <span className="truncate" style={{ color: fitCol }}>
                           {isRetired ? `👋 ${statusBadgeText}` : statusBadgeText}
@@ -779,7 +767,6 @@ export const TeamInspectorModal: React.FC<{
                     const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
                     const qBio = getPlayerBio(q, isMe ? state.p : null);
                     const f = Math.round(q.fit ?? 100);
-                    const fCol = q.inj > 0 || (q.sus || 0) > 0 ? 'var(--red)' : f >= 85 ? 'var(--g)' : f >= 65 ? '#c98a00' : 'var(--red)';
                     return (
                       <button
                         key={q.n}
@@ -837,14 +824,7 @@ export const TeamInspectorModal: React.FC<{
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          <div className="flex flex-col items-end gap-0.5 w-10 mland:w-8" title={`พลังงาน ${f}%`}>
-                            <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular leading-none" style={{ color: fCol }}>
-                              ⚡{f}%
-                            </span>
-                            <div className="w-full h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                              <div className="h-full rounded-full" style={{ width: `${clamp(f, 4, 100)}%`, background: fCol }} />
-                            </div>
-                          </div>
+                          <StaminaBar value={f} variant="compact" className="w-12 mland:w-10" />
                           <span
                             className="w-7 text-center py-0.5 rounded-lg text-white font-bold tabular shrink-0 text-[11px] mland:text-[9.5px]"
                             style={{ background: ovColor(q.ov) }}
