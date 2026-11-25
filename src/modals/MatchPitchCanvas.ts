@@ -2189,10 +2189,10 @@ export const drawLivePitchToCanvas = (
     const accent = isRed ? '#ef4444' : '#facc15';
     const title =
       cb.type === 'R'
-        ? `🟥 ใบแดงไล่ออก!! ${cb.shortName}`
+        ? `ใบแดงไล่ออก!! ${cb.shortName}`
         : cb.type === 'Y2R'
-          ? `🟨🟨➡🟥 เหลืองที่สอง!! ${cb.shortName}`
-          : `🟨 ใบเหลือง · ${cb.shortName}`;
+          ? `เหลืองที่สอง (ใบแดง)!! ${cb.shortName}`
+          : `ใบเหลือง · ${cb.shortName}`;
     const sub = isRed ? `${cb.teamName} เหลือผู้เล่นน้อยกว่า` : `${cb.teamName} · เตือนจังหวะเข้าหนัก`;
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -2212,11 +2212,25 @@ export const drawLivePitchToCanvas = (
     ctx.fill();
     ctx.stroke();
 
-    // Mini card icon badge on left
-    ctx.fillStyle = accent;
-    ctx.beginPath();
-    ctx.roundRect(cx - cardW / 2 + 10, cy + 9, 12, 18, 2.5);
-    ctx.fill();
+    // Mini card icon badge on left (overlapping yellow+red for Y2R, single card for Y/R)
+    if (cb.type === 'Y2R') {
+      ctx.fillStyle = '#facc15';
+      ctx.beginPath();
+      ctx.roundRect(cx - cardW / 2 + 8, cy + 8, 9, 14, 2);
+      ctx.fill();
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = 'rgba(11, 18, 28, 0.9)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(cx - cardW / 2 + 13, cy + 12, 9, 14, 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = accent;
+      ctx.beginPath();
+      ctx.roundRect(cx - cardW / 2 + 10, cy + 9, 12, 18, 2.5);
+      ctx.fill();
+    }
 
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';

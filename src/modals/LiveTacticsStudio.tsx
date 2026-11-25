@@ -14,6 +14,7 @@ import { clamp } from '../utils/math';
 import { AR_T, LINE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
+import { fmtFansShort } from '../engine/simulation';
 import { ovColor } from '../engine/missions';
 import { FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 
@@ -82,6 +83,8 @@ interface LiveTacticsStudioProps {
   findBestSubFor: (outName: string) => Player | null;
   onCloseAndResume: () => void;
   onCloseToStats: () => void;
+  onCloseToChat?: () => void;
+  liveViewers?: number;
   autoSubEnabled?: boolean;
   onToggleAutoSub?: () => void;
 }
@@ -159,6 +162,8 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   findBestSubFor,
   onCloseAndResume,
   onCloseToStats,
+  onCloseToChat,
+  liveViewers,
   autoSubEnabled,
   onToggleAutoSub
 }) => {
@@ -805,20 +810,33 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
 
       {/* RIGHT COLUMN: Consistent Top Tab Switcher + Sub Quota/Resume Bar + Substitutes Bench + Tactical Orders */}
       <div className="flex flex-col min-h-0 gap-1.5 mland:gap-1 overflow-hidden">
-        {/* Same 2-Tab Switcher as Match Stats View */}
-        <div className="grid grid-cols-2 shrink-0 gap-1 p-0.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[10px]">
+        {/* Same 3-Tab Switcher as Match Stats / Live Stream View */}
+        <div className="seg-bar grid grid-cols-3 w-full shrink-0">
           <button
             type="button"
             onClick={onCloseToStats}
-            className="min-h-[28px] mland:min-h-[26px] py-0.5 px-1.5 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap truncate text-[var(--mut)] hover:text-[var(--ink)]"
+            className="seg-btn w-full whitespace-nowrap"
           >
-            <span>📊 สถิติ &amp; ไทม์ไลน์</span>
+            <span>📊 สถิติ</span>
           </button>
           <button
             type="button"
-            className="min-h-[28px] mland:min-h-[26px] py-0.5 px-1.5 rounded-lg font-bold cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap truncate bg-[var(--g)] text-white shadow-xs"
+            onClick={() => (onCloseToChat ? onCloseToChat() : onCloseToStats())}
+            className="seg-btn w-full whitespace-nowrap"
           >
-            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/15 dark:bg-white/20 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+            <span>🔴</span>
+            <span>ไลฟ์สด</span>
+            {liveViewers != null && (
+              <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                {fmtFansShort(liveViewers)}
+              </span>
+            )}
+          </button>
+          <button
+            type="button"
+            className="seg-btn seg-btn-active w-full whitespace-nowrap"
+          >
+            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
               {5 - subsUsed.length}
             </span>
             <span>📋 แผน</span>

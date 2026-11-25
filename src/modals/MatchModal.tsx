@@ -6,14 +6,11 @@ import {
   Film,
   Flag,
   Gauge,
-  MessageSquare,
   Pause,
   Play,
-  Radio,
   Route,
   Star,
   Tag,
-  Users,
   Zap
 } from 'lucide-react';
 import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle, CoachOutfitId } from '../types/game';
@@ -1617,13 +1614,13 @@ export const MatchModal: React.FC<{
       setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
-        pushLog(curMin, `🟨🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) ${cardReason} · โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
+        pushLog(curMin, `🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) ${cardReason} · โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
       }
       pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง');
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
-        triggerDramaSlow(w, 2.5, `🟨🟥 เหลืองที่สอง!! ${culprit.shortName}`);
+        triggerDramaSlow(w, 2.5, `🟨➡🟥 เหลืองที่สอง!! ${culprit.shortName}`);
         triggerCoachMood(w, culprit.side, '🤦', 2.7);
         triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😤', 2.3);
       }
@@ -1840,12 +1837,28 @@ export const MatchModal: React.FC<{
     const setPiece = w.pendingSetPiece;
     const lockedTargetIds = new Set<string>();
 
-    // Track corner role assignment indices so players fan out instead of stacking
+    // Track corner role assignment indices so top aerial targets fill box zones and corner taker stays at flag
+    const cornerTaker =
+      setPiece && setPiece.type === 'corner'
+        ? activeAgents
+            .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
+            .sort(
+              (u, v) =>
+                v.d.crs + v.d.cur + (v.sig === 'crs' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0) -
+                (u.d.crs + u.d.cur + (u.sig === 'crs' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0))
+            )[0]
+        : undefined;
     const cornerAttList =
       setPiece && setPiece.type === 'corner'
-        ? activeAgents.filter(
-            (z) => z.side === setPiece.side && z.pos !== 'GK' && (z.pos === 'FW' || z.role === 'CB' || z.pos === 'MF')
-          )
+        ? activeAgents
+            .filter(
+              (z) => z.side === setPiece.side && z.pos !== 'GK' && z.id !== cornerTaker?.id && (z.pos === 'FW' || z.role === 'CB' || z.pos === 'MF')
+            )
+            .sort(
+              (u, v) =>
+                v.d.hd + v.d.str + (v.sig === 'hd' ? 12 : 0) + (agentHasTrait(v, 'aerial_menace') ? 16 : 0) + (agentHasTrait(v, 'near_post_runner') ? 8 : 0) -
+                (u.d.hd + u.d.str + (u.sig === 'hd' ? 12 : 0) + (agentHasTrait(u, 'aerial_menace') ? 16 : 0) + (agentHasTrait(u, 'near_post_runner') ? 8 : 0))
+            )
         : [];
     const cornerDefList =
       setPiece && setPiece.type === 'corner'
@@ -1864,6 +1877,32 @@ export const MatchModal: React.FC<{
         ag.runToY = undefined;
         ag.tx = clamp(b.toX, 4.5, 95.5);
         ag.ty = clamp(b.toY, 5.5, 94.5);
+        lockedTargetIds.add(ag.id);
+        return;
+      }
+      // Lock player cleanly at strike/header/acrobat contact point so they don't sprint away mid-animation
+      if (
+        (ag.acrobatTimer ?? 0) > 0 &&
+        !w.pendingSetPiece &&
+        b.carrierId !== ag.id &&
+        (ag.acrobatType === 'kick' ||
+          ag.acrobatType === 'shoot_power' ||
+          ag.acrobatType === 'shoot_finesse' ||
+          ag.acrobatType === 'shoot_chip' ||
+          ag.acrobatType === 'header' ||
+          ag.acrobatType === 'diving_header' ||
+          ag.acrobatType === 'volley' ||
+          ag.acrobatType === 'bicycle' ||
+          ag.acrobatType === 'whiff' ||
+          ag.acrobatType === 'cutinside' ||
+          ag.acrobatType === 'burst' ||
+          ag.acrobatType === 'clash' ||
+          ag.acrobatType === 'slide')
+      ) {
+        ag.tx = ag.x;
+        ag.ty = ag.y;
+        ag.runToX = undefined;
+        ag.runToY = undefined;
         lockedTargetIds.add(ag.id);
         return;
       }
@@ -1987,8 +2026,43 @@ export const MatchModal: React.FC<{
         }
       }
 
-      // Free-kick defensive wall & set piece positioning
+      // Free-kick taker, box targets, & defensive wall positioning
       if (setPiece && setPiece.type === 'freekick') {
+        if (ag.side === setPiece.side && ag.pos !== 'GK') {
+          const fkAttRight = isAttackRight(w, setPiece.side);
+          const fkDir = fkAttRight ? 1 : -1;
+          const fkGoalX = fkAttRight ? 100 : 0;
+          const fkDistToGoal = Math.hypot(fkGoalX - setPiece.x, 50 - setPiece.y);
+          const fkTaker = activeAgents
+            .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
+            .sort(
+              (u, v) =>
+                v.d.cur + v.d.pw + (v.sig === 'cur' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0) -
+                (u.d.cur + u.d.pw + (u.sig === 'cur' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0))
+            )[0];
+          if (fkTaker?.id === ag.id) {
+            ag.tx = clamp(setPiece.x - fkDir * 1.4, 4, 96);
+            ag.ty = clamp(setPiece.y, 5, 95);
+            ag.intent = 'SUPPORT';
+            lockedTargetIds.add(ag.id);
+            return;
+          }
+          if (fkDistToGoal >= 36) {
+            const boxCands = activeAgents
+              .filter((z) => z.side === setPiece.side && z.id !== fkTaker?.id && (z.pos === 'FW' || z.role === 'CB'))
+              .sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 10 : 0)) - (u.d.hd + (u.sig === 'hd' ? 10 : 0)));
+            const bIdx = boxCands.findIndex((z) => z.id === ag.id);
+            if (bIdx >= 0 && bIdx < 4) {
+              ag.tx = clamp(fkAttRight ? 88.5 + (bIdx % 2) * 2.5 : 11.5 - (bIdx % 2) * 2.5, 6, 94);
+              ag.ty = clamp(41 + bIdx * 6, 35, 65);
+              ag.intent = 'MAKE_RUN';
+              ag.runToX = ag.tx;
+              ag.runToY = ag.ty;
+              lockedTargetIds.add(ag.id);
+              return;
+            }
+          }
+        }
         if (ag.side !== setPiece.side && setPiece.wallPlayers) {
           const wallIdx = activeAgents
             .filter((z) => z.side === ag.side && (z.pos === 'DF' || z.pos === 'MF'))
@@ -2069,6 +2143,13 @@ export const MatchModal: React.FC<{
         const cornerRight = isAttackRight(w, setPiece.side);
         const toCornerX = (normX: number) => (cornerRight ? normX : 100 - normX);
         if (isAtt) {
+          if (cornerTaker?.id === ag.id) {
+            ag.tx = clamp(setPiece.x, 1.5, 98.5);
+            ag.ty = clamp(setPiece.y, 2, 98);
+            ag.intent = 'SUPPORT';
+            lockedTargetIds.add(ag.id);
+            return;
+          }
           const idx = cornerAttList.findIndex((z) => z.id === ag.id);
           if (idx >= 0) {
             const boxZones: [number, number][] = [
@@ -2088,6 +2169,7 @@ export const MatchModal: React.FC<{
             if (idx < 4) {
               ag.runToX = ag.tx;
               ag.runToY = ag.ty;
+              lockedTargetIds.add(ag.id);
             }
             return;
           }
@@ -3436,8 +3518,19 @@ export const MatchModal: React.FC<{
     let attPool = getTeamPool(side);
     const defSide = side === 'H' ? 'A' : 'H';
     let defPool = getTeamPool(defSide);
-    let carrier = (b.carrierId ? attPool.find((a) => a.id === b.carrierId) : null) || attPool.find((a) => a.pos !== 'GK') || attPool[0];
+    const directCarrier = b.carrierId ? attPool.find((a) => a.id === b.carrierId) : null;
+    let carrier =
+      directCarrier ||
+      attPool
+        .filter((a) => a.pos !== 'GK')
+        .sort((u, v) => Math.hypot(u.x - b.x, u.y - b.y) - Math.hypot(v.x - b.x, v.y - b.y))[0] ||
+      attPool[0];
     if (!carrier) return;
+    if (!directCarrier) {
+      b.carrierId = carrier.id;
+      b.x = carrier.x;
+      b.y = carrier.y;
+    }
 
     const attRight = isAttackRight(w, side);
     const attTeam = side === 'H' ? homeOrig : awayOrig;
@@ -4006,7 +4099,7 @@ export const MatchModal: React.FC<{
             r === 'Y'
               ? `🟨 ใบเหลือง ${nearestDef.shortName}`
               : r === 'Y2R'
-                ? `🟨🟥 เหลืองแดง! ${nearestDef.shortName}`
+                ? `🟨➡🟥 เหลืองแดง! ${nearestDef.shortName}`
                 : `🟥 ใบแดง ${nearestDef.shortName}!`;
           cardCol = r === 'Y' ? '#facc15' : '#ef4444';
         } else if (alreadyYellowed && cardRoll < Math.min(0.9, cardChance * 1.45) && !inBoxNow) {
@@ -5228,21 +5321,21 @@ export const MatchModal: React.FC<{
           type: 'foul',
           x: vr.x,
           y: vr.y,
-          label: isSecondRed ? `🖥🟨🟥 เหลืองแดง! ${vr.culpritShort || ''}` : `🖥🟨 VAR ใบเหลือง ${vr.culpritShort || ''}`,
+          label: isSecondRed ? `🖥🟨➡🟥 เหลืองแดง! ${vr.culpritShort || ''}` : `🖥🟨 VAR ใบเหลือง ${vr.culpritShort || ''}`,
           color: isSecondRed ? '#ef4444' : '#facc15',
           ttl: 3.0,
           maxTtl: 3.0,
           wallPlayers
         });
-        triggerDramaSlow(w, isSecondRed ? 2.4 : 1.7, isSecondRed ? `🖥🟨🟥 เหลืองแดง!!` : `🖥🟨 VAR ใบเหลือง`);
+        triggerDramaSlow(w, isSecondRed ? 2.4 : 1.7, isSecondRed ? `🖥🟨➡🟥 เหลืองแดง!!` : `🖥🟨 VAR ใบเหลือง`);
         w.phaseLabel = isSecondRed
-          ? `🖥🟨🟥 VAR เหลืองที่สอง! ${vr.culpritShort || ''} โดนไล่ออก`
+          ? `🖥🟨➡🟥 VAR เหลืองที่สอง! ${vr.culpritShort || ''} โดนไล่ออก`
           : `🖥🟨 VAR ให้ใบเหลือง ${vr.culpritShort || ''} · ฟรีคิก`;
         w.phaseTone = isSecondRed ? 'danger' : 'setpiece';
         pushLog(
           curMin,
           isSecondRed
-            ? `🖥🟨🟥 VAR ให้ใบเหลืองที่สองไล่ออก ${vr.culpritId || ''} (${defTeam.name})!`
+            ? `🖥🟨➡🟥 VAR ให้ใบเหลืองที่สองไล่ออก ${vr.culpritId || ''} (${defTeam.name})!`
             : `🖥🟨 VAR ให้ใบเหลืองแก่ ${vr.culpritId || ''} (${defTeam.name}) รอดพ้นใบแดงหวุดหวิด`,
           'card'
         );
@@ -6079,7 +6172,14 @@ export const MatchModal: React.FC<{
 
     // 2. Resolve Cutback Delivery ("เปิดตัดหลัง") -> First-time Strike or Defender Clearance!
     if (b.flightType === 'cutback') {
-      const target = active.find((a) => a.id === b.targetId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
+      const designatedCut = b.targetId ? active.find((a) => a.id === b.targetId) : undefined;
+      const closerCut = attPool
+        .filter((a) => a.pos !== 'GK' && a.id !== b.lastPasserId)
+        .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
+      const target =
+        designatedCut && Math.hypot(designatedCut.x - b.toX, designatedCut.y - b.toY) <= 12
+          ? designatedCut
+          : closerCut || designatedCut || attPool.find((a) => a.pos === 'FW') || attPool[0];
       const nearDef = defPool
         .filter((d) => d.pos !== 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
@@ -6087,6 +6187,10 @@ export const MatchModal: React.FC<{
       if (target && (!defClose || Math.random() < 0.66)) {
         target.x = b.toX;
         target.y = b.toY;
+        target.tx = b.toX;
+        target.ty = b.toY;
+        target.vx = 0;
+        target.vy = 0;
         const style: LiveBallState['shotStyle'] = target.d.cur >= 66 ? 'curler' : Math.random() < 0.35 ? 'volley' : 'normal';
         const nearDefDistCut = nearDef ? Math.hypot(nearDef.x - b.toX, nearDef.y - b.toY) : 99;
         if (shouldShooterWhiff(w, target, nearDefDistCut, style, true)) {
@@ -6096,11 +6200,11 @@ export const MatchModal: React.FC<{
         prepareShotFlight(w, curMin, {
           flightType: 'shot',
           side,
-          fromX: b.toX,
-          fromY: b.toY,
+          fromX: target.x,
+          fromY: target.y,
           shooter: target,
           shotStyle: style,
-          curveAmt: (b.toY < 50 ? 1 : -1) * 4.5,
+          curveAmt: (target.y < 50 ? 1 : -1) * 4.5,
           maxZAmt: 5.5,
           durAmt: 0.44
         });
@@ -6125,7 +6229,16 @@ export const MatchModal: React.FC<{
 
     // 2b. Resolve Cross or Corner Delivery in the Box (Header / Diving Header / Volley / Bicycle Kick / Clearing Header!)
     if (b.flightType === 'cross' || b.flightType === 'corner') {
-      const target = active.find((a) => a.id === b.targetId) || attPool.find((a) => a.pos === 'FW') || attPool[0];
+      const designatedTarget = b.targetId ? active.find((a) => a.id === b.targetId) : undefined;
+      const closerAtt = attPool
+        .filter((a) => a.pos !== 'GK' && a.id !== b.lastPasserId)
+        .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
+      const target =
+        designatedTarget && Math.hypot(designatedTarget.x - b.toX, designatedTarget.y - b.toY) <= 12
+          ? designatedTarget
+          : closerAtt && Math.hypot(closerAtt.x - b.toX, closerAtt.y - b.toY) < 10
+            ? closerAtt
+            : designatedTarget || closerAtt || attPool.find((a) => a.pos === 'FW') || attPool[0];
       const topDef = defPool
         .filter((d) => d.pos === 'DF' || d.pos === 'GK')
         .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY))[0];
@@ -6142,10 +6255,12 @@ export const MatchModal: React.FC<{
       const winHeaderProb = clamp(0.48 + (attAir - defAir) * 0.007, 0.24, 0.84);
 
       if (target && Math.random() < winHeaderProb) {
-        if (Math.hypot(target.x - b.toX, target.y - b.toY) < 18) {
-          target.x = b.toX * 0.85 + target.x * 0.15;
-          target.y = b.toY * 0.85 + target.y * 0.15;
-        }
+        target.x = clamp(b.toX, 4, 96);
+        target.y = clamp(b.toY, 5, 95);
+        target.tx = target.x;
+        target.ty = target.y;
+        target.vx = 0;
+        target.vy = 0;
         target.facing = Math.atan2(50 - target.y, goalTargetX - target.x);
 
         const acroRoll = Math.random();
@@ -6161,7 +6276,7 @@ export const MatchModal: React.FC<{
               ? 'diving_header'
               : 'header';
 
-        const nearDefDistBox = topDef ? Math.hypot(topDef.x - b.toX, topDef.y - b.toY) : 99;
+        const nearDefDistBox = topDef ? Math.hypot(topDef.x - target.x, topDef.y - target.y) : 99;
         if ((isBicycle || isVolley) && shouldShooterWhiff(w, target, nearDefDistBox, chosenStyle, true)) {
           launchWhiffLooseBall(w, curMin, side, target, attTeam, defPool, attRightNow, 'ลอยตัวยิงจังหวะเปิดเข้ากรอบแต่เตะวืดอากาศ!');
           return;
@@ -6170,8 +6285,8 @@ export const MatchModal: React.FC<{
         prepareShotFlight(w, curMin, {
           flightType: 'shot',
           side,
-          fromX: b.toX,
-          fromY: b.toY,
+          fromX: target.x,
+          fromY: target.y,
           shooter: target,
           shotStyle: chosenStyle,
           curveAmt: isVolley || isBicycle ? (Math.random() - 0.5) * 4.5 : (Math.random() - 0.5) * 1.4,
@@ -6211,10 +6326,12 @@ export const MatchModal: React.FC<{
         SFX.shot();
         if (isBicycle || isDivingHeader) SFX.cheer(0.65);
       } else if (topDef) {
-        if (Math.hypot(topDef.x - b.toX, topDef.y - b.toY) < 18) {
-          topDef.x = b.toX * 0.75 + topDef.x * 0.25;
-          topDef.y = b.toY * 0.75 + topDef.y * 0.25;
-        }
+        topDef.x = topDef.pos === 'GK' ? clamp(b.toX, 2, 98) : clamp(b.toX, 4, 96);
+        topDef.y = clamp(b.toY, 5, 95);
+        topDef.tx = topDef.x;
+        topDef.ty = topDef.y;
+        topDef.vx = 0;
+        topDef.vy = 0;
         const clearDir = attRightNow ? -1 : 1;
         topDef.facing = Math.atan2(0, clearDir);
         if (topDef.pos === 'GK') {
@@ -6399,7 +6516,7 @@ export const MatchModal: React.FC<{
       const isAerialBall = b.flightType === 'lofted' || b.flightType === 'goalkick';
 
       // Aerial header duel on long lofted balls & goalkicks!
-      if (isAerialBall && receiver && nearestOpp && oppDist < 7.5 && Math.random() < 0.55) {
+      if (isAerialBall && receiver && nearestOpp && oppDist < 7.5 && Math.hypot(receiver.x - b.toX, receiver.y - b.toY) < 16 && Math.random() < 0.55) {
         const attAir = (receiver.d.hd + (receiver.sig === 'hd' ? 12 : 0)) * 0.65 + receiver.d.run * 0.35;
         const defAir = (nearestOpp.d.hd + (nearestOpp.sig === 'hd' ? 12 : 0)) * 0.65 + nearestOpp.d.pos * 0.35;
         const winProb = clamp(0.5 + (attAir - defAir) * 0.008, 0.25, 0.78);
@@ -6407,6 +6524,12 @@ export const MatchModal: React.FC<{
         const dir = attRightNow ? 1 : -1;
 
         if (Math.random() < winProb) {
+          receiver.x = clamp(b.toX, 4, 96);
+          receiver.y = clamp(b.toY, 5, 95);
+          receiver.tx = receiver.x;
+          receiver.ty = receiver.y;
+          receiver.vx = 0;
+          receiver.vy = 0;
           receiver.acrobatType = 'header';
           receiver.acrobatMax = 0.58;
           receiver.acrobatTimer = 0.58;
@@ -6456,6 +6579,12 @@ export const MatchModal: React.FC<{
           SFX.pass();
           return;
         } else {
+          nearestOpp.x = clamp(b.toX, 4, 96);
+          nearestOpp.y = clamp(b.toY, 5, 95);
+          nearestOpp.tx = nearestOpp.x;
+          nearestOpp.ty = nearestOpp.y;
+          nearestOpp.vx = 0;
+          nearestOpp.vy = 0;
           nearestOpp.acrobatType = 'header';
           nearestOpp.acrobatMax = 0.58;
           nearestOpp.acrobatTimer = 0.58;
@@ -8190,7 +8319,7 @@ export const MatchModal: React.FC<{
           const lowFitSpd = ag.fit < 50 ? clamp(0.76 + (agFacMods.lowFitResilience - 0.7) * 0.45, 0.76, 0.94) : 1.0;
           const maxSpd =
             (18 + ((ag.d.spd || 60) - 55) * 0.22) *
-            (ag.intent === 'MAKE_RUN' || ag.intent === 'OVERLAP' || ag.intent === 'PRESS' || ag.intent === 'RESET' || ag.intent === 'PASS_TARGET' ? 1.38 : 1.0) *
+            (ag.intent === 'PASS_TARGET' ? 1.65 : ag.intent === 'MAKE_RUN' || ag.intent === 'OVERLAP' || ag.intent === 'PRESS' || ag.intent === 'RESET' ? 1.38 : 1.0) *
             lowFitSpd *
             turfMatchMods.sprintSpeedMult *
             agFacMods.sprintBonusMult *
@@ -9241,11 +9370,11 @@ export const MatchModal: React.FC<{
       const sideTeam = actionBanner.teamSide === 'A' ? awayOrig : homeOrig;
       const isSideMe = sideTeam.id === state.me && state.mode === 'm';
       return (
-        <span className="inline-flex items-center gap-1.5 min-w-0">
+        <span className="inline-flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5 text-center leading-snug">
           <span className="shrink-0 inline-flex">
             <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={isSideMe} />
           </span>
-          <span className="truncate">{label}</span>
+          <span className="break-words">{label}</span>
         </span>
       );
     }
@@ -9255,7 +9384,7 @@ export const MatchModal: React.FC<{
     let cursor = 0;
     hits.forEach((h, idx) => {
       if (h.start > cursor) {
-        nodes.push(<span key={`bt-${idx}`} className="shrink-0 whitespace-pre">{label.slice(cursor, h.start)}</span>);
+        nodes.push(<span key={`bt-${idx}`} className="whitespace-normal break-words">{label.slice(cursor, h.start)}</span>);
       }
       const htTeam = h.entry.team;
       const htPlayer = h.entry.player;
@@ -9290,55 +9419,56 @@ export const MatchModal: React.FC<{
       cursor = h.end;
     });
     if (cursor < label.length) {
-      nodes.push(<span key="bt-tail" className="truncate">{label.slice(cursor)}</span>);
+      nodes.push(<span key="bt-tail" className="whitespace-normal break-words">{label.slice(cursor)}</span>);
     }
-    return <span className="inline-flex items-center gap-1 min-w-0 max-w-full overflow-hidden">{nodes}</span>;
+    return <span className="inline-flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-center leading-snug">{nodes}</span>;
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
-        <div className="shrink-0 px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2 gap-y-1.5">
-            {/* Left: Unified Match Info Capsule (Competition · Weather · Attendance) */}
-            <div className="order-1 inline-flex items-center gap-1.5 px-2 mland:px-1.5 h-8 sm:h-9 mland:h-7 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 max-w-[54%] sm:max-w-[260px] md:max-w-[330px] lg:max-w-none mland:max-w-[245px] shrink">
+        <div className="shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
+          <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2.5 gap-y-1.5">
+            {/* Left: Unified Match Info Capsule (Full Competition Name · Weather · Attendance · Live) */}
+            <div className="order-1 inline-flex flex-col items-start justify-center xl:flex-row xl:items-center gap-0.5 xl:gap-1.5 px-2 mland:px-1.5 py-1 xl:py-0 min-h-8 sm:min-h-9 mland:min-h-7 xl:h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 shrink-0 max-w-[calc(100%-150px)] sm:max-w-[195px] md:max-w-[235px] lg:max-w-[285px] xl:max-w-none">
               <span
-                className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate min-w-0"
+                className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight whitespace-normal xl:whitespace-nowrap"
                 title={compTitle}
               >
-                <span className="lg:hidden">{compShortTitle}</span>
-                <span className="hidden lg:inline">{compTitle}</span>
+                <span className="md:hidden">{compShortTitle}</span>
+                <span className="hidden md:inline">{compTitle}</span>
               </span>
-              <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
-              <div className="relative shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setShowEnvModsPopover((v) => !v)}
-                  className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold shrink-0 cursor-pointer rounded px-1 py-0.5 transition-colors hover:bg-[var(--surface-2)] ${
-                    matchEnv.timeOfDay === 'night'
-                      ? matchEnv.season === 'rainy'
-                        ? 'text-sky-600 dark:text-sky-300'
-                        : 'text-amber-600 dark:text-amber-300'
-                      : matchEnv.season === 'rainy'
-                        ? 'text-sky-600 dark:text-sky-300'
-                        : 'text-amber-700 dark:text-amber-300'
-                  }`}
-                  title="ดูผลกระทบสภาพสนามหญ้า & สิ่งอำนวยความสะดวกต่อนักเตะในนัดนี้"
-                >
-                  <span>
-                    {matchEnv.timeOfDay === 'night'
-                      ? matchEnv.season === 'rainy'
-                        ? '🌙💧'
-                        : '🌙'
-                      : matchEnv.season === 'rainy'
-                        ? '💧'
-                        : '☀️'}
-                  </span>
-                  <span className="hidden xl:inline">
-                    {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
-                  </span>
-                </button>
+              <span className="hidden xl:inline w-px h-3.5 bg-[var(--line)] shrink-0" />
+              <div className="inline-flex items-center gap-1.5 flex-wrap xl:flex-nowrap">
+                <div className="relative shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setShowEnvModsPopover((v) => !v)}
+                    className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold shrink-0 cursor-pointer rounded px-0.5 py-0 transition-colors hover:bg-[var(--surface-2)] ${
+                      matchEnv.timeOfDay === 'night'
+                        ? matchEnv.season === 'rainy'
+                          ? 'text-sky-600 dark:text-sky-300'
+                          : 'text-amber-600 dark:text-amber-300'
+                        : matchEnv.season === 'rainy'
+                          ? 'text-sky-600 dark:text-sky-300'
+                          : 'text-amber-700 dark:text-amber-300'
+                    }`}
+                    title="ดูผลกระทบสภาพสนามหญ้า & สิ่งอำนวยความสะดวกต่อนักเตะในนัดนี้"
+                  >
+                    <span>
+                      {matchEnv.timeOfDay === 'night'
+                        ? matchEnv.season === 'rainy'
+                          ? '🌙💧'
+                          : '🌙'
+                        : matchEnv.season === 'rainy'
+                          ? '💧'
+                          : '☀️'}
+                    </span>
+                    <span className="hidden xl:inline">
+                      {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
+                    </span>
+                  </button>
                 {showEnvModsPopover && (
                   <div className="absolute left-0 top-full mt-1.5 z-50 w-[305px] sm:w-[360px] rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl p-2.5 text-[10.5px] space-y-2">
                     <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] pb-1">
@@ -9396,50 +9526,51 @@ export const MatchModal: React.FC<{
                     </div>
                   </div>
                 )}
+                </div>
+                <span className="w-px h-3 bg-[var(--line)] shrink-0" />
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold text-[var(--ink)] tabular shrink-0"
+                  title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
+                >
+                  <span className="leading-none shrink-0">🏟</span>
+                  <span>{matchAttendance.att.toLocaleString()}</span>
+                  <span className="hidden md:inline mland:hidden text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
+                  <span className="text-[var(--g)] font-extrabold">({matchAttendance.pct}%)</span>
+                </span>
+                <span className="w-px h-3 bg-[var(--line)] shrink-0" />
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold tabular shrink-0"
+                  title={
+                    streamProj.plan.id === 'off'
+                      ? `ถ่ายทอดผ่าน ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
+                      : `ถ่ายทอดสดทาง ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
+                  }
+                >
+                  <span className={`leading-none shrink-0 text-[9px] mland:text-[7.5px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
+                  <span className={streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
+                    {liveViewers.toLocaleString()}
+                  </span>
+                  <span className="hidden xl:inline text-[var(--mut)] font-medium truncate max-w-[110px]">
+                    {broadcastChannel.short}
+                  </span>
+                </span>
               </div>
-              <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
-              <span
-                className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular shrink-0"
-                title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
-              >
-                <Users className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-[var(--g)] shrink-0" />
-                <span>{matchAttendance.att.toLocaleString()}</span>
-                <span className="hidden md:inline mland:hidden text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
-                <span className="text-[var(--g)] font-extrabold">({matchAttendance.pct}%)</span>
-              </span>
-              <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
-              <span
-                className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold tabular shrink-0"
-                title={
-                  streamProj.plan.id === 'off'
-                    ? `ถ่ายทอดผ่าน ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-                    : `ถ่ายทอดสดทาง ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-                }
-              >
-                <Radio className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--red)]'}`} />
-                <span className={streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
-                  {liveViewers.toLocaleString()}
-                </span>
-                <span className="hidden xl:inline text-[var(--mut)] font-medium truncate max-w-[110px]">
-                  {broadcastChannel.short}
-                </span>
-              </span>
             </div>
 
             {/* Center: Home + (Clock above Score) + Away */}
-            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2 sm:gap-3 mland:gap-1.5">
+            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2.5 sm:gap-3.5 md:gap-4 mland:gap-2">
               {/* Home Team */}
-              <div className="flex items-center justify-end gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1">
+              <div className="flex items-center justify-end gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
                 <div className="text-right min-w-0 flex-1">
-                  <div className={`font-extrabold text-[13px] sm:text-[15px] md:text-base mland:text-xs leading-[1.15] flex items-center justify-end gap-1 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center justify-end gap-1.5 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                     {goalFlashSide === 'H' && (
-                      <span className="px-1 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold shrink-0">
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] sm:text-[10px] font-extrabold shrink-0">
                         GOAL
                       </span>
                     )}
                     <span className="break-words">{homeOrig.name}</span>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[9px] mland:text-[7.5px] font-bold">
+                  <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
                     {homeId === state.me && (
                       <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
                     )}
@@ -9447,57 +9578,57 @@ export const MatchModal: React.FC<{
                     <span className="text-[var(--mut)]">เหย้า</span>
                   </div>
                 </div>
-                <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 md:[&>svg]:w-10 md:[&>svg]:h-10 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                  <ClubCrest name={homeOrig.name} size={40} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+                  <ClubCrest name={homeOrig.name} size={54} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
                 </div>
               </div>
 
               {/* Center Match Time Above Score Box */}
-              <div className="flex flex-col items-center justify-center gap-0.5 shrink-0">
+              <div className="flex flex-col items-center justify-center gap-1 mland:gap-0.5 shrink-0">
                 <div className="flex items-center justify-center leading-none">
                   {done ? (
-                    <span className="px-2 py-[1px] rounded bg-[var(--g)] text-white font-extrabold tabular text-[9px] mland:text-[8px] tracking-wide">
+                    <span className="px-2.5 py-0.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] tracking-wide shadow-2xs">
                       FT
                     </span>
                   ) : matchPhaseUi === 'halftime' ? (
-                    <span className="px-2 py-[1px] rounded bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[9px] mland:text-[8px]">
+                    <span className="px-2.5 py-0.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
                       HT
                     </span>
                   ) : paused ? (
-                    <span className="px-1.5 py-[1px] rounded bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-bold tabular text-[9px] mland:text-[8px]">
+                    <span className="px-2 sm:px-2.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
                       ⏸ {clockLabel}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] font-extrabold tabular text-[9px] mland:text-[8px]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
+                    <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
+                      <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
                       <span>{clockLabel}</span>
                       {stoppageBadge > 0 && <span className="opacity-75">(+{stoppageBadge}&apos;)</span>}
                     </span>
                   )}
                 </div>
-                <div className={`px-2.5 sm:px-3.5 mland:px-2 py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[60px] sm:min-w-[78px] mland:min-w-[54px] transition-all duration-300 shadow-xs ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
-                  <div className="text-lg sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none tracking-tight">
-                    {gh}<span className="text-[var(--mut)]/50 mx-0.5">:</span>{ga}
+                <div className={`px-3.5 sm:px-5 md:px-6 mland:px-3 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[76px] sm:min-w-[96px] md:min-w-[108px] mland:min-w-[68px] transition-all duration-300 shadow-xs ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
+                  <div className="text-2xl sm:text-3xl md:text-[34px] mland:text-xl font-extrabold font-display tabular leading-none tracking-tight">
+                    {gh}<span className="text-[var(--mut)]/50 mx-1">:</span>{ga}
                   </div>
-                  {penResult && <div className="text-[8.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5 truncate">{penResult.text}</div>}
+                  {penResult && <div className="text-[9.5px] sm:text-[10px] mland:text-[8.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5 truncate">{penResult.text}</div>}
                 </div>
               </div>
 
               {/* Away Team */}
-              <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1">
-                <div className="shrink-0 [&>svg]:w-8 [&>svg]:h-8 sm:[&>svg]:w-9 sm:[&>svg]:h-9 md:[&>svg]:w-10 md:[&>svg]:h-10 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                  <ClubCrest name={awayOrig.name} size={40} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+              <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
+                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+                  <ClubCrest name={awayOrig.name} size={54} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className={`font-extrabold text-[13px] sm:text-[15px] md:text-base mland:text-xs leading-[1.15] flex items-center gap-1 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center gap-1.5 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                     <span className="break-words">{awayOrig.name}</span>
                     {goalFlashSide === 'A' && (
-                      <span className="px-1 py-0.2 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-extrabold shrink-0">
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] sm:text-[10px] font-extrabold shrink-0">
                         GOAL
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1 leading-none text-[9px] mland:text-[7.5px] font-bold">
+                  <div className="mt-0.5 flex items-center gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
                     <span className="text-[var(--mut)]">เยือน</span>
                     {awayId === state.me && <span className="text-[var(--mut)]/50">·</span>}
                     {awayId === state.me && (
@@ -9508,10 +9639,48 @@ export const MatchModal: React.FC<{
               </div>
             </div>
 
-            {/* Right: Sleek Uniform-Height Playback Control Dock */}
+            {/* Right: Sleek Uniform-Height Playback Control Dock (Auto before Pause) */}
             <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
               {!done ? (
-                matchPhaseUi === 'halftime' ? (
+                <>
+                  {state.mode === 'm' && (
+                    <button
+                      type="button"
+                      title={
+                        autoSubEnabled
+                          ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
+                          : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
+                      }
+                      aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
+                      onClick={() => {
+                        SFX.tap();
+                        setAutoSubEnabled((v) => {
+                          const next = !v;
+                          saveSettings({ ...getSettings(), autoSubMatch: next });
+                          if (next && worldRef.current && !simRef.current.done) {
+                            runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
+                          }
+                          pushLog(
+                            minute,
+                            next
+                              ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
+                              : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
+                            'sys'
+                          );
+                          return next;
+                        });
+                      }}
+                      className={`btn h-8 sm:h-9 mland:h-7 px-2 sm:px-2.5 mland:px-1.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] shrink-0 ${
+                        autoSubEnabled
+                          ? 'btn-primary'
+                          : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] shadow-2xs'
+                      }`}
+                    >
+                      <Bot className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                      <span className="hidden sm:inline mland:inline">ออโต้</span>
+                    </button>
+                  )}
+                  {matchPhaseUi === 'halftime' ? (
                   <>
                     <button
                       type="button"
@@ -9575,7 +9744,8 @@ export const MatchModal: React.FC<{
                       <span className="hidden sm:inline mland:inline">ข้าม</span>
                     </button>
                   </>
-                )
+                )}
+                </>
               ) : (
                 <button
                   type="button"
@@ -9663,6 +9833,10 @@ export const MatchModal: React.FC<{
               onCloseToStats={() => {
                 setMlandMatchTab('stats');
               }}
+              onCloseToChat={() => {
+                setMlandMatchTab('chat');
+              }}
+              liveViewers={liveViewers}
               autoSubEnabled={autoSubEnabled}
               onToggleAutoSub={() => {
                 setAutoSubEnabled((v) => {
@@ -9746,7 +9920,7 @@ export const MatchModal: React.FC<{
                       return (
                         <>
                           {(homeMiracle || homeBlessed.length > 0) && (
-                            <div className="pointer-events-none absolute top-1 left-1.5 z-20 flex flex-col items-start gap-0.5 max-w-[27%] sm:max-w-[28%]">
+                            <div className="pointer-events-none absolute top-1 left-1.5 z-20 flex flex-col items-start gap-0.5 max-w-[22%] sm:max-w-[23%]">
                               {homeMiracle && (
                                 <span
                                   className={`inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md border text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-extrabold animate-pulse truncate max-w-full shadow-xs ${
@@ -9774,7 +9948,7 @@ export const MatchModal: React.FC<{
                             </div>
                           )}
                           {(awayMiracle || awayBlessed.length > 0) && (
-                            <div className="pointer-events-none absolute top-1 right-1.5 z-20 flex flex-col items-end gap-0.5 max-w-[27%] sm:max-w-[28%]">
+                            <div className="pointer-events-none absolute top-1 right-1.5 z-20 flex flex-col items-end gap-0.5 max-w-[22%] sm:max-w-[23%]">
                               {awayMiracle && (
                                 <span
                                   className={`inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md border text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-extrabold animate-pulse truncate max-w-full shadow-xs ${
@@ -9801,10 +9975,10 @@ export const MatchModal: React.FC<{
                               ))}
                             </div>
                           )}
-                          <div className="pointer-events-none absolute top-0 left-0 right-0 h-[26px] sm:h-[29px] mland:h-[23px] flex items-center justify-center px-2 z-10">
+                          <div className="pointer-events-none absolute top-0.5 left-0 right-0 flex items-start justify-center px-2 z-10">
                             <span
-                              className={`inline-flex items-center px-2.5 mland:px-2 py-[2px] rounded-full border text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold overflow-hidden ${
-                                miracleBannerUi || blessedListUi.length > 0 ? 'max-w-[46%] sm:max-w-[48%]' : 'max-w-[92%]'
+                              className={`inline-flex items-center justify-center px-2.5 mland:px-2 py-[2px] rounded-xl border text-[10px] sm:text-[11px] mland:text-[9px] leading-snug font-bold ${
+                                miracleBannerUi || blessedListUi.length > 0 ? 'max-w-[54%] sm:max-w-[52%]' : 'max-w-[96%]'
                               } ${bannerCls}`}
                             >
                               {renderActionBannerContent()}
@@ -10748,74 +10922,35 @@ export const MatchModal: React.FC<{
 
             {/* Right Stage: Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
-              <div className="flex items-center gap-1.5 shrink-0">
-                <div className={`seg-bar grid flex-1 min-w-0 ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                  <button
-                    type="button"
-                    onClick={() => setMlandMatchTab('stats')}
-                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
-                  >
-                    <span>📊 สถิติ</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMlandMatchTab('chat')}
-                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
-                  >
-                    <MessageSquare className="w-3 h-3 shrink-0" />
-                    <span>ไลฟ์สด</span>
-                    <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
-                      {fmtFansShort(liveViewers)}
-                    </span>
-                  </button>
-                  {state.mode === 'm' && !done && (
-                    <button
-                      type="button"
-                      onClick={() => openTacticsStudio()}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
-                    >
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-                        {5 - subsUsed.length}
-                      </span>
-                      <span>📋 แผน</span>
-                    </button>
-                  )}
-                </div>
+              <div className={`seg-bar grid w-full shrink-0 ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <button
+                  type="button"
+                  onClick={() => setMlandMatchTab('stats')}
+                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                >
+                  <span>📊 สถิติ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMlandMatchTab('chat')}
+                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
+                >
+                  <span>🔴</span>
+                  <span>ไลฟ์สด</span>
+                  <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                    {fmtFansShort(liveViewers)}
+                  </span>
+                </button>
                 {state.mode === 'm' && !done && (
                   <button
                     type="button"
-                    title={
-                      autoSubEnabled
-                        ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
-                        : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
-                    }
-                    aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
-                    onClick={() => {
-                      SFX.tap();
-                      setAutoSubEnabled((v) => {
-                        const next = !v;
-                        saveSettings({ ...getSettings(), autoSubMatch: next });
-                        if (next && worldRef.current && !simRef.current.done) {
-                          runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
-                        }
-                        pushLog(
-                          minute,
-                          next
-                            ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
-                            : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
-                          'sys'
-                        );
-                        return next;
-                      });
-                    }}
-                    className={`btn h-[30px] mland:h-[24px] px-2 mland:px-1.5 rounded-xl mland:rounded-lg text-[10.5px] mland:text-[9px] gap-1 shrink-0 ${
-                      autoSubEnabled
-                        ? 'btn-primary'
-                        : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
-                    }`}
+                    onClick={() => openTacticsStudio()}
+                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
                   >
-                    <Bot className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
-                    <span className="hidden xl:inline">ออโต้</span>
+                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+                      {5 - subsUsed.length}
+                    </span>
+                    <span>📋 แผน</span>
                   </button>
                 )}
               </div>
@@ -10841,7 +10976,7 @@ export const MatchModal: React.FC<{
                         <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)] space-y-1.5 shrink-0">
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <Radio className={`w-3.5 h-3.5 shrink-0 ${streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--red)]'}`} />
+                              <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
                               <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
                                 {broadcastChannel.name}
                               </span>
@@ -10947,7 +11082,7 @@ export const MatchModal: React.FC<{
                     >
                       <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
                         <span className="inline-flex items-center gap-1.5 font-bold text-[var(--ink)] min-w-0">
-                          <Radio className={`w-3 h-3 shrink-0 ${streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--red)]'}`} />
+                          <span className={`leading-none shrink-0 text-[10px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
                           <span className="truncate">{broadcastChannel.short}: <b className="tabular">{liveViewers.toLocaleString()}</b> คนดู</span>
                           <span className="text-[var(--mut)] font-medium hidden sm:inline shrink-0">({getViewerTierMeta(getStreamViewerTier(liveViewers)).label})</span>
                         </span>
