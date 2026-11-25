@@ -16,6 +16,9 @@ type FullscreenEl = HTMLElement & {
   msRequestFullscreen?: () => Promise<void> | void;
 };
 
+let landscapeLockSucceeded = false;
+let explicitExitAt = 0;
+
 export function isStandaloneDisplayMode(): boolean {
   if (typeof window === 'undefined') return false;
   return Boolean(
@@ -62,12 +65,19 @@ export async function lockLandscapeOrientation(): Promise<void> {
   if (!isMobileDevice()) return;
   if (!getFullscreenElement() && !isStandaloneDisplayMode()) return;
   try {
-    const orientation = (screen as Screen & { orientation?: { lock?: (mode: string) => Promise<void> } }).orientation;
+    const orientation = (
+      screen as Screen & { orientation?: { type?: string; lock?: (mode: string) => Promise<void> } }
+    ).orientation;
+    if (landscapeLockSucceeded && orientation?.type?.startsWith('landscape')) {
+      return;
+    }
     if (orientation?.lock) {
       try {
         await orientation.lock('landscape');
+        landscapeLockSucceeded = true;
       } catch {
         await orientation.lock('landscape-primary');
+        landscapeLockSucceeded = true;
       }
     }
   } catch {
@@ -138,6 +148,8 @@ export async function enterImmersiveFullscreen(fromClick = false): Promise<boole
 
 export async function exitFullscreenSafe(): Promise<void> {
   if (typeof document === 'undefined') return;
+  explicitExitAt = Date.now();
+  document.documentElement.classList.remove('is-fs-peek');
   const doc = document as FullscreenDoc;
   try {
     if (doc.fullscreenElement && doc.exitFullscreen) {
@@ -158,6 +170,7 @@ export async function exitFullscreenSafe(): Promise<void> {
 }
 
 export async function unlockOrientationSafe(): Promise<void> {
+  landscapeLockSucceeded = false;
   if (typeof window === 'undefined' || typeof screen === 'undefined') return;
   try {
     const orientation = (
@@ -238,7 +251,8 @@ export function onFullscreenChange(cb: (isFs: boolean) => void): () => void {
 export function bindAutoLandscapeFullscreen(): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
   let lastClickAttempt = 0;
-  let lastTouchAttempt = 0;
+  let barPeekUntil = 0;
+  let wasFs = Boolean(getFullscreenElement());
 
   const isAppleDevice =
     typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
@@ -250,28 +264,6 @@ export function bindAutoLandscapeFullscreen(): () => void {
     return Boolean(
       target.closest('input, textarea, select, option, [contenteditable="true"], [data-no-auto-fs="1"]')
     );
-  };
-
-  const tryEngage = (target: EventTarget | null, source: 'click' | 'touch') => {
-    if (shouldSkipTarget(target)) return;
-    if (!shouldAutoMobileFullscreen()) return;
-
-    if (isAppleStandalone || getFullscreenElement() || !isFullscreenSupported()) {
-      lockLandscapeOrientation().catch(() => undefined);
-      return;
-    }
-
-    const now = Date.now();
-    // Never let a failed/pending touchend block click (click is the most reliable user activation on Android WebAPK)
-    if (source === 'click') {
-      if (now - lastClickAttempt < 120) return;
-      lastClickAttempt = now;
-    } else {
-      if (now - lastTouchAttempt < 280) return;
-      lastTouchAttempt = now;
-    }
-
-    enterImmersiveFullscreen(source === 'click').catch(() => undefined);
   };
 
   const rootStyle = document.documentElement.style;
@@ -292,9 +284,11 @@ export function bindAutoLandscapeFullscreen(): () => void {
   type SafeInsets = { t: number; r: number; b: number; l: number };
   type LockedViewport = { w: number; h: number };
   const lockedByOri = new Map<string, SafeInsets>();
+  const fsCutoutByOri = new Map<string, SafeInsets>();
   const maxViewportByOri = new Map<string, LockedViewport>();
   let settleTimer: number | null = null;
   let fsSettleTimer: number | null = null;
+  let barPeekTimer: number | null = null;
   let initTimer1: number | null = null;
   let initTimer2: number | null = null;
   let focusTimer: number | null = null;
@@ -369,8 +363,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
     rootStyle.removeProperty('--app-dvh');
   };
 
-  const updateViewportLock = (standalone: boolean, activeFs: boolean) => {
-    if (!isMobileDevice() || (!standalone && !activeFs)) {
+  const updateViewportLock = (standalone: boolean, activeFsOrPeek: boolean) => {
+    if (!isMobileDevice() || (!standalone && !activeFsOrPeek)) {
       clearLockedViewport();
       return;
     }
@@ -408,37 +402,49 @@ export function bindAutoLandscapeFullscreen(): () => void {
   const updateSafeAreas = () => {
     const standalone = isStandaloneDisplayMode();
     const activeFs = Boolean(getFullscreenElement());
+    const barPeek = !activeFs && Date.now() < barPeekUntil;
+    document.documentElement.classList.toggle('is-fs-peek', barPeek);
     syncFullscreenClass(activeFs);
-    updateViewportLock(standalone, activeFs);
+    updateViewportLock(standalone, activeFs || barPeek);
 
-    if (!standalone && !activeFs) {
+    if (!standalone && !activeFs && !barPeek) {
       clearLockedInsets();
       return;
     }
 
     const oriKey = getOriKey();
     const isLand = window.innerWidth >= window.innerHeight;
+    const frozenFsCutout = fsCutoutByOri.get(oriKey);
+    if (!isAppleDevice && isLand && frozenFsCutout) {
+      // Once settled in fullscreen, freeze landscape cutout insets so transient system bars
+      // sliding in from any edge never push or move the game UI inward.
+      applyLockedInsets(frozenFsCutout);
+      return;
+    }
+
     const cur = readProbeInsets(activeFs);
     const prev = lockedByOri.get(oriKey);
 
     let next: SafeInsets;
     if (!isAppleDevice && isLand) {
-      // Lock top & bottom to 0 in Android landscape so transient bars never push UI;
-      // preserve side cutout insets detected while immersive fullscreen is active.
-      next = {
-        t: 0,
-        b: 0,
-        r: activeFs ? Math.max(prev?.r || 0, cur.r) : prev ? prev.r : cur.r,
-        l: activeFs ? Math.max(prev?.l || 0, cur.l) : prev ? prev.l : cur.l
-      };
+      // Never expand side cutouts upward via Math.max before/during bar reveals;
+      // use Math.min so temporary navigation bars fade back out cleanly.
+      next = !prev
+        ? { t: 0, b: 0, r: cur.r, l: cur.l }
+        : {
+            t: 0,
+            b: 0,
+            r: Math.min(prev.r, cur.r),
+            l: Math.min(prev.l, cur.l)
+          };
     } else {
       next = !prev
         ? cur
         : {
             t: Math.min(prev.t, cur.t),
-            r: activeFs ? Math.max(prev.r, cur.r) : Math.min(prev.r, cur.r),
+            r: Math.min(prev.r, cur.r),
             b: Math.min(prev.b, cur.b),
-            l: activeFs ? Math.max(prev.l, cur.l) : Math.min(prev.l, cur.l)
+            l: Math.min(prev.l, cur.l)
           };
     }
 
@@ -452,19 +458,36 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
   };
 
-  const onClick = (e: MouseEvent) => {
-    tryEngage(e.target, 'click');
+  const tryEngageFromClick = (target: EventTarget | null) => {
+    if (shouldSkipTarget(target)) return;
+    if (!shouldAutoMobileFullscreen()) return;
+
+    if (isAppleStandalone || getFullscreenElement() || !isFullscreenSupported()) {
+      lockLandscapeOrientation().catch(() => undefined);
+      return;
+    }
+
+    // Give the user ~1.5s to inspect/use mobile system bars after swiping them out
+    if (Date.now() < barPeekUntil - 1100) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastClickAttempt < 160) return;
+    lastClickAttempt = now;
+
+    enterImmersiveFullscreen(true).catch(() => undefined);
   };
 
-  const onTouchEnd = (e: TouchEvent) => {
-    if (e.changedTouches.length > 1) return;
-    tryEngage(e.target, 'touch');
+  const onClick = (e: MouseEvent) => {
+    tryEngageFromClick(e.target);
   };
 
   const onVisibilityOrFocus = () => {
     if (document.visibilityState === 'visible') {
       updateSafeAreas();
       guardViewportScroll();
+      if (Date.now() < barPeekUntil) return;
       if (shouldAutoMobileFullscreen()) {
         if (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported()) {
           enterImmersiveFullscreen().catch(() => undefined);
@@ -477,30 +500,81 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
   const onFsChange = () => {
     const active = Boolean(getFullscreenElement());
+    const prevWasFs = wasFs;
+    wasFs = active;
+
+    if (barPeekTimer) {
+      window.clearTimeout(barPeekTimer);
+      barPeekTimer = null;
+    }
+    if (fsSettleTimer) {
+      window.clearTimeout(fsSettleTimer);
+      fsSettleTimer = null;
+    }
+
+    if (active) {
+      barPeekUntil = 0;
+      document.documentElement.classList.remove('is-fs-peek');
+    } else if (prevWasFs && Date.now() - explicitExitAt > 1200 && shouldAutoMobileFullscreen()) {
+      // User swiped to show mobile bars and Chrome exited DOM fullscreen:
+      // keep UI locked underneath and let bars display briefly before auto-hiding.
+      barPeekUntil = Date.now() + 2600;
+      barPeekTimer = window.setTimeout(() => {
+        barPeekTimer = null;
+        barPeekUntil = 0;
+        document.documentElement.classList.remove('is-fs-peek');
+        updateSafeAreas();
+        if (
+          document.visibilityState === 'visible' &&
+          shouldAutoMobileFullscreen() &&
+          !getFullscreenElement() &&
+          isFullscreenSupported()
+        ) {
+          enterImmersiveFullscreen(false).catch(() => undefined);
+        }
+      }, 2600);
+    }
+
     syncFullscreenClass(active);
     updateSafeAreas();
     guardViewportScroll();
-    if (fsSettleTimer) window.clearTimeout(fsSettleTimer);
+
     fsSettleTimer = window.setTimeout(() => {
+      fsSettleTimer = null;
+      if (Boolean(getFullscreenElement()) && !isAppleDevice && window.innerWidth >= window.innerHeight) {
+        const oriKey = getOriKey();
+        const settled = readProbeInsets(true);
+        const curFrozen = fsCutoutByOri.get(oriKey);
+        const lockedCutout: SafeInsets = curFrozen
+          ? {
+              t: 0,
+              b: 0,
+              r: Math.min(curFrozen.r, settled.r),
+              l: Math.min(curFrozen.l, settled.l)
+            }
+          : { t: 0, b: 0, r: settled.r, l: settled.l };
+        fsCutoutByOri.set(oriKey, lockedCutout);
+        lockedByOri.set(oriKey, lockedCutout);
+      }
       updateSafeAreas();
       guardViewportScroll();
-    }, 250);
+    }, 300);
+
     if (active && shouldAutoMobileFullscreen()) {
       lockLandscapeOrientation().catch(() => undefined);
-      window.setTimeout(() => {
-        if (Boolean(getFullscreenElement()) && shouldAutoMobileFullscreen()) {
-          lockLandscapeOrientation().catch(() => undefined);
-        }
-      }, 100);
     }
   };
 
   const onOrientationChange = () => {
+    landscapeLockSucceeded = false;
     if (settleTimer) window.clearTimeout(settleTimer);
     updateSafeAreas();
     settleTimer = window.setTimeout(() => {
       updateSafeAreas();
       guardViewportScroll();
+      if (shouldAutoMobileFullscreen() && (Boolean(getFullscreenElement()) || isStandaloneDisplayMode())) {
+        lockLandscapeOrientation().catch(() => undefined);
+      }
     }, 260);
   };
 
@@ -517,8 +591,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }, 120);
   };
 
+  // Capture clicks (never touchend swipes) so edge swipes reveal mobile system bars smoothly
   window.addEventListener('click', onClick, { capture: true, passive: true });
-  window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
   window.addEventListener('focus', onVisibilityOrFocus);
   window.addEventListener('resize', onViewportResize, { passive: true });
   window.addEventListener('orientationchange', onOrientationChange, { passive: true });
@@ -553,16 +627,17 @@ export function bindAutoLandscapeFullscreen(): () => void {
   return () => {
     if (settleTimer) window.clearTimeout(settleTimer);
     if (fsSettleTimer) window.clearTimeout(fsSettleTimer);
+    if (barPeekTimer) window.clearTimeout(barPeekTimer);
     if (initTimer1) window.clearTimeout(initTimer1);
     if (initTimer2) window.clearTimeout(initTimer2);
     if (focusTimer) window.clearTimeout(focusTimer);
     probe.remove();
     lvhProbe.remove();
+    document.documentElement.classList.remove('is-fs-peek');
     clearLockedInsets();
     clearLockedViewport();
     displayModeQueries.forEach((m) => m.removeEventListener?.('change', updateSafeAreas));
     window.removeEventListener('click', onClick, { capture: true });
-    window.removeEventListener('touchend', onTouchEnd, { capture: true });
     window.removeEventListener('focus', onVisibilityOrFocus);
     window.removeEventListener('resize', onViewportResize);
     window.removeEventListener('orientationchange', onOrientationChange);

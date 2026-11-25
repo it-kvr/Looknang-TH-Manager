@@ -86,7 +86,10 @@ html.is-fullscreen body,
 html.is-fullscreen #root,
 html.is-standalone,
 html.is-standalone body,
-html.is-standalone #root {
+html.is-standalone #root,
+html.is-fs-peek,
+html.is-fs-peek body,
+html.is-fs-peek #root {
   width: 100%;
   height: 100%;
   margin: 0;
@@ -98,12 +101,16 @@ html.is-standalone #root {
 
 html.is-fullscreen:not(.kb-open),
 html.is-standalone:not(.kb-open),
+html.is-fs-peek:not(.kb-open),
 html.is-fullscreen:not(.kb-open) body,
 html.is-standalone:not(.kb-open) body,
+html.is-fs-peek:not(.kb-open) body,
 html.is-fullscreen:not(.kb-open) #root,
 html.is-standalone:not(.kb-open) #root,
+html.is-fs-peek:not(.kb-open) #root,
 html.is-fullscreen:not(.kb-open) .fixed.inset-0,
-html.is-standalone:not(.kb-open) .fixed.inset-0 {
+html.is-standalone:not(.kb-open) .fixed.inset-0,
+html.is-fs-peek:not(.kb-open) .fixed.inset-0 {
   top: 0;
   left: 0;
   right: auto;
