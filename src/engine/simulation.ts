@@ -330,12 +330,27 @@ export const pois = (l: number) => {
 };
 
 export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerCareerProfile | null): MatchEvent[] {
-  if (!x.length) return [];
-  return Array.from({ length: n }, () => {
-    const W = (q: Player, b: number, f: number) => Array(Math.max(1, Math.round(b * Math.pow(f / 70, 2)))).fill(q);
-    const w = x.flatMap((q) => {
-      const D = DT(q, careerP);
-      const b = q.pos === 'FW' ? 5 : q.pos === 'MF' ? 3 : q.pos === 'DF' ? 1 : 0;
+  if (!x.length || n <= 0) return [];
+  const pickWeightedIdx = (weights: number[], total: number): number => {
+    if (total <= 0) return R(0, weights.length - 1);
+    let r = Math.random() * total;
+    for (let i = 0; i < weights.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return i;
+    }
+    return weights.length - 1;
+  };
+
+  const goalWeights = new Array<number>(x.length);
+  let goalTotal = 0;
+  const assistBaseWeights = new Array<number>(x.length);
+  let assistBaseTotal = 0;
+
+  for (let i = 0; i < x.length; i++) {
+    const q = x[i];
+    const D = DT(q, careerP);
+    const b = q.pos === 'FW' ? 5 : q.pos === 'MF' ? 3 : q.pos === 'DF' ? 1 : 0;
+    if (b) {
       const sc = q.pos === 'DF'
         ? D.d.hd * 0.7 + D.d.str * 0.3
         : D.d.fin * 0.45 + D.d.pw * 0.2 + D.d.run * 0.15 + D.d.cur * 0.1 + D.d.spd * 0.1;
@@ -349,29 +364,59 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
       if (hasTrait(q, 'selfish_shooter', careerP)) traitBoost += 0.24;
       if (hasTrait(q, 'acrobatic_finisher', careerP)) traitBoost += 0.2;
       if (hasTrait(q, 'comeback_king', careerP)) traitBoost += 0.14;
-      return b ? W(q, b * traitBoost, sc) : [];
-    });
-    const q = w.length ? P(w) : P(x);
-    const o = x
-      .filter((z) => z !== q && z.pos !== 'GK')
-      .flatMap((z) => {
-        const D = DT(z, careerP);
-        let assistBoost = 1;
-        if (hasTrait(z, 'killer_passer', careerP)) assistBoost += 0.35;
-        if (hasTrait(z, 'through_ball_vision', careerP)) assistBoost += 0.32;
-        if (hasTrait(z, 'trivela_cross', careerP)) assistBoost += 0.26;
-        if (hasTrait(z, 'early_crosser', careerP)) assistBoost += 0.26;
-        if (hasTrait(z, 'one_touch_wizard', careerP)) assistBoost += 0.24;
-        if (hasTrait(z, 'hold_up_play', careerP)) assistBoost += 0.22;
-        if (hasTrait(z, 'long_diagonal', careerP)) assistBoost += 0.2;
-        if (hasTrait(z, 'one_two_lover', careerP)) assistBoost += 0.22;
-        if (hasTrait(z, 'setpiece_specialist', careerP)) assistBoost += 0.24;
-        if (hasTrait(z, 'team_first', careerP)) assistBoost += 0.26;
-        if (hasTrait(z, 'selfish_shooter', careerP)) assistBoost *= 0.68;
-        return W(z, (z.pos === 'MF' ? 4 : z.pos === 'FW' ? 3 : 1) * assistBoost, D.d.crs * 0.28 + D.d.spass * 0.18 + D.d.lpass * 0.16 + D.a.ps * 0.20 + D.d.cur * 0.08 + D.a.dr * 0.05 + D.d.rd * 0.05);
-      });
-    return { m: R(1, 90), t: t.id, who: q.n, as: Math.random() < 0.75 && o.length ? P(o).n : '' };
-  });
+      const wVal = Math.max(1, Math.round(b * traitBoost * Math.pow(sc / 70, 2)));
+      goalWeights[i] = wVal;
+      goalTotal += wVal;
+    } else {
+      goalWeights[i] = 0;
+    }
+
+    if (q.pos !== 'GK') {
+      let assistBoost = 1;
+      if (hasTrait(q, 'killer_passer', careerP)) assistBoost += 0.35;
+      if (hasTrait(q, 'through_ball_vision', careerP)) assistBoost += 0.32;
+      if (hasTrait(q, 'trivela_cross', careerP)) assistBoost += 0.26;
+      if (hasTrait(q, 'early_crosser', careerP)) assistBoost += 0.26;
+      if (hasTrait(q, 'one_touch_wizard', careerP)) assistBoost += 0.24;
+      if (hasTrait(q, 'hold_up_play', careerP)) assistBoost += 0.22;
+      if (hasTrait(q, 'long_diagonal', careerP)) assistBoost += 0.2;
+      if (hasTrait(q, 'one_two_lover', careerP)) assistBoost += 0.22;
+      if (hasTrait(q, 'setpiece_specialist', careerP)) assistBoost += 0.24;
+      if (hasTrait(q, 'team_first', careerP)) assistBoost += 0.26;
+      if (hasTrait(q, 'selfish_shooter', careerP)) assistBoost *= 0.68;
+      const aSc = D.d.crs * 0.28 + D.d.spass * 0.18 + D.d.lpass * 0.16 + D.a.ps * 0.20 + D.d.cur * 0.08 + D.a.dr * 0.05 + D.d.rd * 0.05;
+      const aVal = Math.max(1, Math.round((q.pos === 'MF' ? 4 : q.pos === 'FW' ? 3 : 1) * assistBoost * Math.pow(aSc / 70, 2)));
+      assistBaseWeights[i] = aVal;
+      assistBaseTotal += aVal;
+    } else {
+      assistBaseWeights[i] = 0;
+    }
+  }
+
+  const out: MatchEvent[] = new Array(n);
+  for (let g = 0; g < n; g++) {
+    const qIdx = goalTotal > 0 ? pickWeightedIdx(goalWeights, goalTotal) : R(0, x.length - 1);
+    const q = x[qIdx];
+    const remAssistTotal = assistBaseTotal - assistBaseWeights[qIdx];
+    let asName = '';
+    if (remAssistTotal > 0 && Math.random() < 0.75) {
+      let r = Math.random() * remAssistTotal;
+      for (let i = 0; i < x.length; i++) {
+        if (i === qIdx || assistBaseWeights[i] <= 0) continue;
+        r -= assistBaseWeights[i];
+        if (r <= 0) {
+          asName = x[i].n;
+          break;
+        }
+      }
+      if (!asName) {
+        const fb = x.find((_, i) => i !== qIdx && assistBaseWeights[i] > 0);
+        if (fb) asName = fb.n;
+      }
+    }
+    out[g] = { m: R(1, 90), t: t.id, who: q.n, as: asName };
+  }
+  return out;
 }
 
 export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
@@ -436,18 +481,29 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     const cardRoll = (tm.press ?? 1) === 2 ? 0.54 : 0.40;
     const numYellows = (Math.random() < cardRoll ? 1 : 0) + (Math.random() < cardRoll * 0.45 ? 1 : 0) + (big && Math.random() < 0.2 ? 1 : 0);
     const matchY: Record<string, number> = {};
+    const poolWeights = numYellows > 0 && pool.length
+      ? pool.map((q) => {
+          const D = DT(q, s?.p);
+          let w = (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22 ? 3 : 1) + (D.d.pos < 58 ? 1 : 0);
+          if (D.tr === 6 || D.tr === 17 || D.tr === 23) w = Math.max(1, w - 1);
+          if (hasTrait(q, 'hot_headed', s?.p)) w += 3;
+          if (hasTrait(q, 'slide_tackler', s?.p) || hasTrait(q, 'risk_taker', s?.p)) w += 2;
+          if (hasTrait(q, 'calm_leader', s?.p) || hasTrait(q, 'tireless_mentor', s?.p)) w = Math.max(1, w - 1);
+          if (q.me && s?.p?.perks?.includes('discipline_pro')) w = Math.max(1, w - 1);
+          return w;
+        })
+      : [];
+    const poolWeightSum = poolWeights.reduce((acc, v) => acc + v, 0);
     for (let c = 0; c < numYellows && pool.length; c++) {
-      const weighted = pool.flatMap((q) => {
-        const D = DT(q, s?.p);
-        let w = (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22 ? 3 : 1) + (D.d.pos < 58 ? 1 : 0);
-        if (D.tr === 6 || D.tr === 17 || D.tr === 23) w = Math.max(1, w - 1);
-        if (hasTrait(q, 'hot_headed', s?.p)) w += 3;
-        if (hasTrait(q, 'slide_tackler', s?.p) || hasTrait(q, 'risk_taker', s?.p)) w += 2;
-        if (hasTrait(q, 'calm_leader', s?.p) || hasTrait(q, 'tireless_mentor', s?.p)) w = Math.max(1, w - 1);
-        if (q.me && s?.p?.perks?.includes('discipline_pro')) w = Math.max(1, w - 1);
-        return Array(w).fill(q);
-      });
-      const culprit = P(weighted);
+      let rW = Math.random() * poolWeightSum;
+      let culprit = pool[pool.length - 1];
+      for (let idx = 0; idx < pool.length; idx++) {
+        rW -= poolWeights[idx];
+        if (rW <= 0) {
+          culprit = pool[idx];
+          break;
+        }
+      }
       const min = R(12, 89);
       matchY[culprit.n] = (matchY[culprit.n] || 0) + 1;
       if (matchY[culprit.n] >= 2) {
@@ -2063,9 +2119,11 @@ export function calcPlayerPerf(
 
   rt = clamp(Math.round(rt * 10) / 10, 3.8, 10);
   const meSqRef = s.teams[s.me]?.sq.find((q) => q.me);
+  const devProf = meSqRef ? getPlayerDevProfile(meSqRef, p) : null;
   const ovScale = getOvGrowthScale(ovMe(p), meSqRef?.pot);
-  const devMult = meSqRef ? getPlayerDevProfile(meSqRef, p).ageMult : 1;
-  const b = () => (Math.random() < (mins >= 60 ? 0.14 : 0.08) * ovScale * devMult ? 1 : 0);
+  const devMult = devProf ? devProf.ageMult : 1;
+  const canGrowPerf = !devProf || devProf.phase !== 'declining';
+  const b = () => (canGrowPerf && Math.random() < (mins >= 60 ? 0.045 : 0.025) * ovScale * devMult ? 1 : 0);
   return {
     rt,
     gl,
@@ -2074,7 +2132,7 @@ export function calcPlayerPerf(
     op,
     vid,
     en,
-    pts: b() + (rt >= 7.2 ? b() : 0) + (rt >= 8.6 ? b() : 0),
+    pts: b() + (rt >= 7.6 ? b() : 0),
     played: true,
     mins,
     subIn: meta?.subIn,
@@ -2102,15 +2160,14 @@ export function creditPlayerPerf(s: GameState, f: PlayerPerfResult) {
   p.as += f.as;
   const fameBonus = (p.perks || []).includes('fame_magnet') ? 2 : 0;
   p.rep = (p.rep || 0) + (f.rt >= 7.5 ? 3 : f.rt >= 6.8 ? 1 : 0) + f.gl * 2 + f.as + fameBonus;
-  if (f.pts > 0) f.grew = autoGrow(p, f.pts);
+  const meSq = s.teams[s.me]?.sq.find((q) => q.me);
+  if (f.pts > 0) f.grew = autoGrow(p, f.pts, meSq?.pot);
   p.vid = 0;
   const fanGain = (p.perks || []).includes('captain') ? 3 : 2;
   s.fan = clamp((s.fan ?? 50) + (f.my > f.op ? fanGain : f.my < f.op ? -2 : 0) + (f.gl ? 1 : 0), 5, 100);
   if (f.gl > 0 || f.as > 0 || f.rt >= 7.6) {
     adjustTeamFans(s.teams[s.me], (f.gl * 180 + f.as * 90 + (f.rt >= 7.6 ? 160 : 0)) * ((p.perks || []).includes('fame_magnet') ? 1.5 : 1));
   }
-
-  const meSq = s.teams[s.me]?.sq.find((q) => q.me);
   if (f.gl >= 3) {
     appendPlayerCareerLog(meSq, `🎩 ซัดแฮตทริก ${f.gl} ประตูในซีซั่น ${s.season} นัด ${Math.max(1, s.md)}`, p);
   }
@@ -2146,19 +2203,20 @@ export function runPlayerWeek(s: GameState) {
   const curOv = ovMe(p);
   const devProf = getPlayerDevProfile(mePlayer, p);
   const ovScale = getOvGrowthScale(curOv, mePlayer.pot);
-  const prodigyBonus = (perks.includes('prodigy') ? 0.05 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.03 : 0);
+  const potCeiling = mePlayer.pot || 88;
+  const prodigyBonus = (perks.includes('prodigy') ? 0.025 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.015 : 0);
 
   if (ac.gr) {
     const k = ac.k || P([focus, focus, p.tr || 'sh', P(['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[])]);
     const kn = ATT.find((z) => z[0] === k)?.[1] || k;
-    const attrResistance = p.a[k] >= 90 ? 0.28 : p.a[k] >= 84 ? 0.52 : p.a[k] >= 78 ? 0.78 : 1;
+    const attrResistance = p.a[k] >= 88 ? 0.2 : p.a[k] >= 82 ? 0.42 : p.a[k] >= 75 ? 0.68 : 1;
     const grChance =
-      (ac.gr * 0.75 + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.03 : 0)) *
+      (ac.gr * 0.34 + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.012 : 0)) *
       ovScale *
       attrResistance *
       devProf.ageMult *
       devProf.formMult;
-    if (p.a[k] < 99 && devProf.phase !== 'declining' && Math.random() < grChance) {
+    if (p.a[k] < 99 && curOv < potCeiling && devProf.phase !== 'declining' && Math.random() < grChance) {
       p.a[k]++;
       p.trn = (p.trn || 0) + 1;
       m += ` · ${kn} เพิ่มเป็น ${p.a[k]}`;
@@ -2176,8 +2234,8 @@ export function runPlayerWeek(s: GameState) {
     const totalFans = adjustTeamFans(s.teams[s.me], fanAdded);
     m += ` · แฟนบอล +${fmtFans(fanAdded)} (รวม ${fmtFansShort(totalFans)})`;
   }
-  if (ac.pt && devProf.phase !== 'declining' && Math.random() < (ac.pt * 0.75 + prodigyBonus) * ovScale * devProf.ageMult) {
-    const g = autoGrow(p, 1);
+  if (ac.pt && curOv < potCeiling && devProf.phase !== 'declining' && Math.random() < (ac.pt * 0.34 + prodigyBonus) * ovScale * devProf.ageMult) {
+    const g = autoGrow(p, 1, potCeiling);
     if (g) m += ` · พัฒนาอัตโนมัติ (${g})`;
   }
   if (mePlayer.me && devProf.strongSeason) {
@@ -2450,7 +2508,8 @@ export const DILEMMAS: DilemmaTemplate[] = [
         label: 'ขอตัวฝึกซ้อมเสริมคนเดียว',
         hint: 'พัฒนาค่าพลัง +1',
         apply: (s) => {
-          const g = s.p ? autoGrow(s.p, 1) : '';
+          const meSqPot = s.teams[s.me]?.sq.find((q) => q.me)?.pot;
+          const g = s.p ? autoGrow(s.p, 1, meSqPot) : '';
           syncMe(s);
           return g ? `ซ้อมเดี่ยวได้ผล! (${g})` : 'ได้ฝึกซ้อมรักษาฟอร์มเต็มที่';
         }
@@ -4479,15 +4538,15 @@ export function finishSeasonComputation(s: GameState) {
     s.esd = s.season;
     const p = s.p;
     const av = p.ap ? p.rs / p.ap : 0;
+    const meSqRef = meTeam.sq.find((q) => q.me);
     if (ovMe(p) >= 62 && av >= 6.8) {
-      const gw = autoGrow(p, 3);
+      const gw = autoGrow(p, 1, meSqRef?.pot);
       p.ntCaps = (p.ntCaps || 0) + R(2, 4);
       const ntG = p.pos === 'FW' ? R(1, 3) : p.pos === 'MF' ? R(0, 2) : 0;
       p.ntGoals = (p.ntGoals || 0) + ntG;
       s.trophies.push({ season: s.season, title: 'ติดทีมชาติชุดใหญ่', type: 'nt' });
       const ntNote = `🇹🇭 ซีซั่น ${s.season}: ติดทีมชาติไทย${ntG ? ` (ยิง ${ntG} ประตู)` : ''}${gw ? ` · ${gw}` : ''}`;
       s.hist.push(ntNote);
-      const meSqRef = meTeam.sq.find((q) => q.me);
       appendPlayerCareerLog(meSqRef, ntNote, p);
     }
   }

@@ -8182,26 +8182,27 @@ export const MatchModal: React.FC<{
     <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
-        <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2 gap-y-1">
-            {/* Left: Competition / League Tier + Weather & Kickoff Time + Attendance / Stadium Capacity */}
-            <div className="order-1 flex flex-wrap items-center gap-1 min-w-0 max-w-[66%] sm:max-w-[270px] md:max-w-[350px] lg:max-w-none mland:max-w-[265px] shrink">
+        <div className="shrink-0 px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
+          <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2 gap-y-1.5">
+            {/* Left: Unified Match Info Capsule (Competition · Weather · Attendance) */}
+            <div className="order-1 inline-flex items-center gap-1.5 px-2 mland:px-1.5 h-8 sm:h-9 mland:h-7 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 max-w-[54%] sm:max-w-[260px] md:max-w-[330px] lg:max-w-none mland:max-w-[245px] shrink">
               <span
-                className="inline-flex items-center px-2 mland:px-1.5 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--line)] text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate max-w-full shadow-2xs"
+                className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate min-w-0"
                 title={compTitle}
               >
-                <span className="lg:hidden truncate">{compShortTitle}</span>
-                <span className="hidden lg:inline truncate">{compTitle}</span>
+                <span className="lg:hidden">{compShortTitle}</span>
+                <span className="hidden lg:inline">{compTitle}</span>
               </span>
+              <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
               <span
-                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9.5px] mland:text-[7.5px] font-bold shrink-0 shadow-2xs ${
+                className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold shrink-0 ${
                   matchEnv.timeOfDay === 'night'
                     ? matchEnv.season === 'rainy'
-                      ? 'bg-slate-800/90 border-sky-400/45 text-sky-200'
-                      : 'bg-indigo-950/85 border-amber-300/40 text-amber-200'
+                      ? 'text-sky-600 dark:text-sky-300'
+                      : 'text-amber-600 dark:text-amber-300'
                     : matchEnv.season === 'rainy'
-                      ? 'bg-sky-500/15 border-sky-500/40 text-sky-700 dark:text-sky-200'
-                      : 'bg-amber-400/20 border-amber-500/45 text-amber-800 dark:text-amber-200'
+                      ? 'text-sky-600 dark:text-sky-300'
+                      : 'text-amber-700 dark:text-amber-300'
                 }`}
                 title={
                   matchEnv.season === 'rainy'
@@ -8222,23 +8223,24 @@ export const MatchModal: React.FC<{
                       ? '💧'
                       : '☀️'}
                 </span>
-                <span className="hidden sm:inline mland:hidden">
+                <span className="hidden xl:inline">
                   {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
                 </span>
               </span>
+              <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
               <span
-                className="inline-flex items-center gap-1 px-2 mland:px-1.5 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--line)] text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular shrink-0 shadow-2xs"
+                className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular shrink-0"
                 title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
               >
                 <Users className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-[var(--g)] shrink-0" />
                 <span>{matchAttendance.att.toLocaleString()}</span>
-                <span className="text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
+                <span className="hidden md:inline mland:hidden text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
                 <span className="text-[var(--g)] font-extrabold">({matchAttendance.pct}%)</span>
               </span>
             </div>
 
             {/* Center: Home + (Clock above Score) + Away */}
-            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2 sm:gap-3 mland:gap-2">
+            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2 sm:gap-3 mland:gap-1.5">
               {/* Home Team */}
               <div className="flex items-center justify-end gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1">
                 <div className="text-right min-w-0 flex-1">
@@ -8319,7 +8321,7 @@ export const MatchModal: React.FC<{
               </div>
             </div>
 
-            {/* Right: Essential Match Playback & Finish Controls (Main Menu Button Grammar) */}
+            {/* Right: Sleek Uniform-Height Playback Control Dock */}
             <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
               {!done ? (
                 matchPhaseUi === 'halftime' ? (
@@ -8329,9 +8331,9 @@ export const MatchModal: React.FC<{
                       title="เริ่มครึ่งหลัง"
                       aria-label="เริ่มครึ่งหลัง"
                       onClick={() => handleStartSecondHalf()}
-                      className="btn btn-md btn-gold"
+                      className="btn btn-gold h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2 rounded-lg text-[11px] sm:text-xs mland:text-[10px]"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current" />
+                      <Play className="w-3.5 h-3.5 fill-current shrink-0" />
                       <span>เริ่มครึ่งหลัง</span>
                     </button>
                     <button
@@ -8339,10 +8341,10 @@ export const MatchModal: React.FC<{
                       title="ข้ามครึ่งหลังไปจบเกม"
                       aria-label="ข้ามครึ่งหลังไปจบเกม"
                       onClick={skipToEnd}
-                      className="btn btn-md btn-surface"
+                      className="btn btn-surface h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2 rounded-lg text-[11px] sm:text-xs mland:text-[10px]"
                     >
-                      <FastForward className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline mland:hidden">ข้าม</span>
+                      <FastForward className="w-3.5 h-3.5 shrink-0" />
+                      <span className="hidden sm:inline mland:inline">ข้าม</span>
                     </button>
                   </>
                 ) : (
@@ -8374,38 +8376,42 @@ export const MatchModal: React.FC<{
                             return next;
                           });
                         }}
-                        className={`btn btn-md w-[70px] sm:w-[98px] mland:w-[64px] px-2 mland:px-1.5 !justify-start gap-1 shrink-0 ${
+                        className={`btn h-8 sm:h-9 mland:h-7 px-2 sm:px-2.5 mland:px-1.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] gap-1 shrink-0 ${
                           autoSubEnabled
                             ? 'btn-primary'
                             : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
                         }`}
                       >
                         <Bot className="w-3.5 h-3.5 shrink-0" />
-                        <span className="hidden sm:inline mland:hidden flex-1 text-center whitespace-nowrap">{autoSubEnabled ? 'ออโต้: เปิด' : 'ออโต้'}</span>
-                        <span className="sm:hidden mland:inline flex-1 text-center whitespace-nowrap">{autoSubEnabled ? 'ON' : 'ออโต้'}</span>
+                        <span>ออโต้</span>
                       </button>
                     )}
 
-                    <div className="seg-bar h-9 mland:h-7.5 shrink-0">
+                    <div className="inline-flex items-center h-8 sm:h-9 mland:h-7 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs shrink-0">
                       <button
                         type="button"
                         title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         onClick={() => setPaused((p) => !p)}
-                        className={`seg-btn h-full px-2.5 sm:px-3 mland:px-2 lg:w-[80px] lg:!justify-start gap-1 shrink-0 text-xs mland:text-[10.5px] ${paused ? 'seg-btn-active' : ''}`}
+                        className={`h-full px-2 sm:px-2.5 mland:px-1.5 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                          paused
+                            ? 'bg-[var(--g)] text-white shadow-2xs'
+                            : 'text-[var(--ink)] hover:bg-[var(--surface-2)]'
+                        }`}
                       >
                         {paused ? <Play className="w-3.5 h-3.5 fill-current shrink-0" /> : <Pause className="w-3.5 h-3.5 shrink-0" />}
-                        <span className="hidden lg:inline flex-1 text-center whitespace-nowrap">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
+                        <span className="hidden lg:inline">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
                       </button>
+                      <span className="w-px h-4 bg-[var(--line)] mx-0.5 shrink-0" />
                       <button
                         type="button"
                         title="ปรับความเร็วการแข่งขัน"
                         aria-label="ปรับความเร็วการแข่งขัน"
                         onClick={cycleMatchSpeed}
-                        className="seg-btn h-full w-[72px] sm:w-[78px] mland:w-[66px] px-2 mland:px-1.5 text-xs mland:text-[10.5px] tabular !justify-start gap-1 shrink-0"
+                        className="h-full px-2 sm:px-2.5 mland:px-1.5 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold text-[var(--ink)] hover:bg-[var(--surface-2)] tabular transition-colors cursor-pointer whitespace-nowrap"
                       >
                         <Gauge className="w-3.5 h-3.5 opacity-80 shrink-0" />
-                        <span className="flex-1 text-center whitespace-nowrap">{speed}x</span>
+                        <span className="min-w-[3.2ch] text-center">{speed}x</span>
                       </button>
                     </div>
 
@@ -8414,7 +8420,7 @@ export const MatchModal: React.FC<{
                       title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       onClick={skipToEnd}
-                      className="btn btn-md btn-gold px-3 mland:px-2.5"
+                      className="btn btn-gold h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2 rounded-lg text-[11px] sm:text-xs mland:text-[10px] shrink-0"
                     >
                       <FastForward className="w-3.5 h-3.5 shrink-0" />
                       <span className="hidden sm:inline mland:inline">ข้าม</span>
@@ -8427,7 +8433,7 @@ export const MatchModal: React.FC<{
                   title="จบเกมและดำเนินการต่อ"
                   aria-label="จบเกมและดำเนินการต่อ"
                   onClick={handleConfirmFinish}
-                  className="btn btn-md px-4 sm:px-5 bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
+                  className="btn h-8 sm:h-9 mland:h-7 px-3.5 sm:px-4 mland:px-2.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
                 >
                   <Flag className="w-3.5 h-3.5 fill-current shrink-0" />
                   <span>จบเกม</span>
@@ -9340,34 +9346,42 @@ export const MatchModal: React.FC<{
               )}
 
               {/* Live Commentary & Match Events Below the Pitch (Scroll Down to Read) */}
-              <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 shadow-xs">
-                <div className="flex flex-wrap items-center justify-between gap-1.5 pb-1.5 border-b border-[var(--line)]/70">
-                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] uppercase tracking-wide whitespace-nowrap shrink-0">
-                    🎙️ เหตุการณ์ในสนาม
+              <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
+                {/* Compact Single-Row Top Menu Band: Title + Unified Filter & Stadium Display Bar */}
+                <div className="bg-[var(--surface-2)]/65 border-b border-[var(--line)] px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 flex items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs mland:text-[9.5px] font-extrabold text-[var(--ink)] tracking-tight whitespace-nowrap shrink-0">
+                    <span>🎙️</span>
+                    <span>เหตุการณ์</span>
+                    <span className="hidden xl:inline">ในสนาม</span>
                   </span>
-                  <div className="flex flex-wrap items-center justify-end gap-1.5 ml-auto">
-                    <div className="seg-bar">
-                      {(
-                        [
-                          ['all', 'ทั้งหมด'],
-                          ['goal', '⚽ ประตู'],
-                          ['card', '🟨🟥 VAR'],
-                          ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
-                        ] as const
-                      ).map(([k, lbl]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setEventFilter(k)}
-                          className={`seg-btn ${eventFilter === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {lbl}
-                        </button>
-                      ))}
-                    </div>
+
+                  <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto ml-auto">
+                    {(
+                      [
+                        ['all', 'ทั้งหมด'],
+                        ['goal', '⚽ ประตู'],
+                        ['card', '🟨 VAR'],
+                        ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
+                      ] as const
+                    ).map(([k, lbl]) => (
+                      <button
+                        key={k}
+                        type="button"
+                        onClick={() => setEventFilter(k)}
+                        className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                          eventFilter === k
+                            ? 'bg-[var(--g)] text-white shadow-2xs'
+                            : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                        }`}
+                      >
+                        {lbl}
+                      </button>
+                    ))}
 
                     {!done && matchPhaseUi !== 'halftime' && (
-                      <div className="flex flex-wrap items-center gap-1 shrink-0">
+                      <>
+                        <span className="w-px h-4 mland:h-3.5 bg-[var(--line)] mx-0.5 shrink-0" />
+
                         <button
                           type="button"
                           title="เปิด/ปิด เส้นทิศทางการวิ่งและจ่ายบอล"
@@ -9376,10 +9390,10 @@ export const MatchModal: React.FC<{
                             SFX.tap();
                             setShowRunVectors((v) => !v);
                           }}
-                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                          className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
                             showRunVectors
-                              ? 'bg-emerald-500/20 border border-emerald-500/55 text-emerald-700 dark:text-emerald-300 shadow-2xs hover:bg-emerald-500/28'
-                              : 'bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/45'
+                              ? 'bg-emerald-500/18 text-emerald-700 dark:text-emerald-300'
+                              : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
                           }`}
                         >
                           <Route className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
@@ -9394,10 +9408,10 @@ export const MatchModal: React.FC<{
                             SFX.tap();
                             setShowRatings((v) => !v);
                           }}
-                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                          className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
                             showRatings
-                              ? 'bg-amber-400/22 border border-amber-400/60 text-[#8a5b00] dark:text-[#fde047] shadow-2xs hover:bg-amber-400/30'
-                              : 'bg-sky-500/18 border border-sky-400/55 text-sky-700 dark:text-sky-300 shadow-2xs hover:bg-sky-500/25'
+                              ? 'bg-amber-400/22 text-[#8a5b00] dark:text-[#fde047]'
+                              : 'bg-sky-500/18 text-sky-700 dark:text-sky-300'
                           }`}
                         >
                           {showRatings ? (
@@ -9416,10 +9430,10 @@ export const MatchModal: React.FC<{
                             SFX.tap();
                             setShowPositions((v) => !v);
                           }}
-                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                          className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
                             showPositions
-                              ? 'bg-sky-500/18 border border-sky-400/55 text-sky-700 dark:text-sky-300 shadow-2xs hover:bg-sky-500/25'
-                              : 'bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/45'
+                              ? 'bg-sky-500/18 text-sky-700 dark:text-sky-300'
+                              : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
                           }`}
                         >
                           <Tag className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
@@ -9434,20 +9448,22 @@ export const MatchModal: React.FC<{
                             SFX.tap();
                             setCineSlowMo((v) => !v);
                           }}
-                          className={`btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md ${
+                          className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
                             cineSlowMo
-                              ? 'bg-violet-500/18 border border-violet-400/55 text-violet-700 dark:text-violet-300 shadow-2xs hover:bg-violet-500/25'
-                              : 'bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/45'
+                              ? 'bg-violet-500/18 text-violet-700 dark:text-violet-300'
+                              : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
                           }`}
                         >
                           <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
                           <span>สโล</span>
                         </button>
-                      </div>
+                      </>
                     )}
 
                     {!done && matchPhaseUi === 'halftime' && (
-                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      <>
+                        <span className="w-px h-4 mland:h-3.5 bg-[var(--line)] mx-0.5 shrink-0" />
+
                         <button
                           type="button"
                           title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนามพักครึ่ง"
@@ -9455,13 +9471,13 @@ export const MatchModal: React.FC<{
                             SFX.tap();
                             setHtStatMode((m) => (m === 'rating' ? 'ovr' : 'rating'));
                           }}
-                          className={`btn btn-xs ${
+                          className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
                             htStatMode === 'rating'
-                              ? 'btn-gold'
-                              : 'bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300'
+                              ? 'bg-amber-400/22 text-[#8a5b00] dark:text-[#fde047]'
+                              : 'bg-sky-500/18 text-sky-700 dark:text-sky-300'
                           }`}
                         >
-                          {htStatMode === 'rating' ? <Star className="w-3 h-3 fill-current" /> : <Zap className="w-3 h-3 fill-current" />}
+                          {htStatMode === 'rating' ? <Star className="w-3 h-3 fill-current shrink-0" /> : <Zap className="w-3 h-3 fill-current shrink-0" />}
                           <span>{htStatMode === 'rating' ? 'เรตติ้ง' : 'พลัง'}</span>
                         </button>
 
@@ -9469,7 +9485,7 @@ export const MatchModal: React.FC<{
                           <button
                             type="button"
                             onClick={() => openTacticsStudio()}
-                            className="btn btn-xs btn-surface"
+                            className="h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 text-[var(--ink)] hover:bg-[var(--surface-2)]/70"
                           >
                             <span>📋 แผน/เปลี่ยนตัว</span>
                             <span className="px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9px] mland:text-[7.5px]">
@@ -9477,12 +9493,12 @@ export const MatchModal: React.FC<{
                             </span>
                           </button>
                         )}
-                      </div>
+                      </>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-1.5 mland:space-y-1">
+                <div className="p-2.5 sm:p-3 mland:p-2 space-y-1.5 mland:space-y-1">
                   {eventFilter === 'sub' ? (
                     subLog.length === 0 ? (
                       <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>

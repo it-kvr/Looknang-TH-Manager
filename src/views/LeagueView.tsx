@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { MainTab, Player, Team, GameState } from '../types/game';
 import { RN, TN, PACT, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
@@ -26,13 +26,16 @@ export const LeagueView: React.FC<{
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
 
-  const tb = sortTable(state.teams.filter((t) => t.tier === vt));
-  const ms = teamStats(me, state);
+  const tb = useMemo(() => sortTable(state.teams.filter((t) => t.tier === vt)), [state.teams, vt]);
+  const ms = useMemo(() => teamStats(me, state), [me, state]);
 
-  const leagueRows = state.teams
-    .filter((t) => t.tier === vt)
-    .map((t) => ({ t, st: teamStats(t, state) }))
-    .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
+  const leagueRows = useMemo(() => {
+    if (sub !== 3) return [];
+    return state.teams
+      .filter((t) => t.tier === vt)
+      .map((t) => ({ t, st: teamStats(t, state) }))
+      .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
+  }, [sub, state, vt, cmpSort]);
 
   const renderFormDots = (fm?: string) => {
     const chars = (fm || '').slice(-5).split('');

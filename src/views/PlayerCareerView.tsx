@@ -396,7 +396,7 @@ export const PlayerCareerView: React.FC<{
                 {PACT.map((ac, idx) => {
                   const isSelected = (p.plan ?? 1) === idx;
                   const tagText =
-                    ac.gr >= 0.25
+                    ac.gr >= 0.14
                       ? ac.k === 'ph'
                         ? '💪 อัปความแกร่งไว'
                         : '📈 อัปพลังหลักไว'

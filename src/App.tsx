@@ -89,19 +89,71 @@ export default function App() {
     });
   };
 
+  const cloneGameState = (prev: GameState): GameState => {
+    try {
+      if (typeof structuredClone === 'function') return structuredClone(prev);
+    } catch {
+      // fallback to JSON clone
+    }
+    return JSON.parse(JSON.stringify(prev)) as GameState;
+  };
+
   useEffect(() => {
     const st = getSettings();
     applyTheme(st.theme);
   }, []);
 
+  const pendingSaveRef = useRef<{ state: GameState; slot: number } | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+
+  const flushPendingSave = () => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (pending) {
+      pendingSaveRef.current = null;
+      saveGameToSlot(pending.state, pending.slot);
+    }
+  };
+
   useEffect(() => {
-    if (state) saveGameToSlot(state, slot);
+    if (!state) {
+      pendingSaveRef.current = null;
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      return;
+    }
+    pendingSaveRef.current = { state, slot };
+    if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      const pending = pendingSaveRef.current;
+      if (pending) {
+        pendingSaveRef.current = null;
+        saveGameToSlot(pending.state, pending.slot);
+      }
+    }, 350);
   }, [state, slot]);
+
+  useEffect(() => {
+    const onHide = () => flushPendingSave();
+    window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onHide);
+    return () => {
+      window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onHide);
+      flushPendingSave();
+    };
+  }, []);
 
   const updateState = (updater: (draft: GameState) => void) => {
     setState((prev) => {
       if (!prev) return prev;
-      const clone: GameState = JSON.parse(JSON.stringify(prev));
+      const clone = cloneGameState(prev);
       updater(clone);
       return clone;
     });
@@ -180,75 +232,77 @@ export default function App() {
     return null;
   }, [state]);
 
-  const commitFinishedMatch = (
+  const applyFinishedMatchToDraft = (
+    d: GameState,
     matchInfo: { kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean },
     payload: FinishedMatchPayload
-  ) => {
+  ): { shouldConfetti: boolean; missionToast: string | null } => {
     const { kind, homeId, awayId, isDerby } = matchInfo;
+    let shouldConfetti = false;
+    let missionToast: string | null = null;
 
-    updateState((d) => {
-      const me = d.teams[d.me];
-      if (d.mode === 'm') {
-        me.tac = payload.finalTac;
+    const me = d.teams[d.me];
+    if (d.mode === 'm') {
+      me.tac = payload.finalTac;
+    }
+
+    const H = d.teams[homeId];
+    const A = d.teams[awayId];
+    const resObj: MatchResult = {
+      gh: payload.gh,
+      ga: payload.ga,
+      evs: payload.evs,
+      pen: payload.pen,
+      xgH: payload.xgH,
+      xgA: payload.xgA,
+      ratings: payload.ratings,
+      motm: payload.motm,
+      pf: payload.pf,
+      cards: payload.cards,
+      subs: payload.subs,
+      playedNames: payload.playedNames,
+      playedSlots: payload.playedSlots
+    };
+
+    const liveInjs = payload.injuries || [];
+    const liveInjTeamIds = Array.from(new Set(liveInjs.map((x) => x.teamId)));
+    const liveInjNames = liveInjs.map((x) => x.name);
+    const applyLiveInjuries = () => {
+      liveInjs.forEach((inj) => {
+        const teamObj = d.teams[inj.teamId];
+        const pl = teamObj?.sq.find((q) => q.n === inj.name);
+        if (!teamObj || !pl) return;
+        pl.inj = Math.max(pl.inj || 0, inj.games);
+        if (pl.me && d.p) d.p.inj = pl.inj;
+        if (teamObj.id === d.me || d.p?.name === pl.n) {
+          pushFeed(d, 'บาดเจ็บในสนาม', `🩹 ${pl.n} (${teamObj.name}) บาดเจ็บระหว่างแข่ง คาดพัก ${inj.games} นัด`, 'urg');
+        }
+      });
+    };
+
+    const recordMatchMissions = () => {
+      const mSum = applyMatchMissionProgress(d, H, A, payload);
+      if (mSum.upgraded.length > 0) {
+        const first = mSum.upgraded[0];
+        const msg =
+          mSum.upgraded.length === 1
+            ? `🎯 ${first.player} ผ่านภารกิจ "${first.mission} ขั้น ${first.stage}" อัปพลังอัตโนมัติ! (${first.rewardText})`
+            : `🎯 ภารกิจหลังเกมอัปพลังสำเร็จ ${mSum.upgraded.length} รายการ (เช่น ${first.player}: ${first.mission} ขั้น ${first.stage})`;
+        pushFeed(d, 'ภารกิจอัปพลัง', msg, 'ok');
+        missionToast = msg;
       }
-
-      const H = d.teams[homeId];
-      const A = d.teams[awayId];
-      const resObj: MatchResult = {
-        gh: payload.gh,
-        ga: payload.ga,
-        evs: payload.evs,
-        pen: payload.pen,
-        xgH: payload.xgH,
-        xgA: payload.xgA,
-        ratings: payload.ratings,
-        motm: payload.motm,
-        pf: payload.pf,
-        cards: payload.cards,
-        subs: payload.subs,
-        playedNames: payload.playedNames,
-        playedSlots: payload.playedSlots
-      };
-
-      const liveInjs = payload.injuries || [];
-      const liveInjTeamIds = Array.from(new Set(liveInjs.map((x) => x.teamId)));
-      const liveInjNames = liveInjs.map((x) => x.name);
-      const applyLiveInjuries = () => {
-        liveInjs.forEach((inj) => {
-          const teamObj = d.teams[inj.teamId];
-          const pl = teamObj?.sq.find((q) => q.n === inj.name);
-          if (!teamObj || !pl) return;
-          pl.inj = Math.max(pl.inj || 0, inj.games);
-          if (pl.me && d.p) d.p.inj = pl.inj;
-          if (teamObj.id === d.me || d.p?.name === pl.n) {
-            pushFeed(d, 'บาดเจ็บในสนาม', `🩹 ${pl.n} (${teamObj.name}) บาดเจ็บระหว่างแข่ง คาดพัก ${inj.games} นัด`, 'urg');
-          }
-        });
-      };
-
-      const recordMatchMissions = () => {
-        const mSum = applyMatchMissionProgress(d, H, A, payload);
-        if (mSum.upgraded.length > 0) {
-          const first = mSum.upgraded[0];
-          const msg =
-            mSum.upgraded.length === 1
-              ? `🎯 ${first.player} ผ่านภารกิจ "${first.mission} ขั้น ${first.stage}" อัปพลังอัตโนมัติ! (${first.rewardText})`
-              : `🎯 ภารกิจหลังเกมอัปพลังสำเร็จ ${mSum.upgraded.length} รายการ (เช่น ${first.player}: ${first.mission} ขั้น ${first.stage})`;
-          pushFeed(d, 'ภารกิจอัปพลัง', msg, 'ok');
-          showToast(msg);
-        }
-        if (mSum.failed.length > 0) {
-          const firstF = mSum.failed[0];
-          pushFeed(
-            d,
-            'ภารกิจส่วนบุคคล',
-            mSum.failed.length === 1
-              ? `💨 ${firstF.player} พลาดอัปพลัง "${firstF.mission} ขั้น ${firstF.stage}" (โอกาส ${firstF.chance}% รอบนี้ไม่สำเร็จ)`
-              : `💨 มี ${mSum.failed.length} รายการพลาดลุ้นอัปขั้นภารกิจหลังจบเกม (ติดเกณฑ์พรสวรรค์)`,
-            ''
-          );
-        }
-      };
+      if (mSum.failed.length > 0) {
+        const firstF = mSum.failed[0];
+        pushFeed(
+          d,
+          'ภารกิจส่วนบุคคล',
+          mSum.failed.length === 1
+            ? `💨 ${firstF.player} พลาดอัปพลัง "${firstF.mission} ขั้น ${firstF.stage}" (โอกาส ${firstF.chance}% รอบนี้ไม่สำเร็จ)`
+            : `💨 มี ${mSum.failed.length} รายการพลาดลุ้นอัปขั้นภารกิจหลังจบเกม (ติดเกณฑ์พรสวรรค์)`,
+          ''
+        );
+      }
+    };
 
       const recordHomeAttendance = () => {
         if (homeId !== d.me || !payload.att || payload.att <= 0) return;
@@ -321,7 +375,7 @@ export default function App() {
               const meSq = me.sq.find((q) => q.me);
               appendPlayerCareerLog(meSq, `🏆 ซีซั่น ${d.season}: คว้าแชมป์ถ้วยประชาชนกับ ${me.name}`, d.p);
             }
-            triggerConfetti();
+            shouldConfetti = true;
           }
         }
         applyLiveInjuries();
@@ -337,7 +391,7 @@ export default function App() {
         applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
-        return;
+        return { shouldConfetti, missionToast };
       }
 
       if (kind === 'asia' && d.ac) {
@@ -395,7 +449,7 @@ export default function App() {
               const meSq = me.sq.find((q) => q.me);
               appendPlayerCareerLog(meSq, `🌏 ซีซั่น ${d.season}: คว้าแชมป์สโมสรทวีปกับ ${me.name}`, d.p);
             }
-            triggerConfetti();
+            shouldConfetti = true;
           }
         }
         applyLiveInjuries();
@@ -411,7 +465,7 @@ export default function App() {
         applyPositionAdaptation(d, H, A, resObj);
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
-        return;
+        return { shouldConfetti, missionToast };
       }
 
       // League Matchday
@@ -549,15 +603,30 @@ export default function App() {
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
       recordMatchMissions();
       recordFinanceSnapshot(d);
-    });
+      return { shouldConfetti, missionToast };
+  };
+
+  const navigateDraftToLeague = (d: GameState) => {
+    d.v = 't';
+    d.tv = 0;
+    d.sub = 0;
+    d.lg = d.teams[d.me].tier;
   };
 
   const handleMatchFinish = (payload: FinishedMatchPayload) => {
     if (!state || !activeMatch) return;
     const finished = activeMatch;
+    const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
+    const clone = cloneGameState(state);
+    const outcome = applyFinishedMatchToDraft(clone, finished, payload);
+    navigateDraftToLeague(clone);
     setActiveMatch(null);
-    commitFinishedMatch(finished, payload);
-    navigateToTab('t');
+    setNavIntent(null);
+    if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+    setState(clone);
+    if (outcome.shouldConfetti) triggerConfetti();
+    if (outcome.missionToast) showToast(outcome.missionToast);
   };
 
   const handleTriggerNextStep = () => {
@@ -566,18 +635,25 @@ export default function App() {
     enterAutoMobileFullscreen().catch(() => undefined);
     if (nextMatchInfo) {
       if (appSettings.autoSkipMatch) {
-        const simState: GameState = JSON.parse(JSON.stringify(state));
-        if (nextMatchInfo.isDerby) simState.derby = 1;
-        const payload = simulateInstantMatchPayload(simState, nextMatchInfo.kind, nextMatchInfo.homeId, nextMatchInfo.awayId);
-        commitFinishedMatch(nextMatchInfo, payload);
-        navigateToTab('t');
-        const H = state.teams[nextMatchInfo.homeId];
-        const A = state.teams[nextMatchInfo.awayId];
-        const myGf = nextMatchInfo.homeId === state.me ? payload.gh : payload.ga;
-        const myGa = nextMatchInfo.homeId === state.me ? payload.ga : payload.gh;
+        const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
+        const clone = cloneGameState(state);
+        if (nextMatchInfo.isDerby) clone.derby = 1;
+        const payload = simulateInstantMatchPayload(clone, nextMatchInfo.kind, nextMatchInfo.homeId, nextMatchInfo.awayId);
+        const outcome = applyFinishedMatchToDraft(clone, nextMatchInfo, payload);
+        navigateDraftToLeague(clone);
+        const H = clone.teams[nextMatchInfo.homeId];
+        const A = clone.teams[nextMatchInfo.awayId];
+        const myGf = nextMatchInfo.homeId === clone.me ? payload.gh : payload.ga;
+        const myGa = nextMatchInfo.homeId === clone.me ? payload.ga : payload.gh;
+        setNavIntent(null);
+        if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
+        if (mainRef.current) mainRef.current.scrollTop = 0;
+        setState(clone);
+        if (outcome.shouldConfetti) triggerConfetti();
         if (myGf > myGa) SFX.win();
         else SFX.confirm();
-        showToast(`⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`);
+        const scoreMsg = `⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`;
+        showToast(outcome.missionToast ? `${scoreMsg} · ${outcome.missionToast}` : scoreMsg);
         return;
       }
       SFX.tap();
@@ -590,7 +666,7 @@ export default function App() {
     }
     SFX.tap();
     if (state.md >= state.fx.length) {
-      const clone: GameState = JSON.parse(JSON.stringify(state));
+      const clone = cloneGameState(state);
       const summary = finishSeasonComputation(clone);
       setState(clone);
       setSeasonSummary(summary);
@@ -601,6 +677,7 @@ export default function App() {
     if (!state) return;
     setSeasonStatsTarget(null);
     if (state.sack === 1) {
+      flushPendingSave();
       setSeasonSummary(null);
       setState(null);
       return;
@@ -643,7 +720,7 @@ export default function App() {
           onToast={showToast}
         />
         {toast && (
-          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/92 backdrop-blur-md text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
+          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
             {toast}
           </div>
         )}
@@ -677,7 +754,7 @@ export default function App() {
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)]">
       {/* Pinned Single-Row Horizontal Top HUD Bar */}
-      <header className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)] safe-top safe-x">
+      <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)] safe-top safe-x">
         <div className="max-w-7xl mland:max-w-none mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
           <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 shrink max-w-[36%]">
             <button
@@ -910,7 +987,7 @@ export default function App() {
         </main>
 
         {/* Pinned Left-Rail Game Console Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-r border-[var(--line)] pl-[var(--sal,env(safe-area-inset-left,0px))] order-first w-[calc(70px+var(--sal,env(safe-area-inset-left,0px)))] mland:w-[calc(62px+var(--sal,env(safe-area-inset-left,0px)))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/98 border-r border-[var(--line)] pl-[var(--sal,env(safe-area-inset-left,0px))] order-first w-[calc(70px+var(--sal,env(safe-area-inset-left,0px)))] mland:w-[calc(62px+var(--sal,env(safe-area-inset-left,0px)))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
           <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
@@ -1035,6 +1112,7 @@ export default function App() {
           state={state}
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => {
+            flushPendingSave();
             setShowSettings(false);
             setSeasonStatsTarget(null);
             setState(null);
@@ -1067,7 +1145,7 @@ export default function App() {
       )}
 
       {toast && (
-        <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/92 backdrop-blur-md text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
+        <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
           {toast}
         </div>
       )}

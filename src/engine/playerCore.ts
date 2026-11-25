@@ -797,11 +797,40 @@ export function xi(t: Team): Player[] {
   });
 }
 
-export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
+type DtResult = {
+  a: CoreAttrs;
+  h: number;
+  d: Record<string, number>;
+  sig: string;
+  tlVal: number;
+  tr: number;
+  pk: number;
+};
+
+const DT_CACHE = new WeakMap<Player, { key: string; res: DtResult }>();
+
+const objSig = (rec?: Record<string, number> | CoreAttrs | null): string => {
+  if (!rec) return '';
+  let out = '';
+  for (const k in rec) {
+    out += `${k}:${(rec as Record<string, number>)[k]},`;
+  }
+  return out;
+};
+
+export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
   const po = q.me ? careerP : null;
+  let cacheKey = '';
+  if (!po) {
+    cacheKey = `${q.n || ''}|${q.pos}|${q.ro}|${q.ov}|${q.age}|${q.pot ?? ''}|${q.talent ?? ''}|${q.customSig ?? ''}|${q.customPers ?? ''}|${objSig(q.sb)}|${objSig(q.coreSb)}|${objSig(q.customA)}|${objSig(q.customD)}`;
+    const cached = DT_CACHE.get(q);
+    if (cached && cached.key === cacheKey) return cached.res;
+  }
   const aSrc = po?.a;
   const sb = po?.sb || q.sb;
-  const h = [...(q.n || 'นักเตะ')].reduce((s, ch) => s + ch.charCodeAt(0), 0);
+  const nm = q.n || 'นักเตะ';
+  let h = 0;
+  for (let i = 0; i < nm.length; i++) h += nm.charCodeAt(i);
   const o: Record<string, Partial<CoreAttrs>> = {
     FW: { sh: 8, dr: 4, tk: -12 },
     MF: { ps: 8, dr: 2, tk: 2 },
@@ -929,7 +958,9 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
   const tr = rawPers != null && rawPers >= 0 && rawPers < PLAYER_PERSONALITIES.length
     ? rawPers
     : h % PLAYER_PERSONALITIES.length;
-  return { a: baseA, h, d, sig, tlVal, tr, pk: 26 + ((h >> 2) % 4) };
+  const res: DtResult = { a: baseA, h, d, sig, tlVal, tr, pk: 26 + ((h >> 2) % 4) };
+  if (!po) DT_CACHE.set(q, { key: cacheKey, res });
+  return res;
 }
 
 export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
@@ -1144,7 +1175,7 @@ export function trySuperstarBreakthrough(
   return { brokeThrough: true, newPot, becameSuperstar: !wasSuperstar && newPot >= 86 };
 }
 
-export function autoGrow(p: PlayerCareerProfile, n = 1): string {
+export function autoGrow(p: PlayerCareerProfile, n = 1, potCap?: number): string {
   const map: Record<Position, StatKey[]> = {
     FW: ['sh', 'sh', 'sh', 'dr', 'dr', 'ps', 'ph'],
     MF: ['ps', 'ps', 'ps', 'dr', 'dr', 'sh', 'tk', 'ph'],
@@ -1155,14 +1186,16 @@ export function autoGrow(p: PlayerCareerProfile, n = 1): string {
   if (p.tr) w.push(p.tr, p.tr);
   const add: Partial<Record<StatKey, number>> = {};
   for (let i = 0; i < n; i++) {
+    const curOv = ovMe(p);
+    if (potCap != null && curOv >= potCap && Math.random() > 0.1) continue;
     const av = w.filter((k) => p.a[k] < 99);
     if (!av.length) break;
     // Prefer attributes that haven't hit extreme levels yet for realistic multi-season balance
-    const lowAv = av.filter((k) => p.a[k] < 82);
+    const lowAv = av.filter((k) => p.a[k] < 80);
     const k = lowAv.length && Math.random() < 0.8 ? P(lowAv) : P(av);
-    if (p.a[k] >= 90 && Math.random() > 0.25) continue;
-    if (p.a[k] >= 84 && Math.random() > 0.48) continue;
-    if (p.a[k] >= 78 && Math.random() > 0.75) continue;
+    if (p.a[k] >= 88 && Math.random() > 0.2) continue;
+    if (p.a[k] >= 82 && Math.random() > 0.42) continue;
+    if (p.a[k] >= 75 && Math.random() > 0.68) continue;
     p.a[k]++;
     p.trn = (p.trn || 0) + 1;
     add[k] = (add[k] || 0) + 1;
@@ -1174,11 +1207,11 @@ export function autoGrow(p: PlayerCareerProfile, n = 1): string {
 
 export function syncMe(s: GameState) {
   if (s.mode !== 'p' || !s.p) return;
+  const q = s.teams[s.me]?.sq.find((x) => x.me);
   if (s.p.pts > 0) {
-    autoGrow(s.p, s.p.pts);
+    autoGrow(s.p, s.p.pts, q?.pot);
     s.p.pts = 0;
   }
-  const q = s.teams[s.me]?.sq.find((x) => x.me);
   if (q) {
     q.ov = ovMe(s.p);
     q.fit = s.p.en ?? 100;

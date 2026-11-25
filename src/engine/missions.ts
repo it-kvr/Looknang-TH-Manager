@@ -581,6 +581,10 @@ const applyStageRewardToPlayer = (
     }
   });
 
+  const basePot = q.pot || Math.max(curOv, 82);
+  const canBreakCap = stage >= 3 && devProf.phase !== 'declining' && devProf.strongSeason && basePot < 96;
+  const potCap = canBreakCap ? Math.min(96, basePot + 1) : basePot;
+
   if (careerP) {
     careerP.sb = { ...(careerP.sb || {}) };
     Object.entries(rewards).forEach(([sk, delta]) => {
@@ -593,12 +597,19 @@ const applyStageRewardToPlayer = (
     if (
       coreAmt > 0 &&
       devProf.phase !== 'declining' &&
-      (careerP.a[def.coreReward] < 80 || Math.random() < 0.22 + ovScale * 0.75)
+      curOv < potCap &&
+      (careerP.a[def.coreReward] < 75 ? Math.random() < 0.72 : Math.random() < 0.18 + ovScale * 0.65)
     ) {
       careerP.a[def.coreReward] = clamp(careerP.a[def.coreReward] + coreAmt, 1, 99);
     }
     careerP.rep = (careerP.rep || 10) + (stage >= 3 ? 3 : 2);
-    q.ov = ovMe(careerP);
+    const nextOv = ovMe(careerP);
+    if (nextOv <= potCap || canBreakCap) {
+      q.ov = clamp(nextOv, 1, potCap);
+    }
+    if (canBreakCap && q.ov > (q.pot || q.ov)) {
+      q.pot = q.ov;
+    }
     if (q.blessed && q.customA) q.customA = { ...careerP.a };
     if (s) syncMe(s);
   } else {
@@ -611,9 +622,6 @@ const applyStageRewardToPlayer = (
     }
     const afterDt = DT(q, null);
     const calcOv = clamp(OVF(q.pos, afterDt.a), 1, 99);
-    const basePot = q.pot || Math.max(q.ov, 82);
-    const canBreakCap = stage >= 3 && devProf.phase !== 'declining' && devProf.strongSeason && basePot < 96;
-    const potCap = canBreakCap ? Math.min(96, basePot + 1) : basePot;
     if (calcOv > q.ov && q.ov < potCap) {
       q.ov = clamp(calcOv, 1, potCap);
     }
@@ -838,15 +846,15 @@ export const applyTrainingMissionProgress = (
     }
   }
 
-  // Career personal weekly plan drills
+  // Career personal weekly plan drills (measured so missions match AI teammates' pace)
   if (opts.careerPlan === 0 && q.pos !== 'GK') {
-    addSimultaneous('shots', 1);
-    if (Math.random() < 0.5) addSimultaneous('onTarget', 1);
+    if (Math.random() < 0.5) addSimultaneous('shots', 1);
+    if (Math.random() < 0.3) addSimultaneous('onTarget', 1);
   } else if (opts.careerPlan === 1) {
-    addSimultaneous('passes', 3);
-    addSimultaneous('dribbles', 1);
+    addSimultaneous('passes', 1);
+    if (Math.random() < 0.45) addSimultaneous('dribbles', 1);
   } else if (opts.careerPlan === 4 && q.pos !== 'GK') {
-    addSimultaneous('setpieces', 1);
+    if (Math.random() < 0.5) addSimultaneous('setpieces', 1);
   }
 
   q.missions = mState;
