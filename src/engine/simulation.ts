@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
-import { applyTrainingMissionProgress } from './missions';
+import { applyTrainingMissionProgress, applyAiClubMatchMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord } from './history';
 
 export function rate(
@@ -2689,6 +2689,7 @@ export function simulateCpuAsiaRound(s: GameState) {
     const H = s.teams[c.ids[i]];
     const A = s.teams[c.ids[i + 1]];
     const r = simMatch(H, A, s);
+    applyAiClubMatchMissions(s, H, A, r);
     const w = pickWinner(H, A, r, s);
     nx[i / 2] = w.id;
     c.log.push(`${RN[c.r]}: ${H.name} ${r.gh}-${r.ga} ${A.name}`);
@@ -2732,6 +2733,7 @@ export function simulateCpuCupRound(s: GameState) {
     const H = s.teams[c.ids[i]];
     const A = s.teams[c.ids[i + 1]];
     const r = simMatch(H, A, s);
+    applyAiClubMatchMissions(s, H, A, r);
     const w = pickWinner(H, A, r, s);
     nx[i / 2] = w.id;
     c.log.push(`${RN[c.r]}: ${H.name} ${r.gh}-${r.ga} ${A.name}`);
@@ -2871,6 +2873,7 @@ export function simulateCpuExtraCupRound(s: GameState, comp: 'lc' | 'sc' | 'dc')
       continue;
     }
     const r = simMatch(H, A, s);
+    applyAiClubMatchMissions(s, H, A, r);
     const w = pickWinner(H, A, r, s);
     nx.push(w.id);
     c.log.push(`${roundLabel}: ${H.name} ${r.gh}-${r.ga} ${A.name}`);

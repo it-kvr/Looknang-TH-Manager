@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { FolderInput, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, FolderInput, RefreshCw, X } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL } from '../data/thaiFootballData';
+import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi } from '../engine/playerCore';
+import { fmtFansShort } from '../engine/simulation';
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor, statBarColor, statTierMeta, talentTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
@@ -167,6 +168,8 @@ export const MainMenu: React.FC<{
   };
   const [targetSlot, setTargetSlot] = useState<number>(1);
   const [previewClubs, setPreviewClubs] = useState<{ names: string[][]; t0: Team[] } | null>(null);
+  const [selectedClubIdx, setSelectedClubIdx] = useState<number>(0);
+  const [clubFilter, setClubFilter] = useState<'all' | 'top' | 'mid' | 'underdog'>('all');
   const [diff, setDiff] = useState<number>(1);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
   const [, setRefresh] = useState(0);
@@ -299,7 +302,19 @@ export const MainMenu: React.FC<{
     const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
     setTargetSlot(slot);
     setPreviewClubs({ names, t0 });
+    setSelectedClubIdx(0);
+    setClubFilter('all');
     goStep('ms');
+  };
+
+  const rerollManagerClubs = () => {
+    SFX.tap();
+    clearNamePool();
+    const names = genClubNames();
+    const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
+    setPreviewClubs({ names, t0 });
+    setSelectedClubIdx(0);
+    setClubFilter('all');
   };
 
   const applyFaceTraits = (f: ReturnType<typeof rollFaceTraits>) => {
@@ -467,18 +482,63 @@ export const MainMenu: React.FC<{
   };
 
   if (step === 'ms' && previewClubs) {
+    const clubMetaList = previewClubs.t0.map((t, idx) => {
+      const squadAvg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / Math.max(1, t.sq.length));
+      const tierBucket: 'top' | 'mid' | 'underdog' = squadAvg >= 42 ? 'top' : squadAvg >= 39 ? 'mid' : 'underdog';
+      const tierTag = tierBucket === 'top' ? 'เต็งลีก' : tierBucket === 'mid' ? 'กลางตาราง' : 'ท้าทาย';
+      return { team: t, idx, squadAvg, tierBucket, tierTag };
+    });
+
+    const filteredClubs = clubMetaList.filter((item) => clubFilter === 'all' || item.tierBucket === clubFilter);
+    const activeIdx = previewClubs.t0[selectedClubIdx] ? selectedClubIdx : 0;
+    const selectedTeam = previewClubs.t0[activeIdx];
+    const selectedMeta = clubMetaList[activeIdx] || clubMetaList[0];
+    const selectedXi = xi(selectedTeam);
+    const xiAvg = Math.round(selectedXi.reduce((s, q) => s + q.ov, 0) / Math.max(1, selectedXi.length));
+
+    const calcLineOv = (positions: Position[]) => {
+      const xiLine = selectedXi.filter((q) => positions.includes(q.pos));
+      const pool = xiLine.length ? xiLine : selectedTeam.sq.filter((q) => positions.includes(q.pos));
+      if (!pool.length) return selectedMeta.squadAvg;
+      return Math.round(pool.reduce((s, q) => s + q.ov, 0) / pool.length);
+    };
+    const attOv = calcLineOv(['FW']);
+    const midOv = calcLineOv(['MF']);
+    const defOv = calcLineOv(['DF', 'GK']);
+    const topStars = selectedTeam.sq.slice().sort((a, b) => b.ov - a.ov).slice(0, 3);
+    const diffDesc =
+      diff === 0
+        ? 'คู่แข่งผ่อนลงเล็กน้อย เหมาะสำหรับเริ่มต้น'
+        : diff === 1
+          ? 'ความท้าทายสมดุลตามมาตรฐานลีก'
+          : 'คู่แข่งแข็งแกร่งขึ้น ท้าทายฝีมือคุมทีม';
+
     return (
       <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)]">
-        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
-          <div className="max-w-5xl mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <h2 className="text-sm sm:text-base mland:text-sm font-bold font-display truncate">🏟️ เลือกสโมสรเริ่มต้น</h2>
-              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
-                เริ่มจากลีกระดับจังหวัด · แก้ไขชื่อ ตรา และชุดได้ภายหลัง
-              </p>
+        {/* Top Navigation Bar: 3 clean zones */}
+        <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md safe-top safe-x">
+          <div className="max-w-6xl mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 flex items-center justify-between gap-3 sm:gap-6">
+            <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); goStep('menu'); }}
+                className="btn btn-sm btn-secondary shrink-0"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                <span>กลับ</span>
+              </button>
+              <div className="min-w-0">
+                <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-tight">
+                  เลือกสโมสรเริ่มต้น
+                </h2>
+                <p className="hidden sm:block mland:hidden text-[11px] text-[var(--mut)] truncate">
+                  ลีกระดับจังหวัด · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
+                </p>
+              </div>
             </div>
+
             <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
-              <div className="seg-bar">
+              <div className="seg-bar" role="group" aria-label="ระดับความยาก">
                 {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((lbl, idx) => (
                   <button
                     key={lbl}
@@ -492,57 +552,284 @@ export const MainMenu: React.FC<{
               </div>
               <button
                 type="button"
-                onClick={() => goStep('menu')}
-                className="btn btn-sm btn-secondary"
+                onClick={rerollManagerClubs}
+                title="สุ่มชุดสโมสรใหม่"
+                className="btn btn-sm btn-secondary shrink-0"
               >
-                ‹ กลับ
+                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
+                <span className="hidden sm:inline mland:inline">สุ่มใหม่</span>
               </button>
             </div>
           </div>
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto safe-bottom safe-x flex items-center justify-center p-3 sm:p-4 mland:p-2">
-          <div className="w-full max-w-5xl grid grid-cols-4 gap-2 mland:gap-1.5 my-auto">
-            {previewClubs.t0.map((t, idx) => {
-              const avg = Math.round(t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length);
-              const tierTag = avg >= 42 ? 'เต็งลีก' : avg >= 39 ? 'กลางตาราง' : 'ท้าทาย';
-              const accent = t.kc?.[0] || '#158049';
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => { SFX.tap(); onStartManager(targetSlot, previewClubs.names, previewClubs.t0, idx, diff); }}
-                  className="group flex items-center gap-2.5 mland:gap-1.5 p-2.5 mland:px-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)] hover:shadow-md active:scale-[0.985] text-left transition-all cursor-pointer shadow-xs min-w-0"
+        </header>
+
+        {/* Main 2-Column Club Selection & Dossier Workspace */}
+        <div className="flex-1 min-h-0 max-w-6xl w-full mx-auto px-3 sm:px-5 mland:px-3 py-3 mland:py-2 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.35fr_0.95fr] mland:grid-cols-[1.32fr_0.98fr] gap-3 sm:gap-4 mland:gap-2.5 safe-bottom safe-x">
+          {/* Left Column: Filter Bar + Club Roster Grid */}
+          <section className="flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-1.5">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
+              <div className="seg-bar">
+                {(
+                  [
+                    ['all', `ทั้งหมด (${clubMetaList.length})`],
+                    ['top', 'เต็งลีก'],
+                    ['mid', 'กลางตาราง'],
+                    ['underdog', 'ท้าทาย']
+                  ] as const
+                ).map(([fk, fl]) => (
+                  <button
+                    key={fk}
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setClubFilter(fk);
+                      const firstMatch = clubMetaList.find((c) => fk === 'all' || c.tierBucket === fk);
+                      if (firstMatch && fk !== 'all' && selectedMeta.tierBucket !== fk) {
+                        setSelectedClubIdx(firstMatch.idx);
+                      }
+                    }}
+                    className={`seg-btn ${clubFilter === fk ? 'seg-btn-active' : ''}`}
+                  >
+                    {fl}
+                  </button>
+                ))}
+              </div>
+              <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--mut)] tabular">
+                <span>เซฟช่อง #{targetSlot}</span>
+                <span aria-hidden="true">·</span>
+                <span>คลิกทีมเพื่อดูรายละเอียด</span>
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+              {filteredClubs.length === 0 ? (
+                <div className="h-full min-h-[160px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] flex flex-col items-center justify-center gap-2 p-6 text-center">
+                  <p className="text-xs sm:text-sm font-semibold text-[var(--mut)]">
+                    ไม่มีสโมสรในกลุ่มนี้จากการสุ่มรอบนี้
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); setClubFilter('all'); }}
+                    className="btn btn-sm btn-secondary"
+                  >
+                    แสดงทั้งหมด
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 mland:grid-cols-2 gap-2 mland:gap-1.5 pb-1">
+                  {filteredClubs.map(({ team: t, idx, squadAvg, tierBucket, tierTag }) => {
+                    const isSelected = idx === activeIdx;
+                    const primaryKit = t.kc?.[0] || '#158049';
+                    const secondaryKit = t.kc?.[1] || '#f5c242';
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => { SFX.tap(); setSelectedClubIdx(idx); }}
+                        aria-pressed={isSelected}
+                        className={`group rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer overflow-hidden flex flex-col min-w-0 ${
+                          isSelected
+                            ? 'border-[var(--g)] bg-[var(--surface)] shadow-md ring-1 ring-[var(--g)]/35'
+                            : 'border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)]/55 hover:bg-[var(--surface-2)]/45'
+                        }`}
+                      >
+                        <div
+                          aria-hidden="true"
+                          className={`h-1 w-full shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'}`}
+                          style={{ background: `linear-gradient(90deg, ${primaryKit}, ${secondaryKit})` }}
+                        />
+                        <div className="px-3 py-2.5 mland:px-2.5 mland:py-1.5 flex items-center gap-2.5 mland:gap-2 min-w-0">
+                          <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+                            <ClubCrest name={t.name} size={36} team={t} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-display font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">
+                              {t.name}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1 mland:mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
+                              <span
+                                className={`font-semibold shrink-0 ${
+                                  tierBucket === 'top'
+                                    ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                                    : tierBucket === 'mid'
+                                      ? 'text-[var(--g)]'
+                                      : 'text-[var(--mut)]'
+                                }`}
+                              >
+                                {tierTag}
+                              </span>
+                              <span aria-hidden="true">·</span>
+                              <span className="shrink-0 font-medium text-[var(--ink)]/75">{t.form}</span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0 pl-1">
+                            <div
+                              className="text-sm sm:text-base mland:text-xs font-extrabold font-display tabular leading-none"
+                              style={{ color: ovColor(squadAvg) }}
+                            >
+                              {squadAvg}
+                            </div>
+                            <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] mt-0.5 leading-none">
+                              OVR
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* Right Column: Selected Club Dossier & Start Confirmation */}
+          <aside className="shrink-0 sm:min-h-0 flex flex-col rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)] shadow-sm overflow-hidden">
+            <div
+              aria-hidden="true"
+              className="h-1.5 mland:h-1 w-full shrink-0"
+              style={{ background: `linear-gradient(90deg, ${selectedTeam.kc?.[0] || '#158049'}, ${selectedTeam.kc?.[1] || '#f5c242'})` }}
+            />
+
+            {/* Dossier Identity Header */}
+            <div className="px-4 py-3 mland:px-3 mland:py-2 border-b border-[var(--line)]/75 flex items-center gap-3 mland:gap-2">
+              <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-14 sm:[&>svg]:h-14 mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+                <ClubCrest name={selectedTeam.name} size={56} team={selectedTeam} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11px] mland:text-[9px] font-semibold text-[var(--g)] truncate">
+                  {selectedMeta.tierBucket === 'top'
+                    ? 'กลุ่มเต็งลุ้นแชมป์ลีก'
+                    : selectedMeta.tierBucket === 'mid'
+                      ? 'กลุ่มกลางตารางสมดุล'
+                      : 'ทีมพลังสู้ท้าทาย'}
+                </div>
+                <h3 className="font-display font-extrabold text-base sm:text-lg mland:text-xs text-[var(--ink)] truncate leading-tight mt-0.5">
+                  {selectedTeam.name}
+                </h3>
+                <div className="flex items-center gap-1.5 text-[11px] mland:text-[9px] text-[var(--mut)] truncate mt-0.5 tabular">
+                  <span>ฐานแฟน ~{fmtFansShort(selectedTeam.fans || 9500)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>นักเตะ {selectedTeam.sq.length} คน</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0 pl-2 border-l border-[var(--line)]/75">
+                <div
+                  className="text-xl sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none"
+                  style={{ color: ovColor(xiAvg) }}
                 >
-                  <div className="relative p-1 mland:p-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/60 shrink-0 [&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                    <ClubCrest name={t.name} size={32} team={t} />
-                    <span
-                      className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 mland:w-2 mland:h-2 rounded-full border border-white dark:border-slate-900"
-                      style={{ background: accent }}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">{t.name}</div>
-                    <div className="flex items-center gap-1 mt-0.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
-                      <span className={`font-bold ${avg >= 42 ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : avg >= 39 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                        {tierTag}
-                      </span>
-                      <span aria-hidden="true">·</span>
-                      <span className="font-semibold text-[var(--ink)]/80">{t.form}</span>
-                      {t.philosophy && (
-                        <>
-                          <span aria-hidden="true">·</span>
-                          <span className="truncate">{t.philosophy}</span>
-                        </>
-                      )}
+                  {xiAvg}
+                </div>
+                <div className="text-[10px] mland:text-[8px] text-[var(--mut)] mt-0.5 whitespace-nowrap">
+                  11 ตัวจริง
+                </div>
+              </div>
+            </div>
+
+            {/* Detailed Dossier Body (Desktop / Tablet / Mobile Landscape) */}
+            <div className="hidden sm:flex mland:flex flex-1 min-h-0 flex-col overflow-y-auto px-4 py-3 mland:px-3 mland:py-2 space-y-3.5 mland:space-y-2">
+              {/* Line Strength Breakdown */}
+              <div className="space-y-2 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">
+                  สมดุลขุมกำลัง
+                </div>
+                <div className="space-y-1.5 mland:space-y-1">
+                  {(
+                    [
+                      ['เกมรุก', attOv],
+                      ['แดนกลาง', midOv],
+                      ['เกมรับ & ประตู', defOv]
+                    ] as const
+                  ).map(([lbl, val]) => (
+                    <div key={lbl} className="grid grid-cols-[92px_1fr_32px] mland:grid-cols-[76px_1fr_26px] items-center gap-2 text-xs mland:text-[9.5px]">
+                      <span className="font-medium text-[var(--ink)]/85 truncate">{lbl}</span>
+                      <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ width: `${clamp(val * 1.45, 18, 100)}%`, background: statBarColor(val) }}
+                        />
+                      </div>
+                      <span className="font-display font-bold tabular text-right text-[var(--ink)]">{val}</span>
                     </div>
-                  </div>
-                  <span className="px-2 mland:px-1.5 py-0.5 rounded-lg mland:rounded-md text-white text-xs mland:text-[10px] font-bold tabular shrink-0 shadow-xs" style={{ background: ovColor(avg) }}>
-                    {avg}
+                  ))}
+                </div>
+              </div>
+
+              {/* Tactical Profile Rows */}
+              <div className="border-t border-[var(--line)]/70 pt-2.5 mland:pt-1.5 space-y-1.5 mland:space-y-1 text-xs mland:text-[9.5px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--mut)]">ระบบการเล่น</span>
+                  <span className="font-bold text-[var(--ink)] tabular">
+                    {selectedTeam.form} · {AR_T[selectedTeam.tac]}
                   </span>
-                </button>
-              );
-            })}
-          </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--mut)] shrink-0">ปรัชญาสโมสร</span>
+                  <span className="font-semibold text-[var(--ink)] truncate text-right">
+                    {selectedTeam.philosophy || 'สมดุล'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Key Players List */}
+              <div className="border-t border-[var(--line)]/70 pt-2.5 mland:pt-1.5 space-y-1.5 mland:space-y-1">
+                <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">
+                  3 แข้งแกนหลักประจำทีม
+                </div>
+                <div className="divide-y divide-[var(--line)]/55">
+                  {topStars.map((pl) => (
+                    <div key={pl.n} className="py-1.5 mland:py-1 flex items-center gap-2 mland:gap-1.5 min-w-0">
+                      <div className="shrink-0 [&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                        <PlayerFace player={pl} team={selectedTeam} size={28} bare />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] truncate leading-tight">
+                          {pl.n}
+                        </div>
+                        <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular leading-tight">
+                          {SPN[pl.ro] || pl.ro} · อายุ {pl.age} ปี
+                        </div>
+                      </div>
+                      <span
+                        className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular shrink-0"
+                        style={{ color: ovColor(pl.ov) }}
+                      >
+                        {pl.ov}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Compact Mobile Portrait Metrics Strip */}
+            <div className="sm:hidden mland:hidden px-4 py-2 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 text-[11px] tabular bg-[var(--surface-2)]/35">
+              <span>รุก <strong className="text-[var(--ink)]">{attOv}</strong></span>
+              <span className="text-[var(--mut)]" aria-hidden="true">·</span>
+              <span>กลาง <strong className="text-[var(--ink)]">{midOv}</strong></span>
+              <span className="text-[var(--mut)]" aria-hidden="true">·</span>
+              <span>รับ <strong className="text-[var(--ink)]">{defOv}</strong></span>
+              <span className="text-[var(--mut)]" aria-hidden="true">·</span>
+              <span className="font-semibold text-[var(--ink)] truncate">{selectedTeam.form}</span>
+            </div>
+
+            {/* Primary CTA Footer */}
+            <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-2 border-t border-[var(--line)]/75 bg-[var(--surface-2)]/45 space-y-2 mland:space-y-1">
+              <p className="hidden sm:block mland:hidden text-[11px] text-[var(--mut)] leading-snug">
+                ระดับ{['ง่าย', 'ปกติ', 'ยาก'][diff]}: {diffDesc}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  onStartManager(targetSlot, previewClubs.names, previewClubs.t0, activeIdx, diff);
+                }}
+                className="btn btn-gold btn-lg w-full font-extrabold"
+              >
+                <span className="truncate">รับคุมทีม {selectedTeam.name}</span>
+                <ChevronRight className="w-4 h-4 shrink-0" />
+              </button>
+            </div>
+          </aside>
         </div>
       </div>
     );

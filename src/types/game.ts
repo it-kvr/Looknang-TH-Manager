@@ -155,7 +155,11 @@ export type PersonalMissionMetric =
   | 'highRatings'
   | 'motm'
   | 'cleanGames'
-  | 'matches';
+  | 'matches'
+  | 'braces'
+  | 'clutchActions'
+  | 'cleanWins'
+  | 'awayWins';
 
 export type MissionStageOutcome = 'ok' | 'fail';
 

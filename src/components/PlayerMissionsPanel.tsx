@@ -88,7 +88,7 @@ export const PlayerMissionsPanel: React.FC<{
             </span>
           </div>
           <div className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">
-            สะสมทุกภารกิจพร้อมกันได้สูงสุด <b className="text-[var(--ink)]">8 ขั้น</b> · หากสุ่มพลาด ความคืบหน้าจะลดเหลือ <b className="text-[var(--ink)]">72%</b> เพื่อเก็บสะสมลองใหม่ได้จนกว่าจะเลยช่วงพีค
+            สะสมทุกภารกิจพร้อมกันได้สูงสุด <b className="text-[var(--ink)]">10 ขั้น</b> · หากสุ่มพลาด ความคืบหน้าจะลดเหลือ <b className="text-[var(--ink)]">70%</b> เพื่อเก็บสะสมลองใหม่ได้จนกว่าจะเลยช่วงพีค
           </div>
         </div>
         <div className="flex items-center gap-2.5 text-xs mland:text-[10px] tabular shrink-0">
@@ -137,7 +137,7 @@ export const PlayerMissionsPanel: React.FC<{
                     : 'bg-[var(--red-soft)] border-[var(--red)]/35 text-[var(--red)]'
                 }`}
               >
-                {lg.success ? '✓' : '✕'} {lg.icon} {lg.missionName} ขั้น {lg.stage} ({lg.chance}%){lg.success && lg.rewardText ? ` · ${lg.rewardText}` : ' · ถอยเหลือ 72% ลองใหม่ได้'}
+                {lg.success ? '✓' : '✕'} {lg.icon} {lg.missionName} ขั้น {lg.stage} ({lg.chance}%){lg.success && lg.rewardText ? ` · ${lg.rewardText}` : ' · ถอยเหลือ 70% ลองใหม่ได้'}
               </span>
             ))}
           </div>
@@ -158,7 +158,7 @@ export const PlayerMissionsPanel: React.FC<{
                   </div>
                   <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{def.desc}</div>
                 </div>
-                <div className="flex items-center flex-wrap justify-end gap-0.5 shrink-0 max-w-[144px] pt-0.5" title={`ประวัติ ${maxStage} ขั้น`}>
+                <div className="grid grid-cols-5 gap-0.5 shrink-0 pt-0.5" title={`ประวัติ ${maxStage} ขั้น`}>
                   {Array.from({ length: maxStage }, (_, idx) => {
                     const out = stageOutcomes[idx] || (idx < stage ? 'ok' : undefined);
                     const isCur = !completedAll && idx === stage;

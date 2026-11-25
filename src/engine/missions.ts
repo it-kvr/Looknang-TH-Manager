@@ -175,7 +175,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'attack',
     metric: 'setpieces',
     unit: 'ครั้ง',
-    targets: [14, 34, 65, 110, 175, 260, 370, 500],
+    targets: [16, 40, 78, 132, 210, 315, 450, 620, 840, 1120],
     subRewards: [
       { fk: 1, cur: 1 },
       { fk: 1, cur: 1, comp: 1 },
@@ -184,10 +184,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { fk: 2, cur: 2, lsh: 1 },
       { fk: 2, cur: 2, comp: 1, lsh: 1 },
       { fk: 3, cur: 2, comp: 2 },
-      { fk: 3, cur: 3, comp: 2 }
+      { fk: 3, cur: 3, comp: 2 },
+      { fk: 3, cur: 3, lsh: 2, comp: 2 },
+      { fk: 4, cur: 3, lsh: 2, comp: 3 }
     ],
     coreReward: 'sh',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -198,7 +200,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'playmaking',
     metric: 'passes',
     unit: 'ครั้ง',
-    targets: [240, 620, 1250, 2200, 3500, 5200, 7400, 10200],
+    targets: [280, 720, 1480, 2600, 4150, 6200, 8800, 12100, 16200, 21500],
     subRewards: [
       { spass: 1, lpass: 1 },
       { spass: 1, lpass: 1, rd: 1 },
@@ -207,10 +209,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { spass: 2, lpass: 2, crs: 1, rd: 1 },
       { spass: 2, lpass: 2, vis: 2 },
       { spass: 3, lpass: 2, crs: 2 },
-      { spass: 3, lpass: 3, vis: 2, comp: 1 }
+      { spass: 3, lpass: 3, vis: 2, comp: 1 },
+      { spass: 3, lpass: 3, vis: 3, rd: 2 },
+      { spass: 4, lpass: 3, vis: 3, comp: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1]
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
   },
   {
     id: 'finishing',
@@ -220,7 +224,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'attack',
     metric: 'shots',
     unit: 'ครั้ง',
-    targets: [38, 95, 185, 320, 500, 740, 1040, 1400],
+    targets: [44, 112, 220, 380, 600, 890, 1260, 1720, 2300, 3050],
     subRewards: [
       { fin: 1, pw: 1 },
       { fin: 1, pw: 1, run: 1 },
@@ -229,10 +233,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { fin: 2, pw: 2, comp: 1 },
       { fin: 2, pw: 2, run: 2 },
       { fin: 3, pw: 2, comp: 2 },
-      { fin: 3, pw: 3, comp: 2 }
+      { fin: 3, pw: 3, comp: 2 },
+      { fin: 3, pw: 3, run: 2, cur: 2 },
+      { fin: 4, pw: 3, comp: 3, run: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF']
   },
   {
@@ -243,7 +249,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'attack',
     metric: 'shots',
     unit: 'ครั้ง',
-    targets: [10, 26, 54, 96, 155, 230, 330, 455],
+    targets: [12, 32, 66, 118, 190, 285, 410, 565, 760, 1020],
     subRewards: [
       { pw: 1, lsh: 1 },
       { lsh: 1, fin: 1, run: 1 },
@@ -252,10 +258,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { fin: 2, pw: 2, comp: 1 },
       { lsh: 2, pw: 2, run: 2 },
       { pw: 3, lsh: 2, comp: 1 },
-      { fin: 3, pw: 2, lsh: 2, comp: 1 }
+      { fin: 3, pw: 2, lsh: 2, comp: 1 },
+      { pw: 3, lsh: 3, run: 2, comp: 2 },
+      { fin: 3, pw: 3, lsh: 3, comp: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['DF']
   },
   {
@@ -266,7 +274,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'attack',
     metric: 'onTarget',
     unit: 'ครั้ง',
-    targets: [18, 46, 92, 160, 255, 380, 540, 730],
+    targets: [22, 56, 112, 195, 310, 465, 660, 910, 1220, 1620],
     subRewards: [
       { fin: 1, cur: 1 },
       { fin: 1, cur: 1, pw: 1 },
@@ -275,10 +283,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { fin: 2, cur: 2, run: 1 },
       { fin: 2, cur: 2, comp: 2 },
       { fin: 3, cur: 2, run: 2 },
-      { fin: 3, cur: 3, comp: 2 }
+      { fin: 3, cur: 3, comp: 2 },
+      { fin: 3, cur: 3, pw: 2, run: 2 },
+      { fin: 4, cur: 3, comp: 3, pw: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF']
   },
   {
@@ -289,7 +299,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'attack',
     metric: 'goals',
     unit: 'ประตู',
-    targets: [8, 22, 46, 82, 130, 195, 280, 385],
+    targets: [10, 26, 55, 98, 158, 238, 340, 470, 635, 850],
     subRewards: [
       { fin: 1, run: 1 },
       { fin: 1, run: 1, comp: 1 },
@@ -298,10 +308,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { fin: 2, pw: 2, comp: 1 },
       { fin: 2, run: 2, comp: 2 },
       { fin: 3, pw: 2, comp: 2 },
-      { fin: 3, pw: 3, comp: 2 }
+      { fin: 3, pw: 3, comp: 2 },
+      { fin: 3, run: 3, pw: 2, comp: 2 },
+      { fin: 4, pw: 3, run: 3, comp: 3 }
     ],
     coreReward: 'sh',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF']
   },
   {
@@ -312,7 +324,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'playmaking',
     metric: 'crossAssists',
     unit: 'ครั้ง',
-    targets: [28, 72, 145, 250, 390, 570, 790, 1060],
+    targets: [34, 88, 175, 305, 480, 710, 1000, 1360, 1820, 2420],
     subRewards: [
       { crs: 1, cur: 1 },
       { crs: 1, cur: 1, run: 1 },
@@ -321,10 +333,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { crs: 2, cur: 2, run: 2 },
       { crs: 2, cur: 2, vis: 2 },
       { crs: 3, cur: 2, rd: 2 },
-      { crs: 3, cur: 3, vis: 2 }
+      { crs: 3, cur: 3, vis: 2 },
+      { crs: 3, cur: 3, vis: 3, rd: 2 },
+      { crs: 4, cur: 3, vis: 3, fk: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -335,7 +349,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'playmaking',
     metric: 'assists',
     unit: 'ครั้ง',
-    targets: [4, 11, 24, 44, 72, 110, 158, 220],
+    targets: [5, 14, 30, 55, 90, 138, 198, 275, 375, 500],
     subRewards: [
       { vis: 1, spass: 1 },
       { vis: 1, crs: 1, cur: 1 },
@@ -344,10 +358,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { vis: 2, spass: 2, lpass: 1 },
       { vis: 2, crs: 2, cur: 2 },
       { vis: 3, lpass: 2, comp: 2 },
-      { vis: 3, spass: 2, crs: 2, comp: 2 }
+      { vis: 3, spass: 2, crs: 2, comp: 2 },
+      { vis: 3, lpass: 3, crs: 2, cur: 2 },
+      { vis: 4, spass: 3, crs: 3, comp: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -358,7 +374,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'playmaking',
     metric: 'keyPasses',
     unit: 'ครั้ง',
-    targets: [12, 32, 66, 115, 185, 275, 390, 530],
+    targets: [15, 38, 78, 138, 220, 330, 470, 645, 870, 1160],
     subRewards: [
       { vis: 1, rd: 1 },
       { vis: 1, lpass: 1, ctrl: 1 },
@@ -367,10 +383,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { vis: 2, spass: 2, ctrl: 1 },
       { vis: 2, lpass: 2, comp: 1 },
       { vis: 3, rd: 2, ctrl: 2 },
-      { vis: 3, lpass: 2, crs: 2 }
+      { vis: 3, lpass: 2, crs: 2 },
+      { vis: 3, crs: 2, rd: 2, ctrl: 2 },
+      { vis: 4, lpass: 3, crs: 2, comp: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -381,7 +399,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'playmaking',
     metric: 'dribbles',
     unit: 'ครั้ง',
-    targets: [52, 135, 270, 470, 740, 1090, 1540, 2100],
+    targets: [60, 155, 315, 550, 875, 1300, 1850, 2550, 3420, 4550],
     subRewards: [
       { drb: 1, spd: 1 },
       { drb: 1, acc: 1, agi: 1 },
@@ -390,10 +408,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { drb: 2, spd: 2, bal: 1 },
       { drb: 2, acc: 2, ctrl: 2 },
       { drb: 3, spd: 2, run: 2 },
-      { drb: 3, ctrl: 2, acc: 2, agi: 1 }
+      { drb: 3, ctrl: 2, acc: 2, agi: 1 },
+      { drb: 3, spd: 3, agi: 2, bal: 2 },
+      { drb: 4, ctrl: 3, spd: 3, acc: 2 }
     ],
     coreReward: 'dr',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -404,7 +424,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'defense',
     metric: 'tackles',
     unit: 'ครั้ง',
-    targets: [42, 108, 215, 370, 580, 860, 1210, 1650],
+    targets: [48, 125, 255, 440, 700, 1040, 1480, 2040, 2750, 3650],
     subRewards: [
       { tkl: 1, mrk: 1 },
       { tkl: 1, mrk: 1, rd: 1 },
@@ -413,10 +433,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { tkl: 2, mrk: 2, blk: 1 },
       { tkl: 2, mrk: 2, comp: 2 },
       { tkl: 3, mrk: 2, rd: 2 },
-      { tkl: 3, mrk: 3, comp: 2 }
+      { tkl: 3, mrk: 3, comp: 2 },
+      { tkl: 3, mrk: 3, str: 2, rd: 2 },
+      { tkl: 4, mrk: 3, blk: 2, comp: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['DF', 'MF']
   },
   {
@@ -427,7 +449,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'defense',
     metric: 'interceptions',
     unit: 'ครั้ง',
-    targets: [20, 54, 110, 190, 300, 445, 630, 860],
+    targets: [24, 64, 132, 230, 365, 545, 780, 1070, 1440, 1920],
     subRewards: [
       { rd: 1, pos: 1 },
       { rd: 1, tkl: 1, foc: 1 },
@@ -436,10 +458,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { rd: 2, mrk: 2, foc: 1 },
       { rd: 2, pos: 2, tkl: 2 },
       { rd: 3, pos: 2, comp: 2 },
-      { rd: 3, mrk: 2, tkl: 2, foc: 1 }
+      { rd: 3, mrk: 2, tkl: 2, foc: 1 },
+      { rd: 3, pos: 3, acc: 2, foc: 2 },
+      { rd: 4, pos: 3, tkl: 2, comp: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['DF', 'MF']
   },
   {
@@ -450,7 +474,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'defense',
     metric: 'blocks',
     unit: 'ครั้ง',
-    targets: [15, 40, 82, 145, 230, 345, 490, 670],
+    targets: [18, 48, 98, 175, 280, 420, 600, 825, 1110, 1480],
     subRewards: [
       { blk: 1, pos: 1 },
       { blk: 1, pos: 1, tol: 1 },
@@ -459,10 +483,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { blk: 2, pos: 2, str: 1 },
       { blk: 2, mrk: 2, comp: 1 },
       { blk: 3, pos: 2, str: 2 },
-      { blk: 3, mrk: 2, tol: 2, comp: 1 }
+      { blk: 3, mrk: 2, tol: 2, comp: 1 },
+      { blk: 3, pos: 3, str: 2, tol: 2 },
+      { blk: 4, pos: 3, mrk: 3, comp: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['DF', 'MF']
   },
   {
@@ -473,7 +499,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'physical',
     metric: 'headers',
     unit: 'ครั้ง',
-    targets: [26, 68, 135, 235, 370, 540, 760, 1030],
+    targets: [32, 82, 165, 285, 450, 665, 940, 1290, 1740, 2320],
     subRewards: [
       { hd: 1, jmp: 1 },
       { hd: 1, str: 1, jmp: 1 },
@@ -482,10 +508,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { hd: 2, str: 2, comp: 1 },
       { hd: 2, jmp: 2, pos: 2 },
       { hd: 3, str: 2, jmp: 2 },
-      { hd: 3, str: 3, comp: 2 }
+      { hd: 3, str: 3, comp: 2 },
+      { hd: 3, jmp: 3, pos: 2, str: 2 },
+      { hd: 4, jmp: 3, str: 3, comp: 2 }
     ],
     coreReward: 'ph',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -496,7 +524,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'gk',
     metric: 'saves',
     unit: 'ครั้ง',
-    targets: [36, 92, 185, 320, 500, 740, 1040, 1420],
+    targets: [42, 110, 220, 385, 610, 905, 1280, 1760, 2380, 3180],
     subRewards: [
       { sv: 1, rfx: 1 },
       { sv: 1, cl: 1, hnd: 1 },
@@ -505,10 +533,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { sv: 2, cl: 2, comp: 1 },
       { sv: 2, rfx: 2, dist: 2 },
       { sv: 3, cl: 2, hnd: 2 },
-      { sv: 3, rfx: 3, cl: 2, comp: 1 }
+      { sv: 3, rfx: 3, cl: 2, comp: 1 },
+      { sv: 3, rfx: 3, hnd: 3, cl: 2 },
+      { sv: 4, rfx: 3, cl: 3, comp: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['GK']
   },
   {
@@ -519,7 +549,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'gk',
     metric: 'cleanSheets',
     unit: 'นัด',
-    targets: [5, 14, 28, 48, 76, 112, 158, 215],
+    targets: [6, 16, 33, 58, 92, 138, 198, 272, 365, 485],
     subRewards: [
       { pos: 1, comp: 1 },
       { pos: 1, comp: 1, rec: 1 },
@@ -528,10 +558,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { sv: 2, mrk: 2, comp: 1 },
       { pos: 2, cl: 2, foc: 2 },
       { sv: 2, mrk: 2, comp: 2 },
-      { pos: 3, cl: 2, comp: 3 }
+      { pos: 3, cl: 2, comp: 3 },
+      { pos: 3, foc: 3, cl: 2, comp: 2 },
+      { pos: 4, cl: 3, comp: 3, foc: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['GK', 'DF']
   },
   {
@@ -542,7 +574,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'gk',
     metric: 'passes',
     unit: 'ครั้ง',
-    targets: [140, 360, 720, 1250, 1980, 2950, 4200, 5800],
+    targets: [165, 425, 860, 1510, 2400, 3580, 5120, 7100, 9600, 12800],
     subRewards: [
       { dist: 1, spass: 1 },
       { dist: 1, lpass: 1, comp: 1 },
@@ -551,10 +583,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { dist: 2, vis: 2, rd: 1 },
       { dist: 2, lpass: 2, ctrl: 2 },
       { dist: 3, spass: 2, rd: 2 },
-      { dist: 3, lpass: 2, comp: 2, vis: 1 }
+      { dist: 3, lpass: 2, comp: 2, vis: 1 },
+      { dist: 3, lpass: 3, vis: 2, ctrl: 2 },
+      { dist: 4, lpass: 3, vis: 3, comp: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1],
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
     posFilter: ['GK']
   },
   {
@@ -565,7 +599,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'physical',
     metric: 'wins',
     unit: 'นัด',
-    targets: [10, 26, 52, 90, 142, 210, 295, 400],
+    targets: [12, 31, 62, 108, 172, 256, 365, 500, 675, 900],
     subRewards: [
       { comp: 1, sta: 1 },
       { comp: 1, det: 1, ldr: 1 },
@@ -574,10 +608,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { comp: 2, sta: 2, foc: 1 },
       { comp: 2, det: 2, rec: 2 },
       { comp: 3, sta: 2, ldr: 2 },
-      { comp: 3, sta: 3, rec: 2, det: 1 }
+      { comp: 3, sta: 3, rec: 2, det: 1 },
+      { comp: 3, ldr: 3, det: 2, sta: 2 },
+      { comp: 4, sta: 3, ldr: 3, rec: 2 }
     ],
     coreReward: 'ph',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1]
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
   },
   {
     id: 'mvp_form',
@@ -587,7 +623,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'playmaking',
     metric: 'highRatings',
     unit: 'นัด',
-    targets: [8, 20, 42, 74, 118, 176, 250, 345],
+    targets: [10, 25, 52, 92, 148, 222, 318, 440, 595, 790],
     subRewards: [
       { con: 1, comp: 1 },
       { con: 1, rd: 1, foc: 1 },
@@ -596,10 +632,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { con: 2, comp: 2, rd: 1 },
       { con: 2, rd: 2, ctrl: 2 },
       { comp: 3, con: 2, foc: 2 },
-      { comp: 3, con: 2, rd: 2, ctrl: 1 }
+      { comp: 3, con: 2, rd: 2, ctrl: 1 },
+      { comp: 3, con: 3, foc: 2, ctrl: 2 },
+      { con: 4, comp: 3, rd: 3, foc: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1]
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
   },
   {
     id: 'motm_star',
@@ -609,7 +647,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'attack',
     metric: 'motm',
     unit: 'ครั้ง',
-    targets: [3, 8, 17, 30, 48, 72, 102, 140],
+    targets: [4, 10, 21, 38, 62, 94, 136, 190, 260, 350],
     subRewards: [
       { comp: 1, det: 1 },
       { comp: 1, agi: 1, ctrl: 1 },
@@ -618,10 +656,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { comp: 2, spd: 1, ctrl: 2 },
       { comp: 2, drb: 2, foc: 2 },
       { comp: 3, agi: 2, ldr: 2 },
-      { comp: 3, ctrl: 2, spd: 2, det: 1 }
+      { comp: 3, ctrl: 2, spd: 2, det: 1 },
+      { comp: 3, drb: 3, ldr: 2, det: 2 },
+      { comp: 4, ctrl: 3, spd: 2, ldr: 3 }
     ],
     coreReward: 'dr',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1]
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
   },
   {
     id: 'fairplay_pro',
@@ -631,7 +671,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'physical',
     metric: 'cleanGames',
     unit: 'นัด',
-    targets: [12, 30, 60, 105, 165, 245, 345, 470],
+    targets: [14, 36, 72, 126, 200, 298, 425, 585, 790, 1050],
     subRewards: [
       { foc: 1, con: 1 },
       { foc: 1, comp: 1, bal: 1 },
@@ -640,10 +680,12 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { foc: 2, comp: 2, bal: 1 },
       { foc: 2, con: 2, end: 2 },
       { foc: 3, comp: 2, tol: 2 },
-      { foc: 3, con: 2, rec: 2, end: 1 }
+      { foc: 3, con: 2, rec: 2, end: 1 },
+      { foc: 3, comp: 3, bal: 2, tol: 2 },
+      { foc: 4, con: 3, rec: 2, end: 2 }
     ],
     coreReward: 'ph',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1]
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
   },
   {
     id: 'ironman',
@@ -653,7 +695,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     category: 'physical',
     metric: 'matches',
     unit: 'นัด',
-    targets: [14, 36, 72, 124, 195, 290, 410, 560],
+    targets: [16, 42, 85, 148, 235, 350, 500, 690, 930, 1240],
     subRewards: [
       { sta: 1, tol: 1 },
       { sta: 1, rec: 1, end: 1 },
@@ -662,10 +704,211 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
       { sta: 2, tol: 2, rec: 1 },
       { sta: 2, str: 2, end: 2 },
       { sta: 3, tol: 2, rec: 2 },
-      { sta: 3, tol: 2, rec: 2, str: 2 }
+      { sta: 3, tol: 2, rec: 2, str: 2 },
+      { sta: 3, end: 3, tol: 2, rec: 2 },
+      { sta: 4, tol: 3, rec: 3, str: 2 }
     ],
     coreReward: 'ph',
-    coreRewards: [0, 0, 1, 0, 1, 0, 1, 1]
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
+  },
+  {
+    id: 'brace_hero',
+    icon: '💥',
+    name: 'ยิงเบิ้ลสะท้านลีก',
+    desc: 'ระเบิดฟอร์มยิงได้อย่างน้อย 2 ประตูขึ้นไปภายในเกมเดียว',
+    category: 'attack',
+    metric: 'braces',
+    unit: 'นัด',
+    targets: [2, 6, 13, 24, 39, 58, 84, 118, 162, 220],
+    subRewards: [
+      { fin: 1, comp: 1 },
+      { fin: 1, pw: 1, run: 1 },
+      { fin: 2, cur: 1, comp: 1 },
+      { fin: 2, pw: 2, run: 1 },
+      { fin: 2, cur: 2, comp: 2 },
+      { fin: 3, pw: 2, run: 2 },
+      { fin: 3, cur: 2, comp: 2 },
+      { fin: 3, pw: 3, run: 2, comp: 2 },
+      { fin: 4, pw: 3, cur: 2, comp: 2 },
+      { fin: 4, pw: 3, run: 3, comp: 3 }
+    ],
+    coreReward: 'sh',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['FW', 'MF']
+  },
+  {
+    id: 'clutch_finisher',
+    icon: '⏱️',
+    name: 'มัจจุราชท้ายเกม (75\'+)',
+    desc: 'มีส่วนร่วมยิงประตูหรือแอสซิสต์ตัดสินเกมในช่วง 15 นาทีสุดท้าย (นาทีที่ 75 ขึ้นไป)',
+    category: 'attack',
+    metric: 'clutchActions',
+    unit: 'ครั้ง',
+    targets: [3, 8, 17, 30, 48, 72, 104, 145, 198, 265],
+    subRewards: [
+      { comp: 1, det: 1 },
+      { comp: 1, run: 1, end: 1 },
+      { comp: 2, fin: 1, foc: 1 },
+      { comp: 2, end: 2, det: 1 },
+      { comp: 2, fin: 2, foc: 2 },
+      { comp: 3, det: 2, run: 2 },
+      { comp: 3, fin: 2, end: 2 },
+      { comp: 3, foc: 3, det: 2, run: 2 },
+      { comp: 4, fin: 3, end: 2, det: 2 },
+      { comp: 4, fin: 3, foc: 3, det: 3 }
+    ],
+    coreReward: 'sh',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['FW', 'MF', 'DF']
+  },
+  {
+    id: 'df_goal_threat',
+    icon: '🌋',
+    name: 'กองหลังจอมพังประตู',
+    desc: 'แนวรับขึ้นมาโขกลูกตั้งเตะหรือซัดไกลใส่สกอร์ช่วยทีม',
+    category: 'attack',
+    metric: 'goals',
+    unit: 'ประตู',
+    targets: [2, 6, 13, 24, 38, 56, 80, 112, 152, 205],
+    subRewards: [
+      { hd: 1, fin: 1 },
+      { hd: 1, pw: 1, jmp: 1 },
+      { fin: 2, lsh: 1, jmp: 1 },
+      { hd: 2, pw: 2, comp: 1 },
+      { fin: 2, lsh: 2, run: 1 },
+      { hd: 3, pw: 2, jmp: 2 },
+      { fin: 3, lsh: 2, comp: 2 },
+      { hd: 3, pw: 3, jmp: 2, comp: 2 },
+      { fin: 3, lsh: 3, hd: 3, run: 2 },
+      { fin: 4, pw: 3, hd: 3, comp: 2 }
+    ],
+    coreReward: 'sh',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['DF']
+  },
+  {
+    id: 'pressing_forward',
+    icon: '🐺',
+    name: 'กองหน้าสายเพรสซิ่ง',
+    desc: 'ไล่บีบเพรสซิ่งตั้งแต่แดนหน้าและแย่งบอลกลับมาครองให้ทีม',
+    category: 'defense',
+    metric: 'tackles',
+    unit: 'ครั้ง',
+    targets: [16, 42, 86, 152, 242, 360, 515, 710, 960, 1280],
+    subRewards: [
+      { tkl: 1, sta: 1 },
+      { tkl: 1, acc: 1, det: 1 },
+      { tkl: 2, sta: 1, mrk: 1 },
+      { tkl: 2, acc: 2, rd: 1 },
+      { tkl: 2, sta: 2, det: 2 },
+      { tkl: 3, rd: 2, acc: 2 },
+      { tkl: 3, sta: 2, mrk: 2 },
+      { tkl: 3, acc: 3, det: 2, rd: 2 },
+      { tkl: 3, sta: 3, mrk: 3, det: 2 },
+      { tkl: 4, sta: 3, acc: 3, det: 3 }
+    ],
+    coreReward: 'tk',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['FW']
+  },
+  {
+    id: 'clean_win_wall',
+    icon: '🏰',
+    name: 'กำแพงแกร่งชนะไร้เสีย',
+    desc: 'ลงเล่นคุมจังหวะเกมรับพาทีมคว้าชัยชนะโดยไม่เสียประตูแม้แต่ลูกเดียว',
+    category: 'defense',
+    metric: 'cleanWins',
+    unit: 'นัด',
+    targets: [5, 14, 29, 50, 80, 120, 172, 238, 320, 425],
+    subRewards: [
+      { pos: 1, mrk: 1 },
+      { pos: 1, tkl: 1, comp: 1 },
+      { pos: 2, mrk: 1, foc: 1 },
+      { pos: 2, tkl: 2, rd: 1 },
+      { pos: 2, mrk: 2, comp: 2 },
+      { pos: 3, tkl: 2, foc: 2 },
+      { pos: 3, mrk: 2, blk: 2 },
+      { pos: 3, tkl: 3, comp: 2, foc: 2 },
+      { pos: 3, mrk: 3, rd: 2, comp: 2 },
+      { pos: 4, mrk: 3, tkl: 3, comp: 3 }
+    ],
+    coreReward: 'tk',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['DF', 'MF', 'GK']
+  },
+  {
+    id: 'road_warrior',
+    icon: '✈️',
+    name: 'นักรบผู้พิชิตเกมเยือน',
+    desc: 'บุกเก็บชัยชนะนอกรังในสภาพแวดล้อมที่กดดันได้อย่างยอดเยี่ยม',
+    category: 'physical',
+    metric: 'awayWins',
+    unit: 'นัด',
+    targets: [6, 16, 33, 58, 92, 138, 198, 274, 370, 495],
+    subRewards: [
+      { det: 1, end: 1 },
+      { det: 1, comp: 1, sta: 1 },
+      { comp: 2, end: 1, foc: 1 },
+      { det: 2, sta: 2, tol: 1 },
+      { comp: 2, end: 2, ldr: 1 },
+      { det: 3, foc: 2, rec: 2 },
+      { comp: 3, sta: 2, ldr: 2 },
+      { det: 3, end: 3, foc: 2, tol: 2 },
+      { comp: 3, ldr: 3, rec: 2, det: 2 },
+      { comp: 4, end: 3, ldr: 3, det: 3 }
+    ],
+    coreReward: 'ph',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1]
+  },
+  {
+    id: 'gk_guardian',
+    icon: '🦁',
+    name: 'นายด่านผู้พิทักษ์ชัยชนะ',
+    desc: 'ยืนเฝ้าเสาเป็นด่านสุดท้ายช่วยทีมคว้า 3 แต้มและชนะในเกมสำคัญ',
+    category: 'gk',
+    metric: 'wins',
+    unit: 'นัด',
+    targets: [12, 31, 62, 108, 172, 256, 365, 500, 675, 900],
+    subRewards: [
+      { cl: 1, comp: 1 },
+      { cl: 1, sv: 1, ldr: 1 },
+      { cl: 2, rfx: 1, comp: 1 },
+      { sv: 2, hnd: 2, ldr: 1 },
+      { cl: 2, comp: 2, foc: 1 },
+      { sv: 2, rfx: 2, ldr: 2 },
+      { cl: 3, hnd: 2, foc: 2 },
+      { sv: 3, rfx: 2, comp: 2, ldr: 2 },
+      { cl: 3, hnd: 3, foc: 2, comp: 2 },
+      { sv: 4, cl: 3, rfx: 3, ldr: 3 }
+    ],
+    coreReward: 'tk',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['GK']
+  },
+  {
+    id: 'gk_consistency',
+    icon: '💎',
+    name: 'มือกาวฟอร์มเทพคงเส้นคงวา',
+    desc: 'รักษามาตรฐานการเฝ้าเสาคว้าเรตติ้ง 7.2 ขึ้นไปอย่างต่อเนื่องทุกฤดูกาล',
+    category: 'gk',
+    metric: 'highRatings',
+    unit: 'นัด',
+    targets: [10, 25, 52, 92, 148, 222, 318, 440, 595, 790],
+    subRewards: [
+      { con: 1, rfx: 1 },
+      { con: 1, hnd: 1, foc: 1 },
+      { con: 2, sv: 1, comp: 1 },
+      { con: 2, rfx: 2, foc: 1 },
+      { con: 2, hnd: 2, dist: 1 },
+      { con: 3, sv: 2, comp: 2 },
+      { con: 3, rfx: 2, foc: 2 },
+      { con: 3, hnd: 3, dist: 2, comp: 2 },
+      { con: 4, sv: 3, rfx: 2, foc: 2 },
+      { con: 4, hnd: 3, comp: 3, dist: 3 }
+    ],
+    coreReward: 'ph',
+    coreRewards: [0, 0, 1, 0, 1, 0, 1, 0, 1, 1],
+    posFilter: ['GK']
   }
 ];
 
@@ -692,15 +935,16 @@ export function calcMissionSuccessChance(
   const age = devProf.age;
   const curOv = q.me && careerP ? ovMe(careerP) : (q.ov || 65);
 
-  // Harder progression curve across 8 stages, uncapped until declining phase
-  let chance = 16 + talent * 0.36 - stage * 5.0;
+  // Harder progression curve across 10 stages, uncapped until declining phase
+  let chance = 14 + talent * 0.32 - stage * 4.4;
+  if (stage >= 7) chance -= (stage - 6) * 2.0;
   if (age <= 21) chance += 3;
   if (devProf.phase === 'peak') chance -= 3;
-  else if (devProf.phase === 'declining') chance -= 16;
+  else if (devProf.phase === 'declining') chance -= 18;
   if (devProf.strongSeason) chance += 4;
 
-  if (curOv >= 76) {
-    chance -= Math.max(0, curOv - 76) * 1.15;
+  if (curOv >= 75) {
+    chance -= Math.max(0, curOv - 75) * 1.2;
   }
 
   if (isProdigy) chance += 5;
@@ -708,7 +952,7 @@ export function calcMissionSuccessChance(
   if (state?.staff?.asst) chance += state.staff.asst * 0.5;
   if (state?.analyticsLv && state.analyticsLv > 1) chance += (state.analyticsLv - 1) * 0.35;
 
-  return clamp(Math.round(chance), 5, 68);
+  return clamp(Math.round(chance), 4, 60);
 }
 
 export const getPlayerMissionView = (
@@ -897,9 +1141,9 @@ export const resolvePlayerMissions = (
         });
         stage++;
       } else {
-        // Setback on failure: keep stage retryable and step metric progress back to ~72%
+        // Setback on failure: keep stage retryable and step metric progress back to 70%
         mState.claimed[def.id] = stage;
-        mState.stats[def.metric] = Math.floor(target * 0.72);
+        mState.stats[def.metric] = Math.floor(target * 0.70);
         summary.failed.push({
           player: q.n,
           mission: def.name,
@@ -978,7 +1222,7 @@ export const claimPlayerMission = (
     msg = `${def.icon} ${q.n} ผ่าน "${def.name} (ขั้น ${stage + 1}/${def.targets.length})"! (โอกาส ${chance}%) · ${rewardStr}`;
   } else {
     mState.claimed[def.id] = stage;
-    const resetVal = Math.floor(target * 0.72);
+    const resetVal = Math.floor(target * 0.70);
     mState.stats[def.metric] = resetVal;
     recentLogs.unshift({
       missionId: def.id,
@@ -1026,7 +1270,7 @@ export const applyTrainingMissionProgress = (
   const mState = ensurePlayerMissions(q, opts.careerP);
   const mult = opts.isTeamFocus ? 1.4 : 1;
 
-  // Measured training drill contributions so missions scale cleanly across 8 stages
+  // Measured training drill contributions so missions scale cleanly across 10 stages
   const addSimultaneous = (metric: PersonalMissionMetric, base: number, label?: string) => {
     if (base <= 0) return;
     const total = Math.max(1, Math.round(base * mult));
@@ -1062,6 +1306,7 @@ export const applyTrainingMissionProgress = (
       if (isDef || (q.pos === 'DF' && Math.random() < 0.4)) addSimultaneous('blocks', 1);
       addSimultaneous('headers', isDef ? 2 : 1);
     } else if (q.pos === 'FW') {
+      if (opts.teamProgram === 'defense' || Math.random() < 0.35) addSimultaneous('tackles', 1);
       addSimultaneous('headers', 1);
     }
   }
@@ -1096,6 +1341,7 @@ const applyTeamMatchMissions = (
   teamGoals: number,
   oppGoals: number,
   isWin: boolean,
+  isAwayTeam: boolean,
   payload: MatchMissionPayload,
   trackForUser: boolean,
   combined: MissionResolveSummary
@@ -1112,6 +1358,8 @@ const applyTeamMatchMissions = (
 
     addMissionStat(q, 'matches', 1, careerP);
     if (isWin) addMissionStat(q, 'wins', 1, careerP);
+    if (isWin && isCleanSheet) addMissionStat(q, 'cleanWins', 1, careerP);
+    if (isWin && isAwayTeam) addMissionStat(q, 'awayWins', 1, careerP);
     if (isCleanSheet && (q.pos === 'GK' || q.pos === 'DF')) {
       addMissionStat(q, 'cleanSheets', 1, careerP);
     }
@@ -1128,7 +1376,13 @@ const applyTeamMatchMissions = (
     const goals = payload.evs.filter((e) => !e.og && e.t === team.id && e.who === q.n).length;
     const assists = payload.evs.filter((e) => !e.og && e.t === team.id && e.as === q.n).length;
     if (goals > 0) addMissionStat(q, 'goals', goals, careerP);
+    if (goals >= 2) addMissionStat(q, 'braces', 1, careerP);
     if (assists > 0) addMissionStat(q, 'assists', assists, careerP);
+
+    const clutchCount = payload.evs.filter(
+      (e) => !e.og && e.t === team.id && e.m >= 75 && (e.who === q.n || e.as === q.n)
+    ).length;
+    if (clutchCount > 0) addMissionStat(q, 'clutchActions', clutchCount, careerP);
 
     const acts = actionsMap[q.n];
     if (acts) {
@@ -1142,7 +1396,11 @@ const applyTeamMatchMissions = (
           metric !== 'goals' &&
           metric !== 'assists' &&
           metric !== 'motm' &&
-          metric !== 'cleanGames'
+          metric !== 'cleanGames' &&
+          metric !== 'braces' &&
+          metric !== 'clutchActions' &&
+          metric !== 'cleanWins' &&
+          metric !== 'awayWins'
         ) {
           addMissionStat(q, metric, val, careerP);
         }
@@ -1179,6 +1437,8 @@ const applyTeamMatchMissions = (
           addMissionStat(q, 'tackles', q.pos === 'DF' ? R(3, 6) : R(2, 4), careerP);
           addMissionStat(q, 'interceptions', q.pos === 'DF' ? R(1, 4) : R(1, 3), careerP);
           addMissionStat(q, 'blocks', q.pos === 'DF' ? R(0, 2) : R(0, 1), careerP);
+        } else if (q.pos === 'FW') {
+          addMissionStat(q, 'tackles', R(0, 2), careerP);
         }
         addMissionStat(q, 'headers', q.pos === 'DF' || q.pos === 'FW' ? R(1, 3) : R(0, 2), careerP);
         if (q.pos === 'MF' || q.pos === 'FW' || q.pos === 'DF') {
@@ -1228,8 +1488,8 @@ export const applyAiClubMatchMissions = (
   const dummyCombined: MissionResolveSummary = { upgraded: [], failed: [] };
   const hWin = res.gh > res.ga || Boolean(res.pen);
   const aWin = res.ga > res.gh || (res.gh === res.ga && res.pen === false);
-  if (H.id !== s.me) applyTeamMatchMissions(s, H, res.gh, res.ga, hWin, res, false, dummyCombined);
-  if (A.id !== s.me) applyTeamMatchMissions(s, A, res.ga, res.gh, aWin, res, false, dummyCombined);
+  if (H.id !== s.me) applyTeamMatchMissions(s, H, res.gh, res.ga, hWin, false, res, false, dummyCombined);
+  if (A.id !== s.me) applyTeamMatchMissions(s, A, res.ga, res.gh, aWin, true, res, false, dummyCombined);
 };
 
 export const applyMatchMissionProgress = (
@@ -1242,8 +1502,8 @@ export const applyMatchMissionProgress = (
   const hWin = payload.gh > payload.ga || Boolean(payload.pen === true);
   const aWin = payload.ga > payload.gh || Boolean(payload.gh === payload.ga && payload.pen === false);
 
-  applyTeamMatchMissions(s, H, payload.gh, payload.ga, hWin, payload, H.id === s.me, combined);
-  applyTeamMatchMissions(s, A, payload.ga, payload.gh, aWin, payload, A.id === s.me, combined);
+  applyTeamMatchMissions(s, H, payload.gh, payload.ga, hWin, false, payload, H.id === s.me, combined);
+  applyTeamMatchMissions(s, A, payload.ga, payload.gh, aWin, true, payload, A.id === s.me, combined);
 
   if (s.mode === 'p' && s.p) syncMe(s);
   return combined;
