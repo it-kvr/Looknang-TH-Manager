@@ -261,6 +261,11 @@ export const MainMenu: React.FC<{
   });
   const starPool = starPoster.pool;
   const starIdx = starPoster.idx;
+  const activeStar = starPool[starIdx % starPool.length];
+  const activeStarDetails = useMemo(
+    () => dtInfo(activeStar.player, activeStar.profile),
+    [activeStar]
+  );
   const countSaves = (m: GameMode) => {
     let n = 0;
     const list = loadedSlots[m];
@@ -1959,11 +1964,6 @@ export const MainMenu: React.FC<{
 
   const mCount = countSaves('m');
   const pCount = countSaves('p');
-  const activeStar = starPool[starIdx % starPool.length];
-  const activeStarDetails = useMemo(
-    () => dtInfo(activeStar.player, activeStar.profile),
-    [activeStar]
-  );
 
   const cycleStarPoster = () => {
     SFX.tap();

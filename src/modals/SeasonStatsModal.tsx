@@ -29,14 +29,10 @@ export const SeasonStatsModal: React.FC<{
   const [compScope, setCompScope] = useState<'league' | 'cup' | 'all'>('league');
 
   const rec = sortedArchives.find((a) => a.season === selectedSeason) || sortedArchives[0];
-  if (!rec) return null;
-
-  const gd = rec.gf - rec.ga;
-  const archiveTeam = state.teams[rec.teamId];
-  const isMyClubCrest = state.mode === 'm' && rec.teamId === state.me;
+  const recPlayers = useMemo(() => rec?.players || [], [rec]);
 
   const scopedPlayers = useMemo(() => {
-    return rec.players.map((pl: SeasonPlayerStatRecord) => {
+    return recPlayers.map((pl: SeasonPlayerStatRecord) => {
       const cSp = pl.cupSp || 0;
       const cSg = pl.cupSg || 0;
       const cSa = pl.cupSa || 0;
@@ -65,9 +61,9 @@ export const SeasonStatsModal: React.FC<{
       }
       return pl;
     });
-  }, [rec.players, compScope]);
+  }, [recPlayers, compScope]);
 
-  const hasAnyCupStats = useMemo(() => rec.players.some((p) => (p.cupSp || 0) > 0), [rec.players]);
+  const hasAnyCupStats = useMemo(() => recPlayers.some((p) => (p.cupSp || 0) > 0), [recPlayers]);
 
   const sortedPlayers = useMemo(() => {
     const list = scopedPlayers.slice();
@@ -92,40 +88,40 @@ export const SeasonStatsModal: React.FC<{
   }, [scopedPlayers, sortBy]);
 
   const scopedTopScorer = useMemo(() => {
-    if (compScope === 'league' && rec.topScorer) return rec.topScorer;
+    if (compScope === 'league' && rec?.topScorer) return rec.topScorer;
     const f = scopedPlayers
       .filter((x) => x.sg > 0)
       .slice()
       .sort((a, b) => b.sg - a.sg || b.sa - a.sa || a.sp - b.sp || b.avgRating - a.avgRating)[0];
     return f ? { name: f.name, pos: f.pos, sg: f.sg, sp: f.sp } : null;
-  }, [compScope, rec.topScorer, scopedPlayers]);
+  }, [compScope, rec?.topScorer, scopedPlayers]);
 
   const scopedTopAssist = useMemo(() => {
-    if (compScope === 'league' && rec.topAssist) return rec.topAssist;
+    if (compScope === 'league' && rec?.topAssist) return rec.topAssist;
     const f = scopedPlayers
       .filter((x) => x.sa > 0)
       .slice()
       .sort((a, b) => b.sa - a.sa || b.sg - a.sg || a.sp - b.sp || b.avgRating - a.avgRating)[0];
     return f ? { name: f.name, pos: f.pos, sa: f.sa, sp: f.sp } : null;
-  }, [compScope, rec.topAssist, scopedPlayers]);
+  }, [compScope, rec?.topAssist, scopedPlayers]);
 
   const scopedTopRating = useMemo(() => {
-    if (compScope === 'league' && rec.topRating) return rec.topRating;
+    if (compScope === 'league' && rec?.topRating) return rec.topRating;
     const f = scopedPlayers
       .filter((x) => x.avgRating > 0 && x.sp > 0)
       .slice()
       .sort((a, b) => b.avgRating - a.avgRating || b.sp - a.sp || b.sg + b.sa - (a.sg + a.sa))[0];
     return f ? { name: f.name, pos: f.pos, avgRating: f.avgRating, sp: f.sp, motm: f.motm } : null;
-  }, [compScope, rec.topRating, scopedPlayers]);
+  }, [compScope, rec?.topRating, scopedPlayers]);
 
   const scopedTopCleanSheet = useMemo(() => {
-    if (compScope === 'league' && rec.topCleanSheet) return rec.topCleanSheet;
+    if (compScope === 'league' && rec?.topCleanSheet) return rec.topCleanSheet;
     const f = scopedPlayers
       .filter((x) => x.pos === 'GK' && x.cs > 0)
       .slice()
       .sort((a, b) => b.cs - a.cs || b.sp - a.sp || b.avgRating - a.avgRating)[0];
     return f ? { name: f.name, pos: f.pos, cs: f.cs, sp: f.sp } : null;
-  }, [compScope, rec.topCleanSheet, scopedPlayers]);
+  }, [compScope, rec?.topCleanSheet, scopedPlayers]);
 
   const topMotm = useMemo(() => {
     return scopedPlayers
@@ -133,6 +129,12 @@ export const SeasonStatsModal: React.FC<{
       .slice()
       .sort((a, b) => b.motm - a.motm || b.avgRating - a.avgRating)[0];
   }, [scopedPlayers]);
+
+  if (!rec) return null;
+
+  const gd = rec.gf - rec.ga;
+  const archiveTeam = state.teams[rec.teamId];
+  const isMyClubCrest = state.mode === 'm' && rec.teamId === state.me;
 
   const totalTeamGoals = scopedPlayers.reduce((sum, p) => sum + p.sg, 0);
   const totalTeamAssists = scopedPlayers.reduce((sum, p) => sum + p.sa, 0);

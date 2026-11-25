@@ -30,33 +30,35 @@ export const PlayerClubTransferView: React.FC<{
   const [refreshTick, setRefreshTick] = useState(0);
 
   const p = state.p;
-  if (!p) return null;
-
   const meTeam = state.teams[state.me];
-  const meSq = meTeam.sq.find((q) => q.me || q.n === p.name) || null;
-  const ov = ovMe(p);
-  const starters = xi(meTeam);
+  const meSq = p && meTeam ? meTeam.sq.find((q) => q.me || q.n === p.name) || null : null;
+  const ov = p ? ovMe(p) : 0;
+  const starters = meTeam ? xi(meTeam) : [];
 
   const samePosTeam = useMemo(
     () =>
-      meTeam.sq
-        .filter((q) => q.pos === p.pos)
-        .slice()
-        .sort((a, b) => b.ov - a.ov),
-    [meTeam, p.pos]
+      p && meTeam
+        ? meTeam.sq
+            .filter((q) => q.pos === p.pos)
+            .slice()
+            .sort((a, b) => b.ov - a.ov)
+        : [],
+    [meTeam, p]
   );
 
   const divisionTable = useMemo(
     () =>
-      state.teams
-        .filter((t) => t.tier === meTeam.tier)
-        .slice()
-        .sort((a, b) => b.pts - a.pts || b.gf - b.ga - (a.gf - a.ga) || b.gf - a.gf),
-    [state.teams, meTeam.tier]
+      meTeam
+        ? state.teams
+            .filter((t) => t.tier === meTeam.tier)
+            .slice()
+            .sort((a, b) => b.pts - a.pts || b.gf - b.ga - (a.gf - a.ga) || b.gf - a.gf)
+        : [],
+    [state.teams, meTeam]
   );
-  const clubLeaguePos = divisionTable.findIndex((t) => t.id === meTeam.id) + 1;
 
   const divisionPosLeaderboard = useMemo(() => {
+    if (!p || !meTeam) return { top5: [], myRank: 0, total: 0 };
     const rows: { player: Player; team: Team }[] = [];
     state.teams
       .filter((t) => t.tier === meTeam.tier)
@@ -68,12 +70,12 @@ export const PlayerClubTransferView: React.FC<{
     rows.sort((a, b) => b.player.ov - a.player.ov);
     const myRank = rows.findIndex((r) => r.player.me || (r.team.id === meTeam.id && r.player.n === p.name)) + 1;
     return { top5: rows.slice(0, 5), myRank, total: rows.length };
-  }, [state.teams, meTeam.tier, meTeam.id, p.pos, p.name]);
+  }, [state.teams, meTeam, p]);
 
-  const ntReadyScore = clamp(Math.round((ov - 62) * 3.1 + ((p.rep ?? 10) - 10) * 1.15), 8, 99);
   const managedClubs = useMemo(() => listManagedClubsFromSaves(), [refreshTick, state.md, state.season]);
 
   const leagueTargets = useMemo(() => {
+    if (!p || !meTeam) return [];
     return state.teams
       .filter((t) => t.id !== meTeam.id && t.tier === tierFilter)
       .map((t) => {
@@ -86,7 +88,12 @@ export const PlayerClubTransferView: React.FC<{
         return { team: t, avgOv, samePosCount: samePos.length, topSame, chance, score };
       })
       .sort((a, b) => b.avgOv - a.avgOv);
-  }, [state.teams, meTeam.id, tierFilter, p.pos, ov, p.rep]);
+  }, [state.teams, meTeam, tierFilter, p, ov]);
+
+  if (!p) return null;
+
+  const clubLeaguePos = divisionTable.findIndex((t) => t.id === meTeam.id) + 1;
+  const ntReadyScore = clamp(Math.round((ov - 62) * 3.1 + ((p.rep ?? 10) - 10) * 1.15), 8, 99);
 
   const handleJoinManagedClub = (slotNum: number) => {
     const mc = managedClubs.find((c) => c.slot === slotNum);
