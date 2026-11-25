@@ -17,12 +17,54 @@ interface ClubHistoryPanelProps {
 
 type LegendMetric = 'goals' | 'assists' | 'apps' | 'cleanSheets' | 'motm';
 
-const METRIC_COLUMNS: { key: LegendMetric; label: string; shortLabel: string }[] = [
-  { key: 'goals', label: 'ประตู', shortLabel: 'ประตู' },
-  { key: 'assists', label: 'แอสซิสต์', shortLabel: 'แอสซิสต์' },
-  { key: 'apps', label: 'ลงเล่น', shortLabel: 'ลงเล่น' },
-  { key: 'cleanSheets', label: 'คลีนชีต', shortLabel: 'คลีนชีต' },
-  { key: 'motm', label: 'MOTM', shortLabel: 'MOTM' }
+const METRIC_COLUMNS: {
+  key: LegendMetric;
+  label: string;
+  icon: string;
+  unit: string;
+  accentCls: string;
+  headerBgCls: string;
+}[] = [
+  {
+    key: 'goals',
+    label: 'ประตู',
+    icon: '⚽',
+    unit: 'ประตู',
+    accentCls: 'text-emerald-700 dark:text-emerald-300',
+    headerBgCls: 'bg-emerald-500/10'
+  },
+  {
+    key: 'assists',
+    label: 'แอสซิสต์',
+    icon: '🎯',
+    unit: 'ครั้ง',
+    accentCls: 'text-sky-700 dark:text-sky-300',
+    headerBgCls: 'bg-sky-500/10'
+  },
+  {
+    key: 'apps',
+    label: 'ลงเล่น',
+    icon: '👕',
+    unit: 'นัด',
+    accentCls: 'text-violet-700 dark:text-violet-300',
+    headerBgCls: 'bg-violet-500/10'
+  },
+  {
+    key: 'cleanSheets',
+    label: 'คลีนชีต',
+    icon: '🧤',
+    unit: 'นัด',
+    accentCls: 'text-teal-700 dark:text-teal-300',
+    headerBgCls: 'bg-teal-500/10'
+  },
+  {
+    key: 'motm',
+    label: 'MOTM',
+    icon: '👑',
+    unit: 'ครั้ง',
+    accentCls: 'text-amber-700 dark:text-amber-300',
+    headerBgCls: 'bg-amber-500/10'
+  }
 ];
 
 function formatSeasonSpan(leg: ClubAllTimePlayerRecord): string {
@@ -202,7 +244,6 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
   onInspectPlayer,
   compact
 }) => {
-  const [sortMetric, setSortMetric] = useState<LegendMetric>('goals');
   const [showClubLog, setShowClubLog] = useState(false);
 
   const isUserClub = team.id === state.me;
@@ -235,19 +276,34 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
     return { league, cup, asia, other };
   }, [legacy.trophies]);
 
-  const sortedLegends = useMemo(() => {
-    return legacy.legends
-      .filter((r) => r.apps > 0 || r.goals > 0 || r.assists > 0 || r.cleanSheets > 0 || r.motm > 0)
-      .slice()
-      .sort(
-        (a: ClubAllTimePlayerRecord, b: ClubAllTimePlayerRecord) =>
-          (b[sortMetric] || 0) - (a[sortMetric] || 0) ||
-          b.goals - a.goals ||
-          b.assists - a.assists ||
-          b.apps - a.apps
-      )
-      .slice(0, 12);
-  }, [legacy.legends, sortMetric]);
+  const columnLeaders = useMemo(() => {
+    const out: Record<LegendMetric, ClubAllTimePlayerRecord[]> = {
+      goals: [],
+      assists: [],
+      apps: [],
+      cleanSheets: [],
+      motm: []
+    };
+    METRIC_COLUMNS.forEach((col) => {
+      out[col.key] = legacy.legends
+        .filter((r) => (r[col.key] || 0) > 0)
+        .slice()
+        .sort(
+          (a: ClubAllTimePlayerRecord, b: ClubAllTimePlayerRecord) =>
+            (b[col.key] || 0) - (a[col.key] || 0) ||
+            b.bestAvgRating - a.bestAvgRating ||
+            b.apps - a.apps ||
+            b.goals - a.goals
+        )
+        .slice(0, 10);
+    });
+    return out;
+  }, [legacy.legends]);
+
+  const hasAnyLegend = useMemo(
+    () => METRIC_COLUMNS.some((col) => columnLeaders[col.key].length > 0),
+    [columnLeaders]
+  );
 
   const chronicleRows = useMemo(() => {
     const past = legacy.seasons.map((r) => ({ ...r, isCurrent: false }));
@@ -259,7 +315,6 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
 
   const rec = isUserClub ? state.records : undefined;
   const goalDiff = legacy.totalGf - legacy.totalGa;
-  const activeSortLabel = METRIC_COLUMNS.find((c) => c.key === sortMetric)?.label || 'ประตู';
 
   return (
     <div className="space-y-3 mland:space-y-2">
@@ -328,8 +383,8 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
         </div>
       </div>
 
-      {/* Trophy Cabinet Showcase + Club Hall of Fame */}
-      <div className="grid grid-cols-1 xl:grid-cols-[0.82fr_1.18fr] gap-3 mland:gap-2 items-stretch">
+      {/* Trophy Cabinet Showcase + Independent-Column Club Hall of Fame */}
+      <div className="space-y-3 mland:space-y-2">
         {/* Trophy Cabinet */}
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 mland:p-2.5 flex flex-col gap-2.5 mland:gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)]/70">
@@ -343,7 +398,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
           </div>
 
           {legacy.trophies.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mland:gap-1.5 max-h-[340px] overflow-y-auto pr-0.5 content-start">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mland:gap-1.5 max-h-[260px] overflow-y-auto pr-0.5 content-start">
               {legacy.trophies.map((tr, i) => {
                 const isGoldGlow = tr.type === 'asia' || (tr.type === 'league' && tr.tier === 2) || tr.type === 'award' || tr.type === 'nt';
                 const shelfBarClass =
@@ -366,7 +421,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                       }}
                     />
                     <div className="relative z-10 flex flex-col items-center">
-                      <TrophySvg type={tr.type} tier={tr.tier} uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${i}`} size={52} />
+                      <TrophySvg type={tr.type} tier={tr.tier} uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${i}`} size={50} />
                       <div className={`w-12 h-1 rounded-full bg-gradient-to-r ${shelfBarClass} mt-0.5`} />
                     </div>
                     <div className="relative z-10 text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] leading-snug line-clamp-2 mt-1.5 min-h-[28px] mland:min-h-[24px] flex items-center">
@@ -380,9 +435,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
               })}
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center py-6 mland:py-3 px-4 text-center rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface-2)]/30">
-              <TrophySvg type="league" tier={2} uid={`empty-${compact ? 'c' : 'f'}-${team.id}`} size={48} muted />
-              <div className="text-xs mland:text-[10.5px] font-semibold text-[var(--ink)] mt-2">
+            <div className="flex flex-col items-center justify-center py-5 mland:py-3 px-4 text-center rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface-2)]/30">
+              <TrophySvg type="league" tier={2} uid={`empty-${compact ? 'c' : 'f'}-${team.id}`} size={44} muted />
+              <div className="text-xs mland:text-[10.5px] font-semibold text-[var(--ink)] mt-1.5">
                 ยังไม่มีถ้วยรางวัลในตู้โชว์
               </div>
               <p className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">
@@ -392,151 +447,125 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
           )}
         </div>
 
-        {/* All-Time Legends Hall of Fame (With Faces, Seasons Played & Dedicated Columns for Each Stat) */}
+        {/* All-Time Legends Hall of Fame — 5 Independent Stat Columns */}
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden flex flex-col">
           <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2 bg-[var(--surface-2)]/40">
             <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
               ทำเนียบตำนานสโมสร
             </span>
             <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
-              เรียงตาม <b className="text-[var(--g)]">{activeSortLabel}</b> · กดหัวคอลัมน์เพื่อจัดเรียง
+              แยกอันดับอิสระในแต่ละหมวด (สูงสุด 10 อันดับ/คอลัมน์)
             </span>
           </div>
 
-          {sortedLegends.length > 0 ? (
-            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto max-h-[340px]">
-              <table className="w-full text-left border-collapse min-w-[520px]">
-                <thead className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)]">
-                  <tr>
-                    <th className="py-2 pl-3 pr-1.5 w-8 text-center">#</th>
-                    <th className="py-2 px-2 text-left">นักเตะ · ซีซั่นที่เล่น</th>
-                    {METRIC_COLUMNS.map((col) => {
-                      const active = sortMetric === col.key;
-                      return (
-                        <th
-                          key={col.key}
-                          className={`py-2 px-2 text-center whitespace-nowrap w-[64px] border-l border-[var(--line)]/40 ${
-                            active ? 'bg-[var(--g-soft)]/55 text-[var(--g)]' : ''
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              setSortMetric(col.key);
-                            }}
-                            className={`inline-flex items-center justify-center gap-0.5 cursor-pointer transition-colors ${
-                              active ? 'font-extrabold text-[var(--g)]' : 'hover:text-[var(--ink)]'
-                            }`}
-                          >
-                            <span>{col.label}</span>
-                            {active && <span className="text-[9px] leading-none">↓</span>}
-                          </button>
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--line)]/60">
-                  {sortedLegends.map((leg, idx) => {
-                    const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
-                    const clickable = !!liveSqPlayer && !!onInspectPlayer;
-                    const facePlayer: Partial<Player> = liveSqPlayer || {
-                      n: leg.name,
-                      pos: leg.pos,
-                      ro: leg.ro,
-                      no: leg.no,
-                      vis: leg.vis
-                    };
-                    const seasonText = formatSeasonSpan(leg);
-                    const rankCls =
-                      idx === 0
-                        ? 'bg-amber-400/20 text-[#9a6700] dark:text-[var(--lamp)] border-amber-400/45'
-                        : idx === 1
-                          ? 'bg-slate-400/20 text-slate-600 dark:text-slate-200 border-slate-400/40'
-                          : idx === 2
-                            ? 'bg-amber-700/20 text-amber-700 dark:text-amber-300 border-amber-600/40'
-                            : 'text-[var(--mut)] border-transparent';
+          {hasAnyLegend ? (
+            <div className="overflow-x-auto overflow-y-auto max-h-[430px]">
+              <div className="grid grid-cols-5 min-w-[780px] divide-x divide-[var(--line)]/65">
+                {METRIC_COLUMNS.map((col) => {
+                  const list = columnLeaders[col.key];
+                  return (
+                    <div key={col.key} className="flex flex-col min-w-0">
+                      <div
+                        className={`sticky top-0 z-10 px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface)] ${col.headerBgCls} flex items-center justify-between gap-1`}
+                      >
+                        <span className={`font-extrabold text-[11px] mland:text-[9.5px] ${col.accentCls} truncate`}>
+                          {col.icon} {col.label}
+                        </span>
+                        <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
+                          {col.unit}
+                        </span>
+                      </div>
 
-                    return (
-                      <tr key={leg.name} className="hover:bg-[var(--surface-2)]/35 transition-colors">
-                        <td className="py-2 mland:py-1.5 pl-3 pr-1.5 text-center align-middle">
-                          <span
-                            className={`inline-flex items-center justify-center w-5 h-5 rounded-md border text-[10.5px] mland:text-[9px] font-extrabold tabular ${rankCls}`}
-                          >
-                            {idx + 1}
-                          </span>
-                        </td>
-                        <td className="py-2 mland:py-1.5 px-2 align-middle">
-                          <div className="flex items-center gap-2.5 mland:gap-1.5 min-w-0">
-                            <div className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                              <PlayerFace
-                                player={facePlayer}
-                                team={team}
-                                state={state}
-                                club={state.club}
-                                isMyClub={isUserClub}
-                                size={36}
-                              />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              {clickable ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    SFX.tap();
-                                    onInspectPlayer!(liveSqPlayer!, team);
-                                  }}
-                                  className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block max-w-[190px]"
-                                >
-                                  {leg.name}
-                                </button>
-                              ) : (
-                                <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate max-w-[190px]">
-                                  {leg.name}
-                                </div>
-                              )}
-                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
-                                {leg.ro || leg.pos} · <span className="font-semibold text-[var(--ink)]/80">{seasonText}</span>
-                                {leg.stillAtClub && (
-                                  <span className="text-[var(--g)] font-semibold"> · อยู่ในทีม</span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        {METRIC_COLUMNS.map((col) => {
-                          const val = leg[col.key] || 0;
-                          const isSortedCol = sortMetric === col.key;
-                          return (
-                            <td
-                              key={col.key}
-                              className={`py-2 mland:py-1.5 px-2 text-center align-middle tabular text-xs mland:text-[10.5px] border-l border-[var(--line)]/40 ${
-                                isSortedCol ? 'bg-[var(--g-soft)]/35' : ''
-                              }`}
-                            >
-                              <span
-                                className={
-                                  val === 0
-                                    ? 'text-[var(--mut)]/45 font-medium'
-                                    : isSortedCol
-                                      ? 'font-extrabold text-[var(--g)]'
-                                      : 'font-bold text-[var(--ink)]'
-                                }
+                      {list.length > 0 ? (
+                        <div className="divide-y divide-[var(--line)]/50">
+                          {list.map((leg, idx) => {
+                            const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
+                            const clickable = !!liveSqPlayer && !!onInspectPlayer;
+                            const facePlayer: Partial<Player> = liveSqPlayer || {
+                              n: leg.name,
+                              pos: leg.pos,
+                              ro: leg.ro,
+                              no: leg.no,
+                              vis: leg.vis
+                            };
+                            const seasonText = formatSeasonSpan(leg);
+                            const val = leg[col.key] || 0;
+                            const rankCls =
+                              idx === 0
+                                ? 'bg-amber-400/20 text-[#9a6700] dark:text-[var(--lamp)] border-amber-400/45'
+                                : idx === 1
+                                  ? 'bg-slate-400/20 text-slate-600 dark:text-slate-200 border-slate-400/40'
+                                  : idx === 2
+                                    ? 'bg-amber-700/20 text-amber-700 dark:text-amber-300 border-amber-600/40'
+                                    : 'text-[var(--mut)] border-transparent';
+
+                            return (
+                              <div
+                                key={`${col.key}-${leg.name}`}
+                                className="px-2 py-1.5 mland:py-1 flex items-center gap-1.5 hover:bg-[var(--surface-2)]/35 transition-colors"
                               >
-                                {val}
-                              </span>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                                <span
+                                  className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[9.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${rankCls}`}
+                                >
+                                  {idx + 1}
+                                </span>
+                                <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                                  <PlayerFace
+                                    player={facePlayer}
+                                    team={team}
+                                    state={state}
+                                    club={state.club}
+                                    isMyClub={isUserClub}
+                                    size={28}
+                                  />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  {clickable ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        SFX.tap();
+                                        onInspectPlayer!(liveSqPlayer!, team);
+                                      }}
+                                      className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block w-full"
+                                    >
+                                      {leg.name}
+                                    </button>
+                                  ) : (
+                                    <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate">
+                                      {leg.name}
+                                    </div>
+                                  )}
+                                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular truncate">
+                                    {leg.ro || leg.pos} · {seasonText}
+                                    {leg.stillAtClub && (
+                                      <span className="text-[var(--g)] font-semibold"> · ทีมนี้</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <span
+                                  className={`font-extrabold text-xs mland:text-[10.5px] tabular shrink-0 pl-0.5 ${
+                                    idx === 0 ? col.accentCls : 'text-[var(--ink)]'
+                                  }`}
+                                >
+                                  {val}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="flex-1 flex items-center justify-center py-8 px-2 text-[10.5px] mland:text-[9px] text-[var(--mut)]/75 text-center">
+                          ยังไม่มีสถิติ
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
-            <div className="flex-1 flex items-center justify-center py-6 text-xs mland:text-[10px] text-[var(--mut)] text-center">
+            <div className="flex items-center justify-center py-6 text-xs mland:text-[10px] text-[var(--mut)] text-center">
               ยังไม่มีข้อมูลตำนานสโมสร — ลงแข่งเพื่อเริ่มบันทึกสถิตินักเตะ
             </div>
           )}

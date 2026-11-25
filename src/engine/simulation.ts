@@ -1,7 +1,7 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
 import { applyTrainingMissionProgress } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers } from './history';
 
@@ -645,7 +645,9 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
     }
   }
 
-  return { gh, ga, evs, xgH, xgA, cards, subs, playedNames, playedSlots, incidents };
+  const baseRes: MatchResult = { gh, ga, evs, xgH, xgA, cards, subs, playedNames, playedSlots, incidents };
+  const { ratings, motm } = computePlayerRatings(h, a, baseRes, s?.p);
+  return { ...baseRes, ratings, motm };
 }
 
 export function extractMatchHighlights(
@@ -1628,9 +1630,10 @@ export function applyPositionAdaptation(
       const target = ROLE_ADAPT_TARGETS[normSlot] || ROLE_ADAPT_TARGETS.CM;
       const devNotes: string[] = [];
       const curOv = isMePlayer && s?.p ? ovMe(s.p) : q.ov;
+      const devProf = getPlayerDevProfile(q, isMePlayer ? s?.p : null);
       const ovScale = getOvGrowthScale(curOv, q.pot);
-      if (age <= 32) {
-        const subChance = ((age <= 24 ? 0.28 : 0.18) + (fastAdapt ? 0.08 : 0)) * (0.45 + 0.55 * ovScale);
+      if (devProf.phase !== 'declining') {
+        const subChance = ((age <= 24 ? 0.22 : 0.14) + (fastAdapt ? 0.06 : 0)) * (0.45 + 0.55 * ovScale) * devProf.ageMult;
         if (Math.random() < subChance) {
           const sk = P(target.subs);
           q.sb = { ...(q.sb || {}) };
@@ -1643,7 +1646,7 @@ export function applyPositionAdaptation(
           devNotes.push(`${SIGL[sk] || sk} +1`);
         }
 
-        const coreChance = ((age <= 24 ? 0.12 : 0.07) + (tl >= 75 ? 0.04 : 0) + (fastAdapt ? 0.04 : 0)) * ovScale;
+        const coreChance = ((age <= 24 ? 0.055 : 0.03) + (tl >= 75 ? 0.025 : 0) + (fastAdapt ? 0.025 : 0)) * ovScale * devProf.ageMult;
         const softCap = clamp(q.pot || 86, 50, 96);
         if (curOv < softCap && Math.random() < coreChance) {
           const ck = P(target.cores);
@@ -1933,8 +1936,10 @@ export function calcPlayerPerf(
     cardPenalty;
 
   rt = clamp(Math.round(rt * 10) / 10, 3.8, 10);
-  const ovScale = getOvGrowthScale(ovMe(p));
-  const b = () => (Math.random() < (mins >= 60 ? 0.24 : 0.14) * ovScale ? 1 : 0);
+  const meSqRef = s.teams[s.me]?.sq.find((q) => q.me);
+  const ovScale = getOvGrowthScale(ovMe(p), meSqRef?.pot);
+  const devMult = meSqRef ? getPlayerDevProfile(meSqRef, p).ageMult : 1;
+  const b = () => (Math.random() < (mins >= 60 ? 0.14 : 0.08) * ovScale * devMult ? 1 : 0);
   return {
     rt,
     gl,
@@ -2010,15 +2015,21 @@ export function runPlayerWeek(s: GameState) {
   let m = `${ac.i} ${ac.n}`;
   const focus = ({ FW: 'sh', MF: 'ps', DF: 'tk', GK: 'ph' } as Record<Position, StatKey>)[p.pos] || 'sh';
   const curOv = ovMe(p);
-  const ovScale = getOvGrowthScale(curOv);
-  const prodigyBonus = (perks.includes('prodigy') ? 0.07 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.04 : 0);
+  const devProf = getPlayerDevProfile(mePlayer, p);
+  const ovScale = getOvGrowthScale(curOv, mePlayer.pot);
+  const prodigyBonus = (perks.includes('prodigy') ? 0.05 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.03 : 0);
 
   if (ac.gr) {
     const k = ac.k || P([focus, focus, p.tr || 'sh', P(['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[])]);
     const kn = ATT.find((z) => z[0] === k)?.[1] || k;
-    const attrResistance = p.a[k] >= 90 ? 0.35 : p.a[k] >= 84 ? 0.65 : 1;
-    const grChance = (ac.gr + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.04 : 0)) * ovScale * attrResistance;
-    if (p.a[k] < 99 && Math.random() < grChance) {
+    const attrResistance = p.a[k] >= 90 ? 0.28 : p.a[k] >= 84 ? 0.52 : p.a[k] >= 78 ? 0.78 : 1;
+    const grChance =
+      (ac.gr * 0.75 + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.03 : 0)) *
+      ovScale *
+      attrResistance *
+      devProf.ageMult *
+      devProf.formMult;
+    if (p.a[k] < 99 && devProf.phase !== 'declining' && Math.random() < grChance) {
       p.a[k]++;
       p.trn = (p.trn || 0) + 1;
       m += ` · ${kn} เพิ่มเป็น ${p.a[k]}`;
@@ -2034,9 +2045,15 @@ export function runPlayerWeek(s: GameState) {
     s.fan = clamp((s.fan ?? 50) + ac.fan, 5, 100);
     m += ` · ขวัญแฟนบอล ${s.fan}%`;
   }
-  if (ac.pt && Math.random() < (ac.pt + prodigyBonus) * ovScale) {
+  if (ac.pt && devProf.phase !== 'declining' && Math.random() < (ac.pt * 0.75 + prodigyBonus) * ovScale * devProf.ageMult) {
     const g = autoGrow(p, 1);
     if (g) m += ` · พัฒนาอัตโนมัติ (${g})`;
+  }
+  if (mePlayer.me && devProf.strongSeason) {
+    const bt = trySuperstarBreakthrough(mePlayer, p, 0.03);
+    if (bt.brokeThrough) {
+      m += ` · 🌟 ทะลุขีดจำกัดศักยภาพสู่ ${bt.newPot}!`;
+    }
   }
   if ((p.inj || 0) > 0) {
     const healStep = (p.plan === 2 ? 2 : 1) + (perks.includes('quick_healer') ? 1 : 0);
@@ -3186,6 +3203,7 @@ export function afterMatchDay(
 
   if (mg) {
     const gr: string[] = [];
+    const breakthroughs: string[] = [];
     const xiSet = new Set(xi(me).map((z) => z.n));
     if (progMeta.devMult > 0) {
       me.sq.forEach((q) => {
@@ -3195,15 +3213,18 @@ export function afterMatchDay(
           progMeta.positions === 'YOUNG'
             ? q.age <= 25
             : Array.isArray(progMeta.positions) && progMeta.positions.includes(q.pos);
+        if (!matchesPos && !isFocus) return;
+        const devProf = getPlayerDevProfile(q, s.p);
+        if (devProf.phase === 'declining') return;
         const benchSharpBonus = plan.restStarters && !xiSet.has(q.n) ? 1.15 : 1;
         const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.55;
-        const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.2 : 1;
-        const persTr = DT(q, s.p).tr;
-        const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.15 : 1;
-        const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.01 : stf.setPieceCoach * 0.004;
+        const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.18 : 1;
+        const persTr = devProf.D.tr;
+        const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.12 : 1;
+        const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.004 : stf.setPieceCoach * 0.0018;
         const ovScale = getOvGrowthScale(q.ov, q.pot);
         const chance =
-          (0.016 + 0.008 * lv * trCondFactor + stf.asst * 0.006 + Math.max(0, analyticsLv - 1) * 0.0035 + roleCoachBonus) *
+          (0.0055 + 0.0022 * lv * trCondFactor + stf.asst * 0.0018 + Math.max(0, analyticsLv - 1) * 0.001 + roleCoachBonus) *
           progMeta.devMult *
           intMeta.devMult *
           benchSharpBonus *
@@ -3211,12 +3232,27 @@ export function afterMatchDay(
           youthCoachMul *
           persDevMul *
           ovScale *
-          (isFocus ? 1.85 : 1);
-        if ((matchesPos || isFocus) && q.age < 30 && q.ov < (q.pot || 86) && Math.random() < chance) {
-          q.ov++;
-          gr.push(`${q.n} (${q.ov})`);
+          devProf.ageMult *
+          devProf.formMult *
+          (isFocus ? 1.45 : 1);
+
+        if (q.ov < (q.pot || 86)) {
+          if (Math.random() < chance) {
+            q.ov++;
+            gr.push(`${q.n} (${q.ov})`);
+          }
+        } else if (devProf.strongSeason && Math.random() < 0.25) {
+          const bt = trySuperstarBreakthrough(q, null, 0.06);
+          if (bt.brokeThrough) {
+            q.ov++;
+            gr.push(`${q.n} (${q.ov})`);
+            breakthroughs.push(`${q.n} → ศักยภาพ ${bt.newPot}${bt.becameSuperstar ? ' 🌟ซุปตาร์!' : ''}`);
+          }
         }
       });
+    }
+    if (breakthroughs.length) {
+      pushFeed(s, 'แววซุปตาร์', `🌟 ทะลุขีดจำกัดระหว่างซีซั่น: ${breakthroughs.join(', ')}`, 'ok');
     }
     const avgFitAfter = myFitCount ? myFitAfterSum / myFitCount : 80;
     const fitDeltaAvg = myFitCount ? Math.round((myFitAfterSum - myFitBeforeSum) / myFitCount) : 0;
@@ -3311,31 +3347,60 @@ export function afterMatchDay(
     if (s.p?.last) pushFeed(s, 'ฝึกซ้อม', s.p.last, /เพิ่มเป็น|ได้ \+1|พัฒนา/.test(s.p.last) ? 'ok' : '');
   }
 
-  // Active in-season training & mission progression for AI bot clubs so rival squads stay competitive
+  // Active in-season training & mission progression for AI bot clubs using symmetric progression rules
   s.teams.forEach((t) => {
     if (mg && t.id === s.me) return;
     const aiXi = new Set(xi(t).map((z) => z.n));
-    const aiProg = t.tac === 'X' || t.tac === 'A' ? 'attack' : t.tac === 'D' || t.tac === 'Z' ? 'defense' : 'balanced';
+    const aiProg: TrainingProgramId = t.tac === 'X' || t.tac === 'A' ? 'attack' : t.tac === 'D' || t.tac === 'Z' ? 'defense' : 'balanced';
+    const aiLv = clamp(([2.5, 5.0, 7.5, 8.8][t.tier] ?? 4.5) + ((t.id % 3) - 1) * 0.4, 1, 10);
+    const aiAsst = clamp(([0.6, 1.8, 3.2, 4.0][t.tier] ?? 1.5) + (t.id % 2) * 0.3, 0, 5);
+    const aiAnalytics = clamp(([1.5, 3.5, 6.0, 7.5][t.tier] ?? 3) + ((t.id % 3) - 1) * 0.5, 1, 10);
+    const aiVirtualState = {
+      tr: Math.round(aiLv),
+      staff: { asst: Math.round(aiAsst), fit: 0, scout: 0, physio: 0 },
+      analyticsLv: Math.round(aiAnalytics)
+    };
+    const aiFocusCandidate = t.sq
+      .filter((q) => !q.me && q.inj === 0 && getPlayerDevProfile(q, null).phase !== 'declining')
+      .slice()
+      .sort((a, b) => ((b.pot || b.ov) - b.ov) * 2 + (b.talent ?? 55) - (((a.pot || a.ov) - a.ov) * 2 + (a.talent ?? 55)))[0];
+
     t.sq.forEach((q) => {
       if (q.me || q.inj > 0) return;
       const isStarter = aiXi.has(q.n);
-      if (q.age <= 27 && q.ov < (q.pot || 86)) {
+      const isAiFocus = aiFocusCandidate?.n === q.n;
+      const devProf = getPlayerDevProfile(q, null);
+      if (devProf.phase !== 'declining') {
+        const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.55;
+        const persTr = devProf.D.tr;
+        const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.12 : 1;
+        const ovScale = getOvGrowthScale(q.ov, q.pot);
         const aiTrainChance =
-          (0.012 + t.tier * 0.008) *
-          (isStarter ? 1.25 : 0.72) *
-          (0.75 + ((q.talent ?? 55) / 100) * 0.55) *
-          getOvGrowthScale(q.ov, q.pot);
-        if (Math.random() < aiTrainChance) {
-          q.ov++;
+          (0.0055 + 0.0022 * aiLv + aiAsst * 0.0018 + Math.max(0, aiAnalytics - 1) * 0.001) *
+          (isStarter ? 1.05 : 0.92) *
+          tlFactor *
+          persDevMul *
+          ovScale *
+          devProf.ageMult *
+          devProf.formMult *
+          (isAiFocus ? 1.35 : 1);
+
+        if (q.ov < (q.pot || 86)) {
+          if (Math.random() < aiTrainChance) {
+            q.ov++;
+          }
+        } else if (devProf.strongSeason && Math.random() < 0.25) {
+          const bt = trySuperstarBreakthrough(q, null, 0.06);
+          if (bt.brokeThrough) {
+            q.ov++;
+          }
         }
       }
-      if (isStarter || q.age <= 23) {
-        applyTrainingMissionProgress(q, {
-          teamProgram: aiProg,
-          isTeamFocus: false,
-          state: null
-        });
-      }
+      applyTrainingMissionProgress(q, {
+        teamProgram: aiProg,
+        isTeamFocus: isAiFocus,
+        state: aiVirtualState
+      });
     });
   });
 
@@ -3980,25 +4045,93 @@ export function growPlayers(s: GameState) {
     t.sq.forEach((q) => {
       q.age++;
       if (q.me) {
-        if (s.p) s.p.age = q.age;
+        if (s.p) {
+          s.p.age = q.age;
+          const myProf = getPlayerDevProfile(q, s.p);
+          if (myProf.strongSeason && myProf.phase !== 'declining') {
+            const bt = trySuperstarBreakthrough(q, s.p, 0.14);
+            if (bt.brokeThrough) {
+              pushFeed(s, 'แววซุปตาร์', `🌟 ฟอร์มยอดเยี่ยมตลอดซีซั่น! ศักยภาพของ ${q.n} ขยับสู่ ${bt.newPot}`, 'ok');
+            }
+          }
+        }
         return;
       }
       if (q.con && !q.loan) q.con.yr = Math.max(0, (q.con.yr ?? 2) - 1);
-      const D = DT(q, s.p);
+
+      const devProf = getPlayerDevProfile(q, s.p);
+      const D = devProf.D;
+      const tlVal = D.tlVal;
       const ovScale = getOvGrowthScale(q.ov, q.pot);
-      const rawYoungDelta =
-        q.age < D.pk - 2
-          ? R(0, 2) + ((D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23) && Math.random() < 0.35 ? 1 : 0) + (Math.random() < ovScale * 0.7 ? 1 : 0)
-          : q.age > D.pk + 4
-            ? -R(1, 3) + (D.tr === 23 && Math.random() < 0.35 ? 1 : 0)
-            : R(-1, 1);
-      const delta = rawYoungDelta > 0 && q.ov >= 86 ? (Math.random() < ovScale * 1.4 ? 1 : 0) : rawYoungDelta;
-      q.ov = clamp(q.ov + delta, 25, q.pot || 90);
-      if (q.age > 35) {
+
+      // Performance-driven Superstar Potential Breakthrough (shared equally by User & AI bots)
+      if (devProf.phase !== 'declining' && devProf.strongSeason) {
+        const bt = trySuperstarBreakthrough(q, null, 0.14);
+        if (bt.brokeThrough && t.id === s.me) {
+          pushFeed(
+            s,
+            'แววซุปตาร์',
+            `🌟 ${q.n} โชว์ฟอร์มเด่นตลอดซีซั่น ทะลุขีดจำกัดศักยภาพสู่ ${bt.newPot}${bt.becameSuperstar ? ' (ก้าวสู่ระดับซุปตาร์!)' : ''}`,
+            'ok'
+          );
+        }
+      }
+
+      // Gradual, steady offseason progression — hard to jump fast, steady while in growing/peak phase
+      let delta = 0;
+      const potCap = Math.max(q.ov, q.pot || 88);
+      if (devProf.phase === 'growing') {
+        const growChance = clamp((0.26 + (tlVal - 50) * 0.0055) * ovScale * devProf.formMult, 0.06, 0.72);
+        if (q.ov < potCap && Math.random() < growChance) {
+          delta = 1;
+          if (q.age <= 20 && q.ov < 70 && tlVal >= 80 && devProf.sp >= 12 && Math.random() < 0.25) {
+            delta = 2;
+          }
+        }
+      } else if (devProf.phase === 'peak') {
+        // Still develops steadily if performing well until peak ends; never drops randomly in peak
+        if (q.ov < potCap && devProf.sp >= 10 && devProf.avgRating >= 6.8) {
+          const peakChance = clamp(0.20 * ovScale * devProf.formMult, 0.03, 0.35);
+          if (Math.random() < peakChance) delta = 1;
+        }
+      } else {
+        // Past peak ("หมดช่วงพีคแล้ว"): gradual decline softened by fitness/professionalism/form
+        const staySharp =
+          (devProf.avgRating >= 7.35 && devProf.sp >= 15 && q.age <= devProf.effPkEnd + 2 && Math.random() < 0.45) ||
+          (D.tr === 23 && Math.random() < 0.3);
+        if (!staySharp) {
+          const heavyDropAge = q.pos === 'GK' ? 36 : 34;
+          delta = q.age >= heavyDropAge && Math.random() < (q.age >= heavyDropAge + 2 ? 0.55 : 0.28) ? -2 : -1;
+        }
+      }
+
+      if (delta !== 0) {
+        q.ov = clamp(q.ov + delta, 25, potCap);
+      }
+
+      // Natural Retirement ("จนกว่าจะแขวนสตั้ด"): age 33-39 (GK +2 yrs), stars in good form last longer
+      const effAge = q.pos === 'GK' ? q.age - 2 : q.age;
+      let retireProb = 0;
+      if (effAge === 33) retireProb = 0.06;
+      else if (effAge === 34) retireProb = 0.14;
+      else if (effAge === 35) retireProb = 0.26;
+      else if (effAge === 36) retireProb = 0.42;
+      else if (effAge === 37) retireProb = 0.62;
+      else if (effAge === 38) retireProb = 0.82;
+      else if (effAge >= 39) retireProb = 1.0;
+
+      if (retireProb > 0 && retireProb < 1) {
+        if (q.ov >= 76 || devProf.avgRating >= 7.1) retireProb = Math.max(0.02, retireProb - 0.14);
+        if (q.ov < BASE[t.tier] - 8 || devProf.sp <= 3) retireProb = Math.min(0.95, retireProb + 0.18);
+      }
+
+      if (retireProb > 0 && Math.random() < retireProb) {
+        const retiredName = q.n;
+        const retiredAge = q.age;
         const repOv = BASE[t.tier] + R(-1, 5) + (Math.random() < (t.tier >= 2 ? 0.25 : 0.14) ? R(3, 6) : 0);
         const fresh = mkPlayer(q.pos, repOv, true);
         if (fresh.age <= 21) {
-          fresh.pot = clamp(repOv + R(10, 20), 68, 94);
+          fresh.pot = clamp(repOv + R(10, 22), 68, 95);
         }
         Object.assign(q, fresh);
         delete q.con;
@@ -4008,6 +4141,14 @@ export function growPlayers(s: GameState) {
         delete q.careerLog;
         delete q.signedSeason;
         delete q.signedMd;
+        delete q.missions;
+        delete q.sb;
+        delete q.coreSb;
+        if (t.id === s.me) {
+          const msg = `👋 อำลาสนาม: ${retiredName} (อายุ ${retiredAge} ปี) ประกาศแขวนสตั๊ด · ดาวรุ่ง ${fresh.n} ขึ้นชุดใหญ่`;
+          s.hist.push(msg);
+          pushFeed(s, 'แขวนสตั๊ด', msg, '');
+        }
       }
     })
   );

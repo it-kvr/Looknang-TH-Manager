@@ -3,7 +3,7 @@ import type { TrainingIntensity, Player, Team, GameState, TrainingProgramMeta } 
 import { clamp, fmtMoney } from '../utils/math';
 import { TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { xi, logFin } from '../engine/playerCore';
+import { xi, logFin, getPlayerDevProfile } from '../engine/playerCore';
 import { getPlayerMissionView, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
@@ -368,7 +368,7 @@ export const TeamTrainingView: React.FC<{
             <div>
               <h3 className="font-bold text-sm mland:text-xs">👥 จัดการรายบุคคล (พักเดี่ยว / ปั้นพิเศษ)</h3>
               <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-                พักเดี่ยว: ฟิต +10% &amp; ลดเสี่ยงเจ็บ 50% · ปั้นพิเศษ: พัฒนา 2.2x ({restedIndivCount} พักอยู่)
+                พักเดี่ยว: ฟิต +10% &amp; ลดเสี่ยงเจ็บ 50% · ปั้นพิเศษ: พัฒนา 1.45x จนกว่าจะหมดช่วงพีค ({restedIndivCount} พักอยู่)
               </div>
             </div>
             <div className="flex items-center gap-1.5">
@@ -468,7 +468,7 @@ export const TeamTrainingView: React.FC<{
                     >
                       {isRest ? '😴 พักอยู่' : '😴 พัก'}
                     </button>
-                    {q.age < 31 && (
+                    {getPlayerDevProfile(q, null).phase !== 'declining' && (
                       <button
                         type="button"
                         onClick={() => {

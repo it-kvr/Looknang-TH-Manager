@@ -14,7 +14,7 @@ import type {
 } from '../types/game';
 import { R, clamp } from '../utils/math';
 import { ATT, SIGL } from '../data/thaiFootballData';
-import { OVF, xi, DT, ovMe, syncMe, recordPlayerSeasonProgress, getOvGrowthScale } from './playerCore';
+import { OVF, xi, DT, ovMe, syncMe, recordPlayerSeasonProgress, getOvGrowthScale, getPlayerDevProfile } from './playerCore';
 
 export const ovColor = (v: number): string => {
   if (v >= 100) return '#db2777';
@@ -469,31 +469,34 @@ export function calcMissionSuccessChance(
 ): number {
   const talent = getPlayerTalent(q, careerP);
   const isProdigy = Boolean(q.me && careerP?.perks?.includes('prodigy'));
-  const age = q.age || 24;
+  const devProf = getPlayerDevProfile(q, careerP);
+  const age = devProf.age;
   const curOv = q.me && careerP ? ovMe(careerP) : (q.ov || 65);
   const pot = q.pot || curOv;
 
-  // Base success probability scales with talent (25-99) and diminishes at higher OVR
-  let chance = 26 + talent * 0.56 - stage * 7.5;
-  if (age <= 21) chance += 4;
-  else if (age >= 30) chance -= (age - 29) * 3.5;
+  // Base success probability scales with talent and diminishes at higher stages/OVR
+  let chance = 20 + talent * 0.44 - stage * 8.0;
+  if (age <= 21) chance += 3;
+  if (devProf.phase === 'peak') chance -= 3;
+  else if (devProf.phase === 'declining') chance -= 18;
+  if (devProf.strongSeason) chance += 4;
 
-  // Diminishing returns for elite ratings so OVR doesn't cap early
-  if (curOv >= 76) {
-    chance -= Math.max(0, curOv - 76) * 1.45;
+  // Diminishing returns for high ratings so progression stays gradual over seasons
+  if (curOv >= 74) {
+    chance -= Math.max(0, curOv - 74) * 1.5;
   }
 
-  // Reaching or exceeding potential makes breakthroughs harder (requires higher talent)
-  if (curOv >= pot) chance -= 12;
-  else if (pot - curOv >= 15) chance += 3;
+  // Reaching or exceeding potential makes breakthroughs noticeably harder
+  if (curOv >= pot) chance -= 15;
+  else if (pot - curOv >= 14) chance += 3;
 
-  if (isProdigy) chance += 6;
-  if (state?.tr) chance += (state.tr - 1) * 0.65;
-  if (state?.staff?.asst) chance += state.staff.asst * 0.75;
-  if (state?.analyticsLv && state.analyticsLv > 1) chance += (state.analyticsLv - 1) * 0.5;
+  if (isProdigy) chance += 5;
+  if (state?.tr) chance += Math.max(0, state.tr - 1) * 0.5;
+  if (state?.staff?.asst) chance += state.staff.asst * 0.6;
+  if (state?.analyticsLv && state.analyticsLv > 1) chance += (state.analyticsLv - 1) * 0.4;
 
   // Never 100% guaranteed and never 0% impossible
-  return clamp(Math.round(chance), 12, 86);
+  return clamp(Math.round(chance), 8, 74);
 }
 
 export const getPlayerMissionView = (
@@ -564,10 +567,14 @@ const applyStageRewardToPlayer = (
   const coreAmt = def.coreRewards?.[Math.min(stage, (def.coreRewards?.length || 1) - 1)] ?? 1;
   const curOv = careerP ? ovMe(careerP) : q.ov;
   const ovScale = getOvGrowthScale(curOv, q.pot);
+  const devProf = getPlayerDevProfile(q, careerP);
+
+  const scaleSub = (delta: number) =>
+    curOv >= 84 ? Math.max(1, Math.round(delta * 0.55)) : curOv >= 74 ? Math.max(1, Math.round(delta * 0.75)) : delta;
 
   q.sb = { ...(q.sb || {}) };
   Object.entries(rewards).forEach(([sk, delta]) => {
-    const scaledDelta = curOv >= 88 ? Math.max(1, Math.round(delta * 0.65)) : delta;
+    const scaledDelta = scaleSub(delta);
     q.sb![sk] = (q.sb![sk] || 0) + scaledDelta;
     if (q.customD && q.customD[sk] != null) {
       q.customD[sk] = clamp(q.customD[sk] + scaledDelta, 1, 99);
@@ -577,13 +584,17 @@ const applyStageRewardToPlayer = (
   if (careerP) {
     careerP.sb = { ...(careerP.sb || {}) };
     Object.entries(rewards).forEach(([sk, delta]) => {
-      const scaledDelta = curOv >= 88 ? Math.max(1, Math.round(delta * 0.65)) : delta;
+      const scaledDelta = scaleSub(delta);
       careerP.sb![sk] = (careerP.sb![sk] || 0) + scaledDelta;
       if (careerP.customD && careerP.customD[sk] != null) {
         careerP.customD[sk] = clamp(careerP.customD[sk] + scaledDelta, 1, 99);
       }
     });
-    if (coreAmt > 0 && (careerP.a[def.coreReward] < 86 || Math.random() < 0.35 + ovScale * 0.8)) {
+    if (
+      coreAmt > 0 &&
+      devProf.phase !== 'declining' &&
+      (careerP.a[def.coreReward] < 80 || Math.random() < 0.22 + ovScale * 0.75)
+    ) {
       careerP.a[def.coreReward] = clamp(careerP.a[def.coreReward] + coreAmt, 1, 99);
     }
     careerP.rep = (careerP.rep || 10) + (stage >= 3 ? 3 : 2);
@@ -591,7 +602,7 @@ const applyStageRewardToPlayer = (
     if (q.blessed && q.customA) q.customA = { ...careerP.a };
     if (s) syncMe(s);
   } else {
-    if (coreAmt > 0) {
+    if (coreAmt > 0 && devProf.phase !== 'declining') {
       q.coreSb = { ...(q.coreSb || {}) };
       q.coreSb[def.coreReward] = (q.coreSb[def.coreReward] || 0) + coreAmt;
       if (q.customA) {
@@ -600,11 +611,15 @@ const applyStageRewardToPlayer = (
     }
     const afterDt = DT(q, null);
     const calcOv = clamp(OVF(q.pos, afterDt.a), 1, 99);
-    const potCap = stage >= 3 ? 98 : (q.pot || 86);
-    if (calcOv > q.ov && (q.ov < potCap || stage >= 3)) {
-      q.ov = clamp(calcOv, 1, stage >= 3 ? 98 : potCap);
+    const basePot = q.pot || Math.max(q.ov, 82);
+    const canBreakCap = stage >= 3 && devProf.phase !== 'declining' && devProf.strongSeason && basePot < 96;
+    const potCap = canBreakCap ? Math.min(96, basePot + 1) : basePot;
+    if (calcOv > q.ov && q.ov < potCap) {
+      q.ov = clamp(calcOv, 1, potCap);
     }
-    if (stage >= 3 && q.ov > (q.pot || q.ov)) q.pot = q.ov;
+    if (canBreakCap && q.ov > (q.pot || q.ov)) {
+      q.pot = q.ov;
+    }
   }
   if (s) {
     recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, careerP);
@@ -781,39 +796,39 @@ export const applyTrainingMissionProgress = (
     isTeamFocus?: boolean;
     careerPlan?: number;
     careerP?: PlayerCareerProfile | null;
-    state?: GameState | null;
+    state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null;
   }
 ): { notes: string[]; summary: MissionResolveSummary } => {
   const notes: string[] = [];
   const mState = ensurePlayerMissions(q, opts.careerP);
-  const mult = opts.isTeamFocus ? 2 : 1;
+  const mult = opts.isTeamFocus ? 1.5 : 1;
 
-  // Measured training drill contributions so missions progress naturally alongside real matches
+  // Measured training drill contributions so missions progress steadily alongside real matches
   const addSimultaneous = (metric: PersonalMissionMetric, base: number, label?: string) => {
     if (base <= 0) return;
-    const total = base * mult;
+    const total = Math.max(1, Math.round(base * mult));
     mState.stats[metric] = (mState.stats[metric] || 0) + total;
     if (label && opts.isTeamFocus) notes.push(`${label} +${total}`);
   };
 
   if (q.pos === 'GK') {
     addSimultaneous('saves', opts.teamProgram === 'defense' ? 2 : 1, 'เซฟประตู');
-    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 5 : 2);
+    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 4 : 2);
   } else {
-    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 7 : 3, 'จ่ายบอล');
+    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 5 : 2, 'จ่ายบอล');
     addSimultaneous('dribbles', opts.teamProgram === 'fitness' || opts.teamProgram === 'setpiece' ? 2 : 1);
 
     if (q.pos === 'FW' || q.pos === 'MF') {
       const isAtt = opts.teamProgram === 'attack';
       addSimultaneous('shots', isAtt ? 2 : 1, 'ยิงประตู');
-      if (isAtt || Math.random() < 0.55) addSimultaneous('onTarget', 1);
+      if (isAtt || Math.random() < 0.45) addSimultaneous('onTarget', 1);
       addSimultaneous('crossAssists', isAtt ? 2 : 1);
-      addSimultaneous('setpieces', opts.teamProgram === 'setpiece' ? 1 : 0);
+      if (opts.teamProgram === 'setpiece') addSimultaneous('setpieces', 1);
     }
     if (q.pos === 'DF' || q.pos === 'MF') {
       const isDef = opts.teamProgram === 'defense';
       addSimultaneous('tackles', isDef ? 2 : 1, 'เข้าสกัด');
-      addSimultaneous('blocks', isDef ? 1 : q.pos === 'DF' && Math.random() < 0.5 ? 1 : 0);
+      if (isDef || (q.pos === 'DF' && Math.random() < 0.45)) addSimultaneous('blocks', 1);
       addSimultaneous('headers', isDef ? 2 : 1);
       if (q.pos === 'DF' && opts.teamProgram === 'setpiece') {
         addSimultaneous('setpieces', 1);
@@ -826,9 +841,9 @@ export const applyTrainingMissionProgress = (
   // Career personal weekly plan drills
   if (opts.careerPlan === 0 && q.pos !== 'GK') {
     addSimultaneous('shots', 1);
-    if (Math.random() < 0.6) addSimultaneous('onTarget', 1);
+    if (Math.random() < 0.5) addSimultaneous('onTarget', 1);
   } else if (opts.careerPlan === 1) {
-    addSimultaneous('passes', 4);
+    addSimultaneous('passes', 3);
     addSimultaneous('dribbles', 1);
   } else if (opts.careerPlan === 4 && q.pos !== 'GK') {
     addSimultaneous('setpieces', 1);
@@ -836,7 +851,7 @@ export const applyTrainingMissionProgress = (
 
   q.missions = mState;
   if (opts.careerP) opts.careerP.missions = mState;
-  const summary = resolvePlayerMissions(q, opts.careerP || null, opts.state || null);
+  const summary = resolvePlayerMissions(q, opts.careerP || null, (opts.state as GameState | null) || null);
   return { notes, summary };
 };
 
@@ -885,31 +900,48 @@ const applyTeamMatchMissions = (
         }
       });
     } else {
-      // Estimation fallback for instant-simmed & AI matches
+      // Estimation fallback for AI & instant matches (balanced parity with user match actions)
       if (q.pos === 'GK') {
-        addMissionStat(q, 'saves', R(2, 5), careerP);
-        addMissionStat(q, 'passes', R(8, 16), careerP);
+        addMissionStat(q, 'saves', R(2, 6), careerP);
+        addMissionStat(q, 'passes', R(12, 22), careerP);
       } else {
-        addMissionStat(q, 'passes', q.pos === 'MF' ? R(14, 28) : R(8, 18), careerP);
-        addMissionStat(q, 'dribbles', q.pos === 'FW' || q.pos === 'MF' ? R(1, 4) : R(0, 2), careerP);
+        addMissionStat(q, 'passes', q.pos === 'MF' ? R(20, 38) : q.pos === 'DF' ? R(15, 28) : R(10, 20), careerP);
+        addMissionStat(q, 'dribbles', q.pos === 'FW' || q.pos === 'MF' ? R(2, 5) : R(1, 3), careerP);
         if (q.pos === 'FW' || q.pos === 'MF') {
-          const sh = Math.max(goals * 2 + (q.pos === 'FW' ? R(1, 2) : R(0, 2)), 0);
+          const sh = Math.max(goals * 2 + (q.pos === 'FW' ? R(1, 3) : R(0, 3)), 0);
           if (sh > 0) {
             addMissionStat(q, 'shots', sh, careerP);
-            addMissionStat(q, 'onTarget', Math.max(goals, Math.round(sh * 0.48)), careerP);
+            addMissionStat(q, 'onTarget', Math.max(goals, Math.round(sh * 0.5)), careerP);
           }
         }
         if (assists > 0) addMissionStat(q, 'crossAssists', assists * 2 + 1, careerP);
-        else if (q.pos === 'MF' || q.pos === 'DF') addMissionStat(q, 'crossAssists', R(0, 2), careerP);
+        else if (q.pos === 'MF' || q.pos === 'DF') addMissionStat(q, 'crossAssists', R(1, 3), careerP);
         if (q.pos === 'DF' || q.pos === 'MF') {
-          addMissionStat(q, 'tackles', R(2, 4), careerP);
-          addMissionStat(q, 'blocks', R(0, 2), careerP);
+          addMissionStat(q, 'tackles', q.pos === 'DF' ? R(3, 6) : R(2, 4), careerP);
+          addMissionStat(q, 'blocks', q.pos === 'DF' ? R(0, 2) : R(0, 1), careerP);
         }
-        addMissionStat(q, 'headers', R(0, 2), careerP);
+        addMissionStat(q, 'headers', q.pos === 'DF' || q.pos === 'FW' ? R(1, 3) : R(0, 2), careerP);
+        if (q.pos === 'MF' || q.pos === 'FW') {
+          addMissionStat(q, 'setpieces', R(0, 2), careerP);
+        }
       }
     }
 
-    const res = resolvePlayerMissions(q, careerP, trackForUser ? s : null);
+    const aiVirtualState: GameState | null = trackForUser
+      ? s
+      : ({
+          ...s,
+          tr: [3, 5, 8, 9][team.tier] ?? 5,
+          analyticsLv: [2, 4, 6, 8][team.tier] ?? 4,
+          staff: {
+            fit: 0,
+            scout: 0,
+            physio: 0,
+            ...(s.staff || {}),
+            asst: [1, 2, 3, 4][team.tier] ?? 2
+          }
+        } as GameState);
+    const res = resolvePlayerMissions(q, careerP, aiVirtualState);
     if (trackForUser) {
       combined.upgraded.push(...res.upgraded);
       combined.failed.push(...res.failed);

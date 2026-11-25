@@ -115,10 +115,34 @@ export function mergeClubAllTimePlayers(
     }
   });
 
-  return Array.from(map.values())
-    .filter((r) => r.apps > 0 || r.goals > 0 || r.assists > 0 || r.cleanSheets > 0 || r.motm > 0)
+  const allRecords = Array.from(map.values()).filter(
+    (r) => r.apps > 0 || r.goals > 0 || r.assists > 0 || r.cleanSheets > 0 || r.motm > 0
+  );
+  const keepNames = new Set<string>();
+  const metrics: Array<keyof Pick<ClubAllTimePlayerRecord, 'goals' | 'assists' | 'apps' | 'cleanSheets' | 'motm'>> = [
+    'goals',
+    'assists',
+    'apps',
+    'cleanSheets',
+    'motm'
+  ];
+  metrics.forEach((m) => {
+    allRecords
+      .filter((r) => (r[m] || 0) > 0)
+      .sort((a, b) => (b[m] || 0) - (a[m] || 0) || b.apps - a.apps)
+      .slice(0, 20)
+      .forEach((r) => keepNames.add(r.name));
+  });
+  allRecords
+    .slice()
     .sort((a, b) => b.apps + b.goals * 2 + b.assists - (a.apps + a.goals * 2 + a.assists))
-    .slice(0, 60);
+    .slice(0, 60)
+    .forEach((r) => keepNames.add(r.name));
+
+  return allRecords
+    .filter((r) => keepNames.has(r.name))
+    .sort((a, b) => b.apps + b.goals * 2 + b.assists - (a.apps + a.goals * 2 + a.assists))
+    .slice(0, 100);
 }
 
 export interface PlayerCareerSummary {

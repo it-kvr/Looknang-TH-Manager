@@ -1021,7 +1021,8 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   const persDef = PLAYER_PERSONALITIES[D0.tr] || PLAYER_PERSONALITIES[3];
   const TR: [string, string] = [persDef.label, persDef.desc];
   const ag = q.age || 24;
-  const gro = ag < D0.pk - 2 ? 'กำลังเติบโต' : ag <= D0.pk + 4 ? 'ช่วงพีค' : 'เริ่มถดถอย';
+  const effPkEnd = D0.pk + (q.pos === 'GK' ? 6 : 4);
+  const gro = ag < D0.pk - 2 ? 'กำลังเติบโต' : ag <= effPkEnd ? 'ช่วงพีค' : 'หมดช่วงพีค';
   const stCls = (q.sus || 0) > 0 || q.inj > 0 ? 'bad' : f < 60 ? 'wrn' : 'ok';
   const traits = getPlayerTraits(q, careerP);
   const bio = getPlayerBio(q, careerP);
@@ -1045,13 +1046,95 @@ export const ovMe = (p: PlayerCareerProfile) => OVF(p.pos, p.a);
 
 export function getOvGrowthScale(curOv: number, pot?: number): number {
   let s = 1.0;
-  if (curOv >= 92) s = 0.08;
-  else if (curOv >= 88) s = 0.16;
-  else if (curOv >= 83) s = 0.30;
-  else if (curOv >= 76) s = 0.50;
-  else if (curOv >= 68) s = 0.74;
-  if (pot != null && curOv >= pot) s *= 0.25;
+  if (curOv >= 93) s = 0.04;
+  else if (curOv >= 89) s = 0.09;
+  else if (curOv >= 84) s = 0.18;
+  else if (curOv >= 78) s = 0.32;
+  else if (curOv >= 72) s = 0.50;
+  else if (curOv >= 64) s = 0.72;
+  if (pot != null && curOv >= pot) s *= 0.12;
   return s;
+}
+
+export interface PlayerDevProfile {
+  D: ReturnType<typeof DT>;
+  age: number;
+  effPkEnd: number;
+  phase: 'growing' | 'peak' | 'declining';
+  ageMult: number;
+  avgRating: number;
+  formMult: number;
+  sp: number;
+  strongSeason: boolean;
+}
+
+export function getPlayerDevProfile(q: Player, careerP?: PlayerCareerProfile | null): PlayerDevProfile {
+  const D = DT(q, careerP);
+  const age = q.age || 24;
+  const effPkEnd = D.pk + (q.pos === 'GK' ? 6 : 4);
+  const sp = q.sp || 0;
+  const avgRating = (q.sra || 0) > 0 ? (q.srs || 0) / q.sra! : 0;
+  const phase: PlayerDevProfile['phase'] =
+    age < D.pk - 2 ? 'growing' : age <= effPkEnd ? 'peak' : 'declining';
+
+  let ageMult = 1.0;
+  if (phase === 'peak') {
+    ageMult = avgRating >= 7.05 ? 0.72 : 0.55;
+  } else if (phase === 'declining') {
+    ageMult = avgRating >= 7.55 && age <= effPkEnd + 2 ? 0.12 : 0.04;
+  }
+
+  let formMult = 0.85;
+  if (sp <= 0) {
+    formMult = 0.55;
+  } else if (avgRating >= 7.5) {
+    formMult = 1.45;
+  } else if (avgRating >= 7.15) {
+    formMult = 1.25;
+  } else if (avgRating >= 6.65) {
+    formMult = 1.0;
+  } else if (avgRating > 0 && avgRating < 6.2) {
+    formMult = 0.72;
+  }
+
+  const contrib = (q.sg || 0) + (q.sa || 0);
+  const strongSeason =
+    sp >= 8 &&
+    (avgRating >= 7.15 ||
+      contrib >= 9 ||
+      (q.pos === 'GK' && (q.cs || 0) >= 5) ||
+      (q.motm || 0) >= 2);
+
+  return { D, age, effPkEnd, phase, ageMult, avgRating, formMult, sp, strongSeason };
+}
+
+export function trySuperstarBreakthrough(
+  q: Player,
+  careerP?: PlayerCareerProfile | null,
+  baseChance = 0.03
+): { brokeThrough: boolean; newPot: number; becameSuperstar: boolean } {
+  const prof = getPlayerDevProfile(q, careerP);
+  const curPot = q.pot || Math.max(q.ov + 2, 78);
+  if (prof.phase === 'declining' || !prof.strongSeason || q.ov < curPot - 3 || curPot >= 96) {
+    return { brokeThrough: false, newPot: curPot, becameSuperstar: false };
+  }
+  const tlVal = prof.D.tlVal;
+  const talentFactor = 0.52 + (tlVal / 100) * 0.88;
+  const formBoost = prof.avgRating >= 7.55 ? 1.55 : prof.avgRating >= 7.25 ? 1.25 : 0.95;
+  const ageFactor = prof.phase === 'growing' ? 1.15 : 0.82;
+  const chance = clamp(baseChance * talentFactor * formBoost * ageFactor, 0.005, 0.42);
+  if (Math.random() >= chance) {
+    return { brokeThrough: false, newPot: curPot, becameSuperstar: false };
+  }
+  const gain = (prof.avgRating >= 7.5 || tlVal >= 78) && Math.random() < 0.4 ? 2 : 1;
+  const newPot = clamp(curPot + gain, q.ov + 1, 96);
+  const wasSuperstar = curPot >= 86;
+  q.pot = newPot;
+  q.talent = clamp((q.talent ?? tlVal) + R(1, 2), 30, 98);
+  if (q.me && careerP) {
+    careerP.talent = q.talent;
+  }
+  return { brokeThrough: true, newPot, becameSuperstar: !wasSuperstar && newPot >= 86 };
 }
 
 export function autoGrow(p: PlayerCareerProfile, n = 1): string {
@@ -1068,10 +1151,11 @@ export function autoGrow(p: PlayerCareerProfile, n = 1): string {
     const av = w.filter((k) => p.a[k] < 99);
     if (!av.length) break;
     // Prefer attributes that haven't hit extreme levels yet for realistic multi-season balance
-    const lowAv = av.filter((k) => p.a[k] < 86);
-    const k = lowAv.length && Math.random() < 0.78 ? P(lowAv) : P(av);
-    if (p.a[k] >= 90 && Math.random() > 0.35) continue;
-    if (p.a[k] >= 84 && Math.random() > 0.62) continue;
+    const lowAv = av.filter((k) => p.a[k] < 82);
+    const k = lowAv.length && Math.random() < 0.8 ? P(lowAv) : P(av);
+    if (p.a[k] >= 90 && Math.random() > 0.25) continue;
+    if (p.a[k] >= 84 && Math.random() > 0.48) continue;
+    if (p.a[k] >= 78 && Math.random() > 0.75) continue;
     p.a[k]++;
     p.trn = (p.trn || 0) + 1;
     add[k] = (add[k] || 0) + 1;
