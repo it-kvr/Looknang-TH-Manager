@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
 import { bindAutoLandscapeFullscreen, enterAutoMobileFullscreen } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
@@ -481,8 +482,9 @@ export default function App() {
         const ticket = isHomeMatch
           ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * ticketMult * (d.promo === 1 ? 1.35 : 1) * stCondMul)
           : 0;
-        const merch = isHomeMatch
-          ? Math.round((2 + clamp(d.merchLv ?? 1, 1, 10) * 2.5) * (fanEff / 55) * merchCondMul)
+        const merchLv = clamp(d.merchLv ?? 1, 0, 10);
+        const merch = isHomeMatch && merchLv > 0
+          ? Math.round((2 + merchLv * 2.5) * (fanEff / 55) * merchCondMul)
           : 0;
         const baseSp = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
         const winSpBonus = spIdx === 1 && diff > 0 ? 10 + me.tier * 6 : 0;
@@ -776,9 +778,10 @@ export default function App() {
               type="button"
               onClick={() => { SFX.tap(); setShowSettings(true); }}
               aria-label="ตั้งค่า"
-              className="btn-icon sm:w-9 sm:h-9 text-sm mland:text-xs"
+              title="ตั้งค่าเกม"
+              className="btn-icon w-9 h-9 mland:w-7.5 mland:h-7.5"
             >
-              ⚙️
+              <Settings className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
             </button>
           </div>
         </div>

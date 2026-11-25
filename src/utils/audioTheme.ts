@@ -534,6 +534,17 @@ export const SFX = {
     [392, 493.88, 587.33, 783.99].forEach((f, i) => snd(f, 0.24, 'triangle', 0.055, i * 0.1));
     snd(783.99, 0.42, 'sine', 0.04, 0.42);
   },
+  celebrate: () => {
+    playCheerNoise(1.1);
+    pulseCrowdRoar(1.0);
+    const fanfare = [392, 523.25, 659.25, 783.99, 1046.5];
+    fanfare.forEach((f, i) => {
+      snd(f, 0.28, 'triangle', 0.056, i * 0.085);
+      snd(f * 0.5, 0.3, 'sawtooth', 0.016, i * 0.085);
+    });
+    snd(783.99, 0.45, 'triangle', 0.045, 0.46);
+    snd(1046.5, 0.55, 'sine', 0.052, 0.52);
+  },
   lose: () => {
     [349.23, 311.13, 261.63, 220].forEach((f, i) => snd(f, 0.26, 'triangle', 0.042, i * 0.13));
   }
@@ -635,17 +646,26 @@ export function vibrate(pattern: number | number[]) {
   }
 }
 
-export function triggerConfetti() {
+export function triggerConfetti(waves = 1) {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const colors = ['#f5c242', '#2fc476', '#ff7a5c', '#60a5fa', '#ffffff'];
-  for (let i = 0; i < 45; i++) {
-    const el = document.createElement('i');
-    el.className = 'confetti-piece';
-    el.style.left = `${Math.floor(Math.random() * 100)}%`;
-    el.style.background = colors[Math.floor(Math.random() * colors.length)];
-    el.style.animationDuration = `${1.6 + Math.random() * 1.4}s`;
-    el.style.animationDelay = `${Math.random() * 0.4}s`;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 3500);
+  const colors = ['#f5c242', '#2fc476', '#ff7a5c', '#60a5fa', '#ffffff', '#fde047'];
+  const totalWaves = Math.max(1, Math.min(4, Math.round(waves)));
+  for (let w = 0; w < totalWaves; w++) {
+    const count = w === 0 ? 45 : 32;
+    const baseDelay = w * 0.45;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('i');
+      el.className = 'confetti-piece';
+      el.style.left = `${Math.floor(Math.random() * 100)}%`;
+      el.style.background = colors[Math.floor(Math.random() * colors.length)];
+      if (i % 5 === 0) {
+        el.style.width = '7px';
+        el.style.height = '18px';
+      }
+      el.style.animationDuration = `${1.6 + Math.random() * 1.4}s`;
+      el.style.animationDelay = `${baseDelay + Math.random() * 0.4}s`;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), (baseDelay + 3.6) * 1000);
+    }
   }
 }

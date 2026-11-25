@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { RefreshCw, Download, CheckCircle2, X } from 'lucide-react';
 import { registerSW } from 'virtual:pwa-register';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -225,8 +226,10 @@ export const PWAUpdateBanner: React.FC = () => {
   if (!needRefresh || dismissed) return null;
 
   return (
-    <div className="fixed bottom-3 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border-2 border-[var(--g)] shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
-      <span className="text-lg shrink-0">🆕</span>
+    <div className="fixed bottom-3 mland:bottom-2.5 right-3 z-[75] max-w-[92vw] sm:max-w-sm rounded-2xl bg-[var(--surface)] border border-[var(--g)]/55 shadow-2xl px-3.5 py-2.5 flex items-center gap-2.5">
+      <div className="w-8 h-8 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/30 text-[var(--g)] flex items-center justify-center shrink-0">
+        <RefreshCw className={`w-4 h-4 ${checkingUpdate ? 'animate-spin' : ''}`} />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="font-bold text-xs text-[var(--ink)]">มีอัปเดตเวอร์ชันใหม่แล้ว!</div>
         <div className="text-[10.5px] text-[var(--mut)] leading-tight">กดอัปเดตได้ทันที (ข้อมูลเซฟไม่หาย)</div>
@@ -235,17 +238,18 @@ export const PWAUpdateBanner: React.FC = () => {
         type="button"
         disabled={checkingUpdate}
         onClick={() => applyUpdate()}
-        className="px-2.5 py-1.5 rounded-xl bg-[var(--g)] text-white text-[11px] font-bold shrink-0 cursor-pointer hover:brightness-105 disabled:opacity-60"
+        className="btn btn-sm btn-primary shrink-0"
       >
-        {checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}
+        <RefreshCw className={`w-3 h-3 ${checkingUpdate ? 'animate-spin' : ''}`} />
+        <span>{checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}</span>
       </button>
       <button
         type="button"
         onClick={() => setDismissed(true)}
         aria-label="ปิดการแจ้งเตือนอัปเดต"
-        className="w-6 h-6 rounded-full bg-[var(--surface-2)] text-[10px] font-bold text-[var(--mut)] shrink-0 cursor-pointer"
+        className="btn-icon w-7 h-7 rounded-full!"
       >
-        ✕
+        <X className="w-3.5 h-3.5" />
       </button>
     </div>
   );
@@ -471,9 +475,9 @@ export const PWAInstallButton: React.FC<{
               type="button"
               onClick={() => setShowGuide(false)}
               aria-label="ปิดหน้าต่าง"
-              className="w-8 h-8 mland:w-6 mland:h-6 rounded-full bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer shrink-0 hover:border-[var(--g)] transition-colors"
+              className="btn-icon rounded-full!"
             >
-              ✕
+              <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
             </button>
           </div>
 
@@ -571,10 +575,18 @@ export const PWAInstallButton: React.FC<{
   if (variant === 'compact') {
     if (isInstalled && !needRefresh) return null;
 
-    const compactToneClass =
-      tone === 'stadium'
-        ? 'bg-white/12 border border-white/25 text-white hover:bg-white/22'
-        : 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] hover:bg-[var(--g)] hover:text-white';
+    const isStadium = tone === 'stadium';
+    const compactSizeClass = isStadium
+      ? 'h-8 sm:h-9 mland:h-7 px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px]'
+      : 'h-9 mland:h-7.5 px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px]';
+
+    const compactInstallTone = isStadium
+      ? 'bg-emerald-500/22 hover:bg-emerald-500/32 border border-emerald-300/40 hover:border-emerald-200/70 text-emerald-50 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_8px_rgba(0,0,0,0.28)]'
+      : 'bg-[var(--surface-2)] hover:bg-[var(--g-soft)] border border-[var(--line)] hover:border-[var(--g)]/55 text-[var(--ink)] hover:text-[var(--g)] shadow-2xs';
+
+    const compactUpdateTone = isStadium
+      ? 'bg-gradient-to-b from-[#fde078] to-[#eab308] text-[#241700] border border-[#fef08a]/65 shadow-[inset_0_1px_0_rgba(255,255,255,0.6),0_2px_10px_rgba(234,179,8,0.28)] hover:brightness-105'
+      : 'bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/45 shadow-[inset_0_1px_0_rgba(255,255,255,0.5),0_2px_6px_rgba(202,138,4,0.22)] hover:brightness-105';
 
     return (
       <>
@@ -584,9 +596,9 @@ export const PWAInstallButton: React.FC<{
             disabled={checkingUpdate}
             onClick={() => applyUpdate()}
             title="อัปเดตตัวเกมเวอร์ชันใหม่"
-            className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 font-extrabold text-[11px] mland:text-[10px] flex items-center gap-1 cursor-pointer shrink-0 shadow-xs hover:brightness-105 disabled:opacity-60 whitespace-nowrap"
+            className={`${compactSizeClass} ${compactUpdateTone} font-extrabold inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-all disabled:opacity-60 whitespace-nowrap`}
           >
-            <span>🆕</span>
+            <RefreshCw className={`w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 ${checkingUpdate ? 'animate-spin' : ''}`} />
             <span>{checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดต'}</span>
           </button>
         )}
@@ -595,9 +607,9 @@ export const PWAInstallButton: React.FC<{
             type="button"
             onClick={handleInstallClick}
             title="ติดตั้งแอปลงเครื่อง"
-            className={`px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg font-bold text-[11px] mland:text-[10px] flex items-center gap-1 cursor-pointer shrink-0 transition-colors whitespace-nowrap ${compactToneClass}`}
+            className={`${compactSizeClass} ${compactInstallTone} font-bold inline-flex items-center gap-1.5 cursor-pointer shrink-0 transition-all whitespace-nowrap`}
           >
-            <span>📲</span>
+            <Download className={`w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 ${isStadium ? 'text-emerald-200' : 'text-[var(--g)]'}`} />
             <span>ติดตั้งแอป</span>
           </button>
         )}
@@ -613,30 +625,31 @@ export const PWAInstallButton: React.FC<{
           <button
             type="button"
             onClick={handleInstallClick}
-            className="w-full flex items-center justify-between gap-3 p-3 mland:p-2 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 text-left cursor-pointer hover:brightness-95 transition"
+            className="w-full flex items-center justify-between gap-3 p-2.5 mland:p-2 rounded-xl bg-[var(--surface)] hover:bg-[var(--g-soft)]/50 border border-[var(--line)] hover:border-[var(--g)]/50 text-left cursor-pointer transition-all"
           >
             <div className="flex items-center gap-2.5 min-w-0">
               <img src={iconUrl} alt="ลูกหนังไทย" className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl shrink-0" />
               <div className="min-w-0">
-                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--g)] truncate">
-                  {isInstallable ? '📲 ติดตั้งแอปลงเครื่องทันที' : '📲 ติดตั้งแอปลงเครื่อง'}
+                <div className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] truncate">
+                  ติดตั้งแอปลงเครื่อง
                 </div>
                 <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] truncate">
                   เล่นเต็มจอ ไม่มีแถบเบราว์เซอร์ และเล่นออฟไลน์ได้
                 </div>
               </div>
             </div>
-            <span className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold shrink-0">
-              {isInstallable ? 'ติดตั้ง' : 'ดูวิธี'}
+            <span className="btn btn-sm btn-primary shrink-0">
+              <Download className="w-3.5 h-3.5" />
+              <span>{isInstallable ? 'ติดตั้ง' : 'ดูวิธี'}</span>
             </span>
           </button>
         )}
 
         {needRefresh ? (
-          <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 text-xs flex items-center justify-between gap-2">
+          <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 text-xs flex items-center justify-between gap-2">
             <div className="min-w-0">
               <div className="font-bold text-[#7a4f00] dark:text-[var(--lamp)] mland:text-[10.5px] flex items-center gap-1.5">
-                <span>🆕</span>
+                <RefreshCw className="w-3.5 h-3.5 shrink-0" />
                 <span className="truncate">มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง</span>
               </div>
               <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
@@ -647,14 +660,15 @@ export const PWAInstallButton: React.FC<{
               type="button"
               disabled={checkingUpdate}
               onClick={() => applyUpdate()}
-              className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-[11px] mland:text-[9.5px] font-extrabold shrink-0 cursor-pointer shadow-xs disabled:opacity-60"
+              className="btn btn-sm btn-gold shrink-0"
             >
-              {checkingUpdate ? 'กำลังอัปเดต...' : '🔄 อัปเดตเลย'}
+              <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+              <span>{checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}</span>
             </button>
           </div>
         ) : isInstalled ? (
           <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 text-xs flex items-center gap-2">
-            <span className="shrink-0">✅</span>
+            <CheckCircle2 className="w-4 h-4 text-[var(--g)] shrink-0" />
             <div className="min-w-0">
               <div className="font-bold text-[var(--g)] mland:text-[10.5px] truncate">ติดตั้งแอปลงเครื่องแล้ว</div>
               <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">ตัวเกมเป็นเวอร์ชันล่าสุด</div>
@@ -679,15 +693,17 @@ export const PWAInstallButton: React.FC<{
           className="w-full p-3 mland:p-2 rounded-2xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 flex items-center justify-between gap-3 mland:gap-2 text-left cursor-pointer transition-all shadow-xs"
         >
           <div className="min-w-0">
-            <div className="font-bold text-xs sm:text-sm mland:text-xs text-[#7a4f00] dark:text-[var(--lamp)] truncate">
-              🆕 มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง
+            <div className="font-bold text-xs sm:text-sm mland:text-xs text-[#7a4f00] dark:text-[var(--lamp)] truncate flex items-center gap-1.5">
+              <RefreshCw className={`w-3.5 h-3.5 shrink-0 ${checkingUpdate ? 'animate-spin' : ''}`} />
+              <span className="truncate">มีอัปเดตเวอร์ชันใหม่พร้อมติดตั้ง</span>
             </div>
             <div className="text-[11px] mland:text-[10px] text-[var(--mut)] truncate">
               กดอัปเดตได้ทันทีโดยข้อมูลเซฟไม่หาย
             </div>
           </div>
-          <span className="px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-gradient-to-b from-[#fad05a] to-[#eab308] text-[#261900] text-xs mland:text-[11px] font-bold shrink-0">
-            {checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}
+          <span className="btn btn-sm btn-gold shrink-0">
+            <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+            <span>{checkingUpdate ? 'กำลังอัปเดต...' : 'อัปเดตเลย'}</span>
           </span>
         </button>
       )}
@@ -695,13 +711,13 @@ export const PWAInstallButton: React.FC<{
         <button
           type="button"
           onClick={handleInstallClick}
-          className="w-full p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--g)]/45 hover:border-[var(--g)] flex items-center justify-between gap-3 mland:gap-2 text-left cursor-pointer transition-all shadow-xs"
+          className="w-full p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)]/65 flex items-center justify-between gap-3 mland:gap-2 text-left cursor-pointer transition-all shadow-xs"
         >
           <div className="flex items-center gap-3 mland:gap-2 min-w-0">
             <img src={iconUrl} alt="ลูกหนังไทย" className="w-10 h-10 mland:w-8 mland:h-8 rounded-xl shrink-0" />
             <div className="min-w-0">
               <div className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] truncate">
-                {isInstallable ? '📲 ติดตั้ง "ลูกหนังไทย" ลงมือถือ' : '📱 เล่นในมือถือ? ติดตั้งเป็นแอปได้'}
+                {isInstallable ? 'ติดตั้ง "ลูกหนังไทย" ลงมือถือ' : 'เล่นในมือถือ? ติดตั้งเป็นแอปได้'}
               </div>
               <div className="text-[11px] mland:text-[10px] text-[var(--mut)] truncate">
                 {isInstallable
@@ -712,8 +728,9 @@ export const PWAInstallButton: React.FC<{
               </div>
             </div>
           </div>
-          <span className="px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--g)] text-white text-xs mland:text-[11px] font-bold shrink-0">
-            {isInstallable ? 'ติดตั้งเลย' : 'วิธีติดตั้ง'}
+          <span className="btn btn-sm btn-primary shrink-0">
+            <Download className="w-3.5 h-3.5" />
+            <span>{isInstallable ? 'ติดตั้งเลย' : 'วิธีติดตั้ง'}</span>
           </span>
         </button>
       )}

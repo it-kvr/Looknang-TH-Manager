@@ -475,13 +475,17 @@ export interface ClubAllTimePlayerRecord {
   name: string;
   pos: Position;
   ro?: SubRole;
+  no?: number;
+  vis?: number[];
   apps: number;
   goals: number;
   assists: number;
   cleanSheets: number;
   motm: number;
   seasons: number;
+  firstSeason?: number;
   lastSeason: number;
+  playedSeasons?: number[];
   bestAvgRating: number;
   stillAtClub?: boolean;
 }

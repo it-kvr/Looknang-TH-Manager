@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw } from 'lucide-react';
+import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -33,6 +33,7 @@ import {
   STAFF_HIRE_COSTS,
   ALL_FACILITY_KEYS,
   getFacilityUpgradeCost,
+  getFacilityDemolishRefund,
   getFacilityCondition,
   getFacilityRenovateCost,
   type ClubFinanceChartPoint
@@ -115,6 +116,12 @@ export const FinanceClubView: React.FC<{
     vis: number[];
     style: CoachStyleId;
   } | null>(null);
+  const [demolishTarget, setDemolishTarget] = useState<{
+    key: FacilityKey;
+    title: string;
+    baseCost: number;
+    minLv: number;
+  } | null>(null);
 
   useEffect(() => {
     if (navIntent?.tab === 'f' && (navIntent.sub === 'overview' || navIntent.sub === 'commercial' || navIntent.sub === 'ledger')) {
@@ -173,13 +180,17 @@ export const FinanceClubView: React.FC<{
       const nextLv = (d[key] ?? 1) + 1;
       d[key] = nextLv;
       d.facCond = { ...(d.facCond || {}), [key]: 100 };
-      logFin(d, `อัปเกรด${title} Lv.${nextLv}`, -cost);
+      logFin(d, `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title} Lv.${nextLv}`, -cost);
     });
-    onToast(`อัปเกรด${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ!`);
+    onToast(`${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ!`);
   };
 
   const renovateFac = (key: FacilityKey, title: string, baseCost: number) => {
     const lv = state[key] ?? 1;
+    if (lv <= 0) {
+      onToast(`${title} ถูกทำลายอยู่ กดสร้างใหม่เพื่อใช้งาน`);
+      return;
+    }
     const cond = getFacilityCondition(state, key);
     if (cond >= 100) {
       onToast(`${title} สภาพสมบูรณ์ 100% อยู่แล้ว`);
@@ -203,13 +214,46 @@ export const FinanceClubView: React.FC<{
     onToast(`🔧 ปรับปรุง${title}กลับมาสภาพ 100% แล้ว`);
   };
 
+  const demolishFac = (key: FacilityKey, title: string, baseCost: number, targetLv: number) => {
+    const minLv = key === 'st' ? 1 : 0;
+    const curLv = clamp(state[key] ?? 1, minLv, MAX_FACILITY_LV);
+    const nextLv = clamp(targetLv, minLv, curLv);
+    if (nextLv >= curLv) return;
+    let refund = 0;
+    for (let lvStep = curLv; lvStep > nextLv; lvStep--) {
+      refund += getFacilityDemolishRefund(baseCost, lvStep);
+    }
+    SFX.tap();
+    onUpdateState((d) => {
+      d[key] = nextLv;
+      d.money += refund;
+      const curCond = getFacilityCondition(d, key);
+      d.facCond = {
+        ...(d.facCond || {}),
+        [key]: nextLv === 0 ? 100 : clamp(curCond - 10, 40, 100)
+      };
+      if (nextLv === 0 && (key === 'merchLv' || key === 'ya')) {
+        d.fan = clamp((d.fan ?? 55) - 1, 5, 100);
+      }
+      logFin(d, `รื้อถอน/ทำลาย${title} (Lv.${curLv} → Lv.${nextLv})`, refund);
+    });
+    setDemolishTarget(null);
+    onToast(
+      nextLv === 0
+        ? `🏚️ ทำลาย${title}ทั้งหมดแล้ว (ได้รับคืนค่าวัสดุ +${fmtMoney(refund)})`
+        : `🔨 รื้อถอน${title}เหลือ Lv.${nextLv} (ได้รับคืนค่าวัสดุ +${fmtMoney(refund)})`
+    );
+  };
+
   const renovateAllFacs = (defs: readonly { key: FacilityKey; title: string; baseCost: number }[]) => {
     let totalCost = 0;
     const toFix: { key: FacilityKey; cond: number }[] = [];
     defs.forEach((f) => {
+      const curLv = state[f.key] ?? 1;
+      if (curLv <= 0) return;
       const cond = getFacilityCondition(state, f.key);
       if (cond < 100) {
-        totalCost += getFacilityRenovateCost(f.baseCost, state[f.key] ?? 1, cond);
+        totalCost += getFacilityRenovateCost(f.baseCost, curLv, cond);
         toFix.push({ key: f.key, cond });
       }
     });
@@ -793,7 +837,7 @@ export const FinanceClubView: React.FC<{
               </div>
 
               {(() => {
-                const merchLv = clamp(state.merchLv ?? 1, 1, MAX_FACILITY_LV);
+                const merchLv = clamp(state.merchLv ?? 1, 0, MAX_FACILITY_LV);
                 const merchCond = getFacilityCondition(state, 'merchLv');
                 const merchUpgradeCost = getFacilityUpgradeCost(75, merchLv);
                 const merchRenovateCost = getFacilityRenovateCost(75, merchLv, merchCond);
@@ -811,9 +855,13 @@ export const FinanceClubView: React.FC<{
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
                           <h3 className="font-bold text-sm truncate">🛍️ ร้านค้าของที่ระลึกสโมสร</h3>
-                          <span className="text-xs font-bold tabular shrink-0">Lv.{merchLv}/{MAX_FACILITY_LV}</span>
+                          <span className={`text-xs font-bold tabular shrink-0 ${merchLv === 0 ? 'text-[var(--red)]' : ''}`}>
+                            Lv.{merchLv}/{MAX_FACILITY_LV}
+                          </span>
                         </div>
-                        <div className="text-[10.5px] font-semibold text-[var(--g)] mt-0.5">{getFacilityTierLabel(merchLv)}</div>
+                        <div className={`text-[10.5px] font-semibold mt-0.5 ${merchLv === 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                          {getFacilityTierLabel(merchLv)}
+                        </div>
                         <p className="text-xs text-[var(--mut)] mt-0.5">
                           รายได้เสริมเหย้า ({fmtMoney(est.estMerch)}/นัด) · ขยายเพดานค่าเหนื่อย +4%/Lv
                         </p>
@@ -823,25 +871,41 @@ export const FinanceClubView: React.FC<{
                     <div className="space-y-1">
                       <div className="flex items-center justify-between text-[10.5px]">
                         <span className="text-[var(--mut)]">ระดับพัฒนา (สูงสุด Lv.{MAX_FACILITY_LV})</span>
-                        <span className={`font-bold tabular ${merchCond < 75 ? 'text-[var(--red)]' : merchCond < 90 ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
-                          สภาพอาคาร {merchCond}%
-                        </span>
+                        {merchLv === 0 ? (
+                          <span className="font-bold text-[var(--red)]">ถูกทำลาย · ไม่มีรายได้</span>
+                        ) : (
+                          <span className={`font-bold tabular ${merchCond < 75 ? 'text-[var(--red)]' : merchCond < 90 ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+                            สภาพอาคาร {merchCond}%{merchCond < 55 ? ' (ชำรุดหนัก)' : merchCond < 75 ? ' (ควรปรับปรุง)' : ''}
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-10 gap-1">
                         {Array.from({ length: MAX_FACILITY_LV }, (_, idx) => idx + 1).map((lv) => (
                           <span key={lv} className={`h-1.5 rounded-full ${lv <= merchLv ? 'bg-[var(--g)]' : 'bg-[var(--surface-2)]'}`} />
                         ))}
                       </div>
-                      <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                        <div
-                          className={`h-full transition-all ${merchCond < 75 ? 'bg-[var(--red)]' : merchCond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
-                          style={{ width: `${merchCond}%` }}
-                        />
-                      </div>
+                      {merchLv > 0 && (
+                        <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${merchCond < 75 ? 'bg-[var(--red)]' : merchCond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
+                            style={{ width: `${merchCond}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 pt-0.5">
-                      {merchCond < 100 && (
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-0.5">
+                      {merchLv > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setDemolishTarget({ key: 'merchLv', title: 'ร้านค้าของที่ระลึก', baseCost: 75, minLv: 0 })}
+                          className="btn btn-sm btn-danger shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>ทำลาย</span>
+                        </button>
+                      )}
+                      {merchLv > 0 && merchCond < 100 && (
                         <button
                           type="button"
                           disabled={state.money < merchRenovateCost}
@@ -857,7 +921,11 @@ export const FinanceClubView: React.FC<{
                         onClick={() => upgradeFac('merchLv', 'ร้านค้าของที่ระลึก', 75)}
                         className="btn btn-sm btn-primary shrink-0"
                       >
-                        {merchLv >= MAX_FACILITY_LV ? `Lv.${MAX_FACILITY_LV} เต็ม` : `ขยายร้าน ${fmtMoneyNum(merchUpgradeCost)}`}
+                        {merchLv >= MAX_FACILITY_LV
+                          ? `Lv.${MAX_FACILITY_LV} เต็ม`
+                          : merchLv === 0
+                            ? `🏗️ สร้างใหม่ ${fmtMoneyNum(merchUpgradeCost)}`
+                            : `ขยายร้าน ${fmtMoneyNum(merchUpgradeCost)}`}
                       </button>
                     </div>
                   </div>
@@ -2448,21 +2516,23 @@ export const FinanceClubView: React.FC<{
         let totalRenovateAll = 0;
         let wornCount = 0;
         infraFacilityDefs.forEach((f) => {
+          const curLv = state[f.key] ?? 1;
+          if (curLv <= 0) return;
           const cond = getFacilityCondition(state, f.key);
           if (cond < 100) {
             wornCount++;
-            totalRenovateAll += getFacilityRenovateCost(f.baseCost, state[f.key] ?? 1, cond);
+            totalRenovateAll += getFacilityRenovateCost(f.baseCost, curLv, cond);
           }
         });
 
         return (
           <div className="grid grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            {/* Left Column: 7 Unique Facilities Lv.10 + Renovation */}
+            {/* Left Column: 7 Unique Facilities Lv.10 + Renovation + Demolition */}
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[var(--line)]/60">
                 <div>
                   <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร ({infraFacilityDefs.length} แห่ง · สูงสุด Lv.{MAX_FACILITY_LV})</h3>
-                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">อัปเกรดตามลำดับขั้น พร้อมภาพพัฒนาการเฉพาะทาง &amp; ระบบปรับปรุงบำรุงรักษา</div>
+                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">อัปเกรด ปรับปรุงซ่อมแซม หรือรื้อถอนคืนค่าวัสดุ (สนามหลักต่ำสุด Lv.1)</div>
                 </div>
                 {wornCount > 0 && (
                   <button
@@ -2478,21 +2548,31 @@ export const FinanceClubView: React.FC<{
 
               <div className="space-y-2.5">
                 {infraFacilityDefs.map(({ key, title, desc, baseCost }) => {
-                  const lv = clamp(state[key] ?? 1, 1, MAX_FACILITY_LV);
+                  const minLv = key === 'st' ? 1 : 0;
+                  const lv = clamp(state[key] ?? 1, minLv, MAX_FACILITY_LV);
                   const cond = getFacilityCondition(state, key);
                   const upgCost = getFacilityUpgradeCost(baseCost, lv);
                   const renCost = getFacilityRenovateCost(baseCost, lv, cond);
+                  const canDemolish = lv > minLv;
                   const condBadgeCls =
-                    cond < 75
-                      ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/35'
-                      : cond < 90
-                        ? 'text-[#9a6700] dark:text-[var(--lamp)] bg-[var(--lamp-soft)] border-[var(--lamp)]/40'
-                        : 'text-[var(--g)] bg-[var(--g-soft)] border-[var(--g)]/35';
+                    lv <= 0
+                      ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/40'
+                      : cond < 75
+                        ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/35'
+                        : cond < 90
+                          ? 'text-[#9a6700] dark:text-[var(--lamp)] bg-[var(--lamp-soft)] border-[var(--lamp)]/40'
+                          : 'text-[var(--g)] bg-[var(--g-soft)] border-[var(--g)]/35';
 
                   return (
                     <div
                       key={key}
-                      className="p-2.5 mland:p-2 rounded-2xl bg-[var(--surface-2)]/55 border border-[var(--line)]/80 space-y-2"
+                      className={`p-2.5 mland:p-2 rounded-2xl border space-y-2 ${
+                        lv <= 0
+                          ? 'bg-[var(--red-soft)]/20 border-[var(--red)]/35'
+                          : cond < 75
+                            ? 'bg-[var(--surface-2)]/70 border-[var(--red)]/35'
+                            : 'bg-[var(--surface-2)]/55 border-[var(--line)]/80'
+                      }`}
                     >
                       <div className="flex items-start gap-2.5">
                         <FacilityUpgradeSvg
@@ -2506,14 +2586,26 @@ export const FinanceClubView: React.FC<{
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center justify-between gap-1.5">
                             <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
-                            <span className="px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] font-extrabold text-[10.5px] tabular shrink-0">
+                            <span
+                              className={`px-1.5 py-0.5 rounded-md font-extrabold text-[10.5px] tabular shrink-0 ${
+                                lv <= 0 ? 'bg-[var(--red-soft)] text-[var(--red)]' : 'bg-[var(--g-soft)] text-[var(--g)]'
+                              }`}
+                            >
                               Lv.{lv}/{MAX_FACILITY_LV}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
-                            <span className="font-semibold text-[var(--ink)]/85">{getFacilityTierLabel(lv)}</span>
+                            <span className={`font-semibold ${lv <= 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]/85'}`}>
+                              {getFacilityTierLabel(lv)}
+                            </span>
                             <span className={`px-1.5 py-0.5 rounded-md border font-bold tabular text-[9.5px] ${condBadgeCls}`}>
-                              สภาพ {cond}%
+                              {lv <= 0
+                                ? 'ถูกทำลาย · ไม่มีโบนัส'
+                                : cond < 55
+                                  ? `สภาพ ${cond}% · ชำรุดหนัก`
+                                  : cond < 75
+                                    ? `สภาพ ${cond}% · ควรปรับปรุง`
+                                    : `สภาพ ${cond}%`}
                             </span>
                           </div>
                           <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
@@ -2529,15 +2621,32 @@ export const FinanceClubView: React.FC<{
                         ))}
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-0.5">
-                        <div className="flex-1 h-1.5 rounded-full bg-[var(--surface)] overflow-hidden border border-[var(--line)]/50">
-                          <div
-                            className={`h-full transition-all ${cond < 75 ? 'bg-[var(--red)]' : cond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
-                            style={{ width: `${cond}%` }}
-                          />
-                        </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                        {lv > 0 ? (
+                          <div className="flex-1 min-w-[60px] h-1.5 rounded-full bg-[var(--surface)] overflow-hidden border border-[var(--line)]/50">
+                            <div
+                              className={`h-full transition-all ${cond < 75 ? 'bg-[var(--red)]' : cond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
+                              style={{ width: `${cond}%` }}
+                            />
+                          </div>
+                        ) : (
+                          <span className="flex-1 text-[10px] mland:text-[9px] font-semibold text-[var(--mut)]">
+                            พื้นที่ว่าง · สามารถก่อสร้างใหม่ได้ทันที
+                          </span>
+                        )}
                         <div className="flex items-center gap-1.5 shrink-0">
-                          {cond < 100 && (
+                          {canDemolish && (
+                            <button
+                              type="button"
+                              onClick={() => setDemolishTarget({ key, title, baseCost, minLv })}
+                              className="btn btn-xs btn-danger"
+                              title={`รื้อถอน/ทำลาย${title}`}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span>ทำลาย</span>
+                            </button>
+                          )}
+                          {lv > 0 && cond < 100 && (
                             <button
                               type="button"
                               disabled={state.money < renCost}
@@ -2553,7 +2662,11 @@ export const FinanceClubView: React.FC<{
                             onClick={() => upgradeFac(key, title, baseCost)}
                             className="btn btn-xs btn-primary"
                           >
-                            {lv >= MAX_FACILITY_LV ? `Lv.${MAX_FACILITY_LV} เต็ม` : `⬆️ อัป ${fmtMoneyNum(upgCost)}`}
+                            {lv >= MAX_FACILITY_LV
+                              ? `Lv.${MAX_FACILITY_LV} เต็ม`
+                              : lv <= 0
+                                ? `🏗️ สร้างใหม่ ${fmtMoneyNum(upgCost)}`
+                                : `⬆️ อัป ${fmtMoneyNum(upgCost)}`}
                           </button>
                         </div>
                       </div>
@@ -3180,6 +3293,90 @@ export const FinanceClubView: React.FC<{
           />
         </div>
       )}
+
+      {/* Facility Demolition Confirmation Modal */}
+      {demolishTarget && (() => {
+        const { key, title, baseCost, minLv } = demolishTarget;
+        const curLv = clamp(state[key] ?? 1, minLv, MAX_FACILITY_LV);
+        const cond = getFacilityCondition(state, key);
+        const stepRefund = getFacilityDemolishRefund(baseCost, curLv);
+        let fullRefund = 0;
+        for (let lvStep = curLv; lvStep > minLv; lvStep--) {
+          fullRefund += getFacilityDemolishRefund(baseCost, lvStep);
+        }
+        const canFull = curLv - minLv >= 2;
+        return (
+          <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3">
+            <div className="w-full max-w-md rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl overflow-hidden">
+              <div className="px-4 py-3 bg-[var(--red-soft)]/60 border-b border-[var(--line)] flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-[var(--red)] shrink-0" />
+                  <h4 className="font-bold text-sm truncate">ยืนยันการรื้อถอน/ทำลายสิ่งก่อสร้าง</h4>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDemolishTarget(null)}
+                  className="btn-icon w-7 h-7"
+                  aria-label="ปิด"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]">
+                  <FacilityUpgradeSvg
+                    kind={key}
+                    level={curLv}
+                    condition={cond}
+                    c1={me.kc[0]}
+                    c2={me.kc[1]}
+                    className="w-24 h-16"
+                  />
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="font-bold text-sm truncate">{title}</div>
+                    <div className="text-xs text-[var(--mut)] tabular">
+                      ระดับปัจจุบัน <b className="text-[var(--ink)]">Lv.{curLv}/{MAX_FACILITY_LV}</b> · สภาพ {cond}%
+                    </div>
+                    <div className="text-[11px] text-[var(--g)] font-semibold tabular">
+                      รื้อถอน 1 ขั้นคืนเงินวัสดุ +{fmtMoney(stepRefund)}
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-[var(--mut)] leading-relaxed">
+                  การรื้อถอนจะลดระดับสิ่งก่อสร้างลงและลดโบนัสที่ได้รับจากอาคารนี้ โดยจะได้รับเงินคืนค่าวัสดุประมาณ 35–38% ของต้นทุนระดับนั้น
+                </p>
+                <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setDemolishTarget(null)}
+                    className="btn btn-sm btn-secondary"
+                  >
+                    ยกเลิก
+                  </button>
+                  {canFull && (
+                    <button
+                      type="button"
+                      onClick={() => demolishFac(key, title, baseCost, minLv)}
+                      className="btn btn-sm btn-danger"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>{minLv === 0 ? 'ทำลายทั้งหมด (Lv.0)' : `รื้อถึง Lv.${minLv}`} +{fmtMoneyNum(fullRefund)}</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => demolishFac(key, title, baseCost, curLv - 1)}
+                    className="btn btn-sm bg-[var(--red)] text-white border border-red-400/30 hover:brightness-110"
+                  >
+                    <Hammer className="w-3.5 h-3.5" />
+                    <span>รื้อถอนเหลือ Lv.{curLv - 1} (+{fmtMoneyNum(stepRefund)})</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

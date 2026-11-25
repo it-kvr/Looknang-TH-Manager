@@ -50,9 +50,15 @@ export function mergeClubAllTimePlayers(
   season: number,
   getAvgRating: (q: Player) => number
 ): ClubAllTimePlayerRecord[] {
+  const sInt = Math.floor(season);
   const map = new Map<string, ClubAllTimePlayerRecord>();
   (existing || []).forEach((rec) => {
-    map.set(rec.name, { ...rec, stillAtClub: false });
+    map.set(rec.name, {
+      ...rec,
+      playedSeasons: rec.playedSeasons ? [...rec.playedSeasons] : undefined,
+      vis: rec.vis ? [...rec.vis] : undefined,
+      stillAtClub: false
+    });
   });
 
   team.sq.forEach((q) => {
@@ -70,25 +76,39 @@ export function mergeClubAllTimePlayers(
         cur.assists += sa;
         cur.cleanSheets += cs;
         cur.motm += motm;
-        if (sp > 0) cur.seasons += 1;
-        cur.lastSeason = season;
+        if (sp > 0) {
+          cur.seasons += 1;
+          const prevList = cur.playedSeasons || (cur.lastSeason > 0 ? [Math.floor(cur.lastSeason)] : []);
+          if (!prevList.includes(sInt)) {
+            cur.playedSeasons = [...prevList, sInt].sort((a, b) => a - b);
+          }
+          const inferredFirst = cur.firstSeason ?? (cur.playedSeasons?.[0] || Math.floor(cur.lastSeason) || sInt);
+          cur.firstSeason = Math.min(inferredFirst, sInt);
+        }
+        cur.lastSeason = sInt;
       }
       cur.pos = q.pos;
       cur.ro = q.ro;
+      if (q.no != null) cur.no = q.no;
+      if (q.vis?.length) cur.vis = [...q.vis];
       cur.bestAvgRating = Math.max(cur.bestAvgRating, avg);
       cur.stillAtClub = true;
-    } else if (sp > 0 || sg > 0 || sa > 0 || cs > 0) {
+    } else if (sp > 0 || sg > 0 || sa > 0 || cs > 0 || motm > 0) {
       map.set(q.n, {
         name: q.n,
         pos: q.pos,
         ro: q.ro,
+        no: q.no,
+        vis: q.vis ? [...q.vis] : undefined,
         apps: sp,
         goals: sg,
         assists: sa,
         cleanSheets: cs,
         motm,
         seasons: sp > 0 ? 1 : 0,
-        lastSeason: season,
+        firstSeason: sInt,
+        lastSeason: sInt,
+        playedSeasons: sp > 0 ? [sInt] : undefined,
         bestAvgRating: avg,
         stillAtClub: true
       });
@@ -96,7 +116,7 @@ export function mergeClubAllTimePlayers(
   });
 
   return Array.from(map.values())
-    .filter((r) => r.apps > 0 || r.goals > 0 || r.assists > 0)
+    .filter((r) => r.apps > 0 || r.goals > 0 || r.assists > 0 || r.cleanSheets > 0 || r.motm > 0)
     .sort((a, b) => b.apps + b.goals * 2 + b.assists - (a.apps + a.goals * 2 + a.assists))
     .slice(0, 60);
 }
@@ -364,7 +384,7 @@ export function getClubLegacySummary(team: Team, state: GameState, curRank?: num
   trophies.sort((a, b) => b.season - a.season);
 
   // Merge stored all-time legends with live squad stats for current season
-  const legends = isUserClub
+  const rawLegends = isUserClub
     ? mergeClubAllTimePlayers(
         state.records?.allTimePlayers,
         team,
@@ -377,6 +397,45 @@ export function getClubLegacySummary(team: Team, state: GameState, curRank?: num
         state.season,
         (q) => calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0)
       );
+
+  // Backfill exact played seasons & shirt number from archived seasons for historical legends
+  const archiveSeasonByPlayer = new Map<string, { seasons: Set<number>; no?: number }>();
+  if (isUserClub && state.seasonArchives?.length) {
+    state.seasonArchives.forEach((arc) => {
+      arc.players.forEach((pl) => {
+        if (pl.sp > 0 || pl.sg > 0 || pl.sa > 0 || pl.cs > 0 || pl.motm > 0) {
+          let entry = archiveSeasonByPlayer.get(pl.name);
+          if (!entry) {
+            entry = { seasons: new Set<number>(), no: pl.no };
+            archiveSeasonByPlayer.set(pl.name, entry);
+          }
+          entry.seasons.add(arc.season);
+          if (pl.no != null) entry.no = pl.no;
+        }
+      });
+    });
+  }
+
+  const legends = rawLegends.map((leg) => {
+    const arcInfo = archiveSeasonByPlayer.get(leg.name);
+    const mergedSet = new Set<number>(leg.playedSeasons || []);
+    if (arcInfo) {
+      arcInfo.seasons.forEach((s) => mergedSet.add(s));
+    }
+    if (leg.lastSeason > 0 && mergedSet.size === 0) {
+      mergedSet.add(Math.floor(leg.lastSeason));
+    }
+    const sortedSeasons = Array.from(mergedSet).sort((a, b) => a - b);
+    const firstSeason = sortedSeasons[0] ?? leg.firstSeason ?? Math.floor(leg.lastSeason);
+    const lastSeason = sortedSeasons[sortedSeasons.length - 1] ?? Math.floor(leg.lastSeason);
+    return {
+      ...leg,
+      no: leg.no ?? arcInfo?.no,
+      firstSeason,
+      lastSeason,
+      playedSeasons: sortedSeasons
+    };
+  });
 
   return {
     seasons: pastSeasons,

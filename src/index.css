@@ -316,7 +316,46 @@ button:not(:disabled):active {
   animation-fill-mode: forwards;
 }
 
+@keyframes celebrate-sparkle {
+  0%, 100% {
+    transform: translateY(0) scale(0.9);
+    opacity: 0.45;
+  }
+  50% {
+    transform: translateY(-6px) scale(1.2);
+    opacity: 1;
+  }
+}
+
+@keyframes celebrate-burst {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.95;
+  }
+  70% {
+    transform: scale(1.25);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+.celebrate-sparkle {
+  animation: celebrate-sparkle 2.2s ease-in-out infinite;
+}
+
+.celebrate-burst {
+  animation: celebrate-burst 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .confetti-piece,
+  .celebrate-sparkle,
+  .celebrate-burst {
+    animation: none !important;
+  }
   .confetti-piece {
     display: none;
   }

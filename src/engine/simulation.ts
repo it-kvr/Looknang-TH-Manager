@@ -1098,7 +1098,14 @@ export const STAFF_HIRE_COSTS = [45, 75, 115, 165, 225, 300] as const;
 export const ALL_FACILITY_KEYS: readonly FacilityKey[] = ['st', 'tr', 'ya', 'med', 'merchLv', 'turfLv', 'analyticsLv'];
 
 export function getFacilityUpgradeCost(baseCost: number, currentLv: number): number {
+  if (currentLv <= 0) return Math.round(baseCost * 0.75);
   return Math.round(baseCost * currentLv * (1 + (currentLv - 1) * 0.25));
+}
+
+export function getFacilityDemolishRefund(baseCost: number, fromLv: number): number {
+  if (fromLv <= 0) return 0;
+  if (fromLv === 1) return Math.max(10, Math.round(baseCost * 0.35));
+  return Math.max(12, Math.round(getFacilityUpgradeCost(baseCost, fromLv - 1) * 0.38));
 }
 
 export function getFacilityCondition(s: Pick<GameState, 'facCond'>, key: FacilityKey): number {
@@ -1106,7 +1113,7 @@ export function getFacilityCondition(s: Pick<GameState, 'facCond'>, key: Facilit
 }
 
 export function getFacilityRenovateCost(baseCost: number, currentLv: number, cond: number): number {
-  if (cond >= 100) return 0;
+  if (cond >= 100 || currentLv <= 0) return 0;
   return Math.max(6, Math.round(baseCost * (0.2 + currentLv * 0.08) * ((100 - cond) / 100) * 1.4));
 }
 
@@ -1131,7 +1138,7 @@ export function getLeagueTransferContext(s: GameState, me: Team) {
   const loansCount = me.sq.filter((q) => !!q.loan).length;
   const curWage = squadWage(me);
   const baseCap = [26, 44, 70, 95][me.tier] ?? 44;
-  const infraMult = 1 + ((s.st ?? 1) - 1) * 0.08 + ((s.merchLv ?? 1) - 1) * 0.04;
+  const infraMult = 1 + Math.max(0, (s.st ?? 1) - 1) * 0.08 + Math.max(0, (s.merchLv ?? 1) - 1) * 0.04;
   const wageCap = Math.round(baseCap * infraMult);
   const wagePct = Math.round((curWage / Math.max(1, wageCap)) * 100);
   const posCounts: Record<Position, number> = {
@@ -1157,7 +1164,7 @@ export function getLeagueTransferContext(s: GameState, me: Team) {
 
 export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
-  const merchLv = clamp(s.merchLv ?? 1, 1, MAX_FACILITY_LV);
+  const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
   const stCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'st') / 100);
   const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(s, 'merchLv') / 100);
   const cap = STADIUM_CAPACITIES[stLv - 1] || 3500;
@@ -1169,7 +1176,7 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const estAtt = Math.round(cap * attRate);
   const ticketPriceMult = [0.82, 1.0, 1.24][tpIdx];
   const estTicket = Math.round((8 + stLv * 6) * (fanVal / 60) * ticketPriceMult * (s.promo === 1 ? 1.35 : 1) * stCondMul);
-  const estMerch = Math.round((2 + merchLv * 2.5) * (fanVal / 55) * merchCondMul);
+  const estMerch = merchLv <= 0 ? 0 : Math.round((2 + merchLv * 2.5) * (fanVal / 55) * merchCondMul);
   const baseSponsor = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
   const estSponsor = Math.round(baseSponsor * (s.promo === 2 ? 1.35 : 1));
   const dealIncome = s.sponsorDeal ? s.sponsorDeal.perMatch : 0;
@@ -2075,8 +2082,9 @@ export function createScoutMission(focus: ScoutMission['focus'], targetRole?: Su
 
 export function resolveScoutResults(s: GameState, m: ScoutMission): Player[] {
   const scoutStaff = getStaffState(s).scout;
-  const analyticsLv = s.analyticsLv ?? 1;
-  const b0 = BASE[s.teams[s.me].tier] + Math.round((s.ya ?? 1) * 1.2) + Math.round(scoutStaff * 1.4) + Math.floor((analyticsLv - 1) / 3);
+  const analyticsLv = clamp(s.analyticsLv ?? 1, 0, MAX_FACILITY_LV);
+  const yaLv = clamp(s.ya ?? 1, 0, MAX_FACILITY_LV);
+  const b0 = BASE[s.teams[s.me].tier] + Math.round(yaLv * 1.2) + Math.round(scoutStaff * 1.4) + Math.floor(Math.max(0, analyticsLv - 1) / 3);
   return Array.from({ length: 3 }, (_, idx) => {
     let pos: Position = P(POS);
     let forceRo: SubRole | undefined;
@@ -3030,16 +3038,17 @@ export function afterMatchDay(
 ) {
   const me = s.teams[s.me];
   const mg = s.mode === 'm';
-  const lv = clamp(s.tr ?? 1, 1, MAX_FACILITY_LV);
-  const medLv = clamp(s.med ?? 1, 1, MAX_FACILITY_LV);
-  const turfLv = clamp(s.turfLv ?? 1, 1, MAX_FACILITY_LV);
-  const analyticsLv = clamp(s.analyticsLv ?? 1, 1, MAX_FACILITY_LV);
+  const lv = clamp(s.tr ?? 1, 0, MAX_FACILITY_LV);
+  const medLv = clamp(s.med ?? 1, 0, MAX_FACILITY_LV);
+  const turfLv = clamp(s.turfLv ?? 1, 0, MAX_FACILITY_LV);
+  const analyticsLv = clamp(s.analyticsLv ?? 1, 0, MAX_FACILITY_LV);
   const stf = getStaffState(s);
 
   // Gradual facility wear & tear each matchday in Manager mode (40%..100%)
   if (mg) {
     const nextCond: Partial<Record<FacilityKey, number>> = { ...(s.facCond || {}) };
     ALL_FACILITY_KEYS.forEach((fk) => {
+      if ((s[fk] ?? 1) <= 0) return;
       const curCond = getFacilityCondition(s, fk);
       const wear = fk === 'st' || fk === 'turfLv' || fk === 'tr' ? R(1, 3) : R(1, 2);
       nextCond[fk] = clamp(curCond - wear, 40, 100);
@@ -3065,7 +3074,7 @@ export function afterMatchDay(
           progMeta.tacFamBonus +
           intMeta.tacAdd +
           Math.ceil(stf.asst * 0.75) +
-          Math.floor((analyticsLv - 1) / 2) +
+          Math.floor(Math.max(0, analyticsLv - 1) / 2) +
           Math.ceil(stf.setPieceCoach * 0.5) +
           (coachStyle === 'balanced' ? 2 : 0)
       )
@@ -3118,7 +3127,7 @@ export function afterMatchDay(
         : 0;
       const trainFitBonus = mine && mg
         ? Math.round(lv * 1.4 * trCondFactor) +
-          Math.floor((turfLv - 1) * 0.7 * turfCondFactor) +
+          Math.floor(Math.max(0, turfLv - 1) * 0.7 * turfCondFactor) +
           Math.round(stf.fit * 1.6) +
           progMeta.fitMod +
           intMeta.fitDelta +
@@ -3145,7 +3154,7 @@ export function afterMatchDay(
           if (
             q.inj > 0 &&
             (Dq.d.rec >= 82 || isIndivRest || (!mine && t.tier >= 1) || (mine && (medLv >= 3 || stf.physio >= 2))) &&
-            Math.random() < (mine ? (0.28 + (medLv - 1) * 0.05 * medCondFactor + stf.physio * 0.055 + (isIndivRest ? 0.25 : 0)) : aiPhysioChance)
+            Math.random() < (mine ? ((medLv > 0 ? 0.28 : 0.16) + Math.max(0, medLv - 1) * 0.05 * medCondFactor + stf.physio * 0.055 + (isIndivRest ? 0.25 : 0)) : aiPhysioChance)
           ) {
             q.inj--;
           }
@@ -3156,7 +3165,7 @@ export function afterMatchDay(
         Math.random() <
           (q.fit < 60 ? 0.068 : 0.022) *
             (mine ? progMeta.injMult * (mg ? intMeta.injMult : 1) * (isIndivRest ? 0.5 : 1) : 1) *
-            (mine ? Math.max(0.4, 1 - (medLv - 1) * 0.045 * medCondFactor - stf.physio * 0.05 - (turfLv - 1) * 0.02 * turfCondFactor) : Math.max(0.65, 1 - t.tier * 0.12)) *
+            (mine ? Math.max(0.4, 1 - Math.max(0, medLv - 1) * 0.045 * medCondFactor - stf.physio * 0.05 - Math.max(0, turfLv - 1) * 0.02 * turfCondFactor) : Math.max(0.65, 1 - t.tier * 0.12)) *
             (hasTrait(q, 'glass_cannon', s.p) ? 1.38 : hasTrait(q, 'iron_lungs', s.p) ? 0.8 : 1) *
             ((130 - Dq.d.tol) / 60)
       ) {
@@ -3187,7 +3196,7 @@ export function afterMatchDay(
         const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.2 : 1;
         const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.024 : stf.setPieceCoach * 0.01;
         const chance =
-          (0.04 + 0.02 * lv * trCondFactor + stf.asst * 0.015 + (analyticsLv - 1) * 0.008 + roleCoachBonus) *
+          (0.04 + 0.02 * lv * trCondFactor + stf.asst * 0.015 + Math.max(0, analyticsLv - 1) * 0.008 + roleCoachBonus) *
           progMeta.devMult *
           intMeta.devMult *
           benchSharpBonus *
@@ -4326,6 +4335,8 @@ export function finishSeasonComputation(s: GameState) {
   const existingArchives = (s.seasonArchives || []).filter((rec) => rec.season !== s.season);
   s.seasonArchives = [...existingArchives, archive].sort((a, b) => b.season - a.season);
 
+  const trophiesWon = (s.trophies || []).filter((tr) => tr.season === s.season);
+
   return {
     mt,
     nt,
@@ -4338,6 +4349,7 @@ export function finishSeasonComputation(s: GameState) {
     bestAssist: leagueBestAssist,
     offers,
     stText,
+    trophiesWon,
     archive
   };
 }

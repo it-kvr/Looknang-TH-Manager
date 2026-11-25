@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { FolderInput, X } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
@@ -1569,10 +1570,10 @@ export const MainMenu: React.FC<{
           <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => setShowImport(true)}
-              className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-white/20 bg-white/10 hover:bg-white/18 backdrop-blur-sm text-[11px] mland:text-[10px] font-semibold text-white transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap"
+              onClick={() => { SFX.tap(); setShowImport(true); }}
+              className="h-8 sm:h-9 mland:h-7 px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-white/10 hover:bg-white/18 hover:border-white/38 backdrop-blur-md text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_8px_rgba(0,0,0,0.28)] transition-all cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
-              <span>📥</span>
+              <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
               <span>นำเข้าเซฟ</span>
             </button>
             <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
@@ -1783,13 +1784,17 @@ export const MainMenu: React.FC<{
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between gap-2">
-              <h3 className="font-bold text-sm font-display">📥 นำเข้าโค้ดเซฟ</h3>
+              <h3 className="font-bold text-sm font-display flex items-center gap-2">
+                <FolderInput className="w-4 h-4 text-[var(--g)] shrink-0" />
+                <span>นำเข้าโค้ดเซฟ</span>
+              </h3>
               <button
                 type="button"
                 onClick={() => setShowImport(false)}
-                className="w-7 h-7 rounded-full bg-[var(--surface-2)] text-xs font-bold cursor-pointer"
+                aria-label="ปิดหน้าต่าง"
+                className="btn-icon rounded-full!"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
             <textarea
