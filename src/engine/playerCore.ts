@@ -1270,6 +1270,51 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
   return { D0, a, f, d, gk, G, top, TR, traits, bio, ag, gro, stCls, stTxt };
 }
 
+export type StatGroupKey = 'atk' | 'ply' | 'def' | 'gk' | 'phy' | 'fit' | 'tal';
+
+export interface StatCategorySummary {
+  key: StatGroupKey;
+  shortLabel: string;
+  fullLabel: string;
+  value: number;
+}
+
+const STAT_GROUP_META_BY_TITLE: Record<string, { key: StatGroupKey; shortLabel: string }> = {
+  '⚔️ โจมตี': { key: 'atk', shortLabel: 'โจมตี' },
+  '⚽ การเล่น': { key: 'ply', shortLabel: 'การเล่น' },
+  '🛡️ ป้องกัน': { key: 'def', shortLabel: 'ป้องกัน' },
+  '🧤 ผู้รักษาประตู': { key: 'gk', shortLabel: 'ประตู' },
+  '💪 ร่างกาย': { key: 'phy', shortLabel: 'ร่างกาย' },
+  '❤️ ความฟิต': { key: 'fit', shortLabel: 'ความฟิต' },
+  '🌟 พรสวรรค์': { key: 'tal', shortLabel: 'พรสวรรค์' }
+};
+
+export function summarizeStatGroups(
+  groups: [string, [string, number, string?][]][]
+): StatCategorySummary[] {
+  return groups.map(([title, rows]) => {
+    const meta = STAT_GROUP_META_BY_TITLE[title] || {
+      key: 'phy' as StatGroupKey,
+      shortLabel: title.replace(/^\S+\s*/, '').trim() || title
+    };
+    const total = rows.reduce((sum, r) => sum + (Number(r[1]) || 0), 0);
+    const value = rows.length ? Math.round(total / rows.length) : 0;
+    return {
+      key: meta.key,
+      shortLabel: meta.shortLabel,
+      fullLabel: title,
+      value
+    };
+  });
+}
+
+export function getPlayerCategoryStats(
+  q: Player,
+  careerP?: PlayerCareerProfile | null
+): StatCategorySummary[] {
+  return summarizeStatGroups(dtInfo(q, q.me ? careerP : null).G);
+}
+
 export function injD(q: Player, n: number, careerP?: PlayerCareerProfile | null): number {
   const r = DT(q, careerP).d.rec;
   return Math.max(1, n + (r >= 80 ? -1 : r < 55 ? 1 : 0));
@@ -1465,7 +1510,41 @@ export interface PlayerSeasonChartPoint {
   dr: number;
   tk: number;
   ph: number;
+  atk?: number;
+  ply?: number;
+  def?: number;
+  gk?: number;
+  phy?: number;
+  fit?: number;
+  tal?: number;
 }
+
+const snapshotCategoryFields = (
+  q: Player,
+  snapOv: number,
+  snapAttrs: CoreAttrs,
+  careerP: PlayerCareerProfile | null | undefined,
+  useExactLive: boolean
+): Partial<Record<StatGroupKey, number>> => {
+  const groups = useExactLive
+    ? dtInfo(q, q.me ? careerP : null).G
+    : dtInfo(
+        {
+          ...q,
+          ov: snapOv,
+          fit: 100,
+          customA: snapAttrs,
+          coreSb: undefined,
+          customD: undefined
+        },
+        q.me && careerP ? { ...careerP, a: snapAttrs } : null
+      ).G;
+  const out: Partial<Record<StatGroupKey, number>> = {};
+  summarizeStatGroups(groups).forEach((cat) => {
+    out[cat.key] = cat.value;
+  });
+  return out;
+};
 
 const sameCoreAttrs = (x: CoreAttrs, y: CoreAttrs) =>
   x.sh === y.sh && x.ps === y.ps && x.dr === y.dr && x.tk === y.tk && x.ph === y.ph;
@@ -1592,16 +1671,22 @@ export function getPlayerSeasonProgression(
     }
   });
 
-  return expanded.map((pt) => ({
-    md: pt.md,
-    label: pt.md === 0 ? 'เริ่ม' : `น.${pt.md}`,
-    ov: pt.ov,
-    sh: pt.a.sh,
-    ps: pt.a.ps,
-    dr: pt.a.dr,
-    tk: pt.a.tk,
-    ph: pt.a.ph
-  }));
+  return expanded.map((pt, idx) => {
+    const isLatest = idx === expanded.length - 1;
+    const snapOv = isLatest ? liveSnap.ov : pt.ov;
+    const snapA = isLatest ? liveSnap.a : pt.a;
+    return {
+      md: pt.md,
+      label: pt.md === 0 ? 'เริ่ม' : `น.${pt.md}`,
+      ov: snapOv,
+      sh: snapA.sh,
+      ps: snapA.ps,
+      dr: snapA.dr,
+      tk: snapA.tk,
+      ph: snapA.ph,
+      ...snapshotCategoryFields(q, snapOv, snapA, careerP, isLatest)
+    };
+  });
 }
 
 export interface PlayerMultiSeasonChartPoint {
@@ -1614,6 +1699,13 @@ export interface PlayerMultiSeasonChartPoint {
   dr: number;
   tk: number;
   ph: number;
+  atk?: number;
+  ply?: number;
+  def?: number;
+  gk?: number;
+  phy?: number;
+  fit?: number;
+  tal?: number;
   isCurrent?: boolean;
 }
 
@@ -1687,7 +1779,8 @@ export function getPlayerMultiSeasonProgression(
       ps: pProf.b.ps,
       dr: pProf.b.dr,
       tk: pProf.b.tk,
-      ph: pProf.b.ph
+      ph: pProf.b.ph,
+      ...snapshotCategoryFields(q, bOv, pProf.b, pProf, false)
     });
   } else if (firstPast?.startA && firstPast?.startOv) {
     points.push({
@@ -1699,7 +1792,8 @@ export function getPlayerMultiSeasonProgression(
       ps: firstPast.startA.ps,
       dr: firstPast.startA.dr,
       tk: firstPast.startA.tk,
-      ph: firstPast.startA.ph
+      ph: firstPast.startA.ph,
+      ...snapshotCategoryFields(q, firstPast.startOv, firstPast.startA, pProf, false)
     });
   } else if (!pastRows.length && q.seasonProg?.pts?.length && q.seasonProg.pts[0]) {
     const s0 = q.seasonProg.pts[0];
@@ -1713,7 +1807,8 @@ export function getPlayerMultiSeasonProgression(
         ps: s0.a.ps,
         dr: s0.a.dr,
         tk: s0.a.tk,
-        ph: s0.a.ph
+        ph: s0.a.ph,
+        ...snapshotCategoryFields(q, s0.ov, s0.a, pProf, false)
       });
     }
   }
@@ -1729,7 +1824,8 @@ export function getPlayerMultiSeasonProgression(
       ps: attr.ps,
       dr: attr.dr,
       tk: attr.tk,
-      ph: attr.ph
+      ph: attr.ph,
+      ...snapshotCategoryFields(q, r.ov, attr, pProf, false)
     });
   });
 
@@ -1745,10 +1841,27 @@ export function getPlayerMultiSeasonProgression(
       dr: curA.dr,
       tk: curA.tk,
       ph: curA.ph,
+      ...snapshotCategoryFields(q, curOv, curA, pProf, true),
       isCurrent: true
     });
   } else if (points.length) {
-    points[points.length - 1].isCurrent = true;
+    const lastIdx = points.length - 1;
+    const isLiveLatest = !q.retired && points[lastIdx].season === curSeason;
+    points[lastIdx] = {
+      ...points[lastIdx],
+      ...(isLiveLatest
+        ? {
+            ov: curOv,
+            sh: curA.sh,
+            ps: curA.ps,
+            dr: curA.dr,
+            tk: curA.tk,
+            ph: curA.ph,
+            ...snapshotCategoryFields(q, curOv, curA, pProf, true)
+          }
+        : {}),
+      isCurrent: true
+    };
   }
 
   return points;

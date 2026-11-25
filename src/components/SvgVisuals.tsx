@@ -178,7 +178,7 @@ export const ClubCrest: React.FC<{
   team?: Team | null;
   club?: ClubIdentity | null;
   isMyClub?: boolean;
-}> = ({ name, size = 24, team, club, isMyClub }) => {
+}> = React.memo(({ name, size = 24, team, club, isMyClub }) => {
   const uid = React.useId().replace(/:/g, '');
   const spec = resolveCrestSpec(name, team, club, isMyClub);
 
@@ -232,7 +232,7 @@ export const ClubCrest: React.FC<{
       />
     </svg>
   );
-};
+});
 
 export const KitJersey: React.FC<{
   club: ClubIdentity;
@@ -400,6 +400,8 @@ export const KitJersey: React.FC<{
     </svg>
   );
 };
+const MemoKitJersey = React.memo(KitJersey);
+export { MemoKitJersey as KitJerseyMemo };
 
 export interface KitVisualSpec {
   uid: string;
@@ -754,8 +756,8 @@ export function faceBodySvg(
       : ''
   }</defs>`;
   const torsoBody = isCoach
-    ? `<g clip-path="url(#jk-${uid})">${renderCoachTorso(coachOutfit, coachClubKit || kit, trim, accent, kitSpec?.crestSpec, uid)}</g><path d="${torsoPath}" fill="none" stroke="#020617" stroke-opacity="0.42" stroke-width="0.9"/>`
-    : `<g clip-path="url(#jk-${uid})">${renderFaceTorsoPattern(pat, kit, trim, accent, uid)}<path d="M12 52l4 12M48 52l-4 12" stroke="${accent}" stroke-width="1.6" opacity="0.32"/>${renderFaceCollar(collar, trim, accent)}</g><path d="${torsoPath}" fill="none" stroke="#0c1f15" stroke-opacity="0.35" stroke-width="0.8"/>`;
+    ? `<g clip-path="url(#jk-${uid})">${renderCoachTorso(coachOutfit, coachClubKit || kit, trim, accent, kitSpec?.crestSpec, uid)}</g><path d="${torsoPath}" fill="none" stroke="#0f172a" stroke-opacity="0.34" stroke-width="0.9"/>`
+    : `<g clip-path="url(#jk-${uid})">${renderFaceTorsoPattern(pat, kit, trim, accent, uid)}<path d="M12 52l4 12M48 52l-4 12" stroke="${accent}" stroke-width="1.6" opacity="0.32"/>${renderFaceCollar(collar, trim, accent)}</g><path d="${torsoPath}" fill="none" stroke="#0f172a" stroke-opacity="0.32" stroke-width="0.9"/>`;
   const chestCrest =
     !isCoach && kitSpec?.crestSpec
       ? `<g transform="translate(35.8, 49.5) scale(0.32)">${buildCrestSvgMarkup(kitSpec.crestSpec, `${uid}-cc`)}</g>`
@@ -768,7 +770,7 @@ export function faceBodySvg(
       ? `<text x="${noX}" y="${noY}" text-anchor="middle" font-size="${noSize}" font-weight="800" font-family="Sarabun" fill="#fff" stroke="#0007" stroke-width="0.9" paint-order="stroke" opacity="0.95">${no || 10}</text>`
       : '';
 
-  return `${bare ? '' : `<rect width="60" height="64" fill="${bg}"/><path d="M0 0h60v26L0 42z" fill="#fff" opacity="0.1"/>`}${torsoDefs}${torsoBody}${chestCrest}${noMarkup}<rect x="25.2" y="36" width="9.6" height="11" rx="3" fill="${sk}"/><path d="M25.2 38.5q4.8 3.2 9.6 0v3.2q-4.8 2.4-9.6 0z" fill="#000" opacity="0.18"/>${hBackHtml}<path d="M15.8 25.4c-1.8-.3-2.5 1.4-2 3.2.4 1.5 1.3 2.1 2.2 1.8z" fill="${sk}"/><path d="M44.2 25.4c1.8-.3 2.5 1.4 2 3.2-.4 1.5-1.3 2.1-2.2 1.8z" fill="${sk}"/><path d="${headD}" fill="${sk}" stroke="#0002" stroke-width="0.45"/><path d="M18.2 33.8c2.2 3.6 6.8 6.4 11.8 6.6 5-.2 9.6-3 11.8-6.6-2.4 3.4-6.8 5.2-11.8 5.3-5-.1-9.4-1.9-11.8-5.3z" fill="#000" opacity="0.07"/>${fhHtml}<path d="M30 25.5v4.8c0 .8-.7 1.3-1.6 1.3" stroke="#000" opacity="0.18" stroke-width="1.05" fill="none" stroke-linecap="round"/><path d="M29.4 31.6q.6.4 1.3.1" stroke="#000" opacity="0.15" stroke-width="0.8" fill="none" stroke-linecap="round"/>${br}${eyes}${mo}${accUnderHairHtml}${hHtml}${accOverHairHtml}`;
+  return `${bare ? '' : `<rect width="60" height="64" fill="${bg}"/><path d="M0 0h60v26L0 42z" fill="#fff" opacity="0.1"/>`}${torsoDefs}${torsoBody}${chestCrest}${noMarkup}<rect x="25.2" y="36" width="9.6" height="11" rx="3" fill="${sk}" stroke="#0f172a" stroke-opacity="0.18" stroke-width="0.5"/><path d="M25.2 38.5q4.8 3.2 9.6 0v3.2q-4.8 2.4-9.6 0z" fill="#000" opacity="0.18"/>${hBackHtml}<path d="M15.8 25.4c-1.8-.3-2.5 1.4-2 3.2.4 1.5 1.3 2.1 2.2 1.8z" fill="${sk}" stroke="#0f172a" stroke-opacity="0.2" stroke-width="0.5"/><path d="M44.2 25.4c1.8-.3 2.5 1.4 2 3.2-.4 1.5-1.3 2.1-2.2 1.8z" fill="${sk}" stroke="#0f172a" stroke-opacity="0.2" stroke-width="0.5"/><path d="${headD}" fill="${sk}" stroke="#0f172a" stroke-opacity="0.22" stroke-width="0.6"/><path d="M18.2 33.8c2.2 3.6 6.8 6.4 11.8 6.6 5-.2 9.6-3 11.8-6.6-2.4 3.4-6.8 5.2-11.8 5.3-5-.1-9.4-1.9-11.8-5.3z" fill="#000" opacity="0.07"/>${fhHtml}<path d="M30 25.5v4.8c0 .8-.7 1.3-1.6 1.3" stroke="#000" opacity="0.18" stroke-width="1.05" fill="none" stroke-linecap="round"/><path d="M29.4 31.6q.6.4 1.3.1" stroke="#000" opacity="0.15" stroke-width="0.8" fill="none" stroke-linecap="round"/>${br}${eyes}${mo}${accUnderHairHtml}${hHtml}${accOverHairHtml}`;
 }
 
 export const PlayerFace: React.FC<{
@@ -785,7 +787,7 @@ export const PlayerFace: React.FC<{
   isCoach?: boolean;
   coachOutfit?: CoachOutfitId;
   coachClubKit?: string;
-}> = ({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor, isCoach = false, coachOutfit, coachClubKit }) => {
+}> = React.memo(({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor, isCoach = false, coachOutfit, coachClubKit }) => {
   const uid = React.useId().replace(/:/g, '');
   const q = player || {};
   const resolvedNo = q.no || (team && q.n ? getShirtNo(team, q) : undefined) || (q.me ? (careerProfile || state?.p)?.no : undefined);
@@ -820,7 +822,7 @@ export const PlayerFace: React.FC<{
       dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, !isCoach, kitSpec, isCoach, resolvedOutfit, resolvedClubKit) }}
     />
   );
-};
+});
 
 export const PITCH_SVG_BASE =
   '<rect width="300" height="380" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v47.5H0zM0 95h300v47.5H0zM0 190h300v47.5H0zM0 285h300v47.5H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="368"/><path d="M6 190h288M90 6v56h120V6M90 374v-66h120v66"/><circle cx="150" cy="190" r="36"/></g>';

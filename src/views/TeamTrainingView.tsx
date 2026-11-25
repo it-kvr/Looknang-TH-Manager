@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { TrainingIntensity, Player, Team, GameState, TrainingProgramMeta } from '../types/game';
 import { clamp, fmtMoney } from '../utils/math';
 import { TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
@@ -19,7 +19,7 @@ export const TeamTrainingView: React.FC<{
   const [trainingMode, setTrainingMode] = useState<'program' | 'missions'>('program');
   const me = state.teams[state.me];
   const [selectedMissionPlayer, setSelectedMissionPlayer] = useState<string>(() => me.sq[0]?.n || '');
-  const starters = xi(me);
+  const starters = useMemo(() => xi(me), [me]);
   const avgFit = Math.round(starters.reduce((s, q) => s + (q.fit ?? 100), 0) / (starters.length || 1));
   const plan = getTeamTrainingPlan(state);
   const curProg = TEAM_TRAINING_PROGRAMS[plan.program];
@@ -29,22 +29,30 @@ export const TeamTrainingView: React.FC<{
   const avgAllFit = me.sq.length ? Math.round(me.sq.reduce((s, q) => s + (q.fit ?? 100), 0) / me.sq.length) : 100;
   const tiredCount = me.sq.filter((q) => (q.fit ?? 100) < 72 && q.inj === 0).length;
   const injuredSq = me.sq.filter((q) => q.inj > 0);
-  const stf = getStaffState(state);
+  const stf = useMemo(() => getStaffState(state), [state]);
   const medLv = state.med ?? 1;
   const trLv = state.tr ?? 1;
   const indMap = plan.individualFocus || {};
   const restedIndivCount = Object.values(indMap).filter((v) => v === 'REST').length;
-  const sortedTrainingPlayers = me.sq
-    .slice()
-    .sort((a, b) => {
-      const aUrg = a.inj > 0 ? -100 : (indMap[a.n] === 'REST' ? -30 : 0) + (a.fit ?? 100);
-      const bUrg = b.inj > 0 ? -100 : (indMap[b.n] === 'REST' ? -30 : 0) + (b.fit ?? 100);
-      return aUrg - bUrg || b.ov - a.ov;
-    });
+  const sortedTrainingPlayers = useMemo(
+    () =>
+      me.sq
+        .slice()
+        .sort((a, b) => {
+          const aUrg = a.inj > 0 ? -100 : (indMap[a.n] === 'REST' ? -30 : 0) + (a.fit ?? 100);
+          const bUrg = b.inj > 0 ? -100 : (indMap[b.n] === 'REST' ? -30 : 0) + (b.fit ?? 100);
+          return aUrg - bUrg || b.ov - a.ov;
+        }),
+    [me.sq, indMap]
+  );
   const missionTargetPlayer = me.sq.find((q) => q.n === selectedMissionPlayer) || me.sq[0];
-  const sortedMissionSquad = me.sq
-    .slice()
-    .sort((a, b) => getPlayerTalent(b, null) - getPlayerTalent(a, null) || b.ov - a.ov);
+  const sortedMissionSquad = useMemo(
+    () =>
+      me.sq
+        .slice()
+        .sort((a, b) => getPlayerTalent(b, null) - getPlayerTalent(a, null) || b.ov - a.ov),
+    [me.sq]
+  );
 
   return (
     <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -72,7 +80,7 @@ export const TeamTrainingView: React.FC<{
       </div>
 
       {trainingMode === 'missions' && missionTargetPlayer ? (
-        <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[205px_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+        <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[205px_1fr] grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
           <div className="p-2.5 mland:p-1.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-1.5 h-full flex flex-col min-h-0">
             <div className="text-xs mland:text-[10.5px] font-bold px-1 shrink-0">👥 เลือกนักเตะ ({me.sq.length} คน)</div>
             <div className="divide-y divide-[var(--line)] border border-[var(--line)] rounded-xl overflow-y-auto flex-1 min-h-0">
@@ -144,7 +152,7 @@ export const TeamTrainingView: React.FC<{
       </div>
 
       {/* Two-Column Realistic Training Workspace */}
-      <div className="grid grid-cols-[1.12fr_0.88fr] mland:grid-cols-[1.15fr_0.85fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+      <div className="grid grid-cols-[1.12fr_0.88fr] mland:grid-cols-[1.15fr_0.85fr] grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
         {/* Left: Weekly Program, Intensity, Rest Options & Special Sessions */}
         <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-1">
           {/* 7 Training Programs */}

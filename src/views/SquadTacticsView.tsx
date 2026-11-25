@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, AutoRule, GameState, PitchDragPreview } from '../types/game';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
@@ -34,12 +34,24 @@ export const SquadTacticsView: React.FC<{
   const [releaseModalNames, setReleaseModalNames] = useState<string[] | null>(null);
   const pitchSvgRef = useRef<SVGSVGElement | null>(null);
 
-  const starters = xi(me);
-  const slots = getFormationSlots(me);
-  const r = rate(me, state);
-  const bench = me.sq
-    .filter((q) => !starters.includes(q))
-    .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov);
+  const starters = useMemo(() => xi(me), [me]);
+  const slots = useMemo(() => getFormationSlots(me), [me]);
+  const r = useMemo(() => rate(me, state), [me, state]);
+  const bench = useMemo(
+    () =>
+      me.sq
+        .filter((q) => !starters.includes(q))
+        .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov),
+    [me.sq, starters]
+  );
+  const incomingOffers = useMemo(() => (isMgr ? getIncomingOffers(state) : []), [isMgr, state]);
+  const incomingOfferCountsByName = useMemo(() => {
+    const counts: Record<string, number> = {};
+    incomingOffers.forEach((o) => {
+      counts[o.n] = (counts[o.n] || 0) + 1;
+    });
+    return counts;
+  }, [incomingOffers]);
   const avgFit = Math.round(starters.reduce((s, q) => s + (q.fit ?? 100), 0) / (starters.length || 1));
   const restNeededStarters = starters.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) < 65);
   const tiredWarningStarters = starters.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) >= 65 && Math.round(q.fit ?? 100) < 75);
@@ -739,7 +751,7 @@ export const SquadTacticsView: React.FC<{
 
         if (sub === 0) {
           return (
-            <div className="grid grid-cols-[1.04fr_0.96fr] mland:grid-cols-[1.02fr_0.98fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+            <div className="grid grid-cols-[1.04fr_0.96fr] mland:grid-cols-[1.02fr_0.98fr] grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
               {/* LEFT: Full-Height Pitch (Maximized Height) */}
               <div className="relative p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col h-full min-h-0 overflow-hidden">
                 {isMgr && pitchDragPreview && (
@@ -971,7 +983,7 @@ export const SquadTacticsView: React.FC<{
           </div>
 
           {isMgr ? (
-            <div className="grid grid-cols-2 gap-3 mland:gap-2.5 flex-1 min-h-0 overflow-hidden">
+            <div className="grid grid-cols-2 grid-rows-[minmax(0,1fr)] gap-3 mland:gap-2.5 flex-1 min-h-0 overflow-hidden">
               <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-1">
                 <div className="grid grid-cols-[130px_1fr] mland:grid-cols-[115px_1fr] gap-2.5 mland:gap-2 items-center">
                   <TacticsMiniPitch team={me} state={state} />
@@ -1394,28 +1406,24 @@ export const SquadTacticsView: React.FC<{
                 )}
 
                 <div className="space-y-2 mland:space-y-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
-                {isMgr && (() => {
-                  const incomingOffers = getIncomingOffers(state);
-                  if (!incomingOffers.length) return null;
-                  return (
-                    <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs mland:text-[10.5px]">
-                      <span className="font-semibold truncate">
-                        💼 มี <b className="tabular">{incomingOffers.length}</b> ข้อเสนอซื้อนักเตะรอเจรจาในตลาดซื้อขาย
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          if (onNavigate) onNavigate('k', 'sell');
-                          else onUpdateState((d) => { d.v = 'k'; });
-                        }}
-                        className="btn btn-xs btn-gold shrink-0"
-                      >
-                        เปิดหน้าตลาด →
-                      </button>
-                    </div>
-                  );
-                })()}
+                {isMgr && incomingOffers.length > 0 && (
+                  <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/60 flex items-center justify-between gap-2 text-xs mland:text-[10.5px]">
+                    <span className="font-semibold truncate">
+                      💼 มี <b className="tabular">{incomingOffers.length}</b> ข้อเสนอซื้อนักเตะรอเจรจาในตลาดซื้อขาย
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        if (onNavigate) onNavigate('k', 'sell');
+                        else onUpdateState((d) => { d.v = 'k'; });
+                      }}
+                      className="btn btn-xs btn-gold shrink-0"
+                    >
+                      เปิดหน้าตลาด →
+                    </button>
+                  </div>
+                )}
 
                 {/* Responsive 100%-Width Squad Roster Table (Zero Horizontal Overflow) */}
                 <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] overflow-hidden">
@@ -1456,7 +1464,7 @@ export const SquadTacticsView: React.FC<{
                       const isStarter = starters.includes(q);
                       const isMe = !!q.me || (!isMgr && state.p?.name === q.n);
                       const no = getShirtNo(me, q);
-                      const offerCount = isMgr ? getIncomingOffers(state).filter((o) => o.n === q.n).length : 0;
+                      const offerCount = isMgr ? incomingOfferCountsByName[q.n] || 0 : 0;
                       const con = ensureCon(q);
                       const wg = con.wg;
                       const fitTxtCls = stMeta.txtCls;

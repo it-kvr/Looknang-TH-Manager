@@ -1,26 +1,28 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
-import type { Position, Player, GameState, StatKey, PlayerCareerProfile } from '../types/game';
+import type { Position, Player, GameState, PlayerCareerProfile } from '../types/game';
 import { SFX } from '../utils/audioTheme';
-import { getPlayerSeasonProgression, getPlayerMultiSeasonProgression } from '../engine/playerCore';
+import { getPlayerSeasonProgression, getPlayerMultiSeasonProgression, type StatGroupKey } from '../engine/playerCore';
 
-type ChartMetricKey = 'ov' | StatKey;
+type ChartMetricKey = 'ov' | StatGroupKey;
 type ChartMode = 'multi' | 'season';
 
 const CHART_SERIES_META: Record<ChartMetricKey, { label: string; color: string; width: number }> = {
   ov: { label: 'พลังรวม', color: '#10b981', width: 2.4 },
-  sh: { label: 'ยิง', color: '#ef4444', width: 1.65 },
-  ps: { label: 'ส่ง', color: '#3b82f6', width: 1.65 },
-  dr: { label: 'เลี้ยง', color: '#f59e0b', width: 1.65 },
-  tk: { label: 'รับ', color: '#8b5cf6', width: 1.65 },
-  ph: { label: 'กาย', color: '#06b6d4', width: 1.65 }
+  atk: { label: 'โจมตี', color: '#ef4444', width: 1.65 },
+  ply: { label: 'การเล่น', color: '#3b82f6', width: 1.65 },
+  def: { label: 'ป้องกัน', color: '#8b5cf6', width: 1.65 },
+  gk: { label: 'ประตู', color: '#f97316', width: 1.65 },
+  phy: { label: 'ร่างกาย', color: '#06b6d4', width: 1.65 },
+  fit: { label: 'ความฟิต', color: '#ec4899', width: 1.65 },
+  tal: { label: 'พรสวรรค์', color: '#f59e0b', width: 1.65 }
 };
 
-const KEY_STATS_BY_POS: Record<Position, StatKey[]> = {
-  FW: ['sh', 'dr', 'ps'],
-  MF: ['ps', 'dr', 'sh'],
-  DF: ['tk', 'ph', 'ps'],
-  GK: ['ph', 'tk', 'ps']
+const KEY_STATS_BY_POS: Record<Position, StatGroupKey[]> = {
+  FW: ['atk', 'ply', 'phy'],
+  MF: ['ply', 'atk', 'def'],
+  DF: ['def', 'phy', 'fit'],
+  GK: ['gk', 'phy', 'fit']
 };
 
 interface TooltipEntry {
@@ -144,24 +146,23 @@ export const PlayerSeasonProgressionCard: React.FC<{
     [player, state, careerProfile]
   );
 
-  const activeSeries: Array<{
-    label: string;
-    ov: number;
-    sh: number;
-    ps: number;
-    dr: number;
-    tk: number;
-    ph: number;
-    md?: number;
-    season?: number;
-    teamName?: string;
-  }> = chartMode === 'multi' ? multiSeries : seasonSeries;
+  const activeSeries: Array<
+    {
+      label: string;
+      ov: number;
+      md?: number;
+      season?: number;
+      teamName?: string;
+    } & Partial<Record<StatGroupKey, number>>
+  > = chartMode === 'multi' ? multiSeries : seasonSeries;
 
   const chartKeys: ChartMetricKey[] = useMemo(
     () =>
       chartScope === 'all'
-        ? ['ov', 'sh', 'ps', 'dr', 'tk', 'ph']
-        : ['ov', ...(KEY_STATS_BY_POS[player.pos] || ['sh', 'ps', 'dr'])],
+        ? player.pos === 'GK'
+          ? ['ov', 'gk', 'phy', 'fit', 'tal']
+          : ['ov', 'atk', 'ply', 'def', 'phy', 'fit', 'tal']
+        : ['ov', ...(KEY_STATS_BY_POS[player.pos] || ['atk', 'ply', 'phy'])],
     [chartScope, player.pos]
   );
 
@@ -321,7 +322,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
 
           {!showProgChart && (
             <div className="hidden sm:flex items-center gap-1.5 mland:gap-1 min-w-0 overflow-hidden">
-              {(KEY_STATS_BY_POS[player.pos] || ['sh', 'ps', 'dr']).map((k) => {
+              {(KEY_STATS_BY_POS[player.pos] || ['atk', 'ply', 'phy']).map((k) => {
                 const meta = CHART_SERIES_META[k];
                 const curV = activeSeries[activeSeries.length - 1]?.[k] ?? 0;
                 const initV = activeSeries[0]?.[k] ?? curV;
@@ -397,7 +398,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
                       : 'text-[var(--mut)] hover:text-[var(--ink)]'
                   }`}
                 >
-                  ครบ 6 ค่า
+                  {player.pos === 'GK' ? 'ครบ 4 หมวด' : 'ครบ 6 หมวด'}
                 </button>
               </div>
             </>

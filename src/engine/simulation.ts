@@ -4744,6 +4744,26 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
   });
 }
 
+export function getLeaguePrizeMoney(tier: number, rank: number, totalTeams = 16): number {
+  const r = Math.max(1, Math.min(totalTeams, Math.round(rank || 1)));
+  if (tier >= 2) {
+    // ลีกในประเทศ 1 (ลีกสูงสุด): แชมป์ 600k -> อันดับ 16 = 100k
+    const top = [600, 460, 380, 320, 280, 250];
+    if (r <= top.length) return top[r - 1];
+    return Math.max(100, 250 - (r - 6) * 15);
+  }
+  if (tier === 1) {
+    // ลีกในประเทศ 2: แชมป์ 350k -> อันดับ 16 = 55k
+    const top = [350, 270, 220, 180, 160, 145];
+    if (r <= top.length) return top[r - 1];
+    return Math.max(55, Math.round((145 - (r - 6) * 9) / 5) * 5);
+  }
+  // ลีกจังหวัด: แชมป์ 200k -> อันดับ 16 = 30k
+  const top = [200, 155, 125, 105, 90, 80];
+  if (r <= top.length) return top[r - 1];
+  return Math.max(30, 80 - (r - 6) * 5);
+}
+
 export function finishSeasonComputation(s: GameState) {
   const mt = s.teams[s.me].tier;
   const lp = s.teams.filter((t) => t.tier === mt).flatMap((t) => t.sq.map((q) => ({ q, t })));
@@ -4828,11 +4848,11 @@ export function finishSeasonComputation(s: GameState) {
     (q) => calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0)
   );
 
+  const leaguePrize = s.mode === 'm' ? getLeaguePrizeMoney(mt, pos, tb[mt].length) : 0;
   if (s.mode === 'm') {
-    const pr = Math.max(0, 150 - pos * 10);
-    if (pr) {
-      s.money += pr;
-      logFin(s, `เงินรางวัลจบอันดับ ${pos}`, pr);
+    if (leaguePrize > 0) {
+      s.money += leaguePrize;
+      logFin(s, `เงินรางวัลบอลลีก ${TN[mt]} (อันดับ ${pos})`, leaguePrize);
     }
     if (s.payDue) {
       s.money -= s.payDue;
@@ -5149,7 +5169,8 @@ export function finishSeasonComputation(s: GameState) {
     offers,
     stText,
     trophiesWon,
-    archive
+    archive,
+    leaguePrize
   };
 }
 

@@ -1,14 +1,13 @@
 import React, { useMemo, useState } from 'react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
+import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, dtInfo, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
+import { getShirtNo, xi, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
-import { TalentBadge } from '../components/TalentBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
@@ -16,6 +15,7 @@ import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressi
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
+import { AthleteCard } from '../components/AthleteCard';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -68,7 +68,7 @@ export const PlayerInspectorModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/68 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
+      className="fixed inset-0 z-[60] bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
       onClick={onClose}
     >
       <div
@@ -176,119 +176,75 @@ export const PlayerInspectorModal: React.FC<{
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] gap-2.5 mland:gap-1.5">
+          <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[240px_1fr] md:grid-rows-[minmax(0,1fr)] mland:grid-cols-[214px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-2.5 mland:gap-1.5">
             {/* Left Column: Athlete Portrait Card + Personal Info Box + Traits/Insights Below */}
-            <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
+            <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 md:h-full mland:h-full md:overflow-y-auto mland:overflow-y-auto pr-0.5 pb-2">
               {/* Signature Athlete Card */}
-              <div className="relative rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-lg overflow-hidden shrink-0 flex flex-col">
-                <div
-                  aria-hidden="true"
-                  className="h-1 w-full shrink-0"
-                  style={{ background: `linear-gradient(90deg, ${kit1}, ${kit2})` }}
-                />
-
-                {/* Top Corner: OVR / POS + POT / TL / Badges */}
-                <div className="px-2.5 pt-1.5 mland:px-2 mland:pt-1 flex items-start justify-between gap-1.5">
-                  <div className="leading-none">
-                    <div className={`text-xl sm:text-[22px] mland:text-sm font-extrabold font-display tabular leading-none ${statTierMeta(livePlayer.ov).darkTextClass}`}>
-                      {livePlayer.ov}
-                    </div>
-                    <div className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide mt-0.5">
-                      {livePlayer.ro} · #{currentNo}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-0.5">
-                    <div className="flex items-center gap-1">
-                      <span className={`text-[9.5px] mland:text-[7.5px] font-bold tabular ${statTierMeta(livePlayer.pot).darkTextClass}`}>
-                        POT {livePlayer.pot}
-                      </span>
-                      <TalentBadge talent={playerTalent} variant="card" size="xs" />
-                    </div>
-                    <div className="flex items-center gap-1">
+              <AthleteCard
+                ov={livePlayer.ov}
+                pot={livePlayer.pot}
+                talent={playerTalent}
+                roleLabel={livePlayer.ro}
+                shirtNo={currentNo}
+                kit1={kit1}
+                kit2={kit2}
+                faceProps={{
+                  player: { ...livePlayer, no: currentNo },
+                  team: liveTeam,
+                  state,
+                  careerProfile: isMePlayer ? state.p : null
+                }}
+                name={livePlayer.n}
+                subtitle={`${
+                  liveTeam
+                    ? liveTeam.name
+                    : isRetired
+                      ? 'แขวนสตั๊ดแล้ว'
+                      : livePlayer.free
+                        ? 'ฟรีเอเยนต์'
+                        : livePlayer.customCreated
+                          ? 'นักเตะสร้างเอง'
+                          : 'ตลาดซื้อขาย'
+                } · อายุ ${livePlayer.age} ปี`}
+                bio={info.bio}
+                categories={summarizeStatGroups(info.G)}
+                renderBadges={(palette) =>
+                  isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
+                    <>
                       {isMePlayer && (
                         <span
                           title="ตัวคุณ"
-                          className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--lamp)] text-[#261900] text-[9px] font-black"
+                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black"
                         >
                           ★
                         </span>
                       )}
                       {livePlayer.blessed && (
-                        <span className="px-1 py-[1px] rounded bg-amber-300 text-[#261900] text-[8.5px] mland:text-[7px] font-extrabold leading-none">
+                        <span className="px-1 py-[1px] rounded bg-amber-300 text-[#261900] text-[8px] mland:text-[6.5px] font-extrabold leading-none">
                           ✨ พร
                         </span>
                       )}
                       {(livePlayer.hg || livePlayer.customCreated) && (
-                        <span className="px-1 py-[1px] rounded bg-emerald-400/20 border border-emerald-300/45 text-emerald-200 text-[8.5px] mland:text-[7px] font-extrabold leading-none">
+                        <span
+                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-extrabold leading-none ${palette.hgBadge}`}
+                        >
                           🌱 เด็กปั้น
                         </span>
                       )}
                       {isCap && (
-                        <span className="px-1 py-[1px] rounded bg-white/18 text-white text-[8.5px] mland:text-[7px] font-bold leading-none">
+                        <span
+                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none ${palette.capBadge}`}
+                        >
                           © กัปตัน
                         </span>
                       )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Neutral Studio Spotlight Portrait Stage */}
-                <div className="relative mx-2 my-1 mland:mx-1.5 mland:my-0.5 rounded-xl mland:rounded-lg border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-1 mland:pt-0.5 flex items-end justify-center overflow-hidden shadow-inner">
-                  <div
-                    aria-hidden="true"
-                    className="pointer-events-none absolute inset-0"
-                    style={{
-                      backgroundImage: 'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)'
-                    }}
-                  />
-                  <div className="relative z-10 [&>svg]:w-[54px] [&>svg]:h-[58px] mland:[&>svg]:w-[36px] mland:[&>svg]:h-[38px] drop-shadow-[0_8px_12px_rgba(0,0,0,0.72)]">
-                    <PlayerFace
-                      player={{ ...livePlayer, no: currentNo }}
-                      team={liveTeam}
-                      state={state}
-                      careerProfile={isMePlayer ? state.p : null}
-                      kitColor={kit1}
-                      trimColor={kit2}
-                      size={58}
-                      bare
-                    />
-                  </div>
-                </div>
-
-                {/* Athlete Identity */}
-                <div className="px-2 pb-1 mland:px-1.5 mland:pb-0.5 text-center space-y-0.5">
-                  <div className="font-display font-extrabold text-[13px] mland:text-[10px] text-white truncate leading-tight">
-                    {livePlayer.n}
-                  </div>
-                  <div className="text-[9.5px] mland:text-[7.5px] text-emerald-100/80 truncate tabular">
-                    {liveTeam ? liveTeam.name : isRetired ? 'แขวนสตั๊ดแล้ว' : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'} · อายุ {livePlayer.age} ปี
-                  </div>
-                </div>
-
-                {/* Bottom 5 Core Stats Strip with Color Bars */}
-                <div className="bg-[#060c09]/92 border-t border-white/10 px-1.5 py-1 mland:px-1 mland:py-0.5 grid grid-cols-5 gap-1 mland:gap-0.5 text-center">
-                  {ATT.map(([k, l]) => {
-                    const val = info.a[k];
-                    const tier = statTierMeta(val);
-                    return (
-                      <div key={k} className="rounded-lg bg-white/[0.04] py-0.5 px-0.5 space-y-0.5">
-                        <div className="text-[8px] mland:text-[6.5px] text-white/60 leading-tight truncate">{l}</div>
-                        <div className={`text-[11px] mland:text-[9px] font-extrabold font-display tabular leading-tight ${tier.darkTextClass}`}>
-                          {val}
-                        </div>
-                        <div className="h-1.5 mland:h-1 rounded-full bg-white/15 overflow-hidden mx-0.5">
-                          <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    </>
+                  ) : null
+                }
+              />
 
               {/* Personal Info Box below Portrait Card (Unified with Career Mode) */}
               <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
-                <PlayerBioStrip bio={info.bio} variant="grid" />
 
                 <div className="space-y-1 mland:space-y-0.5">
                   <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
@@ -428,7 +384,7 @@ export const PlayerInspectorModal: React.FC<{
             </div>
 
             {/* Right Column: Season Progression Graph -> Attribute Breakdown */}
-            <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:overflow-y-auto mland:overflow-y-auto pr-0.5">
+            <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:h-full mland:h-full md:overflow-y-auto mland:overflow-y-auto pr-0.5 pb-2">
               <PlayerSeasonProgressionCard
                 player={livePlayer}
                 state={state}
@@ -517,7 +473,7 @@ export const TeamInspectorModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/68 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
+      className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
       onClick={onClose}
     >
       <div
@@ -599,9 +555,9 @@ export const TeamInspectorModal: React.FC<{
             />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] mland:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] gap-3 mland:gap-2 items-stretch">
+          <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] md:grid-rows-[minmax(0,1fr)] mland:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] mland:grid-rows-[minmax(0,1fr)] gap-3 mland:gap-2 items-stretch">
             {/* Left Column: Full-Height Formation Pitch */}
-            <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-1.5 flex flex-col min-h-[340px] md:min-h-0 mland:min-h-0 overflow-hidden shadow-xs">
+            <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-1.5 flex flex-col min-h-[340px] md:min-h-0 md:h-full mland:min-h-0 mland:h-full overflow-hidden shadow-xs">
               <div className="shrink-0 flex items-center justify-between gap-2 px-1 pb-1.5 mland:pb-1">
                 <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
                   <b className="text-[var(--ink)]">ผัง 11 ตัวจริง</b> · แตะนักเตะเพื่อดูพลัง
@@ -626,7 +582,7 @@ export const TeamInspectorModal: React.FC<{
             </section>
 
             {/* Right Column: Compact Team Summary + Squad List */}
-            <div className="flex flex-col min-h-0 gap-2.5 mland:gap-1.5 md:overflow-hidden mland:overflow-hidden">
+            <div className="flex flex-col min-h-0 md:h-full mland:h-full gap-2.5 mland:gap-1.5 md:overflow-hidden mland:overflow-hidden">
               {/* Compact Team Overview Card */}
               <section className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-3 py-2 mland:px-2.5 mland:py-1.5 shadow-xs space-y-1.5 mland:space-y-1">
                 <div className="grid grid-cols-4 divide-x divide-[var(--line)]/70 text-center">

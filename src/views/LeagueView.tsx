@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Coins, X } from 'lucide-react';
 import type { MainTab, Player, Team, GameState } from '../types/game';
 import { RN, TN, PACT, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort, EXTRA_CUP_META } from '../engine/simulation';
+import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort, EXTRA_CUP_META, getLeaguePrizeMoney } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { CupView } from './CupView';
 
@@ -25,8 +25,13 @@ export const LeagueView: React.FC<{
   const sub = rawSub === 5 ? 2 : rawSub;
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
+  const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
 
   const tb = useMemo(() => sortTable(state.teams.filter((t) => t.tier === vt)), [state.teams, vt]);
+  const myLeaguePos = useMemo(() => {
+    const idx = tb.findIndex((t) => t.id === state.me);
+    return idx >= 0 ? idx + 1 : null;
+  }, [tb, state.me]);
   const ms = useMemo(() => teamStats(me, state), [me, state]);
 
   const leagueRows = useMemo(() => {
@@ -630,21 +635,37 @@ export const LeagueView: React.FC<{
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] px-1 shrink-0">
-          {vt < 2 && (
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
-              <span>1-3 เลื่อนชั้น</span>
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] px-1 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {vt < 2 && (
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
+                <span>1-3 เลื่อนชั้น</span>
+              </span>
+            )}
+            {vt > 0 ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
+                <span>3 ท้ายตกชั้น</span>
+              </span>
+            ) : (
+              <span>ลีกจังหวัดไม่ตกชั้น</span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => { SFX.tap(); setPrizeModalTier(vt); }}
+            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] cursor-pointer transition-colors shadow-2xs"
+          >
+            <Coins className="w-3 h-3 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
+            <span>เงินรางวัลลีก</span>
+            <span className="text-[#9a6700] dark:text-[var(--lamp)] tabular">
+              {myLeaguePos
+                ? `อันดับ ${myLeaguePos}: ${fmtMoney(getLeaguePrizeMoney(vt, myLeaguePos, tb.length))}`
+                : `แชมป์ ${fmtMoney(getLeaguePrizeMoney(vt, 1, tb.length))}`}
             </span>
-          )}
-          {vt > 0 ? (
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
-              <span>3 ท้ายตกชั้น</span>
-            </span>
-          ) : (
-            <span>ลีกจังหวัดไม่ตกชั้น</span>
-          )}
+          </button>
         </div>
 
       </div>
@@ -1219,6 +1240,90 @@ export const LeagueView: React.FC<{
       {sub === 2 && renderStatsAndAwards()}
       {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} />}
       {sub === 4 && <CupView state={state} onInspectTeam={onInspectTeam} />}
+
+      {prizeModalTier !== null && (
+        <div
+          className="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-3 sm:p-5 mland:p-2.5"
+          onClick={() => setPrizeModalTier(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[88dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm mland:text-xs font-display flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
+                  <span>เงินรางวัลบอลลีกประจำฤดูกาล</span>
+                </h3>
+                <p className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
+                  จ่ายเข้าคลังสโมสรเมื่อจบฤดูกาลตามอันดับและระดับลีก
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { SFX.tap(); setPrizeModalTier(null); }}
+                aria-label="ปิดหน้าต่าง"
+                className="btn-icon rounded-full!"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="shrink-0 px-4 pt-2.5 mland:px-3 mland:pt-2">
+              <div className="seg-bar w-full grid grid-cols-3">
+                {[0, 1, 2].map((tierIdx) => (
+                  <button
+                    key={tierIdx}
+                    type="button"
+                    onClick={() => { SFX.tap(); setPrizeModalTier(tierIdx); }}
+                    className={`seg-btn py-1 mland:py-0.5 truncate ${prizeModalTier === tierIdx ? 'seg-btn-active' : ''}`}
+                  >
+                    {TN[tierIdx]}{tierIdx === me.tier ? ' ★' : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-3 grid grid-cols-2 gap-1.5 mland:gap-1 content-start">
+              {Array.from({ length: 16 }, (_, idx) => {
+                const rank = idx + 1;
+                const amount = getLeaguePrizeMoney(prizeModalTier, rank, 16);
+                const isPromoRank = prizeModalTier < 2 && rank <= 3;
+                const isRelRank = prizeModalTier > 0 && rank >= 14;
+                const isMyCurRank = prizeModalTier === vt && myLeaguePos === rank;
+                return (
+                  <div
+                    key={rank}
+                    className={`px-2.5 py-1.5 mland:py-1 rounded-xl border flex items-center justify-between gap-2 text-xs mland:text-[10.5px] ${
+                      isMyCurRank
+                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] font-bold'
+                        : rank === 1
+                          ? 'bg-amber-500/10 border-amber-500/35'
+                          : isPromoRank
+                            ? 'bg-[var(--g-soft)]/35 border-[var(--g)]/30'
+                            : isRelRank
+                              ? 'bg-[var(--red-soft)]/25 border-[var(--red)]/25'
+                              : 'bg-[var(--surface-2)]/60 border-[var(--line)]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0 font-bold tabular">
+                      <span>{rank === 1 ? '🏆' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}</span>
+                      <span className="truncate text-[var(--ink)]">
+                        {rank === 1 ? 'แชมป์ลีก' : `อันดับ ${rank}`}
+                        {isMyCurRank ? ' ★' : ''}
+                      </span>
+                    </span>
+                    <span className="font-extrabold tabular text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
+                      +{fmtMoney(amount)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -13,6 +13,7 @@ interface TalentBadgeProps {
   compactLabel?: boolean;
   prefix?: string;
   title?: string;
+  tone?: 'dark' | 'light';
   className?: string;
 }
 
@@ -100,6 +101,7 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
   compactLabel = false,
   prefix = 'TL',
   title,
+  tone = 'dark',
   className = ''
 }) => {
   const tl = clamp(Math.round(talent), 25, 99);
@@ -129,18 +131,29 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
   }
 
   if (variant === 'card') {
+    const isLight = tone === 'light';
     const sizeCls =
       size === 'xs'
         ? 'px-1.5 py-[2px] mland:px-1 mland:py-[1px] text-[9px] mland:text-[7.5px]'
         : size === 'md'
           ? 'px-2 py-0.5 text-[10.5px] mland:text-[8.5px]'
           : 'px-1.5 py-[2px] text-[9.5px] mland:text-[8px]';
+    const lightToneCls =
+      meta.tierKey === 'legend'
+        ? 'bg-amber-100/90 border-amber-400/70 text-amber-900'
+        : meta.tierKey === 'high'
+          ? 'bg-emerald-100/90 border-emerald-500/55 text-emerald-900'
+          : meta.tierKey === 'pro'
+            ? 'bg-sky-100/90 border-sky-500/55 text-sky-900'
+            : 'bg-slate-200/85 border-slate-400/60 text-slate-800';
     return (
       <span
         title={resolvedTitle}
-        className={`inline-flex items-center gap-1 rounded-md border font-display font-extrabold leading-none tracking-tight tabular select-none shrink-0 ${meta.darkCardCls} ${sizeCls} ${className}`}
+        className={`inline-flex items-center gap-1 rounded-md border font-display font-extrabold leading-none tracking-tight tabular select-none shrink-0 ${
+          isLight ? lightToneCls : meta.darkCardCls
+        } ${sizeCls} ${className}`}
       >
-        <TalentTierIcon tierKey={meta.tierKey} size={size} onDarkCard />
+        <TalentTierIcon tierKey={meta.tierKey} size={size} onDarkCard={!isLight} />
         <span className="opacity-80 font-bold text-[0.84em] tracking-wider">{prefix}</span>
         <span>{tl}</span>
         {showLabel && <span className="opacity-90 font-semibold">· {tierText}</span>}

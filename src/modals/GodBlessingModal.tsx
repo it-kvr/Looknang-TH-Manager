@@ -42,7 +42,7 @@ export const GodBlessingModal: React.FC<{
   const activeItem = roster.find((x) => x.pl.n === editingName) || filteredRoster[0] || roster[0] || null;
 
   return (
-    <div className="fixed inset-0 z-[65] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
+    <div className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
       <div className="w-full max-w-4xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*92)] mland:h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-1.5 bg-gradient-to-r from-[#2e2000] via-[#17281e] to-[#0c1c14] text-white border-b border-[var(--lamp)]/35 flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -64,7 +64,7 @@ export const GodBlessingModal: React.FC<{
           </button>
         </div>
 
-        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[245px_1fr] mland:grid-cols-[220px_1fr] overflow-hidden">
+        <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[245px_1fr] md:grid-rows-[minmax(0,1fr)] mland:grid-cols-[220px_1fr] mland:grid-rows-[minmax(0,1fr)] overflow-hidden">
           {/* Left Column: Team & Player Selector */}
           <div className="shrink-0 max-h-[30vh] md:max-h-none md:h-full mland:max-h-none mland:h-full flex flex-col border-b md:border-b-0 md:border-r mland:border-b-0 mland:border-r border-[var(--line)] bg-[var(--surface-2)]/55 min-h-0">
             <div className="p-2.5 mland:p-1.5 space-y-1.5 border-b border-[var(--line)] shrink-0">
@@ -155,7 +155,7 @@ export const GodBlessingModal: React.FC<{
           </div>
 
           {/* Right Column: Individual Stat Editor */}
-          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2">
+          <div className="flex-1 min-h-0 md:h-full mland:h-full overflow-y-auto p-3.5 sm:p-4 mland:p-2 pb-4">
             {activeItem ? (
               <div className="space-y-3 mland:space-y-2">
                 <div className="flex items-center gap-3 p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)]">

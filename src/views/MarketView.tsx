@@ -158,41 +158,57 @@ export const MarketView: React.FC<{
     return base;
   }, [state.mk, filter, subFilter, sortBy, normalizedQuery]);
 
-  const clubMarketList = useMemo(() => {
+  const clubBasePool = useMemo(() => {
     const items: { q: Player; team: Team; idx: number; price: number }[] = [];
     state.teams.forEach((t) => {
       if (t.id === state.me) return;
       if (clubTierFilter === 'MY_TIER' && Math.abs(t.tier - me.tier) > 1) return;
       t.sq.forEach((q, idx) => {
         if (q.me || q.loan) return;
-        const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
-        const subOk = subFilter === 'ALL' || q.ro === subFilter;
-        const searchOk =
-          !normalizedQuery ||
-          q.n.toLowerCase().includes(normalizedQuery) ||
-          t.name.toLowerCase().includes(normalizedQuery) ||
-          q.ro.toLowerCase().includes(normalizedQuery);
-        if (!lineOk || !subOk || !searchOk) return;
         items.push({ q, team: t, idx, price: Math.max(8, vlu(q)) });
       });
     });
-    const sorted = items.sort((a, b) => {
+    return items;
+  }, [state.teams, state.me, me.tier, clubTierFilter]);
+
+  const clubMarketList = useMemo(() => {
+    const items = clubBasePool.filter(({ q, team: t }) => {
+      const lineOk = filter === 'ALL' || filter === 'FREE' || q.pos === filter;
+      const subOk = subFilter === 'ALL' || q.ro === subFilter;
+      const searchOk =
+        !normalizedQuery ||
+        q.n.toLowerCase().includes(normalizedQuery) ||
+        t.name.toLowerCase().includes(normalizedQuery) ||
+        q.ro.toLowerCase().includes(normalizedQuery);
+      return lineOk && subOk && searchOk;
+    });
+    const sorted = items.slice().sort((a, b) => {
       if (sortBy === 'price_asc') return a.price - b.price || b.q.ov - a.q.ov;
       if (sortBy === 'age_asc') return a.q.age - b.q.age || b.q.ov - a.q.ov;
       return b.q.ov - a.q.ov;
     });
     return sorted.slice(0, 60);
-  }, [state.teams, state.me, me.tier, clubTierFilter, filter, subFilter, sortBy, normalizedQuery]);
+  }, [clubBasePool, filter, subFilter, sortBy, normalizedQuery]);
 
-  const loanPlayers = me.sq.map((q, i) => ({ q, i })).filter(({ q }) => q.loan && q.loanOpt);
-  const contractList = me.sq
-    .map((q, i) => ({ q, i, c: ensureCon(q) }))
-    .filter(({ q }) => !q.loan)
-    .sort((a, b) => a.c.yr - b.c.yr || b.q.ov - a.q.ov);
-  const displayedContracts = contractFilter === 'expiring' ? contractList.filter(({ c }) => c.yr <= 1) : contractList;
+  const loanPlayers = useMemo(
+    () => me.sq.map((q, i) => ({ q, i })).filter(({ q }) => q.loan && q.loanOpt),
+    [me.sq]
+  );
+  const contractList = useMemo(
+    () =>
+      me.sq
+        .map((q, i) => ({ q, i, c: ensureCon(q) }))
+        .filter(({ q }) => !q.loan)
+        .sort((a, b) => a.c.yr - b.c.yr || b.q.ov - a.q.ov),
+    [me.sq]
+  );
+  const displayedContracts = useMemo(
+    () => (contractFilter === 'expiring' ? contractList.filter(({ c }) => c.yr <= 1) : contractList),
+    [contractFilter, contractList]
+  );
 
-  const incomingOffers = getIncomingOffers(state);
-  const listedPlayers = me.sq.filter((q) => q.listed && !q.loan);
+  const incomingOffers = useMemo(() => getIncomingOffers(state), [state]);
+  const listedPlayers = useMemo(() => me.sq.filter((q) => q.listed && !q.loan), [me.sq]);
   const sellSearchNorm = sellSearch.trim().toLowerCase();
   const sellSquadList = useMemo(() => {
     const base = me.sq.filter((q) => {
@@ -450,7 +466,7 @@ export const MarketView: React.FC<{
     const chCol = E.chance >= 75 ? 'var(--g)' : E.chance >= 45 ? '#b45309' : 'var(--red)';
 
     return (
-      <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden" onClick={() => setOfferDraft(null)}>
+      <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden" onClick={() => setOfferDraft(null)}>
         <div className="w-full max-w-3xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="shrink-0 flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
             <PlayerFace player={q} team={sellerTeam} state={state} size={44} />
@@ -677,7 +693,7 @@ export const MarketView: React.FC<{
     const renewOverCap = tx.curWage + wageDelta > tx.wageCap;
 
     return (
-      <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden" onClick={() => setRenewIdx(null)}>
+      <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden" onClick={() => setRenewIdx(null)}>
         <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
           <div className="shrink-0 flex items-center gap-3 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
             <PlayerFace player={q} team={me} state={state} size={42} />
@@ -856,7 +872,7 @@ export const MarketView: React.FC<{
 
       {/* SECTION 1: BUY & LOAN PLAYERS (Filter Sidebar + Spacious Player List) */}
       {activeTab === 'buy' && (
-        <div className="grid grid-cols-[245px_1fr] mland:grid-cols-[210px_1fr] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
+        <div className="grid grid-cols-[245px_1fr] mland:grid-cols-[210px_1fr] grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
           {/* Left Filter & Source Panel */}
           <aside className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
             <div className="flex-1 min-h-0 overflow-y-auto p-3 mland:p-2 space-y-3 mland:space-y-2">

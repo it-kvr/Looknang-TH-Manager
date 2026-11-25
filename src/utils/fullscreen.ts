@@ -387,8 +387,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
     rootStyle.removeProperty('--app-dvh');
   };
 
-  const updateViewportLock = (standalone: boolean, activeFsOrPeek: boolean) => {
-    if (!isMobileDevice() || (!standalone && !activeFsOrPeek)) {
+  const updateViewportLock = (standalone: boolean, activeFs: boolean, barPeek: boolean) => {
+    if (!isMobileDevice() || (!standalone && !activeFs && !barPeek)) {
       clearLockedViewport();
       return;
     }
@@ -396,7 +396,6 @@ export function bindAutoLandscapeFullscreen(): () => void {
     const curW = Math.round(window.innerWidth || 0);
     const curH = Math.round(window.innerHeight || 0);
     const lvhRect = lvhProbe.getBoundingClientRect();
-    const lvwW = Math.round(lvhRect.width || 0);
     const lvhH = Math.round(lvhRect.height || 0);
     const refH = Math.max(curH, lvhH);
     const vvH = Math.round(window.visualViewport?.height || curH);
@@ -408,18 +407,29 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
 
     const oriKey = getOriKey();
-    const candW = Math.max(curW, lvwW);
-    const candH = Math.max(curH, lvhH);
-    const prev = maxViewportByOri.get(oriKey);
-    const nextW = Math.max(prev?.w || 0, candW);
-    const nextH = Math.max(prev?.h || 0, candH);
-    if (nextW > 0 && nextH > 0) {
-      maxViewportByOri.set(oriKey, { w: nextW, h: nextH });
-      rootStyle.setProperty('--locked-vw', `${nextW}px`);
-      rootStyle.setProperty('--locked-vh', `${nextH}px`);
-      rootStyle.setProperty('--app-w', `${nextW}px`);
-      rootStyle.setProperty('--app-h', `${nextH}px`);
-      rootStyle.setProperty('--app-dvh', `${(nextH / 100).toFixed(4)}px`);
+    if (barPeek) {
+      const lvwW = Math.round(lvhRect.width || 0);
+      const prev = maxViewportByOri.get(oriKey);
+      const nextW = Math.max(prev?.w || 0, Math.max(curW, lvwW));
+      const nextH = Math.max(prev?.h || 0, Math.max(curH, lvhH));
+      if (nextW > 0 && nextH > 0) {
+        maxViewportByOri.set(oriKey, { w: nextW, h: nextH });
+        rootStyle.setProperty('--locked-vw', `${nextW}px`);
+        rootStyle.setProperty('--locked-vh', `${nextH}px`);
+        rootStyle.setProperty('--app-w', `${nextW}px`);
+        rootStyle.setProperty('--app-h', `${nextH}px`);
+        rootStyle.setProperty('--app-dvh', `${(nextH / 100).toFixed(4)}px`);
+      }
+      return;
+    }
+
+    if (curW > 0 && curH > 0) {
+      maxViewportByOri.set(oriKey, { w: curW, h: curH });
+      rootStyle.setProperty('--locked-vw', `${curW}px`);
+      rootStyle.setProperty('--locked-vh', `${curH}px`);
+      rootStyle.setProperty('--app-w', `${curW}px`);
+      rootStyle.setProperty('--app-h', `${curH}px`);
+      rootStyle.setProperty('--app-dvh', `${(curH / 100).toFixed(4)}px`);
     }
   };
 
@@ -429,7 +439,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     const barPeek = !activeFs && Date.now() < barPeekUntil;
     document.documentElement.classList.toggle('is-fs-peek', barPeek);
     syncFullscreenClass(activeFs);
-    updateViewportLock(standalone, activeFs || barPeek);
+    updateViewportLock(standalone, activeFs, barPeek);
 
     if (!standalone && !activeFs && !barPeek) {
       clearLockedInsets();

@@ -106,8 +106,9 @@ export const FootPairIcon: React.FC<{
 export const PlayerBioStrip: React.FC<{
   bio: PlayerBio;
   variant?: 'grid' | 'card' | 'inline';
+  tone?: 'dark' | 'light';
   className?: string;
-}> = ({ bio, variant = 'grid', className = '' }) => {
+}> = ({ bio, variant = 'grid', tone = 'dark', className = '' }) => {
   const fm = getFootColorMeta(bio.foot);
 
   if (variant === 'inline') {
@@ -133,30 +134,43 @@ export const PlayerBioStrip: React.FC<{
   }
 
   if (variant === 'card') {
+    const isLight = tone === 'light';
     return (
       <div
-        className={`grid grid-cols-3 items-center divide-x divide-white/12 rounded-xl bg-black/30 border border-white/12 px-1 py-1 mland:py-0.5 text-center ${className}`}
+        className={`grid grid-cols-3 items-center divide-x rounded-lg border px-1 py-1 mland:py-0.5 text-center whitespace-nowrap ${
+          isLight
+            ? 'divide-slate-300/75 bg-white/82 border-slate-300/80 shadow-2xs'
+            : 'divide-white/12 bg-black/30 border-white/12'
+        } ${className}`}
         title={`ส่วนสูง ${bio.heightCm} ซม. · น้ำหนัก ${bio.weightKg} กก. · ${fm.titleText}`}
       >
-        <div className="px-1">
-          <div className="text-[8px] mland:text-[6.5px] text-white/55 font-semibold leading-none">ส่วนสูง</div>
-          <div className="text-[10.5px] mland:text-[8.5px] font-extrabold text-white tabular mt-0.5 leading-none">
-            {bio.heightCm} <span className="text-[8.5px] mland:text-[7px] font-semibold text-white/65">ซม.</span>
-          </div>
+        <div className="px-1 text-[9.5px] mland:text-[7.5px] leading-none tabular truncate">
+          <span className={`font-semibold mr-0.5 ${isLight ? 'text-slate-500' : 'text-white/55'}`}>
+            สูง
+          </span>
+          <span className={`font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>
+            {bio.heightCm}
+          </span>
+          <span className={`text-[8px] mland:text-[6.5px] font-semibold ml-0.5 ${isLight ? 'text-slate-500' : 'text-white/60'}`}>
+            ซม.
+          </span>
         </div>
-        <div className="px-1">
-          <div className="text-[8px] mland:text-[6.5px] text-white/55 font-semibold leading-none">น้ำหนัก</div>
-          <div className="text-[10.5px] mland:text-[8.5px] font-extrabold text-white tabular mt-0.5 leading-none">
-            {bio.weightKg} <span className="text-[8.5px] mland:text-[7px] font-semibold text-white/65">กก.</span>
-          </div>
+        <div className="px-1 text-[9.5px] mland:text-[7.5px] leading-none tabular truncate">
+          <span className={`font-semibold mr-0.5 ${isLight ? 'text-slate-500' : 'text-white/55'}`}>
+            หนัก
+          </span>
+          <span className={`font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>
+            {bio.weightKg}
+          </span>
+          <span className={`text-[8px] mland:text-[6.5px] font-semibold ml-0.5 ${isLight ? 'text-slate-500' : 'text-white/60'}`}>
+            กก.
+          </span>
         </div>
-        <div className="px-1 flex flex-col items-center justify-center">
-          <div className="text-[8px] mland:text-[6.5px] text-emerald-300 font-bold leading-none whitespace-nowrap">
+        <div className="px-1 inline-flex items-center justify-center gap-1 leading-none">
+          <FootPairIcon foot={bio.foot} size="xs" />
+          <span className={`text-[9px] mland:text-[7.5px] font-extrabold ${isLight ? 'text-emerald-700' : 'text-emerald-300'}`}>
             {fm.shortLabel}
-          </div>
-          <div className="mt-0.5 inline-flex items-center justify-center leading-none">
-            <FootPairIcon foot={bio.foot} size="sm" />
-          </div>
+          </span>
         </div>
       </div>
     );

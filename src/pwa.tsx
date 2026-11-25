@@ -461,7 +461,7 @@ export const PWAInstallButton: React.FC<{
 
     return createPortal(
       <div
-        className="fixed inset-0 z-[80] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
+        className="fixed inset-0 z-[80] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
         onClick={() => setShowGuide(false)}
       >
         <div
@@ -594,7 +594,7 @@ export const PWAInstallButton: React.FC<{
       : 'h-9 mland:h-7.5 px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-[11px] sm:text-xs mland:text-[10px]';
 
     const compactInstallTone = isStadium
-      ? 'bg-emerald-500/22 hover:bg-emerald-500/32 border border-emerald-300/40 hover:border-emerald-200/70 text-emerald-50 backdrop-blur-md shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_8px_rgba(0,0,0,0.28)]'
+      ? 'bg-[#0e3b25]/92 hover:bg-[#144d31] border border-emerald-300/40 hover:border-emerald-200/70 text-emerald-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_8px_rgba(0,0,0,0.28)]'
       : 'bg-[var(--surface-2)] hover:bg-[var(--g-soft)] border border-[var(--line)] hover:border-[var(--g)]/55 text-[var(--ink)] hover:text-[var(--g)] shadow-2xs';
 
     const compactUpdateTone = isStadium

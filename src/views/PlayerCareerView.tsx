@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import type { Player, GameState } from '../types/game';
 import { clamp } from '../utils/math';
-import { ATT, PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, LINE, SPN } from '../data/thaiFootballData';
+import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, LINE, SPN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import {
   getShirtNo,
   getFormationSlots,
   xi,
   dtInfo,
+  summarizeStatGroups,
   ovMe,
   syncMe,
   tc,
@@ -20,14 +21,13 @@ import {
   ROLE_ADAPT_THRESHOLD_CROSS
 } from '../engine/playerCore';
 import { statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
-import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
-import { TalentBadge } from '../components/TalentBadge';
+import { ClubCrest } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
-import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
+import { AthleteCard } from '../components/AthleteCard';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -53,6 +53,7 @@ export const PlayerCareerView: React.FC<{
   const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, ht: p.ht, wt: p.wt, foot: p.foot, pot: 95, talent: p.talent, traits: p.traits, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
   const details = dtInfo(fakePlayer, p);
   const myTalent = getPlayerTalent(fakePlayer, p);
+  const myPot = meSq?.pot ?? clamp(Math.max(88, myTalent + 6), ov + 4, 96);
   const starters = xi(meTeam);
   const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
   const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
@@ -60,103 +61,46 @@ export const PlayerCareerView: React.FC<{
   const kit2 = tc(meTeam, state, true);
 
   return (
-    <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] flex-1 min-h-0 gap-2.5 mland:gap-1.5 items-stretch overflow-hidden">
-      <div className="flex flex-col gap-1.5 mland:gap-1 h-full min-h-0 overflow-y-auto pr-0.5">
+    <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-1.5 items-stretch overflow-hidden">
+      <div className="flex flex-col gap-1.5 mland:gap-1 h-full min-h-0 overflow-y-auto pr-0.5 pb-2">
         {/* Collectible Career Athlete Card */}
-        <div className="relative rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-lg overflow-hidden flex flex-col shrink-0">
-          <div
-            aria-hidden="true"
-            className="h-1 w-full shrink-0"
-            style={{ background: `linear-gradient(90deg, ${kit1}, ${kit2})` }}
-          />
-          <div className="px-2.5 pt-1.5 mland:px-2 mland:pt-1 flex items-start justify-between gap-1.5">
-            <div className="leading-none">
-              <div className={`text-xl sm:text-[22px] mland:text-sm font-extrabold font-display tabular leading-none ${statTierMeta(ov).darkTextClass}`}>
-                {ov}
-              </div>
-              <div className="flex items-center gap-1 mt-0.5">
-                <span className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide truncate max-w-[95px]">
-                  {p.sp}{p.altRoles?.length ? `/${p.altRoles.slice(0, 2).join('/')}` : ''}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setShowLockerPicker(true);
-                  }}
-                  title="เปิดล็อกเกอร์เปลี่ยน/สลับเบอร์เสื้อ"
-                  className="px-1.5 py-[1px] rounded bg-white/12 hover:bg-white/25 border border-white/20 text-[9px] mland:text-[7.5px] font-extrabold text-amber-200 tabular cursor-pointer transition-colors shrink-0"
-                >
-                  #{myShirtNo} ▾
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-1">
-              <TalentBadge talent={myTalent} variant="card" size="xs" />
-              <span className="text-[9.5px] mland:text-[7.5px] font-bold text-amber-200/90 tabular">
+        <AthleteCard
+          ov={ov}
+          pot={myPot}
+          talent={myTalent}
+          roleLabel={`${p.sp}${p.altRoles?.length ? `/${p.altRoles.slice(0, 2).join('/')}` : ''}`}
+          shirtNo={myShirtNo}
+          onShirtClick={() => {
+            SFX.tap();
+            setShowLockerPicker(true);
+          }}
+          shirtButtonTitle="เปิดล็อกเกอร์เปลี่ยน/สลับเบอร์เสื้อ"
+          kit1={kit1}
+          kit2={kit2}
+          faceProps={{
+            player: fakePlayer,
+            team: meTeam,
+            state,
+            careerProfile: p
+          }}
+          name={p.name}
+          subtitle={`${meTeam.name} · อายุ ${p.age} ปี`}
+          bio={details.bio}
+          categories={summarizeStatGroups(details.G)}
+          renderBadges={(palette) => (
+            <>
+              <span className={`text-[9px] mland:text-[7px] font-bold tabular ${palette.repText}`}>
                 ★ {p.rep ?? 10}
               </span>
-              <div className="w-5 h-5 mland:w-4 mland:h-4 rounded-md bg-white/10 border border-white/15 flex items-center justify-center [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
+              <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
                 <ClubCrest name={meTeam.name} size={14} team={meTeam} club={state.club} isMyClub={false} />
               </div>
-            </div>
-          </div>
-
-          {/* Studio Spotlight Portrait Stage */}
-          <div className="relative mx-2 my-1 mland:mx-1.5 mland:my-0.5 rounded-xl mland:rounded-lg border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-1 mland:pt-0.5 flex items-end justify-center overflow-hidden shadow-inner">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0"
-              style={{
-                backgroundImage: 'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)'
-              }}
-            />
-            <div className="relative z-10 [&>svg]:w-[54px] [&>svg]:h-[58px] mland:[&>svg]:w-[36px] mland:[&>svg]:h-[38px] drop-shadow-[0_8px_12px_rgba(0,0,0,0.72)]">
-              <PlayerFace
-                player={fakePlayer}
-                team={meTeam}
-                state={state}
-                careerProfile={p}
-                kitColor={kit1}
-                trimColor={kit2}
-                size={58}
-                bare
-              />
-            </div>
-          </div>
-
-          <div className="px-2 pb-1 mland:px-1.5 mland:pb-0.5 text-center space-y-0.5">
-            <div className="font-display font-extrabold text-[13px] mland:text-[10px] text-white truncate leading-tight">
-              {p.name}
-            </div>
-            <div className="text-[9.5px] mland:text-[7.5px] text-emerald-100/80 truncate tabular">
-              {meTeam.name} · อายุ {p.age} ปี
-            </div>
-          </div>
-
-          {/* 5 Core Stats Strip with Color Bars */}
-          <div className="bg-[#060c09]/92 border-t border-white/10 px-1.5 py-1 mland:px-1 mland:py-0.5 grid grid-cols-5 gap-1 mland:gap-0.5 text-center">
-            {ATT.map(([k, l]) => {
-              const val = p.a[k];
-              const tier = statTierMeta(val);
-              return (
-                <div key={k} className="rounded-lg bg-white/[0.04] py-0.5 px-0.5 space-y-0.5">
-                  <div className="text-[8px] mland:text-[6.5px] text-white/60 leading-tight truncate">{l}</div>
-                  <div className={`text-[11px] mland:text-[9px] font-extrabold font-display tabular leading-tight ${tier.darkTextClass}`}>
-                    {val}
-                  </div>
-                  <div className="h-1.5 mland:h-1 rounded-full bg-white/15 overflow-hidden mx-0.5">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+            </>
+          )}
+        />
 
         {/* Personal Info Box below Portrait Card */}
         <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
-          <PlayerBioStrip bio={details.bio} variant="grid" />
 
           <div className="space-y-1 mland:space-y-0.5">
             <div className="flex items-center justify-between text-[11px] mland:text-[9px] font-bold">
@@ -363,7 +307,7 @@ export const PlayerCareerView: React.FC<{
         />
       </div>
 
-      <div className="space-y-2 mland:space-y-1 h-full flex flex-col min-h-0">
+      <div className="gap-2 mland:gap-1 h-full flex flex-col min-h-0">
         <div className="seg-bar grid grid-cols-5 w-full shrink-0">
           {([
             ['plan', '📅 แผนฝึก'],
@@ -383,7 +327,7 @@ export const PlayerCareerView: React.FC<{
           ))}
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {careerTab === 'plan' && (
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col justify-between gap-2 mland:gap-1.5 overflow-y-auto">
               <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
@@ -467,7 +411,7 @@ export const PlayerCareerView: React.FC<{
           )}
 
           {careerTab === 'missions' && (
-            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 pb-2">
               <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
                 <PlayerMissionsPanel
                   player={fakePlayer}
@@ -768,7 +712,7 @@ export const PlayerCareerView: React.FC<{
           )}
 
           {careerTab === 'stats' && (
-            <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5">
+            <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1 overflow-y-auto pr-0.5 pb-2">
               <PlayerSeasonProgressionCard
                 player={fakePlayer}
                 state={state}
@@ -803,7 +747,7 @@ export const PlayerCareerView: React.FC<{
           )}
 
           {careerTab === 'history' && (
-            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 pb-2">
               <PlayerHistoryPanel
                 player={fakePlayer}
                 team={meTeam}

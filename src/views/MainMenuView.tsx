@@ -1,17 +1,18 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, FolderInput, RefreshCw, X } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
-import { PlayerBioStrip, FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
+import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge } from '../components/TalentBadge';
+import { AthleteCard } from '../components/AthleteCard';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
@@ -25,10 +26,11 @@ interface StarPosterCard {
   pot: number;
   talent: number;
   age: number;
+  bio: PlayerBio;
   clubName: string;
   sourceLabel: string;
   archLabel: string;
-  attrs: CoreAttrs;
+  categories: StatCategorySummary[];
   kit1: string;
   kit2: string;
   player: Partial<Player>;
@@ -48,12 +50,12 @@ const STAR_CLUB_PRESETS: Array<{ name: string; kit: [string, string]; pos: Posit
   { name: `${NG[2][14]} ${SFX0[2][7]}`, kit: KIT_P[13], pos: 'DF', sp: 'RB', no: 2, archId: 'fullback' }
 ];
 
-function buildStarPosterPool(): StarPosterCard[] {
+function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameState | null)[] }): StarPosterCard[] {
   const pool: StarPosterCard[] = [];
 
   // Pull real stars from saved Manager & Player Career slots if available
   for (let k = 1; k <= NSL; k++) {
-    const ms = loadGameFromSlot('m', k);
+    const ms = preloaded ? preloaded.m[k - 1] : loadGameFromSlot('m', k);
     if (ms && Array.isArray(ms.teams)) {
       const meT = ms.teams[ms.me];
       const top = meT?.sq?.slice().sort((a, b) => b.ov - a.ov)[0];
@@ -70,10 +72,11 @@ function buildStarPosterPool(): StarPosterCard[] {
           pot: top.pot || top.ov,
           talent: getPlayerTalent(top),
           age: top.age || 22,
+          bio: getPlayerBio(top),
           clubName,
           sourceLabel: `เซฟ #${k}`,
           archLabel: SPN[top.ro] || top.ro,
-          attrs: top.customA || dtInfo(top).a,
+          categories: summarizeStatGroups(dtInfo(top).G),
           kit1,
           kit2,
           player: top,
@@ -82,7 +85,7 @@ function buildStarPosterPool(): StarPosterCard[] {
         });
       }
     }
-    const ps = loadGameFromSlot('p', k);
+    const ps = preloaded ? preloaded.p[k - 1] : loadGameFromSlot('p', k);
     if (ps && ps.p && Array.isArray(ps.teams)) {
       const meT = ps.teams[ps.me];
       const mePl = meT?.sq?.find((q) => q.me);
@@ -90,6 +93,21 @@ function buildStarPosterPool(): StarPosterCard[] {
       const ov = mePl?.ov || OVF(ps.p.pos, attrs);
       const talent = ps.p.talent ?? getPlayerTalent(mePl || { n: ps.p.name, pos: ps.p.pos, ro: ps.p.sp, ov, age: ps.p.age, pot: 92, fit: 100, inj: 0 }, ps.p);
       const pot = mePl?.pot ?? clamp(Math.max(88, talent + 6), ov + 8, 96);
+      const playerObj: Player = mePl || {
+        n: ps.p.name,
+        pos: ps.p.pos,
+        ro: ps.p.sp,
+        ov,
+        age: ps.p.age || 18,
+        pot,
+        talent,
+        traits: ps.p.traits,
+        fit: 100,
+        inj: 0,
+        no: ps.p.no || 10,
+        me: 1,
+        sb: ps.p.sb
+      };
       pool.push({
         id: `save_p_${k}`,
         name: ps.p.name,
@@ -99,13 +117,14 @@ function buildStarPosterPool(): StarPosterCard[] {
         pot,
         talent,
         age: ps.p.age || 18,
+        bio: getPlayerBio(playerObj, ps.p),
         clubName: meT?.name || 'ทีมชาติไทย',
         sourceLabel: `เซฟอาชีพ #${k}`,
         archLabel: ps.p.archName || SPN[ps.p.sp] || ps.p.sp,
-        attrs,
+        categories: summarizeStatGroups(dtInfo(playerObj, ps.p).G),
         kit1: meT?.kc?.[0] || ps.p.c || '#158049',
         kit2: meT?.kc?.[1] || '#f5c242',
-        player: mePl || { n: ps.p.name, pos: ps.p.pos, ro: ps.p.sp, no: ps.p.no, me: 1 },
+        player: playerObj,
         team: meT || null,
         profile: ps.p
       });
@@ -148,6 +167,22 @@ function buildStarPosterPool(): StarPosterCard[] {
       [0, 0, 5, 4, 9, preset.no, 5],
       [2, 0, 9, 0, 2, preset.no, 0]
     ];
+    const starPlayerObj: Player = {
+      n: starName,
+      pos: preset.pos,
+      ro: preset.sp,
+      no: preset.no,
+      ov,
+      age,
+      pot,
+      talent,
+      fit: 100,
+      inj: 0,
+      customA: attrs,
+      sb: arch.sbBonus,
+      customSig: arch.sig,
+      vis: curatedVis[idx % curatedVis.length]
+    };
     pool.push({
       id: `league_star_${idx}`,
       name: starName,
@@ -157,21 +192,14 @@ function buildStarPosterPool(): StarPosterCard[] {
       pot,
       talent,
       age,
+      bio: getPlayerBio(starPlayerObj),
       clubName: preset.name,
       sourceLabel: 'ลีกสูงสุด',
       archLabel: `${arch.icon} ${arch.name}`,
-      attrs,
+      categories: summarizeStatGroups(dtInfo(starPlayerObj).G),
       kit1: preset.kit[0],
       kit2: preset.kit[1],
-      player: {
-        n: starName,
-        pos: preset.pos,
-        ro: preset.sp,
-        no: preset.no,
-        ov,
-        age,
-        vis: curatedVis[idx % curatedVis.length]
-      },
+      player: starPlayerObj,
       team: teamStub
     });
   });
@@ -200,20 +228,28 @@ export const MainMenu: React.FC<{
   const [clubFilter, setClubFilter] = useState<'all' | 'top' | 'mid' | 'underdog'>('all');
   const [diff, setDiff] = useState<number>(1);
   const [confirmDel, setConfirmDel] = useState<string | null>(null);
-  const [, setRefresh] = useState(0);
+  const [refresh, setRefresh] = useState(0);
+  const loadedSlots = useMemo(
+    () => ({
+      m: Array.from({ length: NSL }, (_, idx) => loadGameFromSlot('m', idx + 1)),
+      p: Array.from({ length: NSL }, (_, idx) => loadGameFromSlot('p', idx + 1))
+    }),
+    [refresh]
+  );
   const [showImport, setShowImport] = useState(false);
   const [importText, setImportText] = useState('');
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
   const [starPoster, setStarPoster] = useState<{ pool: StarPosterCard[]; idx: number }>(() => {
-    const pool = buildStarPosterPool();
+    const pool = buildStarPosterPool(loadedSlots);
     return { pool, idx: Math.floor(Math.random() * Math.max(1, pool.length)) };
   });
   const starPool = starPoster.pool;
   const starIdx = starPoster.idx;
   const countSaves = (m: GameMode) => {
     let n = 0;
-    for (let k = 1; k <= NSL; k++) {
-      const d = loadGameFromSlot(m, k);
+    const list = loadedSlots[m];
+    for (let k = 0; k < list.length; k++) {
+      const d = list[k];
       if (d && Array.isArray(d.teams) && (m === 'm' || d.p)) n++;
     }
     return n;
@@ -418,8 +454,9 @@ export const MainMenu: React.FC<{
     const rows: React.ReactNode[] = [];
     let shownEmpty = false;
     const isMgr = m === 'm';
+    const slots = loadedSlots[m];
     for (let k = 1; k <= NSL; k++) {
-      const d = loadGameFromSlot(m, k);
+      const d = slots[k - 1];
       if (d && Array.isArray(d.teams) && (isMgr || d.p)) {
         const meTeam = d.teams[d.me] || null;
         const name = isMgr ? d.club?.name || meTeam?.name || 'สโมสร' : d.p?.name || 'นักเตะ';
@@ -542,10 +579,10 @@ export const MainMenu: React.FC<{
           : 'คู่แข่งแข็งแกร่งขึ้น ท้าทายฝีมือคุมทีม';
 
     return (
-      <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] p-2.5 sm:p-6 md:p-8 mland:p-2.5 safe-all">
-        <div className="w-full max-w-6xl h-full max-h-[86dvh] sm:max-h-[min(84dvh,700px)] mland:max-h-[89dvh] flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
+      <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] stage-viewport">
+        <div className="w-full max-w-6xl h-full max-h-[90%] sm:max-h-[min(86%,700px)] mland:max-h-[92%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
           {/* Top Navigation Bar: 3 clean zones */}
-          <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
+          <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]">
             <div className="w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 flex items-center justify-between gap-3 sm:gap-6">
               <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
                 <button
@@ -593,7 +630,7 @@ export const MainMenu: React.FC<{
           </header>
 
           {/* Main 2-Column Club Selection & Dossier Workspace */}
-          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-3 mland:py-2 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.35fr_0.95fr] mland:grid-cols-[1.32fr_0.98fr] gap-3 sm:gap-4 mland:gap-2.5">
+          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-3 mland:py-2 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.35fr_0.95fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.32fr_0.98fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-2.5">
           {/* Left Column: Filter Bar + Club Roster Grid */}
           <section className="flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-1.5">
             <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
@@ -1063,10 +1100,10 @@ export const MainMenu: React.FC<{
     const activeTabStatsBadge = SIGL[curArch.sig] || curArch.sig;
 
     return (
-      <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] p-2.5 sm:p-6 md:p-8 mland:p-2.5 safe-all">
-        <div className="w-full max-w-6xl h-full max-h-[88dvh] sm:max-h-[min(85dvh,720px)] mland:max-h-[90dvh] flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
+      <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] stage-viewport">
+        <div className="w-full max-w-6xl h-full max-h-[92%] sm:max-h-[min(88%,720px)] mland:max-h-[94%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
           {/* Studio Header */}
-          <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md">
+          <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]">
             <div className="w-full mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5">
@@ -1109,67 +1146,35 @@ export const MainMenu: React.FC<{
           </header>
 
           {/* Responsive Studio Grid */}
-          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[235px_1fr] md:grid-cols-[265px_1fr] mland:grid-cols-[205px_1fr] gap-3 mland:gap-2">
-          {/* Left Column: Collector Athlete Card + Action Buttons */}
-          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0 shrink-0">
-            <div className="relative flex-1 min-h-0 rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#070d0a] text-white shadow-xl overflow-hidden flex flex-col justify-between">
-              {/* Top Kit Accent Strip */}
-              <div
-                aria-hidden="true"
-                className="h-1.5 mland:h-1 w-full shrink-0"
-                style={{ background: `linear-gradient(90deg, ${cColor}, #fad05a 55%, ${cColor})` }}
+          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[235px_1fr] md:grid-cols-[265px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[205px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-3 mland:gap-2">
+          {/* Left Column: Unified Collector Athlete Card + Traits + Action Buttons */}
+          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto pr-0.5 shrink-0">
+            <div className="flex flex-col gap-1.5 mland:gap-1 shrink-0">
+              <AthleteCard
+                ov={ov}
+                pot={estPot}
+                talent={cTalent}
+                roleLabel={cSp}
+                shirtNo={cNo}
+                kit1={cColor}
+                kit2="#fad05a"
+                faceProps={{
+                  player: previewPlayer,
+                  careerProfile: previewProfile
+                }}
+                name={previewName}
+                subtitle={`อายุ ${cAge} ปี · ${curArch.icon} ${curArch.name}`}
+                bio={previewBio}
+                categories={summarizeStatGroups(subStats)}
+                renderBadges={(palette) => (
+                  <span className={`text-[8.5px] mland:text-[7px] font-bold truncate max-w-[110px] ${palette.clubText}`}>
+                    {cTraits.length > 0 ? `✨ ${cTraits.length} นิสัยติดตัว` : 'นักเตะใหม่'}
+                  </span>
+                )}
               />
 
-              {/* Top Corners: OVR / Position + POT / Talent Tier */}
-              <div className="px-3 pt-2 mland:px-2 mland:pt-1.5 flex items-start justify-between gap-2">
-                <div className="leading-none">
-                  <div className={`text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular ${statTierMeta(ov).darkTextClass}`}>
-                    {ov}
-                  </div>
-                  <div className="text-[10.5px] mland:text-[8.5px] font-bold text-white/85 tracking-wide mt-0.5">
-                    {cSp} · #{cNo}
-                  </div>
-                </div>
-
-                <div className="flex flex-col items-end gap-0.5">
-                  <span className={`text-[10.5px] mland:text-[8.5px] font-bold tabular ${statTierMeta(estPot).darkTextClass}`}>
-                    POT {estPot}
-                  </span>
-                  <TalentBadge talent={cTalent} variant="card" showLabel compactLabel size="xs" />
-                </div>
-              </div>
-
-              {/* Studio Portrait Stage */}
-              <div className="relative mx-3 my-1.5 mland:mx-2 mland:my-1 rounded-xl border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#101814] pt-2 mland:pt-1 flex items-end justify-center overflow-hidden shadow-inner flex-1 min-h-[82px] mland:min-h-[58px]">
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute inset-0"
-                  style={{
-                    backgroundImage: 'radial-gradient(circle at 50% 45%, rgba(245, 250, 247, 0.26) 0%, rgba(212, 228, 220, 0.08) 48%, transparent 74%)'
-                  }}
-                />
-                <div className="relative z-10 [&>svg]:w-[78px] [&>svg]:h-[84px] sm:[&>svg]:w-[86px] sm:[&>svg]:h-[92px] mland:[&>svg]:w-[52px] mland:[&>svg]:h-[56px] drop-shadow-[0_10px_16px_rgba(0,0,0,0.75)]">
-                  <PlayerFace
-                    player={previewPlayer}
-                    careerProfile={previewProfile}
-                    kitColor={cColor}
-                    trimColor="#fad05a"
-                    size={84}
-                    bare
-                  />
-                </div>
-              </div>
-
-              {/* Identity & Bio & Active Traits */}
-              <div className="px-3 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-1 mland:space-y-0.5">
-                <div className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-white truncate leading-tight">
-                  {previewName}
-                </div>
-                <div className="text-[10.5px] mland:text-[8.5px] text-emerald-100/80 truncate tabular">
-                  อายุ {cAge} ปี · {curArch.icon} {curArch.name}
-                </div>
-                <PlayerBioStrip bio={previewBio} variant="card" className="pt-0.5" />
-                <div className="flex flex-wrap items-center justify-center gap-1 pt-0.5">
+              {cTraits.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-1 px-1">
                   {cTraits.map((tid) => {
                     const tr = TRAIT_BY_ID[tid];
                     if (!tr) return null;
@@ -1177,32 +1182,14 @@ export const MainMenu: React.FC<{
                       <span
                         key={tid}
                         title={tr.desc}
-                        className="px-1.5 py-[1px] rounded bg-emerald-400/15 border border-emerald-300/30 text-[9px] mland:text-[7.5px] text-emerald-100 font-bold truncate max-w-full"
+                        className="px-1.5 py-[2px] rounded-md border border-[var(--g)]/35 bg-[var(--g-soft)] text-[var(--g)] text-[9px] mland:text-[7.5px] font-bold truncate max-w-full"
                       >
                         {tr.icon} {tr.name}
                       </span>
                     );
                   })}
                 </div>
-              </div>
-
-              {/* Bottom 5 Core Stats with Color Bars */}
-              <div className="bg-[#060c09]/92 border-t border-white/10 px-2.5 py-2 mland:px-1.5 mland:py-1 grid grid-cols-5 gap-1 text-center shrink-0">
-                {ATT.map(([k, l]) => {
-                  const val = cAttrs[k];
-                  return (
-                    <div key={k} className="rounded-lg bg-white/[0.04] py-1 mland:py-0.5 px-0.5 space-y-0.5">
-                      <div className="text-[9px] mland:text-[7.5px] text-white/65 leading-tight truncate">{l}</div>
-                      <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-none text-white">
-                        {val}
-                      </div>
-                      <div className="h-2 mland:h-1.5 rounded-full bg-white/15 overflow-hidden mx-0.5">
-                        <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 10, 100)}%`, background: statBarColor(val) }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              )}
             </div>
 
             <div className="shrink-0 space-y-1.5 mland:space-y-1">
@@ -1224,7 +1211,7 @@ export const MainMenu: React.FC<{
           </div>
 
           {/* Right Column: 4-Tab Complete Customization Workspace */}
-          <div className="flex flex-col min-h-0 gap-2 mland:gap-1.5">
+          <div className="flex flex-col min-h-0 sm:h-full mland:h-full gap-2 mland:gap-1.5">
             <div className="seg-bar grid grid-cols-4 w-full shrink-0">
               {(
                 [
@@ -1826,7 +1813,7 @@ export const MainMenu: React.FC<{
   };
 
   return (
-    <div className="relative h-full w-full flex items-center justify-center overflow-hidden bg-[#040c08] p-3 sm:p-6 md:p-8 mland:p-2.5 safe-all">
+    <div className="relative h-full w-full flex items-center justify-center overflow-hidden bg-[#040c08] stage-viewport">
       {/* Full-Bleed Stadium Artwork Canvas — Blurred & Dark Moody Night Atmosphere */}
       <div
         aria-hidden="true"
@@ -1836,18 +1823,18 @@ export const MainMenu: React.FC<{
           src={stadiumHeroBg}
           alt=""
           referrerPolicy="no-referrer"
-          className="h-full w-full object-cover object-center scale-105 blur-[4px] brightness-[0.62] saturate-90"
+          className="h-full w-full object-cover object-center brightness-[0.52] saturate-95"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-[#020805]/86 via-[#05140c]/68 to-[#020805]/88" />
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(16,68,40,0.16),rgba(2,8,5,0.62)_78%)]" />
       </div>
 
-      {/* Framed Main Hub Stage with Comfortable Breathing Room */}
-      <div className="relative z-10 w-full max-w-6xl h-full max-h-[85dvh] sm:max-h-[min(83dvh,680px)] mland:max-h-[89dvh] rounded-3xl mland:rounded-2xl border border-white/12 bg-[#06110b]/50 backdrop-blur-sm shadow-[0_24px_64px_rgba(0,0,0,0.68)] px-3.5 sm:px-5 mland:px-3.5 py-3 sm:py-4 mland:py-2.5 flex flex-col gap-3 mland:gap-2 overflow-hidden">
+      {/* Framed Main Hub Stage with Comfortable Vertical & Horizontal Breathing Room */}
+      <div className="relative z-10 w-full max-w-6xl h-full max-h-[82%] sm:max-h-[min(78%,600px)] mland:max-h-[84%] mx-auto my-auto rounded-3xl mland:rounded-2xl border border-white/14 bg-[#07130d]/82 shadow-[0_24px_64px_rgba(0,0,0,0.68)] px-3.5 sm:px-5 mland:px-3.5 py-3 sm:py-4 mland:py-2 flex flex-col gap-3 mland:gap-1.5 overflow-hidden">
         {/* Top Stadium Masthead */}
         <header className="shrink-0 flex items-center justify-between gap-3 mland:gap-2">
           <div className="flex items-center gap-3 mland:gap-2 min-w-0">
-            <div className="w-10 h-10 sm:w-11 sm:h-11 mland:w-8 mland:h-8 rounded-xl bg-white/10 border border-white/15 backdrop-blur-sm flex items-center justify-center shrink-0 shadow-lg">
+            <div className="w-10 h-10 sm:w-11 sm:h-11 mland:w-8 mland:h-8 rounded-xl bg-white/12 border border-white/15 flex items-center justify-center shrink-0 shadow-lg">
               <svg viewBox="0 0 40 40" className="w-7 h-7 sm:w-8 sm:h-8 mland:w-6 mland:h-6" aria-hidden="true">
                 <defs>
                   <linearGradient id="pitch_crest" x1="0" y1="0" x2="0" y2="1">
@@ -1869,7 +1856,7 @@ export const MainMenu: React.FC<{
               </svg>
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl sm:text-2xl mland:text-lg font-extrabold font-display tracking-wide leading-none text-white drop-shadow-xs">
+              <h1 className="text-xl sm:text-2xl mland:text-lg font-extrabold font-display tracking-wide leading-none text-white">
                 ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
               </h1>
               <p className="text-[11px] sm:text-xs mland:text-[9.5px] font-medium text-emerald-100/75 truncate mt-0.5">
@@ -1882,7 +1869,7 @@ export const MainMenu: React.FC<{
             <button
               type="button"
               onClick={() => { SFX.tap(); setShowImport(true); }}
-              className="h-8 sm:h-9 mland:h-7 px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-white/10 hover:bg-white/18 hover:border-white/38 backdrop-blur-md text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_2px_8px_rgba(0,0,0,0.28)] transition-all cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              className="h-8 sm:h-9 mland:h-7 px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
               <span>นำเข้าเซฟ</span>
@@ -1892,116 +1879,56 @@ export const MainMenu: React.FC<{
         </header>
 
         {/* Main 2 Columns: Col 1 = In-Game Collector Athlete Card | Col 2 = 2-Column Save & Mode Hub */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] mland:grid-cols-[0.74fr_1.46fr] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[0.74fr_1.46fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
           {/* Column 1: Signature In-Game Athlete Card */}
-          <aside className="relative min-h-0 rounded-2xl mland:rounded-xl border border-white/15 bg-gradient-to-b from-[#16231d] via-[#0e1713] to-[#080e0b] text-white shadow-[0_18px_42px_rgba(0,0,0,0.65)] overflow-hidden flex flex-col justify-between">
-            {/* Top Kit Accent Strip */}
-            <div
-              aria-hidden="true"
-              className="h-1 w-full shrink-0"
-              style={{ background: `linear-gradient(90deg, ${activeStar.kit1}, #fad05a 50%, ${activeStar.kit2})` }}
-            />
-
-            {/* Top Corners: OVR / POS #NO + POT / TalentBadge / Club / Switch */}
-            <div className="px-3 pt-2 mland:px-2 mland:pt-1.5 flex items-start justify-between gap-2 shrink-0">
-              <div className="leading-none">
-                <div className={`text-2xl sm:text-[28px] mland:text-lg font-extrabold font-display tabular leading-none ${statTierMeta(activeStar.ov).darkTextClass}`}>
-                  {activeStar.ov}
-                </div>
-                <div className="text-[10px] mland:text-[8px] font-bold text-white/80 tracking-wide mt-0.5 tabular">
-                  {activeStar.pos} · #{activeStar.no}
-                </div>
-              </div>
-
-              <div className="flex items-start gap-1.5 mland:gap-1 min-w-0">
-                <div className="flex flex-col items-end gap-0.5 min-w-0">
-                  <div className="flex items-center gap-1">
-                    <span className={`text-[10px] mland:text-[8px] font-bold tabular ${statTierMeta(activeStar.pot).darkTextClass}`}>
-                      POT {activeStar.pot}
-                    </span>
-                    <TalentBadge talent={activeStar.talent} variant="card" size="xs" />
+          <aside className="min-h-0 flex flex-col">
+            <AthleteCard
+              ov={activeStar.ov}
+              pot={activeStar.pot}
+              talent={activeStar.talent}
+              roleLabel={activeStar.pos}
+              shirtNo={activeStar.no}
+              kit1={activeStar.kit1}
+              kit2={activeStar.kit2}
+              faceProps={{
+                player: activeStar.player,
+                team: activeStar.team,
+                club: activeStar.club,
+                isMyClub: !!activeStar.club,
+                careerProfile: activeStar.profile
+              }}
+              name={activeStar.name}
+              subtitle={`อายุ ${activeStar.age} ปี · ${activeStar.archLabel} · ${activeStar.sourceLabel}`}
+              bio={activeStar.bio}
+              categories={activeStar.categories}
+              stretchStage
+              className="flex-1 min-h-0 shadow-[0_18px_42px_rgba(0,0,0,0.65)]"
+              renderBadges={(palette) => (
+                <div className="flex items-center gap-1 max-w-[130px] mland:max-w-[95px]">
+                  <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
+                    <ClubCrest name={activeStar.clubName} size={14} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
                   </div>
-                  <div className="flex items-center gap-1 max-w-[140px] mland:max-w-[105px]">
-                    <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
-                      <ClubCrest name={activeStar.clubName} size={14} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
-                    </div>
-                    <span className="text-[9.5px] mland:text-[7.5px] font-semibold text-white/75 truncate">
-                      {activeStar.clubName}
-                    </span>
-                  </div>
+                  <span className={`text-[9px] mland:text-[7px] font-semibold truncate ${palette.clubText}`}>
+                    {activeStar.clubName}
+                  </span>
                 </div>
-
+              )}
+              renderHeaderAction={(palette) => (
                 <button
                   type="button"
                   onClick={cycleStarPoster}
                   title="สลับนักเตะแนะนำ"
                   aria-label="สลับนักเตะแนะนำ"
-                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-white/8 hover:bg-white/15 border border-white/12 hover:border-[#f5c242]/50 text-white/80 hover:text-[#f5c242] flex items-center justify-center cursor-pointer transition-colors shrink-0"
+                  className={`w-6 h-6 mland:w-5 mland:h-5 rounded-lg flex items-center justify-center cursor-pointer transition-colors shrink-0 ${palette.iconBtn}`}
                 >
-                  <RefreshCw className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                  <RefreshCw className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
                 </button>
-              </div>
-            </div>
-
-            {/* Studio Spotlight Portrait Stage (In-Game Style) */}
-            <div className="relative flex-1 min-h-0 mx-3 my-1.5 mland:mx-2 mland:my-1 rounded-xl mland:rounded-lg border border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] pt-1.5 flex items-end justify-center overflow-hidden shadow-inner">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0"
-                style={{
-                  backgroundImage: 'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)'
-                }}
-              />
-              <div className="relative z-10 [&>svg]:w-[96px] [&>svg]:h-[102px] sm:[&>svg]:w-[112px] sm:[&>svg]:h-[119px] mland:[&>svg]:w-[66px] mland:[&>svg]:h-[70px] drop-shadow-[0_10px_16px_rgba(0,0,0,0.72)]">
-                <PlayerFace
-                  player={activeStar.player}
-                  team={activeStar.team}
-                  club={activeStar.club}
-                  isMyClub={!!activeStar.club}
-                  careerProfile={activeStar.profile}
-                  kitColor={activeStar.kit1}
-                  trimColor={activeStar.kit2}
-                  size={112}
-                  bare
-                />
-              </div>
-            </div>
-
-            {/* Athlete Identity */}
-            <div className="px-3 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-0.5 shrink-0">
-              <div className="font-display font-extrabold text-sm sm:text-[15px] mland:text-xs text-white truncate leading-tight">
-                {activeStar.name}
-              </div>
-              <div className="text-[10px] mland:text-[8px] text-emerald-100/80 truncate tabular">
-                อายุ {activeStar.age} ปี · {activeStar.archLabel} · {activeStar.sourceLabel}
-              </div>
-            </div>
-
-            {/* Bottom 5 Core Stats Strip with Color Tiers (Matches In-Game Card) */}
-            <div className="bg-[#060c09]/92 border-t border-white/10 px-2 py-1.5 mland:px-1.5 mland:py-1 grid grid-cols-5 gap-1 mland:gap-0.5 text-center shrink-0">
-              {ATT.map(([k, l]) => {
-                const val = activeStar.attrs[k];
-                const tier = statTierMeta(val);
-                return (
-                  <div key={k} className="rounded-lg bg-white/[0.04] py-1 mland:py-0.5 px-0.5 space-y-0.5">
-                    <div className="text-[9px] mland:text-[7px] text-white/60 leading-tight truncate">{l}</div>
-                    <div className={`text-xs sm:text-[13px] mland:text-[10px] font-extrabold font-display tabular leading-none ${tier.darkTextClass}`}>
-                      {val}
-                    </div>
-                    <div className="h-1.5 mland:h-1 rounded-full bg-white/15 overflow-hidden mx-0.5">
-                      <div
-                        className="h-full rounded-full transition-all"
-                        style={{ width: `${clamp(val, 8, 100)}%`, background: statBarColor(val) }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+              )}
+            />
           </aside>
 
           {/* Column 2: Save Hub Split Inside into 2 Columns ([Manager Mode + Saves] | [Player Mode + Saves]) */}
-          <div className="min-h-0 grid grid-cols-2 gap-2.5 sm:gap-3 mland:gap-2 overflow-hidden">
+          <div className="min-h-0 sm:h-full mland:h-full grid grid-cols-2 grid-rows-[minmax(0,1fr)] gap-2.5 sm:gap-3 mland:gap-2 overflow-hidden">
             {/* Sub-Column 1: Manager Mode + Manager Saves */}
             <section className="min-h-0 flex flex-col gap-2 mland:gap-1.5">
               <button
@@ -2025,7 +1952,7 @@ export const MainMenu: React.FC<{
                 </span>
               </button>
 
-              <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
                 <div className="shrink-0 px-3 mland:px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
                   <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
                     เซฟผู้จัดการทีม
@@ -2063,7 +1990,7 @@ export const MainMenu: React.FC<{
                 </span>
               </button>
 
-              <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/95 backdrop-blur-md border border-[var(--line)] shadow-2xl overflow-hidden">
+              <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
                 <div className="shrink-0 px-3 mland:px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
                   <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
                     เซฟนักเตะอาชีพ
@@ -2083,7 +2010,7 @@ export const MainMenu: React.FC<{
 
       {showImport && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
           onClick={() => setShowImport(false)}
         >
           <div

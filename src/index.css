@@ -99,17 +99,9 @@ html.is-fs-peek #root {
   background-color: var(--bg);
 }
 
-html.is-fullscreen:not(.kb-open),
-html.is-standalone:not(.kb-open),
 html.is-fs-peek:not(.kb-open),
-html.is-fullscreen:not(.kb-open) body,
-html.is-standalone:not(.kb-open) body,
 html.is-fs-peek:not(.kb-open) body,
-html.is-fullscreen:not(.kb-open) #root,
-html.is-standalone:not(.kb-open) #root,
 html.is-fs-peek:not(.kb-open) #root,
-html.is-fullscreen:not(.kb-open) .fixed.inset-0,
-html.is-standalone:not(.kb-open) .fixed.inset-0,
 html.is-fs-peek:not(.kb-open) .fixed.inset-0 {
   top: 0;
   left: 0;
@@ -117,6 +109,18 @@ html.is-fs-peek:not(.kb-open) .fixed.inset-0 {
   bottom: auto;
   width: var(--app-w, 100%);
   height: var(--app-h, 100%);
+}
+
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open),
+html.is-standalone:not(.is-fs-peek):not(.kb-open),
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open) body,
+html.is-standalone:not(.is-fs-peek):not(.kb-open) body,
+html.is-fullscreen:not(.is-fs-peek):not(.kb-open) #root,
+html.is-standalone:not(.is-fs-peek):not(.kb-open) #root {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
 }
 
 html:fullscreen::backdrop,
@@ -142,6 +146,36 @@ html:-webkit-full-screen::backdrop {
   padding-bottom: var(--sab, env(safe-area-inset-bottom, 0px));
   padding-left: var(--sal, env(safe-area-inset-left, 0px));
   padding-right: var(--sar, env(safe-area-inset-right, 0px));
+}
+
+.stage-viewport {
+  --stage-px: 0.625rem;
+  --stage-py: 0.625rem;
+  padding-top: max(var(--stage-py), var(--sat, env(safe-area-inset-top, 0px)), var(--sab, env(safe-area-inset-bottom, 0px)));
+  padding-bottom: max(var(--stage-py), var(--sat, env(safe-area-inset-top, 0px)), var(--sab, env(safe-area-inset-bottom, 0px)));
+  padding-left: max(var(--stage-px), var(--sal, env(safe-area-inset-left, 0px)), var(--sar, env(safe-area-inset-right, 0px)));
+  padding-right: max(var(--stage-px), var(--sal, env(safe-area-inset-left, 0px)), var(--sar, env(safe-area-inset-right, 0px)));
+}
+
+@media (min-width: 640px) {
+  .stage-viewport {
+    --stage-px: 1.35rem;
+    --stage-py: 1.35rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .stage-viewport {
+    --stage-px: 1.75rem;
+    --stage-py: 1.5rem;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .stage-viewport {
+    --stage-px: 0.5rem;
+    --stage-py: 0.5rem;
+  }
 }
 
 html,

@@ -91,7 +91,7 @@ export default function App() {
     isPortraitMobile && !dismissedRotatePrompt && appSettings.preferFullscreen !== false ? (
       <div
         data-no-auto-fs="1"
-        className="fixed inset-0 z-[90] bg-[#040d08]/94 backdrop-blur-md flex items-center justify-center p-5 safe-all text-white"
+        className="fixed inset-0 z-[90] bg-[#040d08]/95 flex items-center justify-center p-5 safe-all text-white"
       >
         <div className="w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#12261c] to-[#09150f] border border-emerald-400/30 shadow-2xl p-5 text-center space-y-4">
           <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--g-soft)] border border-[var(--g)]/45 flex items-center justify-center text-emerald-300 shadow-inner">
@@ -148,29 +148,22 @@ export default function App() {
     setNavIntent({ tab: resolvedTab, sub, ts: Date.now() });
     setNavResetSeq((n) => n + 1);
     if (mainRef.current) mainRef.current.scrollTop = 0;
-    updateState((d) => {
+    navigateShallow((d) => {
       if (tab === 'c') {
-        d.v = 't';
-        d.tv = 4;
-        d.sub = 0;
-        return;
+        return { v: 't', tv: 4, sub: 0 };
       }
       if (tab === 'q' && sub === 'training') {
-        d.v = 'r';
-        d.tv = 0;
-        d.sub = 0;
-        return;
+        return { v: 'r', tv: 0, sub: 0 };
       }
       if (tab === 'f' && sub === 'infra') {
-        d.v = 'u';
-        d.tv = 0;
-        d.sub = 0;
-        return;
+        return { v: 'u', tv: 0, sub: 0 };
       }
-      d.v = tab;
-      d.tv = tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 2 : 0) : 0;
-      d.sub = tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : sub === 'locker' ? 3 : 0) : 0;
-      if (tab === 't') d.lg = d.teams[d.me].tier;
+      return {
+        v: tab,
+        tv: tab === 't' ? (sub === 'cup' ? 4 : sub === 'awards' ? 2 : 0) : 0,
+        sub: tab === 'q' ? (sub === 'tactics' ? 1 : sub === 'squad' ? 2 : sub === 'locker' ? 3 : 0) : 0,
+        ...(tab === 't' ? { lg: d.teams[d.me].tier } : {})
+      };
     });
   };
 
@@ -190,6 +183,7 @@ export default function App() {
 
   const pendingSaveRef = useRef<{ state: GameState; slot: number } | null>(null);
   const saveTimerRef = useRef<number | null>(null);
+  const skipNextSaveRef = useRef(false);
 
   const flushPendingSave = () => {
     if (saveTimerRef.current !== null) {
@@ -206,10 +200,15 @@ export default function App() {
   useEffect(() => {
     if (!state) {
       pendingSaveRef.current = null;
+      skipNextSaveRef.current = false;
       if (saveTimerRef.current !== null) {
         window.clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+      return;
+    }
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
       return;
     }
     pendingSaveRef.current = { state, slot };
@@ -235,7 +234,16 @@ export default function App() {
     };
   }, []);
 
+  const navigateShallow = (patcher: (prev: GameState) => Partial<GameState>) => {
+    skipNextSaveRef.current = true;
+    setState((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...patcher(prev) };
+    });
+  };
+
   const updateState = (updater: (draft: GameState) => void) => {
+    skipNextSaveRef.current = false;
     setState((prev) => {
       if (!prev) return prev;
       const clone = cloneGameState(prev);
@@ -955,8 +963,7 @@ export default function App() {
   const curTab: MainTab = tabs.some(([k]) => k === resolvedView) ? resolvedView : tabs[0][0];
 
   return (
-    <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] text-[var(--ink)] p-2.5 sm:p-5 md:p-6 mland:p-2 safe-all">
-      <div className="w-full max-w-[1380px] h-full max-h-[90dvh] sm:max-h-[min(86dvh,790px)] mland:max-h-[91dvh] flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--bg)] shadow-2xl">
+    <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)] safe-all">
         {/* Pinned Single-Row Horizontal Top HUD Bar */}
         <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
           <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
@@ -1230,12 +1237,12 @@ export default function App() {
                     setNavIntent(null);
                     setNavResetSeq((n) => n + 1);
                     if (mainRef.current) mainRef.current.scrollTop = 0;
-                    updateState((d) => {
-                      d.v = key;
-                      d.tv = 0;
-                      d.sub = 0;
-                      d.lg = d.teams[d.me].tier;
-                    });
+                    navigateShallow((d) => ({
+                      v: key,
+                      tv: 0,
+                      sub: 0,
+                      lg: d.teams[d.me].tier
+                    }));
                   }}
                   className={`relative flex-col py-1.5 px-1 mland:py-1 mland:px-0.5 text-[9.5px] mland:text-[8.5px] flex-1 min-h-[40px] max-h-[60px] mland:min-h-[36px] mland:max-h-[48px] rounded-xl mland:rounded-lg flex items-center justify-center gap-0.5 font-bold cursor-pointer transition-all min-w-0 ${
                     active
@@ -1255,7 +1262,6 @@ export default function App() {
             })}
           </div>
         </nav>
-      </div>
       </div>
 
       {/* Modals */}

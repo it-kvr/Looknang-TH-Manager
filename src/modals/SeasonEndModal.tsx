@@ -16,6 +16,7 @@ import type { GameState, Player, TrophyRecord } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX, triggerConfetti } from '../utils/audioTheme';
 import { finishSeasonComputation, ensureTeamFans, fmtFans } from '../engine/simulation';
+import { fmtMoney } from '../utils/math';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { TrophySvg } from '../components/ClubHistoryPanel';
 
@@ -120,6 +121,9 @@ export const SeasonEndModal: React.FC<{
   }, [state.sack, majorTrophyCount, wonAsia, summary.ch, summary.mt, summary.nt, summary.pos, summary.stText, wonCup, wonLc, wonDc, wonSc, isPromoted, metBoardGoal, wonNtCallup, isSolidUpper, isRelegated]);
 
   const celebrationPlan = useMemo(() => {
+    const prizeLine = state.mode === 'm' && summary.leaguePrize > 0
+      ? `💰 เงินรางวัลบอลลีก +${fmtMoney(summary.leaguePrize)}`
+      : null;
     if (celebrationLevel === 'grand') {
       return {
         badge: 'ขบวนแห่แชมป์ & งานเลี้ยงฉลองยิ่งใหญ่',
@@ -130,7 +134,7 @@ export const SeasonEndModal: React.FC<{
             : `ค่ำคืนแห่งประวัติศาสตร์ของสโมสร จัดงานเลี้ยงฉลองถ้วยรางวัลและพลุไฟตระการตาที่สนามเหย้า ${state.club?.std || me.name}`,
         perks: [
           `🏆 คว้าเกียรติยศ ${trophiesWon.length} รายการ`,
-          `👥 แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`,
+          ...(prizeLine ? [prizeLine] : [`👥 แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`]),
           `👑 ชื่อเสียงสโมสรพุ่งทะยาน`
         ]
       };
@@ -142,7 +146,7 @@ export const SeasonEndModal: React.FC<{
         desc: `ค่ำคืนแห่งความภาคภูมิใจ หลังจบอันดับ ${summary.pos} (${me.pts} แต้ม) พาสโมสรก้าวขึ้นสู่เวทีที่สูงกว่า พร้อมงานเลี้ยงขอบคุณนักเตะและแฟนบอล`,
         perks: [
           `🚀 เลื่อนชั้น ${TN[summary.mt]} → ${TN[summary.nt]}`,
-          `👏 แฟนบอลร่วมฉลองเต็มความจุ`,
+          ...(prizeLine ? [prizeLine] : [`👏 แฟนบอลร่วมฉลองเต็มความจุ`]),
           `💼 บอร์ดพร้อมหนุนงบฤดูกาลหน้า`
         ]
       };
@@ -157,13 +161,13 @@ export const SeasonEndModal: React.FC<{
             : `จบอันดับ ${summary.pos}/${summary.totalTeams} ด้วยผลงานอันน่าประทับใจ บอร์ดบริหารและแฟนบอลจัดงานเลี้ยงปิดซีซั่นอย่างอบอุ่น`,
         perks: [
           `⭐ อันดับ ${summary.pos}/${summary.totalTeams} (${me.pts} แต้ม)`,
-          metBoardGoal ? `✅ ทำได้ตามเป้าบอร์ด (1-${state.obj})` : `📈 ผลงานเหนือความคาดหมาย`,
+          ...(prizeLine ? [prizeLine] : [metBoardGoal ? `✅ ทำได้ตามเป้าบอร์ด (1-${state.obj})` : `📈 ผลงานเหนือความคาดหมาย`]),
           `🎤 งานมอบรางวัลนักเตะยอดเยี่ยม`
         ]
       };
     }
     return null;
-  }, [celebrationLevel, me, state.club?.std, majorTrophyCount, trophiesWon.length, state.obj, summary.nt, summary.mt, summary.pos, summary.totalTeams, wonNtCallup, metBoardGoal]);
+  }, [celebrationLevel, me, state.mode, state.club?.std, majorTrophyCount, trophiesWon.length, state.obj, summary.nt, summary.mt, summary.pos, summary.totalTeams, summary.leaguePrize, wonNtCallup, metBoardGoal]);
 
   const winRate = arc && arc.played > 0 ? Math.round((arc.won / arc.played) * 100) : 0;
   const gd = arc ? arc.gf - arc.ga : me.gf - me.ga;
@@ -445,13 +449,18 @@ export const SeasonEndModal: React.FC<{
 
             {state.mode === 'm' ? (
               <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70 space-y-0.5">
-                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold">ประเมินบอร์ดบริหาร</div>
+                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold">บอร์ด &amp; เงินรางวัลบอลลีก</div>
                 <div className="font-extrabold text-sm mland:text-xs tabular flex items-center gap-1">
                   <ShieldCheck className={`w-3.5 h-3.5 shrink-0 ${state.sack === 1 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`} />
-                  <span>ความเชื่อมั่น {state.bd ?? 50}%</span>
+                  <span>บอร์ด {state.bd ?? 50}%</span>
+                  {summary.leaguePrize > 0 && (
+                    <span className="ml-auto text-[#9a6700] dark:text-[var(--lamp)] text-xs mland:text-[10px]">
+                      +{fmtMoney(summary.leaguePrize)}
+                    </span>
+                  )}
                 </div>
-                <div className={`text-[10.5px] mland:text-[9px] font-semibold ${state.sack === 1 ? 'text-[var(--red)]' : metBoardGoal ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                  {state.sack === 1 ? 'มติปลดออกจากตำแหน่ง' : `เป้า 1-${state.obj || '-'} · จบ #${summary.pos}`}
+                <div className={`text-[10.5px] mland:text-[9px] font-semibold truncate ${state.sack === 1 ? 'text-[var(--red)]' : metBoardGoal ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                  {state.sack === 1 ? 'มติปลดออกจากตำแหน่ง' : `เป้า 1-${state.obj || '-'} · จบอันดับ #${summary.pos}`}
                 </div>
               </div>
             ) : (
