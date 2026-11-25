@@ -172,6 +172,16 @@ export interface MissionAttemptLog {
   chance: number;
   rewardText?: string;
   md?: number;
+  season?: number;
+}
+
+export interface MissionSeasonRecord {
+  season: number;
+  teamName?: string;
+  metrics: Partial<Record<PersonalMissionMetric, number>>;
+  passed: Record<string, number>;
+  failed: Record<string, number>;
+  endStage: Record<string, number>;
 }
 
 export interface PlayerMissionsState {
@@ -180,6 +190,8 @@ export interface PlayerMissionsState {
   outcomes?: Record<string, MissionStageOutcome[]>;
   recentLogs?: MissionAttemptLog[];
   focusId?: string;
+  seasonLog?: Record<number, MissionSeasonRecord>;
+  seasonPlans?: Record<number, string[]>;
 }
 
 export type CustomSlot = [SubRole, number, number];

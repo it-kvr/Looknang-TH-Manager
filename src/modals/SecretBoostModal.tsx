@@ -3,6 +3,7 @@ import type { GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { ovMe } from '../engine/playerCore';
+import { TalentBadge } from '../components/TalentBadge';
 import {
   applySecretBoost,
   applySecretMoneyAdjust,
@@ -130,7 +131,9 @@ export const SecretBoostModal: React.FC<{
                 </span>
                 <div className="flex items-center gap-3">
                   <span>ชื่อเสียง: <b className="text-[#9a6700] dark:text-[var(--lamp)]">★ {state.p.rep ?? 10}</b></span>
-                  <span>พรสวรรค์: <b className="text-[var(--g)]">TL {state.p.talent ?? 78}</b></span>
+                  <span className="inline-flex items-center gap-1">
+                    พรสวรรค์: <TalentBadge talent={state.p.talent ?? 78} variant="default" size="xs" />
+                  </span>
                   <span>OVR: <b className="text-[var(--lamp)]">{ovMe(state.p)}</b></span>
                 </div>
               </div>

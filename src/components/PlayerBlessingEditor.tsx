@@ -24,6 +24,7 @@ import { ovColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/blessings';
 import { PlayerFace } from './SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
+import { TalentBadge } from './TalentBadge';
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 const GK_SIG_KEYS = ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp'];
@@ -652,8 +653,8 @@ export const PlayerBlessingEditor: React.FC<{
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1.5">
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between text-[10px]">
-              <span className="text-[var(--mut)] font-semibold">🌟 พรสวรรค์ (TL)</span>
-              <b className={`tabular text-xs ${statTierMeta(talent).textClass}`}>{talent}</b>
+              <span className="text-[var(--mut)] font-semibold">พรสวรรค์ (TL)</span>
+              <TalentBadge talent={talent} variant="inline" showLabel compactLabel size="xs" />
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setTalent((v) => clamp(v - 1, 25, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>

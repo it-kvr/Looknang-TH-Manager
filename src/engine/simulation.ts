@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
-import { applyTrainingMissionProgress, applyAiClubMatchMissions } from './missions';
+import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord } from './history';
 
 export function rate(
@@ -1666,6 +1666,9 @@ export function startSeason(s: GameState) {
     });
     t.sq.forEach((q) => {
       recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
+      if (t.id === s.me || q.me) {
+        initPlayerSeasonMissions(q, s.season ?? 1, t.name, q.me ? s.p : null, s);
+      }
     });
   });
 
@@ -2368,7 +2371,9 @@ export function runPlayerWeek(s: GameState) {
     const { notes: trainMissionNotes, summary } = applyTrainingMissionProgress(meSq, {
       careerPlan: p.plan ?? 1,
       careerP: p,
-      state: s
+      state: s,
+      teamName: s.teams[s.me]?.name,
+      isUserSide: true
     });
     if (summary.upgraded.length) {
       const up = summary.upgraded[0];
@@ -3741,7 +3746,9 @@ export function afterMatchDay(
         teamProgram: plan.program,
         isTeamFocus: s.focusPlayer === q.n,
         careerP: q.me ? s.p : null,
-        state: s
+        state: s,
+        teamName: me.name,
+        isUserSide: true
       });
       summary.upgraded.forEach((u) => upgradedEntries.push({ player: u.player, mission: u.mission, stage: u.stage, rewardText: u.rewardText }));
       summary.failed.forEach((f) => failedEntries.push({ player: f.player, mission: f.mission, stage: f.stage }));
@@ -3817,7 +3824,8 @@ export function afterMatchDay(
     const aiVirtualState = {
       tr: Math.round(aiLv),
       staff: { asst: Math.round(aiAsst), fit: 0, scout: 0, physio: 0 },
-      analyticsLv: Math.round(aiAnalytics)
+      analyticsLv: Math.round(aiAnalytics),
+      season: s.season
     };
     const aiFocusCandidate = t.sq
       .filter((q) => !q.me && q.inj === 0 && getPlayerDevProfile(q, null).phase !== 'declining')
@@ -3858,7 +3866,9 @@ export function afterMatchDay(
       applyTrainingMissionProgress(q, {
         teamProgram: aiProg,
         isTeamFocus: isAiFocus,
-        state: aiVirtualState
+        state: aiVirtualState,
+        teamName: t.name,
+        isUserSide: t.id === s.me
       });
     });
   });

@@ -4,10 +4,11 @@ import { clamp, fmtMoney } from '../utils/math';
 import { TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { xi, logFin, getPlayerDevProfile } from '../engine/playerCore';
-import { getPlayerMissionView, getPlayerTalent, talentTierMeta } from '../engine/missions';
+import { getPlayerMissionView, getPlayerTalent } from '../engine/missions';
 import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
+import { TalentBadge } from '../components/TalentBadge';
 
 export const TeamTrainingView: React.FC<{
   state: GameState;
@@ -78,7 +79,6 @@ export const TeamTrainingView: React.FC<{
               {sortedMissionSquad.map((q) => {
                 const selected = q.n === missionTargetPlayer.n;
                 const { talent, passedStages } = getPlayerMissionView(q, null, state);
-                const tlMeta = talentTierMeta(talent);
                 return (
                   <button
                     key={q.n}
@@ -97,13 +97,7 @@ export const TeamTrainingView: React.FC<{
                         </div>
                       </div>
                     </div>
-                    <span
-                      className="px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0"
-                      style={{ background: tlMeta.bg, color: tlMeta.color }}
-                      title={`พรสวรรค์ ${talent}/99 (${tlMeta.label})`}
-                    >
-                      TL {talent}
-                    </span>
+                    <TalentBadge talent={talent} variant="default" size="xs" />
                   </button>
                 );
               })}
@@ -439,8 +433,16 @@ export const TeamTrainingView: React.FC<{
                           <div className="h-full rounded-full" style={{ width: `${f}%`, background: fCol }} />
                         </div>
                         <span className={`text-[10px] mland:text-[8.5px] font-bold tabular ${fTextCls}`}>{f}%</span>
-                        <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                          {q.inj > 0 ? `🩹${q.inj}นัด` : `OVR ${q.ov}/${q.pot} · TL ${getPlayerTalent(q, null)}`}
+                        <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular inline-flex items-center gap-1 flex-wrap">
+                          {q.inj > 0 ? (
+                            `🩹${q.inj}นัด`
+                          ) : (
+                            <>
+                              <span>OVR {q.ov}/{q.pot}</span>
+                              <span aria-hidden="true">·</span>
+                              <TalentBadge talent={getPlayerTalent(q, null)} variant="inline" size="xs" />
+                            </>
+                          )}
                         </span>
                       </div>
                     </div>

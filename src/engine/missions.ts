@@ -1,9 +1,11 @@
 import type {
+  Position,
   StatKey,
   TrainingProgramId,
   Player,
   PersonalMissionMetric,
   PlayerMissionsState,
+  MissionSeasonRecord,
   MissionStageOutcome,
   MissionAttemptLog,
   Team,
@@ -129,40 +131,81 @@ export function getPlayerTalent(q: Player, careerP?: PlayerCareerProfile | null)
   return clamp(Math.round(40 + ((q.pot || q.ov || 65) - 55) * 0.5 + ((h % 25) - 10)), 30, 92);
 }
 
-export function talentTierMeta(tl: number): { label: string; emoji: string; badgeCls: string; bg: string; color: string } {
+export interface TalentTierMeta {
+  tierKey: 'legend' | 'high' | 'pro' | 'grind';
+  label: string;
+  shortLabel: string;
+  emoji: string;
+  badgeCls: string;
+  darkCardCls: string;
+  textCls: string;
+  barHex: string;
+  bg: string;
+  color: string;
+}
+
+export function talentTierMeta(tl: number): TalentTierMeta {
   if (tl >= 85) {
     return {
+      tierKey: 'legend',
       label: 'อัจฉริยะลูกหนัง',
+      shortLabel: 'อัจฉริยะ',
       emoji: '💎',
-      badgeCls: 'bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300',
+      badgeCls:
+        'bg-gradient-to-r from-amber-500/18 via-yellow-400/12 to-amber-500/18 border-amber-500/45 text-amber-900 dark:from-amber-400/20 dark:via-yellow-400/10 dark:to-amber-500/15 dark:border-amber-400/45 dark:text-amber-200',
+      darkCardCls:
+        'bg-gradient-to-r from-amber-500/28 via-yellow-400/18 to-amber-500/24 border-amber-300/60 text-amber-200 shadow-[0_0_12px_rgba(245,158,11,0.22)]',
+      textCls: 'text-amber-700 dark:text-amber-300',
+      barHex: '#f59e0b',
       bg: 'rgba(245, 158, 11, 0.22)',
-      color: '#f59e0b'
+      color: '#d97706'
     };
   }
   if (tl >= 70) {
     return {
+      tierKey: 'high',
       label: 'พรสวรรค์สูง',
+      shortLabel: 'พรสวรรค์สูง',
       emoji: '🌟',
-      badgeCls: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300',
+      badgeCls:
+        'bg-gradient-to-r from-emerald-500/16 to-teal-500/12 border-emerald-600/40 text-emerald-900 dark:from-emerald-500/20 dark:to-teal-500/12 dark:border-emerald-400/45 dark:text-emerald-200',
+      darkCardCls:
+        'bg-gradient-to-r from-emerald-500/26 to-teal-400/18 border-emerald-300/50 text-emerald-200 shadow-[0_0_10px_rgba(16,185,129,0.16)]',
+      textCls: 'text-emerald-700 dark:text-emerald-300',
+      barHex: '#10b981',
       bg: 'rgba(16, 185, 129, 0.2)',
-      color: '#10b981'
+      color: '#059669'
     };
   }
   if (tl >= 50) {
     return {
+      tierKey: 'pro',
       label: 'มาตรฐานอาชีพ',
+      shortLabel: 'มาตรฐาน',
       emoji: '⚡',
-      badgeCls: 'bg-sky-500/15 border-sky-500/40 text-sky-700 dark:text-sky-300',
+      badgeCls:
+        'bg-gradient-to-r from-sky-500/15 to-cyan-500/10 border-sky-600/40 text-sky-900 dark:from-sky-500/20 dark:to-cyan-500/12 dark:border-sky-400/45 dark:text-sky-200',
+      darkCardCls:
+        'bg-gradient-to-r from-sky-500/25 to-cyan-400/16 border-sky-300/45 text-sky-200',
+      textCls: 'text-sky-700 dark:text-sky-300',
+      barHex: '#0ea5e9',
       bg: 'rgba(14, 165, 233, 0.2)',
-      color: '#0ea5e9'
+      color: '#0284c7'
     };
   }
   return {
+    tierKey: 'grind',
     label: 'ต้องฝึกหนักเป็นพิเศษ',
+    shortLabel: 'ฝึกหนัก',
     emoji: '🧱',
-    badgeCls: 'bg-slate-500/18 border-slate-500/40 text-slate-600 dark:text-slate-300',
-    bg: tl >= 40 ? 'rgba(71, 85, 105, 0.28)' : 'rgba(148, 163, 184, 0.16)',
-    color: tl >= 40 ? '#cbd5e1' : '#94a3b8'
+    badgeCls:
+      'bg-slate-500/12 border-slate-500/35 text-slate-700 dark:bg-slate-400/14 dark:border-slate-400/35 dark:text-slate-200',
+    darkCardCls:
+      'bg-slate-400/15 border-slate-300/35 text-slate-200',
+    textCls: 'text-slate-600 dark:text-slate-300',
+    barHex: '#64748b',
+    bg: tl >= 40 ? 'rgba(71, 85, 105, 0.22)' : 'rgba(148, 163, 184, 0.16)',
+    color: '#475569'
   };
 }
 
@@ -914,12 +957,124 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
 
 export const ensurePlayerMissions = (q: Player, careerP?: PlayerCareerProfile | null): PlayerMissionsState => {
   const src = (q.me && careerP?.missions) || q.missions;
+  let seasonLog: Record<number, MissionSeasonRecord> | undefined;
+  if (src?.seasonLog) {
+    seasonLog = {};
+    Object.entries(src.seasonLog).forEach(([k, rec]) => {
+      if (!rec) return;
+      const sNum = Number(k);
+      seasonLog![sNum] = {
+        season: rec.season ?? sNum,
+        ...(rec.teamName ? { teamName: rec.teamName } : {}),
+        metrics: { ...(rec.metrics || {}) },
+        passed: { ...(rec.passed || {}) },
+        failed: { ...(rec.failed || {}) },
+        endStage: { ...(rec.endStage || {}) }
+      };
+    });
+  }
+  let seasonPlans: Record<number, string[]> | undefined;
+  if (src?.seasonPlans) {
+    seasonPlans = {};
+    Object.entries(src.seasonPlans).forEach(([k, arr]) => {
+      if (Array.isArray(arr)) seasonPlans![Number(k)] = [...arr];
+    });
+  }
   return {
     stats: { ...(src?.stats || {}) },
     claimed: { ...(src?.claimed || {}) },
     outcomes: src?.outcomes ? { ...src.outcomes } : {},
-    recentLogs: src?.recentLogs ? [...src.recentLogs] : []
+    recentLogs: src?.recentLogs ? [...src.recentLogs] : [],
+    ...(src?.focusId ? { focusId: src.focusId } : {}),
+    ...(seasonLog ? { seasonLog } : {}),
+    ...(seasonPlans ? { seasonPlans } : {})
   };
+};
+
+const ensureSeasonRec = (
+  mState: PlayerMissionsState,
+  season: number,
+  teamName?: string,
+  maxSeasonsToKeep = 25
+): MissionSeasonRecord => {
+  const sInt = Math.max(1, Math.floor(season || 1));
+  if (!mState.seasonLog) mState.seasonLog = {};
+  let rec = mState.seasonLog[sInt];
+  if (!rec) {
+    rec = {
+      season: sInt,
+      ...(teamName ? { teamName } : {}),
+      metrics: {},
+      passed: {},
+      failed: {},
+      endStage: {}
+    };
+    mState.seasonLog[sInt] = rec;
+    const keys = Object.keys(mState.seasonLog).map(Number).sort((a, b) => a - b);
+    while (keys.length > maxSeasonsToKeep) {
+      const oldest = keys.shift();
+      if (oldest != null && oldest !== sInt) delete mState.seasonLog[oldest];
+    }
+  } else if (teamName && !rec.teamName) {
+    rec.teamName = teamName;
+  }
+  return rec;
+};
+
+const recordSeasonMetric = (
+  mState: PlayerMissionsState,
+  season: number | undefined,
+  metric: PersonalMissionMetric,
+  delta: number,
+  teamName?: string,
+  maxSeasonsToKeep = 25
+) => {
+  if (!season || delta <= 0) return;
+  const rec = ensureSeasonRec(mState, season, teamName, maxSeasonsToKeep);
+  rec.metrics[metric] = (rec.metrics[metric] || 0) + delta;
+};
+
+const recordSeasonStageAttempt = (
+  mState: PlayerMissionsState,
+  season: number | undefined,
+  missionId: string,
+  passed: boolean,
+  newStage: number,
+  teamName?: string,
+  maxSeasonsToKeep = 25
+) => {
+  if (!season) return;
+  const rec = ensureSeasonRec(mState, season, teamName, maxSeasonsToKeep);
+  if (passed) {
+    rec.passed[missionId] = (rec.passed[missionId] || 0) + 1;
+  } else {
+    rec.failed[missionId] = (rec.failed[missionId] || 0) + 1;
+  }
+  rec.endStage[missionId] = Math.max(rec.endStage[missionId] || 0, newStage);
+};
+
+export const initPlayerSeasonMissions = (
+  q: Player,
+  season: number,
+  teamName?: string,
+  careerP?: PlayerCareerProfile | null,
+  state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null
+) => {
+  const sInt = Math.max(1, Math.floor(season || 1));
+  const mState = ensurePlayerMissions(q, careerP);
+  const rec = ensureSeasonRec(mState, sInt, teamName, q.me ? 30 : 10);
+  PERSONAL_MISSIONS.forEach((def) => {
+    const st = mState.claimed[def.id] || 0;
+    if (st > 0) rec.endStage[def.id] = Math.max(rec.endStage[def.id] || 0, st);
+  });
+  if (!mState.seasonPlans || !Object.prototype.hasOwnProperty.call(mState.seasonPlans, sInt)) {
+    const autoPicks = computeRecommendedMissionIds(q, careerP, state, 3);
+    if (autoPicks.length > 0) {
+      mState.seasonPlans = { ...(mState.seasonPlans || {}), [sInt]: autoPicks };
+    }
+  }
+  q.missions = mState;
+  if (careerP) careerP.missions = mState;
 };
 
 export function calcMissionSuccessChance(
@@ -1096,12 +1251,15 @@ export interface MissionResolveSummary {
 export const resolvePlayerMissions = (
   q: Player,
   careerP?: PlayerCareerProfile | null,
-  s?: GameState | null
+  s?: GameState | null,
+  teamName?: string
 ): MissionResolveSummary => {
   const summary: MissionResolveSummary = { upgraded: [], failed: [] };
   const mState = ensurePlayerMissions(q, careerP);
   const outcomes = { ...(mState.outcomes || {}) };
   const recentLogs = [...(mState.recentLogs || [])];
+  const curSeason = s?.season ?? 1;
+  const maxSeasonsKeep = q.me || teamName ? 25 : 6;
   let changed = false;
 
   PERSONAL_MISSIONS.forEach((def) => {
@@ -1119,6 +1277,7 @@ export const resolvePlayerMissions = (
 
       if (success) {
         mState.claimed[def.id] = stage + 1;
+        recordSeasonStageAttempt(mState, curSeason, def.id, true, stage + 1, teamName, maxSeasonsKeep);
         const rewardText = applyStageRewardToPlayer(q, careerP || null, def, stage, s);
         summary.upgraded.push({
           player: q.n,
@@ -1137,13 +1296,15 @@ export const resolvePlayerMissions = (
           success: true,
           chance,
           rewardText,
-          md: s ? (s.md ?? 0) + 1 : undefined
+          md: s ? (s.md ?? 0) + 1 : undefined,
+          season: curSeason
         });
         stage++;
       } else {
         // Setback on failure: keep stage retryable and step metric progress back to 70%
         mState.claimed[def.id] = stage;
         mState.stats[def.metric] = Math.floor(target * 0.70);
+        recordSeasonStageAttempt(mState, curSeason, def.id, false, stage, teamName, maxSeasonsKeep);
         summary.failed.push({
           player: q.n,
           mission: def.name,
@@ -1159,7 +1320,8 @@ export const resolvePlayerMissions = (
           stage: stage + 1,
           success: false,
           chance,
-          md: s ? (s.md ?? 0) + 1 : undefined
+          md: s ? (s.md ?? 0) + 1 : undefined,
+          season: curSeason
         });
         break;
       }
@@ -1208,6 +1370,7 @@ export const claimPlayerMission = (
   let msg: string;
   if (success) {
     mState.claimed[def.id] = stage + 1;
+    recordSeasonStageAttempt(mState, s.season ?? 1, def.id, true, stage + 1, targetTeam?.name, 25);
     const rewardStr = applyStageRewardToPlayer(q, careerP, def, stage, s);
     recentLogs.unshift({
       missionId: def.id,
@@ -1217,13 +1380,15 @@ export const claimPlayerMission = (
       success: true,
       chance,
       rewardText: rewardStr,
-      md: (s.md ?? 0) + 1
+      md: (s.md ?? 0) + 1,
+      season: s.season ?? 1
     });
     msg = `${def.icon} ${q.n} ผ่าน "${def.name} (ขั้น ${stage + 1}/${def.targets.length})"! (โอกาส ${chance}%) · ${rewardStr}`;
   } else {
     mState.claimed[def.id] = stage;
     const resetVal = Math.floor(target * 0.70);
     mState.stats[def.metric] = resetVal;
+    recordSeasonStageAttempt(mState, s.season ?? 1, def.id, false, stage, targetTeam?.name, 25);
     recentLogs.unshift({
       missionId: def.id,
       missionName: def.name,
@@ -1231,7 +1396,8 @@ export const claimPlayerMission = (
       stage: stage + 1,
       success: false,
       chance,
-      md: (s.md ?? 0) + 1
+      md: (s.md ?? 0) + 1,
+      season: s.season ?? 1
     });
     msg = `💨 ${q.n} พลาดการอัพพลัง "${def.name} (ขั้น ${stage + 1}/${def.targets.length})" (โอกาสติด ${chance}%) · ความคืบหน้าลดเหลือ ${resetVal}/${target} เพื่อลองใหม่`;
   }
@@ -1247,11 +1413,15 @@ export const addMissionStat = (
   q: Player,
   metric: PersonalMissionMetric,
   rawDelta: number,
-  careerP?: PlayerCareerProfile | null
+  careerP?: PlayerCareerProfile | null,
+  season?: number,
+  teamName?: string,
+  maxSeasonsToKeep = 25
 ) => {
   if (rawDelta <= 0) return;
   const mState = ensurePlayerMissions(q, careerP);
   mState.stats[metric] = (mState.stats[metric] || 0) + rawDelta;
+  recordSeasonMetric(mState, season, metric, rawDelta, teamName, maxSeasonsToKeep);
   q.missions = mState;
   if (careerP) careerP.missions = mState;
 };
@@ -1263,18 +1433,23 @@ export const applyTrainingMissionProgress = (
     isTeamFocus?: boolean;
     careerPlan?: number;
     careerP?: PlayerCareerProfile | null;
-    state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null;
+    state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv' | 'season'> | null;
+    teamName?: string;
+    isUserSide?: boolean;
   }
 ): { notes: string[]; summary: MissionResolveSummary } => {
   const notes: string[] = [];
   const mState = ensurePlayerMissions(q, opts.careerP);
   const mult = opts.isTeamFocus ? 1.4 : 1;
+  const season = opts.state?.season;
+  const maxSeasonsKeep = opts.isUserSide || q.me ? 25 : 6;
 
   // Measured training drill contributions so missions scale cleanly across 10 stages
   const addSimultaneous = (metric: PersonalMissionMetric, base: number, label?: string) => {
     if (base <= 0) return;
     const total = Math.max(1, Math.round(base * mult));
     mState.stats[metric] = (mState.stats[metric] || 0) + total;
+    recordSeasonMetric(mState, season, metric, total, opts.teamName, maxSeasonsKeep);
     if (label && opts.isTeamFocus) notes.push(`${label} +${total}`);
   };
 
@@ -1324,7 +1499,12 @@ export const applyTrainingMissionProgress = (
 
   q.missions = mState;
   if (opts.careerP) opts.careerP.missions = mState;
-  const summary = resolvePlayerMissions(q, opts.careerP || null, (opts.state as GameState | null) || null);
+  const summary = resolvePlayerMissions(
+    q,
+    opts.careerP || null,
+    (opts.state as GameState | null) || null,
+    opts.teamName
+  );
   return { notes, summary };
 };
 
@@ -1351,38 +1531,42 @@ const applyTeamMatchMissions = (
   const actionsMap = payload.playerActions || {};
   const cardSet = new Set((payload.cards || []).map((c) => c.who));
 
+  const curSeason = s.season ?? 1;
+  const maxSeasonsKeep = team.id === s.me ? 25 : 6;
+
   team.sq.forEach((q) => {
     const careerP = q.me && s.p ? s.p : null;
     if (q.me && payload.pf && payload.pf.played === false) return;
     if (!playedList.has(q.n) && !actionsMap[q.n]) return;
 
-    addMissionStat(q, 'matches', 1, careerP);
-    if (isWin) addMissionStat(q, 'wins', 1, careerP);
-    if (isWin && isCleanSheet) addMissionStat(q, 'cleanWins', 1, careerP);
-    if (isWin && isAwayTeam) addMissionStat(q, 'awayWins', 1, careerP);
+    const keepN = q.me ? 30 : maxSeasonsKeep;
+    addMissionStat(q, 'matches', 1, careerP, curSeason, team.name, keepN);
+    if (isWin) addMissionStat(q, 'wins', 1, careerP, curSeason, team.name, keepN);
+    if (isWin && isCleanSheet) addMissionStat(q, 'cleanWins', 1, careerP, curSeason, team.name, keepN);
+    if (isWin && isAwayTeam) addMissionStat(q, 'awayWins', 1, careerP, curSeason, team.name, keepN);
     if (isCleanSheet && (q.pos === 'GK' || q.pos === 'DF')) {
-      addMissionStat(q, 'cleanSheets', 1, careerP);
+      addMissionStat(q, 'cleanSheets', 1, careerP, curSeason, team.name, keepN);
     }
     if (!cardSet.has(q.n)) {
-      addMissionStat(q, 'cleanGames', 1, careerP);
+      addMissionStat(q, 'cleanGames', 1, careerP, curSeason, team.name, keepN);
     }
 
     const rt = q.me && payload.pf?.rt ? payload.pf.rt : payload.ratings?.[q.n] || 0;
-    if (rt >= 7.2) addMissionStat(q, 'highRatings', 1, careerP);
+    if (rt >= 7.2) addMissionStat(q, 'highRatings', 1, careerP, curSeason, team.name, keepN);
     if (payload.motm && payload.motm === q.n) {
-      addMissionStat(q, 'motm', 1, careerP);
+      addMissionStat(q, 'motm', 1, careerP, curSeason, team.name, keepN);
     }
 
     const goals = payload.evs.filter((e) => !e.og && e.t === team.id && e.who === q.n).length;
     const assists = payload.evs.filter((e) => !e.og && e.t === team.id && e.as === q.n).length;
-    if (goals > 0) addMissionStat(q, 'goals', goals, careerP);
-    if (goals >= 2) addMissionStat(q, 'braces', 1, careerP);
-    if (assists > 0) addMissionStat(q, 'assists', assists, careerP);
+    if (goals > 0) addMissionStat(q, 'goals', goals, careerP, curSeason, team.name, keepN);
+    if (goals >= 2) addMissionStat(q, 'braces', 1, careerP, curSeason, team.name, keepN);
+    if (assists > 0) addMissionStat(q, 'assists', assists, careerP, curSeason, team.name, keepN);
 
     const clutchCount = payload.evs.filter(
       (e) => !e.og && e.t === team.id && e.m >= 75 && (e.who === q.n || e.as === q.n)
     ).length;
-    if (clutchCount > 0) addMissionStat(q, 'clutchActions', clutchCount, careerP);
+    if (clutchCount > 0) addMissionStat(q, 'clutchActions', clutchCount, careerP, curSeason, team.name, keepN);
 
     const acts = actionsMap[q.n];
     if (acts) {
@@ -1402,47 +1586,47 @@ const applyTeamMatchMissions = (
           metric !== 'cleanWins' &&
           metric !== 'awayWins'
         ) {
-          addMissionStat(q, metric, val, careerP);
+          addMissionStat(q, metric, val, careerP, curSeason, team.name, keepN);
         }
       });
       if (acts.keyPasses == null && assists > 0) {
-        addMissionStat(q, 'keyPasses', assists, careerP);
+        addMissionStat(q, 'keyPasses', assists, careerP, curSeason, team.name, keepN);
       }
     } else {
       // Estimation fallback for AI & instant matches (balanced parity with user match actions)
       if (q.pos === 'GK') {
-        addMissionStat(q, 'saves', R(2, 6), careerP);
-        addMissionStat(q, 'passes', R(12, 22), careerP);
+        addMissionStat(q, 'saves', R(2, 6), careerP, curSeason, team.name, keepN);
+        addMissionStat(q, 'passes', R(12, 22), careerP, curSeason, team.name, keepN);
       } else {
-        addMissionStat(q, 'passes', q.pos === 'MF' ? R(20, 38) : q.pos === 'DF' ? R(15, 28) : R(10, 20), careerP);
-        addMissionStat(q, 'dribbles', q.pos === 'FW' || q.pos === 'MF' ? R(2, 5) : R(1, 3), careerP);
+        addMissionStat(q, 'passes', q.pos === 'MF' ? R(20, 38) : q.pos === 'DF' ? R(15, 28) : R(10, 20), careerP, curSeason, team.name, keepN);
+        addMissionStat(q, 'dribbles', q.pos === 'FW' || q.pos === 'MF' ? R(2, 5) : R(1, 3), careerP, curSeason, team.name, keepN);
         if (q.pos === 'FW' || q.pos === 'MF') {
           const sh = Math.max(goals * 2 + (q.pos === 'FW' ? R(1, 3) : R(0, 3)), 0);
           if (sh > 0) {
-            addMissionStat(q, 'shots', sh, careerP);
-            addMissionStat(q, 'onTarget', Math.max(goals, Math.round(sh * 0.5)), careerP);
+            addMissionStat(q, 'shots', sh, careerP, curSeason, team.name, keepN);
+            addMissionStat(q, 'onTarget', Math.max(goals, Math.round(sh * 0.5)), careerP, curSeason, team.name, keepN);
           }
         } else if (q.pos === 'DF') {
           const dfSh = goals > 0 ? Math.max(1, goals) : Math.random() < 0.38 ? 1 : 0;
-          if (dfSh > 0) addMissionStat(q, 'shots', dfSh, careerP);
+          if (dfSh > 0) addMissionStat(q, 'shots', dfSh, careerP, curSeason, team.name, keepN);
         }
-        if (assists > 0) addMissionStat(q, 'crossAssists', assists * 2 + 1, careerP);
-        else if (q.pos === 'MF' || q.pos === 'DF') addMissionStat(q, 'crossAssists', R(1, 3), careerP);
+        if (assists > 0) addMissionStat(q, 'crossAssists', assists * 2 + 1, careerP, curSeason, team.name, keepN);
+        else if (q.pos === 'MF' || q.pos === 'DF') addMissionStat(q, 'crossAssists', R(1, 3), careerP, curSeason, team.name, keepN);
 
         const kp =
           (q.pos === 'MF' ? R(1, 3) : q.pos === 'FW' ? R(0, 2) : R(0, 1)) + assists;
-        if (kp > 0) addMissionStat(q, 'keyPasses', kp, careerP);
+        if (kp > 0) addMissionStat(q, 'keyPasses', kp, careerP, curSeason, team.name, keepN);
 
         if (q.pos === 'DF' || q.pos === 'MF') {
-          addMissionStat(q, 'tackles', q.pos === 'DF' ? R(3, 6) : R(2, 4), careerP);
-          addMissionStat(q, 'interceptions', q.pos === 'DF' ? R(1, 4) : R(1, 3), careerP);
-          addMissionStat(q, 'blocks', q.pos === 'DF' ? R(0, 2) : R(0, 1), careerP);
+          addMissionStat(q, 'tackles', q.pos === 'DF' ? R(3, 6) : R(2, 4), careerP, curSeason, team.name, keepN);
+          addMissionStat(q, 'interceptions', q.pos === 'DF' ? R(1, 4) : R(1, 3), careerP, curSeason, team.name, keepN);
+          addMissionStat(q, 'blocks', q.pos === 'DF' ? R(0, 2) : R(0, 1), careerP, curSeason, team.name, keepN);
         } else if (q.pos === 'FW') {
-          addMissionStat(q, 'tackles', R(0, 2), careerP);
+          addMissionStat(q, 'tackles', R(0, 2), careerP, curSeason, team.name, keepN);
         }
-        addMissionStat(q, 'headers', q.pos === 'DF' || q.pos === 'FW' ? R(1, 3) : R(0, 2), careerP);
+        addMissionStat(q, 'headers', q.pos === 'DF' || q.pos === 'FW' ? R(1, 3) : R(0, 2), careerP, curSeason, team.name, keepN);
         if (q.pos === 'MF' || q.pos === 'FW' || q.pos === 'DF') {
-          addMissionStat(q, 'setpieces', q.pos === 'DF' ? R(0, 1) : R(0, 2), careerP);
+          addMissionStat(q, 'setpieces', q.pos === 'DF' ? R(0, 1) : R(0, 2), careerP, curSeason, team.name, keepN);
         }
       }
     }
@@ -1461,7 +1645,7 @@ const applyTeamMatchMissions = (
             asst: [1, 2, 3, 4][team.tier] ?? 2
           }
         } as GameState);
-    const res = resolvePlayerMissions(q, careerP, aiVirtualState);
+    const res = resolvePlayerMissions(q, careerP, aiVirtualState, team.name);
     if (trackForUser) {
       combined.upgraded.push(...res.upgraded);
       combined.failed.push(...res.failed);
@@ -1507,4 +1691,360 @@ export const applyMatchMissionProgress = (
 
   if (s.mode === 'p' && s.p) syncMe(s);
   return combined;
+};
+
+export const getMissionTrainingHint = (def: PersonalMissionDef): string => {
+  switch (def.metric) {
+    case 'setpieces':
+      return 'ซ้อมโปรแกรมลูกตั้งเตะ และตั้งให้เป็นมือสังหารฟรีคิก/เตะมุม';
+    case 'passes':
+      return 'ซ้อมโปรแกรมแท็กติก · เน้นครองบอลและส่งสั้น';
+    case 'shots':
+    case 'onTarget':
+    case 'goals':
+    case 'braces':
+      return 'ซ้อมโปรแกรมเกมรุก · ดันแผนบุก/เพรสซิ่งสูง';
+    case 'clutchActions':
+      return 'ลงเล่นครบ 90 นาทีในเกมสูสี · เก็บพลังกายให้พร้อมช่วงท้ายเกม';
+    case 'crossAssists':
+    case 'assists':
+    case 'keyPasses':
+      return 'ซ้อมแท็กติกหรือเกมรุก · เล่นเกมกว้างเปิดป้อนจากริมเส้น';
+    case 'dribbles':
+      return 'ซ้อมฟิตเนส/ลูกตั้งเตะ · เพิ่มความคล่องตัวและพื้นที่พาบอล';
+    case 'tackles':
+    case 'interceptions':
+    case 'blocks':
+    case 'cleanWins':
+      return 'ซ้อมโปรแกรมเกมรับ · ตั้งรับแน่นหรือเพรสซิ่งตัดบอล';
+    case 'headers':
+      return 'ซ้อมเกมรับ/ลูกตั้งเตะ · มีส่วนร่วมจังหวะเตะมุมทั้งรุกและรับ';
+    case 'saves':
+    case 'cleanSheets':
+      return 'ซ้อมเกมรับ (ผู้รักษาประตู) · รักษาความฟิตลงเฝ้าเสาสม่ำเสมอ';
+    case 'awayWins':
+      return 'วางแผนโรเตชั่นเก็บความฟิตให้เต็มก่อนบุกเยือน';
+    case 'highRatings':
+    case 'motm':
+      return 'รักษาความฟิต 85%+ · โหมดอาชีพแนะนำดูวิดีโอเพิ่มเรตติ้งก่อนแข่ง';
+    case 'cleanGames':
+      return 'ลดจังหวะเข้าปะทะรุนแรงเมื่อมีใบเหลืองติดตัว';
+    case 'wins':
+    case 'matches':
+    default:
+      return 'ลงสนามสม่ำเสมอทุกถ้วยทั้งลีก บอลถ้วย และถ้วยเอเชีย';
+  }
+};
+
+const ROLE_MISSION_PRIORITY: Record<Position, string[]> = {
+  FW: ['goalscorer', 'finishing', 'assist_king', 'dribbler', 'sharpshooter', 'pressing_forward', 'motm_star'],
+  MF: ['passing', 'playmaker', 'key_creator', 'dribbler', 'intercept_master', 'assist_king', 'mvp_form'],
+  DF: ['defender', 'intercept_master', 'aerial', 'clean_win_wall', 'shotblocker', 'df_goal_threat', 'gk_clean'],
+  GK: ['goalkeeper', 'gk_clean', 'gk_guardian', 'gk_sweeper', 'gk_consistency', 'ironman', 'winner']
+};
+
+export const computeRecommendedMissionIds = (
+  q: Player,
+  careerP?: PlayerCareerProfile | null,
+  state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null,
+  count = 3
+): string[] => {
+  const { items } = getPlayerMissionView(q, careerP, state);
+  const roleOrder = ROLE_MISSION_PRIORITY[q.pos] || ROLE_MISSION_PRIORITY.MF;
+  const scored = items
+    .filter((x) => !x.completedAll)
+    .map((x) => {
+      const roleIdx = roleOrder.indexOf(x.def.id);
+      const roleBonus = roleIdx >= 0 ? (roleOrder.length - roleIdx) * 4 : x.def.posFilter ? 6 : 0;
+      const score =
+        x.pct * 1.4 +
+        roleBonus +
+        (x.maxStage - x.stage) * 1.2 +
+        x.successChance * 0.2;
+      return { item: x, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const picks: string[] = [];
+  const usedCats = new Set<string>();
+  // First pass: encourage distinct categories across the 3 slots
+  for (const { item } of scored) {
+    if (picks.length >= count) break;
+    const cat = item.def.category || 'physical';
+    if (!usedCats.has(cat)) {
+      picks.push(item.def.id);
+      usedCats.add(cat);
+    }
+  }
+  // Fill any remaining slots in priority score order
+  for (const { item } of scored) {
+    if (picks.length >= count) break;
+    if (!picks.includes(item.def.id)) picks.push(item.def.id);
+  }
+  return picks;
+};
+
+export const toggleMissionSeasonPlan = (
+  q: Player,
+  season: number,
+  missionId: string,
+  careerP?: PlayerCareerProfile | null,
+  state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null
+): { pinned: boolean; count: number; maxReached?: boolean } => {
+  const sInt = Math.max(1, Math.floor(season || 1));
+  const mState = ensurePlayerMissions(q, careerP);
+  const plans = { ...(mState.seasonPlans || {}) };
+  const hasExplicit = Object.prototype.hasOwnProperty.call(plans, sInt);
+  const curList = hasExplicit
+    ? [...(plans[sInt] || [])]
+    : computeRecommendedMissionIds(q, careerP, state, 3);
+  const idx = curList.indexOf(missionId);
+  let pinned = false;
+  if (idx >= 0) {
+    curList.splice(idx, 1);
+  } else {
+    if (curList.length >= 6) {
+      return { pinned: false, count: curList.length, maxReached: true };
+    }
+    curList.push(missionId);
+    pinned = true;
+  }
+  plans[sInt] = curList;
+  mState.seasonPlans = plans;
+  q.missions = mState;
+  if (careerP) careerP.missions = mState;
+  return { pinned, count: curList.length };
+};
+
+export const autoPlanSeasonMissions = (
+  q: Player,
+  season: number,
+  careerP?: PlayerCareerProfile | null,
+  state?: Pick<GameState, 'tr' | 'staff' | 'analyticsLv'> | null
+): string[] => {
+  const sInt = Math.max(1, Math.floor(season || 1));
+  const mState = ensurePlayerMissions(q, careerP);
+  const picks = computeRecommendedMissionIds(q, careerP, state, 3);
+  mState.seasonPlans = { ...(mState.seasonPlans || {}), [sInt]: picks };
+  q.missions = mState;
+  if (careerP) careerP.missions = mState;
+  return picks;
+};
+
+export interface SeasonMissionEntry {
+  def: PersonalMissionDef;
+  isEligible: boolean;
+  stage: number;
+  maxStage: number;
+  completedAll: boolean;
+  target: number;
+  curVal: number;
+  pct: number;
+  neededForNext: number;
+  seasonEarned: number;
+  seasonPassed: number;
+  seasonFailed: number;
+  seasonEndStage: number;
+  pacePerMatch: number;
+  estMatchesLeft: number | null;
+  onTrackThisSeason: boolean;
+  isPlanned: boolean;
+  successChance: number;
+  trainingHint: string;
+}
+
+export interface SeasonOfMissionsView {
+  curSeason: number;
+  selectedSeason: number;
+  availableSeasons: number[];
+  remainingMatches: number;
+  playedInSelectedSeason: number;
+  plannedIds: string[];
+  isAutoPlanned: boolean;
+  entries: SeasonMissionEntry[];
+  seasonSummary: {
+    totalPassed: number;
+    totalFailed: number;
+    totalEarnedActions: number;
+    eligibleCount: number;
+    totalCount: number;
+    plannedCount: number;
+    plannedOnTrackCount: number;
+    teamName?: string;
+  };
+  getCellForSeason: (
+    missionId: string,
+    metric: PersonalMissionMetric,
+    seasonNum: number
+  ) => { earned: number; passed: number; failed: number; endStage: number };
+}
+
+export const getSeasonOfMissionsView = (
+  q: Player,
+  careerP?: PlayerCareerProfile | null,
+  state?: GameState | null,
+  requestedSeason?: number
+): SeasonOfMissionsView => {
+  const mState = ensurePlayerMissions(q, careerP);
+  const curSeason = state?.season ?? 1;
+  const seasonSet = new Set<number>([curSeason]);
+  for (let i = 1; i <= curSeason; i++) seasonSet.add(i);
+  if (mState.seasonLog) {
+    Object.keys(mState.seasonLog).forEach((k) => {
+      const n = Number(k);
+      if (n >= 1) seasonSet.add(n);
+    });
+  }
+  if (mState.seasonPlans) {
+    Object.keys(mState.seasonPlans).forEach((k) => {
+      const n = Number(k);
+      if (n >= 1) seasonSet.add(n);
+    });
+  }
+  const histSrc = (q.me && careerP?.history) || q.history || [];
+  histSrc.forEach((h) => {
+    if (h.season >= 1) seasonSet.add(h.season);
+  });
+
+  const availableSeasons = Array.from(seasonSet).sort((a, b) => a - b);
+  const selectedSeason =
+    requestedSeason != null && seasonSet.has(requestedSeason) ? requestedSeason : curSeason;
+
+  const hasAnySeasonLog = Boolean(mState.seasonLog && Object.keys(mState.seasonLog).length > 0);
+  const legacyFallbackSeason = !hasAnySeasonLog && selectedSeason === 1;
+  const selRec = mState.seasonLog?.[selectedSeason];
+
+  const totalLeagueMd = state?.fx?.length || 30;
+  const curMd = state?.md || 0;
+  const remainingMatches = selectedSeason === curSeason ? Math.max(0, totalLeagueMd - curMd) : 0;
+
+  const histRow = histSrc.find((h) => h.season === selectedSeason);
+  const playedInSelectedSeason =
+    selectedSeason === curSeason
+      ? Math.max(q.sp || 0, curMd > 0 ? curMd : 0)
+      : histRow?.sp ?? selRec?.metrics.matches ?? 0;
+
+  const hasExplicitPlan = Boolean(
+    mState.seasonPlans && Object.prototype.hasOwnProperty.call(mState.seasonPlans, selectedSeason)
+  );
+  const shouldAutoPick = !hasExplicitPlan && selectedSeason >= curSeason;
+  const isAutoPlanned = shouldAutoPick;
+  const plannedIds = hasExplicitPlan
+    ? mState.seasonPlans![selectedSeason] || []
+    : shouldAutoPick
+      ? computeRecommendedMissionIds(q, careerP, state, 3)
+      : [];
+
+  const entries: SeasonMissionEntry[] = PERSONAL_MISSIONS.map((def) => {
+    const isEligible = !def.posFilter || def.posFilter.includes(q.pos);
+    const stage = clamp(mState.claimed[def.id] || 0, 0, def.targets.length);
+    const maxStage = def.targets.length;
+    const completedAll = stage >= maxStage;
+    const target = def.targets[Math.min(stage, maxStage - 1)];
+    const curVal = mState.stats[def.metric] || 0;
+    const pct = completedAll ? 100 : clamp(Math.round((curVal / Math.max(1, target)) * 100), 0, 100);
+    const neededForNext = completedAll ? 0 : Math.max(0, target - curVal);
+
+    const seasonEarned = selRec
+      ? selRec.metrics[def.metric] || 0
+      : legacyFallbackSeason
+        ? curVal
+        : 0;
+    const seasonPassed = selRec
+      ? selRec.passed[def.id] || 0
+      : legacyFallbackSeason
+        ? stage
+        : 0;
+    const seasonFailed = selRec
+      ? selRec.failed[def.id] || 0
+      : legacyFallbackSeason
+        ? (mState.outcomes?.[def.id] || []).filter((o) => o === 'fail').length
+        : 0;
+    const seasonEndStage = selRec?.endStage[def.id] ?? (legacyFallbackSeason ? stage : 0);
+
+    const pacePerMatch =
+      playedInSelectedSeason > 0 ? Math.round((seasonEarned / playedInSelectedSeason) * 100) / 100 : 0;
+    const estMatchesLeft =
+      !completedAll && neededForNext > 0 && pacePerMatch > 0
+        ? Math.ceil(neededForNext / pacePerMatch)
+        : null;
+    const onTrackThisSeason =
+      selectedSeason === curSeason &&
+      !completedAll &&
+      (neededForNext === 0 || (estMatchesLeft != null && estMatchesLeft <= remainingMatches));
+
+    const isPlanned = plannedIds.includes(def.id);
+    const successChance = completedAll ? 0 : calcMissionSuccessChance(q, careerP, def, stage, state);
+
+    return {
+      def,
+      isEligible,
+      stage,
+      maxStage,
+      completedAll,
+      target,
+      curVal,
+      pct,
+      neededForNext,
+      seasonEarned,
+      seasonPassed,
+      seasonFailed,
+      seasonEndStage,
+      pacePerMatch,
+      estMatchesLeft,
+      onTrackThisSeason,
+      isPlanned,
+      successChance,
+      trainingHint: getMissionTrainingHint(def)
+    };
+  });
+
+  const totalPassed = entries.reduce((sum, e) => sum + e.seasonPassed, 0);
+  const totalFailed = entries.reduce((sum, e) => sum + e.seasonFailed, 0);
+  const totalEarnedActions = entries.reduce((sum, e) => sum + (e.isEligible ? e.seasonEarned : 0), 0);
+  const eligibleCount = entries.filter((e) => e.isEligible).length;
+  const plannedEntries = entries.filter((e) => e.isPlanned);
+
+  const getCellForSeason = (missionId: string, metric: PersonalMissionMetric, seasonNum: number) => {
+    const rec = mState.seasonLog?.[seasonNum];
+    if (rec) {
+      return {
+        earned: rec.metrics[metric] || 0,
+        passed: rec.passed[missionId] || 0,
+        failed: rec.failed[missionId] || 0,
+        endStage: rec.endStage[missionId] || 0
+      };
+    }
+    if (!hasAnySeasonLog && seasonNum === 1) {
+      return {
+        earned: mState.stats[metric] || 0,
+        passed: mState.claimed[missionId] || 0,
+        failed: (mState.outcomes?.[missionId] || []).filter((o) => o === 'fail').length,
+        endStage: mState.claimed[missionId] || 0
+      };
+    }
+    return { earned: 0, passed: 0, failed: 0, endStage: 0 };
+  };
+
+  return {
+    curSeason,
+    selectedSeason,
+    availableSeasons,
+    remainingMatches,
+    playedInSelectedSeason,
+    plannedIds,
+    isAutoPlanned,
+    entries,
+    seasonSummary: {
+      totalPassed,
+      totalFailed,
+      totalEarnedActions,
+      eligibleCount,
+      totalCount: PERSONAL_MISSIONS.length,
+      plannedCount: plannedEntries.length,
+      plannedOnTrackCount: plannedEntries.filter((e) => e.onTrackThisSeason || e.completedAll).length,
+      teamName: selRec?.teamName || histRow?.teamName
+    },
+    getCellForSeason
+  };
 };

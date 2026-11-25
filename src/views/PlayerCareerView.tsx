@@ -19,8 +19,9 @@ import {
   ROLE_ADAPT_THRESHOLD_ADJ,
   ROLE_ADAPT_THRESHOLD_CROSS
 } from '../engine/playerCore';
-import { statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
+import { statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { TalentBadge } from '../components/TalentBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
@@ -52,7 +53,6 @@ export const PlayerCareerView: React.FC<{
   const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, ht: p.ht, wt: p.wt, foot: p.foot, pot: 95, talent: p.talent, traits: p.traits, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
   const details = dtInfo(fakePlayer, p);
   const myTalent = getPlayerTalent(fakePlayer, p);
-  const tlMeta = talentTierMeta(myTalent);
   const starters = xi(meTeam);
   const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
   const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
@@ -92,13 +92,7 @@ export const PlayerCareerView: React.FC<{
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <span
-                className="px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular border border-white/15"
-                style={{ background: tlMeta.bg, color: tlMeta.color }}
-                title={`พรสวรรค์ ${myTalent}/99 (${tlMeta.label})`}
-              >
-                TL {myTalent}
-              </span>
+              <TalentBadge talent={myTalent} variant="card" size="xs" />
               <span className="text-[9.5px] mland:text-[7.5px] font-bold text-amber-200/90 tabular">
                 ★ {p.rep ?? 10}
               </span>

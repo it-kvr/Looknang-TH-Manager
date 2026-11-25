@@ -4,10 +4,11 @@ import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, dtInfo, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
-import { ovColor, statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
+import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { TalentBadge } from '../components/TalentBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
@@ -39,7 +40,6 @@ export const PlayerInspectorModal: React.FC<{
   const canDoMissions = !isRetired && (isMyTeam || isMePlayer);
   const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
-  const tlMeta = talentTierMeta(playerTalent);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
   const con = !isRetired && liveTeam ? ensureCon(livePlayer) : null;
   const fitVal = Math.round(livePlayer.fit ?? 100);
@@ -203,13 +203,7 @@ export const PlayerInspectorModal: React.FC<{
                       <span className={`text-[9.5px] mland:text-[7.5px] font-bold tabular ${statTierMeta(livePlayer.pot).darkTextClass}`}>
                         POT {livePlayer.pot}
                       </span>
-                      <span
-                        className="px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular leading-tight border border-white/15"
-                        style={{ background: tlMeta.bg, color: tlMeta.color }}
-                        title={`พรสวรรค์ ${playerTalent}/99 (${tlMeta.label})`}
-                      >
-                        TL {playerTalent}
-                      </span>
+                      <TalentBadge talent={playerTalent} variant="card" size="xs" />
                     </div>
                     <div className="flex items-center gap-1">
                       {isMePlayer && (

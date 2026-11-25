@@ -2,10 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { FootballTraitDef, Player, PlayerCareerProfile, Position } from '../types/game';
 import { FOOTBALL_TRAITS, PLAYER_ARCHETYPES, PLAYER_PERSONALITIES, SIGL } from '../data/thaiFootballData';
-import { talentTierMeta } from '../engine/missions';
 import { ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS } from '../engine/simulation';
 import { playerPen } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
+import { TalentBadge } from './TalentBadge';
 
 interface GuideEntry {
   id: string;
@@ -21,11 +21,19 @@ interface GuideEntry {
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 
-const TALENT_TIERS: Array<{ id: string; range: string; label: string; emoji: string; desc: string; check: (tl: number) => boolean }> = [
-  { id: 'tl_legend', range: '85–99', label: 'อัจฉริยะลูกหนัง', emoji: '💎', desc: 'พรสวรรค์ระดับสูงสุด พัฒนาค่าพลังไวมากและทำภารกิจอัปพลังติดง่ายที่สุด', check: (tl) => tl >= 85 },
-  { id: 'tl_high', range: '70–84', label: 'พรสวรรค์สูง', emoji: '🌟', desc: 'มีแววระดับตัวท็อป เติบโตไวและมีโอกาสอัปพลังจากภารกิจสูง', check: (tl) => tl >= 70 && tl < 85 },
-  { id: 'tl_pro', range: '50–69', label: 'มาตรฐานอาชีพ', emoji: '⚡', desc: 'พัฒนาตามมาตรฐานนักเตะอาชีพ เติบโตต่อเนื่องเมื่อซ้อมและลงเล่นสม่ำเสมอ', check: (tl) => tl >= 50 && tl < 70 },
-  { id: 'tl_hard', range: 'ต่ำกว่า 50', label: 'ต้องฝึกหนักเป็นพิเศษ', emoji: '🧱', desc: 'เติบโตช้ากว่าสายพรสวรรค์ ต้องอาศัยความขยัน ภารกิจ และสนามซ้อมระดับสูงช่วยหนุน', check: (tl) => tl < 50 }
+const TALENT_TIERS: Array<{
+  id: string;
+  range: string;
+  label: string;
+  emoji: string;
+  tone: 'gold' | 'pos' | 'sig' | 'neutral';
+  desc: string;
+  check: (tl: number) => boolean;
+}> = [
+  { id: 'tl_legend', range: '85–99', label: 'อัจฉริยะลูกหนัง', emoji: '💎', tone: 'gold', desc: 'พรสวรรค์ระดับสูงสุด พัฒนาค่าพลังไวมากและทำภารกิจอัปพลังติดง่ายที่สุด', check: (tl) => tl >= 85 },
+  { id: 'tl_high', range: '70–84', label: 'พรสวรรค์สูง', emoji: '🌟', tone: 'pos', desc: 'มีแววระดับตัวท็อป เติบโตไวและมีโอกาสอัปพลังจากภารกิจสูง', check: (tl) => tl >= 70 && tl < 85 },
+  { id: 'tl_pro', range: '50–69', label: 'มาตรฐานอาชีพ', emoji: '⚡', tone: 'sig', desc: 'พัฒนาตามมาตรฐานนักเตะอาชีพ เติบโตต่อเนื่องเมื่อซ้อมและลงเล่นสม่ำเสมอ', check: (tl) => tl >= 50 && tl < 70 },
+  { id: 'tl_hard', range: 'ต่ำกว่า 50', label: 'ต้องฝึกหนักเป็นพิเศษ', emoji: '🧱', tone: 'neutral', desc: 'เติบโตช้ากว่าสายพรสวรรค์ ต้องอาศัยความขยัน ภารกิจ และสนามซ้อมระดับสูงช่วยหนุน', check: (tl) => tl < 50 }
 ];
 
 const POS_LABEL: Record<Position, string> = {
@@ -70,7 +78,6 @@ export const PlayerTraitsStrip: React.FC<{
   const [ownFilter, setOwnFilter] = useState<'all' | 'owned' | 'unowned'>('all');
   const [query, setQuery] = useState('');
 
-  const tlMeta = talentTierMeta(talent);
   const sigLabel = SIGL[sigKey] || sigKey;
   const age = player.age || careerProfile?.age || 24;
   const rawTrTitle = trPair[0] || '😐 ปกติ';
@@ -140,7 +147,7 @@ export const PlayerTraitsStrip: React.FC<{
         desc: tier.desc,
         owned,
         badgeText: owned ? `มี (TL ${talent})` : undefined,
-        tone: 'gold'
+        tone: tier.tone
       });
     });
 
@@ -327,9 +334,7 @@ export const PlayerTraitsStrip: React.FC<{
         <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/45">
           <div className="text-[9px] mland:text-[7.5px] font-bold text-[var(--mut)]">ข้อมูลเชิงลึก</div>
           <div className="flex flex-wrap gap-1">
-            <span className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#7a4f00] dark:text-[#fde047] text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight tabular">
-              {tlMeta.emoji} TL {talent} ({tlMeta.label})
-            </span>
+            <TalentBadge talent={talent} variant="default" showLabel size="sm" />
             <span className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight ${growthBadgeCls}`}>
               📈 {growthStage} ({age} ปี)
             </span>

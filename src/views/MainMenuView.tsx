@@ -8,9 +8,10 @@ import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { cleanImportJson } from '../engine/saveCodec';
-import { ovColor, statBarColor, statTierMeta, talentTierMeta } from '../engine/missions';
+import { ovColor, statBarColor, statTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip, FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
+import { TalentBadge } from '../components/TalentBadge';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
@@ -845,7 +846,6 @@ export const MainMenu: React.FC<{
 
     const ov = OVF(cPos, cAttrs);
     const estPot = clamp(Math.max(88, cTalent + 6), ov + 18, 96);
-    const tlMeta = talentTierMeta(cTalent);
     const previewName = cName.trim() || 'นักเตะใหม่';
     const previewPlayer: Player = {
       n: previewName, pos: cPos, ro: cSp, ov, age: cAge, ht: cHt, wt: cWt, foot: cFoot, pot: estPot, talent: cTalent, traits: cTraits, fit: 100, inj: 0, no: cNo, me: 1, hg: 1, customCreated: 1
@@ -1105,12 +1105,7 @@ export const MainMenu: React.FC<{
                   <span className={`text-[10.5px] mland:text-[8.5px] font-bold tabular ${statTierMeta(estPot).darkTextClass}`}>
                     POT {estPot}
                   </span>
-                  <span
-                    className="px-1.5 py-[1px] rounded text-[9px] mland:text-[7.5px] font-extrabold tabular leading-tight border border-white/15"
-                    style={{ background: tlMeta.bg, color: tlMeta.color }}
-                  >
-                    TL {cTalent} · {tlMeta.label}
-                  </span>
+                  <TalentBadge talent={cTalent} variant="card" showLabel compactLabel size="xs" />
                 </div>
               </div>
 
@@ -1664,11 +1659,9 @@ export const MainMenu: React.FC<{
                         </div>
                       );
                     })}
-                    <div className="pt-1.5 border-t border-[var(--line)] flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                      <span className="text-[var(--mut)]">เพดานพรสวรรค์ (Talent)</span>
-                      <span className="px-1.5 py-0.5 rounded font-bold tabular" style={{ background: tlMeta.bg, color: tlMeta.color }}>
-                        TL {cTalent} · {tlMeta.label}
-                      </span>
+                    <div className="pt-1.5 border-t border-[var(--line)] flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
+                      <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์ (Talent)</span>
+                      <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
                     </div>
                   </div>
                 </div>
