@@ -11,6 +11,7 @@ import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
+import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -19,6 +20,7 @@ export const PlayerCareerView: React.FC<{
   onOpenSeasonStats?: (season?: number) => void;
 }> = ({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
   const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
+  const [showLockerPicker, setShowLockerPicker] = useState(false);
   const p = state.p;
   if (!p) return null;
   const meTeam = state.teams[state.me];
@@ -56,8 +58,21 @@ export const PlayerCareerView: React.FC<{
               <div className={`text-xl sm:text-[22px] mland:text-sm font-extrabold font-display tabular leading-none ${statTierMeta(ov).darkTextClass}`}>
                 {ov}
               </div>
-              <div className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide mt-0.5 truncate max-w-[115px]">
-                {p.sp}{p.altRoles?.length ? `/${p.altRoles.slice(0, 2).join('/')}` : ''} · #{myShirtNo}
+              <div className="flex items-center gap-1 mt-0.5">
+                <span className="text-[9.5px] mland:text-[7.5px] font-bold text-white/80 tracking-wide truncate max-w-[95px]">
+                  {p.sp}{p.altRoles?.length ? `/${p.altRoles.slice(0, 2).join('/')}` : ''}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setShowLockerPicker(true);
+                  }}
+                  title="เปิดล็อกเกอร์เปลี่ยน/สลับเบอร์เสื้อ"
+                  className="px-1.5 py-[1px] rounded bg-white/12 hover:bg-white/25 border border-white/20 text-[9px] mland:text-[7.5px] font-extrabold text-amber-200 tabular cursor-pointer transition-colors shrink-0"
+                >
+                  #{myShirtNo} ▾
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -501,7 +516,6 @@ export const PlayerCareerView: React.FC<{
                 state={state}
                 careerProfile={p}
                 variant="inline"
-                defaultOpen
               />
               <div
                 className={`grid grid-cols-1 gap-1.5 mland:gap-1 ${
@@ -542,6 +556,17 @@ export const PlayerCareerView: React.FC<{
           )}
         </div>
       </div>
+
+      {showLockerPicker && (
+        <ShirtNumberLockerModal
+          player={fakePlayer}
+          team={meTeam}
+          state={state}
+          onClose={() => setShowLockerPicker(false)}
+          onUpdateState={onUpdateState}
+          onToast={onToast}
+        />
+      )}
     </div>
   );
 };

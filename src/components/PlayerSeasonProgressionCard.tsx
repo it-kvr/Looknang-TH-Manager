@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import type { Position, Player, GameState, StatKey, PlayerCareerProfile } from '../types/game';
 import { SFX } from '../utils/audioTheme';
@@ -7,7 +7,7 @@ import { getPlayerSeasonProgression } from '../engine/playerCore';
 type ChartMetricKey = 'ov' | StatKey;
 
 const CHART_SERIES_META: Record<ChartMetricKey, { label: string; color: string; width: number }> = {
-  ov: { label: 'OVR', color: '#10b981', width: 2.4 },
+  ov: { label: 'พลังรวม', color: '#10b981', width: 2.4 },
   sh: { label: 'ยิง', color: '#ef4444', width: 1.65 },
   ps: { label: 'ส่ง', color: '#3b82f6', width: 1.65 },
   dr: { label: 'เลี้ยง', color: '#f59e0b', width: 1.65 },
@@ -72,6 +72,44 @@ export const PlayerSeasonProgressionCard: React.FC<{
   const [showProgChart, setShowProgChart] = useState(defaultOpen);
   const [chartScope, setChartScope] = useState<'key' | 'all'>('all');
   const [hiddenMetrics, setHiddenMetrics] = useState<Partial<Record<ChartMetricKey, boolean>>>({});
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setShowProgChart(defaultOpen);
+  }, [defaultOpen, player.id, player.n, state.season]);
+
+  useEffect(() => {
+    if (!showProgChart) return;
+    let startX = 0;
+    let startY = 0;
+    let trackingOutside = false;
+
+    const onPointerDown = (e: PointerEvent) => {
+      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        trackingOutside = true;
+        startX = e.clientX;
+        startY = e.clientY;
+      } else {
+        trackingOutside = false;
+      }
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!trackingOutside) return;
+      trackingOutside = false;
+      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
+      if (dist < 10 && cardRef.current && !cardRef.current.contains(e.target as Node)) {
+        setShowProgChart(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('pointerup', onPointerUp, true);
+    };
+  }, [showProgChart]);
 
   const seasonSeries = useMemo(
     () => getPlayerSeasonProgression(player, state, careerProfile),
@@ -187,6 +225,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
 
   return (
     <div
+      ref={cardRef}
       className={`shrink-0 bg-[var(--surface)] border border-[var(--line)] shadow-xs ${
         isOverlay ? 'relative' : ''
       } ${
@@ -196,43 +235,78 @@ export const PlayerSeasonProgressionCard: React.FC<{
       }`}
     >
       {/* Unified Compact Header Row */}
-      <div className="px-3 py-1.5 mland:px-2 mland:py-1 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 flex-1 text-[10.5px] mland:text-[8.5px] tabular">
-          <span className="font-bold text-[var(--ink)] shrink-0">
-            📈 พัฒนาการซ.{state.season}
+      <div
+        role="button"
+        tabIndex={0}
+        aria-expanded={showProgChart}
+        onClick={() => {
+          SFX.tap();
+          setShowProgChart((v) => !v);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            SFX.tap();
+            setShowProgChart((v) => !v);
+          }
+        }}
+        className="px-3 py-2 mland:px-2.5 mland:py-1 flex items-center justify-between gap-2 cursor-pointer select-none hover:bg-[var(--surface-2)]/40 transition-colors"
+      >
+        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 flex-1 text-[11px] mland:text-[8.5px] tabular">
+          <span className="font-bold text-[var(--ink)] shrink-0 flex items-center gap-1">
+            <span>📈</span>
+            <span>พัฒนาการ · ซีซั่น {state.season}</span>
           </span>
-          <span className="font-bold text-[var(--mut)] shrink-0">
-            OVR <b className="text-[var(--ink)]">{startOv}→{endOv}</b>
+
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 mland:px-1 mland:py-0 rounded-md bg-[var(--surface-2)] border border-[var(--line)]/80 font-bold shrink-0">
+            <span className="text-[var(--mut)] font-semibold">พลังรวม</span>
+            <span className="text-[var(--ink)] font-extrabold">
+              {ovDiff !== 0 ? `${startOv}→${endOv}` : endOv}
+            </span>
             {ovDiff !== 0 && (
-              <span className={`ml-0.5 font-extrabold ${ovDiff > 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                ({ovDiff > 0 ? `+${ovDiff}` : ovDiff})
+              <span
+                className={`px-1 rounded text-[9.5px] mland:text-[7.5px] font-extrabold leading-tight ${
+                  ovDiff > 0
+                    ? 'bg-[var(--g-soft)] text-[var(--g)]'
+                    : 'bg-[var(--red-soft)] text-[var(--red)]'
+                }`}
+              >
+                {ovDiff > 0 ? `+${ovDiff}` : ovDiff}
               </span>
             )}
           </span>
+
           {!showProgChart && (
-            <span className="hidden sm:inline text-[var(--mut)] truncate">
-              {(KEY_STATS_BY_POS[player.pos] || ['sh', 'ps', 'dr']).map((k, idx) => {
+            <div className="hidden sm:flex items-center gap-1.5 mland:gap-1 min-w-0 overflow-hidden">
+              {(KEY_STATS_BY_POS[player.pos] || ['sh', 'ps', 'dr']).map((k) => {
                 const meta = CHART_SERIES_META[k];
                 const curV = seasonSeries[seasonSeries.length - 1]?.[k] ?? 0;
                 const initV = seasonSeries[0]?.[k] ?? curV;
                 const d = curV - initV;
                 return (
-                  <span key={k}>
-                    {idx > 0 ? ' · ' : ''}
-                    {meta.label} {curV}
+                  <span
+                    key={k}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 mland:px-1 mland:py-0 rounded-md bg-[var(--surface-2)]/65 border border-[var(--line)]/60 text-[10px] mland:text-[8px] font-semibold shrink-0"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: meta.color }} />
+                    <span className="text-[var(--mut)]">{meta.label}</span>
+                    <b className="text-[var(--ink)] font-extrabold">{curV}</b>
                     {d !== 0 && (
-                      <span className={d > 0 ? 'text-[var(--g)] font-bold' : 'text-[var(--red)] font-bold'}>
+                      <span className={d > 0 ? 'text-[var(--g)] font-extrabold' : 'text-[var(--red)] font-extrabold'}>
                         {d > 0 ? `+${d}` : d}
                       </span>
                     )}
                   </span>
                 );
               })}
-            </span>
+            </div>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
+        <div
+          className="flex items-center gap-1.5 mland:gap-1 shrink-0"
+          onClick={(e) => e.stopPropagation()}
+        >
           {showProgChart && (
             <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
               <button
@@ -266,10 +340,10 @@ export const PlayerSeasonProgressionCard: React.FC<{
               SFX.tap();
               setShowProgChart((v) => !v);
             }}
-            className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold cursor-pointer transition-colors shrink-0 ${
+            className={`px-2.5 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold cursor-pointer transition-colors shrink-0 ${
               showProgChart
                 ? 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                : 'bg-[var(--g-soft)]/70 border-[var(--g)]/35 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
             }`}
           >
             {showProgChart ? 'ย่อกราฟ ▴' : 'ดูกราฟ ▾'}

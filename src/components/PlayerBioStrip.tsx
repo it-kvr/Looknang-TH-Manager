@@ -27,26 +27,26 @@ export function getFootColorMeta(foot: PreferredFoot): FootColorMeta {
     return {
       foot: 'L',
       label: 'เท้าซ้าย',
-      shortLabel: 'ซ้าย',
+      shortLabel: 'เท้าซ้าย',
       ...sharedMeta,
-      titleText: 'ถนัดเท้าซ้าย'
+      titleText: 'เท้าซ้าย'
     };
   }
   if (foot === 'B') {
     return {
       foot: 'B',
-      label: 'สองข้าง',
-      shortLabel: '2 ข้าง',
+      label: 'สองเท้า',
+      shortLabel: 'สองเท้า',
       ...sharedMeta,
-      titleText: 'ถนัดทั้งสองเท้า'
+      titleText: 'สองเท้า'
     };
   }
   return {
     foot: 'R',
     label: 'เท้าขวา',
-    shortLabel: 'ขวา',
+    shortLabel: 'เท้าขวา',
     ...sharedMeta,
-    titleText: 'ถนัดเท้าขวา'
+    titleText: 'เท้าขวา'
   };
 }
 
@@ -182,9 +182,9 @@ export const PlayerBioStrip: React.FC<{
       </div>
       <div className="px-1 flex flex-col items-center justify-center" title={fm.titleText}>
         <div className="text-[8.5px] mland:text-[7px] text-[var(--mut)] font-bold leading-none">เท้าถนัด</div>
-        <div className="mt-0.5 inline-flex items-center justify-center gap-1 leading-none">
-          <FootPairIcon foot={bio.foot} size="sm" />
-          <span className={`text-[10.5px] mland:text-[8.5px] font-extrabold ${fm.textCls}`}>{fm.shortLabel}</span>
+        <div className="mt-0.5 inline-flex items-center justify-center gap-0.5 leading-none whitespace-nowrap">
+          <FootPairIcon foot={bio.foot} size="xs" />
+          <span className={`text-[9.5px] mland:text-[7.5px] font-extrabold ${fm.textCls}`}>{fm.shortLabel}</span>
         </div>
       </div>
     </div>

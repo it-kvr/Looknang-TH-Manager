@@ -1996,8 +1996,11 @@ export const MatchModal: React.FC<{
     const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
     const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
     const gkSaveScore = gk
-      ? (gk.d.sv + (gk.sig === 'sv' ? 7 : 0) + (agentHasTrait(gk, 'reflex_cat') ? 8 : 0) + (flightType === 'penalty' && agentHasTrait(gk, 'penalty_saver') ? 12 : 0)) * 0.56 +
-        (gk.d.cl + (gk.sig === 'cl' ? 6 : 0) + (agentHasTrait(gk, 'sweeper_keeper') ? 5 : 0)) * 0.44 +
+      ? (gk.d.sv + (gk.sig === 'sv' ? 7 : 0) + (agentHasTrait(gk, 'reflex_cat') ? 8 : 0) + (flightType === 'penalty' && agentHasTrait(gk, 'penalty_saver') ? 12 : 0)) * 0.34 +
+        ((gk.d.rfx ?? gk.d.sv) + (gk.sig === 'rfx' ? 7 : 0)) * 0.22 +
+        ((gk.d.hnd ?? gk.d.sv) + (gk.sig === 'hnd' ? 7 : 0)) * 0.16 +
+        (gk.d.cl + (gk.sig === 'cl' ? 6 : 0) + (agentHasTrait(gk, 'sweeper_keeper') ? 5 : 0)) * 0.16 +
+        (gk.d.pos + (gk.sig === 'pos' ? 6 : 0)) * 0.12 +
         (gkBlessed ? 18 : 0)
       : 58;
     const shooterScore = shooter
@@ -4802,7 +4805,13 @@ export const MatchModal: React.FC<{
         const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
         const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff);
         const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
-        const gkSaveScore = gk ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.56 + (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.44 : 58;
+        const gkSaveScore = gk
+          ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.36 +
+            ((gk.d.rfx ?? gk.d.sv) + (gk.sig === 'rfx' ? 8 : 0)) * 0.24 +
+            ((gk.d.hnd ?? gk.d.sv) + (gk.sig === 'hnd' ? 8 : 0)) * 0.16 +
+            (gk.d.cl + (gk.sig === 'cl' ? 8 : 0)) * 0.14 +
+            (gk.d.pos + (gk.sig === 'pos' ? 6 : 0)) * 0.10
+          : 58;
         const shooterScore = shooter
           ? (shooter.d.fin + (shooter.sig === 'fin' ? 8 : 0)) * 0.5 +
             (shooter.d.cur + (shooter.sig === 'cur' ? 8 : 0)) * 0.25 +
@@ -6811,8 +6820,10 @@ export const MatchModal: React.FC<{
                   (agentHasTrait(kicker, 'setpiece_specialist') ? 6 : 0)
                 : 64;
               const gkScore = gk
-                ? gk.d.sv * 0.58 +
-                  gk.d.cl * 0.42 +
+                ? gk.d.sv * 0.38 +
+                  (gk.d.rfx ?? gk.d.sv) * 0.24 +
+                  gk.d.cl * 0.22 +
+                  gk.d.pos * 0.16 +
                   (agentHasTrait(gk, 'penalty_saver') ? 11 : 0) +
                   (agentHasTrait(gk, 'reflex_cat') ? 5 : 0)
                 : 60;

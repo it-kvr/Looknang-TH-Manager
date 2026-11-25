@@ -27,8 +27,6 @@ export const LeagueView: React.FC<{
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
 
   const tb = sortTable(state.teams.filter((t) => t.tier === vt));
-  const myTierTable = vt === me.tier ? tb : sortTable(state.teams.filter((t) => t.tier === me.tier));
-  const myRank = myTierTable.findIndex((t) => t.id === state.me) + 1;
   const ms = teamStats(me, state);
 
   const leagueRows = state.teams
@@ -621,36 +619,21 @@ export const LeagueView: React.FC<{
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] px-1 shrink-0">
-          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-            {vt < 2 && (
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
-                <span>1-3 เลื่อนชั้น</span>
-              </span>
-            )}
-            {vt > 0 ? (
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
-                <span>3 ท้ายตกชั้น</span>
-              </span>
-            ) : (
-              <span>ลีกจังหวัดไม่ตกชั้น</span>
-            )}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] px-1 shrink-0">
+          {vt < 2 && (
             <span className="inline-flex items-center gap-1">
-              <span className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--lamp)] text-[#261900] text-[7.5px] font-black">★</span>
-              <span>ทีมคุณ (อันดับ {myRank} · {me.pts} แต้ม)</span>
+              <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
+              <span>1-3 เลื่อนชั้น</span>
             </span>
+          )}
+          {vt > 0 ? (
             <span className="inline-flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-              <span>ชนะ</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block ml-0.5" />
-              <span>เสมอ</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 inline-block ml-0.5" />
-              <span>แพ้ (5 นัด)</span>
+              <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
+              <span>3 ท้ายตกชั้น</span>
             </span>
-          </div>
-          <span className="opacity-80 tabular">นัดที่ {Math.min(state.md, state.fx.length)}/{state.fx.length} · แตะทีมเพื่อส่อง</span>
+          ) : (
+            <span>ลีกจังหวัดไม่ตกชั้น</span>
+          )}
         </div>
 
       </div>

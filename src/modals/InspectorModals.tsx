@@ -14,6 +14,7 @@ import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
+import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -31,10 +32,11 @@ export const PlayerInspectorModal: React.FC<{
   const isMePlayer = !!livePlayer.me || (state.mode === 'p' && state.p?.name === livePlayer.n);
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
-  const [shirtNo, setShirtNo] = useState(String(currentNo));
+  const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>('info');
   const effectiveMode = inspectMode === 'missions' && !(isMyTeam || isMePlayer) ? 'info' : inspectMode;
   const canDoMissions = isMyTeam || isMePlayer;
+  const canEditShirtNo = Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const tlMeta = talentTierMeta(playerTalent);
   const isCap = !!liveTeam && liveTeam.cap === livePlayer.n;
@@ -290,7 +292,7 @@ export const PlayerInspectorModal: React.FC<{
                     </span>
                   </div>
                   <div className="h-2 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
-                    <div className="h-full rounded-full transition-all" style={{ width: `${clamp(fitVal, 6, 100)}%`, background: fitCol }} />
+                    <div className="h-full rounded-full transition-all shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]" style={{ width: `${clamp(fitVal, 6, 100)}%`, background: statBarColor(fitVal) }} />
                   </div>
                 </div>
 
@@ -370,42 +372,20 @@ export const PlayerInspectorModal: React.FC<{
                   </span>
                 </div>
 
-                {isMyTeam && state.mode === 'm' && (
-                  <div className="flex items-center gap-1 pt-0.5 border-t border-[var(--line)]/60">
-                    <span className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] shrink-0">#</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={99}
-                      value={shirtNo}
-                      onChange={(e) => setShirtNo(e.target.value)}
-                      className="w-10 px-1 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9px] font-bold text-center tabular shrink-0"
-                    />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const n = clamp(parseInt(shirtNo, 10) || currentNo, 1, 99);
-                          onUpdateState((d) => {
-                            const sq = d.teams[d.me].sq;
-                            const pl = sq.find((q) => q.n === livePlayer.n);
-                            if (!pl) return;
-                            const oldNo = getShirtNo(d.teams[d.me], pl);
-                            const holder = sq.find((q) => q !== pl && q.no === n);
-                            if (holder) {
-                              holder.no = oldNo;
-                              if (Array.isArray(holder.vis) && holder.vis.length >= 6) holder.vis[5] = oldNo;
-                            }
-                            pl.no = n;
-                            if (Array.isArray(pl.vis) && pl.vis.length >= 6) pl.vis[5] = n;
-                            if (pl.me && d.p) d.p.no = n;
-                          });
-                          setShirtNo(String(n));
-                          onToast(`เปลี่ยนเบอร์เสื้อ ${livePlayer.n} เป็น #${n}`);
-                        }}
-                        className="btn btn-xs btn-primary shrink-0"
-                      >
-                        บันทึก
-                      </button>
+                {canEditShirtNo && (
+                  <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--line)]/60">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setShowLockerPicker(true);
+                      }}
+                      className="btn btn-xs btn-secondary flex-1 justify-between gap-1"
+                    >
+                      <span>👕 เบอร์ #{currentNo}</span>
+                      <span className="text-[var(--g)] font-extrabold">ล็อกเกอร์ ▾</span>
+                    </button>
+                    {state.mode === 'm' && (
                       <button
                         type="button"
                         onClick={() => {
@@ -414,7 +394,7 @@ export const PlayerInspectorModal: React.FC<{
                           });
                           onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
                         }}
-                        className={`btn btn-xs flex-1 truncate ${
+                        className={`btn btn-xs shrink-0 ${
                           isCap
                             ? 'btn-gold'
                             : 'btn-secondary'
@@ -422,8 +402,9 @@ export const PlayerInspectorModal: React.FC<{
                       >
                         {isCap ? '© กัปตัน' : 'ตั้งกัปตัน'}
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
                 </div>
 
               {/* Personality, Style & Insights Strip below Athlete Card */}
@@ -447,7 +428,6 @@ export const PlayerInspectorModal: React.FC<{
                 state={state}
                 careerProfile={isMePlayer ? state.p : null}
                 variant="inline"
-                defaultOpen
               />
 
               {/* Balanced 3x2 Attribute Card Grid (Equal rows per box) */}
@@ -481,6 +461,16 @@ export const PlayerInspectorModal: React.FC<{
           </div>
         )}
       </div>
+      {showLockerPicker && liveTeam && canEditShirtNo && (
+        <ShirtNumberLockerModal
+          player={livePlayer}
+          team={liveTeam}
+          state={state}
+          onClose={() => setShowLockerPicker(false)}
+          onUpdateState={onUpdateState}
+          onToast={onToast}
+        />
+      )}
     </div>
   );
 };

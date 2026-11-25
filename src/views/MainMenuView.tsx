@@ -1088,7 +1088,7 @@ export const MainMenu: React.FC<{
 
                     <div className="p-2 mland:p-1 rounded-xl border bg-[var(--surface)] border-[var(--line)] space-y-1">
                       <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                        <span className="font-bold text-[var(--mut)]">ถนัดเท้า</span>
+                        <span className="font-bold text-[var(--mut)]">เท้าถนัด</span>
                         <span className={`inline-flex items-center gap-1 font-extrabold ${getFootColorMeta(cFoot).textCls}`}>
                           <FootPairIcon foot={cFoot} size="xs" />
                           <span>{getFootColorMeta(cFoot).label}</span>
@@ -1103,7 +1103,7 @@ export const MainMenu: React.FC<{
                               key={fk}
                               type="button"
                               onClick={() => { SFX.tap(); setCFoot(fk); }}
-                              className={`btn btn-xs px-1 ${
+                              className={`btn btn-xs px-1 gap-0.5 text-[10px] mland:text-[8.5px] whitespace-nowrap ${
                                 active ? fm.buttonActiveCls : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
                               }`}
                             >

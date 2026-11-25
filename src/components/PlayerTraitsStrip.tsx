@@ -35,7 +35,7 @@ const POS_LABEL: Record<Position, string> = {
   GK: 'ผู้รักษาประตู'
 };
 
-const GK_SIG_KEYS = ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp'];
+const GK_SIG_KEYS = ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp'];
 const OUTFIELD_SIG_KEYS = [
   'fin', 'pw', 'cur', 'lsh', 'fk', 'run',
   'drb', 'ctrl', 'spass', 'lpass', 'crs', 'vis',

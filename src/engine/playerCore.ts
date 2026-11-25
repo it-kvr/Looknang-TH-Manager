@@ -484,8 +484,8 @@ export function getPlayerBio(
   const weightKg = clamp(Math.round((q?.me ? po?.wt : undefined) ?? q?.wt ?? po?.wt ?? fallback.wt), 50, 110);
   const rawFoot = (q?.me ? po?.foot : undefined) ?? q?.foot ?? po?.foot ?? fallback.foot;
   const foot: PreferredFoot = rawFoot === 'L' || rawFoot === 'R' || rawFoot === 'B' ? rawFoot : fallback.foot;
-  const footLabel = foot === 'L' ? 'เท้าซ้าย' : foot === 'B' ? 'สองข้าง' : 'เท้าขวา';
-  const footShort = foot === 'L' ? 'ซ้าย' : foot === 'B' ? '2 ข้าง' : 'ขวา';
+  const footLabel = foot === 'L' ? 'เท้าซ้าย' : foot === 'B' ? 'สองเท้า' : 'เท้าขวา';
+  const footShort = foot === 'L' ? 'เท้าซ้าย' : foot === 'B' ? 'สองเท้า' : 'เท้าขวา';
   const bmi = weightKg / ((heightCm / 100) ** 2);
   const physiqueLabel =
     heightCm >= 186
@@ -863,7 +863,11 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     vis: cl(baseA.ps * 0.55 + q.ov * 0.3 + tlVal * 0.15 + hv(26)),
     rd: cl(baseA.tk * 0.6 + baseA.ps * 0.4 + hv(6)),
     tkl: cl(baseA.tk * 0.72 + baseA.ph * 0.18 + baseA.dr * 0.10 + hv(7)),
-    pos: cl(baseA.tk * 0.55 + baseA.ps * 0.35 + baseA.ph * 0.10 + hv(21) + (q.pos === 'DF' || q.ro === 'CDM' ? 3 : 0)),
+    pos: cl(
+      q.pos === 'GK'
+        ? q.ov * 0.25 + baseA.tk * 0.55 + baseA.ps * 0.1 + baseA.ph * 0.1 + hv(21)
+        : baseA.tk * 0.55 + baseA.ps * 0.35 + baseA.ph * 0.10 + hv(21) + (q.pos === 'DF' || q.ro === 'CDM' ? 3 : 0)
+    ),
     mrk: cl(baseA.tk * 0.65 + baseA.ph * 0.2 + baseA.ps * 0.15 + hv(18) + (q.pos === 'DF' ? 4 : 0)),
     blk: cl(baseA.tk * 0.55 + baseA.ph * 0.35 + baseA.ps * 0.1 + hv(19) + (q.ro === 'CB' ? 4 : 0)),
     hd: cl(baseA.ph * 0.7 + baseA.tk * 0.3 + hv(8)),
@@ -884,12 +888,13 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null) {
     det: cl(q.ov * 0.45 + baseA.ph * 0.25 + tlVal * 0.2 + 10 + hv(27)),
     sv: cl(q.ov * 0.7 + baseA.ph * 0.3 + hv(15)),
     rfx: cl(q.ov * 0.65 + baseA.dr * 0.25 + baseA.ph * 0.1 + hv(37)),
+    hnd: cl(q.ov * 0.68 + baseA.tk * 0.22 + baseA.ph * 0.1 + hv(38)),
     cl: cl(q.ov * 0.85 + hv(16)),
     dist: cl(baseA.ps * 0.8 + hv(17))
   };
 
   const sk = q.pos === 'GK'
-    ? ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp']
+    ? ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp']
     : ['fin', 'pw', 'cur', 'lsh', 'fk', 'run', 'drb', 'ctrl', 'spass', 'lpass', 'crs', 'vis', 'rd', 'tkl', 'pos', 'mrk', 'blk', 'hd', 'spd', 'acc', 'str', 'sta', 'comp'];
   const sig = po?.sig
     ? po.sig
@@ -932,12 +937,12 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
       ? [[
           '🧤 ผู้รักษาประตู',
           [
-            ['เซฟ', d.sv, 'sv'],
+            ['พุ่งเซฟ', d.sv, 'sv'],
             ['ปฏิกิริยา', d.rfx, 'rfx'],
-            ['ออกมาปิดมุม', d.cl, 'cl'],
-            ['จ่ายจากแนวหลัง', d.dist, 'dist'],
-            ['ส่งบอลสั้น', d.spass, 'spass'],
-            ['ส่งบอลยาว', d.lpass, 'lpass']
+            ['รับบอล', d.hnd, 'hnd'],
+            ['ปิดมุมยิง', d.cl, 'cl'],
+            ['ยืนตำแหน่ง', d.pos, 'pos'],
+            ['เปิดเกม', d.dist, 'dist']
           ]
         ]]
       : [

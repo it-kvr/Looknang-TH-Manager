@@ -51,6 +51,7 @@ export const SquadTacticsView: React.FC<{
         f,
         label: 'ควรพัก',
         shortLabel: 'ควรพัก',
+        barColor: '#ef4444',
         txtCls: 'text-[#dc2626] dark:text-[#f87171]',
         pillCls: 'bg-rose-500/15 text-[#dc2626] dark:text-[#fca5a5] border-rose-500/35',
         rowTint: 'bg-rose-500/[0.08] border-rose-500/45 hover:border-rose-500/75',
@@ -62,6 +63,7 @@ export const SquadTacticsView: React.FC<{
         f,
         label: 'เริ่มล้า',
         shortLabel: 'ล้า',
+        barColor: '#f59e0b',
         txtCls: 'text-[#b45309] dark:text-[#fbbf24]',
         pillCls: 'bg-amber-500/15 text-[#b45309] dark:text-[#fcd34d] border-amber-500/35',
         rowTint: 'bg-amber-500/[0.06] border-amber-500/35 hover:border-amber-500/70',
@@ -73,6 +75,7 @@ export const SquadTacticsView: React.FC<{
         f,
         label: 'พร้อม',
         shortLabel: 'พร้อม',
+        barColor: '#22c55e',
         txtCls: 'text-[#15803d] dark:text-[#4ade80]',
         pillCls: 'bg-emerald-500/12 text-[#15803d] dark:text-[#4ade80] border-emerald-500/30',
         rowTint: '',
@@ -83,6 +86,7 @@ export const SquadTacticsView: React.FC<{
       f,
       label: 'ฟิตเต็ม',
       shortLabel: 'ฟิต',
+      barColor: '#22c55e',
       txtCls: 'text-[var(--g)]',
       pillCls: 'bg-emerald-500/15 text-[var(--g)] border-emerald-500/35',
       rowTint: '',
@@ -645,13 +649,12 @@ export const SquadTacticsView: React.FC<{
                   {f}%
                 </span>
               </div>
-              <div className="w-full h-1.5 mland:h-1 rounded-full bg-gradient-to-r from-rose-500/20 via-amber-400/20 to-emerald-500/20 border border-[var(--line)]/55 overflow-hidden">
+              <div className={`w-full h-1.5 mland:h-1 rounded-full bg-[#0b2018] border ${f < 65 ? 'border-[#ef4444]' : 'border-[var(--line)]/65 dark:border-white/30'} overflow-hidden`}>
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
-                    width: `${clamp(f, 6, 100)}%`,
-                    background: 'linear-gradient(90deg, #ef4444 0%, #f59e0b 52%, #10b981 100%)',
-                    backgroundSize: `${10000 / Math.max(f, 8)}% 100%`
+                    width: `${clamp(f, f > 0 ? 4 : 0, 100)}%`,
+                    backgroundColor: stMeta.barColor
                   }}
                 />
               </div>
@@ -1590,13 +1593,12 @@ export const SquadTacticsView: React.FC<{
                               <span className={`font-bold truncate ${fitTxtCls}`}>{stMeta.shortLabel}</span>
                               <span className={`font-extrabold ${fitTxtCls}`}>{f}%</span>
                             </div>
-                            <div className="w-full h-1.5 rounded-full bg-gradient-to-r from-rose-500/20 via-amber-400/20 to-emerald-500/20 border border-[var(--line)]/50 overflow-hidden">
+                            <div className={`w-full h-1.5 rounded-full bg-[#0b2018] border ${f < 65 ? 'border-[#ef4444]' : 'border-[var(--line)]/65 dark:border-white/30'} overflow-hidden`}>
                               <div
-                                className="h-full rounded-full"
+                                className="h-full rounded-full transition-all"
                                 style={{
-                                  width: `${clamp(f, 6, 100)}%`,
-                                  background: 'linear-gradient(90deg, #ef4444 0%, #f59e0b 52%, #10b981 100%)',
-                                  backgroundSize: `${10000 / Math.max(f, 8)}% 100%`
+                                  width: `${clamp(f, f > 0 ? 4 : 0, 100)}%`,
+                                  backgroundColor: stMeta.barColor
                                 }}
                               />
                             </div>

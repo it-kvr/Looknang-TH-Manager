@@ -16,38 +16,26 @@ import { R, clamp } from '../utils/math';
 import { ATT, SIGL } from '../data/thaiFootballData';
 import { OVF, xi, DT, ovMe, syncMe, recordPlayerSeasonProgress } from './playerCore';
 
-const grayShadeHex = (v: number, minRgb: [number, number, number], maxRgb: [number, number, number]): string => {
-  const t = clamp((v - 10) / 39, 0, 1);
-  const r = Math.round(minRgb[0] + (maxRgb[0] - minRgb[0]) * t);
-  const g = Math.round(minRgb[1] + (maxRgb[1] - minRgb[1]) * t);
-  const b = Math.round(minRgb[2] + (maxRgb[2] - minRgb[2]) * t);
-  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+export const ovColor = (v: number): string => {
+  if (v >= 100) return '#db2777';
+  if (v >= 90) return '#d97706';
+  if (v >= 80) return '#7c3aed';
+  if (v >= 70) return '#059669';
+  if (v >= 60) return '#0d9488';
+  if (v >= 50) return '#0284c7';
+  if (v >= 40) return '#475569';
+  return '#64748b';
 };
 
-export const ovColor = (v: number) => {
-  if (v < 50) return grayShadeHex(v, [128, 137, 150], [59, 68, 82]);
-  return v >= 90
-    ? '#d97706'
-    : v >= 80
-      ? '#7c3aed'
-      : v >= 70
-        ? '#059669'
-        : v >= 60
-          ? '#0d9488'
-          : '#0284c7';
-};
-
-export const statBarColor = (v: number) => {
-  if (v < 50) return grayShadeHex(v, [155, 164, 178], [71, 85, 105]);
-  return v >= 90
-    ? '#f59e0b'
-    : v >= 80
-      ? '#8b5cf6'
-      : v >= 70
-        ? '#10b981'
-        : v >= 60
-          ? '#14b8a6'
-          : '#0ea5e9';
+export const statBarColor = (v: number): string => {
+  if (v >= 100) return '#ec4899';
+  if (v >= 90) return '#f59e0b';
+  if (v >= 80) return '#8b5cf6';
+  if (v >= 70) return '#10b981';
+  if (v >= 60) return '#14b8a6';
+  if (v >= 50) return '#0ea5e9';
+  if (v >= 40) return '#64748b';
+  return '#94a3b8';
 };
 
 export interface StatTierMeta {
@@ -59,13 +47,23 @@ export interface StatTierMeta {
 }
 
 export function statTierMeta(v: number): StatTierMeta {
+  const hex = statBarColor(v);
+  if (v >= 100) {
+    return {
+      textClass: 'text-pink-600 dark:text-pink-300',
+      darkTextClass: 'text-pink-300',
+      badgeClass: 'bg-pink-500/14 border-pink-500/35 text-pink-700 dark:text-pink-200',
+      dotClass: 'bg-pink-500',
+      hex
+    };
+  }
   if (v >= 90) {
     return {
       textClass: 'text-amber-700 dark:text-amber-300',
       darkTextClass: 'text-amber-300',
       badgeClass: 'bg-amber-500/14 border-amber-500/35 text-amber-800 dark:text-amber-200',
       dotClass: 'bg-amber-500',
-      hex: '#f59e0b'
+      hex
     };
   }
   if (v >= 80) {
@@ -74,7 +72,7 @@ export function statTierMeta(v: number): StatTierMeta {
       darkTextClass: 'text-violet-300',
       badgeClass: 'bg-violet-500/14 border-violet-500/35 text-violet-800 dark:text-violet-200',
       dotClass: 'bg-violet-500',
-      hex: '#8b5cf6'
+      hex
     };
   }
   if (v >= 70) {
@@ -83,7 +81,7 @@ export function statTierMeta(v: number): StatTierMeta {
       darkTextClass: 'text-emerald-300',
       badgeClass: 'bg-emerald-500/14 border-emerald-500/35 text-emerald-800 dark:text-emerald-200',
       dotClass: 'bg-emerald-500',
-      hex: '#10b981'
+      hex
     };
   }
   if (v >= 60) {
@@ -92,7 +90,7 @@ export function statTierMeta(v: number): StatTierMeta {
       darkTextClass: 'text-teal-300',
       badgeClass: 'bg-teal-500/14 border-teal-500/35 text-teal-800 dark:text-teal-200',
       dotClass: 'bg-teal-500',
-      hex: '#14b8a6'
+      hex
     };
   }
   if (v >= 50) {
@@ -101,42 +99,24 @@ export function statTierMeta(v: number): StatTierMeta {
       darkTextClass: 'text-sky-300',
       badgeClass: 'bg-sky-500/14 border-sky-500/35 text-sky-800 dark:text-sky-200',
       dotClass: 'bg-sky-500',
-      hex: '#0ea5e9'
+      hex
     };
   }
-  if (v >= 42) {
-    return {
-      textClass: 'text-slate-700 dark:text-slate-200',
-      darkTextClass: 'text-slate-200',
-      badgeClass: 'bg-slate-700/22 border-slate-600/50 text-slate-800 dark:bg-slate-400/25 dark:border-slate-400/45 dark:text-slate-100',
-      dotClass: 'bg-slate-700 dark:bg-slate-300',
-      hex: statBarColor(v)
-    };
-  }
-  if (v >= 32) {
+  if (v >= 40) {
     return {
       textClass: 'text-slate-600 dark:text-slate-300',
       darkTextClass: 'text-slate-300',
       badgeClass: 'bg-slate-600/18 border-slate-500/42 text-slate-700 dark:text-slate-200',
       dotClass: 'bg-slate-500',
-      hex: statBarColor(v)
-    };
-  }
-  if (v >= 20) {
-    return {
-      textClass: 'text-slate-500 dark:text-slate-400',
-      darkTextClass: 'text-slate-400',
-      badgeClass: 'bg-slate-500/14 border-slate-500/32 text-slate-600 dark:text-slate-300',
-      dotClass: 'bg-slate-400',
-      hex: statBarColor(v)
+      hex
     };
   }
   return {
-    textClass: 'text-slate-400 dark:text-slate-500',
-    darkTextClass: 'text-slate-500',
-    badgeClass: 'bg-slate-400/10 border-slate-400/25 text-slate-500 dark:text-slate-400',
-    dotClass: 'bg-slate-400/65',
-    hex: statBarColor(v)
+    textClass: 'text-slate-500 dark:text-slate-400',
+    darkTextClass: 'text-slate-400',
+    badgeClass: 'bg-slate-400/12 border-slate-400/30 text-slate-600 dark:text-slate-300',
+    dotClass: 'bg-slate-400',
+    hex
   };
 }
 

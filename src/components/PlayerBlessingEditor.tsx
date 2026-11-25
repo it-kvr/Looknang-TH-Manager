@@ -26,7 +26,7 @@ import { PlayerFace } from './SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
-const GK_SIG_KEYS = ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp'];
+const GK_SIG_KEYS = ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp'];
 
 export const PlayerBlessingEditor: React.FC<{
   player: Player;
@@ -73,8 +73,8 @@ export const PlayerBlessingEditor: React.FC<{
         sh: fb.sh,
         ps: g('dist') * 0.52 + g('spass') * 0.2 + g('lpass') * 0.18 + g('cl') * 0.1,
         dr: g('spd') * 0.3 + g('acc') * 0.25 + g('agi') * 0.2 + g('rfx') * 0.25,
-        tk: g('cl') * 0.5 + g('sv') * 0.3 + g('rfx') * 0.2,
-        ph: g('sv') * 0.38 + g('str') * 0.2 + g('sta') * 0.2 + g('jmp') * 0.12 + g('rfx') * 0.1
+        tk: g('hnd') * 0.3 + g('pos') * 0.25 + g('cl') * 0.25 + g('sv') * 0.2,
+        ph: g('sv') * 0.34 + g('rfx') * 0.16 + g('str') * 0.18 + g('sta') * 0.18 + g('jmp') * 0.14
       };
     }
     return {
@@ -130,7 +130,7 @@ export const PlayerBlessingEditor: React.FC<{
   const persDef = PLAYER_PERSONALITIES[customPers] || PLAYER_PERSONALITIES[3];
 
   const sigOptions = Object.keys(SIGL).filter((k) =>
-    curPos === 'GK' ? GK_SIG_KEYS.includes(k) : !['sv', 'rfx', 'cl', 'dist'].includes(k)
+    curPos === 'GK' ? GK_SIG_KEYS.includes(k) : !['sv', 'rfx', 'hnd', 'cl', 'dist'].includes(k)
   );
 
   const shiftAllStatsBy = (delta: number) => {
@@ -191,7 +191,7 @@ export const PlayerBlessingEditor: React.FC<{
         sh: ['fin', 'pw', 'cur', 'lsh', 'fk', 'run'],
         ps: ['spass', 'lpass', 'crs', 'ctrl', 'dist', 'rd', 'fk', 'vis'],
         dr: ['drb', 'ctrl', 'spd', 'acc', 'agi', 'run', 'bal'],
-        tk: ['rd', 'tkl', 'pos', 'mrk', 'blk'],
+        tk: ['rd', 'tkl', 'pos', 'mrk', 'blk', 'hnd', 'cl'],
         ph: ['str', 'sta', 'acc', 'jmp', 'hd', 'tol', 'end', 'sv', 'rfx']
       };
       nextSub = { ...subD };
@@ -235,7 +235,7 @@ export const PlayerBlessingEditor: React.FC<{
     setRo(nextRo);
     const nextPos = LINE[nextRo] || curPos;
     const nextSigPool = Object.keys(SIGL).filter((k) =>
-      nextPos === 'GK' ? GK_SIG_KEYS.includes(k) : !['sv', 'rfx', 'cl', 'dist'].includes(k)
+      nextPos === 'GK' ? GK_SIG_KEYS.includes(k) : !['sv', 'rfx', 'hnd', 'cl', 'dist'].includes(k)
     );
     if (!nextSigPool.includes(sig)) {
       setSig(nextPos === 'GK' ? 'sv' : 'fin');
@@ -272,12 +272,12 @@ export const PlayerBlessingEditor: React.FC<{
       ? [[
           '🧤 ผู้รักษาประตู',
           [
-            ['sv', 'เซฟ'],
+            ['sv', 'พุ่งเซฟ'],
             ['rfx', 'ปฏิกิริยา'],
-            ['cl', 'ออกมาปิดมุม'],
-            ['dist', 'จ่ายจากแนวหลัง'],
-            ['spass', 'ส่งบอลสั้น'],
-            ['lpass', 'ส่งบอลยาว']
+            ['hnd', 'รับบอล'],
+            ['cl', 'ปิดมุมยิง'],
+            ['pos', 'ยืนตำแหน่ง'],
+            ['dist', 'เปิดเกม']
           ]
         ] as [string, [string, string][]]]
       : ([
@@ -859,7 +859,7 @@ export const PlayerBlessingEditor: React.FC<{
         {/* Physical Bio: Height, Weight, Preferred Foot */}
         <div className="p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10.5px] font-bold text-[var(--ink)]">📐 รูปร่าง &amp; เท้าที่ถนัด</span>
+            <span className="text-[10.5px] font-bold text-[var(--ink)]">📐 รูปร่าง &amp; เท้าถนัด</span>
             <button
               type="button"
               onClick={() => {
@@ -901,7 +901,7 @@ export const PlayerBlessingEditor: React.FC<{
 
             <div className="p-1.5 rounded-lg border bg-[var(--surface-2)]/65 border-[var(--line)] space-y-1">
               <div className="flex items-center justify-between text-[10px]">
-                <span className="text-[var(--mut)] font-bold">ถนัดเท้า</span>
+                <span className="text-[var(--mut)] font-bold">เท้าถนัด</span>
                 <span className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold ${getFootColorMeta(foot).textCls}`}>
                   <FootPairIcon foot={foot} size="xs" />
                   <span>{getFootColorMeta(foot).label}</span>
@@ -916,7 +916,7 @@ export const PlayerBlessingEditor: React.FC<{
                       key={fk}
                       type="button"
                       onClick={() => { SFX.tap(); setFoot(fk); }}
-                      className={`btn btn-xs px-1 ${
+                      className={`btn btn-xs px-1 gap-0.5 text-[10px] mland:text-[8.5px] whitespace-nowrap ${
                         active ? fm.buttonActiveCls : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
                       }`}
                     >

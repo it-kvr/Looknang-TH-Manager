@@ -13,12 +13,12 @@ export const StatBarRow: React.FC<{ label: string; value: number; compact?: bool
   return (
     <div className={`flex items-center gap-1.5 sm:gap-2 ${compact ? 'py-[2px] mland:py-[1px]' : 'py-0.5'}`}>
       <span className="w-[78px] sm:w-[88px] mland:w-[64px] shrink-0 flex items-center gap-1 truncate text-[11px] mland:text-[9px] text-[var(--ink)]/90 font-medium">
-        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${tier.dotClass}`} aria-hidden="true" />
+        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: tier.hex }} aria-hidden="true" />
         <span className="truncate">{label}</span>
       </span>
       <div className="flex-1 min-w-[38px] h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface-2)] border border-[var(--line)]/75 overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-300"
+          className="h-full rounded-full transition-all duration-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.28)]"
           style={{ width: `${pct}%`, background: statBarColor(value) }}
         />
       </div>

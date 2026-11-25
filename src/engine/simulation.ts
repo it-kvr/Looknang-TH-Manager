@@ -37,7 +37,7 @@ export function rate(
   at += M(['GK'], (q, d) => d.dist * 0.65 + d.lpass * 0.35 - q.ov) * 0.08;
   df += M(['DF'], (q, d) => d.rd * 0.25 + d.pos * 0.25 + d.mrk * 0.2 + d.blk * 0.15 + d.hd * 0.15 - q.ov) * 0.4;
   df += M(['MF'], (q, d) => d.rd * 0.35 + d.pos * 0.35 + d.mrk * 0.3 - q.ov) * 0.14;
-  df += M(['GK'], (q, d) => d.sv * 0.5 + d.cl * 0.3 + d.dist * 0.2 - q.ov) * 0.3;
+  df += M(['GK'], (q, d) => d.sv * 0.35 + (d.rfx ?? d.sv) * 0.18 + (d.hnd ?? d.sv) * 0.17 + d.cl * 0.18 + d.pos * 0.12 - q.ov) * 0.3;
   df += M(['DF', 'MF'], (q, d) => d.str * 0.65 + d.tol * 0.35 - q.ov) * 0.07;
   const sa = M(['FW', 'MF', 'DF', 'GK'], (q, d) => d.sta - q.ov) * 0.12;
   at += sa;
@@ -941,7 +941,7 @@ export function computePlayerRatings(
             ? (D.a.ps * 0.22 + D.d.spass * 0.14 + D.d.lpass * 0.12 + D.a.dr * 0.16 + D.d.crs * 0.12 + D.d.rd * 0.12 + D.d.sta * 0.12)
             : q.pos === 'DF'
               ? (D.d.rd * 0.25 + D.d.pos * 0.25 + D.d.mrk * 0.2 + D.d.blk * 0.15 + D.d.hd * 0.15)
-              : (D.d.sv * 0.45 + D.d.cl * 0.3 + D.d.dist * 0.15 + D.d.comp * 0.1);
+              : (D.d.sv * 0.32 + (D.d.rfx ?? D.d.sv) * 0.18 + (D.d.hnd ?? D.d.sv) * 0.16 + D.d.cl * 0.14 + (D.d.pos ?? D.d.sv) * 0.1 + D.d.dist * 0.1);
       const statEdge = (roleScore - 60) / 85 + (D.d.comp - 60) / 240;
       const defWorkBonus =
         q.pos === 'GK'
@@ -1560,7 +1560,7 @@ const ROLE_ADAPT_TARGETS: Record<string, { cores: StatKey[]; subs: string[] }> =
   LB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
   RB: { cores: ['tk', 'ps', 'ph'], subs: ['tkl', 'mrk', 'spd', 'crs'] },
   CB: { cores: ['tk', 'ph'], subs: ['tkl', 'mrk', 'hd', 'blk', 'str'] },
-  GK: { cores: ['ph', 'tk'], subs: ['sv', 'rfx', 'cl', 'dist'] }
+  GK: { cores: ['ph', 'tk'], subs: ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist'] }
 };
 
 export const ROLE_ADAPT_THRESHOLD_ADJ = 4;
@@ -1877,7 +1877,7 @@ export function calcPlayerPerf(
         ? (D.a.ps * 0.22 + D.d.spass * 0.14 + D.d.lpass * 0.12 + D.a.dr * 0.16 + D.d.crs * 0.12 + D.d.rd * 0.12 + D.d.sta * 0.12 - 60) / 90
         : p.pos === 'DF'
           ? (D.d.rd * 0.25 + D.d.pos * 0.25 + D.d.mrk * 0.2 + D.d.blk * 0.15 + D.d.hd * 0.15 - 60) / 90
-          : (D.d.sv * 0.45 + D.d.cl * 0.3 + D.d.dist * 0.15 + D.d.comp * 0.1 - 60) / 90;
+          : (D.d.sv * 0.32 + (D.d.rfx ?? D.d.sv) * 0.18 + (D.d.hnd ?? D.d.sv) * 0.16 + D.d.cl * 0.14 + (D.d.pos ?? D.d.sv) * 0.1 + D.d.dist * 0.1 - 60) / 90;
 
   const baseRt =
     matchRatings?.[p.name] != null
