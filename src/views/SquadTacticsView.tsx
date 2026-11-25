@@ -34,6 +34,25 @@ export const SquadTacticsView: React.FC<{
   const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
   const [releaseModalNames, setReleaseModalNames] = useState<string[] | null>(null);
   const pitchSvgRef = useRef<SVGSVGElement | null>(null);
+  const formationPopoverRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!showFormationSheet) return;
+    const handleOutsidePointer = (e: PointerEvent) => {
+      if (!formationPopoverRef.current?.contains(e.target as Node)) {
+        setShowFormationSheet(false);
+      }
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowFormationSheet(false);
+    };
+    document.addEventListener('pointerdown', handleOutsidePointer);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointer);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showFormationSheet]);
 
   const starters = useMemo(() => xi(me), [me]);
   const slots = useMemo(() => getFormationSlots(me), [me]);
@@ -758,11 +777,98 @@ export const SquadTacticsView: React.FC<{
         if (sub === 0) {
           return (
             <div className="grid grid-cols-[1.04fr_0.96fr] mland:grid-cols-[1.02fr_0.98fr] grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-2 items-stretch overflow-hidden">
-              {/* LEFT: Full-Height Pitch (Maximized Height) */}
+              {/* LEFT: Full-Height Pitch with Top-Right Formation Switcher inside Pitch */}
               <div className="relative p-1 mland:p-0.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col h-full min-h-0 overflow-hidden">
                 {isMgr && pitchDragPreview && (
-                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20 pointer-events-none px-2.5 py-0.5 rounded-lg bg-[var(--surface)]/95 border border-[var(--g)]/60 text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shadow-md">
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 pointer-events-none px-2.5 py-0.5 rounded-lg bg-[var(--surface)]/95 border border-[var(--g)]/60 text-[var(--g)] text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shadow-md">
                     📍 {pitchDragPreview.player.n.split(' ')[0]} → {pitchDragPreview.sp} ({pitchDragPreview.zoneLabel}) · {formName(me, pitchDragPreview)}
+                  </div>
+                )}
+
+                {/* Top-Right Inside Pitch: Compact Plan Pill (Tap to Expand, Tap Outside to Collapse) */}
+                {!(isMgr && pitchDragPreview) && (
+                  <div
+                    ref={formationPopoverRef}
+                    className="absolute top-2 right-2 mland:top-1.5 mland:right-1.5 z-20 flex flex-col items-end max-w-[calc(100%-16px)]"
+                  >
+                    {isMgr ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setShowFormationSheet((v) => !v);
+                        }}
+                        title="กดเพื่อเปลี่ยนแผนและสไตล์การเล่น"
+                        className={`inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border backdrop-blur-xs shadow-md cursor-pointer transition-colors max-w-full overflow-x-auto no-scrollbar ${
+                          showFormationSheet
+                            ? 'bg-[var(--surface)] border-[var(--g)] ring-1 ring-[var(--g)]/40 text-[var(--ink)]'
+                            : 'bg-[var(--surface)]/92 border-[var(--line)]/90 text-[var(--ink)] hover:border-[var(--g)]/70'
+                        }`}
+                      >
+                        {formationStatusSummary}
+                        <span className="text-[9px] text-[var(--g)] ml-0.5 shrink-0">{showFormationSheet ? '▴' : '▾'}</span>
+                      </button>
+                    ) : (
+                      <div className="inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border border-[var(--line)]/90 bg-[var(--surface)]/92 backdrop-blur-xs shadow-md max-w-full overflow-x-auto no-scrollbar">
+                        {formationStatusSummary}
+                      </div>
+                    )}
+
+                    {isMgr && showFormationSheet && (
+                      <div className="mt-1.5 w-[275px] sm:w-[310px] mland:w-[250px] max-w-[calc(100%-4px)] p-2 mland:p-1.5 rounded-xl bg-[var(--surface)]/96 backdrop-blur-md border border-[var(--g)]/55 shadow-xl space-y-1.5 mland:space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
+                          <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์การเล่น</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowFormationSheet(false)}
+                            className="btn btn-xs btn-secondary !py-0 !px-1.5"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1">
+                          {Object.keys(FSD).map((f) => (
+                            <button
+                              key={f}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                onUpdateState((d) => {
+                                  const t = d.teams[d.me];
+                                  if (t.form !== f) {
+                                    t.form = f;
+                                    t.lu = null;
+                                    t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
+                                  }
+                                });
+                              }}
+                              className={`btn btn-xs truncate !px-1 ${
+                                me.form === f ? 'btn-primary' : 'btn-secondary'
+                              }`}
+                            >
+                              {f}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-5 gap-1">
+                          {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                onUpdateState((d) => { d.teams[d.me].tac = k; });
+                              }}
+                              className={`btn btn-xs truncate !px-1 ${
+                                me.tac === k ? 'btn-gold' : 'btn-secondary text-[var(--mut)]'
+                              }`}
+                            >
+                              {AR_T[k]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -782,7 +888,7 @@ export const SquadTacticsView: React.FC<{
                 </div>
               </div>
 
-              {/* RIGHT: Top-Right Navigation Tabs + Squad List with Plan Right After "รายชื่อทีม" */}
+              {/* RIGHT: Top-Right Navigation Tabs + Single-Row Squad Header & List */}
               <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 h-full overflow-hidden">
                 {/* Top-Right Tabs Corner */}
                 <div className="flex items-center justify-end shrink-0 overflow-x-auto no-scrollbar">
@@ -791,139 +897,66 @@ export const SquadTacticsView: React.FC<{
 
                 {/* Squad Panel */}
                 <div className="flex-1 min-h-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden">
-                  {/* "รายชื่อทีม" followed directly by "แผน ..." */}
-                  <div className="flex items-center justify-between gap-1.5 mb-1.5 mland:mb-1 shrink-0 min-w-0">
-                    <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-x-auto no-scrollbar">
-                      <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0">
-                        👥 รายชื่อทีม
-                      </span>
-                      {isMgr ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setShowFormationSheet((v) => !v);
-                          }}
-                          title="กดเพื่อเปลี่ยนแผนและสไตล์การเล่น"
-                          className={`inline-flex items-center gap-1 text-[10.5px] mland:text-[9px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-0.5 rounded-lg border cursor-pointer transition-colors ${
-                            showFormationSheet
-                              ? 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--ink)]'
-                              : 'bg-[var(--surface-2)]/85 border-[var(--line)] hover:border-[var(--g)]/60'
-                          }`}
-                        >
-                          {formationStatusSummary}
-                          <span className="text-[9.5px] text-[var(--g)] ml-0.5">{showFormationSheet ? '▴' : '▾'}</span>
-                        </button>
-                      ) : (
-                        <div className="inline-flex items-center gap-1 text-[10.5px] mland:text-[9px] font-semibold tabular whitespace-nowrap shrink-0 px-2 py-0.5 rounded-lg bg-[var(--surface-2)]/85 border border-[var(--line)]">
-                          {formationStatusSummary}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  {/* Single Compact Header Row: "👥 รายชื่อทีม" + Filter Tabs + Rest/Auto Buttons */}
+                  <div className="flex items-center justify-between gap-1.5 mland:gap-1 mb-1.5 mland:mb-1 shrink-0 min-w-0">
+                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0">
+                      👥 รายชื่อทีม
+                    </span>
 
-                  {/* Inline Quick Formation & Mentality Picker inside Right Panel (never covers pitch) */}
-                  {isMgr && showFormationSheet && (
-                    <div className="mb-1.5 mland:mb-1 p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/85 border border-[var(--g)]/45 space-y-1.5 mland:space-y-1 shrink-0">
-                      <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
-                        <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์การเล่น</span>
-                        <button
-                          type="button"
-                          onClick={() => setShowFormationSheet(false)}
-                          className="btn btn-xs btn-secondary"
-                        >
-                          ✕ ปิด
-                        </button>
-                      </div>
-                      <div className="grid grid-cols-5 gap-1">
-                        {Object.keys(FSD).map((f) => (
-                          <button
-                            key={f}
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              onUpdateState((d) => {
-                                const t = d.teams[d.me];
-                                if (t.form !== f) {
-                                  t.form = f;
-                                  t.lu = null;
-                                  t.tacFam = Math.max(40, (t.tacFam ?? 65) - 10);
-                                }
-                              });
-                            }}
-                            className={`btn btn-xs truncate ${
-                              me.form === f ? 'btn-primary' : 'btn-secondary'
-                            }`}
-                          >
-                            {f}
-                          </button>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-5 gap-1">
-                        {(['X', 'A', 'B', 'D', 'Z'] as Mentality[]).map((k) => (
+                    <div className="flex items-center justify-end gap-1 min-w-0 overflow-x-auto no-scrollbar">
+                      <div className="seg-bar shrink-0 !p-[2px]">
+                        {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
                           <button
                             key={k}
                             type="button"
-                            onClick={() => onUpdateState((d) => { d.teams[d.me].tac = k; })}
-                            className={`btn btn-xs truncate ${
-                              me.tac === k ? 'btn-gold' : 'btn-secondary text-[var(--mut)]'
+                            onClick={() => {
+                              SFX.tap();
+                              setLuTab(k);
+                            }}
+                            className={`seg-btn !px-1.5 !py-0.5 mland:!px-1 mland:!py-[1px] !text-[10px] mland:!text-[8.5px] whitespace-nowrap ${
+                              luTab === k ? 'seg-btn-active' : ''
                             }`}
                           >
-                            {AR_T[k]}
+                            {l}
                           </button>
                         ))}
                       </div>
-                    </div>
-                  )}
 
-                  {/* Squad Filter & Action Controls */}
-                  <div className="flex items-center justify-between gap-1 mb-1.5 mland:mb-1 shrink-0">
-                    <div className="seg-bar min-w-0">
-                      {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
-                        <button
-                          key={k}
-                          type="button"
-                          onClick={() => setLuTab(k)}
-                          className={`seg-btn ${luTab === k ? 'seg-btn-active' : ''}`}
-                        >
-                          {l}
-                        </button>
-                      ))}
-                    </div>
-                    {isMgr && (
-                      <div className="flex items-center gap-1 shrink-0">
-                        {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                      {isMgr && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                            <button
+                              type="button"
+                              onClick={restTiredStarters}
+                              title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
+                              className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                                restNeededStarters.length > 0
+                                  ? 'bg-[var(--red)] border-[var(--red)] text-white hover:brightness-110'
+                                  : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                              }`}
+                            >
+                              🛌 พักล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                            </button>
+                          )}
                           <button
                             type="button"
-                            onClick={restTiredStarters}
-                            title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
-                            className={`btn btn-xs ${
-                              restNeededStarters.length > 0
-                                ? 'btn-danger'
-                                : 'bg-amber-500/15 border border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                            title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
+                            onClick={() => {
+                              SFX.tap();
+                              onUpdateState((d) => { d.teams[d.me].lu = null; });
+                              onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                            }}
+                            className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                              !me.lu
+                                ? 'bg-[var(--g-soft)] border-[var(--g)]/45 text-[var(--g)]'
+                                : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
                             }`}
                           >
-                            🛌 พักตัวล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                            {me.lu ? '⚡ อัตโนมัติ' : '✓ อัตโนมัติ'}
                           </button>
-                        )}
-                        <button
-                          type="button"
-                          title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => { d.teams[d.me].lu = null; });
-                            onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
-                          }}
-                          className={`btn btn-xs shrink-0 ${
-                            !me.lu
-                              ? 'bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)]'
-                              : 'btn-secondary hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
-                          }`}
-                        >
-                          {me.lu ? '⚡ จัดอัตโนมัติ' : '✓ อัตโนมัติ'}
-                        </button>
-                      </div>
-                    )}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Compact Stamina Spectrum Legend */}

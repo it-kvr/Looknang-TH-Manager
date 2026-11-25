@@ -62,7 +62,6 @@ export interface AthleteCardPalette {
   lockerBtn: string;
   clubIconWrap: string;
   stageBox: string;
-  stageGlow: string;
   nameText: string;
   metaText: string;
   statsWrap: string;
@@ -89,9 +88,7 @@ export function getAthleteCardPalette(tone: CardStudioTone): AthleteCardPalette 
         'bg-amber-500/12 hover:bg-amber-500/22 border border-amber-600/35 text-amber-800',
       clubIconWrap: 'bg-white/85 border border-slate-300/75',
       stageBox:
-        'border-slate-300/75 bg-gradient-to-b from-[#dfe7e3] via-[#edf2ef] to-[#d5dfd9] shadow-[inset_0_1px_4px_rgba(15,23,42,0.08)]',
-      stageGlow:
-        'radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.32) 48%, transparent 76%)',
+        'border-slate-300/75 bg-gradient-to-b from-[#e4ebe7] to-[#d8e1dc] shadow-[inset_0_1px_4px_rgba(15,23,42,0.08)]',
       nameText: 'text-slate-900',
       metaText: 'text-emerald-800/80',
       statsWrap: 'bg-white/82 border-t border-slate-300/75',
@@ -117,9 +114,7 @@ export function getAthleteCardPalette(tone: CardStudioTone): AthleteCardPalette 
       'bg-white/12 hover:bg-white/25 border border-white/20 text-amber-200',
     clubIconWrap: 'bg-white/10 border border-white/15',
     stageBox:
-      'border-white/10 bg-gradient-to-b from-[#23322c] via-[#18231e] to-[#111915] shadow-inner',
-    stageGlow:
-      'radial-gradient(circle at 50% 48%, rgba(241, 248, 244, 0.24) 0%, rgba(212, 228, 220, 0.08) 46%, transparent 74%)',
+      'border-white/10 bg-gradient-to-b from-[#1f2d27] to-[#111915] shadow-inner',
     nameText: 'text-white',
     metaText: 'text-emerald-100/80',
     statsWrap: 'bg-[#060c09]/92 border-t border-white/10',

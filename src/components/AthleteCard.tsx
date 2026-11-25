@@ -147,11 +147,6 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           className="absolute top-1 right-1 z-20"
         />
         <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{ backgroundImage: cardPalette.stageGlow }}
-        />
-        <div
           className={`relative z-10 ${
             stretchStage
               ? '[&>svg]:w-[76px] [&>svg]:h-[82px] sm:[&>svg]:w-[88px] sm:[&>svg]:h-[94px] mland:[&>svg]:w-[48px] mland:[&>svg]:h-[52px]'
