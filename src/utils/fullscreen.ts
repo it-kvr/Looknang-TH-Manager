@@ -21,6 +21,7 @@ export function isStandaloneDisplayMode(): boolean {
   return Boolean(
     window.matchMedia?.('(display-mode: fullscreen)').matches ||
       window.matchMedia?.('(display-mode: standalone)').matches ||
+      window.matchMedia?.('(display-mode: minimal-ui)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true
   );
 }
@@ -42,25 +43,12 @@ export function isFullscreenSupported(): boolean {
   const doc = document as FullscreenDoc;
   const el = document.documentElement as FullscreenEl;
 
-  if (typeof doc.fullscreenEnabled === 'boolean') {
-    return doc.fullscreenEnabled && Boolean(el.requestFullscreen);
-  }
-  if (typeof doc.webkitFullscreenEnabled === 'boolean') {
-    return doc.webkitFullscreenEnabled && Boolean(el.webkitRequestFullscreen);
-  }
-  if (typeof doc.mozFullScreenEnabled === 'boolean') {
-    return doc.mozFullScreenEnabled && Boolean(el.mozRequestFullScreen);
-  }
-  if (typeof doc.msFullscreenEnabled === 'boolean') {
-    return doc.msFullscreenEnabled && Boolean(el.msRequestFullscreen);
-  }
+  if (Boolean(el.requestFullscreen) && doc.fullscreenEnabled !== false) return true;
+  if (Boolean(el.webkitRequestFullscreen) && doc.webkitFullscreenEnabled !== false) return true;
+  if (Boolean(el.mozRequestFullScreen) && doc.mozFullScreenEnabled !== false) return true;
+  if (Boolean(el.msRequestFullscreen) && doc.msFullscreenEnabled !== false) return true;
 
-  return Boolean(
-    el.requestFullscreen ||
-      el.webkitRequestFullscreen ||
-      el.mozRequestFullScreen ||
-      el.msRequestFullscreen
-  );
+  return false;
 }
 
 export function syncFullscreenClass(isFs: boolean) {
@@ -87,7 +75,10 @@ export async function lockLandscapeOrientation(): Promise<void> {
   }
 }
 
-export async function enterImmersiveFullscreen(): Promise<boolean> {
+let pendingEnterFs: Promise<boolean> | null = null;
+let pendingFromClick = false;
+
+export async function enterImmersiveFullscreen(fromClick = false): Promise<boolean> {
   if (typeof document === 'undefined') return false;
 
   if (getFullscreenElement()) {
@@ -100,32 +91,49 @@ export async function enterImmersiveFullscreen(): Promise<boolean> {
     return false;
   }
 
-  const el = document.documentElement as FullscreenEl;
-  try {
-    if (el.requestFullscreen) {
-      try {
-        await el.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
-      } catch {
-        await el.requestFullscreen();
-      }
-    } else if (el.webkitRequestFullscreen) {
-      await Promise.resolve(el.webkitRequestFullscreen());
-    } else if (el.mozRequestFullScreen) {
-      await Promise.resolve(el.mozRequestFullScreen());
-    } else if (el.msRequestFullscreen) {
-      await Promise.resolve(el.msRequestFullscreen());
-    }
-  } catch {
-    syncFullscreenClass(Boolean(getFullscreenElement()));
-    return false;
+  if (pendingEnterFs && (pendingFromClick || !fromClick)) {
+    return pendingEnterFs;
   }
 
-  const active = Boolean(getFullscreenElement());
-  syncFullscreenClass(active);
-  if (active) {
-    lockLandscapeOrientation().catch(() => undefined);
-  }
-  return active;
+  const el = document.documentElement as FullscreenEl;
+  const doc = document as FullscreenDoc;
+  pendingFromClick = fromClick;
+
+  const attemptPromise = (async () => {
+    try {
+      if (el.requestFullscreen && doc.fullscreenEnabled !== false) {
+        try {
+          await el.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
+        } catch {
+          await el.requestFullscreen();
+        }
+      } else if (el.webkitRequestFullscreen && doc.webkitFullscreenEnabled !== false) {
+        await Promise.resolve(el.webkitRequestFullscreen());
+      } else if (el.mozRequestFullScreen && doc.mozFullScreenEnabled !== false) {
+        await Promise.resolve(el.mozRequestFullScreen());
+      } else if (el.msRequestFullscreen && doc.msFullscreenEnabled !== false) {
+        await Promise.resolve(el.msRequestFullscreen());
+      }
+    } catch {
+      syncFullscreenClass(Boolean(getFullscreenElement()));
+      return false;
+    }
+
+    const active = Boolean(getFullscreenElement());
+    syncFullscreenClass(active);
+    if (active) {
+      lockLandscapeOrientation().catch(() => undefined);
+    }
+    return active;
+  })().finally(() => {
+    if (pendingEnterFs === attemptPromise) {
+      pendingEnterFs = null;
+      pendingFromClick = false;
+    }
+  });
+
+  pendingEnterFs = attemptPromise;
+  return attemptPromise;
 }
 
 export async function exitFullscreenSafe(): Promise<void> {
@@ -229,7 +237,6 @@ export function onFullscreenChange(cb: (isFs: boolean) => void): () => void {
 
 export function bindAutoLandscapeFullscreen(): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
-  let inFlight = false;
   let lastClickAttempt = 0;
   let lastTouchAttempt = 0;
 
@@ -255,19 +262,16 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
 
     const now = Date.now();
-    if (inFlight) return;
-    if (source === 'click' && now - lastClickAttempt < 180) return;
-    if (source === 'touch' && now - lastTouchAttempt < 350) return;
+    // Never let a failed/pending touchend block click (click is the most reliable user activation on Android WebAPK)
+    if (source === 'click') {
+      if (now - lastClickAttempt < 120) return;
+      lastClickAttempt = now;
+    } else {
+      if (now - lastTouchAttempt < 280) return;
+      lastTouchAttempt = now;
+    }
 
-    inFlight = true;
-    if (source === 'click') lastClickAttempt = now;
-    else lastTouchAttempt = now;
-
-    enterImmersiveFullscreen()
-      .catch(() => undefined)
-      .finally(() => {
-        inFlight = false;
-      });
+    enterImmersiveFullscreen(source === 'click').catch(() => undefined);
   };
 
   const rootStyle = document.documentElement.style;
@@ -316,31 +320,30 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
   const readProbeInsets = (activeFs: boolean): SafeInsets => {
     const cs = window.getComputedStyle(probe);
-    const isLand = window.innerWidth > window.innerHeight;
+    const isLand = window.innerWidth >= window.innerHeight;
+    const rawT = Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0));
+    const rawR = Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0));
+    const rawB = Math.max(0, Math.round(parseFloat(cs.paddingBottom) || 0));
+    const rawL = Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0));
     if (!isAppleDevice) {
       if (isLand) {
         // In Android landscape fullscreen/standalone, top & bottom bars are transient overlays (never cutouts)
         return {
           t: 0,
-          r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
+          r: rawR < 120 ? rawR : 0,
           b: 0,
-          l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
+          l: rawL < 120 ? rawL : 0
         };
       }
       // In Android portrait fullscreen/standalone, bottom navigation bar is transient (not a notch)
       return {
-        t: activeFs ? 0 : Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
-        r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
+        t: activeFs ? 0 : rawT,
+        r: rawR < 120 ? rawR : 0,
         b: 0,
-        l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
+        l: rawL < 120 ? rawL : 0
       };
     }
-    return {
-      t: Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
-      r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
-      b: Math.max(0, Math.round(parseFloat(cs.paddingBottom) || 0)),
-      l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
-    };
+    return { t: rawT, r: rawR, b: rawB, l: rawL };
   };
 
   const applyLockedInsets = (ins: SafeInsets) => {
@@ -414,16 +417,31 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
 
     const oriKey = getOriKey();
+    const isLand = window.innerWidth >= window.innerHeight;
     const cur = readProbeInsets(activeFs);
     const prev = lockedByOri.get(oriKey);
-    const next: SafeInsets = !prev
-      ? cur
-      : {
-          t: Math.min(prev.t, cur.t),
-          r: Math.min(prev.r, cur.r),
-          b: Math.min(prev.b, cur.b),
-          l: Math.min(prev.l, cur.l)
-        };
+
+    let next: SafeInsets;
+    if (!isAppleDevice && isLand) {
+      // Lock top & bottom to 0 in Android landscape so transient bars never push UI;
+      // preserve side cutout insets detected while immersive fullscreen is active.
+      next = {
+        t: 0,
+        b: 0,
+        r: activeFs ? Math.max(prev?.r || 0, cur.r) : prev ? prev.r : cur.r,
+        l: activeFs ? Math.max(prev?.l || 0, cur.l) : prev ? prev.l : cur.l
+      };
+    } else {
+      next = !prev
+        ? cur
+        : {
+            t: Math.min(prev.t, cur.t),
+            r: activeFs ? Math.max(prev.r, cur.r) : Math.min(prev.r, cur.r),
+            b: Math.min(prev.b, cur.b),
+            l: activeFs ? Math.max(prev.l, cur.l) : Math.min(prev.l, cur.l)
+          };
+    }
+
     lockedByOri.set(oriKey, next);
     applyLockedInsets(next);
   };
@@ -439,6 +457,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
   };
 
   const onTouchEnd = (e: TouchEvent) => {
+    if (e.changedTouches.length > 1) return;
     tryEngage(e.target, 'touch');
   };
 
@@ -513,6 +532,13 @@ export function bindAutoLandscapeFullscreen(): () => void {
   document.addEventListener('mozfullscreenchange', onFsChange);
   document.addEventListener('MSFullscreenChange', onFsChange);
 
+  const displayModeQueries = [
+    window.matchMedia?.('(display-mode: fullscreen)'),
+    window.matchMedia?.('(display-mode: standalone)'),
+    window.matchMedia?.('(display-mode: minimal-ui)')
+  ].filter((m): m is MediaQueryList => Boolean(m));
+  displayModeQueries.forEach((m) => m.addEventListener?.('change', updateSafeAreas));
+
   updateSafeAreas();
   initTimer1 = window.setTimeout(() => updateSafeAreas(), 250);
   initTimer2 = window.setTimeout(() => updateSafeAreas(), 800);
@@ -534,6 +560,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     lvhProbe.remove();
     clearLockedInsets();
     clearLockedViewport();
+    displayModeQueries.forEach((m) => m.removeEventListener?.('change', updateSafeAreas));
     window.removeEventListener('click', onClick, { capture: true });
     window.removeEventListener('touchend', onTouchEnd, { capture: true });
     window.removeEventListener('focus', onVisibilityOrFocus);

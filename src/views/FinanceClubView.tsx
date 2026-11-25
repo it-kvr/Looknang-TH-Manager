@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle } from 'lucide-react';
+import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -1500,14 +1500,35 @@ export const FinanceClubView: React.FC<{
           });
         };
 
+        const randomizeInlineCoachOutfit = () => {
+          SFX.tap();
+          const pool = COACH_OUTFITS.filter((o) => o.id !== displayCoachOutfitId);
+          const src = pool.length ? pool : COACH_OUTFITS;
+          const pick = src[R(0, src.length - 1)];
+          if (!pick) return;
+          onUpdateState((d) => {
+            const cl = ensureClubIdentity(d);
+            cl.managerOutfit = pick.id;
+          });
+          setInlineCoachDraft((prev) => (prev ? { ...prev, outfit: pick.id } : null));
+          onToast(`เปลี่ยนชุดโค้ชเป็น "${pick.name}" แล้ว`);
+        };
+
         const toggleInlineRandomOutfit = () => {
           SFX.tap();
-          setInlineCoachDraft({
-            vis: [...displayCoachVis],
-            style: displayCoachStyleId,
-            outfit: displayCoachOutfitId,
-            randomOutfitPerMatch: !displayRandomOutfit
+          const nextRandom = !displayRandomOutfit;
+          onUpdateState((d) => {
+            const cl = ensureClubIdentity(d);
+            cl.managerRandomOutfitPerMatch = nextRandom;
           });
+          setInlineCoachDraft((prev) =>
+            prev ? { ...prev, randomOutfitPerMatch: nextRandom } : null
+          );
+          onToast(
+            nextRandom
+              ? 'เปิดสุ่มชุดโค้ชใหม่แต่ละนัดแล้ว! โค้ชจะเปลี่ยนชุดอัตโนมัติทุกแมตช์'
+              : 'ปิดการสุ่มชุดโค้ชแต่ละนัดแล้ว'
+          );
         };
 
         const saveInlineCoach = () => {
@@ -1826,7 +1847,16 @@ export const FinanceClubView: React.FC<{
                         className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
                       >
                         <Dices className="w-3.5 h-3.5" />
-                        <span>สุ่ม</span>
+                        <span>สุ่มหน้า</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={randomizeInlineCoachOutfit}
+                        title="สุ่มเปลี่ยนชุดโค้ชตอนนี้"
+                        className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                      >
+                        <Shirt className="w-3 h-3" />
+                        <span>สุ่มชุด</span>
                       </button>
                       <button
                         type="button"
@@ -1839,7 +1869,7 @@ export const FinanceClubView: React.FC<{
                         }`}
                       >
                         <Shuffle className="w-3 h-3" />
-                        <span>สุ่มชุดทุกนัด{displayRandomOutfit ? ' ✓' : ''}</span>
+                        <span>สุ่มชุดแต่ละนัด{displayRandomOutfit ? ' ✓' : ''}</span>
                       </button>
                       <button
                         type="button"

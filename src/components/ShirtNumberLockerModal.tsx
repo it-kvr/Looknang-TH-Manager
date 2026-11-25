@@ -87,7 +87,7 @@ export const ShirtNumberLockerModal: React.FC<{
       }}
     >
       <div
-        className="w-full max-w-2xl mland:max-w-[82vw] max-h-[88dvh] mland:max-h-[94dvh] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+        className="w-full max-w-2xl mland:max-w-[82vw] max-h-[calc(var(--app-dvh,1dvh)*88)] mland:max-h-[calc(var(--app-dvh,1dvh)*94)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

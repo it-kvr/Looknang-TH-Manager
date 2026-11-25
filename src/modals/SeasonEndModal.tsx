@@ -173,7 +173,7 @@ export const SeasonEndModal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
       <div
-        className={`w-full max-w-3xl mland:max-w-[94vw] max-h-[92dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border flex flex-col overflow-hidden shadow-2xl ${
+        className={`w-full max-w-3xl mland:max-w-[94vw] max-h-[calc(var(--app-dvh,1dvh)*92)] mland:h-[calc(var(--app-dvh,1dvh)*96)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border flex flex-col overflow-hidden shadow-2xl ${
           celebrationLevel === 'grand'
             ? 'border-amber-400/70 shadow-[0_0_50px_rgba(245,194,66,0.28)]'
             : celebrationLevel === 'promotion' || celebrationLevel === 'elite'

@@ -9,6 +9,7 @@ import {
   Pause,
   Play,
   Route,
+  Shirt,
   Star,
   Tag,
   Users,
@@ -467,7 +468,9 @@ export const MatchModal: React.FC<{
       let matchOutfit: CoachOutfitId = 'suit_navy';
       if (isUser) {
         if (state.club?.managerRandomOutfitPerMatch && COACH_OUTFITS.length > 0) {
-          matchOutfit = COACH_OUTFITS[R(0, COACH_OUTFITS.length - 1)]?.id || baseOutfit;
+          const pool = COACH_OUTFITS.filter((o) => o.id !== baseOutfit);
+          const src = pool.length ? pool : COACH_OUTFITS;
+          matchOutfit = src[R(0, src.length - 1)]?.id || baseOutfit;
         } else {
           matchOutfit = baseOutfit;
         }
@@ -576,6 +579,35 @@ export const MatchModal: React.FC<{
   if (!worldRef.current) {
     worldRef.current = buildInitialWorld();
   }
+
+  const [liveCoachOutfitId, setLiveCoachOutfitId] = useState<CoachOutfitId>(() => {
+    const c = meIsHome ? worldRef.current?.sideline?.coachH : worldRef.current?.sideline?.coachA;
+    return c?.outfit || state.club?.managerOutfit || 'suit_navy';
+  });
+
+  const handleRandomizeLiveCoachOutfit = () => {
+    if (state.mode !== 'm') return;
+    SFX.tap();
+    const curId = liveCoachOutfitId;
+    const pool = COACH_OUTFITS.filter((o) => o.id !== curId);
+    const src = pool.length ? pool : COACH_OUTFITS;
+    const pick = src[R(0, src.length - 1)];
+    if (!pick) return;
+    const w = worldRef.current;
+    if (w?.sideline) {
+      const coach = meIsHome ? w.sideline.coachH : w.sideline.coachA;
+      coach.outfit = pick.id;
+      coach.gestureTimer = Math.max(coach.gestureTimer || 0, 1.1);
+    }
+    setLiveCoachOutfitId(pick.id);
+    setLogs((prev) => [
+      { m: minute, text: `👔 เปลี่ยนชุดโค้ชข้างสนามเป็น "${pick.name}"`, tone: 'sys' },
+      ...prev.slice(0, 79)
+    ]);
+  };
+
+  const liveCoachOutfitName =
+    COACH_OUTFITS.find((o) => o.id === liveCoachOutfitId)?.name || 'ชุดโค้ช';
 
   const getEffectiveTeamCfg = (side: 'H' | 'A', curMin: number) => {
     const isUserSide = (side === 'H' && meIsHome) || (side === 'A' && !meIsHome);
@@ -9450,6 +9482,19 @@ export const MatchModal: React.FC<{
                           <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
                           <span>สโล</span>
                         </button>
+
+                        {state.mode === 'm' && (
+                          <button
+                            type="button"
+                            title={`สุ่มชุดโค้ชข้างสนามนัดนี้ (ปัจจุบัน: ${liveCoachOutfitName})`}
+                            aria-label="สุ่มชุดโค้ช"
+                            onClick={handleRandomizeLiveCoachOutfit}
+                            className="btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/60 hover:bg-[var(--g-soft)]"
+                          >
+                            <Shirt className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                            <span>ชุดโค้ช</span>
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -9473,16 +9518,27 @@ export const MatchModal: React.FC<{
                         </button>
 
                         {state.mode === 'm' && (
-                          <button
-                            type="button"
-                            onClick={() => openTacticsStudio()}
-                            className="btn btn-xs btn-surface"
-                          >
-                            <span>📋 แผน/เปลี่ยนตัว</span>
-                            <span className="px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9px] mland:text-[7.5px]">
-                              {5 - subsUsed.length}
-                            </span>
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              title={`สุ่มชุดโค้ชข้างสนามนัดนี้ (ปัจจุบัน: ${liveCoachOutfitName})`}
+                              onClick={handleRandomizeLiveCoachOutfit}
+                              className="btn btn-xs btn-secondary"
+                            >
+                              <Shirt className="w-3 h-3 shrink-0" />
+                              <span>สุ่มชุดโค้ช</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openTacticsStudio()}
+                              className="btn btn-xs btn-surface"
+                            >
+                              <span>📋 แผน/เปลี่ยนตัว</span>
+                              <span className="px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9px] mland:text-[7.5px]">
+                                {5 - subsUsed.length}
+                              </span>
+                            </button>
+                          </>
                         )}
                       </div>
                     )}

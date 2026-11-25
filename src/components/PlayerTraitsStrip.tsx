@@ -385,7 +385,7 @@ export const PlayerTraitsStrip: React.FC<{
             onClick={() => setShowGuideModal(false)}
           >
             <div
-              className="w-full max-w-3xl h-[min(90dvh,680px)] rounded-3xl bg-[var(--bg)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
+              className="w-full max-w-3xl h-[min(calc(var(--app-dvh,1dvh)*90),680px)] rounded-3xl bg-[var(--bg)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}

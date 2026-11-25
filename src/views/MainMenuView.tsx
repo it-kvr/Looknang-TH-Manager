@@ -1532,7 +1532,7 @@ export const MainMenu: React.FC<{
       </div>
 
       {/* Landscape-First Main Hub: Centered Stage with Breathing Room Top/Bottom */}
-      <div className="relative z-10 w-full max-w-5xl mx-auto h-full sm:max-h-[500px] mland:max-h-[min(360px,calc(100dvh-28px))] px-4 sm:px-7 mland:px-5 py-4 sm:py-5 mland:py-2.5 flex flex-col gap-3 sm:gap-3.5 mland:gap-2.5 overflow-hidden">
+      <div className="relative z-10 w-full max-w-5xl mx-auto h-full sm:max-h-[500px] mland:max-h-[min(360px,calc(var(--app-dvh,1dvh)*100-28px))] px-4 sm:px-7 mland:px-5 py-4 sm:py-5 mland:py-2.5 flex flex-col gap-3 sm:gap-3.5 mland:gap-2.5 overflow-hidden">
         {/* Top Stadium Masthead */}
         <header className="shrink-0 flex items-center justify-between gap-3 mland:gap-2">
           <div className="flex items-center gap-3 mland:gap-2 min-w-0">

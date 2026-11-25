@@ -47,7 +47,7 @@ export const CustomFormationModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-3xl h-[90dvh] max-h-[92dvh] mland:max-w-[96vw] mland:h-[96dvh] mland:max-h-[96dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-3xl h-[calc(var(--app-dvh,1dvh)*90)] max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-w-[96vw] mland:h-[calc(var(--app-dvh,1dvh)*96)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 flex items-center justify-between px-4 py-2.5 mland:px-3 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <div>
             <h3 className="font-bold text-sm sm:text-base mland:text-xs">✏️ ปรับผังแผนเอง ({countPos('DF')}-{countPos('MF')}-{countPos('FW')})</h3>

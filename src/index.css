@@ -96,8 +96,12 @@ html.is-standalone #root {
   background-color: var(--bg);
 }
 
+html.is-fullscreen:not(.kb-open),
+html.is-standalone:not(.kb-open),
 html.is-fullscreen:not(.kb-open) body,
 html.is-standalone:not(.kb-open) body,
+html.is-fullscreen:not(.kb-open) #root,
+html.is-standalone:not(.kb-open) #root,
 html.is-fullscreen:not(.kb-open) .fixed.inset-0,
 html.is-standalone:not(.kb-open) .fixed.inset-0 {
   top: 0;

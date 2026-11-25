@@ -43,7 +43,7 @@ export const GodBlessingModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[65] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
-      <div className="w-full max-w-4xl mland:max-w-[97vw] h-[92dvh] mland:h-[96dvh] max-h-[94dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-4xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*92)] mland:h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-1.5 bg-gradient-to-r from-[#2e2000] via-[#17281e] to-[#0c1c14] text-white border-b border-[var(--lamp)]/35 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h3 className="font-bold text-base mland:text-xs font-display flex items-center gap-1.5 truncate">

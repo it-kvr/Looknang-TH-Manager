@@ -468,7 +468,7 @@ export const PWAInstallButton: React.FC<{
           role="dialog"
           aria-modal="true"
           aria-labelledby="pwa-guide-title"
-          className="w-full max-w-2xl max-h-[94dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl my-auto flex flex-col"
+          className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*94)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl my-auto flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}

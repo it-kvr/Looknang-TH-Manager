@@ -72,7 +72,7 @@ export const PlayerInspectorModal: React.FC<{
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(94dvh,740px)] mland:h-[95dvh] mland:max-h-[calc(100dvh-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(calc(var(--app-dvh,1dvh)*94),740px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Clean Compact Modal Header */}
@@ -527,7 +527,7 @@ export const TeamInspectorModal: React.FC<{
       onClick={onClose}
     >
       <div
-        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(92dvh,720px)] mland:h-[95dvh] mland:max-h-[calc(100dvh-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
+        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(calc(var(--app-dvh,1dvh)*92),720px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Compact Modal Header */}

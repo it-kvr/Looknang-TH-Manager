@@ -94,7 +94,7 @@ export const SeasonStatsModal: React.FC<{
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-4xl mland:max-w-[96vw] max-h-[92dvh] mland:h-[96dvh] mland:max-h-[96dvh] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-4xl mland:max-w-[96vw] max-h-[calc(var(--app-dvh,1dvh)*92)] mland:h-[calc(var(--app-dvh,1dvh)*96)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="shrink-0 px-4 py-3 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
