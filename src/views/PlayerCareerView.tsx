@@ -312,7 +312,7 @@ export const PlayerCareerView: React.FC<{
           {([
             ['plan', '📅 แผนฝึก'],
             ['missions', '🎯 ภารกิจ'],
-            ['perks', `🌟 สกิล & สไตล์`],
+            ['perks', '🌟 สกิล'],
             ['stats', '📊 ค่าพลัง'],
             ['history', '📜 ประวัติ']
           ] as const).map(([k, lbl]) => (
@@ -320,7 +320,7 @@ export const PlayerCareerView: React.FC<{
               key={k}
               type="button"
               onClick={() => { SFX.tap(); setCareerTab(k); }}
-              className={`seg-btn py-1.5 mland:py-1 truncate px-1 ${careerTab === k ? 'seg-btn-active' : ''}`}
+              className={`seg-btn py-1.5 mland:py-1 px-1 whitespace-nowrap ${careerTab === k ? 'seg-btn-active' : ''}`}
             >
               {lbl}
             </button>
@@ -426,26 +426,29 @@ export const PlayerCareerView: React.FC<{
 
           {careerTab === 'perks' && (
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-                <div className="seg-bar">
+              <div className="flex items-center justify-between gap-2 shrink-0">
+                <div className="seg-bar grid grid-cols-4 flex-1 min-w-0">
                   {([
                     ['perks', `🌟 ติดตัว (${perks.length})`],
                     ['traits', `🧬 สไตล์ (${(p.traits || []).length}/6)`],
-                    ['roles', `🎯 ตำแหน่งรอง (${(p.altRoles || []).length})`],
-                    ['sig', '⚡ อาวุธประจำตัว']
+                    ['roles', `🎯 ตำแหน่ง (${(p.altRoles || []).length})`],
+                    ['sig', '⚡ อาวุธ']
                   ] as const).map(([sk, slbl]) => (
                     <button
                       key={sk}
                       type="button"
                       onClick={() => { SFX.tap(); setSkillSubTab(sk); }}
-                      className={`seg-btn whitespace-nowrap ${skillSubTab === sk ? 'seg-btn-active' : ''}`}
+                      className={`seg-btn whitespace-nowrap px-1.5 ${skillSubTab === sk ? 'seg-btn-active' : ''}`}
                     >
                       {slbl}
                     </button>
                   ))}
                 </div>
-                <span className="text-xs mland:text-[10px] font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular shrink-0">
-                  ชื่อเสียงคงเหลือ: ★ {p.rep ?? 10}
+                <span
+                  title="ชื่อเสียงคงเหลือ"
+                  className="px-2 py-1 rounded-lg bg-[var(--lamp-soft)] border border-[var(--lamp)]/40 text-xs mland:text-[10px] font-extrabold text-[#9a6700] dark:text-[var(--lamp)] tabular shrink-0 whitespace-nowrap"
+                >
+                  ★ {p.rep ?? 10}
                 </span>
               </div>
 

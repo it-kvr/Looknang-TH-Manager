@@ -15,10 +15,11 @@ export const LeagueView: React.FC<{
   onInspectTeam: (teamId: number) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
+  onShallowPatch?: (patcher: (prev: GameState) => Partial<GameState>) => void;
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
   onToast?: (msg: string) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onNavigate, onOpenSeasonStats, onToast }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -35,7 +36,7 @@ export const LeagueView: React.FC<{
   const ms = useMemo(() => teamStats(me, state), [me, state]);
 
   const leagueRows = useMemo(() => {
-    if (sub !== 3) return [];
+    if (sub !== 1) return [];
     return state.teams
       .filter((t) => t.tier === vt)
       .map((t) => ({ t, st: teamStats(t, state) }))
@@ -1142,10 +1143,14 @@ export const LeagueView: React.FC<{
               type="button"
               onClick={() => {
                 SFX.tap();
-                onUpdateState((d) => {
-                  if (d.v === 'c') d.v = 't';
-                  d.tv = tabIdx;
-                });
+                if (onShallowPatch) {
+                  onShallowPatch((prev) => ({ v: prev.v === 'c' ? 't' : prev.v, tv: tabIdx }));
+                } else {
+                  onUpdateState((d) => {
+                    if (d.v === 'c') d.v = 't';
+                    d.tv = tabIdx;
+                  });
+                }
               }}
               className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2.5 text-xs mland:text-[10.5px] shrink-0 min-w-0 ${
                 sub === tabIdx
@@ -1173,7 +1178,11 @@ export const LeagueView: React.FC<{
                 onChange={(e) => {
                   const nextTier = Number(e.target.value);
                   SFX.tap();
-                  onUpdateState((d) => { d.lg = nextTier; });
+                  if (onShallowPatch) {
+                    onShallowPatch(() => ({ lg: nextTier }));
+                  } else {
+                    onUpdateState((d) => { d.lg = nextTier; });
+                  }
                 }}
                 className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl pl-3 pr-7 mland:pl-2.5 mland:pr-6 py-1.5 mland:py-1 font-bold text-xs mland:text-[10.5px] text-[var(--ink)] cursor-pointer truncate max-w-[175px] sm:max-w-none transition-colors shadow-xs"
               >
@@ -1190,7 +1199,11 @@ export const LeagueView: React.FC<{
                 type="button"
                 title="กลับลีกของฉัน"
                 aria-label="กลับลีกของฉัน"
-                onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
+                onClick={() => {
+                  SFX.tap();
+                  if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
+                  else onUpdateState((d) => { d.lg = me.tier; });
+                }}
                 className="btn btn-sm btn-gold shrink-0"
               >
                 <span>↩</span>
@@ -1208,7 +1221,11 @@ export const LeagueView: React.FC<{
                   key={lbl}
                   type="button"
                   title={isMyTier ? `${lbl} (ลีกของคุณ)` : lbl}
-                  onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
+                  onClick={() => {
+                    SFX.tap();
+                    if (onShallowPatch) onShallowPatch(() => ({ lg: idx }));
+                    else onUpdateState((d) => { d.lg = idx; });
+                  }}
                   className={`seg-btn py-1.5 mland:py-1 px-2.5 mland:px-2 text-xs mland:text-[10.5px] min-w-0 ${
                     active
                       ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs hover:text-[var(--bg)]'

@@ -123,6 +123,18 @@ html.is-standalone:not(.is-fs-peek):not(.kb-open) #root {
   margin: 0;
 }
 
+html.kb-open,
+html.kb-open body,
+html.kb-open #root {
+  height: var(--kb-vh, 100dvh);
+  max-height: var(--kb-vh, 100dvh);
+}
+
+html.kb-open .fixed.inset-0 {
+  height: var(--kb-vh, 100dvh);
+  max-height: var(--kb-vh, 100dvh);
+}
+
 html:fullscreen::backdrop,
 html:-webkit-full-screen::backdrop {
   background-color: var(--bg);

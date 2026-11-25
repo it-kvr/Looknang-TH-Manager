@@ -109,3 +109,144 @@ export const KIT_PATTERNS = [
 ];
 
 export const KIT_COLLARS = ['คอกลม', 'คอวี', 'คอปก', 'คอทูโทน'];
+
+/** Smart complementary away kit pattern suggestions keyed by home kit pattern index */
+export const AWAY_KIT_PAIRINGS: Record<number, readonly number[]> = {
+  0: [5, 4, 12, 6],
+  1: [0, 5, 10, 4],
+  2: [0, 4, 12, 6],
+  3: [0, 5, 11, 10],
+  4: [0, 12, 5, 10],
+  5: [0, 4, 1, 12],
+  6: [0, 12, 2, 10],
+  7: [0, 5, 10, 12],
+  8: [0, 4, 12, 11],
+  9: [0, 12, 5, 10],
+  10: [5, 4, 1, 0],
+  11: [0, 12, 6, 10],
+  12: [4, 5, 10, 0],
+  13: [0, 5, 12, 6]
+};
+
+export interface TurfGradeSpec {
+  id: 'local' | 'regional' | 'pro' | 'elite' | 'fifa_hybrid';
+  grade: 'D' | 'C' | 'B' | 'A' | 'S';
+  name: string;
+  shortName: string;
+  desc: string;
+  cutStyle: 'patchy' | 'bands' | 'pro_bands' | 'checker' | 'hybrid_pro';
+  maxPuddles: number;
+  /** [stripeEven, stripeOdd, apron] */
+  palette: {
+    day: readonly [string, string, string];
+    rainy: readonly [string, string, string];
+    night: readonly [string, string, string];
+    nightRainy: readonly [string, string, string];
+  };
+  fatigueMult: number;
+  injuryMult: number;
+  passPaceBonus: number;
+}
+
+export const TURF_GRADE_SPECS: readonly TurfGradeSpec[] = [
+  {
+    id: 'local',
+    grade: 'D',
+    name: 'เกรด D · หญ้าพื้นบ้าน (ท้องถิ่น)',
+    shortName: 'เกรด D พื้นบ้าน',
+    desc: 'หญ้าพื้นบ้านสีอมเหลือง มีรอยสึกหน้าโกลและกลางสนาม ระบายน้ำช้า',
+    cutStyle: 'patchy',
+    maxPuddles: 7,
+    palette: {
+      day: ['#2f6f33', '#377d3a', '#1e4b21'],
+      rainy: ['#255427', '#2b612e', '#173818'],
+      night: ['#1d4f25', '#235c2c', '#0d2914'],
+      nightRainy: ['#17401f', '#1c4b24', '#091e0f']
+    },
+    fatigueMult: 1.07,
+    injuryMult: 1.12,
+    passPaceBonus: -0.04
+  },
+  {
+    id: 'regional',
+    grade: 'C',
+    name: 'เกรด C · หญ้าธรรมชาติมาตรฐาน',
+    shortName: 'เกรด C มาตรฐาน',
+    desc: 'หญ้าจริงตัดแถบกว้างเรียบร้อย สึกหรอบางจุดเวลาเจอฝน',
+    cutStyle: 'bands',
+    maxPuddles: 5,
+    palette: {
+      day: ['#24773e', '#2c8848', '#175229'],
+      rainy: ['#1c5b31', '#236a3a', '#113c20'],
+      night: ['#1a5c32', '#206b3b', '#0a2214'],
+      nightRainy: ['#154a28', '#1a5730', '#081a10']
+    },
+    fatigueMult: 1.02,
+    injuryMult: 1.04,
+    passPaceBonus: -0.01
+  },
+  {
+    id: 'pro',
+    grade: 'B',
+    name: 'เกรด B · หญ้านวลน้อยลีกอาชีพ',
+    shortName: 'เกรด B ลีกอาชีพ',
+    desc: 'หญ้าเขียวแน่นตัดลายแถบคมชัด พร้อมระบบระบายน้ำมาตรฐานลีก',
+    cutStyle: 'pro_bands',
+    maxPuddles: 3,
+    palette: {
+      day: ['#217846', '#298e53', '#165834'],
+      rainy: ['#195836', '#1f6840', '#103b25'],
+      night: ['#195e39', '#1f6e44', '#081d13'],
+      nightRainy: ['#144b2e', '#195937', '#06160e']
+    },
+    fatigueMult: 1,
+    injuryMult: 1,
+    passPaceBonus: 0.01
+  },
+  {
+    id: 'elite',
+    grade: 'A',
+    name: 'เกรด A · หญ้า Bermuda แข่งขัน',
+    shortName: 'เกรด A เบอร์มิวดา',
+    desc: 'หญ้าเบอร์มิวดาตัดลายตารางหมากรุกคมกริบ บอลไหลลื่น ระบายน้ำไว',
+    cutStyle: 'checker',
+    maxPuddles: 1,
+    palette: {
+      day: ['#1b7f49', '#259659', '#115430'],
+      rainy: ['#166039', '#1d7345', '#0d3d24'],
+      night: ['#15633b', '#1d7849', '#071f14'],
+      nightRainy: ['#115030', '#17623b', '#061810']
+    },
+    fatigueMult: 0.96,
+    injuryMult: 0.93,
+    passPaceBonus: 0.03
+  },
+  {
+    id: 'fifa_hybrid',
+    grade: 'S',
+    name: 'เกรด S · พื้นไฮบริด FIFA Pro',
+    shortName: 'เกรด S FIFA Pro',
+    desc: 'หญ้าไฮบริดตัดลายแชมเปียนส์ทูโทน พร้อมระบบดูดน้ำใต้ดิน ไร้แอ่งน้ำขัง',
+    cutStyle: 'hybrid_pro',
+    maxPuddles: 0,
+    palette: {
+      day: ['#147d4a', '#1f985b', '#0d5030'],
+      rainy: ['#12673d', '#1a7d4b', '#0a3f25'],
+      night: ['#11663c', '#1a7d4b', '#061c12'],
+      nightRainy: ['#0f5634', '#166b41', '#05160e']
+    },
+    fatigueMult: 0.93,
+    injuryMult: 0.88,
+    passPaceBonus: 0.05
+  }
+];
+
+export const getTurfGradeForLevel = (turfLv: number, turfCond = 100): TurfGradeSpec => {
+  let idx = turfLv <= 1 ? 0 : turfLv <= 3 ? 1 : turfLv <= 6 ? 2 : turfLv <= 8 ? 3 : 4;
+  if (turfCond < 55 && idx > 0) idx -= 1;
+  return TURF_GRADE_SPECS[idx] || TURF_GRADE_SPECS[1];
+};
+
+export const getTurfGradeSpec = (id?: string): TurfGradeSpec =>
+  TURF_GRADE_SPECS.find((t) => t.id === id) || TURF_GRADE_SPECS[2];
+

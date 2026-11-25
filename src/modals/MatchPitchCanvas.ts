@@ -1,5 +1,6 @@
 import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId } from '../types/game';
 import { COACH_OUTFITS } from '../data/thaiFootballData';
+import { getTurfGradeSpec } from '../data/crestAndKitData';
 import { R, clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
 import { faceBodySvg } from '../components/SvgVisuals';
@@ -124,7 +125,7 @@ export const drawLivePitchToCanvas = (
   const rect = cw > 0 && ch > 0 ? null : canvas.getBoundingClientRect();
   const cssW = Math.max(320, Math.round((cw > 0 ? cw : rect?.width) || 640));
   const cssH = Math.max(180, Math.round((ch > 0 ? ch : rect?.height) || 330));
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
   const pxW = Math.round(cssW * dpr);
   const pxH = Math.round(cssH * dpr);
   if (canvas.width !== pxW || canvas.height !== pxH) {
@@ -145,13 +146,15 @@ export const drawLivePitchToCanvas = (
   const env = world.env;
   const isRainy = env?.season === 'rainy';
   const isNight = env?.timeOfDay === 'night';
+  const turfSpec = getTurfGradeSpec(env?.turfGrade);
+  const turfCond = clamp(Math.round(env?.turfCond ?? 100), 40, 100);
   const puddleSig =
     isRainy && env?.puddles?.length
       ? env.puddles
           .map((pd) => `${pd.x.toFixed(1)},${pd.y.toFixed(1)},${pd.rx.toFixed(1)},${pd.ry.toFixed(1)},${pd.rot.toFixed(2)},${pd.alpha.toFixed(2)}`)
           .join(';')
       : '';
-  const bgKey = `${cssW}x${cssH}@${dpr}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
+  const bgKey = `${cssW}x${cssH}@${dpr}|${turfSpec.id}|${Math.round(turfCond / 5)}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
 
   if (typeof document !== 'undefined') {
     if (!pitchBgCache || pitchBgCache.key !== bgKey) {
@@ -164,37 +167,91 @@ export const drawLivePitchToCanvas = (
       if (bctx) {
         bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-        // 1. Stadium apron & mowed turf stripes (reflecting season & day/night lighting)
-        const apronFill = isNight
+        // 1. Stadium apron & multi-grade mowed turf pattern (cached once offscreen for zero FPS lag)
+        const [stripeEven, stripeOdd, apronFill] = isNight
           ? isRainy
-            ? '#06160e'
-            : '#081d13'
+            ? turfSpec.palette.nightRainy
+            : turfSpec.palette.night
           : isRainy
-            ? '#103b25'
-            : '#165834';
+            ? turfSpec.palette.rainy
+            : turfSpec.palette.day;
+
         bctx.fillStyle = apronFill;
         bctx.fillRect(0, 0, cssW, cssH);
 
-        const stripeEven = isNight
-          ? isRainy
-            ? '#144b2e'
-            : '#195e39'
-          : isRainy
-            ? '#195836'
-            : '#217846';
-        const stripeOdd = isNight
-          ? isRainy
-            ? '#195937'
-            : '#1f6e44'
-          : isRainy
-            ? '#1f6840'
-            : '#298e53';
-
-        const stripeCount = 12;
+        const stripeCount =
+          turfSpec.cutStyle === 'patchy'
+            ? 8
+            : turfSpec.cutStyle === 'bands'
+              ? 10
+              : turfSpec.cutStyle === 'hybrid_pro'
+                ? 14
+                : 12;
         const stripeW = pw / stripeCount;
         for (let i = 0; i < stripeCount; i++) {
           bctx.fillStyle = i % 2 === 0 ? stripeEven : stripeOdd;
           bctx.fillRect(padX + i * stripeW, padY, stripeW + 0.5, ph);
+        }
+
+        // Cross-cut / specialty elite stadium mowing patterns (drawn once into background bitmap)
+        if (turfSpec.cutStyle === 'checker' || turfSpec.cutStyle === 'hybrid_pro') {
+          const rowBands = turfSpec.cutStyle === 'hybrid_pro' ? 8 : 7;
+          const bandH = ph / rowBands;
+          bctx.save();
+          bctx.beginPath();
+          bctx.rect(padX, padY, pw, ph);
+          bctx.clip();
+          for (let r = 0; r < rowBands; r++) {
+            if (r % 2 === 0) {
+              bctx.fillStyle = turfSpec.cutStyle === 'hybrid_pro' ? 'rgba(6, 36, 20, 0.085)' : 'rgba(6, 34, 18, 0.075)';
+              bctx.fillRect(padX, padY + r * bandH, pw, bandH + 0.4);
+            }
+          }
+          if (turfSpec.cutStyle === 'hybrid_pro') {
+            // Signature Champions League / FIFA Pro subtle center ring mow & penalty box cut frame
+            bctx.strokeStyle = 'rgba(255, 255, 255, 0.055)';
+            bctx.lineWidth = Math.max(8, ph * 0.045);
+            bctx.beginPath();
+            bctx.arc(px(50), py(50), ph * 0.22, 0, Math.PI * 2);
+            bctx.stroke();
+
+            bctx.strokeStyle = 'rgba(6, 32, 18, 0.14)';
+            bctx.lineWidth = Math.max(4, pw * 0.008);
+            bctx.strokeRect(padX + 2, padY + 2, pw - 4, ph - 4);
+          }
+          bctx.restore();
+        } else if (turfSpec.cutStyle === 'pro_bands') {
+          bctx.save();
+          bctx.strokeStyle = 'rgba(6, 32, 18, 0.1)';
+          bctx.lineWidth = Math.max(3, pw * 0.006);
+          bctx.strokeRect(padX + 1.5, padY + 1.5, pw - 3, ph - 3);
+          bctx.restore();
+        }
+
+        // Deterministic worn turf / sandy earth patches for local pitches or worn turf condition
+        const wearFactor = turfSpec.cutStyle === 'patchy' ? Math.max(0.55, (105 - turfCond) / 60) : turfCond < 78 ? (80 - turfCond) / 55 : 0;
+        if (wearFactor > 0.05) {
+          const wearSpots: readonly [number, number, number, number][] = [
+            [4.5, 50, 4.2, 11.5],
+            [95.5, 50, 4.2, 11.5],
+            [50, 50, 5.2, 8.2],
+            [11.5, 50, 2.8, 4.8],
+            [88.5, 50, 2.8, 4.8]
+          ];
+          wearSpots.forEach(([wx, wy, wrx, wry]) => {
+            const cxW = px(wx);
+            const cyW = py(wy);
+            const rxW = Math.max(6, (wrx / 100) * pw);
+            const ryW = Math.max(6, (wry / 100) * ph);
+            const wGrad = bctx.createRadialGradient(cxW, cyW, rxW * 0.15, cxW, cyW, Math.max(rxW, ryW));
+            const alpha = clamp(0.16 * wearFactor, 0.04, 0.28);
+            wGrad.addColorStop(0, isRainy ? `rgba(74, 58, 34, ${alpha * 1.15})` : `rgba(138, 122, 62, ${alpha})`);
+            wGrad.addColorStop(1, 'rgba(90, 80, 40, 0)');
+            bctx.fillStyle = wGrad;
+            bctx.beginPath();
+            bctx.ellipse(cxW, cyW, rxW, ryW, 0, 0, Math.PI * 2);
+            bctx.fill();
+          });
         }
 
         // Subtle rainy-season surface water patches on the turf (static layer)
@@ -330,17 +387,26 @@ export const drawLivePitchToCanvas = (
         bctx.strokeRect(padX, sixTop, sixW, sixH);
         bctx.strokeRect(padX + pw - sixW, sixTop, sixW, sixH);
 
-        // Penalty spots & arcs
-        bctx.beginPath();
-        bctx.arc(px(11), py(50), 2, 0, Math.PI * 2);
-        bctx.arc(px(89), py(50), 2, 0, Math.PI * 2);
-        bctx.fill();
+        // Penalty spots & arcs (D-arcs strictly outside each 18-yard box, intersecting box edge cleanly)
+        const leftSpotX = px(11);
+        const rightSpotX = px(89);
+        const spotY = py(50);
 
         bctx.beginPath();
-        bctx.arc(px(11), py(50), ph * 0.135, -0.68, 0.68);
+        bctx.arc(leftSpotX, spotY, 2, 0, Math.PI * 2);
+        bctx.arc(rightSpotX, spotY, 2, 0, Math.PI * 2);
+        bctx.fill();
+
+        const leftBoxEdgeX = padX + boxW;
+        const spotToBoxDx = Math.max(4, leftBoxEdgeX - leftSpotX);
+        const penArcR = Math.max(spotToBoxDx * 1.44, ph * 0.145);
+        const penArcAng = Math.acos(clamp(spotToBoxDx / penArcR, -0.96, 0.96));
+
+        bctx.beginPath();
+        bctx.arc(leftSpotX, spotY, penArcR, -penArcAng, penArcAng);
         bctx.stroke();
         bctx.beginPath();
-        bctx.arc(px(89), py(50), ph * 0.135, Math.PI - 0.68, Math.PI + 0.68);
+        bctx.arc(rightSpotX, spotY, penArcR, Math.PI - penArcAng, Math.PI + penArcAng);
         bctx.stroke();
 
         // Corner arcs
@@ -1947,9 +2013,6 @@ export const drawLivePitchToCanvas = (
     const cx = cssW / 2;
 
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetY = 4;
     ctx.fillStyle = gb.isOwnGoal ? 'rgba(28, 10, 16, 0.95)' : 'rgba(9, 23, 16, 0.94)';
     ctx.strokeStyle = gb.isOwnGoal ? '#fb7185' : gb.isMyGoal ? '#facc15' : '#4ade80';
     ctx.lineWidth = 1.6;

@@ -216,16 +216,16 @@ export const PlayerClubTransferView: React.FC<{
           <button
             type="button"
             onClick={() => { SFX.tap(); setSubTab('status'); }}
-            className={`seg-btn ${subTab === 'status' ? 'seg-btn-active' : ''}`}
+            className={`seg-btn whitespace-nowrap px-2.5 ${subTab === 'status' ? 'seg-btn-active' : ''}`}
           >
-            🏟️ สถานะในทีม & ทีมชาติ
+            🏟️ สถานะทีม
           </button>
           <button
             type="button"
             onClick={() => { SFX.tap(); setSubTab('transfer'); }}
-            className={`seg-btn ${subTab === 'transfer' ? 'seg-btn-active' : ''}`}
+            className={`seg-btn whitespace-nowrap px-2.5 ${subTab === 'transfer' ? 'seg-btn-active' : ''}`}
           >
-            🤝 ย้ายทีม & ทีมที่คุม
+            🤝 ย้ายสโมสร
           </button>
         </div>
       </div>

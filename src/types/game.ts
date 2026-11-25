@@ -393,6 +393,8 @@ export interface PlayerPerfResult {
   subOut?: boolean;
   yc?: number;
   rc?: number;
+  motm?: boolean;
+  repGain?: number;
 }
 
 export interface MatchResult {
@@ -818,6 +820,20 @@ export interface GameState {
   sponsorDeals?: ActivePartnerDeal[];
   megastore?: ClubMegastoreState;
   seasonArchives?: SeasonArchiveRecord[];
+  liveStream?: LiveStreamPlanId;
+  streamStats?: LiveStreamStatsSummary;
+}
+
+export type LiveStreamPlanId = 'off' | 'basic' | 'pro' | 'studio';
+
+export interface LiveStreamStatsSummary {
+  lastViewers: number;
+  lastPeakViewers: number;
+  lastIn: number;
+  lastOut: number;
+  totalIn: number;
+  totalOut: number;
+  matches: number;
 }
 
 export type FacilityKey = 'st' | 'tr' | 'ya' | 'med' | 'merchLv' | 'turfLv' | 'analyticsLv';
@@ -951,6 +967,8 @@ export interface FinishedMatchPayload {
   playerActions?: Record<string, Partial<Record<PersonalMissionMetric, number>>>;
   att?: number;
   cap?: number;
+  streamViewers?: number;
+  streamPeakViewers?: number;
 }
 
 export type PitchIntent =
@@ -1199,11 +1217,15 @@ export interface MatchPitchPuddle {
   alpha: number;
 }
 
+export type TurfGradeId = 'local' | 'regional' | 'pro' | 'elite' | 'fifa_hybrid';
+
 export interface MatchEnvironment {
   season: 'rainy' | 'summer';
   timeOfDay: 'day' | 'night';
   puddles: MatchPitchPuddle[];
   sunAngle: number;
+  turfGrade: TurfGradeId;
+  turfCond: number;
 }
 
 export interface LiveMatchWorld {

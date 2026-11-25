@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, PlayerJerseySaleRecord, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, PlayerJerseySaleRecord, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
@@ -596,29 +596,42 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   // Miracle rapid comeback ("ปาฏิหาริย์พลิกนรก") when trailing by 2+ goals
   const deficitAbs = Math.abs(gh - ga);
   if (deficitAbs >= 2) {
-    const miracleChance = deficitAbs >= 3 ? (bg ? 0.13 : 0.095) : (bg ? 0.09 : 0.065);
+    const miracleChance = deficitAbs >= 3 ? (bg ? 0.17 : 0.12) : bg ? 0.115 : 0.08;
     if (Math.random() < miracleChance) {
       const trailingHome = gh < ga;
       const rallyTeam = trailingHome ? h : a;
       const rallyPool = trailingHome ? H.x : G.x;
-      // Push early/mid goals earlier so the final surge feels like a rapid comeback!
+      // Push early/mid goals earlier so the final surge feels like a sustained comeback storm!
       evs.forEach((ev) => {
-        if (ev.m > 68) ev.m = R(12, 66);
+        if (ev.m > 56) ev.m = R(10, 54);
       });
-      const rallyGoals = deficitAbs + (Math.random() < 0.65 ? 1 : 0);
-      const startBurstMin = R(70, 77);
+      const rollOutcome = Math.random();
+      const rallyGoals =
+        rollOutcome < 0.44
+          ? deficitAbs + 1 // full hell-flip overtake
+          : rollOutcome < 0.78
+            ? deficitAbs // miraculous draw
+            : Math.max(1, deficitAbs - 1); // heroic near-miss chase
+      const startBurstMin = R(58, 74);
+      const stepSpan = Math.max(2, Math.floor((90 - startBurstMin) / Math.max(1, rallyGoals)));
       const addedEvs = genMatchGoals(rallyTeam, rallyPool, rallyGoals, s?.p).map((ev, idx) => ({
         ...ev,
-        m: clamp(startBurstMin + idx * R(2, 4) + R(0, 2), 70, 90)
+        m: clamp(startBurstMin + idx * stepSpan + R(0, 2), 58, 90)
       }));
       evs = [...evs, ...addedEvs].sort((x, y) => x.m - y.m);
       if (trailingHome) gh += rallyGoals;
       else ga += rallyGoals;
+      const overtook = rallyGoals > deficitAbs;
+      const equalized = rallyGoals === deficitAbs;
       incidents.push({
         m: startBurstMin,
         t: rallyTeam.id,
         kind: 'miracle',
-        text: `⚡ ปาฏิหาริย์พลิกนรก! ${rallyTeam.name} โดนนำห่างแต่ฮึดรัว ${rallyGoals} ประตูติดในช่วงท้ายเกม!`
+        text: overtook
+          ? `🌋 ปาฏิหาริย์พลิกนรก! ${rallyTeam.name} โดนนำห่าง ${deficitAbs} ลูก แต่ฮึดรัว ${rallyGoals} ประตูพลิกแซงเหลือเชื่อ!`
+          : equalized
+            ? `⚡ ปาฏิหาริย์โกงความตาย! ${rallyTeam.name} โดนนำห่าง ${deficitAbs} ลูก แต่ฮึดไล่รัว ${rallyGoals} ประตูตีเสมอท้ายเกม!`
+            : `🔥 ฮึดสู้พลิกนรก! ${rallyTeam.name} โดนนำห่างแต่รัวไล่มา ${rallyGoals} ประตูแบบเกือบแซงได้!`
       });
     }
   }
@@ -2163,6 +2176,185 @@ export function computeMatchAttendance(
   return { att, cap, pct: Math.round((att / Math.max(1, cap)) * 100) };
 }
 
+export interface LiveStreamPlanDef {
+  id: LiveStreamPlanId;
+  name: string;
+  short: string;
+  desc: string;
+  crewCost: number;
+  gearCost: number;
+  rightsCost: number;
+  totalCost: number;
+  viewerMult: number;
+  revBase: number;
+  revPer1k: number;
+  fanGainBonus: number;
+}
+
+export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
+  {
+    id: 'off',
+    name: 'ปิดไลฟ์สดช่องสโมสร',
+    short: 'ปิดไลฟ์สด',
+    desc: 'ไม่เปิดถ่ายทอดสดช่องทางสโมสรเอง (งดรายรับและค่าใช้จ่าย)',
+    crewCost: 0,
+    gearCost: 0,
+    rightsCost: 0,
+    totalCost: 0,
+    viewerMult: 0,
+    revBase: 0,
+    revPer1k: 0,
+    fanGainBonus: 0
+  },
+  {
+    id: 'basic',
+    name: 'ไลฟ์สดพื้นฐาน (มือถือ & แอดมิน)',
+    short: 'ไลฟ์พื้นฐาน',
+    desc: 'ทีมงานขนาดเล็ก ต้นทุนต่ำ เหมาะสำหรับสโมสรเริ่มต้นทำกำไรสม่ำเสมอ',
+    crewCost: 1,
+    gearCost: 1,
+    rightsCost: 1,
+    totalCost: 3,
+    viewerMult: 1.0,
+    revBase: 2.6,
+    revPer1k: 1.3,
+    fanGainBonus: 25
+  },
+  {
+    id: 'pro',
+    name: 'ทีมโปรดักชันกึ่งโปร (หลายมุมกล้อง)',
+    short: 'กึ่งโปร HD',
+    desc: 'เพิ่มผู้บรรยายและกล้องหลายมุม ดึงดูดยอดคนดูและโดเนทสูงขึ้น',
+    crewCost: 4,
+    gearCost: 3,
+    rightsCost: 3,
+    totalCost: 10,
+    viewerMult: 1.85,
+    revBase: 4.5,
+    revPer1k: 1.65,
+    fanGainBonus: 70
+  },
+  {
+    id: 'studio',
+    name: 'สตูดิโอถ่ายทอดสดลิขสิทธิ์เต็มรูปแบบ',
+    short: 'สตูดิโอเต็มรูป',
+    desc: 'โปรดักชันระดับลีกอาชีพ ยอดคนดูสูงสุดและบูสต์ฐานแฟนบอล (ต้องมียอดชมสูงถึงคุ้มทุน)',
+    crewCost: 8,
+    gearCost: 7,
+    rightsCost: 7,
+    totalCost: 22,
+    viewerMult: 3.0,
+    revBase: 7.5,
+    revPer1k: 1.95,
+    fanGainBonus: 160
+  }
+];
+
+export function resolveLiveStreamPlan(s?: Pick<GameState, 'liveStream' | 'mode'> | null): LiveStreamPlanDef {
+  if (s?.mode === 'p') {
+    return LIVE_STREAM_PLANS[2];
+  }
+  const id = s?.liveStream || 'basic';
+  return LIVE_STREAM_PLANS.find((p) => p.id === id) || LIVE_STREAM_PLANS[1];
+}
+
+export function computeMatchStreamProjection(
+  h: Team,
+  a: Team,
+  s: GameState,
+  opts?: { kind?: MatchKind | 'asia'; derby?: boolean; planOverride?: LiveStreamPlanDef }
+) {
+  const plan = opts?.planOverride || resolveLiveStreamPlan(s);
+  const hFans = ensureTeamFans(h);
+  const aFans = ensureTeamFans(a);
+  const maxTier = Math.max(h.tier ?? 0, a.tier ?? 0);
+  const tierMult = maxTier === 0 ? 0.72 : maxTier === 1 ? 1.25 : 2.15;
+  const kind = opts?.kind || 'league';
+  const kindMult =
+    kind === 'asia' ? 1.9 : kind === 'sc' ? 1.75 : kind === 'cup' ? 1.45 : kind === 'lc' ? 1.32 : kind === 'dc' ? 1.2 : 1;
+  const derbyMult = opts?.derby ? 1.42 : 1;
+  const moodMul = clamp(0.78 + ((s.fan ?? 55) / 100) * 0.44, 0.75, 1.3);
+  const rawBase = Math.round(((hFans * 0.055 + aFans * 0.042) * tierMult * kindMult * derbyMult * moodMul) / 10) * 10;
+  // Even when club official stream is off, league broadcast still has ambient audience for display in MatchModal
+  const effectiveViewerMult = plan.id === 'off' ? 0.45 : plan.viewerMult;
+  const baseViewers = Math.max(420, Math.round(rawBase * effectiveViewerMult));
+  const peakViewers = Math.round(baseViewers * 1.24);
+  if (plan.id === 'off') {
+    return {
+      plan,
+      baseViewers,
+      peakViewers,
+      estIn: 0,
+      estOut: 0,
+      estNet: 0
+    };
+  }
+  const estIn = Math.max(1, Math.round(plan.revBase + (baseViewers / 1000) * plan.revPer1k));
+  const estOut = plan.totalCost;
+  return {
+    plan,
+    baseViewers,
+    peakViewers,
+    estIn,
+    estOut,
+    estNet: estIn - estOut
+  };
+}
+
+export function applyLiveStreamMatchSettlement(
+  d: GameState,
+  me: Team,
+  opp: Team,
+  opts: {
+    kind?: MatchKind | 'asia';
+    isHome: boolean;
+    isDerby?: boolean;
+    myGoals: number;
+    oppGoals: number;
+    viewers?: number;
+    peakViewers?: number;
+  }
+): { streamIn: number; streamOut: number; viewers: number; peakViewers: number } {
+  if (d.mode !== 'm') return { streamIn: 0, streamOut: 0, viewers: 0, peakViewers: 0 };
+  const plan = resolveLiveStreamPlan(d);
+  if (plan.id === 'off') return { streamIn: 0, streamOut: 0, viewers: 0, peakViewers: 0 };
+  const h = opts.isHome ? me : opp;
+  const a = opts.isHome ? opp : me;
+  const proj = computeMatchStreamProjection(h, a, d, {
+    kind: opts.kind || 'league',
+    derby: opts.isDerby,
+    planOverride: plan
+  });
+  const viewers = Math.max(300, Math.round(opts.viewers ?? proj.baseViewers));
+  const peakViewers = Math.max(viewers, Math.round(opts.peakViewers ?? proj.peakViewers));
+  const totalGoals = Math.max(0, (opts.myGoals || 0) + (opts.oppGoals || 0));
+  const winMul = opts.myGoals > opts.oppGoals ? 1.12 : opts.myGoals === opts.oppGoals ? 1.0 : 0.92;
+  const hypeMul = clamp(1 + totalGoals * 0.045 + (opts.isDerby ? 0.14 : 0), 0.95, 1.45);
+  const streamIn = Math.max(1, Math.round((plan.revBase + (peakViewers / 1000) * plan.revPer1k) * winMul * hypeMul));
+  const streamOut = plan.totalCost;
+
+  d.money += streamIn;
+  logFin(d, `รายได้ไลฟ์สดออนไลน์ (${plan.short} · ${fmtFansShort(peakViewers)} ดู)`, streamIn);
+  d.money -= streamOut;
+  logFin(d, `ค่าถ่ายทอดสด (ทีมงาน ${plan.crewCost}k · อุปกรณ์ ${plan.gearCost}k · ลิขสิทธิ์ ${plan.rightsCost}k)`, -streamOut);
+
+  if (plan.fanGainBonus > 0) {
+    const bonusFans = Math.round(plan.fanGainBonus * (opts.myGoals >= opts.oppGoals ? 1.2 : 0.85));
+    adjustTeamFans(me, bonusFans);
+  }
+  const prev = d.streamStats;
+  d.streamStats = {
+    lastViewers: viewers,
+    lastPeakViewers: peakViewers,
+    lastIn: streamIn,
+    lastOut: streamOut,
+    totalIn: (prev?.totalIn || 0) + streamIn,
+    totalOut: (prev?.totalOut || 0) + streamOut,
+    matches: (prev?.matches || 0) + 1
+  };
+  return { streamIn, streamOut, viewers, peakViewers };
+}
+
 export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
   const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
@@ -2174,8 +2366,9 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const myFans = ensureTeamFans(me);
   const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
   const nxtRound = s.fx?.[s.md];
-  const nxtPair = nxtRound?.find(([x]) => x === s.me);
-  const oppTeam = nxtPair ? s.teams[nxtPair[1]] : me;
+  const nxtPair = nxtRound?.find(([x, y]) => x === s.me || y === s.me);
+  const oppId = nxtPair ? (nxtPair[0] === s.me ? nxtPair[1] : nxtPair[0]) : s.me;
+  const oppTeam = s.teams[oppId] || me;
   const attEst = computeMatchAttendance(me, oppTeam || me, s, { kind: 'league', derby: !!s.derby });
   const estAtt = attEst.att;
   const attRate = attEst.pct / 100;
@@ -2186,12 +2379,15 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const estSponsor = mainSp.total;
   const activeDeals = getActivePartnerDeals(s);
   const dealIncome = activeDeals.reduce((sum, d) => sum + d.perMatch, 0);
+  const streamProj = computeMatchStreamProjection(me, oppTeam || me, s, { kind: 'league', derby: !!s.derby });
+  const estStreamIn = streamProj.estIn;
+  const estStreamOut = streamProj.estOut;
   const wageCost = squadWage(me);
   const staffCost = Math.round(getStaffWage(s));
   const loanCost = s.bankLoan ? s.bankLoan.per : 0;
-  const totalOut = wageCost + staffCost + loanCost;
-  const homeIn = estTicket + estMerch + estSponsor + dealIncome;
-  const awayIn = estSponsor + dealIncome;
+  const totalOut = wageCost + staffCost + loanCost + estStreamOut;
+  const homeIn = estTicket + estMerch + estSponsor + dealIncome + estStreamIn;
+  const awayIn = estSponsor + dealIncome + estStreamIn;
   return {
     cap,
     estAtt,
@@ -2202,6 +2398,11 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
     dealIncome,
     activeDealsCount: activeDeals.length,
     ticketPlan: tPlan,
+    streamPlan: streamProj.plan,
+    estStreamViewers: streamProj.baseViewers,
+    estStreamIn,
+    estStreamOut,
+    estStreamNet: estStreamIn - estStreamOut,
     wageCost,
     staffCost,
     loanCost,
@@ -2903,7 +3104,7 @@ export function calcPlayerPerf(
   H: Team,
   _A: Team,
   matchRatings?: Record<string, number>,
-  meta?: { played: boolean; mins: number; subIn: boolean; subOut: boolean; yc: number; rc: number }
+  meta?: { played: boolean; mins: number; subIn: boolean; subOut: boolean; yc: number; rc: number; motm?: boolean }
 ): PlayerPerfResult {
   const p = s.p!;
   const home = H.id === s.me;
@@ -2999,6 +3200,42 @@ export function calcPlayerPerf(
     cardPenalty;
 
   rt = clamp(Math.round(rt * 10) / 10, 3.8, 10);
+  const isMotm = Boolean(meta?.motm ?? (r.motm && r.motm === p.name));
+  const rcCount = meta?.rc || 0;
+  const rtRep = rt >= 8.2 ? 3 : rt >= 7.4 ? 2 : rt >= 6.7 ? 1 : 0;
+  const winRep = mins >= 20 && my > op ? 1 : 0;
+  const bigMatchRep = (s.pc || s.pa || s.derby) && rt >= 7.0 ? 1 : 0;
+  const motmRep = isMotm ? 2 : 0;
+  const goalRep =
+    p.pos === 'DF' || p.pos === 'GK'
+      ? Math.min(2, gl) * 2
+      : p.pos === 'MF'
+        ? Math.min(3, gl) + (gl >= 1 ? 1 : 0)
+        : Math.min(3, gl);
+  const assistRep = Math.min(2, as);
+  const roleRep =
+    mins >= 45
+      ? p.pos === 'GK'
+        ? op === 0
+          ? 2
+          : op === 1 && rt >= 7.0
+            ? 1
+            : 0
+        : p.pos === 'DF'
+          ? op === 0
+            ? 2
+            : op <= 1 && my >= op && rt >= 6.9
+              ? 1
+              : 0
+          : p.pos === 'MF'
+            ? gl === 0 && as === 0 && my > op && rt >= 7.0
+              ? 1
+              : 0
+            : 0
+      : 0;
+  const fameBonus = perks.includes('fame_magnet') ? 2 : 0;
+  const rawRepGain = Math.max(0, rtRep + winRep + bigMatchRep + motmRep + goalRep + assistRep + roleRep - (rcCount > 0 ? 2 : 0)) + fameBonus;
+
   const meSqRef = s.teams[s.me]?.sq.find((q) => q.me);
   const devProf = meSqRef ? getPlayerDevProfile(meSqRef, p) : null;
   const ovScale = getOvGrowthScale(ovMe(p), meSqRef?.pot);
@@ -3019,7 +3256,9 @@ export function calcPlayerPerf(
     subIn: meta?.subIn,
     subOut: meta?.subOut,
     yc: meta?.yc || 0,
-    rc: meta?.rc || 0
+    rc: rcCount,
+    motm: isMotm,
+    repGain: rawRepGain
   };
 }
 
@@ -3040,7 +3279,18 @@ export function creditPlayerPerf(s: GameState, f: PlayerPerfResult) {
   p.gl += f.gl;
   p.as += f.as;
   const fameBonus = (p.perks || []).includes('fame_magnet') ? 2 : 0;
-  p.rep = (p.rep || 0) + (f.rt >= 7.5 ? 3 : f.rt >= 6.8 ? 1 : 0) + f.gl * 2 + f.as + fameBonus;
+  const fallbackRep =
+    Math.max(
+      0,
+      (f.rt >= 8.2 ? 3 : f.rt >= 7.4 ? 2 : f.rt >= 6.7 ? 1 : 0) +
+        ((f.mins ?? 90) >= 20 && f.my > f.op ? 1 : 0) +
+        (f.motm ? 2 : 0) +
+        Math.min(3, f.gl) +
+        Math.min(2, f.as) +
+        ((f.mins ?? 90) >= 45 && (p.pos === 'GK' || p.pos === 'DF') ? (f.op === 0 ? 2 : f.op <= 1 && f.rt >= 7.0 ? 1 : 0) : 0) -
+        ((f.rc || 0) > 0 ? 2 : 0)
+    ) + fameBonus;
+  p.rep = (p.rep || 0) + (typeof f.repGain === 'number' ? f.repGain : fallbackRep);
   const meSq = s.teams[s.me]?.sq.find((q) => q.me);
   if (f.pts > 0) f.grew = autoGrow(p, f.pts, meSq?.pot);
   p.vid = 0;
@@ -6029,7 +6279,8 @@ export function simulateInstantMatchPayload(
       subIn: !!subInEv,
       subOut: !!subOutEv,
       yc,
-      rc
+      rc,
+      motm: motm === pName
     });
   }
 
@@ -6098,6 +6349,7 @@ export function simulateInstantMatchPayload(
   });
 
   const attInfo = computeMatchAttendance(H, A, s, { kind, derby: !!s.derby });
+  const streamProj = computeMatchStreamProjection(H, A, s, { kind, derby: !!s.derby });
   return {
     gh: r.gh,
     ga: r.ga,
@@ -6106,6 +6358,8 @@ export function simulateInstantMatchPayload(
     xgA: r.xgA || 1.0,
     att: attInfo.att,
     cap: attInfo.cap,
+    streamViewers: streamProj.baseViewers,
+    streamPeakViewers: streamProj.peakViewers,
     pen,
     penText,
     ratings,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt } from 'lucide-react';
+import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2 } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -28,7 +28,7 @@ import type {
   PlayerJerseySaleRecord
 } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
+import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS, AWAY_KIT_PAIRINGS, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis, getShirtNo } from '../engine/playerCore';
@@ -67,9 +67,12 @@ import {
   MEGASTORE_STOCK_TIERS,
   ensureMegastoreState,
   getMegastoreProjection,
+  LIVE_STREAM_PLANS,
+  resolveLiveStreamPlan,
+  computeMatchStreamProjection,
   type ClubFinanceChartPoint
 } from '../engine/simulation';
-import { renderCrestPattern, ClubCrest, KitJersey, PlayerFace } from '../components/SvgVisuals';
+import { renderCrestPattern, ClubCrest, KitJersey, KitPatternThumb, PlayerFace } from '../components/SvgVisuals';
 import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel } from '../components/FacilityUpgradeSvg';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 
@@ -134,6 +137,7 @@ export const FinanceClubView: React.FC<{
   const [ledgerFilter, setLedgerFilter] = useState<'all' | 'in' | 'out'>('all');
   const [showCoachEditor, setShowCoachEditor] = useState(false);
   const [editingClubInfo, setEditingClubInfo] = useState(false);
+  const [clubEditFocusField, setClubEditFocusField] = useState<'name' | 'nick' | 'std' | 'managerName' | 'motto' | 'founded'>('name');
   const [editingCaptain, setEditingCaptain] = useState(false);
   const [clubDraft, setClubDraft] = useState({
     name: '',
@@ -145,6 +149,9 @@ export const FinanceClubView: React.FC<{
   });
   const [identityDraft, setIdentityDraft] = useState<ClubIdentity | null>(null);
   const [crestStudioTab, setCrestStudioTab] = useState<'shape' | 'icon'>('shape');
+  const [identityMobilePane, setIdentityMobilePane] = useState<'crest' | 'kit'>('crest');
+  const [kitColorTarget, setKitColorTarget] = useState<'c1' | 'c2' | 'c3'>('c1');
+  const [kitPatternTarget, setKitPatternTarget] = useState<'home' | 'away'>('home');
   const [coachEditorTab, setCoachEditorTab] = useState<'look' | 'style'>('look');
   const [coachDraft, setCoachDraft] = useState<{
     name: string;
@@ -457,7 +464,7 @@ export const FinanceClubView: React.FC<{
           {(
             [
               ['overview', '📊 กระแสเงิน & แคมเปญ'],
-              ['commercial', '💼 สปอนเซอร์ & ตั๋ว'],
+              ['commercial', '💼 สปอนเซอร์ & ไลฟ์สด'],
               ['megastore', '🛍️ เมกะสโตร์ & ยอดขาย'],
               ['ledger', '📒 ธนาคาร & บัญชี']
             ] as const
@@ -490,7 +497,14 @@ export const FinanceClubView: React.FC<{
                     <div className="flex justify-between text-[var(--mut)]"><span>ค่าตั๋ว (~{est.estAtt.toLocaleString()} คน · {est.ticketPlan.priceBaht}฿)</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estTicket)}</b></div>
                     <div className="flex justify-between text-[var(--mut)]"><span>เมกะสโตร์สโมสร (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</b></div>
                     <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์ ({est.activeDealsCount})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
-                    <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>รายจ่ายรวม/นัด</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.totalOut)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]">
+                      <span>ไลฟ์สด ({est.streamPlan.id === 'off' ? 'ปิด' : `~${fmtFansShort(est.estStreamViewers)} ดู`})</span>
+                      <b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estStreamIn)}</b>
+                    </div>
+                    <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60">
+                      <span>รายจ่ายรวม (รวมทีมงาน/ลิขสิทธิ์ไลฟ์ {fmtMoneyNum(est.estStreamOut)})</span>
+                      <b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.totalOut)}</b>
+                    </div>
                   </div>
 
                   <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-1.5 text-xs">
@@ -498,9 +512,13 @@ export const FinanceClubView: React.FC<{
                       <span>✈️ เกมเยือน</span>
                       <span className={`tabular ${est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>{est.awayNet >= 0 ? `+${fmtMoneyNum(est.awayNet)}` : fmtMoneyNum(est.awayNet)}</span>
                     </div>
-                    <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor)}</b></div>
-                    <div className="flex justify-between text-[var(--mut)]"><span>ดีลพาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.dealIncome)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]">
+                      <span>ไลฟ์สดออนไลน์ ({est.streamPlan.short})</span>
+                      <b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estStreamIn)}</b>
+                    </div>
                     <div className="flex justify-between text-[var(--mut)]"><span>ค่าเหนื่อยนักเตะ + สตาฟฟ์</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.wageCost + est.staffCost)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าทีมงาน/อุปกรณ์/ลิขสิทธิ์ไลฟ์</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.estStreamOut)}</b></div>
                     <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>ผ่อนเงินกู้ธนาคาร</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.loanCost)}</b></div>
                   </div>
                 </div>
@@ -999,6 +1017,104 @@ export const FinanceClubView: React.FC<{
                   <b className="text-[var(--g)] tabular shrink-0">+{fmtMoney(est.estTicket)} / นัดเหย้า</b>
                 </div>
               </div>
+
+              {/* Online Live Streaming & Broadcast Rights Card */}
+              {(() => {
+                const curStreamPlan = resolveLiveStreamPlan(state);
+                const nxtRound = state.fx?.[state.md];
+                const nxtPair = nxtRound?.find(([x, y]) => x === state.me || y === state.me);
+                const oppId = nxtPair ? (nxtPair[0] === state.me ? nxtPair[1] : nxtPair[0]) : state.me;
+                const oppTeam = state.teams[oppId] || me;
+                return (
+                  <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5">
+                        <Radio className="w-4 h-4 text-[var(--red)] shrink-0" />
+                        <span>ช่องทางไลฟ์สดออนไลน์ &amp; ลิขสิทธิ์ถ่ายทอดสด</span>
+                      </h3>
+                      <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
+                        {curStreamPlan.id === 'off' ? 'ปิดอยู่' : `~${est.estStreamViewers.toLocaleString()} คนดู`}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {LIVE_STREAM_PLANS.map((plan) => {
+                        const active = curStreamPlan.id === plan.id;
+                        const proj = computeMatchStreamProjection(me, oppTeam, state, {
+                          kind: 'league',
+                          derby: !!state.derby,
+                          planOverride: plan
+                        });
+                        return (
+                          <button
+                            key={plan.id}
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              onUpdateState((d) => {
+                                d.liveStream = plan.id;
+                              });
+                              onToast(`ตั้งค่าช่องทางไลฟ์สดเป็น "${plan.short}" แล้ว`);
+                            }}
+                            className={`p-2.5 mland:p-2 rounded-xl text-left border transition-colors cursor-pointer ${
+                              active
+                                ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                                : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--line)]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1.5 text-xs font-bold">
+                              <span className="truncate">{plan.short}</span>
+                              {plan.id === 'off' ? (
+                                <span className="text-[10.5px] opacity-80 shrink-0">0฿ / นัด</span>
+                              ) : (
+                                <span
+                                  className={`tabular text-[11px] shrink-0 ${
+                                    active
+                                      ? 'text-white'
+                                      : proj.estNet >= 0
+                                        ? 'text-[var(--g)]'
+                                        : 'text-[var(--red)]'
+                                  }`}
+                                >
+                                  สุทธิ {proj.estNet >= 0 ? `+${fmtMoneyNum(proj.estNet)}` : fmtMoneyNum(proj.estNet)}
+                                </span>
+                              )}
+                            </div>
+                            {plan.id === 'off' ? (
+                              <div className={`text-[10px] mt-1 leading-snug ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
+                                {plan.desc}
+                              </div>
+                            ) : (
+                              <>
+                                <div className={`text-[10px] mt-0.5 tabular flex items-center justify-between gap-1 ${active ? 'text-white/90' : 'text-[var(--ink)]'}`}>
+                                  <span>คนดู ~{fmtFansShort(proj.baseViewers)}</span>
+                                  <span>รับ +{fmtMoneyNum(proj.estIn)} · จ่าย -{fmtMoneyNum(proj.estOut)}</span>
+                                </div>
+                                <div className={`text-[9.5px] mt-0.5 tabular truncate ${active ? 'text-white/80' : 'text-[var(--mut)]'}`}>
+                                  ทีมงาน {plan.crewCost}k · อุปกรณ์ {plan.gearCost}k · ลิขสิทธิ์ {plan.rightsCost}k
+                                </div>
+                              </>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {state.streamStats && state.streamStats.matches > 0 && (
+                      <div className="p-2.5 rounded-xl bg-[var(--surface-2)] flex flex-wrap items-center justify-between gap-2 text-[11px] tabular">
+                        <span className="text-[var(--mut)]">
+                          ไลฟ์ล่าสุด <b className="text-[var(--ink)]">{state.streamStats.lastPeakViewers.toLocaleString()}</b> คนดู · รวม {state.streamStats.matches} นัด
+                        </span>
+                        <span className="font-bold">
+                          <span className="text-[var(--g)]">+{fmtMoneyNum(state.streamStats.totalIn)}</span>
+                          <span className="text-[var(--mut)] mx-1">/</span>
+                          <span className="text-[var(--red)]">-{fmtMoneyNum(state.streamStats.totalOut)}</span>
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Clean Bridge Card resolving "Souvenir Shop vs Megastore" duplication */}
               {(() => {
@@ -1849,12 +1965,57 @@ export const FinanceClubView: React.FC<{
                 <ClubCrest name={me.name} size={48} team={me} club={dk} isMyClub />
               </div>
               <div className="w-px h-7 mland:h-5 bg-[var(--line)]/75 mx-0.5" aria-hidden="true" />
-              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                <KitJersey club={dk} away={false} size={44} />
-              </div>
-              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
-                <KitJersey club={dk} away={true} size={44} />
-              </div>
+              {clubTab === 'identity' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentityMobilePane('kit');
+                      setKitPatternTarget('home');
+                      setKitColorTarget('c1');
+                    }}
+                    title="คลิกเพื่อแก้ไขชุดเหย้า"
+                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                      kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
+                    }`}
+                  >
+                    <div className="[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                      <KitJersey club={dk} away={false} size={40} />
+                    </div>
+                    <span className={`text-[8.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                      เหย้า
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentityMobilePane('kit');
+                      setKitPatternTarget('away');
+                      setKitColorTarget('c2');
+                    }}
+                    title="คลิกเพื่อแก้ไขชุดเยือน"
+                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                      kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
+                    }`}
+                  >
+                    <div className="[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                      <KitJersey club={dk} away={true} size={40} />
+                    </div>
+                    <span className={`text-[8.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                      เยือน
+                    </span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                    <KitJersey club={dk} away={false} size={44} />
+                  </div>
+                  <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                    <KitJersey club={dk} away={true} size={44} />
+                  </div>
+                </>
+              )}
             </div>
 
             <div className="space-y-0.5 min-w-0 flex-1">
@@ -1920,7 +2081,8 @@ export const FinanceClubView: React.FC<{
                     cl.pat = R(0, CREST_PATTERNS.length - 1);
                     cl.crestBorder = R(0, 3);
                     cl.kit = R(0, KIT_PATTERNS.length - 1);
-                    cl.awayKit = Math.random() < 0.5 ? R(0, KIT_PATTERNS.length - 1) : undefined;
+                    const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
+                    cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
                     cl.collar = R(0, KIT_COLLARS.length - 1);
                     cl.cuffTrim = Math.random() < 0.75;
                     cl.icon = P(icons);
@@ -2028,7 +2190,7 @@ export const FinanceClubView: React.FC<{
           .slice()
           .sort((a, b) => (b.n === me.cap ? 1 : 0) - (a.n === me.cap ? 1 : 0) || b.ov - a.ov || b.age - a.age);
 
-        const openClubEdit = () => {
+        const openClubEdit = (focusField: 'name' | 'nick' | 'std' | 'managerName' | 'motto' | 'founded' = 'name') => {
           SFX.tap();
           setClubDraft({
             name: k.name || me.name || '',
@@ -2038,6 +2200,7 @@ export const FinanceClubView: React.FC<{
             motto: k.motto || '',
             founded: String(k.founded || 2568)
           });
+          setClubEditFocusField(focusField);
           setEditingClubInfo(true);
         };
 
@@ -2204,173 +2367,97 @@ export const FinanceClubView: React.FC<{
                         {TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}
                       </p>
                     </div>
-                    {editingClubInfo ? (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button type="button" onClick={cancelClubEdit} className="btn btn-xs btn-secondary whitespace-nowrap shrink-0">
-                          <X className="w-3.5 h-3.5" />
-                          <span>ยกเลิก</span>
-                        </button>
-                        <button type="button" onClick={saveClubEdit} className="btn btn-xs btn-primary whitespace-nowrap shrink-0">
-                          <Check className="w-3.5 h-3.5" />
-                          <span>บันทึก</span>
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setClubTab('identity');
-                          }}
-                          className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
-                        >
-                          <span>ตรา & ชุดแข่ง</span>
-                          <ArrowUpRight className="w-3 h-3" />
-                        </button>
-                        <button type="button" onClick={openClubEdit} className="btn btn-xs btn-primary whitespace-nowrap shrink-0">
-                          <Pencil className="w-3 h-3" />
-                          <span>แก้ไขข้อมูล</span>
-                        </button>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setClubTab('identity');
+                        }}
+                        className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                      >
+                        <span>ตรา & ชุดแข่ง</span>
+                        <ArrowUpRight className="w-3 h-3" />
+                      </button>
+                      <button type="button" onClick={() => openClubEdit('name')} className="btn btn-xs btn-primary whitespace-nowrap shrink-0">
+                        <Pencil className="w-3 h-3" />
+                        <span>แก้ไขข้อมูล</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {editingClubInfo ? (
-                    <form
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        saveClubEdit();
-                      }}
-                      className="space-y-2.5 pt-1"
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => openClubEdit('name')}
+                      title="แตะเพื่อแก้ไขชื่อสโมสร"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
                     >
-                      <div className="grid grid-cols-2 gap-2.5">
-                        <div>
-                          <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">ชื่อสโมสร</label>
-                          <input
-                            value={clubDraft.name}
-                            maxLength={20}
-                            onChange={(e) => setClubDraft((prev) => ({ ...prev, name: e.target.value }))}
-                            className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)] focus:border-[var(--g)]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">ฉายาสโมสร</label>
-                          <input
-                            value={clubDraft.nick}
-                            maxLength={20}
-                            placeholder="เช่น เสือล้านนา"
-                            onChange={(e) => setClubDraft((prev) => ({ ...prev, nick: e.target.value }))}
-                            className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)] focus:border-[var(--g)]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">ชื่อสนามเหย้า</label>
-                          <input
-                            value={clubDraft.std}
-                            maxLength={24}
-                            onChange={(e) => setClubDraft((prev) => ({ ...prev, std: e.target.value }))}
-                            className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)] focus:border-[var(--g)]"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">ชื่อผู้จัดการทีม</label>
-                          <input
-                            value={clubDraft.managerName}
-                            maxLength={22}
-                            placeholder="เช่น โค้ชต้น"
-                            onChange={(e) => setClubDraft((prev) => ({ ...prev, managerName: e.target.value }))}
-                            className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)] focus:border-[var(--g)]"
-                          />
-                        </div>
-                        <div className="col-span-2 grid grid-cols-3 gap-2.5">
-                          <div className="col-span-2">
-                            <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">คำขวัญสโมสร</label>
-                            <input
-                              value={clubDraft.motto}
-                              maxLength={40}
-                              placeholder="เช่น สู้สุดใจเพื่อชัยชนะ"
-                              onChange={(e) => setClubDraft((prev) => ({ ...prev, motto: e.target.value }))}
-                              className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)] focus:border-[var(--g)]"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">ปีก่อตั้ง (พ.ศ.)</label>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              maxLength={4}
-                              value={clubDraft.founded}
-                              onChange={(e) =>
-                                setClubDraft((prev) => ({ ...prev, founded: e.target.value.replace(/\D/g, '').slice(0, 4) }))
-                              }
-                              className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)] tabular focus:border-[var(--g)]"
-                            />
-                          </div>
-                        </div>
+                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                        <span>ชื่อสโมสร</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5 text-[10.5px] text-[var(--mut)]">
-                        <span>พิมพ์เสร็จกดบันทึกเพื่ออัปเดตข้อมูลทั่วทั้งเกม</span>
-                        <div className="flex items-center gap-1.5">
-                          {['สู้ไม่ถอยเพื่อแฟนบอล', 'ใจเกินร้อย', 'ศักดิ์ศรีลูกหนังไทย'].map((preset) => (
-                            <button
-                              key={preset}
-                              type="button"
-                              onClick={() => setClubDraft((prev) => ({ ...prev, motto: preset }))}
-                              className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[10px] font-semibold text-[var(--ink)] cursor-pointer whitespace-nowrap"
-                            >
-                              {preset}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </form>
-                  ) : (
-                    <div
-                      onClick={openClubEdit}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          openClubEdit();
-                        }
-                      }}
-                      title="คลิกเพื่อแก้ไขข้อมูลสโมสร"
-                      className="grid grid-cols-2 gap-x-4 gap-y-2.5 pt-1 cursor-pointer rounded-xl hover:bg-[var(--surface-2)]/45 p-2 -mx-2 transition-colors"
+                      <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate mt-0.5">{me.name}</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openClubEdit('nick')}
+                      title="แตะเพื่อแก้ไขฉายาสโมสร"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
                     >
-                      <div className="min-w-0 border-b border-[var(--line)]/50 pb-2">
-                        <div className="text-[10.5px] text-[var(--mut)]">ชื่อสโมสร</div>
-                        <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate mt-0.5">{me.name}</div>
+                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                        <span>ฉายาสโมสร</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
                       </div>
-                      <div className="min-w-0 border-b border-[var(--line)]/50 pb-2">
-                        <div className="text-[10.5px] text-[var(--mut)]">ฉายาสโมสร</div>
-                        <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate mt-0.5">
-                          {k.nick || <span className="font-normal text-[var(--mut)]">แตะเพื่อตั้งฉายา</span>}
-                        </div>
+                      <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate mt-0.5">
+                        {k.nick || <span className="font-normal text-[var(--mut)]">แตะเพื่อตั้งฉายา</span>}
                       </div>
-                      <div className="min-w-0 border-b border-[var(--line)]/50 pb-2">
-                        <div className="text-[10.5px] text-[var(--mut)]">สนามเหย้า</div>
-                        <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">{k.std}</div>
-                        <div className="text-[10px] text-[var(--mut)] tabular">
-                          ความจุ {cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}
-                        </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openClubEdit('std')}
+                      title="แตะเพื่อแก้ไขชื่อสนามเหย้า"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                        <span>สนามเหย้า</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
                       </div>
-                      <div className="min-w-0 border-b border-[var(--line)]/50 pb-2">
-                        <div className="text-[10.5px] text-[var(--mut)]">ผู้จัดการทีม</div>
-                        <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">
-                          {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
-                        </div>
-                        <div className="text-[10px] text-[var(--mut)] truncate">{repRank}</div>
+                      <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">{k.std}</div>
+                      <div className="text-[10px] text-[var(--mut)] tabular">
+                        ความจุ {cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}
                       </div>
-                      <div className="col-span-2 min-w-0">
-                        <div className="text-[10.5px] text-[var(--mut)]">คำขวัญสโมสร</div>
-                        <div className="text-xs font-semibold text-[var(--ink)] truncate mt-0.5">
-                          {k.motto ? `“${k.motto}”` : <span className="font-normal text-[var(--mut)]">แตะเพื่อเพิ่มคำขวัญประจำทีม</span>}
-                        </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openClubEdit('managerName')}
+                      title="แตะเพื่อแก้ไขชื่อผู้จัดการทีม"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                        <span>ผู้จัดการทีม</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
                       </div>
-                    </div>
-                  )}
+                      <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">
+                        {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+                      </div>
+                      <div className="text-[10px] text-[var(--mut)] truncate">{repRank}</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openClubEdit('motto')}
+                      title="แตะเพื่อแก้ไขคำขวัญสโมสร"
+                      className="col-span-2 min-w-0 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                    >
+                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                        <span>คำขวัญสโมสร</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
+                      </div>
+                      <div className="text-xs font-semibold text-[var(--ink)] truncate mt-0.5">
+                        {k.motto ? `“${k.motto}”` : <span className="font-normal text-[var(--mut)]">แตะเพื่อเพิ่มคำขวัญประจำทีม</span>}
+                      </div>
+                    </button>
+                  </div>
                 </section>
 
                 {/* Section 2: Head Coach & Tactical Style */}
@@ -2839,6 +2926,225 @@ export const FinanceClubView: React.FC<{
               </div>
             </div>
 
+            {/* Dedicated Spacious Club Info Editor Modal (Easy Thai Input + Clear Buttons + Mobile Keyboard Safe) */}
+            {editingClubInfo && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-3 sm:p-4 mland:p-2"
+                onClick={cancelClubEdit}
+              >
+                <form
+                  onClick={(e) => e.stopPropagation()}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    saveClubEdit();
+                  }}
+                  className="w-full max-w-lg max-h-[calc(var(--app-dvh,1dvh)*90)] mland:max-h-[calc(var(--app-dvh,1dvh)*94)] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden"
+                >
+                  <div className="px-4 py-3 mland:py-2 border-b border-[var(--line)] flex items-center justify-between gap-3 shrink-0 bg-[var(--surface-2)]/40">
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-sm sm:text-base text-[var(--ink)]">แก้ไขข้อมูลสโมสร</h3>
+                      <p className="text-[11px] text-[var(--mut)] truncate">
+                        พิมพ์สะดวก รองรับภาษาไทยครบทุกช่อง กดปุ่ม ✕ เพื่อล้างข้อความได้ทันที
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={cancelClubEdit}
+                      aria-label="ปิดหน้าต่าง"
+                      className="btn-icon"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 mland:p-3 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--mut)] block mb-1">ชื่อสโมสร</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            autoFocus={clubEditFocusField === 'name'}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            value={clubDraft.name}
+                            maxLength={40}
+                            placeholder="ระบุชื่อสโมสร"
+                            onChange={(e) => setClubDraft((prev) => ({ ...prev, name: e.target.value }))}
+                            className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
+                          />
+                          {clubDraft.name && (
+                            <button
+                              type="button"
+                              aria-label="ล้างชื่อสโมสร"
+                              onClick={() => setClubDraft((prev) => ({ ...prev, name: '' }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--mut)] block mb-1">ฉายาสโมสร</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            autoFocus={clubEditFocusField === 'nick'}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            value={clubDraft.nick}
+                            maxLength={40}
+                            placeholder="เช่น เสือล้านนา"
+                            onChange={(e) => setClubDraft((prev) => ({ ...prev, nick: e.target.value }))}
+                            className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
+                          />
+                          {clubDraft.nick && (
+                            <button
+                              type="button"
+                              aria-label="ล้างฉายาสโมสร"
+                              onClick={() => setClubDraft((prev) => ({ ...prev, nick: '' }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--mut)] block mb-1">ชื่อสนามเหย้า</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            autoFocus={clubEditFocusField === 'std'}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            value={clubDraft.std}
+                            maxLength={48}
+                            placeholder="ระบุชื่อสนามเหย้า"
+                            onChange={(e) => setClubDraft((prev) => ({ ...prev, std: e.target.value }))}
+                            className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
+                          />
+                          {clubDraft.std && (
+                            <button
+                              type="button"
+                              aria-label="ล้างชื่อสนามเหย้า"
+                              onClick={() => setClubDraft((prev) => ({ ...prev, std: '' }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-semibold text-[var(--mut)] block mb-1">ชื่อผู้จัดการทีม</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            autoFocus={clubEditFocusField === 'managerName'}
+                            autoComplete="off"
+                            autoCorrect="off"
+                            spellCheck={false}
+                            value={clubDraft.managerName}
+                            maxLength={40}
+                            placeholder="เช่น โค้ชต้น"
+                            onChange={(e) => setClubDraft((prev) => ({ ...prev, managerName: e.target.value }))}
+                            className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
+                          />
+                          {clubDraft.managerName && (
+                            <button
+                              type="button"
+                              aria-label="ล้างชื่อผู้จัดการทีม"
+                              onClick={() => setClubDraft((prev) => ({ ...prev, managerName: '' }))}
+                              className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-2">
+                          <label className="text-xs font-semibold text-[var(--mut)] block mb-1">คำขวัญสโมสร</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              autoFocus={clubEditFocusField === 'motto'}
+                              autoComplete="off"
+                              autoCorrect="off"
+                              spellCheck={false}
+                              value={clubDraft.motto}
+                              maxLength={80}
+                              placeholder="เช่น สู้สุดใจเพื่อชัยชนะ"
+                              onChange={(e) => setClubDraft((prev) => ({ ...prev, motto: e.target.value }))}
+                              className="w-full pl-3.5 pr-9 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
+                            />
+                            {clubDraft.motto && (
+                              <button
+                                type="button"
+                                aria-label="ล้างคำขวัญสโมสร"
+                                onClick={() => setClubDraft((prev) => ({ ...prev, motto: '' }))}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface)] cursor-pointer"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-semibold text-[var(--mut)] block mb-1">ปีก่อตั้ง (พ.ศ.)</label>
+                          <input
+                            type="text"
+                            autoFocus={clubEditFocusField === 'founded'}
+                            inputMode="numeric"
+                            maxLength={4}
+                            value={clubDraft.founded}
+                            onChange={(e) =>
+                              setClubDraft((prev) => ({ ...prev, founded: e.target.value.replace(/\D/g, '').slice(0, 4) }))
+                            }
+                            className="w-full px-3.5 py-2.5 sm:py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-base sm:text-sm font-semibold text-[var(--ink)] tabular select-text focus:outline-none focus:border-[var(--g)]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] font-semibold text-[var(--mut)] mr-1">คำขวัญด่วน:</span>
+                      {['สู้ไม่ถอยเพื่อแฟนบอล', 'ใจเกินร้อย', 'ศักดิ์ศรีลูกหนังไทย'].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setClubDraft((prev) => ({ ...prev, motto: preset }))}
+                          className="px-2.5 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] font-semibold text-[var(--ink)] cursor-pointer whitespace-nowrap"
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-3 mland:py-2 border-t border-[var(--line)] bg-[var(--surface-2)]/40 flex items-center justify-end gap-2 shrink-0">
+                    <button type="button" onClick={cancelClubEdit} className="btn btn-sm btn-secondary">
+                      <X className="w-3.5 h-3.5" />
+                      <span>ยกเลิก</span>
+                    </button>
+                    <button type="submit" className="btn btn-sm btn-primary">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>บันทึกข้อมูล</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
             {/* Dedicated Coach Customization Studio Modal (Draft + Visual Presets + Direct Option Chips + Save/Reset) */}
             {showCoachEditor && (() => {
               const curDraft = coachDraft || {
@@ -3011,13 +3317,15 @@ export const FinanceClubView: React.FC<{
                           <label className="text-[11px] font-semibold text-[var(--mut)] block mb-1">ชื่อผู้จัดการทีม</label>
                           <input
                             value={curDraft.name}
-                            maxLength={22}
+                            maxLength={40}
+                            autoComplete="off"
+                            spellCheck={false}
                             placeholder="เช่น โค้ชต้น"
                             onChange={(e) => {
                               const val = e.target.value.replace(/["'<>`]/g, '');
                               setCoachDraft((prev) => ({ ...(prev || curDraft), name: val }));
                             }}
-                            className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-xs font-semibold text-[var(--ink)] focus:border-[var(--g)]"
+                            className="w-full px-3 py-2 mland:py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface)] text-base sm:text-xs font-semibold text-[var(--ink)] select-text focus:outline-none focus:border-[var(--g)]"
                           />
                         </div>
 
@@ -3360,7 +3668,12 @@ export const FinanceClubView: React.FC<{
           { key: 'tr', title: 'ศูนย์ฝึกซ้อมครบวงจร', desc: 'เพิ่มโอกาสอัปค่าพลังซ้อม & ฟื้นฟูความฟิตระหว่างสัปดาห์', baseCost: 90 },
           { key: 'ya', title: 'อะคาเดมี่เยาวชน', desc: 'ปั้นดาวรุ่ง OVR สูงขึ้นทุกซีซั่น & เพิ่มคุณภาพงานแมวมอง', baseCost: 85 },
           { key: 'med', title: 'ศูนย์การแพทย์ & กายภาพ', desc: 'ลดโอกาสบาดเจ็บ & เร่งระยะเวลาฟื้นฟูอาการบาดเจ็บ', baseCost: 80 },
-          { key: 'turfLv', title: 'พื้นสนามหญ้า & ระบายน้ำ', desc: 'ลดความล้าและอาการบาดเจ็บจากสภาพสนามแฉะหรือแห้งแข็ง', baseCost: 75 },
+          {
+            key: 'turfLv',
+            title: 'พื้นสนามหญ้า & ระบายน้ำ',
+            desc: `${getTurfGradeForLevel(state.turfLv ?? 1, getFacilityCondition(state, 'turfLv')).name} · ลดความล้าและอาการบาดเจ็บจากฝน`,
+            baseCost: 75
+          },
           { key: 'analyticsLv', title: 'ห้องวิเคราะห์เกม & วีดิทัศน์', desc: 'เร่งความคุ้นเคยแท็กติก เสริมภารกิจนักเตะ & แมวมอง', baseCost: 85 },
           { key: 'merchLv', title: 'เมกะสโตร์ & แฟนโซน', desc: `สร้างรายได้วันแข่งเหย้า (+${fmtMoneyNum(est.estMerch)}) & เพดานค่าจ้าง +4%/Lv`, baseCost: 75 }
         ];
@@ -3616,16 +3929,38 @@ export const FinanceClubView: React.FC<{
         );
       })()}
 
-      {/* Club Tab 2: Crest & Jersey Studio */}
+      {/* Club Tab 2: Crest & Jersey Studio (Compact & Structured) */}
       {clubTab === 'identity' && (
-        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col gap-1.5 overflow-hidden">
+          {/* Portrait mobile pane switcher so Crest & Kit stay compact without deep vertical scrolling */}
+          <div className="md:hidden mland:hidden seg-bar grid grid-cols-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setIdentityMobilePane('crest')}
+              className={`seg-btn py-1.5 ${identityMobilePane === 'crest' ? 'active' : ''}`}
+            >
+              🛡️ ตราสโมสร
+            </button>
+            <button
+              type="button"
+              onClick={() => setIdentityMobilePane('kit')}
+              className={`seg-btn py-1.5 ${identityMobilePane === 'kit' ? 'active' : ''}`}
+            >
+              🎽 ชุดแข่ง &amp; สี
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
             {/* Left Panel: Crest Studio */}
-            <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
-              <div className="px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 shrink-0">
-                <div className="flex items-center gap-2 min-w-0">
-                  <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] whitespace-nowrap">🛡️ ออกแบบตราสโมสร</h3>
-                  <span className="hidden sm:inline text-[10.5px] mland:text-[9.5px] font-medium text-[var(--mut)] truncate">
+            <div
+              className={`${
+                identityMobilePane === 'crest' ? 'flex' : 'hidden md:flex mland:flex'
+              } rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex-col min-h-0 overflow-hidden`}
+            >
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h3 className="font-bold text-xs sm:text-[13px] mland:text-xs text-[var(--ink)] whitespace-nowrap">🛡️ ตราสโมสร</h3>
+                  <span className="hidden sm:inline text-[10px] mland:text-[9px] font-medium text-[var(--mut)] truncate">
                     {CREST_SHAPES[dk.shape]?.label} · {CREST_IC_NAMES[dk.icon] || dk.icon}
                   </span>
                 </div>
@@ -3635,7 +3970,7 @@ export const FinanceClubView: React.FC<{
                     onClick={() => setCrestStudioTab('shape')}
                     className={`seg-btn whitespace-nowrap ${crestStudioTab === 'shape' ? 'active' : ''}`}
                   >
-                    ทรง &amp; ลายตรา
+                    ทรง &amp; ลาย
                   </button>
                   <button
                     type="button"
@@ -3647,14 +3982,14 @@ export const FinanceClubView: React.FC<{
                 </div>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-2 divide-y divide-[var(--line)]/55">
+              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-2 mland:space-y-1.5">
                 {crestStudioTab === 'shape' ? (
                   <>
                     {/* Shapes */}
-                    <div className="pb-2.5 mland:pb-2">
-                      <div className="flex items-center justify-between mb-1.5 mland:mb-1">
-                        <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold">รูปทรงตรา ({CREST_SHAPES.length} แบบ)</span>
-                        <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)]">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold">รูปทรง ({CREST_SHAPES.length} แบบ)</span>
+                        <span className="text-[10px] mland:text-[9px] font-bold text-[var(--g)]">
                           {CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}
                         </span>
                       </div>
@@ -3666,13 +4001,13 @@ export const FinanceClubView: React.FC<{
                               key={sh.label}
                               type="button"
                               onClick={() => patchIdentityDraft((cl) => { cl.shape = i; })}
-                              className={`flex items-center gap-1.5 py-1.5 px-2 mland:py-1 mland:px-1.5 rounded-lg text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer border transition-colors min-w-0 ${
+                              className={`flex items-center gap-1.5 py-1 px-1.5 rounded-lg text-[10px] mland:text-[9px] font-semibold cursor-pointer border transition-colors min-w-0 ${
                                 active
                                   ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)]'
-                                  : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                                  : 'bg-[var(--surface-2)]/35 border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
                               }`}
                             >
-                              <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
+                              <svg width="14" height="14" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
                                 <path d={sh.d} fill={dk.c1} stroke={active ? 'var(--g)' : 'var(--line)'} strokeWidth="1.7" />
                               </svg>
                               <span className="truncate">{sh.label}</span>
@@ -3683,11 +4018,11 @@ export const FinanceClubView: React.FC<{
                     </div>
 
                     {/* Border & Stars */}
-                    <div className="py-2.5 mland:py-2 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2">
+                    <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/50 grid grid-cols-2 gap-2">
                       <div>
-                        <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">สไตล์ขอบตรา</div>
+                        <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mb-1">ขอบตรา</div>
                         <div className="seg-bar grid grid-cols-4 w-full">
-                          {(['ขาว', 'ทอง', 'ขอบคู่', 'ดำ'] as const).map((lbl, i) => (
+                          {(['ขาว', 'ทอง', 'คู่', 'ดำ'] as const).map((lbl, i) => (
                             <button
                               key={lbl}
                               type="button"
@@ -3700,7 +4035,7 @@ export const FinanceClubView: React.FC<{
                         </div>
                       </div>
                       <div>
-                        <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">ดาวเกียรติยศ</div>
+                        <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mb-1">ดาวเกียรติยศ</div>
                         <div className="seg-bar grid grid-cols-4 w-full">
                           {[0, 1, 2, 3].map((stCnt) => (
                             <button
@@ -3717,10 +4052,10 @@ export const FinanceClubView: React.FC<{
                     </div>
 
                     {/* Patterns */}
-                    <div className="pt-2.5 mland:pt-2">
-                      <div className="flex items-center justify-between mb-1.5 mland:mb-1">
-                        <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold">ลวดลายพื้นหลัง ({CREST_PATTERNS.length} แบบ)</span>
-                        <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)]">
+                    <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/50">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold">ลายพื้นหลัง ({CREST_PATTERNS.length} แบบ)</span>
+                        <span className="text-[10px] mland:text-[9px] font-bold text-[var(--g)]">
                           {CREST_PATTERNS[dk.pat]}
                         </span>
                       </div>
@@ -3734,13 +4069,13 @@ export const FinanceClubView: React.FC<{
                               key={l}
                               type="button"
                               onClick={() => patchIdentityDraft((cl) => { cl.pat = i; })}
-                              className={`flex items-center gap-1 py-1.5 px-1.5 mland:py-1 rounded-lg text-[10px] mland:text-[9px] font-semibold cursor-pointer border transition-colors min-w-0 ${
+                              className={`flex items-center gap-1 py-1 px-1.5 rounded-lg text-[9.5px] mland:text-[8.5px] font-semibold cursor-pointer border transition-colors min-w-0 ${
                                 active
                                   ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                                  : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                                  : 'bg-[var(--surface-2)]/35 border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
                               }`}
                             >
-                              <svg width="14" height="14" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
+                              <svg width="13" height="13" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
                                 <defs>
                                   <clipPath id={`cp-${patUid}`}>
                                     <path d={shPath} />
@@ -3773,9 +4108,9 @@ export const FinanceClubView: React.FC<{
                 ) : (
                   <>
                     {/* Emblem Color + Random */}
-                    <div className="pb-2.5 mland:pb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="pb-2 mland:pb-1.5 border-b border-[var(--line)]/50 flex items-center justify-between gap-1.5 flex-wrap">
                       <div className="flex flex-wrap items-center gap-1">
-                        <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mr-1">สีสัญลักษณ์:</span>
+                        <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mr-0.5">สีสัญลักษณ์:</span>
                         {(
                           [
                             ['', 'อัตโนมัติ'],
@@ -3792,10 +4127,10 @@ export const FinanceClubView: React.FC<{
                               key={lbl}
                               type="button"
                               onClick={() => patchIdentityDraft((cl) => { cl.iconColor = colVal; })}
-                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] mland:text-[9px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
                                 active
                                   ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                                  : 'bg-transparent border-[var(--line)]/70 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                                  : 'bg-[var(--surface-2)]/35 border-[var(--line)]/65 text-[var(--mut)] hover:text-[var(--ink)]'
                               }`}
                             >
                               {colVal && (
@@ -3825,38 +4160,36 @@ export const FinanceClubView: React.FC<{
                     </div>
 
                     {/* Visual Vector Emblem Grid */}
-                    <div className="pt-2.5 mland:pt-2">
-                      <div className="grid grid-cols-6 gap-1">
-                        {Object.keys(CREST_IC).map((ic) => {
-                          const active = dk.icon === ic;
-                          return (
-                            <button
-                              key={ic}
-                              type="button"
-                              onClick={() => patchIdentityDraft((cl) => { cl.icon = ic; })}
-                              className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 mland:py-1 rounded-lg cursor-pointer border transition-colors min-w-0 ${
-                                active
-                                  ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] ring-1 ring-[var(--g)]'
-                                  : 'bg-transparent border-[var(--line)]/50 text-[var(--ink)] hover:border-[var(--line)] hover:bg-[var(--surface-2)]/50'
-                              }`}
-                            >
-                              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-                                <g
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.1"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
-                                />
-                              </svg>
-                              <span className="text-[9px] mland:text-[8px] font-semibold truncate max-w-full leading-tight">
-                                {CREST_IC_NAMES[ic] || ic}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                    <div className="grid grid-cols-5 sm:grid-cols-6 gap-1">
+                      {Object.keys(CREST_IC).map((ic) => {
+                        const active = dk.icon === ic;
+                        return (
+                          <button
+                            key={ic}
+                            type="button"
+                            onClick={() => patchIdentityDraft((cl) => { cl.icon = ic; })}
+                            className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 mland:py-1 rounded-lg cursor-pointer border transition-colors min-w-0 ${
+                              active
+                                ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] ring-1 ring-[var(--g)]'
+                                : 'bg-[var(--surface-2)]/25 border-[var(--line)]/50 text-[var(--ink)] hover:border-[var(--line)] hover:bg-[var(--surface-2)]/60'
+                            }`}
+                          >
+                            <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+                              <g
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.1"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+                              />
+                            </svg>
+                            <span className="text-[9px] mland:text-[8px] font-semibold truncate max-w-full leading-tight">
+                              {CREST_IC_NAMES[ic] || ic}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -3864,19 +4197,39 @@ export const FinanceClubView: React.FC<{
             </div>
 
             {/* Right Panel: Jersey Studio */}
-            <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
-              <div className="px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 shrink-0">
-                <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] whitespace-nowrap">🎽 สีชุดแข่ง &amp; ลายเสื้อ</h3>
-                <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
-                  เหย้า: {KIT_PATTERNS[dk.kit || 0]} · {KIT_COLLARS[(dk.collar ?? 0) % 4]}
+            <div
+              className={`${
+                identityMobilePane === 'kit' ? 'flex' : 'hidden md:flex mland:flex'
+              } rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex-col min-h-0 overflow-hidden`}
+            >
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 shrink-0">
+                <h3 className="font-bold text-xs sm:text-[13px] mland:text-xs text-[var(--ink)] whitespace-nowrap">🎽 ชุดแข่ง &amp; โทนสี</h3>
+                <span className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] truncate">
+                  {KIT_PATTERNS[dk.kit || 0]} · {KIT_COLLARS[(dk.collar ?? 0) % 4]}
                 </span>
               </div>
 
-              <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-2 divide-y divide-[var(--line)]/55">
+              <div className="flex-1 min-h-0 overflow-y-auto px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-2 mland:space-y-1.5">
                 {/* Popular Presets */}
-                <div className="pb-2.5 mland:pb-2">
-                  <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1.5 mland:mb-1">ชุดสียอดนิยม</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 mland:grid-cols-5 gap-1">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold">ชุดสียอดนิยม</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patchIdentityDraft((cl) => {
+                          const prev1 = cl.c1;
+                          cl.c1 = cl.c2;
+                          cl.c2 = prev1;
+                        })
+                      }
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-[var(--line)]/70 bg-[var(--surface-2)]/50 hover:border-[var(--g)] text-[9.5px] font-semibold text-[var(--ink)] cursor-pointer whitespace-nowrap"
+                    >
+                      <ArrowLeftRight className="w-2.5 h-2.5" />
+                      <span>สลับเหย้า/เยือน</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
                     {clubPresets.map((pr) => {
                       const active = dk.c1.toLowerCase() === pr.c1.toLowerCase() && dk.c2.toLowerCase() === pr.c2.toLowerCase();
                       return (
@@ -3890,10 +4243,10 @@ export const FinanceClubView: React.FC<{
                               cl.c3 = pr.c3 || '';
                             });
                           }}
-                          className={`flex items-center gap-1.5 px-2 py-1.5 mland:py-1 rounded-lg text-[10px] mland:text-[9px] font-semibold cursor-pointer border transition-colors min-w-0 ${
+                          className={`flex items-center gap-1 px-1.5 py-1 rounded-lg text-[9.5px] mland:text-[8.5px] font-semibold cursor-pointer border transition-colors min-w-0 ${
                             active
                               ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)]'
-                              : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                              : 'bg-[var(--surface-2)]/35 border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
                           }`}
                         >
                           <span className="inline-flex items-center -space-x-0.5 shrink-0">
@@ -3907,109 +4260,213 @@ export const FinanceClubView: React.FC<{
                   </div>
                 </div>
 
-                {/* 3 Color Pickers (compact rows) */}
-                <div className="py-2.5 mland:py-2 space-y-2 mland:space-y-1.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold sm:w-24 shrink-0 whitespace-nowrap">
-                      สีหลัก (เหย้า)
-                    </span>
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {KIT_SW.map((col) => (
-                        <button
-                          key={col}
-                          type="button"
-                          disabled={colDist(col, dk.c2) < 150}
-                          title={colDist(col, dk.c2) < 150 ? 'สีใกล้กับชุดเยือนมากเกินไป' : col}
-                          onClick={() => patchIdentityDraft((cl) => { cl.c1 = col; })}
-                          className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-black/20 dark:border-white/25 disabled:opacity-20 cursor-pointer transition-shadow ${
-                            dk.c1 === col ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)]' : ''
-                          }`}
-                          style={{ background: col }}
+                {/* Unified 3-Target Color Picker (Single clean palette saves huge space) */}
+                <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/50 space-y-1.5">
+                  <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                    <div className="seg-bar grid grid-cols-3 flex-1 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => setKitColorTarget('c1')}
+                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c1' ? 'active' : ''}`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/30 shrink-0" style={{ background: dk.c1 }} />
+                        <span>สีหลัก</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKitColorTarget('c2')}
+                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c2' ? 'active' : ''}`}
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/30 shrink-0" style={{ background: dk.c2 }} />
+                        <span>สีรอง/เยือน</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKitColorTarget('c3')}
+                        className={`seg-btn inline-flex items-center justify-center gap-1 whitespace-nowrap ${kitColorTarget === 'c3' ? 'active' : ''}`}
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full border border-black/20 dark:border-white/30 shrink-0"
+                          style={{ background: dk.c3 || dk.c2 }}
                         />
-                      ))}
+                        <span>สีขลิบ</span>
+                      </button>
                     </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold sm:w-24 shrink-0 whitespace-nowrap">
-                      สีรอง / เยือน
-                    </span>
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {KIT_SW.map((col) => (
-                        <button
-                          key={col}
-                          type="button"
-                          disabled={colDist(col, dk.c1) < 150}
-                          title={colDist(col, dk.c1) < 150 ? 'สีใกล้กับชุดเหย้ามากเกินไป' : col}
-                          onClick={() => patchIdentityDraft((cl) => { cl.c2 = col; })}
-                          className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-black/20 dark:border-white/25 disabled:opacity-20 cursor-pointer transition-shadow ${
-                            dk.c2 === col ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)]' : ''
-                          }`}
-                          style={{ background: col }}
-                        />
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                    <div className="flex items-center justify-between sm:w-24 shrink-0 gap-1">
-                      <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold whitespace-nowrap">สีขลิบ/ตัด</span>
+                    {kitColorTarget === 'c3' && (
                       <button
                         type="button"
                         onClick={() => patchIdentityDraft((cl) => { cl.c3 = ''; })}
-                        className={`px-1.5 py-0.5 rounded-md border text-[9.5px] font-semibold cursor-pointer whitespace-nowrap ${
+                        className={`px-2 py-1 rounded-lg border text-[10px] font-semibold cursor-pointer whitespace-nowrap shrink-0 ${
                           !dk.c3
-                            ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]'
-                            : 'border-[var(--line)]/65 text-[var(--mut)] hover:text-[var(--ink)]'
+                            ? 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--g)]'
+                            : 'border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
                         }`}
                       >
                         อัตโนมัติ
                       </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1 flex-1">
-                      {KIT_SW.map((col) => (
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 mland:gap-1 pt-0.5">
+                    {KIT_SW.map((col) => {
+                      const isBlocked =
+                        (kitColorTarget === 'c1' && colDist(col, dk.c2) < 150) ||
+                        (kitColorTarget === 'c2' && colDist(col, dk.c1) < 150);
+                      const isSelected =
+                        (kitColorTarget === 'c1' && dk.c1 === col) ||
+                        (kitColorTarget === 'c2' && dk.c2 === col) ||
+                        (kitColorTarget === 'c3' && dk.c3 === col);
+                      return (
                         <button
                           key={col}
                           type="button"
-                          onClick={() => patchIdentityDraft((cl) => { cl.c3 = col; })}
-                          className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-black/20 dark:border-white/25 cursor-pointer transition-shadow ${
-                            dk.c3 === col ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)]' : ''
+                          disabled={isBlocked}
+                          title={
+                            isBlocked
+                              ? kitColorTarget === 'c1'
+                                ? 'สีใกล้กับชุดเยือนมากเกินไป'
+                                : 'สีใกล้กับชุดเหย้ามากเกินไป'
+                              : col
+                          }
+                          onClick={() =>
+                            patchIdentityDraft((cl) => {
+                              if (kitColorTarget === 'c1') cl.c1 = col;
+                              else if (kitColorTarget === 'c2') cl.c2 = col;
+                              else cl.c3 = col;
+                            })
+                          }
+                          className={`w-6 h-6 mland:w-5 mland:h-5 rounded-md border border-black/20 dark:border-white/25 disabled:opacity-20 cursor-pointer transition-transform ${
+                            isSelected ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)] scale-105' : 'hover:scale-105'
                           }`}
                           style={{ background: col }}
                         />
-                      ))}
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Unified Home & Away Kit Pattern Studio + 1-Tap Smart Match */}
+                {(() => {
+                  const homePat = (dk.kit || 0) % KIT_PATTERNS.length;
+                  const effectiveAwayPat = dk.awayKit != null ? dk.awayKit % KIT_PATTERNS.length : homePat;
+                  const isAwaySynced = dk.awayKit == null;
+                  const editingAway = kitPatternTarget === 'away';
+                  const activePat = editingAway ? effectiveAwayPat : homePat;
+                  const previewC = editingAway ? dk.c2 : dk.c1;
+                  const previewD = editingAway ? dk.c1 : dk.c2;
+
+                  const handleSmartMatchAway = () => {
+                    const pairPool = AWAY_KIT_PAIRINGS[homePat] || [0, 5, 4, 12];
+                    const curIdx = pairPool.indexOf(effectiveAwayPat);
+                    const nextAway = isAwaySynced || curIdx < 0 ? pairPool[0] : pairPool[(curIdx + 1) % pairPool.length];
+                    patchIdentityDraft((cl) => {
+                      cl.awayKit = nextAway;
+                    });
+                    setKitPatternTarget('away');
+                    onToast(`แมตช์ชุดเยือน "${KIT_PATTERNS[nextAway]}" คู่กับชุดเหย้า "${KIT_PATTERNS[homePat]}" แล้ว`);
+                  };
+
+                  return (
+                    <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/50 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5">
+                        <div className="seg-bar grid grid-cols-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setKitPatternTarget('home')}
+                            className={`seg-btn whitespace-nowrap ${!editingAway ? 'active' : ''}`}
+                          >
+                            🏠 ลายเหย้า
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setKitPatternTarget('away')}
+                            className={`seg-btn whitespace-nowrap ${editingAway ? 'active' : ''}`}
+                          >
+                            ✈️ ลายเยือน
+                          </button>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              patchIdentityDraft((cl) => {
+                                cl.awayKit = undefined;
+                              });
+                              setKitPatternTarget('away');
+                              onToast(`ตั้งชุดเยือนเป็นลายเดียวกับชุดเหย้า (${KIT_PATTERNS[homePat]})`);
+                            }}
+                            title="ตั้งให้ลายชุดเยือนเหมือนชุดเหย้าเป๊ะ"
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] mland:text-[9px] font-semibold cursor-pointer whitespace-nowrap transition-colors ${
+                              isAwaySynced
+                                ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)]'
+                                : 'bg-[var(--surface-2)]/40 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                            }`}
+                          >
+                            <Link2 className="w-3 h-3 shrink-0" />
+                            <span>เหมือนเหย้า</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleSmartMatchAway}
+                            title="สุ่ม/สลับลายชุดเยือนที่เข้าคู่ลงตัวกับลายชุดเหย้า"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-amber-500/45 bg-amber-500/10 hover:bg-amber-500/20 text-[10px] mland:text-[9px] font-bold text-amber-700 dark:text-amber-300 cursor-pointer whitespace-nowrap transition-colors"
+                          >
+                            <Wand2 className="w-3 h-3 shrink-0" />
+                            <span>แมตช์คู่สวย</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] mland:text-[9px] text-[var(--mut)]">
+                        <span>
+                          {editingAway
+                            ? isAwaySynced
+                              ? 'ชุดเยือน: กำลังใช้ลายเดียวกับเหย้า (แตะลายด้านล่างเพื่อแยก)'
+                              : 'เลือกภาพลายเสื้อสำหรับชุดเยือน'
+                            : 'เลือกภาพลายเสื้อสำหรับชุดเหย้า'}
+                        </span>
+                        <span className="font-bold text-[var(--g)]">
+                          {KIT_PATTERNS[activePat]}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-5 gap-1">
+                        {KIT_PATTERNS.map((l, i) => {
+                          const selected = activePat === i;
+                          const syncedMark = editingAway && isAwaySynced && homePat === i;
+                          return (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() =>
+                                patchIdentityDraft((cl) => {
+                                  if (editingAway) cl.awayKit = i;
+                                  else cl.kit = i;
+                                })
+                              }
+                              className={`flex items-center gap-1 py-1 px-1.5 rounded-lg border text-[9.5px] mland:text-[8.5px] font-semibold cursor-pointer transition-colors min-w-0 ${
+                                selected
+                                  ? syncedMark
+                                    ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)] ring-1 ring-[var(--g)]'
+                                    : 'bg-[var(--g)] text-white border-[var(--g)]'
+                                  : 'bg-[var(--surface-2)]/35 border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                              }`}
+                            >
+                              <KitPatternThumb pattern={i} c={previewC} d={previewD} accent={dk.c3} size={14} />
+                              <span className="truncate">{l}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
-                {/* Home Kit Pattern */}
-                <div className="py-2.5 mland:py-2">
-                  <div className="flex items-center justify-between mb-1.5 mland:mb-1">
-                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold">ลายเสื้อชุดเหย้า ({KIT_PATTERNS.length} ลาย)</span>
-                    <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)]">{KIT_PATTERNS[dk.kit || 0]}</span>
-                  </div>
-                  <div className="grid grid-cols-4 sm:grid-cols-5 mland:grid-cols-5 gap-1">
-                    {KIT_PATTERNS.map((l, i) => (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.kit = i; })}
-                        className={`py-1.5 px-1.5 mland:py-1 rounded-lg border text-[10px] mland:text-[9px] font-semibold truncate cursor-pointer transition-colors ${
-                          dk.kit === i
-                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                            : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
-                        }`}
-                      >
-                        {l}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Away Kit, Collar & Cuff Trim */}
-                <div className="pt-2.5 mland:pt-2 space-y-2 mland:space-y-1.5">
-                  <div>
-                    <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">ทรงคอเสื้อ</div>
+                {/* Collar & Cuff Trim */}
+                <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)]/50 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2">
+                    <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mb-1">ทรงคอเสื้อ</div>
                     <div className="seg-bar grid grid-cols-4 w-full">
                       {KIT_COLLARS.map((clbl, ci) => (
                         <button
@@ -4024,44 +4481,23 @@ export const FinanceClubView: React.FC<{
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2">
-                    <div>
-                      <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">ลายเสื้อชุดเยือน</div>
-                      <select
-                        value={dk.awayKit != null ? String(dk.awayKit) : 'same'}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          patchIdentityDraft((cl) => {
-                            cl.awayKit = v === 'same' ? undefined : Number(v);
-                          });
-                        }}
-                        className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] text-[11px] mland:text-[10px] font-semibold text-[var(--ink)]"
+                  <div>
+                    <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mb-1">ขลิบแขน &amp; ชาย</div>
+                    <div className="seg-bar grid grid-cols-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = true; })}
+                        className={`seg-btn whitespace-nowrap ${(dk.cuffTrim ?? true) ? 'active' : ''}`}
                       >
-                        <option value="same">ใช้ลายเดียวกับเหย้า</option>
-                        {KIT_PATTERNS.map((l, i) => (
-                          <option key={l} value={i}>{l}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">แถบขลิบปลายแขน &amp; ชายเสื้อ</div>
-                      <div className="seg-bar grid grid-cols-2 w-full">
-                        <button
-                          type="button"
-                          onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = true; })}
-                          className={`seg-btn whitespace-nowrap ${(dk.cuffTrim ?? true) ? 'active' : ''}`}
-                        >
-                          เปิดใช้งาน
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = false; })}
-                          className={`seg-btn whitespace-nowrap ${!(dk.cuffTrim ?? true) ? 'active' : ''}`}
-                        >
-                          ปิด
-                        </button>
-                      </div>
+                        เปิด
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = false; })}
+                        className={`seg-btn whitespace-nowrap ${!(dk.cuffTrim ?? true) ? 'active' : ''}`}
+                      >
+                        ปิด
+                      </button>
                     </div>
                   </div>
                 </div>

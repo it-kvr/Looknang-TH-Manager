@@ -234,6 +234,104 @@ export const ClubCrest: React.FC<{
   );
 });
 
+const KIT_BODY_PATH = 'M30 10l-22 14 8 18 10-5v48h48V37l10 5 8-18-22-14c-4 8-10 10-20 10s-16-2-20-10z';
+
+function renderKitPatternLayer(p: number, uid: string, c: string, d: string, accent: string) {
+  return (
+    <>
+      <rect width="100" height="100" fill={p === 11 ? `url(#kg-${uid})` : c} />
+      {p === 1 && [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} x={i * 14} width="7" height="100" fill={d} />)}
+      {p === 2 && [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} y={i * 16} width="100" height="8" fill={d} />)}
+      {p === 3 && <rect x="50" width="50" height="100" fill={d} />}
+      {p === 4 && (
+        <>
+          <path d="M8 100L70 0h22L30 100z" fill={d} />
+          <path d="M5 100L67 0h3L8 100z" fill={accent} opacity="0.85" />
+        </>
+      )}
+      {p === 5 && (
+        <>
+          <rect y="36" width="100" height="18" fill={d} />
+          <rect y="34" width="100" height="2" fill={accent} />
+          <rect y="54" width="100" height="2" fill={accent} />
+        </>
+      )}
+      {p === 6 && (
+        <>
+          <path d="M18 22l32 22 32-22v14L50 58 18 36z" fill={d} />
+          <path d="M18 36l32 22 32-22v4L50 62 18 40z" fill={accent} />
+        </>
+      )}
+      {p === 7 &&
+        [0, 1, 2, 3, 4, 5].flatMap((row) =>
+          [0, 1, 2, 3, 4, 5].map((col) =>
+            (row + col) % 2 === 0 ? (
+              <rect key={`${row}-${col}`} x={col * 17} y={row * 17} width="17" height="17" fill={d} />
+            ) : null
+          )
+        )}
+      {p === 8 && (
+        <>
+          <rect x="50" y="0" width="50" height="46" fill={d} />
+          <rect x="0" y="46" width="50" height="54" fill={d} />
+        </>
+      )}
+      {p === 9 && (
+        <>
+          <rect x="42" y="0" width="16" height="100" fill={d} />
+          <rect x="0" y="38" width="100" height="15" fill={d} />
+        </>
+      )}
+      {p === 10 && (
+        <>
+          <rect x="0" y="0" width="27" height="50" fill={d} />
+          <rect x="73" y="0" width="27" height="50" fill={d} />
+          <rect x="25" y="10" width="2.5" height="35" fill={accent} />
+          <rect x="72.5" y="10" width="2.5" height="35" fill={accent} />
+        </>
+      )}
+      {p === 12 && [0, 1, 2, 3, 4, 5, 6, 7].map((i) => <rect key={i} x={i * 12 + 4} width="2.2" height="100" fill={d} opacity="0.9" />)}
+      {p === 13 && (
+        <>
+          <path d="M0 32l24-12 20 14 22-14 34 16v13L66 33 44 47 24 33 0 45z" fill={d} opacity="0.92" />
+          <path d="M0 54l24-12 20 14 22-14 34 16v7L66 49 44 63 24 49 0 61z" fill={accent} opacity="0.8" />
+        </>
+      )}
+    </>
+  );
+}
+
+export const KitPatternThumb: React.FC<{
+  pattern: number;
+  c: string;
+  d: string;
+  accent?: string;
+  size?: number;
+}> = React.memo(({ pattern, c, d, accent = '', size = 15 }) => {
+  const uid = React.useId().replace(/:/g, '');
+  const p = ((pattern || 0) % KIT_PATTERNS.length + KIT_PATTERNS.length) % KIT_PATTERNS.length;
+  const effAccent = accent || (colDist(d, '#ffffff') < 100 ? '#f4c63d' : '#ffffff');
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" className="shrink-0" aria-hidden="true">
+      <defs>
+        <clipPath id={`kpt-${uid}`}>
+          <path d={KIT_BODY_PATH} />
+        </clipPath>
+        {p === 11 && (
+          <linearGradient id={`kg-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={c} />
+            <stop offset="100%" stopColor={d} />
+          </linearGradient>
+        )}
+      </defs>
+      <g clipPath={`url(#kpt-${uid})`}>
+        {renderKitPatternLayer(p, uid, c, d, effAccent)}
+      </g>
+      <path d={KIT_BODY_PATH} fill="none" stroke="currentColor" strokeOpacity="0.45" strokeWidth="4" />
+    </svg>
+  );
+});
+
 export const KitJersey: React.FC<{
   club: ClubIdentity;
   away?: boolean;
@@ -245,7 +343,7 @@ export const KitJersey: React.FC<{
 }> = ({
   club,
   away = false,
-  size = 84,
+  size = 80,
   team = null,
   hideNumber = false,
   shirtNo = '10',
@@ -261,7 +359,7 @@ export const KitJersey: React.FC<{
   const p = isGK ? gkPatterns[(rawPat + 2) % gkPatterns.length] : rawPat;
   const collar = (club.collar ?? 0) % 4;
   const cuffTrim = club.cuffTrim ?? true;
-  const J = 'M30 10l-22 14 8 18 10-5v48h48V37l10 5 8-18-22-14c-4 8-10 10-20 10s-16-2-20-10z';
+  const J = KIT_BODY_PATH;
   const numLightBg = colDist(c, '#ffffff') < 130 && [0, 5, 6, 10, 12, 13].includes(p);
   const numFill = gkBase
     ? colLum(c) > 0.55
@@ -289,64 +387,7 @@ export const KitJersey: React.FC<{
         )}
       </defs>
       <g clipPath={`url(#kc-${uid})`}>
-        <rect width="100" height="100" fill={p === 11 ? `url(#kg-${uid})` : c} />
-        {p === 1 && [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} x={i * 14} width="7" height="100" fill={d} />)}
-        {p === 2 && [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} y={i * 16} width="100" height="8" fill={d} />)}
-        {p === 3 && <rect x="50" width="50" height="100" fill={d} />}
-        {p === 4 && (
-          <>
-            <path d="M8 100L70 0h22L30 100z" fill={d} />
-            <path d="M5 100L67 0h3L8 100z" fill={accent} opacity="0.85" />
-          </>
-        )}
-        {p === 5 && (
-          <>
-            <rect y="36" width="100" height="18" fill={d} />
-            <rect y="34" width="100" height="2" fill={accent} />
-            <rect y="54" width="100" height="2" fill={accent} />
-          </>
-        )}
-        {p === 6 && (
-          <>
-            <path d="M18 22l32 22 32-22v14L50 58 18 36z" fill={d} />
-            <path d="M18 36l32 22 32-22v4L50 62 18 40z" fill={accent} />
-          </>
-        )}
-        {p === 7 &&
-          [0, 1, 2, 3, 4, 5].flatMap((row) =>
-            [0, 1, 2, 3, 4, 5].map((col) =>
-              (row + col) % 2 === 0 ? (
-                <rect key={`${row}-${col}`} x={col * 17} y={row * 17} width="17" height="17" fill={d} />
-              ) : null
-            )
-          )}
-        {p === 8 && (
-          <>
-            <rect x="50" y="0" width="50" height="46" fill={d} />
-            <rect x="0" y="46" width="50" height="54" fill={d} />
-          </>
-        )}
-        {p === 9 && (
-          <>
-            <rect x="42" y="0" width="16" height="100" fill={d} />
-            <rect x="0" y="38" width="100" height="15" fill={d} />
-          </>
-        )}
-        {p === 10 && (
-          <>
-            <rect x="0" y="0" width="27" height="50" fill={d} />
-            <rect x="73" y="0" width="27" height="50" fill={d} />
-            <rect x="25" y="10" width="2.5" height="35" fill={accent} />
-            <rect x="72.5" y="10" width="2.5" height="35" fill={accent} />
-          </>
-        )}
-        {p === 12 && [0, 1, 2, 3, 4, 5, 6, 7].map((i) => <rect key={i} x={i * 12 + 4} width="2.2" height="100" fill={d} opacity="0.9" />)}
-        {p === 13 && (
-          <>
-            <path d="M0 32l24-12 20 14 22-14 34 16v13L66 33 44 47 24 33 0 45z" fill={d} opacity="0.92" />
-            <path d="M0 54l24-12 20 14 22-14 34 16v7L66 49 44 63 24 49 0 61z" fill={accent} opacity="0.8" />
-          </>
-        )}
+        {renderKitPatternLayer(p, uid, c, d, accent)}
 
         {/* Cuff & Hem Trim */}
         {cuffTrim && (
@@ -825,7 +866,7 @@ export const PlayerFace: React.FC<{
 });
 
 export const PITCH_SVG_BASE =
-  '<rect width="300" height="380" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v47.5H0zM0 95h300v47.5H0zM0 190h300v47.5H0zM0 285h300v47.5H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="368"/><path d="M6 190h288M90 6v56h120V6M90 374v-66h120v66"/><circle cx="150" cy="190" r="36"/></g>';
+  '<rect width="300" height="380" fill="#25834f"/><path fill="#2d965c" d="M0 0h300v47.5H0zM0 95h300v47.5H0zM0 190h300v47.5H0zM0 285h300v47.5H0z"/><g fill="none" stroke="#eef2e6" stroke-width="1.6" opacity="0.85"><rect x="6" y="6" width="288" height="368"/><path d="M6 190h288M90 6v58h120V6M90 374v-58h120v58M118 6v20h64V6M118 374v-20h64v20M124.63 64A32 32 0 0 0 175.37 64M124.63 316A32 32 0 0 1 175.37 316M13 6A7 7 0 0 1 6 13M294 13A7 7 0 0 1 287 6M287 374A7 7 0 0 1 294 367M6 367A7 7 0 0 1 13 374"/><circle cx="150" cy="190" r="36"/></g><g fill="#eef2e6" opacity="0.88"><circle cx="150" cy="190" r="2.2"/><circle cx="150" cy="44.5" r="2"/><circle cx="150" cy="335.5" r="2"/></g>';
 
 export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }> = ({ team, state }) => {
   const uid = React.useId().replace(/:/g, '');

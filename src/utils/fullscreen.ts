@@ -388,11 +388,6 @@ export function bindAutoLandscapeFullscreen(): () => void {
   };
 
   const updateViewportLock = (standalone: boolean, activeFs: boolean, barPeek: boolean) => {
-    if (!isMobileDevice() || (!standalone && !activeFs && !barPeek)) {
-      clearLockedViewport();
-      return;
-    }
-
     const curW = Math.round(window.innerWidth || 0);
     const curH = Math.round(window.innerHeight || 0);
     const lvhRect = lvhProbe.getBoundingClientRect();
@@ -400,9 +395,24 @@ export function bindAutoLandscapeFullscreen(): () => void {
     const refH = Math.max(curH, lvhH);
     const vvH = Math.round(window.visualViewport?.height || curH);
 
-    const kbOpen = isEditingTextActive() && refH > 0 && vvH < refH * 0.78;
+    const kbOpen = isMobileDevice() && isEditingTextActive() && refH > 0 && vvH > 0 && vvH < refH * 0.82;
     document.documentElement.classList.toggle('kb-open', kbOpen);
     if (kbOpen) {
+      rootStyle.setProperty('--kb-vh', `${vvH}px`);
+    } else {
+      rootStyle.removeProperty('--kb-vh');
+    }
+
+    if (!isMobileDevice() || (!standalone && !activeFs && !barPeek)) {
+      if (!kbOpen) {
+        clearLockedViewport();
+      }
+      return;
+    }
+
+    if (kbOpen) {
+      rootStyle.setProperty('--app-h', `${vvH}px`);
+      rootStyle.setProperty('--app-dvh', `${(vvH / 100).toFixed(4)}px`);
       return;
     }
 
@@ -638,7 +648,14 @@ export function bindAutoLandscapeFullscreen(): () => void {
     focusTimer = window.setTimeout(() => {
       updateSafeAreas();
       guardViewportScroll();
-    }, 120);
+      if (isEditingTextActive() && document.activeElement instanceof HTMLElement) {
+        try {
+          document.activeElement.scrollIntoView({ block: 'center', inline: 'nearest' });
+        } catch {
+          // ignore scrollIntoView errors
+        }
+      }
+    }, 140);
   };
 
   // Capture clicks (never touchend swipes) so edge swipes reveal mobile system bars smoothly

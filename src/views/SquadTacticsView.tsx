@@ -16,10 +16,11 @@ import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/Sq
 export const SquadTacticsView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
+  onShallowPatch?: (patcher: (prev: GameState) => Partial<GameState>) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onNavigate, onToast }) => {
+}> = ({ state, onUpdateState, onShallowPatch, onInspectPlayer, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 3 ? 0 : (state.sub ?? 0);
@@ -701,18 +702,23 @@ export const SquadTacticsView: React.FC<{
       )}
 
       {(() => {
+        const setSquadSubTab = (nextSub: number) => {
+          SFX.tap();
+          if (onShallowPatch) onShallowPatch(() => ({ sub: nextSub }));
+          else onUpdateState((d) => { d.sub = nextSub; });
+        };
         const subTabBar = (
           <div className="seg-bar shrink-0">
-            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 0; })} className={`seg-btn ${sub === 0 ? 'seg-btn-active' : ''}`}>
+            <button type="button" onClick={() => setSquadSubTab(0)} className={`seg-btn ${sub === 0 ? 'seg-btn-active' : ''}`}>
               ⚽ ตัวจริง
             </button>
-            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 1; })} className={`seg-btn ${sub === 1 ? 'seg-btn-active' : ''}`}>
+            <button type="button" onClick={() => setSquadSubTab(1)} className={`seg-btn ${sub === 1 ? 'seg-btn-active' : ''}`}>
               🧭 แผนเกม
             </button>
-            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 2; })} className={`seg-btn ${sub === 2 ? 'seg-btn-active' : ''}`}>
+            <button type="button" onClick={() => setSquadSubTab(2)} className={`seg-btn ${sub === 2 ? 'seg-btn-active' : ''}`}>
               📋 ทั้งทีม ({me.sq.length})
             </button>
-            <button type="button" onClick={() => onUpdateState((d) => { d.sub = 3; })} className={`seg-btn ${sub === 3 ? 'seg-btn-active' : ''}`}>
+            <button type="button" onClick={() => setSquadSubTab(3)} className={`seg-btn ${sub === 3 ? 'seg-btn-active' : ''}`}>
               👕 ล็อกเกอร์
             </button>
           </div>

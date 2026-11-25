@@ -13,7 +13,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
@@ -215,12 +215,17 @@ export default function App() {
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null;
-      const pending = pendingSaveRef.current;
-      if (pending) {
-        pendingSaveRef.current = null;
-        saveGameToSlot(pending.state, pending.slot);
-      }
-    }, 350);
+      const runSave = () => {
+        const pending = pendingSaveRef.current;
+        if (pending) {
+          pendingSaveRef.current = null;
+          saveGameToSlot(pending.state, pending.slot);
+        }
+      };
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback;
+      if (typeof ric === 'function') ric(runSave, { timeout: 1200 });
+      else runSave();
+    }, 650);
   }, [state, slot]);
 
   useEffect(() => {
@@ -364,6 +369,7 @@ export default function App() {
 
     const H = d.teams[homeId];
     const A = d.teams[awayId];
+    const opp = homeId === d.me ? A : H;
     const resObj: MatchResult = {
       gh: payload.gh,
       ga: payload.ga,
@@ -508,6 +514,17 @@ export default function App() {
         });
         applyMatchCards(d, H, A, payload.cards);
         applyPositionAdaptation(d, H, A, resObj);
+        if (d.mode === 'm') {
+          applyLiveStreamMatchSettlement(d, me, opp, {
+            kind: 'cup',
+            isHome: homeId === d.me,
+            isDerby,
+            myGoals: homeId === d.me ? payload.gh : payload.ga,
+            oppGoals: homeId === d.me ? payload.ga : payload.gh,
+            viewers: payload.streamViewers,
+            peakViewers: payload.streamPeakViewers
+          });
+        }
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
         return { shouldConfetti, missionToast };
@@ -596,6 +613,17 @@ export default function App() {
         });
         applyMatchCards(d, H, A, payload.cards);
         applyPositionAdaptation(d, H, A, resObj);
+        if (d.mode === 'm') {
+          applyLiveStreamMatchSettlement(d, me, opp, {
+            kind,
+            isHome: homeId === d.me,
+            isDerby,
+            myGoals: homeId === d.me ? payload.gh : payload.ga,
+            oppGoals: homeId === d.me ? payload.ga : payload.gh,
+            viewers: payload.streamViewers,
+            peakViewers: payload.streamPeakViewers
+          });
+        }
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
         return { shouldConfetti, missionToast };
@@ -673,6 +701,17 @@ export default function App() {
         });
         applyMatchCards(d, H, A, payload.cards);
         applyPositionAdaptation(d, H, A, resObj);
+        if (d.mode === 'm') {
+          applyLiveStreamMatchSettlement(d, me, opp, {
+            kind: 'asia',
+            isHome: homeId === d.me,
+            isDerby,
+            myGoals: homeId === d.me ? payload.gh : payload.ga,
+            oppGoals: homeId === d.me ? payload.ga : payload.gh,
+            viewers: payload.streamViewers,
+            peakViewers: payload.streamPeakViewers
+          });
+        }
         if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
         recordMatchMissions();
         return { shouldConfetti, missionToast };
@@ -799,6 +838,15 @@ export default function App() {
         }
         d.money += sponsor;
         logFin(d, `สปอนเซอร์หลัก${mainSp.bonusLabel ? ` + ${mainSp.bonusLabel}` : ''}`, sponsor);
+        applyLiveStreamMatchSettlement(d, me, opp, {
+          kind: 'league',
+          isHome: isHomeMatch,
+          isDerby,
+          myGoals,
+          oppGoals,
+          viewers: payload.streamViewers,
+          peakViewers: payload.streamPeakViewers
+        });
         if (d.winBonus && diff > 0) {
           d.money -= d.winBonus;
           logFin(d, 'จ่ายโบนัสอัดฉีดชัยชนะ', -d.winBonus);
@@ -986,7 +1034,7 @@ export default function App() {
           ['t', '🏆', 'การแข่งขัน'],
           ['p', '🌟', 'นักเตะ'],
           ['q', '⚽', 'ทีม & แผน'],
-          ['k', '🧭', 'สโมสร & ย้ายทีม']
+          ['k', '🧭', 'สโมสร']
         ];
 
   const resolvedView: MainTab = state.v === 'c' ? 't' : state.v;
@@ -1189,6 +1237,7 @@ export default function App() {
               onInspectTeam={(tid) => setInspectTeamId(tid)}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onUpdateState={updateState}
+              onShallowPatch={navigateShallow}
               onNavigate={navigateToTab}
               onOpenSeasonStats={(seasonNum) =>
                 setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
@@ -1201,6 +1250,7 @@ export default function App() {
               key={`q-${navResetSeq}`}
               state={state}
               onUpdateState={updateState}
+              onShallowPatch={navigateShallow}
               onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
               onNavigate={navigateToTab}
               onToast={showToast}
@@ -1265,7 +1315,7 @@ export default function App() {
         </main>
 
         {/* Pinned Left-Rail Game Console Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/98 border-r border-[var(--line)] order-first w-[70px] mland:w-[60px] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/98 border-r border-[var(--line)] order-first w-[74px] mland:w-[64px] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto">
           <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
