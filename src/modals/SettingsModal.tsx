@@ -1,11 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Copy, Download, Folder, FolderInput, X } from 'lucide-react';
+import { Copy, Folder, FolderInput, Save, X } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { GameState, AppSettings } from '../types/game';
 import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
 import { enterLandscapeFullscreen, exitFullscreenSafe, isMobileDevice } from '../utils/fullscreen';
-import { exportSaveCode, cleanImportJson, downloadSaveFile, readSaveFileText } from '../engine/saveCodec';
+import { exportSaveCode, cleanImportJson, readSaveFileText } from '../engine/saveCodec';
 import { firstEmptySlot, loadGameFromSlot, NSL } from '../engine/playerCore';
+import { GAME_AUTO_FOLDER_NAME, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from './SaveFolderModal';
 
 const VIP_UNLOCKED_KEY = 'lk_vip_unlocked';
@@ -29,6 +30,8 @@ export const SettingsModal: React.FC<{
   const [importFileName, setImportFileName] = useState('');
   const [targetSlot, setTargetSlot] = useState<number>(slot);
   const [showFolderModal, setShowFolderModal] = useState(false);
+  const [folderInitialTab, setFolderInitialTab] = useState<'folder' | 'code'>('folder');
+  const [savingToFolder, setSavingToFolder] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [vipUnlocked, setVipUnlocked] = useState<boolean>(() => {
     try {
@@ -338,40 +341,51 @@ export const SettingsModal: React.FC<{
                 type="button"
                 onClick={() => {
                   SFX.tap();
+                  setFolderInitialTab('folder');
                   setShowFolderModal(true);
                 }}
                 className="w-full btn btn-xs btn-gold flex items-center justify-center gap-1.5"
               >
                 <Folder className="w-3.5 h-3.5 shrink-0" />
-                <span>จัดการโฟลเดอร์เซฟ (เลือกที่อยู่ &amp; เลือกไฟล์โหลด)</span>
+                <span>เปิดโฟลเดอร์เซฟเกม ({GAME_AUTO_FOLDER_NAME})</span>
               </button>
 
               <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    SFX.win();
-                    onSaveNow?.();
-                    const { filename } = downloadSaveFile(state);
-                    setLastSavedFile(filename);
-                    onToast(`💾 บันทึกไฟล์ "${filename}" ลงเครื่องแล้ว`);
+                  disabled={savingToFolder}
+                  onClick={async () => {
+                    SFX.tap();
+                    setSavingToFolder(true);
+                    try {
+                      onSaveNow?.();
+                      const saved = await saveGameToAutoFolder(state);
+                      setLastSavedFile(`${GAME_AUTO_FOLDER_NAME}/${saved.filename}`);
+                      SFX.win();
+                      onToast(`💾 บันทึกไฟล์ "${saved.filename}" ลงโฟลเดอร์เกมแล้ว`);
+                    } catch {
+                      onToast('❌ บันทึกไฟล์ไม่สำเร็จ');
+                    } finally {
+                      setSavingToFolder(false);
+                    }
                   }}
                   className="btn btn-xs btn-primary flex items-center justify-center gap-1 whitespace-nowrap"
                 >
-                  <Download className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
-                  <span>บันทึกลงเครื่อง</span>
+                  <Save className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <span>{savingToFolder ? 'กำลังบันทึก...' : 'บันทึกเซฟทันที'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => {
                     SFX.tap();
-                    fileInputRef.current?.click();
+                    setFolderInitialTab('folder');
+                    setShowFolderModal(true);
                   }}
                   className="btn btn-xs btn-secondary flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 text-[var(--g)]" />
-                  <span>โหลดจากเครื่อง</span>
+                  <span>โหลดเซฟที่บันทึกไว้</span>
                 </button>
               </div>
 
@@ -404,7 +418,7 @@ export const SettingsModal: React.FC<{
                   }}
                   className="btn btn-xs btn-secondary flex-1"
                 >
-                  {showLoadBox ? 'ซ่อนช่องวางโค้ด' : 'วางโค้ดเพื่อโหลด'}
+                  {showLoadBox ? 'ซ่อนช่องวางโค้ด' : 'วางโค้ด / ไฟล์ภายนอก'}
                 </button>
               </div>
 
@@ -427,20 +441,32 @@ export const SettingsModal: React.FC<{
                 <div className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-[11px] mland:text-[9.5px] font-bold truncate">
-                      {importFileName ? `📄 ${importFileName}` : '📂 โหลดไฟล์ / วางโค้ดเซฟ'}
+                      {importFileName ? `📄 ${importFileName}` : '📂 นำเข้าไฟล์ภายนอก / วางโค้ดเซฟ'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowLoadBox(false);
-                        setImportRaw('');
-                        setImportFileName('');
-                      }}
-                      aria-label="ปิดกล่องโหลดเซฟ"
-                      className="text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer p-0.5"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          fileInputRef.current?.click();
+                        }}
+                        className="btn btn-xs btn-secondary"
+                      >
+                        เลือกไฟล์
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowLoadBox(false);
+                          setImportRaw('');
+                          setImportFileName('');
+                        }}
+                        aria-label="ปิดกล่องโหลดเซฟ"
+                        className="text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <textarea
@@ -534,6 +560,7 @@ export const SettingsModal: React.FC<{
         <SaveFolderModal
           currentState={state}
           currentSlot={slot}
+          initialTab={folderInitialTab}
           onSaveCurrentSlot={onSaveNow}
           onLoadSave={(loaded, chosenSlot) => {
             onLoadSaveFile?.(loaded, chosenSlot);

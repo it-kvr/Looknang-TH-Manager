@@ -1,20 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, Download, FolderInput, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ChevronRight, FolderInput, RefreshCw, Save } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
-import { SFX, unlockAudio, getSettings, saveSettings } from '../utils/audioTheme';
+import { SFX, unlockAudio } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
-import { downloadSaveFile } from '../engine/saveCodec';
+import { GAME_AUTO_FOLDER_NAME, migrateLocalSlotsToAutoFolderOnce, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from '../modals/SaveFolderModal';
 import { ovColor, statBarColor, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge } from '../components/TalentBadge';
 import { AthleteCard } from '../components/AthleteCard';
-import { enterAutoMobileFullscreen, enterLandscapeFullscreen, exitFullscreenSafe, getFullscreenElement, isMobileDevice, isPortraitViewport, onFullscreenChange } from '../utils/fullscreen';
+import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
 
@@ -238,18 +238,8 @@ export const MainMenu: React.FC<{
     [refresh]
   );
   const [showImport, setShowImport] = useState(false);
-  const [isFsActive, setIsFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
-  const [isPortraitMob, setIsPortraitMob] = useState<boolean>(() => isMobileDevice() && isPortraitViewport());
   useEffect(() => {
-    const unbind = onFullscreenChange(setIsFsActive);
-    const checkOri = () => setIsPortraitMob(isMobileDevice() && isPortraitViewport());
-    window.addEventListener('resize', checkOri, { passive: true });
-    window.addEventListener('orientationchange', checkOri, { passive: true });
-    return () => {
-      unbind();
-      window.removeEventListener('resize', checkOri);
-      window.removeEventListener('orientationchange', checkOri);
-    };
+    void migrateLocalSlotsToAutoFolderOnce(loadGameFromSlot, NSL);
   }, []);
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
   const [starPoster, setStarPoster] = useState<{ pool: StarPosterCard[]; idx: number }>(() => {
@@ -512,16 +502,21 @@ export const MainMenu: React.FC<{
             <div className="flex flex-col gap-1 shrink-0 w-7 mland:w-6">
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   SFX.tap();
-                  const { filename } = downloadSaveFile(d);
-                  onToast(`💾 บันทึกไฟล์ "${filename}" ลงเครื่องแล้ว`);
+                  try {
+                    const saved = await saveGameToAutoFolder(d, { label: `สำรองช่อง #${k}` });
+                    SFX.win();
+                    onToast(`💾 บันทึกจุดเซฟ "${saved.filename}" ลงโฟลเดอร์ ${GAME_AUTO_FOLDER_NAME} แล้ว`);
+                  } catch {
+                    onToast('❌ บันทึกไฟล์ลงโฟลเดอร์เกมไม่สำเร็จ');
+                  }
                 }}
-                title="บันทึกไฟล์เซฟลงเครื่อง"
-                aria-label="บันทึกไฟล์เซฟลงเครื่อง"
+                title="บันทึกจุดเซฟลงโฟลเดอร์เกม"
+                aria-label="บันทึกจุดเซฟลงโฟลเดอร์เกม"
                 className="flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--g)] hover:border-[var(--g)]/50 transition-colors cursor-pointer flex items-center justify-center"
               >
-                <Download className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+                <Save className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
               </button>
               <button
                 type="button"
@@ -1879,51 +1874,11 @@ export const MainMenu: React.FC<{
           <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
             <button
               type="button"
-              data-no-auto-fs="1"
-              onClick={async () => {
-                SFX.tap();
-                if (!isFsActive || isPortraitMob) {
-                  const cur = getSettings();
-                  if (cur.preferFullscreen === false) {
-                    saveSettings({ ...cur, preferFullscreen: true });
-                  }
-                  const res = await enterLandscapeFullscreen(true);
-                  if (res.fullscreen) {
-                    onToast(res.landscape ? '📱 เปิดโหมดเต็มจอแนวนอนแล้ว' : 'เปิดโหมดเต็มจอแล้ว');
-                  } else {
-                    onToast('กรุณาหมุนเครื่องเป็นแนวนอนหรือแตะอีกครั้งเพื่อเข้าเต็มจอ');
-                  }
-                } else {
-                  await exitFullscreenSafe().catch(() => undefined);
-                }
-              }}
-              title={isFsActive && !isPortraitMob ? 'ออกจากโหมดเต็มจอ' : 'เต็มจอแนวนอน'}
-              aria-label={isFsActive && !isPortraitMob ? 'ออกจากโหมดเต็มจอ' : 'เปิดโหมดเต็มจอแนวนอน'}
-              className={`h-8 sm:h-9 mland:h-7 px-2.5 mland:px-2 rounded-xl mland:rounded-lg border inline-flex items-center justify-center gap-1.5 text-[11px] sm:text-xs mland:text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                isFsActive && !isPortraitMob
-                  ? 'border-emerald-300/45 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
-                  : 'border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-white'
-              }`}
-            >
-              {isFsActive && !isPortraitMob ? (
-                <Minimize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
-              ) : (
-                <Maximize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
-              )}
-              <span className="hidden sm:inline mland:inline">
-                {isFsActive && !isPortraitMob ? 'ย่อจอ' : 'เต็มจอแนวนอน'}
-              </span>
-              <span className="sm:hidden mland:hidden">
-                {isFsActive && !isPortraitMob ? 'ย่อจอ' : 'แนวนอน'}
-              </span>
-            </button>
-            <button
-              type="button"
               onClick={() => { SFX.tap(); openImportModal(); }}
               className="h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
-              <span>โหลด / นำเข้าเซฟ</span>
+              <span>โหลดเซฟที่บันทึกไว้</span>
             </button>
             <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
           </div>

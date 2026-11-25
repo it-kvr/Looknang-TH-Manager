@@ -931,22 +931,28 @@ export const LeagueView: React.FC<{
           <h4 className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center gap-1.5">{ic} <span>{title}</span></h4>
           {list.length ? (
             <div className="space-y-1">
-              {list.map((x, idx) => (
-                <button
-                  key={`${x.t.id}-${x.q.n}`}
-                  type="button"
-                  onClick={() => onInspectPlayer(x.q, x.t)}
-                  className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${x.t.id === state.me ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
-                >
-                  <span className={`w-4 text-[11px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
-                  <PlayerFace player={x.q} team={x.t} state={state} size={26} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
-                    <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">{x.t.name} · {x.q.pos}</div>
-                  </div>
-                  <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center">{fmt(x.q)}</span>
-                </button>
-              ))}
+              {list.map((x, idx) => {
+                const isMine = x.t.id === state.me;
+                return (
+                  <button
+                    key={`${x.t.id}-${x.q.n}`}
+                    type="button"
+                    onClick={() => onInspectPlayer(x.q, x.t)}
+                    className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${isMine ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
+                  >
+                    <span className={`w-4 text-[11px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
+                    <PlayerFace player={x.q} team={x.t} state={state} club={state.club} isMyClub={isMine && state.mode === 'm'} size={28} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
+                      <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1">
+                        <ClubCrest name={x.t.name} size={12} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                        <span className="truncate">{x.t.name} · {x.q.pos}</span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center shrink-0">{fmt(x.q)}</span>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <p className="text-[11px] text-[var(--mut)]">ยังไม่มีข้อมูล</p>
@@ -1018,7 +1024,7 @@ export const LeagueView: React.FC<{
                       >
                         <div className="flex items-center gap-2.5 mland:gap-2">
                           <div className="shrink-0">
-                            <PlayerFace player={leader.q} team={leader.t} state={state} size={42} />
+                            <PlayerFace player={leader.q} team={leader.t} state={state} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} size={44} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
@@ -1074,20 +1080,30 @@ export const LeagueView: React.FC<{
                               key={`${aw.id}-${entry.t.id}-${entry.q.n}`}
                               type="button"
                               onClick={() => { SFX.tap(); onInspectPlayer(entry.q, entry.t); }}
-                              className={`w-full min-h-[36px] mland:min-h-[26px] flex items-center gap-2 mland:gap-1.5 px-2 py-1 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
+                              className={`w-full min-h-[38px] mland:min-h-[28px] flex items-center gap-2 mland:gap-1.5 px-1.5 py-1 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
                                 isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/75'
                               }`}
                             >
                               <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-center shrink-0">
                                 {idx + 2}
                               </span>
-                              <ClubCrest name={entry.t.name} size={16} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                              <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
+                                <PlayerFace
+                                  player={entry.q}
+                                  team={entry.t}
+                                  state={state}
+                                  club={state.club}
+                                  isMyClub={isMine && state.mode === 'm'}
+                                  size={28}
+                                />
+                              </div>
                               <div className="flex-1 min-w-0">
                                 <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] truncate">
                                   {entry.q.n}
                                 </div>
-                                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                                  {entry.t.name} · {entry.q.ro}
+                                <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
+                                  <ClubCrest name={entry.t.name} size={12} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                                  <span className="truncate">{entry.t.name} · {entry.q.ro}</span>
                                 </div>
                               </div>
                               <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">
@@ -1108,12 +1124,18 @@ export const LeagueView: React.FC<{
             })}
           </div>
 
-          {/* 6 Stat Leaderboards */}
+          {/* 6 Complementary Stat Leaderboards (non-overlapping with Golden Boot & Golden Glove) */}
           <div className="grid grid-cols-3 gap-2 mland:gap-1.5 content-start">
-            {board('⚽', 'ดาวซัลโว', (q) => q.sg || 0, (q) => `${q.sg || 0}`)}
             {board('🎯', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
-            {board('🔥', 'ประตู + แอสซิสต์', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
-            {board('🧤', 'คลีนชีต (ผู้รักษาประตู)', (q) => q.cs || 0, (q) => `${q.cs || 0}`, (q) => q.pos === 'GK')}
+            {board('🔥', 'มีส่วนร่วมประตู (G+A)', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
+            {board('🌟', 'แมนออฟเดอะแมตช์ (MOTM)', (q) => q.motm || 0, (q) => `${q.motm || 0} ครั้ง`)}
+            {board(
+              '📈',
+              'เรตติ้งเฉลี่ยสูงสุด',
+              (q) => ((q.sra || 0) >= 1 ? Math.round(((q.srs || 0) / q.sra!) * 100) / 100 : 0),
+              (q) => `${((q.srs || 0) / Math.max(1, q.sra || 1)).toFixed(2)}`,
+              (q) => (q.sra || 0) >= 1
+            )}
             {board('💎', 'ค่าตัวสูงสุด', vlu, (q) => fmtMoneyNum(vlu(q)))}
             {board('⚡', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`)}
           </div>

@@ -4,7 +4,7 @@ import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
-import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
+import { ovColor, statBarColor, statTierMeta, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -16,15 +16,17 @@ import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 import { AthleteCard } from '../components/AthleteCard';
+import { TalentBadge } from '../components/TalentBadge';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
   team: Team | null;
   state: GameState;
+  initialTab?: 'info' | 'history' | 'missions';
   onClose: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ player, team, state, onClose, onUpdateState, onToast }) => {
+}> = ({ player, team, state, initialTab = 'info', onClose, onUpdateState, onToast }) => {
   const liveTeam = team ? state.teams[team.id] || team : null;
   const livePlayer = liveTeam
     ? liveTeam.sq.find((q) => q.n === player.n) || player
@@ -34,10 +36,10 @@ export const PlayerInspectorModal: React.FC<{
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [showLockerPicker, setShowLockerPicker] = useState(false);
-  const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>('info');
+  const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>(initialTab);
   const isRetired = Boolean(livePlayer.retired);
-  const effectiveMode = inspectMode === 'missions' && (isRetired || !(isMyTeam || isMePlayer)) ? 'info' : inspectMode;
-  const canDoMissions = !isRetired && (isMyTeam || isMePlayer);
+  const effectiveMode = inspectMode === 'missions' && isRetired ? 'info' : inspectMode;
+  const canDoMissions = !isRetired;
   const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
@@ -167,6 +169,7 @@ export const PlayerInspectorModal: React.FC<{
               player={livePlayer}
               team={liveTeam}
               state={state}
+              readOnly={!isMyTeam && !isMePlayer}
               onUpdateState={onUpdateState}
               onToast={onToast}
             />
@@ -446,9 +449,9 @@ export const TeamInspectorModal: React.FC<{
   team: Team;
   state: GameState;
   onClose: () => void;
-  onInspectPlayer: (p: Player, t: Team | null) => void;
+  onInspectPlayer: (p: Player, t: Team | null, initialTab?: 'info' | 'history' | 'missions') => void;
 }> = ({ team, state, onClose, onInspectPlayer }) => {
-  const [teamTab, setTeamTab] = useState<'squad' | 'history'>('squad');
+  const [teamTab, setTeamTab] = useState<'squad' | 'missions' | 'history'>('squad');
   const [posFilter, setPosFilter] = useState<'ALL' | 'XI' | Position>('ALL');
   const st = teamStats(team, state);
   const myTeam = state.teams[state.me];
@@ -529,6 +532,17 @@ export const TeamInspectorModal: React.FC<{
               </button>
               <button
                 type="button"
+                onClick={() => { SFX.tap(); setTeamTab('missions'); }}
+                className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
+                  teamTab === 'missions'
+                    ? 'bg-[var(--g)] text-white shadow-xs'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                }`}
+              >
+                🎯 ภารกิจเพิ่มพลัง
+              </button>
+              <button
+                type="button"
                 onClick={() => { SFX.tap(); setTeamTab('history'); }}
                 className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg mland:rounded-md text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
                   teamTab === 'history'
@@ -558,6 +572,92 @@ export const TeamInspectorModal: React.FC<{
               onInspectPlayer={onInspectPlayer}
               compact
             />
+          </div>
+        ) : teamTab === 'missions' ? (
+          <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-4 mland:p-2 space-y-2.5 mland:space-y-2">
+            {(() => {
+              const rows = team.sq
+                .map((q) => {
+                  const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
+                  const mv = getPlayerMissionView(q, isMe ? state.p : null, state);
+                  const sbSum = Object.values((isMe ? state.p?.sb : q.sb) || {}).reduce((a, b) => a + b, 0);
+                  const maxTotal = mv.items.reduce((s, it) => s + it.maxStage, 0);
+                  const topItem = mv.items
+                    .slice()
+                    .sort((a, b) => b.stage - a.stage || b.pct - a.pct)[0];
+                  return { q, isMe, mv, sbSum, maxTotal, topItem };
+                })
+                .sort((a, b) => b.mv.passedStages - a.mv.passedStages || b.sbSum - a.sbSum || b.q.ov - a.q.ov);
+              const totalPassed = rows.reduce((s, r) => s + r.mv.passedStages, 0);
+              const totalBonus = rows.reduce((s, r) => s + r.sbSum, 0);
+              return (
+                <>
+                  <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-xs sm:text-sm mland:text-xs font-bold text-[var(--ink)]">
+                        🎯 ภารกิจสะสมเพิ่มค่าพลังของนักเตะทีม {team.name}
+                      </div>
+                      <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">
+                        {isMeTeam
+                          ? 'แตะนักเตะเพื่อดูและปักหมุดแผนภารกิจรายคน'
+                          : 'นักเตะทีมนี้ดำเนินภารกิจอัตโนมัติหลังจบการแข่งขันทุกนัด · แตะนักเตะเพื่อดูภารกิจทั้งหมด'}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs mland:text-[10px] font-bold tabular shrink-0">
+                      <span className="px-2 py-1 rounded-lg bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35">
+                        ผ่านรวม {totalPassed} ขั้น
+                      </span>
+                      <span className="px-2 py-1 rounded-lg bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] border border-[var(--lamp)]/40">
+                        โบนัสพลัง +{totalBonus}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5">
+                    {rows.map(({ q, isMe, mv, sbSum, maxTotal, topItem }) => (
+                      <button
+                        key={q.n}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          onInspectPlayer(q, team, 'missions');
+                        }}
+                        className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-left cursor-pointer transition-colors flex items-center gap-2.5"
+                      >
+                        <div className="shrink-0">
+                          <PlayerFace
+                            player={q}
+                            team={team}
+                            state={state}
+                            club={state.club}
+                            isMyClub={isMeTeam && state.mode === 'm'}
+                            careerProfile={isMe ? state.p : null}
+                            size={34}
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
+                              {q.n}
+                            </span>
+                            <TalentBadge talent={mv.talent} size="xs" />
+                          </div>
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate tabular">
+                            {q.ro} · OVR {q.ov} · ผ่าน <b className="text-[var(--g)]">{mv.passedStages}/{maxTotal}</b> · โบนัส <b className="text-[var(--ink)]">+{sbSum}</b>
+                          </div>
+                          {topItem && (
+                            <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                              {topItem.def.icon} {topItem.def.name}: ขั้น {topItem.completedAll ? `${topItem.maxStage}/${topItem.maxStage}` : `${topItem.stage + 1}/${topItem.maxStage}`} ({topItem.pct}%)
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-[var(--g)] shrink-0">ดู ›</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
           </div>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden p-3 sm:p-3.5 mland:p-2 grid grid-cols-1 md:grid-cols-[minmax(0,0.96fr)_minmax(0,1.04fr)] md:grid-rows-[minmax(0,1fr)] mland:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] mland:grid-rows-[minmax(0,1fr)] gap-3 mland:gap-2 items-stretch">

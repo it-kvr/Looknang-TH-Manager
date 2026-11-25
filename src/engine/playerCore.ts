@@ -53,6 +53,9 @@ export function saveGameToSlot(s: GameState, slot: number) {
   } catch {
     // ignore quota errors
   }
+  void import('./saveFolder')
+    .then((mod) => mod.syncSlotToAutoFolder(s, slot))
+    .catch(() => undefined);
 }
 
 export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {

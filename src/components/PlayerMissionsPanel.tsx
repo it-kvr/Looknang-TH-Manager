@@ -55,9 +55,10 @@ export const PlayerMissionsPanel: React.FC<{
   player: Player;
   team: Team | null;
   state: GameState;
+  readOnly?: boolean;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ player, team, state, onUpdateState, onToast }) => {
+}> = ({ player, team, state, readOnly = false, onUpdateState, onToast }) => {
   const [panelTab, setPanelTab] = useState<'active' | 'season'>('active');
   const [seasonSubView, setSeasonSubView] = useState<'season' | 'matrix'>('season');
   const [selectedSeason, setSelectedSeason] = useState<number>(() => state.season ?? 1);
@@ -163,6 +164,11 @@ export const PlayerMissionsPanel: React.FC<{
             </div>
             <div className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">
               สะสมได้สูงสุด <b className="text-[var(--ink)]">10 ขั้น</b> · หากสุ่มพลาดความคืบหน้าลดเหลือ <b className="text-[var(--ink)]">70%</b> เพื่อลองใหม่
+              {readOnly && (
+                <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] text-[9.5px] font-semibold text-[var(--ink)]">
+                  👁️ ทีมอื่น · AI อัปพลังอัตโนมัติหลังแข่ง
+                </span>
+              )}
             </div>
           </div>
 
@@ -311,28 +317,34 @@ export const PlayerMissionsPanel: React.FC<{
                   ระบบเลือก 3 ภารกิจที่เหมาะกับตำแหน่งให้เองเมื่อยังไม่ได้ปักหมุด · ปรับ/ปักหมุดเพิ่มหรือนำออกได้อิสระ
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => handleAutoPlan(seasonView.selectedSeason)}
-                className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-[10.5px] mland:text-[8.5px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer hover:bg-[var(--g)] hover:text-white transition-colors"
-              >
-                <Sparkles className="w-3 h-3 shrink-0" />
-                <span>จัด 3 เป้าหมายอัตโนมัติใหม่</span>
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => handleAutoPlan(seasonView.selectedSeason)}
+                  className="px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/40 text-[var(--g)] text-[10.5px] mland:text-[8.5px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0 cursor-pointer hover:bg-[var(--g)] hover:text-white transition-colors"
+                >
+                  <Sparkles className="w-3 h-3 shrink-0" />
+                  <span>จัด 3 เป้าหมายอัตโนมัติใหม่</span>
+                </button>
+              )}
             </div>
 
             {plannedEntries.length === 0 ? (
               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] py-1 flex flex-wrap items-center gap-2">
                 <span>
-                  ยังไม่ได้เลือกภารกิจในแผนซีซั่น {seasonView.selectedSeason} — กด <b className="text-[var(--ink)]">"☆ ปักหมุด"</b> ด้านล่าง
+                  {readOnly
+                    ? `ยังไม่มีภารกิจที่ปักหมุดในซีซั่น ${seasonView.selectedSeason}`
+                    : <>ยังไม่ได้เลือกภารกิจในแผนซีซั่น {seasonView.selectedSeason} — กด <b className="text-[var(--ink)]">"☆ ปักหมุด"</b> ด้านล่าง</>}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => handleAutoPlan(seasonView.selectedSeason)}
-                  className="px-2 py-0.5 rounded-md bg-[var(--g)] text-white font-bold text-[10px] cursor-pointer hover:brightness-110"
-                >
-                  ✨ ให้ระบบเลือกให้เลย (3 รายการ)
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleAutoPlan(seasonView.selectedSeason)}
+                    className="px-2 py-0.5 rounded-md bg-[var(--g)] text-white font-bold text-[10px] cursor-pointer hover:brightness-110"
+                  >
+                    ✨ ให้ระบบเลือกให้เลย (3 รายการ)
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mland:gap-1.5">
@@ -351,13 +363,15 @@ export const PlayerMissionsPanel: React.FC<{
                             ขั้น {e.completedAll ? `${e.maxStage}/${e.maxStage}` : `${e.stage + 1}/${e.maxStage}`} · ซีซั่นนี้ +{e.seasonEarned.toLocaleString()} {e.def.unit}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePin(e.def.id, e.def.name, seasonView.selectedSeason)}
-                          className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap shrink-0 cursor-pointer px-1.5 py-0.5 rounded hover:bg-[var(--red-soft)]"
-                        >
-                          นำออก
-                        </button>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePin(e.def.id, e.def.name, seasonView.selectedSeason)}
+                            className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--red)] whitespace-nowrap shrink-0 cursor-pointer px-1.5 py-0.5 rounded hover:bg-[var(--red-soft)]"
+                          >
+                            นำออก
+                          </button>
+                        )}
                       </div>
 
                       <div className="space-y-0.5">
@@ -503,17 +517,23 @@ export const PlayerMissionsPanel: React.FC<{
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePin(def.id, def.name, seasonView.selectedSeason)}
-                        className={`px-2 py-1 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap shrink-0 border cursor-pointer transition-colors ${
-                          isPlanned
-                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                            : 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)] hover:border-[var(--g)]'
-                        }`}
-                      >
-                        {isPlanned ? '★ ในแผน' : '☆ ปักหมุด'}
-                      </button>
+                      {!readOnly ? (
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePin(def.id, def.name, seasonView.selectedSeason)}
+                          className={`px-2 py-1 rounded-lg text-[10px] mland:text-[8.5px] font-bold whitespace-nowrap shrink-0 border cursor-pointer transition-colors ${
+                            isPlanned
+                              ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                              : 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          {isPlanned ? '★ ในแผน' : '☆ ปักหมุด'}
+                        </button>
+                      ) : isPlanned ? (
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-bold bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35 shrink-0">
+                          ★ ในแผน
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="space-y-1">
@@ -616,16 +636,18 @@ export const PlayerMissionsPanel: React.FC<{
                                   {isEligible ? def.unit : `เฉพาะ ${def.posFilter?.join('/')}`}
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleTogglePin(def.id, def.name, seasonView.selectedSeason)}
-                                title={isPlanned ? 'นำออกจากแผนซีซั่น' : 'ปักหมุดเข้าแผนซีซั่น'}
-                                className={`text-[11px] px-1 py-0.5 rounded cursor-pointer shrink-0 ${
-                                  isPlanned ? 'text-[var(--g)] font-bold' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                                }`}
-                              >
-                                {isPlanned ? '★' : '☆'}
-                              </button>
+                              {!readOnly && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleTogglePin(def.id, def.name, seasonView.selectedSeason)}
+                                  title={isPlanned ? 'นำออกจากแผนซีซั่น' : 'ปักหมุดเข้าแผนซีซั่น'}
+                                  className={`text-[11px] px-1 py-0.5 rounded cursor-pointer shrink-0 ${
+                                    isPlanned ? 'text-[var(--g)] font-bold' : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                                  }`}
+                                >
+                                  {isPlanned ? '★' : '☆'}
+                                </button>
+                              )}
                             </div>
                           </td>
                           {seasonView.availableSeasons.map((sNum) => {
@@ -744,18 +766,20 @@ export const PlayerMissionsPanel: React.FC<{
                         <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{def.desc}</div>
                       </div>
                       <div className="flex items-start gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => handleTogglePin(def.id, def.name, seasonView.curSeason)}
-                          title={isPlannedThisSeason ? `อยู่ในแผนซีซั่น ${seasonView.curSeason}` : `ปักหมุดเข้าแผนซีซั่น ${seasonView.curSeason}`}
-                          className={`px-1.5 py-0.5 rounded text-[10px] mland:text-[8.5px] font-bold border cursor-pointer transition-colors ${
-                            isPlannedThisSeason
-                              ? 'bg-[var(--g)] text-white border-[var(--g)]'
-                              : 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)]'
-                          }`}
-                        >
-                          {isPlannedThisSeason ? '★' : '☆'}
-                        </button>
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePin(def.id, def.name, seasonView.curSeason)}
+                            title={isPlannedThisSeason ? `อยู่ในแผนซีซั่น ${seasonView.curSeason}` : `ปักหมุดเข้าแผนซีซั่น ${seasonView.curSeason}`}
+                            className={`px-1.5 py-0.5 rounded text-[10px] mland:text-[8.5px] font-bold border cursor-pointer transition-colors ${
+                              isPlannedThisSeason
+                                ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                                : 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)]'
+                            }`}
+                          >
+                            {isPlannedThisSeason ? '★' : '☆'}
+                          </button>
+                        )}
                         <div className="grid grid-cols-5 gap-0.5 pt-0.5" title={`ประวัติ ${maxStage} ขั้น`}>
                           {Array.from({ length: maxStage }, (_, idx) => {
                             const out = stageOutcomes[idx] || (idx < stage ? 'ok' : undefined);

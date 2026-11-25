@@ -1,26 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2, Minimize2, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
 import {
   bindAutoLandscapeFullscreen,
   enterAutoMobileFullscreen,
   enterLandscapeFullscreen,
-  exitFullscreenSafe,
-  getFullscreenElement,
-  isMobileDevice,
-  isPortraitViewport,
-  onFullscreenChange,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
-import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
+import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
+import stadiumHeroBg from './assets/images/thai_stadium_hero_1795511663761.jpg';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
 import { SquadTacticsView } from './views/SquadTacticsView';
@@ -40,10 +36,11 @@ import { SecretBoostModal } from './modals/SecretBoostModal';
 import { SettingsModal } from './modals/SettingsModal';
 
 export default function App() {
+  const [enteredGame, setEnteredGame] = useState(false);
   const [state, setState] = useState<GameState | null>(null);
   const [slot, setSlot] = useState<number>(1);
   const [toast, setToast] = useState<string | null>(null);
-  const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null } | null>(null);
+  const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null; initialTab?: 'info' | 'history' | 'missions' } | null>(null);
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
   const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
@@ -57,21 +54,10 @@ export default function App() {
   });
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
-  const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(() => isMobileDevice() && isPortraitViewport());
-  const [isFsActive, setIsFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
 
   useEffect(() => {
     const unbindFs = bindAutoLandscapeFullscreen();
-    const unbindFsState = onFullscreenChange(setIsFsActive);
-    const checkOri = () => {
-      setIsPortraitMobile(isMobileDevice() && isPortraitViewport());
-    };
-    window.addEventListener('resize', checkOri, { passive: true });
-    window.addEventListener('orientationchange', checkOri, { passive: true });
     return () => {
-      window.removeEventListener('resize', checkOri);
-      window.removeEventListener('orientationchange', checkOri);
-      unbindFsState();
       unbindFs();
     };
   }, []);
@@ -929,6 +915,83 @@ export default function App() {
     showToast(`เริ่มต้นฤดูกาลที่ ${state.season + 1} แล้ว!`);
   };
 
+  const handleEnterGame = () => {
+    unlockAudio();
+    SFX.tap();
+    const cur = getSettings();
+    if (cur.preferFullscreen !== false) {
+      enterLandscapeFullscreen(true).catch(() => undefined);
+    }
+    setEnteredGame(true);
+  };
+
+  if (!enteredGame && !state) {
+    return (
+      <div className="relative h-full w-full flex items-center justify-center overflow-hidden bg-[#040c08] stage-viewport">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#040c08]">
+          <img
+            src={stadiumHeroBg}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-full w-full object-cover object-center brightness-[0.52] saturate-95"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#020805]/86 via-[#05140c]/62 to-[#020805]/90" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(22,124,72,0.22),rgba(2,8,5,0.68)_75%)]" />
+        </div>
+
+        <div className="relative z-10 w-full max-w-md mx-auto rounded-3xl mland:rounded-2xl border border-white/15 bg-[#07130d]/88 shadow-[0_24px_64px_rgba(0,0,0,0.75)] px-6 py-7 mland:px-6 mland:py-4 flex flex-col items-center text-center gap-4 mland:gap-2.5">
+          <div className="w-16 h-16 mland:w-12 mland:h-12 rounded-2xl bg-white/10 border border-white/18 flex items-center justify-center shadow-xl">
+            <svg viewBox="0 0 40 40" className="w-11 h-11 mland:w-8 mland:h-8" aria-hidden="true">
+              <defs>
+                <linearGradient id="enter_pitch_crest" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stopColor="#123a26" />
+                  <stop offset="1" stopColor="#22794b" />
+                </linearGradient>
+                <radialGradient id="enter_flood_crest" cx="0.5" cy="0.15" r="0.65">
+                  <stop offset="0" stopColor="#fde68a" stopOpacity="0.72" />
+                  <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
+                </radialGradient>
+              </defs>
+              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_pitch_crest)" />
+              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_flood_crest)" />
+              <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
+                <path d="M5 24h30" />
+                <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
+              </g>
+              <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
+            </svg>
+          </div>
+
+          <div className="space-y-1 mland:space-y-0.5">
+            <h1 className="text-3xl sm:text-4xl mland:text-2xl font-extrabold font-display tracking-wide leading-none text-white">
+              ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
+            </h1>
+            <p className="text-xs sm:text-sm mland:text-[11px] font-medium text-emerald-100/80">
+              เกมจำลองคุมสโมสร &amp; นักเตะอาชีพไทย
+            </p>
+          </div>
+
+          <button
+            type="button"
+            data-no-auto-fs="1"
+            onClick={handleEnterGame}
+            className="w-full py-3.5 mland:py-2.5 px-6 rounded-2xl mland:rounded-xl bg-gradient-to-r from-[#f7cb51] via-[#f5c242] to-[#e0a214] text-[#211500] font-extrabold text-base mland:text-sm font-display shadow-[0_10px_28px_rgba(245,194,66,0.35)] hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+          >
+            <span>⚽</span>
+            <span>กดเพื่อเข้าเกม</span>
+          </button>
+
+          <p className="text-[11px] mland:text-[9.5px] text-emerald-100/60">
+            แตะเพื่อเปิดเสียงเกมและเข้าสู่โหมดเต็มจอแนวนอนอัตโนมัติ
+          </p>
+        </div>
+
+        <OfflineIndicator />
+        <PWAUpdateBanner />
+      </div>
+    );
+  }
+
   if (!state) {
     return (
       <>
@@ -1159,37 +1222,6 @@ export default function App() {
             </button>
             <button
               type="button"
-              data-no-auto-fs="1"
-              onClick={async () => {
-                SFX.tap();
-                if (!isFsActive || isPortraitMobile) {
-                  if (appSettings.preferFullscreen === false) {
-                    const next = { ...appSettings, preferFullscreen: true };
-                    setAppSettings(next);
-                    saveSettings(next);
-                  }
-                  const res = await enterLandscapeFullscreen(true);
-                  if (res.fullscreen) {
-                    showToast(res.landscape ? '📱 เปิดโหมดเต็มจอแนวนอนแล้ว' : 'เปิดโหมดเต็มจอแล้ว');
-                  } else {
-                    showToast('กรุณาหมุนเครื่องเป็นแนวนอนหรือแตะอีกครั้งเพื่อเข้าเต็มจอ');
-                  }
-                } else {
-                  await exitFullscreenSafe().catch(() => undefined);
-                }
-              }}
-              aria-label={isFsActive && !isPortraitMobile ? 'ออกจากโหมดเต็มจอ' : 'เปิดโหมดเต็มจอแนวนอน'}
-              title={isFsActive && !isPortraitMobile ? 'ออกจากโหมดเต็มจอ' : 'เต็มจอแนวนอน'}
-              className="btn-icon w-9 h-9 mland:w-7.5 mland:h-7.5"
-            >
-              {isFsActive && !isPortraitMobile ? (
-                <Minimize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
-              ) : (
-                <Maximize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
-              )}
-            </button>
-            <button
-              type="button"
               onClick={() => { SFX.tap(); setShowSettings(true); }}
               aria-label="ตั้งค่า"
               title="ตั้งค่าเกม"
@@ -1352,8 +1384,8 @@ export default function App() {
           team={state.teams[inspectTeamId]}
           state={state}
           onClose={() => setInspectTeamId(null)}
-          onInspectPlayer={(p, t) => {
-            setInspectPlayer({ player: p, team: t });
+          onInspectPlayer={(p, t, initialTab) => {
+            setInspectPlayer({ player: p, team: t, initialTab });
           }}
         />
       )}
@@ -1363,6 +1395,7 @@ export default function App() {
           player={inspectPlayer.player}
           team={inspectPlayer.team}
           state={state}
+          initialTab={inspectPlayer.initialTab}
           onClose={() => setInspectPlayer(null)}
           onUpdateState={updateState}
           onToast={showToast}
