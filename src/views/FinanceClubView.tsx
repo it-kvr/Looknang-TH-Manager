@@ -1030,10 +1030,10 @@ export const FinanceClubView: React.FC<{
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5">
                         <Radio className="w-4 h-4 text-[var(--red)] shrink-0" />
-                        <span>ช่องทางไลฟ์สดออนไลน์ &amp; ลิขสิทธิ์ถ่ายทอดสด</span>
+                        <span>ช่องผู้ถือลิขสิทธิ์ถ่ายทอดสด &amp; สตรีมมิ่ง</span>
                       </h3>
                       <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
-                        {curStreamPlan.id === 'off' ? 'ปิดอยู่' : `~${est.estStreamViewers.toLocaleString()} คนดู`}
+                        {curStreamPlan.id === 'off' ? 'ช่องกลางลีก' : `~${est.estStreamViewers.toLocaleString()} คนดู`}
                       </span>
                     </div>
 
@@ -1054,7 +1054,7 @@ export const FinanceClubView: React.FC<{
                               onUpdateState((d) => {
                                 d.liveStream = plan.id;
                               });
-                              onToast(`ตั้งค่าช่องทางไลฟ์สดเป็น "${plan.short}" แล้ว`);
+                              onToast(`ตั้งค่าแพ็กเกจถ่ายทอดสดช่องลิขสิทธิ์เป็น "${plan.short}" แล้ว`);
                             }}
                             className={`p-2.5 mland:p-2 rounded-xl text-left border transition-colors cursor-pointer ${
                               active

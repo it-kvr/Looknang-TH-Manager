@@ -53,7 +53,7 @@ interface MatchTimelineItem {
 }
 import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, getFacilityCondition } from '../engine/simulation';
-import { generateLiveStreamComment, getStreamViewerTier, getViewerTierMeta, type LiveCommentItem, type LiveCommentKind } from '../engine/liveStreamChat';
+import { generateLiveStreamComment, getMatchBroadcastChannel, getStreamViewerTier, getViewerTierMeta, type LiveCommentItem, type LiveCommentKind } from '../engine/liveStreamChat';
 import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -240,10 +240,10 @@ const MatchLogRow = React.memo<{
                 team={htTeam}
                 state={state}
                 careerProfile={htPlayer.me ? state.p : null}
-                club={state.club}
+                club={htIsMe ? state.club : null}
                 isMyClub={htIsMe}
                 kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
-                trimColor={htTrim}
+                trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
                 size={20}
                 bare
               />
@@ -327,10 +327,10 @@ const MatchLogRow = React.memo<{
               team={vPlayer.team}
               state={state}
               careerProfile={vPlayer.player.me ? state.p : null}
-              club={state.club}
+              club={vPlayer.team.id === state.me && state.mode === 'm' ? state.club : null}
               isMyClub={vPlayer.team.id === state.me && state.mode === 'm'}
               kitColor={vPlayer.player.pos === 'GK' ? vGkKit : vKit}
-              trimColor={vTrim}
+              trimColor={vPlayer.player.pos === 'GK' ? undefined : vTrim}
               size={20}
               bare
             />
@@ -372,28 +372,68 @@ export const MatchModal: React.FC<{
   const matchEnv = useMemo<MatchEnvironment>(() => {
     const season: 'rainy' | 'summer' = Math.random() < 0.5 ? 'rainy' : 'summer';
     const timeOfDay: 'day' | 'night' = Math.random() < 0.5 ? 'night' : 'day';
-    const seed = (homeOrig.id + 1) * 17 + (homeOrig.name?.length || 5) * 7 + state.md * 5;
+    const clubSeed = (homeOrig.id + 1) * 97 + (homeOrig.name?.length || 5) * 31;
     let turfLv = 4;
     let turfCond = 90;
+    let effectiveCond = 90;
     if (meIsHome) {
       turfLv = clamp(state.turfLv ?? 1, 0, 10);
       turfCond = turfLv <= 0 ? 40 : getFacilityCondition(state, 'turfLv');
+      const deficitPenalty = state.money < -30 ? 14 : state.money < 0 ? 7 : 0;
+      effectiveCond = clamp(turfCond - deficitPenalty, 30, 100);
     } else if (kind === 'asia' || kind === 'sc') {
-      turfLv = homeOrig.tier === 0 ? 9 : 7;
-      turfCond = 94;
+      turfLv = homeOrig.tier === 2 ? 9 : 8;
+      turfCond = 95;
+      effectiveCond = 95;
     } else {
-      turfLv =
-        homeOrig.tier === 0
-          ? 5 + (seed % 6)
+      const avgOv = Math.round(homeOrig.sq.reduce((s, q) => s + q.ov, 0) / Math.max(1, homeOrig.sq.length));
+      const budgetBoost =
+        homeOrig.tier === 2
+          ? clamp(Math.round((avgOv - 66) / 3), -1, 3)
           : homeOrig.tier === 1
-            ? 2 + (seed % 5)
-            : seed % 4;
-      turfCond = clamp(74 + ((seed * 3) % 25) - (season === 'rainy' ? 6 : 0), 56, 100);
+            ? clamp(Math.round((avgOv - 57) / 3), -1, 2)
+            : clamp(Math.round((avgOv - 49) / 3), -1, 2);
+      turfLv =
+        homeOrig.tier === 2
+          ? clamp(6 + budgetBoost + (clubSeed % 3), 4, 10)
+          : homeOrig.tier === 1
+            ? clamp(2 + budgetBoost + (clubSeed % 4), 1, 7)
+            : clamp(budgetBoost + (clubSeed % 4), 0, 4);
+      turfCond = clamp(68 + ((clubSeed + state.md * 7) % 28) - (season === 'rainy' ? 6 : 0) + homeOrig.tier * 4, 46, 100);
+      effectiveCond = turfCond;
     }
-    const turfSpecInit = getTurfGradeForLevel(turfLv, turfCond);
+
+    const turfSpecInit = getTurfGradeForLevel(turfLv, effectiveCond);
+    const grassLength: 'short' | 'medium' | 'long' =
+      turfLv >= 6 && effectiveCond >= 72
+        ? 'short'
+        : turfLv <= 1 || effectiveCond < 58
+          ? 'long'
+          : effectiveCond < 70 || (!meIsHome && clubSeed % 4 === 0 && turfLv <= 4)
+            ? 'long'
+            : turfLv >= 4 && effectiveCond >= 84
+              ? 'short'
+              : 'medium';
+
+    const rawDirtMix =
+      turfLv <= 0
+        ? 0.82
+        : turfLv === 1
+          ? clamp(0.42 + (100 - effectiveCond) * 0.0055, 0.34, 0.78)
+          : turfLv <= 3
+            ? clamp(0.14 + Math.max(0, 82 - effectiveCond) * 0.006, 0.06, 0.5)
+            : turfLv <= 6
+              ? effectiveCond < 72
+                ? clamp((74 - effectiveCond) * 0.0085, 0.05, 0.32)
+                : 0
+              : effectiveCond < 58
+                ? clamp((60 - effectiveCond) * 0.007, 0.04, 0.22)
+                : 0;
+    const dirtMix = Number(clamp(rawDirtMix + (season === 'rainy' && rawDirtMix > 0 ? 0.08 : 0), 0, 0.92).toFixed(2));
+
     const puddleCount =
       season === 'rainy'
-        ? Math.min(7, turfSpecInit.maxPuddles + (turfSpecInit.maxPuddles > 0 && turfCond < 70 ? 1 : 0))
+        ? Math.min(7, turfSpecInit.maxPuddles + (turfSpecInit.maxPuddles > 0 && effectiveCond < 70 ? 1 : 0))
         : 0;
     const puddles: MatchPitchPuddle[] =
       puddleCount > 0
@@ -412,9 +452,12 @@ export const MatchModal: React.FC<{
       puddles,
       sunAngle: 0.25 + Math.random() * 0.4,
       turfGrade: turfSpecInit.id,
-      turfCond
+      turfCond: effectiveCond,
+      grassLength,
+      dirtMix,
+      pitchSeed: clubSeed
     };
-  }, [homeOrig.id, homeOrig.name, homeOrig.tier, kind, meIsHome, state.turfLv, state.facCond?.turfLv, state.md]);
+  }, [homeOrig.id, homeOrig.name, homeOrig.tier, homeOrig.sq, kind, meIsHome, state.turfLv, state.facCond?.turfLv, state.money, state.md]);
   const turfSpec = useMemo(() => getTurfGradeSpec(matchEnv.turfGrade), [matchEnv.turfGrade]);
 
   const initialHomeXi = useMemo(() => xi(homeOrig).map((q) => q.n), [homeOrig]);
@@ -490,11 +533,11 @@ export const MatchModal: React.FC<{
     const envDesc =
       matchEnv.season === 'rainy'
         ? matchEnv.timeOfDay === 'night'
-          ? `🌙💧 หน้าฝน · เตะกลางคืน · 🌱 ${turfSpec.name} (${matchEnv.turfCond}%)`
-          : `🌦️ หน้าฝน · กลางวัน · 🌱 ${turfSpec.name} (${matchEnv.turfCond}%)`
+          ? '🌙💧 หน้าฝน · เตะกลางคืน'
+          : '🌦️ หน้าฝน · กลางวัน'
         : matchEnv.timeOfDay === 'night'
-          ? `🌙 หน้าร้อน · เตะกลางคืน · 🌱 ${turfSpec.name} (${matchEnv.turfCond}%)`
-          : `☀️ หน้าร้อน · แดดออก · 🌱 ${turfSpec.name} (${matchEnv.turfCond}%)`;
+          ? '🌙 หน้าร้อน · เตะกลางคืน'
+          : '☀️ หน้าร้อน · แดดออก';
     const base: MatchLogItem[] = [
       { id: 1, m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${homeOrig.name} พบ ${awayOrig.name}`, tone: 'sys' },
       { id: 2, m: 0, text: `🏟️ ยอดผู้ชมเข้าสนาม: ${matchAttendance.att.toLocaleString()} / ${matchAttendance.cap.toLocaleString()} คน (${matchAttendance.pct}%)`, tone: 'sys' },
@@ -571,33 +614,41 @@ export const MatchModal: React.FC<{
     () => computeMatchStreamProjection(homeOrig, awayOrig, state, { kind, derby: isDerby }),
     [homeOrig, awayOrig, state, kind, isDerby]
   );
+  const broadcastChannel = useMemo(
+    () =>
+      getMatchBroadcastChannel({
+        tier: homeOrig.tier,
+        kind,
+        planId: streamProj.plan.id,
+        homeId: homeOrig.id,
+        season: state.season
+      }),
+    [homeOrig.tier, homeOrig.id, kind, streamProj.plan.id, state.season]
+  );
   const initialLiveViewers = Math.max(250, Math.round(streamProj.baseViewers * 0.72));
   const [liveViewers, setLiveViewers] = useState<number>(() => initialLiveViewers);
   const [peakViewers, setPeakViewers] = useState<number>(() => initialLiveViewers);
-  const [liveComments, setLiveComments] = useState<LiveCommentItem[]>(() => [
-    generateLiveStreamComment({
-      m: 0,
-      viewers: initialLiveViewers,
-      kind: 'ambient',
-      homeName: homeOrig.name,
-      awayName: awayOrig.name,
-      myTeamName: meTeamOrig.name,
-      oppTeamName: oppTeamOrig.name,
-      gh: 0,
-      ga: 0
-    }),
-    generateLiveStreamComment({
-      m: 0,
-      viewers: initialLiveViewers,
-      kind: 'ambient',
-      homeName: homeOrig.name,
-      awayName: awayOrig.name,
-      myTeamName: meTeamOrig.name,
-      oppTeamName: oppTeamOrig.name,
-      gh: 0,
-      ga: 0
-    })
-  ]);
+  const usedStreamTextsRef = useRef<Set<string>>(new Set());
+  const [liveComments, setLiveComments] = useState<LiveCommentItem[]>(() => {
+    const initial: LiveCommentItem[] = [];
+    for (let i = 0; i < 2; i++) {
+      const item = generateLiveStreamComment({
+        m: 0,
+        viewers: initialLiveViewers,
+        kind: 'ambient',
+        homeName: homeOrig.name,
+        awayName: awayOrig.name,
+        myTeamName: meTeamOrig.name,
+        oppTeamName: oppTeamOrig.name,
+        channelName: broadcastChannel.name,
+        gh: 0,
+        ga: 0,
+        usedTexts: usedStreamTextsRef.current
+      });
+      if (item) initial.push(item);
+    }
+    return initial;
+  });
   const [clubShoutMin, setClubShoutMin] = useState<number>(-10);
   const liveViewersRef = useRef<number>(initialLiveViewers);
   const peakViewersRef = useRef<number>(initialLiveViewers);
@@ -1288,10 +1339,17 @@ export const MatchModal: React.FC<{
     return () => setCrowdAudio(false);
   }, []);
 
+  const findMatchPlayerMeta = (name?: string | null) => {
+    if (!name) return undefined;
+    const clean = name.trim();
+    const pObj = homeOrig.sq.find((q) => q.n === clean) || awayOrig.sq.find((q) => q.n === clean);
+    return pObj ? { pos: pObj.pos, role: pObj.ro } : undefined;
+  };
+
   const pushStreamComment = (
     m: number,
     cKind: LiveCommentKind,
-    opts?: { actor?: string; assist?: string; viewerBoost?: number; burst?: number }
+    opts?: { actor?: string; assist?: string; gkName?: string; viewerBoost?: number; burst?: number }
   ) => {
     let nextV = liveViewersRef.current;
     if (opts?.viewerBoost) {
@@ -1303,28 +1361,37 @@ export const MatchModal: React.FC<{
         setPeakViewers(nextV);
       }
     }
+    const actorMeta = findMatchPlayerMeta(opts?.actor);
     const count = opts?.burst ?? (getStreamViewerTier(nextV) === 'viral' ? 2 : 1);
     const created: LiveCommentItem[] = [];
     for (let i = 0; i < count; i++) {
-      created.push(
-        generateLiveStreamComment({
-          m,
-          viewers: nextV,
-          kind: cKind,
-          homeName: homeOrig.name,
-          awayName: awayOrig.name,
-          myTeamName: meTeamOrig.name,
-          oppTeamName: oppTeamOrig.name,
-          actor: opts?.actor,
-          assist: opts?.assist,
-          gh: simRef.current.gh,
-          ga: simRef.current.ga,
-          playerModeName: isPlayerMode ? myPlayerName : undefined,
-          playerModeNo: isPlayerMode && myPlayerSquadObj ? getShirtNo(meTeamOrig, myPlayerSquadObj) : null
-        })
-      );
+      const nextItem = generateLiveStreamComment({
+        m,
+        viewers: nextV,
+        kind: cKind,
+        homeName: homeOrig.name,
+        awayName: awayOrig.name,
+        myTeamName: meTeamOrig.name,
+        oppTeamName: oppTeamOrig.name,
+        channelName: broadcastChannel.name,
+        actor: opts?.actor,
+        actorPos: actorMeta?.pos,
+        actorRole: actorMeta?.role,
+        assist: opts?.assist,
+        gkName: opts?.gkName,
+        gh: simRef.current.gh,
+        ga: simRef.current.ga,
+        playerModeName: isPlayerMode ? myPlayerName : undefined,
+        playerModeNo: isPlayerMode && myPlayerSquadObj ? getShirtNo(meTeamOrig, myPlayerSquadObj) : null,
+        playerModePos: isPlayerMode ? myPlayerSquadObj?.pos || state.p?.pos : undefined,
+        playerModeRole: isPlayerMode ? myPlayerSquadObj?.ro || state.p?.sp : undefined,
+        usedTexts: usedStreamTextsRef.current
+      });
+      if (nextItem) created.push(nextItem);
     }
-    setLiveComments((prev) => [...created, ...prev].slice(0, 65));
+    if (created.length > 0) {
+      setLiveComments((prev) => [...created, ...prev].slice(0, 65));
+    }
   };
 
   const pushLog = (m: number, text: string, tone?: 'goal' | 'card' | 'sys' | 'sub') => {
@@ -1344,7 +1411,8 @@ export const MatchModal: React.FC<{
       if (text.includes('VAR')) {
         pushStreamComment(m, 'var', { viewerBoost: baseSurge });
       } else {
-        pushStreamComment(m, 'card', { viewerBoost: Math.round(baseSurge * 0.6) });
+        const cardMatch = text.match(/!\s*([^\s(]+)/);
+        pushStreamComment(m, 'card', { actor: cardMatch?.[1], viewerBoost: Math.round(baseSurge * 0.6) });
       }
     } else if (tone === 'sub') {
       const inMatch = text.match(/🟢\s*([^\s(]+)/);
@@ -1352,14 +1420,24 @@ export const MatchModal: React.FC<{
         pushStreamComment(m, 'sub', { actor: inMatch?.[1] });
       }
     } else if (text.includes('เซฟ') || text.includes('ปัด')) {
-      if (Math.random() < (vTier === 'low' ? 0.5 : 0.85)) {
-        pushStreamComment(m, 'save', { viewerBoost: Math.round(baseSurge * 0.45) });
+      if (Math.random() < (vTier === 'low' ? 0.55 : 0.85)) {
+        const gkObj =
+          homeOrig.sq.find((q) => q.pos === 'GK' && text.includes(q.n)) ||
+          awayOrig.sq.find((q) => q.pos === 'GK' && text.includes(q.n));
+        pushStreamComment(m, 'save', {
+          actor: gkObj?.n,
+          gkName: gkObj?.n,
+          viewerBoost: Math.round(baseSurge * 0.45)
+        });
       }
     } else if (text.includes('VAR')) {
       pushStreamComment(m, 'var', { viewerBoost: Math.round(baseSurge * 0.8) });
     } else if (text.includes('หลุดกรอบ') || text.includes('เฉียดเสา') || text.includes('เตะวืด')) {
       if (Math.random() < (vTier === 'low' ? 0.35 : 0.7)) {
-        pushStreamComment(m, 'miss');
+        const missObj =
+          homeOrig.sq.find((q) => text.includes(q.n)) ||
+          awayOrig.sq.find((q) => text.includes(q.n));
+        pushStreamComment(m, 'miss', { actor: missObj?.n });
       }
     }
   };
@@ -8792,10 +8870,10 @@ export const MatchModal: React.FC<{
                                   team={sideTeam}
                                   state={state}
                                   careerProfile={tlPlayer.me ? state.p : null}
-                                  club={state.club}
+                                  club={sideId === state.me && state.mode === 'm' ? state.club : null}
                                   isMyClub={sideId === state.me && state.mode === 'm'}
                                   kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
-                                  trimColor={sideTrim}
+                                  trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
                                   size={20}
                                   bare
                                 />
@@ -8851,10 +8929,10 @@ export const MatchModal: React.FC<{
                                   team={sideTeam}
                                   state={state}
                                   careerProfile={tlPlayer.me ? state.p : null}
-                                  club={state.club}
+                                  club={sideId === state.me && state.mode === 'm' ? state.club : null}
                                   isMyClub={sideId === state.me && state.mode === 'm'}
                                   kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
-                                  trimColor={sideTrim}
+                                  trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
                                   size={20}
                                   bare
                                 />
@@ -8965,10 +9043,10 @@ export const MatchModal: React.FC<{
               team={htTeam}
               state={state}
               careerProfile={htPlayer.me ? state.p : null}
-              club={state.club}
+              club={htIsMe ? state.club : null}
               isMyClub={htIsMe}
               kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
-              trimColor={htTrim}
+              trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
               size={18}
               bare
             />
@@ -9036,23 +9114,6 @@ export const MatchModal: React.FC<{
               </span>
               <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
               <span
-                className={`inline-flex items-center gap-0.5 text-[10px] mland:text-[8px] font-bold shrink-0 ${
-                  turfSpec.grade === 'S'
-                    ? 'text-emerald-600 dark:text-emerald-300'
-                    : turfSpec.grade === 'A'
-                      ? 'text-[var(--g)]'
-                      : turfSpec.grade === 'D'
-                        ? 'text-amber-700 dark:text-amber-300'
-                        : 'text-[var(--ink)]'
-                }`}
-                title={`${turfSpec.name} (สภาพพื้น ${matchEnv.turfCond}%) — ${turfSpec.desc}`}
-              >
-                <span>🌱</span>
-                <span className="hidden md:inline mland:hidden">{turfSpec.shortName}</span>
-                <span className="md:hidden mland:inline">เกรด {turfSpec.grade}</span>
-              </span>
-              <span className="w-px h-3.5 bg-[var(--line)] shrink-0" />
-              <span
                 className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular shrink-0"
                 title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
               >
@@ -9066,16 +9127,16 @@ export const MatchModal: React.FC<{
                 className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold tabular shrink-0"
                 title={
                   streamProj.plan.id === 'off'
-                    ? `ช่องสโมสรปิดไลฟ์อยู่ · ช่องกลางลีกมียอดรับชม ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-                    : `${streamProj.plan.short} · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
+                    ? `ถ่ายทอดผ่าน ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
+                    : `ถ่ายทอดสดทาง ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
                 }
               >
                 <Radio className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--red)]'}`} />
                 <span className={streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
                   {liveViewers.toLocaleString()}
                 </span>
-                <span className="hidden xl:inline text-[var(--mut)] font-medium">
-                  {streamProj.plan.id === 'off' ? 'ไลฟ์กลาง' : 'ดูสด'}
+                <span className="hidden xl:inline text-[var(--mut)] font-medium truncate max-w-[110px]">
+                  {broadcastChannel.short}
                 </span>
               </span>
             </div>
@@ -9909,10 +9970,10 @@ export const MatchModal: React.FC<{
                                   team={motmTeam}
                                   state={state}
                                   careerProfile={motmPlayer.me ? state.p : null}
-                                  club={state.club}
+                                  club={motmTeam.id === state.me && state.mode === 'm' ? state.club : null}
                                   isMyClub={motmTeam.id === state.me && state.mode === 'm'}
                                   kitColor={motmTeam.id === homeId ? (motmPlayer.pos === 'GK' ? homeGkKit : homeKit) : (motmPlayer.pos === 'GK' ? awayGkKit : awayKit)}
-                                  trimColor={motmTeam.id === homeId ? homeTrim : awayTrim}
+                                  trimColor={motmPlayer.pos === 'GK' ? undefined : (motmTeam.id === homeId ? homeTrim : awayTrim)}
                                   size={18}
                                   bare
                                 />
@@ -9975,10 +10036,10 @@ export const MatchModal: React.FC<{
                                         team={pickedInfo.team}
                                         state={state}
                                         careerProfile={pkPl.me ? state.p : null}
-                                        club={state.club}
+                                        club={pickedInfo.team.id === state.me && state.mode === 'm' ? state.club : null}
                                         isMyClub={pickedInfo.team.id === state.me && state.mode === 'm'}
                                         kitColor={pkIsHome ? (pkPl.pos === 'GK' ? homeGkKit : homeKit) : (pkPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                        trimColor={pkIsHome ? homeTrim : awayTrim}
+                                        trimColor={pkPl.pos === 'GK' ? undefined : (pkIsHome ? homeTrim : awayTrim)}
                                         size={24}
                                         bare
                                       />
@@ -10103,10 +10164,10 @@ export const MatchModal: React.FC<{
                                       team={subTeam}
                                       state={state}
                                       careerProfile={subPl.me ? state.p : null}
-                                      club={state.club}
+                                      club={subTeam.id === state.me && state.mode === 'm' ? state.club : null}
                                       isMyClub={subTeam.id === state.me && state.mode === 'm'}
                                       kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                      trimColor={subTeam.id === homeId ? homeTrim : awayTrim}
+                                      trimColor={subPl.pos === 'GK' ? undefined : (subTeam.id === homeId ? homeTrim : awayTrim)}
                                       size={18}
                                       bare
                                     />
@@ -10381,7 +10442,7 @@ export const MatchModal: React.FC<{
                                   <span>เข้า</span>
                                   {inPl && (
                                     <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--g)]/50 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                      <PlayerFace player={inPl} team={tObj} state={state} careerProfile={inPl.me ? state.p : null} club={state.club} isMyClub={isTMe} kitColor={inPl.pos === 'GK' ? tGkKit : tKit} trimColor={tTrim} size={20} bare />
+                                      <PlayerFace player={inPl} team={tObj} state={state} careerProfile={inPl.me ? state.p : null} club={isTMe ? state.club : null} isMyClub={isTMe} kitColor={inPl.pos === 'GK' ? tGkKit : tKit} trimColor={inPl.pos === 'GK' ? undefined : tTrim} size={20} bare />
                                     </span>
                                   )}
                                   {inNo != null && <span className="font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">#{inNo}</span>}
@@ -10392,7 +10453,7 @@ export const MatchModal: React.FC<{
                                   <span>ออก</span>
                                   {outPl && (
                                     <span className="shrink-0 w-[18px] h-[18px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--red)]/45 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[18px] [&>svg]:h-[19px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                      <PlayerFace player={outPl} team={tObj} state={state} careerProfile={outPl.me ? state.p : null} club={state.club} isMyClub={isTMe} kitColor={outPl.pos === 'GK' ? tGkKit : tKit} trimColor={tTrim} size={18} bare />
+                                      <PlayerFace player={outPl} team={tObj} state={state} careerProfile={outPl.me ? state.p : null} club={isTMe ? state.club : null} isMyClub={isTMe} kitColor={outPl.pos === 'GK' ? tGkKit : tKit} trimColor={outPl.pos === 'GK' ? undefined : tTrim} size={18} bare />
                                     </span>
                                   )}
                                   {outNo != null && <span className="font-bold tabular opacity-85">#{outNo}</span>}
@@ -10496,11 +10557,11 @@ export const MatchModal: React.FC<{
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Radio className={`w-3.5 h-3.5 shrink-0 ${streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--red)]'}`} />
                               <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
-                                {streamProj.plan.id === 'off' ? 'ไทยลีก LIVE (ช่องกลาง)' : `${meTeamOrig.name} LIVE`}
+                                {broadcastChannel.name}
                               </span>
                             </div>
-                            <span className="text-[10.5px] mland:text-[9px] font-bold text-[var(--g)] shrink-0">
-                              {tierMeta.label}
+                            <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
+                              {broadcastChannel.badge}
                             </span>
                           </div>
 
@@ -10510,7 +10571,7 @@ export const MatchModal: React.FC<{
                             </span>
                             {state.mode === 'm' && (
                               streamProj.plan.id === 'off' ? (
-                                <span className="text-[var(--mut)]">ปิดช่องทางสโมสร</span>
+                                <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
                               ) : (
                                 <span className="font-bold">
                                   <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
@@ -10599,10 +10660,10 @@ export const MatchModal: React.FC<{
                       className="w-full text-left rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)]/60 transition-colors px-3 py-2 mland:px-2.5 mland:py-1.5 cursor-pointer"
                     >
                       <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-                        <span className="inline-flex items-center gap-1.5 font-bold text-[var(--ink)]">
+                        <span className="inline-flex items-center gap-1.5 font-bold text-[var(--ink)] min-w-0">
                           <Radio className={`w-3 h-3 shrink-0 ${streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--red)]'}`} />
-                          <span>ไลฟ์สด: <b className="tabular">{liveViewers.toLocaleString()}</b> คนดู</span>
-                          <span className="text-[var(--mut)] font-medium">({getViewerTierMeta(getStreamViewerTier(liveViewers)).label})</span>
+                          <span className="truncate">{broadcastChannel.short}: <b className="tabular">{liveViewers.toLocaleString()}</b> คนดู</span>
+                          <span className="text-[var(--mut)] font-medium hidden sm:inline shrink-0">({getViewerTierMeta(getStreamViewerTier(liveViewers)).label})</span>
                         </span>
                         <span className="font-bold text-[var(--g)] shrink-0">ดูแชท →</span>
                       </div>

@@ -1226,6 +1226,9 @@ export interface MatchEnvironment {
   sunAngle: number;
   turfGrade: TurfGradeId;
   turfCond: number;
+  grassLength?: 'short' | 'medium' | 'long';
+  dirtMix?: number;
+  pitchSeed?: number;
 }
 
 export interface LiveMatchWorld {

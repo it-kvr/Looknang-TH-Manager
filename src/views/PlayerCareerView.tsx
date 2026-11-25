@@ -59,6 +59,7 @@ export const PlayerCareerView: React.FC<{
   const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
   const kit1 = tc(meTeam, state, false);
   const kit2 = tc(meTeam, state, true);
+  const isPitchOrNaturalGK = mySlot ? mySlot === 'GK' : (p.pos === 'GK' || p.sp === 'GK');
 
   return (
     <div className="grid grid-cols-[240px_1fr] mland:grid-cols-[214px_1fr] grid-rows-[minmax(0,1fr)] flex-1 min-h-0 gap-2.5 mland:gap-1.5 items-stretch overflow-hidden">
@@ -81,6 +82,7 @@ export const PlayerCareerView: React.FC<{
             player: fakePlayer,
             team: meTeam,
             state,
+            isGK: isPitchOrNaturalGK,
             careerProfile: p
           }}
           name={p.name}

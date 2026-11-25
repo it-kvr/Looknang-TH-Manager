@@ -3,7 +3,7 @@ import type { Position, Player, Team, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
+import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
@@ -54,6 +54,10 @@ export const PlayerInspectorModal: React.FC<{
           : 'var(--red)';
   const kit1 = liveTeam ? tc(liveTeam, state, false) : isMePlayer && state.p ? state.p.c : ovColor(livePlayer.ov);
   const kit2 = liveTeam ? tc(liveTeam, state, true) : '#f5c242';
+  const pitchStarters = liveTeam ? xi(liveTeam) : [];
+  const pitchStarterIdx = liveTeam ? pitchStarters.findIndex((q) => q.n === livePlayer.n) : -1;
+  const pitchSlotSp = pitchStarterIdx >= 0 && liveTeam ? getFormationSlots(liveTeam)[pitchStarterIdx]?.sp : null;
+  const isPitchOrNaturalGK = pitchSlotSp ? pitchSlotSp === 'GK' : (livePlayer.pos === 'GK' || livePlayer.ro === 'GK');
   const statusBadgeText = isRetired
     ? livePlayer.retiredSeason
       ? `แขวนสตั๊ดแล้ว (จบ S${livePlayer.retiredSeason})`
@@ -192,6 +196,7 @@ export const PlayerInspectorModal: React.FC<{
                   player: { ...livePlayer, no: currentNo },
                   team: liveTeam,
                   state,
+                  isGK: isPitchOrNaturalGK,
                   careerProfile: isMePlayer ? state.p : null
                 }}
                 name={livePlayer.n}

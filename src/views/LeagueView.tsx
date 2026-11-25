@@ -636,35 +636,33 @@ export const LeagueView: React.FC<{
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10.5px] mland:text-[9px] text-[var(--mut)] px-1 shrink-0">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px] text-[var(--mut)] px-1 shrink-0 whitespace-nowrap">
+          <div className="flex items-center gap-2.5 min-w-0">
             {vt < 2 && (
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
-                <span>1-3 เลื่อนชั้น</span>
+                <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block shrink-0" />
+                <span>1-3 ขึ้นชั้น</span>
               </span>
             )}
-            {vt > 0 ? (
+            {vt > 0 && (
               <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block" />
+                <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block shrink-0" />
                 <span>3 ท้ายตกชั้น</span>
               </span>
-            ) : (
-              <span>ลีกจังหวัดไม่ตกชั้น</span>
             )}
           </div>
 
           <button
             type="button"
             onClick={() => { SFX.tap(); setPrizeModalTier(vt); }}
-            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] cursor-pointer transition-colors shadow-2xs"
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] cursor-pointer transition-colors shadow-2xs shrink-0"
           >
             <Coins className="w-3 h-3 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
-            <span>เงินรางวัลลีก</span>
+            <span>รางวัล</span>
             <span className="text-[#9a6700] dark:text-[var(--lamp)] tabular">
               {myLeaguePos
-                ? `อันดับ ${myLeaguePos}: ${fmtMoney(getLeaguePrizeMoney(vt, myLeaguePos, tb.length))}`
-                : `แชมป์ ${fmtMoney(getLeaguePrizeMoney(vt, 1, tb.length))}`}
+                ? fmtMoney(getLeaguePrizeMoney(vt, myLeaguePos, tb.length))
+                : fmtMoney(getLeaguePrizeMoney(vt, 1, tb.length))}
             </span>
           </button>
         </div>

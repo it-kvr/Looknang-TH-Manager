@@ -5,7 +5,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, Pla
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
 import { SFX, unlockAudio } from '../utils/audioTheme';
-import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
+import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
@@ -61,8 +61,7 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
       const top = meT?.sq?.slice().sort((a, b) => b.ov - a.ov)[0];
       if (meT && top) {
         const clubName = ms.club?.name || meT.name;
-        const kit1 = ms.club?.c1 || meT.kc?.[0] || '#158049';
-        const kit2 = ms.club?.c2 || meT.kc?.[1] || '#f5c242';
+        const [kit1, kit2] = teamKits(meT, ms);
         pool.push({
           id: `save_m_${k}`,
           name: top.n,
@@ -108,6 +107,7 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
         me: 1,
         sb: ps.p.sb
       };
+      const [pKit1, pKit2] = meT ? teamKits(meT, ps) : [ps.p.c || '#158049', '#f5c242'];
       pool.push({
         id: `save_p_${k}`,
         name: ps.p.name,
@@ -122,8 +122,8 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
         sourceLabel: `เซฟอาชีพ #${k}`,
         archLabel: ps.p.archName || SPN[ps.p.sp] || ps.p.sp,
         categories: summarizeStatGroups(dtInfo(playerObj, ps.p).G),
-        kit1: meT?.kc?.[0] || ps.p.c || '#158049',
-        kit2: meT?.kc?.[1] || '#f5c242',
+        kit1: pKit1,
+        kit2: pKit2,
         player: playerObj,
         team: meT || null,
         profile: ps.p
@@ -1165,7 +1165,9 @@ export const MainMenu: React.FC<{
                 kit2="#fad05a"
                 faceProps={{
                   player: previewPlayer,
-                  careerProfile: previewProfile
+                  careerProfile: previewProfile,
+                  kitColor: cColor,
+                  trimColor: '#fad05a'
                 }}
                 name={previewName}
                 subtitle={`อายุ ${cAge} ปี · ${curArch.icon} ${curArch.name}`}
@@ -1507,7 +1509,7 @@ export const MainMenu: React.FC<{
                               : 'bg-[var(--surface-2)]/50 border-[var(--line)] hover:border-[var(--g)]'
                           }`}
                         >
-                          <PlayerFace player={previewPlayer} careerProfile={sampleProfile} size={38} />
+                          <PlayerFace player={previewPlayer} careerProfile={sampleProfile} kitColor={f.c} trimColor="#fad05a" size={38} />
                           <span className="text-[9.5px] mland:hidden font-semibold text-[var(--mut)] truncate w-full text-center">
                             {HS_N[f.hs]}
                           </span>

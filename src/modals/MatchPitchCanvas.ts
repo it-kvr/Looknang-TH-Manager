@@ -147,14 +147,21 @@ export const drawLivePitchToCanvas = (
   const isRainy = env?.season === 'rainy';
   const isNight = env?.timeOfDay === 'night';
   const turfSpec = getTurfGradeSpec(env?.turfGrade);
-  const turfCond = clamp(Math.round(env?.turfCond ?? 100), 40, 100);
+  const turfCond = clamp(Math.round(env?.turfCond ?? 100), 30, 100);
+  const grassLength = env?.grassLength || (turfSpec.cutStyle === 'patchy' ? 'long' : turfSpec.cutStyle === 'checker' || turfSpec.cutStyle === 'hybrid_pro' ? 'short' : 'medium');
+  const dirtMix = clamp(
+    env?.dirtMix ?? (turfSpec.cutStyle === 'patchy' ? Math.max(0.35, (100 - turfCond) / 70) : turfCond < 75 ? (78 - turfCond) / 65 : 0),
+    0,
+    0.92
+  );
+  const pitchSeed = env?.pitchSeed ?? 137;
   const puddleSig =
     isRainy && env?.puddles?.length
       ? env.puddles
           .map((pd) => `${pd.x.toFixed(1)},${pd.y.toFixed(1)},${pd.rx.toFixed(1)},${pd.ry.toFixed(1)},${pd.rot.toFixed(2)},${pd.alpha.toFixed(2)}`)
           .join(';')
       : '';
-  const bgKey = `${cssW}x${cssH}@${dpr}|${turfSpec.id}|${Math.round(turfCond / 5)}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
+  const bgKey = `${cssW}x${cssH}@${dpr}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
 
   if (typeof document !== 'undefined') {
     if (!pitchBgCache || pitchBgCache.key !== bgKey) {
@@ -228,31 +235,153 @@ export const drawLivePitchToCanvas = (
           bctx.restore();
         }
 
-        // Deterministic worn turf / sandy earth patches for local pitches or worn turf condition
-        const wearFactor = turfSpec.cutStyle === 'patchy' ? Math.max(0.55, (105 - turfCond) / 60) : turfCond < 78 ? (80 - turfCond) / 55 : 0;
-        if (wearFactor > 0.05) {
-          const wearSpots: readonly [number, number, number, number][] = [
-            [4.5, 50, 4.2, 11.5],
-            [95.5, 50, 4.2, 11.5],
-            [50, 50, 5.2, 8.2],
-            [11.5, 50, 2.8, 4.8],
-            [88.5, 50, 2.8, 4.8]
+        // Seeded PRNG for deterministic per-stadium organic turf texture (dirt patches, tufts, grass grain)
+        let rngState = (pitchSeed ^ 0x9e3779b9) >>> 0;
+        const nextRand = () => {
+          rngState = (rngState + 0x6d2b79f5) | 0;
+          let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+
+        bctx.save();
+        bctx.beginPath();
+        bctx.rect(padX, padY, pw, ph);
+        bctx.clip();
+
+        // Organic uneven grass patches for medium / long grass pitches
+        if (grassLength !== 'short' || dirtMix > 0.08) {
+          const blotchCount = grassLength === 'long' ? 24 : 12;
+          for (let i = 0; i < blotchCount; i++) {
+            const bx = padX + nextRand() * pw;
+            const by = padY + nextRand() * ph;
+            const br = Math.max(10, (0.04 + nextRand() * 0.09) * pw);
+            const bGrad = bctx.createRadialGradient(bx, by, br * 0.1, bx, by, br);
+            const darkOrWarm = nextRand() > 0.42;
+            const op = grassLength === 'long' ? 0.13 : 0.065;
+            bGrad.addColorStop(
+              0,
+              darkOrWarm
+                ? `rgba(10, 38, 16, ${op})`
+                : isRainy
+                  ? `rgba(42, 86, 36, ${op * 0.9})`
+                  : `rgba(88, 128, 42, ${op * 0.95})`
+            );
+            bGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            bctx.fillStyle = bGrad;
+            bctx.beginPath();
+            bctx.ellipse(bx, by, br, br * (0.55 + nextRand() * 0.45), nextRand() * Math.PI, 0, Math.PI * 2);
+            bctx.fill();
+          }
+        }
+
+        // Short grass: sleek roller sheen & fine crisp mowing lines
+        if (grassLength === 'short') {
+          bctx.strokeStyle = isNight ? 'rgba(255, 255, 255, 0.024)' : 'rgba(255, 255, 255, 0.036)';
+          bctx.lineWidth = 0.8;
+          const microStep = Math.max(4, ph / 48);
+          for (let yLine = padY + microStep; yLine < padY + ph; yLine += microStep) {
+            bctx.beginPath();
+            bctx.moveTo(padX, yLine);
+            bctx.lineTo(padX + pw, yLine);
+            bctx.stroke();
+          }
+        } else {
+          // Medium & long grass: visible grass blades / tufts
+          const tuftCount = grassLength === 'long' ? 280 : 120;
+          const bladeH = grassLength === 'long' ? Math.max(3.2, ph * 0.015) : Math.max(1.8, ph * 0.0085);
+          for (let i = 0; i < tuftCount; i++) {
+            const tx = padX + 4 + nextRand() * (pw - 8);
+            const ty = padY + 4 + nextRand() * (ph - 8);
+            const isSunTip = nextRand() > 0.45;
+            bctx.strokeStyle = isSunTip
+              ? isRainy
+                ? 'rgba(84, 152, 74, 0.34)'
+                : 'rgba(128, 188, 76, 0.36)'
+              : 'rgba(8, 36, 16, 0.38)';
+            bctx.lineWidth = grassLength === 'long' ? 1.05 : 0.8;
+            bctx.beginPath();
+            bctx.moveTo(tx - 1.1, ty);
+            bctx.lineTo(tx - 1.8 - nextRand() * 0.8, ty - bladeH * (0.7 + nextRand() * 0.45));
+            bctx.moveTo(tx, ty + 0.3);
+            bctx.lineTo(tx + (nextRand() - 0.5) * 1.4, ty - bladeH * (0.85 + nextRand() * 0.4));
+            if (grassLength === 'long') {
+              bctx.moveTo(tx + 1.1, ty);
+              bctx.lineTo(tx + 1.9 + nextRand() * 0.8, ty - bladeH * (0.65 + nextRand() * 0.45));
+            }
+            bctx.stroke();
+          }
+        }
+
+        // Mixed dirt / clay / bare earth patches ("สนามที่มีดินผสมด้วย")
+        if (dirtMix > 0.04) {
+          const wearZones: { x: number; y: number; rx: number; ry: number; weight: number }[] = [
+            { x: 4.5, y: 50, rx: 4.6, ry: 12.2, weight: 1.0 },
+            { x: 95.5, y: 50, rx: 4.6, ry: 12.2, weight: 1.0 },
+            { x: 50, y: 50, rx: 5.8, ry: 8.8, weight: 0.9 },
+            { x: 11.5, y: 50, rx: 3.1, ry: 5.0, weight: 0.85 },
+            { x: 88.5, y: 50, rx: 3.1, ry: 5.0, weight: 0.85 },
+            { x: 24, y: 14, rx: 4.0, ry: 3.5, weight: 0.55 },
+            { x: 76, y: 86, rx: 4.0, ry: 3.5, weight: 0.55 }
           ];
-          wearSpots.forEach(([wx, wy, wrx, wry]) => {
-            const cxW = px(wx);
-            const cyW = py(wy);
-            const rxW = Math.max(6, (wrx / 100) * pw);
-            const ryW = Math.max(6, (wry / 100) * ph);
-            const wGrad = bctx.createRadialGradient(cxW, cyW, rxW * 0.15, cxW, cyW, Math.max(rxW, ryW));
-            const alpha = clamp(0.16 * wearFactor, 0.04, 0.28);
-            wGrad.addColorStop(0, isRainy ? `rgba(74, 58, 34, ${alpha * 1.15})` : `rgba(138, 122, 62, ${alpha})`);
-            wGrad.addColorStop(1, 'rgba(90, 80, 40, 0)');
+
+          const extraSpots = Math.round(dirtMix * 16);
+          for (let i = 0; i < extraSpots; i++) {
+            wearZones.push({
+              x: 8 + nextRand() * 84,
+              y: 8 + nextRand() * 84,
+              rx: 2.2 + nextRand() * (3.6 + dirtMix * 3.2),
+              ry: 1.8 + nextRand() * (3.2 + dirtMix * 2.6),
+              weight: 0.45 + nextRand() * 0.55
+            });
+          }
+
+          wearZones.forEach((wz) => {
+            const cxW = px(wz.x);
+            const cyW = py(wz.y);
+            const rxW = Math.max(7, (wz.rx / 100) * pw * (0.78 + dirtMix * 0.42));
+            const ryW = Math.max(6, (wz.ry / 100) * ph * (0.78 + dirtMix * 0.42));
+            const maxR = Math.max(rxW, ryW);
+            const coreAlpha = clamp(dirtMix * wz.weight * (isRainy ? 0.62 : 0.56), 0.08, 0.66);
+
+            const wGrad = bctx.createRadialGradient(cxW, cyW, maxR * 0.12, cxW, cyW, maxR);
+            if (isRainy) {
+              wGrad.addColorStop(0, `rgba(74, 48, 27, ${coreAlpha})`);
+              wGrad.addColorStop(0.55, `rgba(88, 60, 34, ${coreAlpha * 0.7})`);
+              wGrad.addColorStop(1, 'rgba(62, 46, 26, 0)');
+            } else {
+              wGrad.addColorStop(0, `rgba(142, 102, 58, ${coreAlpha})`);
+              wGrad.addColorStop(0.55, `rgba(124, 96, 52, ${coreAlpha * 0.68})`);
+              wGrad.addColorStop(1, 'rgba(105, 88, 46, 0)');
+            }
             bctx.fillStyle = wGrad;
             bctx.beginPath();
-            bctx.ellipse(cxW, cyW, rxW, ryW, 0, 0, Math.PI * 2);
+            bctx.ellipse(cxW, cyW, rxW, ryW, (nextRand() - 0.5) * 0.5, 0, Math.PI * 2);
             bctx.fill();
+
+            // Granular dirt clods & earthy texture dots inside each soil patch
+            const speckCount = Math.round(4 + dirtMix * 12 * wz.weight);
+            for (let s = 0; s < speckCount; s++) {
+              const ang = nextRand() * Math.PI * 2;
+              const dist = Math.sqrt(nextRand()) * 0.72;
+              const sx = cxW + Math.cos(ang) * rxW * dist;
+              const sy = cyW + Math.sin(ang) * ryW * dist;
+              const sr = 0.7 + nextRand() * 1.4;
+              bctx.fillStyle = isRainy
+                ? nextRand() > 0.5
+                  ? `rgba(48, 30, 16, ${clamp(coreAlpha * 0.9, 0.15, 0.65)})`
+                  : `rgba(98, 68, 40, ${clamp(coreAlpha * 0.75, 0.12, 0.5)})`
+                : nextRand() > 0.45
+                  ? `rgba(112, 74, 38, ${clamp(coreAlpha * 0.9, 0.15, 0.62)})`
+                  : `rgba(176, 138, 86, ${clamp(coreAlpha * 0.72, 0.12, 0.48)})`;
+              bctx.beginPath();
+              bctx.arc(sx, sy, sr, 0, Math.PI * 2);
+              bctx.fill();
+            }
           });
         }
+
+        bctx.restore();
 
         // Subtle rainy-season surface water patches on the turf (static layer)
         if (isRainy && env?.puddles?.length) {
@@ -354,8 +483,9 @@ export const drawLivePitchToCanvas = (
           bctx.fillRect(0, 0, cssW, cssH);
         }
 
-        // 2. Pitch markings
-        bctx.strokeStyle = 'rgba(240, 248, 240, 0.86)';
+        // 2. Pitch markings (crisper chalk on pro manicured turf, slightly worn on dirt-mixed grounds)
+        const chalkAlpha = dirtMix > 0.35 ? 0.72 : dirtMix > 0.1 ? 0.82 : 0.9;
+        bctx.strokeStyle = `rgba(242, 249, 242, ${chalkAlpha})`;
         bctx.lineWidth = Math.max(1.2, cssW * 0.0024);
         bctx.strokeRect(padX, padY, pw, ph);
 

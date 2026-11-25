@@ -454,6 +454,12 @@ export interface KitVisualSpec {
 
 let _faceSeq = 0;
 
+export function resolveGkKitPalette(baseColor: string, altColor = '', gkOverride?: string): { kit: string; trim: string; accent: string } {
+  const kit = gkOverride || pickGK(baseColor, altColor);
+  const trim = colDist(kit, '#111827') > 160 ? '#111827' : '#ffffff';
+  return { kit, trim, accent: '#ffffff' };
+}
+
 function resolveKitVisualForFace(
   team?: Team | null,
   state?: GameState | null,
@@ -466,16 +472,33 @@ function resolveKitVisualForFace(
   fallbackName?: string
 ): KitVisualSpec {
   const uid = uidOverride || `f${(++_faceSeq).toString(36)}`;
-  const mine = Boolean(isMyClubProp || club || (team && state && team.id === state.me && state.mode === 'm'));
-  const activeClub = club || (mine ? state?.club || null : null);
+  const mine =
+    isMyClubProp !== undefined
+      ? Boolean(isMyClubProp)
+      : Boolean(club || (team && state && team.id === state.me && state.mode === 'm'));
+  const activeClub = mine ? (club || state?.club || null) : null;
   const seedName = activeClub?.name || team?.name || fallbackName || 'Club';
   const h = ([...seedName].reduce((a, c, idx) => a + c.charCodeAt(0) * (idx + 3), 0) * 37) >>> 0;
-  const rawPat = activeClub ? (activeClub.kit ?? 0) % KIT_PATTERNS.length : team ? (h >> 3) % KIT_PATTERNS.length : h % 6;
+  const isAwayKitColor = Boolean(
+    !isGK &&
+      activeClub &&
+      kitColor &&
+      activeClub.c2 &&
+      kitColor.toLowerCase() === activeClub.c2.toLowerCase() &&
+      activeClub.c1.toLowerCase() !== activeClub.c2.toLowerCase()
+  );
+  const rawPat = activeClub
+    ? ((isAwayKitColor && activeClub.awayKit != null ? activeClub.awayKit : activeClub.kit) ?? 0) % KIT_PATTERNS.length
+    : team
+      ? (h >> 3) % KIT_PATTERNS.length
+      : h % 6;
   const gkPatterns = [0, 4, 6, 10, 12, 13];
   const kitPattern = isGK ? gkPatterns[(rawPat + 2) % gkPatterns.length] : rawPat;
   const collar = activeClub ? (activeClub.collar ?? 0) % 4 : (h >> 5) % 4;
   const resolvedTrim = trimColor || activeClub?.c2 || team?.kc?.[1] || '#ffd75e';
-  const accent = activeClub?.c3 || (colDist(resolvedTrim, '#ffffff') < 100 ? '#f4c63d' : '#ffffff');
+  const accent = isGK
+    ? '#ffffff'
+    : activeClub?.c3 || (colDist(resolvedTrim, '#ffffff') < 100 ? '#f4c63d' : '#ffffff');
   const crestSpec = team || activeClub ? resolveCrestSpec(seedName, team, activeClub, mine) : null;
   return { uid, kitPattern, collar, accent, crestSpec };
 }
@@ -821,6 +844,7 @@ export const PlayerFace: React.FC<{
   careerProfile?: PlayerCareerProfile | null;
   club?: ClubIdentity | null;
   isMyClub?: boolean;
+  isGK?: boolean;
   size?: number;
   bare?: boolean;
   kitColor?: string;
@@ -828,29 +852,36 @@ export const PlayerFace: React.FC<{
   isCoach?: boolean;
   coachOutfit?: CoachOutfitId;
   coachClubKit?: string;
-}> = React.memo(({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor, isCoach = false, coachOutfit, coachClubKit }) => {
+}> = React.memo(({ player, team, state, careerProfile, club, isMyClub, isGK: isGKProp, size = 38, bare = false, kitColor, trimColor, isCoach = false, coachOutfit, coachClubKit }) => {
   const uid = React.useId().replace(/:/g, '');
   const q = player || {};
   const resolvedNo = q.no || (team && q.n ? getShirtNo(team, q) : undefined) || (q.me ? (careerProfile || state?.p)?.no : undefined);
   const v = visOf(resolvedNo ? { ...q, no: resolvedNo } : q, careerProfile || state?.p);
   const teamKit = team ? tc(team, state) : null;
-  const isGK = !isCoach && (q.pos === 'GK' || q.ro === 'GK');
+  const teamTrim = team ? tc(team, state, true) : null;
+  const isGK = !isCoach && (isGKProp !== undefined ? isGKProp : (q.pos === 'GK' || q.ro === 'GK'));
   const resolvedOutfit: CoachOutfitId | undefined = isCoach
     ? coachOutfit || (isMyClub ? club?.managerOutfit : undefined) || (state && team?.id === state.me ? state.club?.managerOutfit : undefined) || 'suit_navy'
     : undefined;
   const resolvedClubKit = coachClubKit || teamKit || club?.c1 || '#1e293b';
+  const careerShirt = q.me && (careerProfile || state?.p) ? (careerProfile || state?.p)!.c : undefined;
+  const gkPalette = resolveGkKitPalette(teamKit || careerShirt || '#2f6fd6', teamTrim || club?.c2 || '', kitColor);
   const kc = kitColor
     ? kitColor
     : isCoach
       ? '#1e293b'
       : isGK
-        ? pickGK(teamKit || '#2f6fd6')
+        ? gkPalette.kit
         : teamKit
           ? teamKit
-          : q.me && (careerProfile || state?.p)
-            ? (careerProfile || state?.p)!.c
+          : careerShirt
+            ? careerShirt
             : '#2f6fd6';
-  const tr = trimColor ? trimColor : team ? tc(team, state, true) : club?.c2 || '#ffd75e';
+  const tr = isGK
+    ? (trimColor && trimColor !== teamTrim ? trimColor : gkPalette.trim)
+    : trimColor
+      ? trimColor
+      : teamTrim || club?.c2 || '#ffd75e';
   const bg = bare ? 'transparent' : `color-mix(in srgb, ${kc} 18%, transparent)`;
   const kitSpec = resolveKitVisualForFace(team, state, club, isMyClub, kc, tr, isGK, uid, q.n);
   return (
@@ -872,7 +903,9 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
   const uid = React.useId().replace(/:/g, '');
   const col = tc(team, state);
   const trCol = tc(team, state, true);
-  const gkCol = pickGK(col);
+  const gkPal = resolveGkKitPalette(col, trCol);
+  const gkCol = gkPal.kit;
+  const gkTrCol = gkPal.trim;
   const slots = getFormationSlots(team);
   const starters = xi(team);
   return (
@@ -887,7 +920,9 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
         const q = starters[idx];
         const cx = 18 + z.x * 2.64;
         const cy = 16 + z.y * 3.48;
-        const kc = z.sp === 'GK' ? gkCol : col;
+        const slotIsGK = z.sp === 'GK';
+        const kc = slotIsGK ? gkCol : col;
+        const slotTrim = slotIsGK ? gkTrCol : trCol;
         const isMe = !!(q?.me || (state?.mode === 'p' && state?.p?.name === q?.n));
         const sc = 0.5;
         return (
@@ -901,12 +936,12 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
                   __html: faceBodySvg(
                     visOf(q, state?.p),
                     kc,
-                    trCol,
+                    slotTrim,
                     32,
                     '#10281d',
                     true,
                     false,
-                    resolveKitVisualForFace(team, state, null, undefined, kc, trCol, z.sp === 'GK', `${uid}-m-${idx}`, q.n)
+                    resolveKitVisualForFace(team, state, null, undefined, kc, slotTrim, slotIsGK, `${uid}-m-${idx}`, q.n)
                   )
                 }}
               />
@@ -1033,7 +1068,9 @@ export const FormationPitch: React.FC<{
   const slots = getFormationSlots(team);
   const col = kitOverride || tc(team, state);
   const trCol = trimOverride || tc(team, state, true);
-  const gkCol = gkKitOverride || pickGK(col);
+  const gkPal = resolveGkKitPalette(col, trCol, gkKitOverride);
+  const gkCol = gkPal.kit;
+  const gkTrCol = gkPal.trim;
   const zoneLineColors: Record<Position, { stroke: string; fill: string; text: string }> = {
     FW: { stroke: 'rgba(110, 231, 183, 0.55)', fill: 'rgba(16, 185, 129, 0.08)', text: 'rgba(209, 250, 229, 0.85)' },
     MF: { stroke: 'rgba(252, 211, 77, 0.55)', fill: 'rgba(245, 158, 11, 0.08)', text: 'rgba(254, 243, 199, 0.85)' },
@@ -1134,7 +1171,9 @@ export const FormationPitch: React.FC<{
                   : subAlertFitTh != null && efVal < warnTh
                     ? '#f59e0b'
                     : PCOL[pn];
-        const kc = z.sp === 'GK' ? gkCol : col;
+        const slotIsGK = z.sp === 'GK';
+        const kc = slotIsGK ? gkCol : col;
+        const slotTrim = slotIsGK ? gkTrCol : trCol;
         const rad = isTarget ? 18 : 15;
         const sc = isTarget ? 0.56 : 0.48;
         const no = getShirtNo(team, q);
@@ -1249,12 +1288,12 @@ export const FormationPitch: React.FC<{
                 __html: faceBodySvg(
                   visOf(q, state.p),
                   kc,
-                  trCol,
+                  slotTrim,
                   32,
                   '#10281d',
                   true,
                   false,
-                  resolveKitVisualForFace(team, state, null, undefined, kc, trCol, z.sp === 'GK', `${uid}-p-${i}`, q.n)
+                  resolveKitVisualForFace(team, state, null, undefined, kc, slotTrim, slotIsGK, `${uid}-p-${i}`, q.n)
                 )
               }}
             />
@@ -1410,7 +1449,9 @@ export const FormationPitch: React.FC<{
         const gy = 16 + dragPreview.y * 3.48;
         const pn = playerPen(pq, dragPreview.sp);
         const ed = pn === 0 ? '#4ade80' : pn === 1 ? '#facc15' : '#f87171';
-        const kc = dragPreview.sp === 'GK' ? gkCol : col;
+        const dragIsGK = dragPreview.sp === 'GK';
+        const kc = dragIsGK ? gkCol : col;
+        const dragTrim = dragIsGK ? gkTrCol : trCol;
         const sc = 0.56;
         return (
           <g className="pointer-events-none">
@@ -1445,12 +1486,12 @@ export const FormationPitch: React.FC<{
                 __html: faceBodySvg(
                   visOf(pq, state.p),
                   kc,
-                  trCol,
+                  dragTrim,
                   32,
                   '#10281d',
                   true,
                   false,
-                  resolveKitVisualForFace(team, state, null, undefined, kc, trCol, dragPreview.sp === 'GK', `${uid}-drag`, pq.n)
+                  resolveKitVisualForFace(team, state, null, undefined, kc, dragTrim, dragIsGK, `${uid}-drag`, pq.n)
                 )
               }}
             />

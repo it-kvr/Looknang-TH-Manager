@@ -2,7 +2,7 @@ import React from 'react';
 import type { PlayerBio, StatCategorySummary } from '../engine/playerCore';
 import { clamp } from '../utils/math';
 import { statBarColor, statTierMeta } from '../engine/missions';
-import { PlayerFace } from './SvgVisuals';
+import { PlayerFace, resolveGkKitPalette } from './SvgVisuals';
 import { TalentBadge } from './TalentBadge';
 import { PlayerBioStrip } from './PlayerBioStrip';
 import {
@@ -59,6 +59,11 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   const isLight = cardTone === 'light';
   const badgeNodes = renderBadges?.(cardPalette, cardTone);
   const actionNode = renderHeaderAction?.(cardPalette, cardTone);
+  const isCardGK =
+    faceProps.isGK ?? (faceProps.player?.pos === 'GK' || faceProps.player?.ro === 'GK');
+  const gkPalette = isCardGK ? resolveGkKitPalette(kit1, kit2, faceProps.kitColor) : null;
+  const cardShirtKit = faceProps.kitColor ?? (gkPalette ? gkPalette.kit : kit1);
+  const cardShirtTrim = faceProps.trimColor ?? (gkPalette ? gkPalette.trim : kit2);
 
   return (
     <div
@@ -155,8 +160,9 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
         >
           <PlayerFace
             {...faceProps}
-            kitColor={kit1}
-            trimColor={kit2}
+            isGK={isCardGK}
+            kitColor={cardShirtKit}
+            trimColor={cardShirtTrim}
             size={stretchStage ? 88 : 64}
             bare
           />
