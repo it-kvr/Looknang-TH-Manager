@@ -34,19 +34,31 @@ export const PlayerInspectorModal: React.FC<{
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>('info');
-  const effectiveMode = inspectMode === 'missions' && !(isMyTeam || isMePlayer) ? 'info' : inspectMode;
-  const canDoMissions = isMyTeam || isMePlayer;
-  const canEditShirtNo = Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
+  const isRetired = Boolean(livePlayer.retired);
+  const effectiveMode = inspectMode === 'missions' && (isRetired || !(isMyTeam || isMePlayer)) ? 'info' : inspectMode;
+  const canDoMissions = !isRetired && (isMyTeam || isMePlayer);
+  const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const tlMeta = talentTierMeta(playerTalent);
-  const isCap = !!liveTeam && liveTeam.cap === livePlayer.n;
-  const con = liveTeam ? ensureCon(livePlayer) : null;
+  const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
+  const con = !isRetired && liveTeam ? ensureCon(livePlayer) : null;
   const fitVal = Math.round(livePlayer.fit ?? 100);
-  const fitCol = livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'var(--red)' : fitVal >= 75 ? 'var(--g)' : fitVal >= 55 ? '#c98a00' : 'var(--red)';
+  const fitCol = isRetired
+    ? '#d97706'
+    : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0
+      ? 'var(--red)'
+      : fitVal >= 75
+        ? 'var(--g)'
+        : fitVal >= 55
+          ? '#c98a00'
+          : 'var(--red)';
   const kit1 = liveTeam ? tc(liveTeam, state, false) : isMePlayer && state.p ? state.p.c : ovColor(livePlayer.ov);
   const kit2 = liveTeam ? tc(liveTeam, state, true) : '#f5c242';
-  const statusBadgeText =
-    (livePlayer.sus || 0) > 0
+  const statusBadgeText = isRetired
+    ? livePlayer.retiredSeason
+      ? `แขวนสตั๊ดแล้ว (จบ S${livePlayer.retiredSeason})`
+      : 'แขวนสตั๊ดแล้ว'
+    : (livePlayer.sus || 0) > 0
       ? `ติดโทษแบน ${livePlayer.sus} นัด`
       : livePlayer.inj > 0
         ? `บาดเจ็บพัก ${livePlayer.inj} นัด`
@@ -81,7 +93,7 @@ export const PlayerInspectorModal: React.FC<{
               <div className="text-xs sm:text-sm mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
                 <span className="truncate">{livePlayer.n}</span>
                 <span className="text-[var(--mut)] font-semibold text-[11px] mland:text-[10px] shrink-0">
-                  · {liveTeam ? liveTeam.name : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'}
+                  · {liveTeam ? liveTeam.name : isRetired ? 'ตำนานที่แขวนสตั๊ดแล้ว' : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'}
                 </span>
               </div>
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1.5">
@@ -256,7 +268,7 @@ export const PlayerInspectorModal: React.FC<{
                     {livePlayer.n}
                   </div>
                   <div className="text-[9.5px] mland:text-[7.5px] text-emerald-100/80 truncate tabular">
-                    {liveTeam ? liveTeam.name : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'} · อายุ {livePlayer.age} ปี
+                    {liveTeam ? liveTeam.name : isRetired ? 'แขวนสตั๊ดแล้ว' : livePlayer.free ? 'ฟรีเอเยนต์' : livePlayer.customCreated ? 'นักเตะสร้างเอง' : 'ตลาดซื้อขาย'} · อายุ {livePlayer.age} ปี
                   </div>
                 </div>
 
@@ -303,16 +315,16 @@ export const PlayerInspectorModal: React.FC<{
                   const treatCost = Math.max(4, 14 - Math.floor(medLv * 1.1) - physioLv);
                   const alreadyTreated = livePlayer.treatedMd === curTurn;
                   return (
-                    <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 60 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
+                    <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${isRetired ? 'bg-amber-500/10 border-amber-500/35' : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 60 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
                       <div className="flex items-center justify-between font-bold gap-1">
                         <span className="truncate" style={{ color: fitCol }}>
-                          {statusBadgeText}
+                          {isRetired ? `👋 ${statusBadgeText}` : statusBadgeText}
                         </span>
                         <span className="tabular text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
                           🟨{livePlayer.yc || 0}/3 · 🟥{livePlayer.rc || 0}
                         </span>
                       </div>
-                      {livePlayer.inj > 0 && isMyTeam && state.mode === 'm' && (
+                      {!isRetired && livePlayer.inj > 0 && isMyTeam && state.mode === 'm' && (
                         <button
                           type="button"
                           disabled={alreadyTreated || state.money < treatCost}
@@ -479,7 +491,7 @@ export const TeamInspectorModal: React.FC<{
   team: Team;
   state: GameState;
   onClose: () => void;
-  onInspectPlayer: (p: Player, t: Team) => void;
+  onInspectPlayer: (p: Player, t: Team | null) => void;
 }> = ({ team, state, onClose, onInspectPlayer }) => {
   const [teamTab, setTeamTab] = useState<'squad' | 'history'>('squad');
   const [posFilter, setPosFilter] = useState<'ALL' | 'XI' | Position>('ALL');

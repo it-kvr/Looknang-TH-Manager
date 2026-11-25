@@ -1250,3 +1250,77 @@ export const COACH_STYLES: Array<{
     effectDesc: 'ฟิต & ขวัญทีมหลังเกม +2% / +1'
   }
 ];
+
+export const COACH_OUTFITS: Array<{
+  id: 'suit_navy' | 'suit_black' | 'suit_charcoal' | 'suit_camel' | 'tracksuit' | 'polo' | 'shirt';
+  name: string;
+  desc: string;
+  coat: string;
+  lapel: string;
+  shirt: string;
+  mode: 'suit' | 'tracksuit' | 'polo' | 'shirt';
+}> = [
+  {
+    id: 'suit_navy',
+    name: 'สูทกรมท่า',
+    desc: 'คลาสสิกสุภาพ',
+    coat: '#1e293b',
+    lapel: '#0f172a',
+    shirt: '#f8fafc',
+    mode: 'suit'
+  },
+  {
+    id: 'suit_black',
+    name: 'สูทดำเข้ม',
+    desc: 'สุขุมน่าเกรงขาม',
+    coat: '#18181b',
+    lapel: '#09090b',
+    shirt: '#f8fafc',
+    mode: 'suit'
+  },
+  {
+    id: 'suit_charcoal',
+    name: 'สูทเทาโมเดิร์น',
+    desc: 'สมาร์ตข้างสนาม',
+    coat: '#475569',
+    lapel: '#334155',
+    shirt: '#f8fafc',
+    mode: 'suit'
+  },
+  {
+    id: 'suit_camel',
+    name: 'สูทน้ำตาลหรู',
+    desc: 'มาดกุนซือสไตล์ยุโรป',
+    coat: '#6b4423',
+    lapel: '#4a2e16',
+    shirt: '#faf5ee',
+    mode: 'suit'
+  },
+  {
+    id: 'tracksuit',
+    name: 'วอร์มสโมสร',
+    desc: 'คล่องตัวสีประจำทีม',
+    coat: '#1e293b',
+    lapel: '#0f172a',
+    shirt: '#f8fafc',
+    mode: 'tracksuit'
+  },
+  {
+    id: 'polo',
+    name: 'โปโลคุมทีม',
+    desc: 'ลุคฝึกซ้อมสบายๆ',
+    coat: '#1e293b',
+    lapel: '#0f172a',
+    shirt: '#f8fafc',
+    mode: 'polo'
+  },
+  {
+    id: 'shirt',
+    name: 'เชิ้ตผูกไท',
+    desc: 'เรียบหรูคล่องแคล่ว',
+    coat: '#f8fafc',
+    lapel: '#e2e8f0',
+    shirt: '#f8fafc',
+    mode: 'shirt'
+  }
+];

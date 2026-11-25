@@ -1,8 +1,8 @@
 import React from 'react';
-import type { Position, SubRole, Player, Team, ClubIdentity, PlayerCareerProfile, GameState, PitchPositionZone, PitchDragPreview } from '../types/game';
+import type { Position, SubRole, Player, Team, ClubIdentity, PlayerCareerProfile, GameState, PitchPositionZone, PitchDragPreview, CoachOutfitId } from '../types/game';
 import { clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { PCOL, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N } from '../data/thaiFootballData';
+import { PCOL, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_OUTFITS } from '../data/thaiFootballData';
 import { getShirtNo, visOf, getFormationSlots, playerPen, xi, colLum, colDist, tc, pickGK } from '../engine/playerCore';
 
 export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
@@ -477,16 +477,82 @@ function renderFaceCollar(collar: number, trim: string, accent: string): string 
   return `<path d="M21.5 44c2.5 5 5 6.5 8.5 6.5s6-1.5 8.5-6.5" stroke="${accent}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
 }
 
-function renderCoachSuitTorso(tieCol: string, accent: string, crestSpec: ResolvedCrestSpec | null | undefined, uid: string): string {
-  const blazer = '#1e293b';
-  const lapel = '#0f172a';
-  const shirt = '#f8fafc';
+function renderCoachTorso(
+  outfitId: CoachOutfitId | undefined,
+  clubKit: string,
+  tieCol: string,
+  accent: string,
+  crestSpec: ResolvedCrestSpec | null | undefined,
+  uid: string
+): string {
+  const cfg = COACH_OUTFITS.find((o) => o.id === outfitId) || COACH_OUTFITS[0];
   const tieShade =
     colDist(tieCol, '#f8fafc') < 90
       ? '#b91c1c'
       : colDist(tieCol, '#000000') < 65
         ? '#334155'
         : tieCol;
+
+  if (cfg.mode === 'tracksuit') {
+    const jCol = clubKit || '#1e293b';
+    const trimAccent = colDist(jCol, tieShade) < 55 ? '#f8fafc' : tieShade;
+    const base = `<rect x="8" y="44" width="44" height="20" fill="${jCol}"/>`;
+    const shoulderStripes =
+      `<path d="M10 47l8 4v13h-3V52.5L10 50z" fill="${trimAccent}" opacity="0.9"/>` +
+      `<path d="M50 47l-8 4v13h3V52.5L50 50z" fill="${trimAccent}" opacity="0.9"/>`;
+    const collarZip =
+      `<path d="M21.5 44h17l-2.5 5.2h-12z" fill="#0f172a"/>` +
+      `<path d="M22.5 44.5h15l-1.8 4h-11.4z" fill="${trimAccent}" opacity="0.28"/>` +
+      `<line x1="30" y1="45" x2="30" y2="64" stroke="#e2e8f0" stroke-width="1.1"/>` +
+      `<rect x="29.1" y="47.8" width="1.8" height="2.8" rx="0.6" fill="#cbd5e1"/>`;
+    const chestStripe = `<path d="M13 55h34" stroke="${trimAccent}" stroke-width="1.3" opacity="0.72"/>`;
+    const pin = crestSpec
+      ? `<g transform="translate(36.2, 50.6) scale(0.25)">${buildCrestSvgMarkup(crestSpec, `${uid}-cp`)}</g>`
+      : `<circle cx="38" cy="52.5" r="1.6" fill="${trimAccent}" stroke="#ffffff" stroke-width="0.6"/>`;
+    return `${base}${shoulderStripes}${chestStripe}${collarZip}${pin}`;
+  }
+
+  if (cfg.mode === 'polo') {
+    const pCol = clubKit || '#1e293b';
+    const trimAccent = colDist(pCol, tieShade) < 55 ? '#f8fafc' : tieShade;
+    const base = `<rect x="8" y="44" width="44" height="20" fill="${pCol}"/>`;
+    const collar =
+      `<path d="M21 44l5.5 5.6 3.5-2.1 3.5 2.1L39 44z" fill="${trimAccent}" stroke="#0f172a" stroke-opacity="0.35" stroke-width="0.7"/>` +
+      `<rect x="28.6" y="47.2" width="2.8" height="8" rx="0.8" fill="#0f172a" fill-opacity="0.32"/>` +
+      `<circle cx="30" cy="49.4" r="0.65" fill="#f8fafc"/><circle cx="30" cy="52.6" r="0.65" fill="#f8fafc"/>`;
+    const sleeveTrim =
+      `<path d="M11 54l4 10" stroke="${trimAccent}" stroke-width="1.4" opacity="0.75"/>` +
+      `<path d="M49 54l-4 10" stroke="${trimAccent}" stroke-width="1.4" opacity="0.75"/>`;
+    const pin = crestSpec
+      ? `<g transform="translate(36.2, 50.8) scale(0.25)">${buildCrestSvgMarkup(crestSpec, `${uid}-cp`)}</g>`
+      : `<circle cx="38" cy="53" r="1.5" fill="${trimAccent}" stroke="#ffffff" stroke-width="0.6"/>`;
+    return `${base}${sleeveTrim}${collar}${pin}`;
+  }
+
+  if (cfg.mode === 'shirt') {
+    const shirt = '#f8fafc';
+    const collarShadow = '#e2e8f0';
+    const base = `<rect x="8" y="44" width="44" height="20" fill="${shirt}"/>`;
+    const shading =
+      `<path d="M8 44h11l4 20H8z" fill="#e2e8f0" opacity="0.36"/>` +
+      `<path d="M52 44H41l-4 20h15z" fill="#e2e8f0" opacity="0.36"/>` +
+      `<line x1="30" y1="48" x2="30" y2="64" stroke="#cbd5e1" stroke-width="0.9"/>`;
+    const collar =
+      `<path d="M21.2 44l4.2 5.4 4.6-3.4 4.6 3.4 4.2-5.4z" fill="${collarShadow}" stroke="#94a3b8" stroke-width="0.7"/>`;
+    const tie =
+      `<path d="M28.1 46.8h3.8l-.8 2.8h-2.2z" fill="${tieShade}"/>` +
+      `<path d="M28.7 49.4h2.6l1.3 11.2-2.6 3.2-2.6-3.2z" fill="${tieShade}"/>` +
+      `<path d="M28.7 49.4l1.3 14.4" stroke="${accent}" stroke-width="0.65" opacity="0.55"/>`;
+    const pin = crestSpec
+      ? `<g transform="translate(36.4, 51.2) scale(0.22)">${buildCrestSvgMarkup(crestSpec, `${uid}-cp`)}</g>`
+      : `<circle cx="38" cy="53" r="1.3" fill="${tieShade}"/>`;
+    return `${base}${shading}${collar}${tie}${pin}`;
+  }
+
+  // Suit modes: suit_navy, suit_black, suit_charcoal, suit_camel
+  const blazer = cfg.coat;
+  const lapel = cfg.lapel;
+  const shirt = cfg.shirt;
   const base = `<rect x="8" y="44" width="44" height="20" fill="${blazer}"/>`;
   const lapels =
     `<path d="M21 44h18l-9 18z" fill="${shirt}"/>` +
@@ -515,7 +581,9 @@ export function faceBodySvg(
   bare = false,
   showNo = true,
   kitSpec?: KitVisualSpec,
-  isCoach = false
+  isCoach = false,
+  coachOutfit?: CoachOutfitId,
+  coachClubKit?: string
 ): string {
   const ki = v[0] ?? 2;
   const hi = v[1] ?? 0;
@@ -686,7 +754,7 @@ export function faceBodySvg(
       : ''
   }</defs>`;
   const torsoBody = isCoach
-    ? `<g clip-path="url(#jk-${uid})">${renderCoachSuitTorso(trim, accent, kitSpec?.crestSpec, uid)}</g><path d="${torsoPath}" fill="none" stroke="#020617" stroke-opacity="0.5" stroke-width="0.9"/>`
+    ? `<g clip-path="url(#jk-${uid})">${renderCoachTorso(coachOutfit, coachClubKit || kit, trim, accent, kitSpec?.crestSpec, uid)}</g><path d="${torsoPath}" fill="none" stroke="#020617" stroke-opacity="0.42" stroke-width="0.9"/>`
     : `<g clip-path="url(#jk-${uid})">${renderFaceTorsoPattern(pat, kit, trim, accent, uid)}<path d="M12 52l4 12M48 52l-4 12" stroke="${accent}" stroke-width="1.6" opacity="0.32"/>${renderFaceCollar(collar, trim, accent)}</g><path d="${torsoPath}" fill="none" stroke="#0c1f15" stroke-opacity="0.35" stroke-width="0.8"/>`;
   const chestCrest =
     !isCoach && kitSpec?.crestSpec
@@ -715,13 +783,19 @@ export const PlayerFace: React.FC<{
   kitColor?: string;
   trimColor?: string;
   isCoach?: boolean;
-}> = ({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor, isCoach = false }) => {
+  coachOutfit?: CoachOutfitId;
+  coachClubKit?: string;
+}> = ({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor, isCoach = false, coachOutfit, coachClubKit }) => {
   const uid = React.useId().replace(/:/g, '');
   const q = player || {};
   const resolvedNo = q.no || (team && q.n ? getShirtNo(team, q) : undefined) || (q.me ? (careerProfile || state?.p)?.no : undefined);
   const v = visOf(resolvedNo ? { ...q, no: resolvedNo } : q, careerProfile || state?.p);
   const teamKit = team ? tc(team, state) : null;
   const isGK = !isCoach && (q.pos === 'GK' || q.ro === 'GK');
+  const resolvedOutfit: CoachOutfitId | undefined = isCoach
+    ? coachOutfit || (isMyClub ? club?.managerOutfit : undefined) || (state && team?.id === state.me ? state.club?.managerOutfit : undefined) || 'suit_navy'
+    : undefined;
+  const resolvedClubKit = coachClubKit || teamKit || club?.c1 || '#1e293b';
   const kc = kitColor
     ? kitColor
     : isCoach
@@ -743,7 +817,7 @@ export const PlayerFace: React.FC<{
       height={Math.round((size * 64) / 60)}
       viewBox="0 0 60 64"
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, !isCoach, kitSpec, isCoach) }}
+      dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, !isCoach, kitSpec, isCoach, resolvedOutfit, resolvedClubKit) }}
     />
   );
 };

@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
-import { BarChart3 } from 'lucide-react';
+import React, { useMemo, useRef, useState } from 'react';
+import { BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { ClubAllTimePlayerRecord, GameState, Player, Team, TrophyRecord } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getClubLegacySummary } from '../engine/history';
+import { getClubLegacySummary, resolveClubLegendProfile } from '../engine/history';
 import { sortTable, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { PlayerFace } from './SvgVisuals';
 
@@ -11,7 +11,7 @@ interface ClubHistoryPanelProps {
   team: Team;
   state: GameState;
   onOpenSeasonStats?: (season?: number) => void;
-  onInspectPlayer?: (p: Player, t: Team) => void;
+  onInspectPlayer?: (p: Player, t: Team | null) => void;
   compact?: boolean;
 }
 
@@ -245,6 +245,8 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
   compact
 }) => {
   const [showClubLog, setShowClubLog] = useState(false);
+  const [selectedTrophySeason, setSelectedTrophySeason] = useState<number | 'all'>('all');
+  const trophyShelfRef = useRef<HTMLDivElement | null>(null);
 
   const isUserClub = team.id === state.me;
   const tierTable = useMemo(
@@ -275,6 +277,20 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
     });
     return { league, cup, asia, other };
   }, [legacy.trophies]);
+
+  const trophySeasons = useMemo(() => {
+    const set = new Set<number>();
+    legacy.trophies.forEach((tr) => set.add(tr.season));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [legacy.trophies]);
+
+  const orderedCabinetTrophies = useMemo(() => {
+    const sorted = legacy.trophies
+      .slice()
+      .sort((a, b) => a.season - b.season);
+    if (selectedTrophySeason === 'all') return sorted;
+    return sorted.filter((tr) => tr.season === selectedTrophySeason);
+  }, [legacy.trophies, selectedTrophySeason]);
 
   const columnLeaders = useMemo(() => {
     const out: Record<LegendMetric, ClubAllTimePlayerRecord[]> = {
@@ -385,54 +401,173 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
 
       {/* Trophy Cabinet Showcase + Independent-Column Club Hall of Fame */}
       <div className="space-y-3 mland:space-y-2">
-        {/* Trophy Cabinet */}
+        {/* Realistic Single-Row Museum Glass Trophy Cabinet with Season Browsing */}
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 mland:p-2.5 flex flex-col gap-2.5 mland:gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)]/70">
-            <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
-              ตู้โชว์ถ้วยรางวัล ({legacy.trophies.length})
-            </span>
-            <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
-              ลีก {trophyCounts.league} · ปชช. {trophyCounts.cup} · ทวีป {trophyCounts.asia}
-              {trophyCounts.other > 0 ? ` · อื่นๆ ${trophyCounts.other}` : ''}
-            </span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
+                ตู้โชว์ถ้วยรางวัล ({legacy.trophies.length})
+              </span>
+              <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular truncate">
+                ลีก {trophyCounts.league} · ปชช. {trophyCounts.cup} · ทวีป {trophyCounts.asia}
+                {trophyCounts.other > 0 ? ` · อื่นๆ ${trophyCounts.other}` : ''}
+              </span>
+            </div>
+
+            {legacy.trophies.length > 0 && (
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  aria-label="เลื่อนตู้ถ้วยไปทางซ้าย"
+                  onClick={() => {
+                    SFX.tap();
+                    trophyShelfRef.current?.scrollBy({ left: -240, behavior: 'smooth' });
+                  }}
+                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] flex items-center justify-center text-[var(--ink)] cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="เลื่อนตู้ถ้วยไปทางขวา"
+                  onClick={() => {
+                    SFX.tap();
+                    trophyShelfRef.current?.scrollBy({ left: 240, behavior: 'smooth' });
+                  }}
+                  className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] flex items-center justify-center text-[var(--ink)] cursor-pointer transition-colors"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
 
-          {legacy.trophies.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mland:gap-1.5 content-start">
-              {legacy.trophies.map((tr, i) => {
-                const isGoldGlow = tr.type === 'asia' || (tr.type === 'league' && tr.tier === 2) || tr.type === 'award' || tr.type === 'nt';
-                const shelfBarClass =
-                  tr.type === 'cup' || (tr.type === 'league' && tr.tier === 1)
-                    ? 'from-slate-400/20 via-slate-300/75 to-slate-400/20'
-                    : 'from-amber-500/20 via-amber-400/80 to-amber-500/20';
-
+          {legacy.trophies.length > 0 && trophySeasons.length > 0 && (
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setSelectedTrophySeason('all');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shrink-0 border cursor-pointer transition-colors ${
+                  selectedTrophySeason === 'all'
+                    ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                    : 'bg-[var(--surface-2)]/75 text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)]'
+                }`}
+              >
+                ทุกฤดูกาล ({legacy.trophies.length})
+              </button>
+              {trophySeasons.map((sn) => {
+                const countInS = legacy.trophies.filter((tr) => tr.season === sn).length;
+                const active = selectedTrophySeason === sn;
                 return (
-                  <div
-                    key={`${tr.season}-${tr.type}-${i}`}
-                    className="relative rounded-xl border border-[var(--line)]/85 bg-gradient-to-b from-[var(--surface-2)]/35 via-[var(--surface)] to-[var(--surface-2)]/80 p-2.5 mland:p-1.5 flex flex-col items-center text-center overflow-hidden"
+                  <button
+                    key={sn}
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setSelectedTrophySeason((prev) => (prev === sn ? 'all' : sn));
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap shrink-0 border tabular cursor-pointer transition-colors ${
+                      active
+                        ? 'bg-[#c58a14] text-white border-[#eab308]'
+                        : 'bg-[var(--surface-2)]/75 text-[var(--ink)] border-[var(--line)] hover:border-[#eab308]/60'
+                    }`}
                   >
-                    <div
-                      aria-hidden="true"
-                      className="pointer-events-none absolute top-1 left-1/2 -translate-x-1/2 w-16 h-16 rounded-full blur-md opacity-45"
-                      style={{
-                        background: isGoldGlow
-                          ? 'radial-gradient(circle, rgba(245, 194, 66, 0.35), transparent 72%)'
-                          : 'radial-gradient(circle, rgba(148, 163, 184, 0.32), transparent 72%)'
-                      }}
-                    />
-                    <div className="relative z-10 flex flex-col items-center">
-                      <TrophySvg type={tr.type} tier={tr.tier} uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${i}`} size={50} />
-                      <div className={`w-12 h-1 rounded-full bg-gradient-to-r ${shelfBarClass} mt-0.5`} />
-                    </div>
-                    <div className="relative z-10 text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] leading-snug line-clamp-2 mt-1.5 min-h-[28px] mland:min-h-[24px] flex items-center">
-                      {tr.title}
-                    </div>
-                    <div className="relative z-10 text-[10px] mland:text-[8.5px] font-semibold text-[#9a6700] dark:text-[var(--lamp)] tabular mt-0.5">
-                      ซีซั่น {tr.season}
-                    </div>
-                  </div>
+                    ซีซั่น {sn} ({countInS})
+                  </button>
                 );
               })}
+            </div>
+          )}
+
+          {legacy.trophies.length > 0 ? (
+            <div className="relative rounded-2xl border-[3px] border-[#5f3b1e] dark:border-[#492c15] bg-gradient-to-b from-[#1a1310] via-[#130e0c] to-[#0b0807] shadow-[inset_0_10px_28px_rgba(0,0,0,0.75),0_6px_18px_rgba(0,0,0,0.22)] overflow-hidden">
+              {/* Top Brass Lighting Canopy */}
+              <div
+                aria-hidden="true"
+                className="h-2.5 w-full bg-gradient-to-b from-[#3d2512] to-[#1d1209] border-b border-[#d4a84f]/35 relative flex items-center justify-around px-6"
+              >
+                {[0, 1, 2, 3].map((dot) => (
+                  <span key={dot} className="w-6 h-1 rounded-full bg-[#fef08a]/55 blur-[1px]" />
+                ))}
+              </div>
+
+              {/* Glass Front Reflection Sheen */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-20 bg-[linear-gradient(118deg,rgba(255,255,255,0.09)_0%,rgba(255,255,255,0.03)_26%,transparent_44%,rgba(255,255,255,0.03)_68%,transparent_84%)]"
+              />
+
+              {/* Single-Row Scrollable Cabinet Shelf */}
+              <div
+                ref={trophyShelfRef}
+                className="relative z-10 overflow-x-auto scroll-smooth snap-x snap-mandatory"
+              >
+                <div className="min-w-full w-max flex flex-col">
+                  {/* Single Row of Trophies */}
+                  <div className="flex flex-nowrap items-end gap-4 sm:gap-5 px-5 pt-4 mland:pt-3 pb-0">
+                    {orderedCabinetTrophies.map((tr, i) => {
+                      const prevSeason = i > 0 ? orderedCabinetTrophies[i - 1].season : null;
+                      const showSeasonDivider = selectedTrophySeason === 'all' && prevSeason !== null && prevSeason !== tr.season;
+                      const isGoldGlow = tr.type === 'asia' || (tr.type === 'league' && tr.tier === 2) || tr.type === 'award' || tr.type === 'nt';
+
+                      return (
+                        <React.Fragment key={`${tr.season}-${tr.type}-${i}`}>
+                          {showSeasonDivider && (
+                            <div
+                              aria-hidden="true"
+                              className="self-stretch w-px my-2 bg-gradient-to-b from-transparent via-[#d4a84f]/30 to-[#d4a84f]/15 shrink-0"
+                            />
+                          )}
+                          <div className="relative snap-start shrink-0 w-[112px] sm:w-[122px] mland:w-[98px] flex flex-col items-center text-center group pb-1.5">
+                            {/* Overhead Museum Spotlight Cone */}
+                            <div
+                              aria-hidden="true"
+                              className="pointer-events-none absolute -top-4 left-1/2 -translate-x-1/2 w-24 h-24 opacity-60 group-hover:opacity-90 transition-opacity"
+                              style={{
+                                background: isGoldGlow
+                                  ? 'radial-gradient(ellipse at 50% 8%, rgba(253, 224, 71, 0.30) 0%, rgba(245, 158, 11, 0.10) 45%, transparent 74%)'
+                                  : 'radial-gradient(ellipse at 50% 8%, rgba(226, 232, 240, 0.28) 0%, rgba(148, 163, 184, 0.08) 45%, transparent 74%)'
+                              }}
+                            />
+
+                            {/* Engraved Season Tag Above Spotlight */}
+                            <div className="relative z-10 text-[9.5px] mland:text-[8px] font-bold tracking-wide text-[#fde68a]/85 tabular mb-1">
+                              ซีซั่น {tr.season}
+                            </div>
+
+                            {/* Trophy SVG Resting on Velvet Pedestal */}
+                            <div className="relative z-10 flex flex-col items-center transition-transform duration-200 group-hover:-translate-y-0.5">
+                              <TrophySvg
+                                type={tr.type}
+                                tier={tr.tier}
+                                uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${i}`}
+                                size={compact ? 54 : 62}
+                              />
+                              {/* Contact Floor Shadow */}
+                              <div className="w-12 h-1.5 rounded-full bg-black/75 blur-[1.5px] -mt-1" />
+                              {/* Dark Velvet Cushion Base */}
+                              <div className="w-16 h-1.5 rounded-t-sm bg-gradient-to-b from-[#2f241d] to-[#1a130f] border-x border-t border-[#d4a84f]/35" />
+                            </div>
+
+                            {/* Engraved Brass Nameplate Plaque Mounted on Shelf Front */}
+                            <div className="relative z-10 w-full mt-0.5 px-1.5 py-1 rounded bg-gradient-to-b from-[#f3d47b] via-[#d7a83f] to-[#a3751a] border border-[#fef08a]/65 shadow-[0_2px_5px_rgba(0,0,0,0.55)]">
+                              <div className="text-[10px] mland:text-[8.5px] font-extrabold text-[#241603] leading-tight line-clamp-2 min-h-[24px] mland:min-h-[20px] flex items-center justify-center">
+                                {tr.title}
+                              </div>
+                            </div>
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+
+                  {/* Continuous Wooden & Brass Display Shelf Ledge */}
+                  <div className="w-full h-3.5 bg-gradient-to-b from-[#8b572a] via-[#653d1b] to-[#3a200c] border-t-2 border-[#e3b95c]/65 shadow-[inset_0_2px_4px_rgba(255,255,255,0.22)]" />
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-5 mland:py-3 px-4 text-center rounded-xl border border-dashed border-[var(--line)] bg-[var(--surface-2)]/30">
@@ -483,17 +618,20 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                       {list.length > 0 ? (
                         <div className="divide-y divide-[var(--line)]/50">
                           {list.map((leg, idx) => {
-                            const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
-                            const clickable = !!liveSqPlayer && !!onInspectPlayer;
-                            const facePlayer: Partial<Player> = liveSqPlayer || {
-                              n: leg.name,
-                              pos: leg.pos,
-                              ro: leg.ro,
-                              no: leg.no,
-                              vis: leg.vis
-                            };
+                            const status = resolveClubLegendProfile(leg, team, state);
+                            const clickable = !!onInspectPlayer;
+                            const facePlayer: Partial<Player> = status.inspectPlayer;
+                            const faceTeam = status.inspectTeam ?? team;
                             const seasonText = formatSeasonSpan(leg);
                             const val = leg[col.key] || 0;
+                            const statusColorCls =
+                              status.kind === 'club'
+                                ? 'text-[var(--g)] font-semibold'
+                                : status.kind === 'transferred'
+                                  ? 'text-sky-600 dark:text-sky-400 font-semibold'
+                                  : status.kind === 'free'
+                                    ? 'text-violet-600 dark:text-violet-400 font-semibold'
+                                    : 'text-amber-600 dark:text-amber-400 font-semibold';
                             const rankCls =
                               idx === 0
                                 ? 'bg-amber-400/20 text-[#9a6700] dark:text-[var(--lamp)] border-amber-400/45'
@@ -516,10 +654,10 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                                 <div className="w-6 h-6 mland:w-5 mland:h-5 rounded-lg mland:rounded-md bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
                                   <PlayerFace
                                     player={facePlayer}
-                                    team={team}
+                                    team={faceTeam}
                                     state={state}
                                     club={state.club}
-                                    isMyClub={isUserClub}
+                                    isMyClub={status.kind === 'club' && isUserClub}
                                     size={24}
                                   />
                                 </div>
@@ -529,8 +667,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                                       type="button"
                                       onClick={() => {
                                         SFX.tap();
-                                        onInspectPlayer!(liveSqPlayer!, team);
+                                        onInspectPlayer!(status.inspectPlayer, status.inspectTeam);
                                       }}
+                                      title={`ดูข้อมูลและสถานะของ ${leg.name} (${status.label})`}
                                       className="font-bold text-[10.5px] mland:text-[9px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block w-full"
                                     >
                                       {leg.name}
@@ -540,11 +679,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                                       {leg.name}
                                     </div>
                                   )}
-                                  <div className="text-[8.5px] mland:text-[7.5px] text-[var(--mut)] tabular truncate">
-                                    {leg.ro || leg.pos} · {seasonText}
-                                    {leg.stillAtClub && (
-                                      <span className="text-[var(--g)] font-semibold"> · ทีมนี้</span>
-                                    )}
+                                  <div className="text-[8.5px] mland:text-[7.5px] text-[var(--mut)] tabular truncate" title={`${leg.ro || leg.pos} · ${seasonText} · ${status.label}`}>
+                                    {leg.ro || leg.pos} · {seasonText}{' '}
+                                    <span className={statusColorCls}>· {status.shortLabel}</span>
                                   </div>
                                 </div>
                                 <span

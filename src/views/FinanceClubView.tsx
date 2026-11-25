@@ -12,10 +12,10 @@ import {
   Tooltip,
   ReferenceLine
 } from 'recharts';
-import type { Position, MainTab, Player, Team, ClubIdentity, CoachStyleId, GameState, FacilityKey, StaffRoleKey } from '../types/game';
+import type { Position, MainTab, Player, Team, ClubIdentity, CoachStyleId, CoachOutfitId, GameState, FacilityKey, StaffRoleKey } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS } from '../data/crestAndKitData';
-import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES } from '../data/thaiFootballData';
+import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis } from '../engine/playerCore';
 import {
@@ -94,7 +94,7 @@ export const FinanceClubView: React.FC<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-  onInspectPlayer?: (p: Player, t: Team) => void;
+  onInspectPlayer?: (p: Player, t: Team | null) => void;
   onOpenSeasonStats?: (season?: number) => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
 }> = ({ tab, state, onUpdateState, onToast, onInspectPlayer, onOpenSeasonStats, navIntent }) => {
@@ -119,6 +119,7 @@ export const FinanceClubView: React.FC<{
     name: string;
     vis: number[];
     style: CoachStyleId;
+    outfit: CoachOutfitId;
   } | null>(null);
   const [demolishTarget, setDemolishTarget] = useState<{
     key: FacilityKey;
@@ -1407,6 +1408,7 @@ export const FinanceClubView: React.FC<{
       {clubTab === 'info' && (() => {
         const coachVis = k.managerVis && k.managerVis.length >= 8 ? k.managerVis : getDefaultCoachVis(k.managerName || k.name || 'coach');
         const curStyle = COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced')) || COACH_STYLES[0];
+        const curOutfit = (k.managerOutfit || 'suit_navy') as CoachOutfitId;
         const capPlayer = me.sq.find((q) => q.n === me.cap) || topO;
         const captainCandidates = me.sq
           .slice()
@@ -1729,7 +1731,8 @@ export const FinanceClubView: React.FC<{
                           setCoachDraft({
                             name: k.managerName || '',
                             vis: [...coachVis],
-                            style: (k.managerStyle || 'balanced') as CoachStyleId
+                            style: (k.managerStyle || 'balanced') as CoachStyleId,
+                            outfit: curOutfit
                           });
                           setCoachEditorTab('look');
                           setShowCoachEditor(true);
@@ -1746,8 +1749,12 @@ export const FinanceClubView: React.FC<{
                             player={coachFacePlayer}
                             team={me}
                             state={state}
+                            club={k}
+                            isMyClub
                             kitColor="#1e293b"
                             trimColor={k.c2 || '#facc15'}
+                            coachOutfit={curOutfit}
+                            coachClubKit={k.c1 || me.kc[0]}
                             size={54}
                             bare
                             isCoach
@@ -1783,7 +1790,8 @@ export const FinanceClubView: React.FC<{
                           setCoachDraft({
                             name: k.managerName || '',
                             vis: [...coachVis],
-                            style: (k.managerStyle || 'balanced') as CoachStyleId
+                            style: (k.managerStyle || 'balanced') as CoachStyleId,
+                            outfit: curOutfit
                           });
                           setCoachEditorTab('look');
                           setShowCoachEditor(true);
@@ -2160,12 +2168,15 @@ export const FinanceClubView: React.FC<{
               const curDraft = coachDraft || {
                 name: k.managerName || '',
                 vis: [...coachVis],
-                style: (k.managerStyle || 'balanced') as CoachStyleId
+                style: (k.managerStyle || 'balanced') as CoachStyleId,
+                outfit: curOutfit
               };
               const draftStyle = COACH_STYLES.find((s) => s.id === curDraft.style) || COACH_STYLES[0];
+              const draftOutfit = COACH_OUTFITS.find((o) => o.id === curDraft.outfit) || COACH_OUTFITS[0];
               const hasCoachChanges =
                 curDraft.name.trim() !== (k.managerName || '').trim() ||
                 curDraft.style !== ((k.managerStyle || 'balanced') as CoachStyleId) ||
+                curDraft.outfit !== curOutfit ||
                 curDraft.vis.some((v, idx) => v !== (coachVis[idx] ?? 0));
 
               const draftCoachPlayer: Player = {
@@ -2216,10 +2227,11 @@ export const FinanceClubView: React.FC<{
                   cl.managerName = cleanName;
                   cl.managerVis = [...curDraft.vis];
                   cl.managerStyle = curDraft.style;
+                  cl.managerOutfit = curDraft.outfit;
                 });
                 setShowCoachEditor(false);
                 setCoachDraft(null);
-                onToast('บันทึกข้อมูลและรูปลักษณ์โค้ชเรียบร้อยแล้ว!');
+                onToast('บันทึกข้อมูล รูปลักษณ์ และการแต่งกายโค้ชเรียบร้อยแล้ว!');
               };
 
               const resetCoachDraft = () => {
@@ -2227,7 +2239,8 @@ export const FinanceClubView: React.FC<{
                 setCoachDraft({
                   name: k.managerName || '',
                   vis: [...coachVis],
-                  style: (k.managerStyle || 'balanced') as CoachStyleId
+                  style: (k.managerStyle || 'balanced') as CoachStyleId,
+                  outfit: curOutfit
                 });
                 onToast('คืนค่าโค้ชเดิมแล้ว');
               };
@@ -2270,18 +2283,22 @@ export const FinanceClubView: React.FC<{
                       {/* Left Live Preview & Quick Looks */}
                       <div className="sm:w-[235px] mland:w-[215px] shrink-0 p-4 mland:p-3 border-b sm:border-b-0 sm:border-r mland:border-b-0 mland:border-r border-[var(--line)]/70 bg-[var(--surface-2)]/35 flex flex-col gap-3 mland:gap-2 overflow-y-auto">
                         <div className="flex flex-col items-center text-center gap-2">
-                          <div className="relative w-28 h-28 mland:w-22 mland:h-22 rounded-2xl bg-gradient-to-b from-[#eef5f1] via-[#dce9e2] to-[#c7dad0] dark:from-[#324d40] dark:via-[#24392f] dark:to-[#182820] border border-[var(--line)] flex items-end justify-center overflow-hidden shadow-sm">
+                          <div className="relative w-28 h-28 mland:w-24 mland:h-24 rounded-2xl bg-gradient-to-b from-[#eef5f1] via-[#dce9e2] to-[#c7dad0] dark:from-[#324d40] dark:via-[#24392f] dark:to-[#182820] border border-[var(--line)] flex items-end justify-center overflow-hidden shadow-sm">
                             <div
                               aria-hidden="true"
                               className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.65),transparent_70%)] dark:bg-[radial-gradient(circle_at_50%_40%,rgba(232,248,240,0.24),transparent_72%)]"
                             />
-                            <div className="relative z-10 flex items-end justify-center">
+                            <div className="relative z-10 w-full h-full pt-1 flex items-end justify-center [&>svg]:w-full [&>svg]:h-full">
                               <PlayerFace
                                 player={draftCoachPlayer}
                                 team={me}
                                 state={state}
+                                club={k}
+                                isMyClub
                                 kitColor="#1e293b"
                                 trimColor={k.c2 || '#facc15'}
+                                coachOutfit={curDraft.outfit}
+                                coachClubKit={k.c1 || me.kc[0]}
                                 size={104}
                                 bare
                                 isCoach
@@ -2296,7 +2313,7 @@ export const FinanceClubView: React.FC<{
                               {repRank} · ชื่อเสียง {rep}
                             </div>
                             <div className="text-[11px] font-semibold text-[var(--g)] truncate mt-0.5">
-                              {draftStyle.icon} {draftStyle.name}
+                              {draftStyle.icon} {draftStyle.name} · {draftOutfit.name}
                             </div>
                           </div>
                         </div>
@@ -2345,16 +2362,22 @@ export const FinanceClubView: React.FC<{
                                       : 'bg-[var(--surface)] border-[var(--line)] hover:border-[var(--g)]/60'
                                   }`}
                                 >
-                                  <PlayerFace
-                                    player={presetPlayer}
-                                    team={me}
-                                    state={state}
-                                    kitColor="#1e293b"
-                                    trimColor={k.c2 || '#facc15'}
-                                    size={34}
-                                    bare
-                                    isCoach
-                                  />
+                                  <div className="w-9 h-9 mland:w-8 mland:h-8 pt-0.5 flex items-end justify-center overflow-hidden [&>svg]:w-full [&>svg]:h-full">
+                                    <PlayerFace
+                                      player={presetPlayer}
+                                      team={me}
+                                      state={state}
+                                      club={k}
+                                      isMyClub
+                                      kitColor="#1e293b"
+                                      trimColor={k.c2 || '#facc15'}
+                                      coachOutfit={curDraft.outfit}
+                                      coachClubKit={k.c1 || me.kc[0]}
+                                      size={34}
+                                      bare
+                                      isCoach
+                                    />
+                                  </div>
                                   <span className="text-[9.5px] font-semibold text-[var(--ink)] truncate w-full text-center">
                                     {pr.label}
                                   </span>
@@ -2377,7 +2400,7 @@ export const FinanceClubView: React.FC<{
                               }}
                               className={`seg-btn ${coachEditorTab === 'look' ? 'seg-btn-active' : ''}`}
                             >
-                              รูปลักษณ์ &amp; ทรงผม
+                              หน้าตา &amp; การแต่งกาย
                             </button>
                             <button
                               type="button"
@@ -2395,6 +2418,58 @@ export const FinanceClubView: React.FC<{
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 mland:p-3 space-y-3.5 mland:space-y-2.5 text-xs">
                           {coachEditorTab === 'look' ? (
                             <>
+                              {/* Coach Outfit Selector */}
+                              <div className="space-y-1.5 pb-3 border-b border-[var(--line)]/55">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-bold text-[var(--mut)]">การแต่งกายของโค้ช</span>
+                                  <span className="text-[10.5px] font-semibold text-[var(--g)]">
+                                    {draftOutfit.name} · {draftOutfit.desc}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
+                                  {COACH_OUTFITS.map((outfitOpt) => {
+                                    const active = curDraft.outfit === outfitOpt.id;
+                                    const swatchPrimary =
+                                      outfitOpt.mode === 'tracksuit' || outfitOpt.mode === 'polo'
+                                        ? k.c1 || me.kc[0] || '#1e293b'
+                                        : outfitOpt.coat;
+                                    const swatchSecondary =
+                                      outfitOpt.mode === 'tracksuit' || outfitOpt.mode === 'polo'
+                                        ? k.c2 || '#facc15'
+                                        : outfitOpt.mode === 'shirt'
+                                          ? k.c2 || '#1e293b'
+                                          : outfitOpt.lapel;
+                                    return (
+                                      <button
+                                        key={outfitOpt.id}
+                                        type="button"
+                                        onClick={() => {
+                                          SFX.tap();
+                                          setCoachDraft((prev) => ({ ...(prev || curDraft), outfit: outfitOpt.id }));
+                                        }}
+                                        className={`px-2 py-1.5 rounded-xl border flex items-center gap-1.5 cursor-pointer transition-colors text-left ${
+                                          active
+                                            ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
+                                            : 'bg-[var(--surface-2)]/70 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                                        }`}
+                                      >
+                                        <span
+                                          className="w-4 h-4 rounded-md border border-black/20 shrink-0 relative overflow-hidden"
+                                          style={{ background: swatchPrimary }}
+                                        >
+                                          <span
+                                            className="absolute inset-y-0 right-0 w-1.5"
+                                            style={{ background: swatchSecondary }}
+                                          />
+                                        </span>
+                                        <span className="text-[10.5px] font-semibold truncate">
+                                          {outfitOpt.name}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                               {/* Skin & Hair Colors */}
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-3 border-b border-[var(--line)]/55">
                                 <div className="space-y-1.5">

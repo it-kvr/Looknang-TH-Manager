@@ -1,4 +1,5 @@
-import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach } from '../types/game';
+import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId } from '../types/game';
+import { COACH_OUTFITS } from '../data/thaiFootballData';
 import { R, clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
 import { faceBodySvg } from '../components/SvgVisuals';
@@ -65,14 +66,21 @@ export const buildAgentsForTeam = (
 
 export const PITCH_FACE_CACHE = new Map<string, HTMLCanvasElement | 'loading'>();
 
-export const getPitchFaceCanvas = (vis: number[], kit: string, trim: string, isCoach = false): HTMLCanvasElement | null => {
-  const key = `${vis.join(',')}|${kit}|${trim}|${isCoach ? 1 : 0}`;
+export const getPitchFaceCanvas = (
+  vis: number[],
+  kit: string,
+  trim: string,
+  isCoach = false,
+  coachOutfit?: CoachOutfitId,
+  coachClubKit?: string
+): HTMLCanvasElement | null => {
+  const key = `${vis.join(',')}|${kit}|${trim}|${isCoach ? 1 : 0}|${coachOutfit || ''}|${coachClubKit || ''}`;
   const existing = PITCH_FACE_CACHE.get(key);
   if (existing && existing !== 'loading') return existing;
   if (existing === 'loading' || typeof Image === 'undefined' || typeof document === 'undefined') return null;
 
   PITCH_FACE_CACHE.set(key, 'loading');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, !isCoach, undefined, isCoach)}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, !isCoach, undefined, isCoach, coachOutfit, coachClubKit)}</svg>`;
   const img = new Image();
   img.onload = () => {
     const off = document.createElement('canvas');
@@ -625,11 +633,17 @@ export const drawLivePitchToCanvas = (
       ctx.arc(cr * 0.35 - paceStep, cr * 0.65, cr * 0.25, 0, Math.PI * 2);
       ctx.fill();
 
+      const outfitCfg = COACH_OUTFITS.find((o) => o.id === (c.outfit || 'suit_navy')) || COACH_OUTFITS[0];
+      const sleeveCol =
+        outfitCfg.mode === 'tracksuit' || outfitCfg.mode === 'polo'
+          ? kit
+          : outfitCfg.coat;
+
       // Tactical coaching arm gesture (pointing / waving instructions)
       if (c.gestureTimer > 0 || (c.shoutTimer > 0 && c.shoutText)) {
         const wave = Math.sin(sl.warmupPhase * 2.4) * 0.4;
         const armAng = c.facing + wave;
-        ctx.strokeStyle = '#1e293b';
+        ctx.strokeStyle = sleeveCol;
         ctx.lineWidth = 2.4;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -643,14 +657,14 @@ export const drawLivePitchToCanvas = (
       }
 
       // Suit / Manager jacket shoulders
-      ctx.fillStyle = '#1e293b';
+      ctx.fillStyle = sleeveCol;
       ctx.beginPath();
       ctx.arc(0, 0, cr, 0, Math.PI * 2);
       ctx.fill();
 
-      // Manager portrait face clipped inside suit frame (always formal suit + consistent tie color)
+      // Manager portrait face clipped inside outfit frame
       const tieCol = c.tieColor || trim;
-      const coachFace = getPitchFaceCanvas(coachVis, '#1e293b', tieCol, true);
+      const coachFace = getPitchFaceCanvas(coachVis, '#1e293b', tieCol, true, c.outfit || 'suit_navy', kit);
       if (coachFace) {
         ctx.save();
         ctx.beginPath();

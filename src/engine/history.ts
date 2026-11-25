@@ -44,6 +44,45 @@ export function calcSeasonAvgRating(q: Partial<Player>, sp: number, sg: number, 
   );
 }
 
+export function snapshotPlayerForRecord(
+  q: Player,
+  retiredInfo?: { season: number; age: number }
+): Player {
+  const { missions: _omitMissions, ...rest } = q;
+  const copy: Player = {
+    ...rest,
+    traits: q.traits ? [...q.traits] : undefined,
+    altRoles: q.altRoles ? [...q.altRoles] : undefined,
+    roleExp: q.roleExp ? { ...q.roleExp } : undefined,
+    vis: q.vis ? [...q.vis] : undefined,
+    customA: q.customA ? { ...q.customA } : undefined,
+    customD: q.customD ? { ...q.customD } : undefined,
+    sb: q.sb ? { ...q.sb } : undefined,
+    coreSb: q.coreSb ? { ...q.coreSb } : undefined,
+    history: q.history ? q.history.map((h) => ({ ...h })) : undefined,
+    careerLog: q.careerLog ? [...q.careerLog] : undefined,
+    seasonProg: q.seasonProg
+      ? {
+          s: q.seasonProg.s,
+          pts: q.seasonProg.pts ? q.seasonProg.pts.map((pt) => ({ ...pt, a: { ...pt.a } })) : []
+        }
+      : undefined
+  };
+  if (retiredInfo) {
+    copy.retired = true;
+    copy.retiredSeason = retiredInfo.season;
+    copy.age = retiredInfo.age;
+    copy.fit = 100;
+    copy.inj = 0;
+    copy.sus = 0;
+    const retireNote = `👋 อำลาสนามหลังจบซีซั่น ${retiredInfo.season} (อายุ ${retiredInfo.age} ปี)`;
+    if (!copy.careerLog?.includes(retireNote)) {
+      copy.careerLog = [...(copy.careerLog || []), retireNote].slice(-30);
+    }
+  }
+  return copy;
+}
+
 export function mergeClubAllTimePlayers(
   existing: ClubAllTimePlayerRecord[] | undefined,
   team: Team,
@@ -93,6 +132,8 @@ export function mergeClubAllTimePlayers(
       if (q.vis?.length) cur.vis = [...q.vis];
       cur.bestAvgRating = Math.max(cur.bestAvgRating, avg);
       cur.stillAtClub = true;
+      cur.retired = false;
+      cur.snapshot = snapshotPlayerForRecord(q);
     } else if (sp > 0 || sg > 0 || sa > 0 || cs > 0 || motm > 0) {
       map.set(q.n, {
         name: q.n,
@@ -110,7 +151,8 @@ export function mergeClubAllTimePlayers(
         lastSeason: sInt,
         playedSeasons: sp > 0 ? [sInt] : undefined,
         bestAvgRating: avg,
-        stillAtClub: true
+        stillAtClub: true,
+        snapshot: snapshotPlayerForRecord(q)
       });
     }
   });
@@ -224,23 +266,24 @@ export function getPlayerCareerSummary(
   const curOv = isMe && pProf ? ovMe(pProf) : player.ov;
   const curAvg = calcSeasonAvgRating({ ...player, ov: curOv }, curSp, curSg, curSa, curCs);
 
-  const currentRow: PlayerSeasonHistoryRecord | null = !hasCurrentArchived
-    ? {
-        season: state.season,
-        teamId: team?.id ?? -1,
-        teamName: team?.name || (player.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขาย'),
-        tier: team?.tier ?? 0,
-        ov: curOv,
-        sp: curSp,
-        sg: curSg,
-        sa: curSa,
-        cs: curCs,
-        motm: curMotm,
-        yc: curYc,
-        rc: curRc,
-        avgRating: curAvg
-      }
-    : null;
+  const currentRow: PlayerSeasonHistoryRecord | null =
+    !hasCurrentArchived && !player.retired
+      ? {
+          season: state.season,
+          teamId: team?.id ?? -1,
+          teamName: team?.name || (player.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขาย'),
+          tier: team?.tier ?? 0,
+          ov: curOv,
+          sp: curSp,
+          sg: curSg,
+          sa: curSa,
+          cs: curCs,
+          motm: curMotm,
+          yc: curYc,
+          rc: curRc,
+          avgRating: curAvg
+        }
+      : null;
 
   const allRows = currentRow ? [currentRow, ...pastSeasons] : pastSeasons;
   const sumApps = allRows.reduce((s, r) => s + r.sp, 0);
@@ -475,5 +518,123 @@ export function getClubLegacySummary(team: Team, state: GameState, curRank?: num
     winPct,
     bestLeagueFinish,
     legends
+  };
+}
+
+export interface ResolvedLegendStatus {
+  kind: 'club' | 'transferred' | 'free' | 'retired';
+  label: string;
+  shortLabel: string;
+  inspectPlayer: Player;
+  inspectTeam: Team | null;
+}
+
+export function resolveClubLegendProfile(
+  leg: ClubAllTimePlayerRecord,
+  clubTeam: Team,
+  state: GameState
+): ResolvedLegendStatus {
+  const inClub = clubTeam.sq.find((q) => q.n === leg.name);
+  if (inClub) {
+    return {
+      kind: 'club',
+      label: 'ทีมนี้',
+      shortLabel: 'ทีมนี้',
+      inspectPlayer: inClub,
+      inspectTeam: clubTeam
+    };
+  }
+
+  for (const t of state.teams) {
+    if (t.id === clubTeam.id) continue;
+    const found = t.sq.find((q) => q.n === leg.name);
+    if (found) {
+      return {
+        kind: 'transferred',
+        label: `ย้ายไป ${t.name}`,
+        shortLabel: `ย้ายไป ${t.name}`,
+        inspectPlayer: found,
+        inspectTeam: t
+      };
+    }
+  }
+
+  const inMarket = state.mk.find((q) => q.n === leg.name) || state.yth.find((q) => q.n === leg.name);
+  if (inMarket) {
+    return {
+      kind: 'free',
+      label: inMarket.free ? 'ฟรีเอเยนต์' : 'ตลาดนักเตะ',
+      shortLabel: inMarket.free ? 'ฟรีเอเยนต์' : 'ตลาดนักเตะ',
+      inspectPlayer: inMarket,
+      inspectTeam: null
+    };
+  }
+
+  // Retired or exited pyramid — build inspectable historical profile from snapshot or season archives
+  let latestArcPl: { ov: number; age: number; sp: number; sg: number; sa: number; cs: number; motm: number; no?: number } | null = null;
+  if (state.seasonArchives?.length) {
+    const sortedArcs = state.seasonArchives.slice().sort((a, b) => b.season - a.season);
+    for (const arc of sortedArcs) {
+      const f = arc.players.find((pl) => pl.name === leg.name);
+      if (f) {
+        latestArcPl = f;
+        break;
+      }
+    }
+  }
+
+  const retiredSeason = leg.retiredSeason ?? (leg.lastSeason ? Math.floor(leg.lastSeason) : undefined);
+  const retiredAge = leg.retiredAge ?? latestArcPl?.age ?? 35;
+
+  if (leg.snapshot) {
+    return {
+      kind: 'retired',
+      label: retiredSeason ? `แขวนสตั๊ด (S${retiredSeason})` : 'แขวนสตั๊ด',
+      shortLabel: 'แขวนสตั๊ด',
+      inspectPlayer: {
+        ...leg.snapshot,
+        retired: true,
+        retiredSeason: leg.snapshot.retiredSeason ?? retiredSeason,
+        age: leg.snapshot.age || retiredAge,
+        fit: 100,
+        inj: 0,
+        sus: 0
+      },
+      inspectTeam: null
+    };
+  }
+
+  const fallbackRole = leg.ro || (leg.pos === 'GK' ? 'GK' : leg.pos === 'DF' ? 'CB' : leg.pos === 'MF' ? 'CM' : 'ST');
+  const estOv = latestArcPl?.ov ?? clamp(Math.round(60 + (leg.bestAvgRating - 6.0) * 14), 54, 86);
+  const fallbackPlayer: Player = {
+    n: leg.name,
+    pos: leg.pos,
+    ro: fallbackRole,
+    ov: estOv,
+    age: retiredAge,
+    pot: estOv,
+    fit: 100,
+    inj: 0,
+    no: leg.no ?? latestArcPl?.no ?? 10,
+    vis: leg.vis ? [...leg.vis] : undefined,
+    sp: latestArcPl?.sp ?? leg.apps,
+    sg: latestArcPl?.sg ?? leg.goals,
+    sa: latestArcPl?.sa ?? leg.assists,
+    cs: latestArcPl?.cs ?? leg.cleanSheets,
+    motm: latestArcPl?.motm ?? leg.motm,
+    retired: true,
+    retiredSeason,
+    careerLog: [
+      `🏟️ ตำนานสโมสร ${clubTeam.name} · รวม ${leg.apps} นัด · ${leg.goals} ประตู · ${leg.assists} แอสซิสต์`,
+      `👋 อำลาสนาม${retiredSeason ? `หลังจบซีซั่น ${retiredSeason}` : ''} (อายุ ${retiredAge} ปี)`
+    ]
+  };
+
+  return {
+    kind: 'retired',
+    label: retiredSeason ? `แขวนสตั๊ด (S${retiredSeason})` : 'แขวนสตั๊ด',
+    shortLabel: 'แขวนสตั๊ด',
+    inspectPlayer: fallbackPlayer,
+    inspectTeam: null
   };
 }

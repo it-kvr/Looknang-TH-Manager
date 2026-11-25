@@ -122,6 +122,8 @@ export interface Player {
   history?: PlayerSeasonHistoryRecord[];
   careerLog?: string[];
   seasonProg?: PlayerSeasonProgression;
+  retired?: boolean;
+  retiredSeason?: number;
 }
 
 export interface CreatedPlayerTemplate {
@@ -208,6 +210,15 @@ export interface Team {
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
 
+export type CoachOutfitId =
+  | 'suit_navy'
+  | 'suit_black'
+  | 'suit_charcoal'
+  | 'suit_camel'
+  | 'tracksuit'
+  | 'polo'
+  | 'shirt';
+
 export interface ClubIdentity {
   name: string;
   nick: string;
@@ -230,6 +241,7 @@ export interface ClubIdentity {
   managerName?: string;
   managerVis?: number[];
   managerStyle?: CoachStyleId;
+  managerOutfit?: CoachOutfitId;
 }
 
 export interface PlayerCareerProfile {
@@ -491,6 +503,10 @@ export interface ClubAllTimePlayerRecord {
   playedSeasons?: number[];
   bestAvgRating: number;
   stillAtClub?: boolean;
+  retired?: boolean;
+  retiredSeason?: number;
+  retiredAge?: number;
+  snapshot?: Player;
 }
 
 export interface TrophyRecord {
@@ -711,6 +727,7 @@ export interface AppSettings {
   subAlertEnabled?: boolean;
   subAlertFitThreshold?: number;
   subAlertFormThreshold?: number;
+  autoSubMatch?: boolean;
 }
 
 export interface PlayerArchetype {
@@ -1189,6 +1206,7 @@ export interface LiveSidelineCoach {
   isUserCoach: boolean;
   vis?: number[];
   tieColor?: string;
+  outfit?: CoachOutfitId;
 }
 
 export interface GodBlessingPatch {

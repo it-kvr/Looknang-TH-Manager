@@ -3,7 +3,7 @@ import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
 import { applyTrainingMissionProgress } from './missions';
-import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers } from './history';
+import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord } from './history';
 
 export function rate(
   t: Team,
@@ -4265,6 +4265,43 @@ export function growPlayers(s: GameState) {
       if (retireProb > 0 && Math.random() < retireProb) {
         const retiredName = q.n;
         const retiredAge = q.age;
+        if (t.id === s.me) {
+          s.records = s.records || {};
+          s.records.allTimePlayers = s.records.allTimePlayers || [];
+          const retiredSnapshot = snapshotPlayerForRecord(q, { season: s.season, age: retiredAge });
+          const existingRec = s.records.allTimePlayers.find((r) => r.name === retiredName);
+          if (existingRec) {
+            existingRec.retired = true;
+            existingRec.retiredSeason = s.season;
+            existingRec.retiredAge = retiredAge;
+            existingRec.stillAtClub = false;
+            existingRec.snapshot = retiredSnapshot;
+          } else if ((q.sp || 0) > 0 || (q.sg || 0) > 0 || (q.sa || 0) > 0 || (q.cs || 0) > 0 || (q.motm || 0) > 0) {
+            const avg = calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0);
+            s.records.allTimePlayers.push({
+              name: retiredName,
+              pos: q.pos,
+              ro: q.ro,
+              no: q.no,
+              vis: q.vis ? [...q.vis] : undefined,
+              apps: q.sp || 0,
+              goals: q.sg || 0,
+              assists: q.sa || 0,
+              cleanSheets: q.cs || 0,
+              motm: q.motm || 0,
+              seasons: (q.sp || 0) > 0 ? 1 : 0,
+              firstSeason: s.season,
+              lastSeason: s.season,
+              playedSeasons: (q.sp || 0) > 0 ? [s.season] : undefined,
+              bestAvgRating: avg,
+              stillAtClub: false,
+              retired: true,
+              retiredSeason: s.season,
+              retiredAge,
+              snapshot: retiredSnapshot
+            });
+          }
+        }
         const repOv = BASE[t.tier] + R(-1, 5) + (Math.random() < (t.tier >= 2 ? 0.25 : 0.14) ? R(3, 6) : 0);
         const fresh = mkPlayer(q.pos, repOv, true);
         if (fresh.age <= 21) {

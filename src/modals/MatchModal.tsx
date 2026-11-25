@@ -17,7 +17,7 @@ import {
 import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID } from '../data/thaiFootballData';
-import { getSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
+import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
 
 type TimelineKind =
   | 'kickoff'
@@ -293,7 +293,7 @@ export const MatchModal: React.FC<{
   const [liveFormMap, setLiveFormMap] = useState<Record<string, number>>(() =>
     Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5]))
   );
-  const [autoSubEnabled, setAutoSubEnabled] = useState<boolean>(false);
+  const [autoSubEnabled, setAutoSubEnabled] = useState<boolean>(() => Boolean(getSettings().autoSubMatch));
   const subAlertEnabled = settings.subAlertEnabled ?? true;
   const subAlertFitTh = clamp(settings.subAlertFitThreshold ?? 58, 45, 75);
   const subAlertFormTh = clamp(settings.subAlertFormThreshold ?? 5.8, 5.0, 6.4);
@@ -479,7 +479,8 @@ export const MatchModal: React.FC<{
         moodCooldown: side === 'H' ? 6.5 : 9.0,
         isUserCoach: isUser,
         vis: coachVis,
-        tieColor
+        tieColor,
+        outfit: isUser ? (state.club?.managerOutfit || 'suit_navy') : 'suit_navy'
       };
     };
     return {
@@ -8357,6 +8358,7 @@ export const MatchModal: React.FC<{
                           SFX.tap();
                           setAutoSubEnabled((v) => {
                             const next = !v;
+                            saveSettings({ ...getSettings(), autoSubMatch: next });
                             if (next && worldRef.current && !simRef.current.done) {
                               runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
                             }
@@ -8370,38 +8372,38 @@ export const MatchModal: React.FC<{
                             return next;
                           });
                         }}
-                        className={`btn btn-md px-2.5 sm:px-3 mland:px-2 ${
+                        className={`btn btn-md w-[70px] sm:w-[98px] mland:w-[64px] px-2 mland:px-1.5 !justify-start gap-1 shrink-0 ${
                           autoSubEnabled
                             ? 'btn-primary'
                             : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
                         }`}
                       >
                         <Bot className="w-3.5 h-3.5 shrink-0" />
-                        <span className="hidden sm:inline mland:hidden">{autoSubEnabled ? 'ออโต้: เปิด' : 'ออโต้'}</span>
-                        <span className="sm:hidden mland:inline">{autoSubEnabled ? 'ON' : 'ออโต้'}</span>
+                        <span className="hidden sm:inline mland:hidden flex-1 text-center whitespace-nowrap">{autoSubEnabled ? 'ออโต้: เปิด' : 'ออโต้'}</span>
+                        <span className="sm:hidden mland:inline flex-1 text-center whitespace-nowrap">{autoSubEnabled ? 'ON' : 'ออโต้'}</span>
                       </button>
                     )}
 
-                    <div className="seg-bar h-9 mland:h-7.5">
+                    <div className="seg-bar h-9 mland:h-7.5 shrink-0">
                       <button
                         type="button"
                         title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         onClick={() => setPaused((p) => !p)}
-                        className={`seg-btn h-full px-2.5 sm:px-3 mland:px-2 text-xs mland:text-[10.5px] ${paused ? 'seg-btn-active' : ''}`}
+                        className={`seg-btn h-full px-2.5 sm:px-3 mland:px-2 lg:w-[80px] lg:!justify-start gap-1 shrink-0 text-xs mland:text-[10.5px] ${paused ? 'seg-btn-active' : ''}`}
                       >
-                        {paused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
-                        <span className="hidden lg:inline">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
+                        {paused ? <Play className="w-3.5 h-3.5 fill-current shrink-0" /> : <Pause className="w-3.5 h-3.5 shrink-0" />}
+                        <span className="hidden lg:inline flex-1 text-center whitespace-nowrap">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
                       </button>
                       <button
                         type="button"
                         title="ปรับความเร็วการแข่งขัน"
                         aria-label="ปรับความเร็วการแข่งขัน"
                         onClick={cycleMatchSpeed}
-                        className="seg-btn h-full w-[68px] sm:w-[74px] mland:w-[58px] px-1.5 text-xs mland:text-[10.5px] tabular justify-center shrink-0"
+                        className="seg-btn h-full w-[72px] sm:w-[78px] mland:w-[66px] px-2 mland:px-1.5 text-xs mland:text-[10.5px] tabular !justify-start gap-1 shrink-0"
                       >
                         <Gauge className="w-3.5 h-3.5 opacity-80 shrink-0" />
-                        <span className="inline-block min-w-[3.4ch] text-center">{speed}x</span>
+                        <span className="flex-1 text-center whitespace-nowrap">{speed}x</span>
                       </button>
                     </div>
 
@@ -8508,6 +8510,7 @@ export const MatchModal: React.FC<{
               onToggleAutoSub={() => {
                 setAutoSubEnabled((v) => {
                   const next = !v;
+                  saveSettings({ ...getSettings(), autoSubMatch: next });
                   if (next && worldRef.current && !simRef.current.done) {
                     runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
                   }
