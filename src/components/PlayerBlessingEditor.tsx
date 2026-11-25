@@ -23,7 +23,7 @@ import { OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, visOf, rndV
 import { ovColor, statTierMeta, getPlayerTalent } from '../engine/missions';
 import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/blessings';
 import { PlayerFace } from './SvgVisuals';
-import { getFootColorMeta } from './PlayerBioStrip';
+import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 const GK_SIG_KEYS = ['sv', 'rfx', 'cl', 'dist', 'spass', 'lpass', 'sta', 'comp'];
@@ -901,10 +901,11 @@ export const PlayerBlessingEditor: React.FC<{
 
             <div className="p-1.5 rounded-lg border bg-[var(--surface-2)]/65 border-[var(--line)] space-y-1">
               <div className="flex items-center justify-between text-[10px]">
-                <span className="text-[var(--mut)] font-bold">🦶 ถนัดเท้า</span>
-                <b className="text-[10.5px] font-extrabold" style={{ color: getFootColorMeta(foot).dotColor }}>
-                  {getFootColorMeta(foot).label}
-                </b>
+                <span className="text-[var(--mut)] font-bold">ถนัดเท้า</span>
+                <span className={`inline-flex items-center gap-1 text-[10.5px] font-extrabold ${getFootColorMeta(foot).textCls}`}>
+                  <FootPairIcon foot={foot} size="xs" />
+                  <span>{getFootColorMeta(foot).label}</span>
+                </span>
               </div>
               <div className="grid grid-cols-3 gap-1">
                 {(['L', 'R', 'B'] as const).map((fk) => {
@@ -919,7 +920,7 @@ export const PlayerBlessingEditor: React.FC<{
                         active ? fm.buttonActiveCls : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
                       }`}
                     >
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: active ? 'currentColor' : fm.dotColor }} />
+                      <FootPairIcon foot={fk} size="xs" />
                       <span>{fm.shortLabel}</span>
                     </button>
                   );

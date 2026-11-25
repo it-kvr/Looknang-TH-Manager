@@ -8181,7 +8181,7 @@ export const MatchModal: React.FC<{
                       title="เริ่มครึ่งหลัง"
                       aria-label="เริ่มครึ่งหลัง"
                       onClick={() => handleStartSecondHalf()}
-                      className="h-7 mland:h-6 px-2.5 sm:px-3 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap hover:brightness-110 transition-all inline-flex items-center gap-1"
+                      className="h-10 sm:h-11 mland:h-8 px-3.5 sm:px-5 mland:px-3.5 rounded-xl bg-[var(--g)] text-white text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold cursor-pointer shadow-sm whitespace-nowrap hover:brightness-110 active:scale-[0.98] transition-all inline-flex items-center gap-1.5"
                     >
                       <span>▶</span>
                       <span>เริ่มครึ่งหลัง</span>
@@ -8191,7 +8191,7 @@ export const MatchModal: React.FC<{
                       title="ข้ามครึ่งหลังไปจบเกม"
                       aria-label="ข้ามครึ่งหลังไปจบเกม"
                       onClick={skipToEnd}
-                      className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--lamp)] text-[10.5px] mland:text-[9px] font-bold cursor-pointer whitespace-nowrap transition-colors inline-flex items-center gap-0.5"
+                      className="h-10 sm:h-11 mland:h-8 px-2.5 sm:px-3 mland:px-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--lamp)] text-xs sm:text-[13px] mland:text-[10.5px] font-bold cursor-pointer whitespace-nowrap transition-colors inline-flex items-center gap-1"
                     >
                       <span>⏩</span>
                       <span className="hidden sm:inline mland:hidden">ข้าม</span>
@@ -8273,7 +8273,7 @@ export const MatchModal: React.FC<{
                   title="จบเกมและดำเนินการต่อ"
                   aria-label="จบเกมและดำเนินการต่อ"
                   onClick={handleConfirmFinish}
-                  className="h-7 sm:h-8 mland:h-6 px-3 sm:px-3.5 mland:px-2.5 rounded-lg sm:rounded-xl bg-[var(--g)] hover:brightness-110 active:scale-[0.98] text-white text-[11px] sm:text-xs mland:text-[10px] font-extrabold cursor-pointer shadow-xs whitespace-nowrap transition-all inline-flex items-center gap-1.5"
+                  className="h-10 sm:h-11 mland:h-8 px-4 sm:px-5 mland:px-3.5 rounded-xl bg-[var(--g)] hover:brightness-110 active:scale-[0.98] text-white text-xs sm:text-[13.5px] mland:text-[10.5px] font-extrabold cursor-pointer shadow-sm whitespace-nowrap transition-all inline-flex items-center gap-1.5"
                 >
                   <span>🏁</span>
                   <span>จบเกม</span>
@@ -9217,29 +9217,6 @@ export const MatchModal: React.FC<{
                           <span>{htStatMode === 'rating' ? '⭐ เรตติ้ง' : '⚡ พลัง'}</span>
                         </button>
 
-                        {state.mode === 'm' && (!halftimeTalkUsed ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('attack'); }}
-                              className="h-6 mland:h-5 px-2 rounded-md bg-rose-500/18 border border-rose-400/50 text-rose-700 dark:text-rose-200 font-bold cursor-pointer hover:brightness-110 inline-flex items-center gap-1 whitespace-nowrap"
-                            >
-                              <span>🔥 บุกครึ่งหลัง</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('defend'); }}
-                              className="h-6 mland:h-5 px-2 rounded-md bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] font-bold cursor-pointer hover:border-[var(--g)] inline-flex items-center gap-1 whitespace-nowrap"
-                            >
-                              <span>🛡️ รับรัดกุม</span>
-                            </button>
-                          </>
-                        ) : (
-                          <span className="h-6 mland:h-5 px-2 rounded-md bg-emerald-500/15 border border-emerald-400/35 text-emerald-700 dark:text-emerald-300 font-bold inline-flex items-center whitespace-nowrap">
-                            ✅ สั่งการแล้ว
-                          </span>
-                        ))}
-
                         {state.mode === 'm' && (
                           <button
                             type="button"
@@ -9521,6 +9498,38 @@ export const MatchModal: React.FC<{
                 </div>
               )}
 
+              {state.mode === 'm' && !done && matchPhaseUi === 'halftime' && (
+                <div className="shrink-0 p-1.5 mland:p-1 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-1">
+                  <div className="flex items-center justify-between gap-1 px-1 text-[10px] mland:text-[8.5px] font-extrabold text-[var(--mut)]">
+                    <span>🗣️ สั่งการครึ่งหลัง (ข้างสนาม)</span>
+                  </div>
+                  {!halftimeTalkUsed ? (
+                    <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
+                      <button
+                        type="button"
+                        onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('attack'); }}
+                        className="h-9 sm:h-10 mland:h-7 px-2 rounded-xl mland:rounded-lg bg-rose-500/18 border border-rose-400/55 text-rose-700 dark:text-rose-200 text-[11px] sm:text-xs mland:text-[9.5px] font-extrabold cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-1 whitespace-nowrap shadow-2xs"
+                      >
+                        <span>🔥</span>
+                        <span>บุกครึ่งหลัง</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setHalftimeTalkUsed(true); handleStartSecondHalf('defend'); }}
+                        className="h-9 sm:h-10 mland:h-7 px-2 rounded-xl mland:rounded-lg bg-sky-500/14 border border-sky-400/50 text-sky-700 dark:text-sky-200 text-[11px] sm:text-xs mland:text-[9.5px] font-extrabold cursor-pointer hover:brightness-110 active:scale-[0.98] transition-all inline-flex items-center justify-center gap-1 whitespace-nowrap shadow-2xs"
+                      >
+                        <span>🛡️</span>
+                        <span>ตั้งรับรัดกุม</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="h-8 mland:h-6 px-2.5 rounded-xl bg-emerald-500/15 border border-emerald-400/35 text-emerald-700 dark:text-emerald-300 text-[11px] mland:text-[9.5px] font-bold flex items-center justify-center whitespace-nowrap">
+                      ✅ สั่งการครึ่งหลังแล้ว
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-1.5">
                 <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
                   <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
@@ -9564,7 +9573,7 @@ export const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={handleConfirmFinish}
-                    className="shrink-0 w-full h-9 sm:h-10 mland:h-8 px-4 rounded-xl bg-[var(--lamp)] hover:brightness-105 active:scale-[0.99] text-[#261900] text-xs sm:text-[13px] mland:text-[10.5px] font-extrabold cursor-pointer shadow-sm transition-all flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    className="shrink-0 w-full h-11 sm:h-12 mland:h-9 px-4 rounded-xl bg-[var(--lamp)] hover:brightness-105 active:scale-[0.99] text-[#261900] text-[13px] sm:text-sm mland:text-[11px] font-extrabold cursor-pointer shadow-sm transition-all flex items-center justify-center gap-1.5 whitespace-nowrap"
                   >
                     <span>🏁</span>
                     <span>จบเกมและดำเนินการต่อ</span>

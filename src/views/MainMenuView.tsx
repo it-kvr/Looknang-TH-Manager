@@ -8,7 +8,7 @@ import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, dele
 import { cleanImportJson } from '../engine/saveCodec';
 import { ovColor, statBarColor, statTierMeta, talentTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
-import { PlayerBioStrip, getFootColorMeta } from '../components/PlayerBioStrip';
+import { PlayerBioStrip, FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
@@ -1088,10 +1088,11 @@ export const MainMenu: React.FC<{
 
                     <div className="p-2 mland:p-1 rounded-xl border bg-[var(--surface)] border-[var(--line)] space-y-1">
                       <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                        <span className="font-bold text-[var(--mut)]">🦶 ถนัดเท้า</span>
-                        <b className="font-extrabold" style={{ color: getFootColorMeta(cFoot).dotColor }}>
-                          {getFootColorMeta(cFoot).label}
-                        </b>
+                        <span className="font-bold text-[var(--mut)]">ถนัดเท้า</span>
+                        <span className={`inline-flex items-center gap-1 font-extrabold ${getFootColorMeta(cFoot).textCls}`}>
+                          <FootPairIcon foot={cFoot} size="xs" />
+                          <span>{getFootColorMeta(cFoot).label}</span>
+                        </span>
                       </div>
                       <div className="grid grid-cols-3 gap-1">
                         {(['L', 'R', 'B'] as const).map((fk) => {
@@ -1106,7 +1107,7 @@ export const MainMenu: React.FC<{
                                 active ? fm.buttonActiveCls : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
                               }`}
                             >
-                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: active ? 'currentColor' : fm.dotColor }} />
+                              <FootPairIcon foot={fk} size="xs" />
                               <span>{fm.shortLabel}</span>
                             </button>
                           );

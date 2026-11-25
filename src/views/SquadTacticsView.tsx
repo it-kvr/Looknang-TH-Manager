@@ -9,7 +9,7 @@ import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRe
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { LockerRoomPanel } from '../components/LockerRoomPanel';
-import { getFootColorMeta } from '../components/PlayerBioStrip';
+import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
 
@@ -1555,11 +1555,11 @@ export const SquadTacticsView: React.FC<{
                                   </span>
                                 )}
                                 <span
-                                  className={`hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1 rounded border text-[9.5px] mland:text-[8px] font-bold leading-tight shrink-0 ${footMeta.badgeCls}`}
+                                  className="hidden sm:inline-flex mland:inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold tabular leading-tight shrink-0 whitespace-nowrap"
                                   title={`สูง ${bio.heightCm} ซม. · หนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
                                 >
-                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: footMeta.dotColor }} />
-                                  <span>{bio.heightCm}/{bio.weightKg} · {footMeta.shortLabel}</span>
+                                  <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
+                                  <FootPairIcon foot={bio.foot} size="xs" />
                                 </span>
                                 {f < 75 && q.inj === 0 && (q.sus || 0) === 0 && (
                                   <span className={`sm:hidden mland:hidden px-1 rounded text-[9px] font-bold ${stMeta.pillCls}`}>
