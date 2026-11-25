@@ -627,7 +627,14 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
     l: 0,
     p: 0,
     fm: '',
-    tacFam: R(62, 76)
+    tacFam: R(62, 76),
+    fans: Math.max(
+      2500,
+      Math.round(
+        ([9500, 26000, 78000, 165000][tier] ?? 24000) * (1 + diff * 0.045) +
+          R(-1800, 3200) * (tier + 1)
+      )
+    )
   };
   assignTeamShirtNumbers(team);
   return team;

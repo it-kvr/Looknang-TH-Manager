@@ -15,7 +15,7 @@ import {
 import type { GameState, Player, TrophyRecord } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX, triggerConfetti } from '../utils/audioTheme';
-import { finishSeasonComputation } from '../engine/simulation';
+import { finishSeasonComputation, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { TrophySvg } from '../components/ClubHistoryPanel';
 
@@ -122,7 +122,7 @@ export const SeasonEndModal: React.FC<{
             : `ค่ำคืนแห่งประวัติศาสตร์ของสโมสร จัดงานเลี้ยงฉลองถ้วยรางวัลและพลุไฟตระการตาที่สนามเหย้า ${state.club?.std || me.name}`,
         perks: [
           `🏆 คว้าเกียรติยศ ${trophiesWon.length} รายการ`,
-          `🔥 กระแสแฟนบอล ${state.fan ?? 55}%`,
+          `👥 แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`,
           `👑 ชื่อเสียงสโมสรพุ่งทะยาน`
         ]
       };
@@ -155,7 +155,7 @@ export const SeasonEndModal: React.FC<{
       };
     }
     return null;
-  }, [celebrationLevel, me.name, state.club?.std, me.pts, majorTrophyCount, trophiesWon.length, state.fan, state.obj, summary.nt, summary.mt, summary.pos, summary.totalTeams, wonNtCallup, metBoardGoal]);
+  }, [celebrationLevel, me, state.club?.std, majorTrophyCount, trophiesWon.length, state.obj, summary.nt, summary.mt, summary.pos, summary.totalTeams, wonNtCallup, metBoardGoal]);
 
   const winRate = arc && arc.played > 0 ? Math.round((arc.won / arc.played) * 100) : 0;
   const gd = arc ? arc.gf - arc.ga : me.gf - me.ga;

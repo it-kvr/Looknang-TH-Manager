@@ -65,14 +65,14 @@ export const buildAgentsForTeam = (
 
 export const PITCH_FACE_CACHE = new Map<string, HTMLCanvasElement | 'loading'>();
 
-export const getPitchFaceCanvas = (vis: number[], kit: string, trim: string): HTMLCanvasElement | null => {
-  const key = `${vis.join(',')}|${kit}|${trim}`;
+export const getPitchFaceCanvas = (vis: number[], kit: string, trim: string, isCoach = false): HTMLCanvasElement | null => {
+  const key = `${vis.join(',')}|${kit}|${trim}|${isCoach ? 1 : 0}`;
   const existing = PITCH_FACE_CACHE.get(key);
   if (existing && existing !== 'loading') return existing;
   if (existing === 'loading' || typeof Image === 'undefined' || typeof document === 'undefined') return null;
 
   PITCH_FACE_CACHE.set(key, 'loading');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, false)}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, isCoach)}</svg>`;
   const img = new Image();
   img.onload = () => {
     const off = document.createElement('canvas');
@@ -649,7 +649,7 @@ export const drawLivePitchToCanvas = (
       ctx.fill();
 
       // Manager portrait face clipped inside suit frame
-      const coachFace = getPitchFaceCanvas(coachVis, '#1e293b', kit);
+      const coachFace = getPitchFaceCanvas(coachVis, '#1e293b', kit, true);
       if (coachFace) {
         ctx.save();
         ctx.beginPath();
@@ -952,6 +952,31 @@ export const drawLivePitchToCanvas = (
       ctx.beginPath();
       ctx.arc(wx, wy, expand * 0.68, -Math.PI * 0.4, Math.PI * 0.45);
       ctx.stroke();
+      ctx.restore();
+    } else if (fx.type === 'kick_burst') {
+      const kx = px(fx.x);
+      const ky = py(fx.y);
+      const dir = Math.atan2(py(fx.toY ?? fx.y) - ky, px(fx.toX ?? fx.x + 5) - kx);
+      const prog = 1 - alpha;
+      const ringR = 5 + prog * 18;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.95;
+      ctx.strokeStyle = fx.color || '#fde047';
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.arc(kx, ky, ringR, dir - 0.95, dir + 0.95);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.lineWidth = 1.8;
+      for (let ray = -1; ray <= 1; ray++) {
+        const ra = dir + ray * 0.38;
+        const r0 = 4 + prog * 6;
+        const r1 = 11 + prog * 16;
+        ctx.beginPath();
+        ctx.moveTo(kx + Math.cos(ra) * r0, ky + Math.sin(ra) * r0);
+        ctx.lineTo(kx + Math.cos(ra) * r1, ky + Math.sin(ra) * r1);
+        ctx.stroke();
+      }
       ctx.restore();
     } else if (
       fx.type === 'foul' ||
@@ -1412,20 +1437,66 @@ export const drawLivePitchToCanvas = (
         ctx.beginPath();
         ctx.arc(0, 0, playerRadius + 10.5, ag.facing - 0.75, ag.facing + 0.85);
         ctx.stroke();
+      } else if (
+        ag.acrobatType === 'kick' ||
+        ag.acrobatType === 'shoot_power' ||
+        ag.acrobatType === 'shoot_finesse' ||
+        ag.acrobatType === 'shoot_chip'
+      ) {
+        // Distinct shooting motion: crisp wind-up recoil (prog < 0.25) -> explosive strike lunge + glowing swing arc
+        const dir = ag.facing;
+        const kickPhase = prog < 0.25 ? -(prog / 0.25) : Math.sin(((prog - 0.25) / 0.75) * Math.PI);
+        const isPower = ag.acrobatType === 'shoot_power';
+        const isFinesse = ag.acrobatType === 'shoot_finesse';
+        const isChip = ag.acrobatType === 'shoot_chip';
+        const pushDist = kickPhase * playerRadius * (isPower ? 0.56 : 0.42);
+        const liftY = isChip ? -Math.max(0, kickPhase) * playerRadius * 0.28 : isPower ? -Math.max(0, kickPhase) * playerRadius * 0.14 : 0;
+        const lean = isPower ? 0.26 * kickPhase : isFinesse ? -0.3 * kickPhase : 0.16 * kickPhase;
+        ctx.translate(Math.cos(dir) * pushDist, Math.sin(dir) * pushDist + liftY);
+        ctx.rotate(lean);
+        const arcColor = isPower
+          ? `rgba(251, 146, 60, ${acAlpha * 0.96})`
+          : isFinesse
+            ? `rgba(56, 189, 248, ${acAlpha * 0.96})`
+            : isChip
+              ? `rgba(250, 204, 21, ${acAlpha * 0.96})`
+              : `rgba(253, 224, 71, ${acAlpha * 0.92})`;
+        ctx.strokeStyle = arcColor;
+        ctx.lineWidth = isPower ? 2.8 : 2.3;
+        const ringRad = playerRadius + 4.5 + Math.max(0, kickPhase) * (isPower ? 6.5 : 4.5);
+        ctx.beginPath();
+        ctx.arc(0, 0, ringRad, dir - 0.85, dir + 0.85);
+        ctx.stroke();
+        if (isPower && prog >= 0.2) {
+          ctx.strokeStyle = `rgba(255, 255, 255, ${acAlpha * 0.85})`;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(0, 0, ringRad + 3.5, dir - 0.55, dir + 0.55);
+          ctx.stroke();
+        }
       }
     }
 
-    // Animated running feet / boots oriented along facing direction
+    // Animated running feet / boots oriented along facing direction (with extended striking boot on shots)
     const cosF = Math.cos(ag.facing);
     const sinF = Math.sin(ag.facing);
     const perpX = -sinF;
     const perpY = cosF;
-    const legSwing = strideSin * (playerRadius * 0.52);
+    const isKickingNow =
+      (ag.acrobatTimer ?? 0) > 0 &&
+      (ag.acrobatType === 'kick' ||
+        ag.acrobatType === 'shoot_power' ||
+        ag.acrobatType === 'shoot_finesse' ||
+        ag.acrobatType === 'shoot_chip' ||
+        ag.acrobatType === 'volley');
+    const kickProg = isKickingNow ? clamp(1 - (ag.acrobatTimer ?? 0) / Math.max(0.1, ag.acrobatMax || 0.45), 0, 1) : 0;
+    const kickSwing = isKickingNow ? (kickProg < 0.25 ? -0.45 : Math.sin(((kickProg - 0.25) / 0.75) * Math.PI) * 1.15) : 0;
+    const legSwing = isKickingNow ? kickSwing * (playerRadius * 0.85) : strideSin * (playerRadius * 0.52);
 
     ctx.fillStyle = '#111827';
     ctx.beginPath();
-    ctx.arc(perpX * (playerRadius * 0.42) + cosF * legSwing, perpY * (playerRadius * 0.42) + sinF * legSwing + playerRadius * 0.35, playerRadius * 0.28, 0, Math.PI * 2);
-    ctx.arc(-perpX * (playerRadius * 0.42) - cosF * legSwing, -perpY * (playerRadius * 0.42) - sinF * legSwing + playerRadius * 0.35, playerRadius * 0.28, 0, Math.PI * 2);
+    ctx.arc(perpX * (playerRadius * 0.42) + cosF * legSwing, perpY * (playerRadius * 0.42) + sinF * legSwing + playerRadius * 0.35, playerRadius * (isKickingNow ? 0.31 : 0.28), 0, Math.PI * 2);
+    ctx.arc(-perpX * (playerRadius * 0.42) - cosF * (isKickingNow ? playerRadius * 0.25 : legSwing), -perpY * (playerRadius * 0.42) - sinF * (isKickingNow ? playerRadius * 0.25 : legSwing) + playerRadius * 0.35, playerRadius * 0.28, 0, Math.PI * 2);
     ctx.fill();
 
     // Shoulders sway & facing indicator
@@ -1622,6 +1693,30 @@ export const drawLivePitchToCanvas = (
     b.shotStyle === 'deflected';
   const isCurlBall = b.shotStyle === 'curler' || b.shotStyle === 'knuckle';
   const isPowerShot = b.flightType === 'shot' || b.flightType === 'freekick' || b.flightType === 'penalty' || b.flightType === 'shootout_kick';
+
+  // Shot comet trail behind fast/special shots
+  if (isPowerShot && b.trail.length >= 2) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    const tailLen = b.trail.length;
+    for (let ti = 1; ti < tailLen; ti++) {
+      const p0 = b.trail[ti - 1];
+      const p1 = b.trail[ti];
+      const ratio = ti / tailLen;
+      ctx.strokeStyle = isCurlBall
+        ? `rgba(56, 189, 248, ${ratio * 0.52})`
+        : isSpecialBall
+          ? `rgba(251, 146, 60, ${ratio * 0.58})`
+          : `rgba(253, 224, 71, ${ratio * 0.46})`;
+      ctx.lineWidth = Math.max(1.2, ballR * 1.45 * ratio);
+      ctx.beginPath();
+      ctx.moveTo(px(p0.x), py(p0.y) - (p0.z || 0) * 0.78);
+      ctx.lineTo(px(p1.x), py(p1.y) - (p1.z || 0) * 0.78);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   ctx.save();
   ctx.translate(bx, drawBy);
 
@@ -1632,9 +1727,9 @@ export const drawLivePitchToCanvas = (
       ? 'rgba(56, 189, 248, 0.34)'
       : isSpecialBall
         ? 'rgba(251, 191, 36, 0.38)'
-        : 'rgba(254, 240, 138, 0.24)';
+        : 'rgba(254, 240, 138, 0.28)';
     ctx.beginPath();
-    ctx.arc(0, 0, ballR * 1.48, 0, Math.PI * 2);
+    ctx.arc(0, 0, ballR * 1.54, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -1717,6 +1812,7 @@ export const drawLivePitchToCanvas = (
 
   // 7. Floating event callouts (Offside flag, Foul, Save, Woodwork, Goal!)
   world.fx.forEach((fx) => {
+    if (!fx.label) return;
     const alpha = clamp(fx.ttl / fx.maxTtl, 0, 1);
     ctx.save();
     ctx.globalAlpha = Math.min(1, alpha * 1.4);

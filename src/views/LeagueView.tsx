@@ -6,7 +6,7 @@ import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress } from '../engine/simulation';
+import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { CupView } from './CupView';
 
@@ -707,7 +707,7 @@ export const LeagueView: React.FC<{
                 <ClubCrest name={t.name} size={20} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                 <div className="min-w-0">
                   <div className="font-bold text-xs mland:text-[10.5px] whitespace-normal break-words leading-tight">{t.name} {isMe && <span className="text-[var(--lamp)]">★</span>}</div>
-                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">ตัวจริง {st.ovXi} · หน้า {st.f} กลาง {st.m} หลัง {st.d} โกล์ {st.gk}</div>
+                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">ตัวจริง {st.ovXi} · หน้า {st.f} กลาง {st.m} หลัง {st.d} · 👥 {fmtFansShort(ensureTeamFans(t))}</div>
                 </div>
                 <div className="hidden sm:block mland:hidden">
                   <div className="flex justify-between text-[10.5px] font-bold mb-0.5">

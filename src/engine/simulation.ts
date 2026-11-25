@@ -480,21 +480,26 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   if (h.pass === 3 && G.at > H.at) H.at += 3;
   if (a.pass === 3 && H.at > G.at) G.at += 3;
 
-  // Divine fortune / hot-streak spark ("พรสิ่งศักดิ์สิทธิ์") — can bless either side regardless of OVR
+  // Divine fortune / hot-streak spark ("พรสิ่งศักดิ์สิทธิ์") — underdogs/disadvantaged clubs receive blessings significantly more often
   const incidents: MatchDramaticEvent[] = [];
   let luckH = 0;
   let luckA = 0;
   let blessedHomeHero: Player | null = null;
   let blessedAwayHero: Player | null = null;
-  if (Math.random() < (bg ? 0.34 : 0.25)) {
-    const gap = Math.max(0, G.at + G.df - (H.at + H.df));
+  const powH = H.at + H.df;
+  const powA = G.at + G.df;
+  const diffH = powA - powH;
+  const blessChanceH = clamp((bg ? 0.27 : 0.20) + clamp(diffH / 16, -0.11, 0.28), 0.08, 0.50);
+  const blessChanceA = clamp((bg ? 0.27 : 0.20) + clamp(-diffH / 16, -0.11, 0.28), 0.08, 0.50);
+  if (Math.random() < blessChanceH) {
+    const gap = Math.max(0, diffH);
     luckH = R(4, 7) + (gap > 8 ? 3 : 0);
     H.at += luckH;
     H.df += Math.round(luckH * 0.7);
     blessedHomeHero = H.x.length ? P(H.x) : null;
   }
-  if (Math.random() < (bg ? 0.34 : 0.25)) {
-    const gap = Math.max(0, H.at + H.df - (G.at + G.df));
+  if (Math.random() < blessChanceA) {
+    const gap = Math.max(0, -diffH);
     luckA = R(4, 7) + (gap > 8 ? 3 : 0);
     G.at += luckA;
     G.df += Math.round(luckA * 0.7);
@@ -974,6 +979,77 @@ export function computePlayerRatings(
   return { ratings, motm: bestN };
 }
 
+export function ensureTeamFans(t?: Team | null): number {
+  if (!t) return 10000;
+  if (typeof t.fans === 'number' && Number.isFinite(t.fans) && t.fans > 0) {
+    return Math.round(t.fans);
+  }
+  const tierBase = [9500, 26000, 78000, 165000][t.tier ?? 0] ?? 24000;
+  const ovAvg = t.sq?.length ? t.sq.slice(0, 11).reduce((sum, q) => sum + q.ov, 0) / Math.min(11, t.sq.length) : 60;
+  const diffBonus = clamp((ovAvg - (BASE[t.tier ?? 0] ?? 60)) * 0.035, -0.32, 0.55);
+  const seed = ((t.id + 1) * 7919) % 31;
+  const est = Math.max(2500, Math.round(tierBase * (1 + diffBonus) + (seed - 15) * (t.tier + 1) * 180));
+  t.fans = est;
+  return est;
+}
+
+export function fmtFans(n: number): string {
+  return Math.max(0, Math.round(n || 0)).toLocaleString('en-US');
+}
+
+export function fmtFansShort(n: number): string {
+  const v = Math.max(0, Math.round(n || 0));
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M`;
+  if (v >= 100_000) return `${Math.round(v / 1_000)}K`;
+  if (v >= 10_000) return `${(v / 1_000).toFixed(1)}K`;
+  return v.toLocaleString('en-US');
+}
+
+export function adjustTeamFans(t: Team | undefined | null, delta: number): number {
+  if (!t) return 0;
+  const cur = ensureTeamFans(t);
+  const next = Math.max(500, Math.round(cur + delta));
+  t.fans = next;
+  return next;
+}
+
+export function updateTeamsFanbaseOnMatch(
+  h: Team,
+  gh: number,
+  a: Team,
+  ga: number,
+  opts?: { kind?: 'league' | 'cup' | 'asia'; big?: boolean }
+) {
+  const curH = ensureTeamFans(h);
+  const curA = ensureTeamFans(a);
+  const kindMul = opts?.kind === 'asia' ? 1.55 : opts?.kind === 'cup' ? 1.25 : 1.0;
+  const bigMul = opts?.big ? 1.25 : 1.0;
+  const margin = Math.abs(gh - ga);
+  const upsetForH = a.tier > h.tier || curA > curH * 1.4;
+  const upsetForA = h.tier > a.tier || curH > curA * 1.4;
+
+  let dH = 0;
+  let dA = 0;
+  const scaleH = Math.max(120, Math.round(Math.sqrt(curH) * 2.2));
+  const scaleA = Math.max(120, Math.round(Math.sqrt(curA) * 2.2));
+
+  if (gh > ga) {
+    dH = Math.round(scaleH * (0.95 + Math.min(3, margin - 1) * 0.28 + (upsetForH ? 0.65 : 0)) * kindMul * bigMul);
+    dA = -Math.round(scaleA * (upsetForH ? 0.42 : 0.22) * (1 + Math.min(2, margin - 1) * 0.15));
+  } else if (gh < ga) {
+    dA = Math.round(scaleA * (1.05 + Math.min(3, margin - 1) * 0.3 + (upsetForA ? 0.72 : 0)) * kindMul * bigMul);
+    dH = -Math.round(scaleH * (upsetForA ? 0.5 : 0.32) * (1 + Math.min(2, margin - 1) * 0.16));
+  } else {
+    dH = upsetForH ? Math.round(scaleH * 0.35 * kindMul) : -Math.round(scaleH * 0.06);
+    dA = Math.round(scaleA * (upsetForA ? 0.48 : 0.18) * kindMul);
+  }
+  if (gh >= 3) dH += Math.round(scaleH * 0.18);
+  if (ga >= 3) dA += Math.round(scaleA * 0.18);
+
+  adjustTeamFans(h, dH);
+  adjustTeamFans(a, dA);
+}
+
 export function applyMatchResult(h: Team, gh: number, a: Team, ga: number) {
   h.fm = (h.fm || '') + (gh > ga ? 'W' : gh < ga ? 'L' : 'D');
   a.fm = (a.fm || '') + (gh < ga ? 'W' : gh > ga ? 'L' : 'D');
@@ -997,6 +1073,7 @@ export function applyMatchResult(h: Team, gh: number, a: Team, ga: number) {
     h.pts++;
     a.pts++;
   }
+  updateTeamsFanbaseOnMatch(h, gh, a, ga, { kind: 'league' });
 }
 
 export const sortTable = (a: Team[]) =>
@@ -1164,6 +1241,49 @@ export function getLeagueTransferContext(s: GameState, me: Team) {
   };
 }
 
+export function getTeamStadiumCapacity(t: Team, s?: GameState | null): number {
+  if (s && t.id === s.me) {
+    const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
+    return STADIUM_CAPACITIES[stLv - 1] || 3500;
+  }
+  const fans = ensureTeamFans(t);
+  const tierFloor = [4500, 9500, 18000, 32000][t.tier ?? 0] ?? 9000;
+  const estLvIdx = clamp(
+    Math.floor((fans / 18000) + (t.tier ?? 0) * 1.6),
+    t.tier >= 3 ? 4 : t.tier >= 2 ? 2 : 0,
+    STADIUM_CAPACITIES.length - 1
+  );
+  return Math.max(tierFloor, STADIUM_CAPACITIES[estLvIdx] || 13000);
+}
+
+export function computeMatchAttendance(
+  h: Team,
+  a: Team,
+  s?: GameState | null,
+  opts?: { kind?: 'league' | 'cup' | 'asia'; derby?: boolean }
+): { att: number; cap: number; pct: number } {
+  const cap = getTeamStadiumCapacity(h, s);
+  const homeFans = ensureTeamFans(h);
+  const awayFans = ensureTeamFans(a);
+  const isUserHome = !!(s && h.id === s.me);
+  const tpIdx = isUserHome ? clamp(s?.tp ?? 1, 0, 2) : 1;
+  const priceMult = [1.14, 1.0, 0.82][tpIdx];
+  const promoMult = isUserHome && s?.promo === 1 ? 1.15 : 1.0;
+  const moodRatio = isUserHome && s ? clamp(((s.fan ?? 55) + getActiveBoardModifiers(s).fan) / 100, 0.15, 1.0) : 0.62;
+  const recentWins = (h.fm || '').slice(-4).split('').filter((c) => c === 'W').length;
+  const formBoost = recentWins * 0.03;
+  const bigMatchBoost = opts?.kind === 'asia' ? 0.18 : opts?.kind === 'cup' ? 0.11 : opts?.derby ? 0.15 : 0;
+  const fanbaseDraw = clamp(0.28 + (homeFans / Math.max(10000, cap * 1.85)) * 0.52, 0.28, 0.86);
+  const awayTravel = clamp(awayFans / Math.max(60000, cap * 4), 0.02, 0.12);
+  const fillRate = clamp(
+    (fanbaseDraw * 0.65 + moodRatio * 0.35 + awayTravel + formBoost + bigMatchBoost) * priceMult * promoMult,
+    0.22,
+    0.99
+  );
+  const att = clamp(Math.round(cap * fillRate), Math.min(cap, 450), cap);
+  return { att, cap, pct: Math.round((att / Math.max(1, cap)) * 100) };
+}
+
 export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const stLv = clamp(s.st ?? 1, 1, MAX_FACILITY_LV);
   const merchLv = clamp(s.merchLv ?? 1, 0, MAX_FACILITY_LV);
@@ -1174,11 +1294,17 @@ export function calcMatchdayFinanceEstimate(s: GameState, me: Team) {
   const spIdx = s.sp ?? 0;
   const bMods = getActiveBoardModifiers(s);
   const fanVal = clamp((s.fan ?? 55) + bMods.fan, 5, 100);
-  const attRate = clamp((0.36 + (fanVal / 100) * 0.56) * [1.15, 1.0, 0.8][tpIdx] * (s.promo === 1 ? 1.15 : 1), 0.2, 0.98);
-  const estAtt = Math.round(cap * attRate);
+  const myFans = ensureTeamFans(me);
+  const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
+  const nxtRound = s.fx?.[s.md];
+  const nxtPair = nxtRound?.find(([x]) => x === s.me);
+  const oppTeam = nxtPair ? s.teams[nxtPair[1]] : me;
+  const attEst = computeMatchAttendance(me, oppTeam || me, s, { kind: 'league', derby: !!s.derby });
+  const estAtt = attEst.att;
+  const attRate = attEst.pct / 100;
   const ticketPriceMult = [0.82, 1.0, 1.24][tpIdx];
-  const estTicket = Math.round((8 + stLv * 6) * (fanVal / 60) * ticketPriceMult * (s.promo === 1 ? 1.35 : 1) * stCondMul);
-  const estMerch = merchLv <= 0 ? 0 : Math.round((2 + merchLv * 2.5) * (fanVal / 55) * merchCondMul);
+  const estTicket = Math.round((8 + stLv * 6) * (fanVal / 60) * fanScale * ticketPriceMult * (s.promo === 1 ? 1.35 : 1) * stCondMul);
+  const estMerch = merchLv <= 0 ? 0 : Math.round((2 + merchLv * 2.5) * (fanVal / 55) * fanScale * merchCondMul);
   const baseSponsor = spIdx === 0 ? 8 + me.tier * 6 : spIdx === 1 ? 4 + me.tier * 4 : 5 + me.tier * 5;
   const estSponsor = Math.round(baseSponsor * (s.promo === 2 ? 1.35 : 1));
   const dealIncome = s.sponsorDeal ? s.sponsorDeal.perMatch : 0;
@@ -1980,6 +2106,9 @@ export function creditPlayerPerf(s: GameState, f: PlayerPerfResult) {
   p.vid = 0;
   const fanGain = (p.perks || []).includes('captain') ? 3 : 2;
   s.fan = clamp((s.fan ?? 50) + (f.my > f.op ? fanGain : f.my < f.op ? -2 : 0) + (f.gl ? 1 : 0), 5, 100);
+  if (f.gl > 0 || f.as > 0 || f.rt >= 7.6) {
+    adjustTeamFans(s.teams[s.me], (f.gl * 180 + f.as * 90 + (f.rt >= 7.6 ? 160 : 0)) * ((p.perks || []).includes('fame_magnet') ? 1.5 : 1));
+  }
 
   const meSq = s.teams[s.me]?.sq.find((q) => q.me);
   if (f.gl >= 3) {
@@ -2043,7 +2172,9 @@ export function runPlayerWeek(s: GameState) {
   }
   if (ac.fan) {
     s.fan = clamp((s.fan ?? 50) + ac.fan, 5, 100);
-    m += ` · ขวัญแฟนบอล ${s.fan}%`;
+    const fanAdded = Math.round(ac.fan * (140 + (s.teams[s.me]?.tier ?? 0) * 180));
+    const totalFans = adjustTeamFans(s.teams[s.me], fanAdded);
+    m += ` · แฟนบอล +${fmtFans(fanAdded)} (รวม ${fmtFansShort(totalFans)})`;
   }
   if (ac.pt && devProf.phase !== 'declining' && Math.random() < (ac.pt * 0.75 + prodigyBonus) * ovScale * devProf.ageMult) {
     const g = autoGrow(p, 1);
@@ -2272,11 +2403,14 @@ export const DILEMMAS: DilemmaTemplate[] = [
     options: [
       {
         label: 'ประกาศกร้าวว่าพร้อมลุ้นแชมป์!',
-        hint: 'แฟน +5% · ขวัญ +4%',
+        hint: 'ผู้ติดตามเพิ่มขึ้น · ขวัญ +4%',
         apply: (s) => {
           s.fan = clamp((s.fan ?? 50) + 5, 5, 100);
           s.mor = clamp((s.mor ?? 50) + 4, 0, 100);
-          return 'แฟนบอลคึกคักสุดขีด! (แฟน +5%, ขวัญ +4%)';
+          const meTm = s.teams[s.me];
+          const fAdd = Math.max(400, Math.round(ensureTeamFans(meTm) * 0.025));
+          adjustTeamFans(meTm, fAdd);
+          return `แฟนบอลคึกคักสุดขีด! (ผู้ติดตาม +${fmtFans(fAdd)}, ขวัญ +4%)`;
         }
       },
       {
@@ -2299,14 +2433,17 @@ export const DILEMMAS: DilemmaTemplate[] = [
     options: [
       {
         label: 'ไปร่วมกิจกรรมอย่างเต็มใจ',
-        hint: 'ชื่อเสียง +5 · แฟน +6% · พลังกาย -6%',
+        hint: 'ชื่อเสียง +5 · แฟนบอลเพิ่มขึ้น · พลังกาย -6%',
         apply: (s) => {
           if (s.p) {
             s.p.rep = (s.p.rep || 0) + 5;
             s.p.en = clamp((s.p.en ?? 100) - 6, 20, 100);
           }
           s.fan = clamp((s.fan ?? 50) + 6, 5, 100);
-          return 'คุณกลายเป็นขวัญใจเยาวชน! (ชื่อเสียง +5, แฟน +6%)';
+          const meTm = s.teams[s.me];
+          const fAdd = Math.max(550, Math.round(ensureTeamFans(meTm) * 0.03));
+          adjustTeamFans(meTm, fAdd);
+          return `คุณกลายเป็นขวัญใจเยาวชน! (ชื่อเสียง +5, แฟนสโมสร +${fmtFans(fAdd)})`;
         }
       },
       {
@@ -4344,6 +4481,16 @@ export function finishSeasonComputation(s: GameState) {
       if (isChamp && !tm.trophies.some((tr) => tr.season === s.season && tr.type === 'league')) {
         tm.trophies.push({ season: s.season, title: `แชมป์ ${TN[preTier]}`, tier: preTier, type: 'league' });
       }
+      // Season-end fanbase growth/churn for every club based on trophies, promotion, and relegation
+      let fanEndMul = 0.015;
+      if (isAsiaChamp) fanEndMul += 0.22;
+      else if (isCupChamp) fanEndMul += 0.14;
+      if (isChamp) fanEndMul += preTier === 2 ? 0.16 : 0.12;
+      else if (tm.tier > preTier) fanEndMul += 0.10;
+      else if (tm.tier < preTier) fanEndMul -= 0.06;
+      else if (rk.rank <= 4) fanEndMul += 0.04;
+      else if (rk.rank >= Math.max(5, rk.total - 2)) fanEndMul -= 0.02;
+      adjustTeamFans(tm, Math.round(ensureTeamFans(tm) * fanEndMul));
       const tmScorer = tm.sq.slice().sort((a, b) => (b.sg || 0) - (a.sg || 0))[0];
       const teamHistEntry = {
         season: s.season,
@@ -4637,12 +4784,15 @@ export function simulateInstantMatchPayload(
     playerActions[q.n] = act;
   });
 
+  const attInfo = computeMatchAttendance(H, A, s, { kind, derby: !!s.derby });
   return {
     gh: r.gh,
     ga: r.ga,
     evs: r.evs,
     xgH: r.xgH || 1.1,
     xgA: r.xgA || 1.0,
+    att: attInfo.att,
+    cap: attInfo.cap,
     pen,
     penText,
     ratings,

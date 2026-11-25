@@ -203,6 +203,7 @@ export interface Team {
   trophies?: TrophyRecord[];
   tacticTrialMd?: number;
   tacticTrialLabel?: string;
+  fans?: number;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
@@ -374,6 +375,8 @@ export interface MatchResult {
   playedSlots?: Record<number, Record<string, SubRole>>;
   incidents?: MatchDramaticEvent[];
   highlights?: MatchHighlightsSummary;
+  att?: number;
+  cap?: number;
 }
 
 export interface CupState {
@@ -509,6 +512,7 @@ export interface ClubRecords {
   curStreak?: number;
   unbeatenStreak?: number;
   curUnbeatenStreak?: number;
+  highestAttendance?: { att: number; cap: number; txt: string; opp?: string; kind?: string; s: number };
   allTimePlayers?: ClubAllTimePlayerRecord[];
 }
 
@@ -817,6 +821,8 @@ export interface FinishedMatchPayload {
   playedSlots?: Record<number, Record<string, SubRole>>;
   injuries?: { teamId: number; name: string; games: number }[];
   playerActions?: Record<string, Partial<Record<PersonalMissionMetric, number>>>;
+  att?: number;
+  cap?: number;
 }
 
 export type PitchIntent =
@@ -893,7 +899,11 @@ export interface LivePitchAgent {
     | 'cutinside'
     | 'supersave'
     | 'slip'
-    | 'whiff';
+    | 'whiff'
+    | 'kick'
+    | 'shoot_power'
+    | 'shoot_finesse'
+    | 'shoot_chip';
   skillSpinDir?: number;
   actionDirX?: number;
   actionDirY?: number;
@@ -992,7 +1002,8 @@ export interface LivePitchFx {
     | 'solo'
     | 'throwin'
     | 'slip'
-    | 'whiff';
+    | 'whiff'
+    | 'kick_burst';
   x: number;
   y: number;
   toX?: number;

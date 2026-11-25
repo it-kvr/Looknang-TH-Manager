@@ -250,6 +250,7 @@ export const packSaveTeam = (t: Team): unknown[] => {
     });
   }
   if (t.trophies && t.trophies.length) tex.tr = t.trophies;
+  if (t.fans != null) tex.fn = t.fans;
   const arr: unknown[] = [
     t.id, t.name, t.tier, t.kc, t.sq.map(packSavePlayer),
     t.form, t.tac, t.pts, t.gf, t.ga, t.w, t.d, t.l, t.p
@@ -319,6 +320,7 @@ export const unpackSaveTeam = (raw: unknown): Team => {
     });
   }
   if (Array.isArray(tex.tr)) tm.trophies = tex.tr as TrophyRecord[];
+  if (tex.fn !== undefined) tm.fans = Number(tex.fn);
   return tm;
 };
 

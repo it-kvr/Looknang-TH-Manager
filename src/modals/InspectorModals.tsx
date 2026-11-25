@@ -5,7 +5,7 @@ import { TN, ATT, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, dtInfo, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
-import { sortTable, teamStats } from '../engine/simulation';
+import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -541,7 +541,8 @@ export const TeamInspectorModal: React.FC<{
                 <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
                 {rank ? <span> · อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
                 <span> · ชนะ {team.w} เสมอ {team.d} แพ้ {team.l} ({gd >= 0 ? `+${gd}` : gd})</span>
-                <span className="hidden sm:inline mland:inline"> · อายุเฉลี่ย {st.age} ปี</span>
+                <span className="hidden sm:inline mland:inline"> · แฟน {fmtFans(ensureTeamFans(team))} คน</span>
+                <span className="hidden md:inline"> · อายุเฉลี่ย {st.age} ปี</span>
               </div>
             </div>
           </div>

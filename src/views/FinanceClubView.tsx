@@ -36,6 +36,10 @@ import {
   getFacilityDemolishRefund,
   getFacilityCondition,
   getFacilityRenovateCost,
+  ensureTeamFans,
+  fmtFans,
+  fmtFansShort,
+  adjustTeamFans,
   type ClubFinanceChartPoint
 } from '../engine/simulation';
 import { renderCrestPattern, ClubCrest, KitJersey, PlayerFace } from '../components/SvgVisuals';
@@ -1317,9 +1321,9 @@ export const FinanceClubView: React.FC<{
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">พลัง XI / ทีม</div>
                 <b className="text-xs mland:text-[10.5px] tabular">{ts.ovXi} / {ts.ovSq}</b>
               </div>
-              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แฟนบอล</div>
-                <b className="text-xs mland:text-[10.5px] tabular">{state.fan ?? 50}%</b>
+              <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">แฟนบอลทั้งหมด</div>
+                <b className="text-xs mland:text-[10.5px] tabular">{fmtFansShort(ensureTeamFans(me))}</b>
               </div>
               <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/85 border border-[var(--line)]/60">
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">บอร์ด</div>
@@ -1700,6 +1704,7 @@ export const FinanceClubView: React.FC<{
                           trimColor={k.c2 || '#facc15'}
                           size={48}
                           bare
+                          isCoach
                         />
                       </button>
                       <div className="min-w-0">
@@ -2227,6 +2232,7 @@ export const FinanceClubView: React.FC<{
                               trimColor={k.c2 || '#facc15'}
                               size={104}
                               bare
+                              isCoach
                             />
                           </div>
                           <div className="w-full min-w-0">
@@ -2294,6 +2300,7 @@ export const FinanceClubView: React.FC<{
                                     trimColor={k.c2 || '#facc15'}
                                     size={34}
                                     bare
+                                    isCoach
                                   />
                                   <span className="text-[9.5px] font-semibold text-[var(--ink)] truncate w-full text-center">
                                     {pr.label}
@@ -3144,11 +3151,14 @@ export const FinanceClubView: React.FC<{
               type="button"
               disabled={actCool}
               onClick={() => {
+                let gained = 0;
                 onUpdateState((d) => {
                   d.fan = clamp((d.fan ?? 50) + 6, 5, 100);
+                  gained = Math.max(450, Math.round(ensureTeamFans(d.teams[d.me]) * 0.025));
+                  adjustTeamFans(d.teams[d.me], gained);
                   d.clubActMd = curTurn;
                 });
-                onToast('แฟนบอลประทับใจ! ขวัญแฟนบอล +6%');
+                onToast(`แฟนบอลประทับใจ! ผู้ติดตามสโมสร +${fmtFans(gained)} คน`);
               }}
               className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
             >
@@ -3156,22 +3166,25 @@ export const FinanceClubView: React.FC<{
                 <span>📣 พบปะแฟนบอล</span>
                 <span className="text-[var(--g)]">ฟรี</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">ขวัญแฟนบอล +6%</div>
+              <div className="text-[11px] text-[var(--mut)]">เพิ่มแฟนบอล +2.5% และความคึกคักเข้าสนาม</div>
             </button>
 
             <button
               type="button"
               disabled={actCool || state.money < 20}
               onClick={() => {
+                let gained = 0;
                 onUpdateState((d) => {
                   d.money -= 20;
                   logFin(d, 'จัดงาน Open House สโมสร', -20);
                   d.fan = clamp((d.fan ?? 50) + 8, 5, 100);
+                  gained = Math.max(700, Math.round(ensureTeamFans(d.teams[d.me]) * 0.04));
+                  adjustTeamFans(d.teams[d.me], gained);
                   d.mor = clamp((d.mor ?? 50) + 5, 0, 100);
                   d.bd = clamp((d.bd ?? 50) + 3, 0, 100);
                   d.clubActMd = curTurn;
                 });
-                onToast('Open House สำเร็จ! แฟน +8% ขวัญ +5% บอร์ด +3%');
+                onToast(`Open House สำเร็จ! แฟนบอล +${fmtFans(gained)} คน · ขวัญ +5% · บอร์ด +3%`);
               }}
               className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
             >
@@ -3179,7 +3192,7 @@ export const FinanceClubView: React.FC<{
                 <span>🎉 Open House สโมสร</span>
                 <span className="tabular">20k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">แฟน +8% · ขวัญ +5% · บอร์ด +3%</div>
+              <div className="text-[11px] text-[var(--mut)]">แฟนบอล +4% · ขวัญ +5% · บอร์ด +3%</div>
             </button>
 
             <button
@@ -3232,15 +3245,18 @@ export const FinanceClubView: React.FC<{
               type="button"
               disabled={actCool || state.money < 10}
               onClick={() => {
+                let gained = 0;
                 onUpdateState((d) => {
                   d.money -= 10;
                   logFin(d, 'จัดแมตช์การกุศลสโมสร', -10);
                   d.fan = clamp((d.fan ?? 50) + 10, 5, 100);
+                  gained = Math.max(900, Math.round(ensureTeamFans(d.teams[d.me]) * 0.05));
+                  adjustTeamFans(d.teams[d.me], gained);
                   d.mgrRep = (d.mgrRep ?? 50) + 4;
                   d.bd = clamp((d.bd ?? 50) + 2, 0, 100);
                   d.clubActMd = curTurn;
                 });
-                onToast('แมตช์การกุศลสุดประทับใจ! แฟน +10% · ชื่อเสียง +4');
+                onToast(`แมตช์การกุศลสุดประทับใจ! แฟนบอล +${fmtFans(gained)} คน · ชื่อเสียง +4`);
               }}
               className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
             >
@@ -3248,7 +3264,7 @@ export const FinanceClubView: React.FC<{
                 <span>⚽ แมตช์การกุศล</span>
                 <span className="tabular">10k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">แฟน +10% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%</div>
+              <div className="text-[11px] text-[var(--mut)]">แฟนบอล +5% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%</div>
             </button>
 
             <button
@@ -3256,10 +3272,13 @@ export const FinanceClubView: React.FC<{
               disabled={actCool || state.money < 12}
               onClick={() => {
                 let boostedName = '';
+                let gained = 0;
                 onUpdateState((d) => {
                   d.money -= 12;
                   logFin(d, 'แคมเปญโซเชียลสโมสร', -12);
                   d.fan = clamp((d.fan ?? 50) + 7, 5, 100);
+                  gained = Math.max(850, Math.round(ensureTeamFans(d.teams[d.me]) * 0.045));
+                  adjustTeamFans(d.teams[d.me], gained);
                   const yPool = d.teams[d.me].sq.filter((q) => q.age <= 22 && q.ov < (q.pot || 90));
                   if (yPool.length) {
                     const pick = P(yPool);
@@ -3268,7 +3287,11 @@ export const FinanceClubView: React.FC<{
                   }
                   d.clubActMd = curTurn;
                 });
-                onToast(boostedName ? `แฟน +7% และ ${boostedName} มีกำลังใจพัฒนา +1 OVR!` : 'แคมเปญโซเชียลปังมาก! ขวัญแฟนบอล +7%');
+                onToast(
+                  boostedName
+                    ? `แคมเปญปัง! แฟน +${fmtFans(gained)} และ ${boostedName} มีกำลังใจพัฒนา +1 OVR!`
+                    : `แคมเปญโซเชียลปังมาก! ยอดผู้ติดตามสโมสร +${fmtFans(gained)} คน`
+                );
               }}
               className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
             >
@@ -3276,7 +3299,7 @@ export const FinanceClubView: React.FC<{
                 <span>📱 แคมเปญโซเชียล</span>
                 <span className="tabular">12k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">แฟน +7% · กระตุ้นดาวรุ่งในทีม</div>
+              <div className="text-[11px] text-[var(--mut)]">ยอดผู้ติดตาม +4.5% · กระตุ้นดาวรุ่งในทีม</div>
             </button>
           </div>
         </div>

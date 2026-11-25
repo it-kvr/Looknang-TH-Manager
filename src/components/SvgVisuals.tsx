@@ -477,6 +477,27 @@ function renderFaceCollar(collar: number, trim: string, accent: string): string 
   return `<path d="M21.5 44c2.5 5 5 6.5 8.5 6.5s6-1.5 8.5-6.5" stroke="${accent}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
 }
 
+function renderCoachSuitTorso(tieCol: string, accent: string, crestSpec: ResolvedCrestSpec | null | undefined, uid: string): string {
+  const blazer = '#1e293b';
+  const lapel = '#0f172a';
+  const shirt = '#f8fafc';
+  const tieShade = colDist(tieCol, '#000000') < 65 ? '#334155' : tieCol;
+  const base = `<rect x="8" y="44" width="44" height="20" fill="${blazer}"/>`;
+  const lapels =
+    `<path d="M21 44h18l-9 18z" fill="${shirt}"/>` +
+    `<path d="M18.5 44l6.5 18.5-4.5 1.5-5-14z" fill="${lapel}"/>` +
+    `<path d="M41.5 44l-6.5 18.5 4.5 1.5 5-14z" fill="${lapel}"/>` +
+    `<path d="M21.5 44l3.8 5.2 4.7-3.4 4.7 3.4 3.8-5.2" fill="none" stroke="#e2e8f0" stroke-width="0.95"/>`;
+  const tie =
+    `<path d="M28.1 46.8h3.8l-.8 2.8h-2.2z" fill="${tieShade}"/>` +
+    `<path d="M28.7 49.4h2.6l1.3 11.2-2.6 3.2-2.6-3.2z" fill="${tieShade}"/>` +
+    `<path d="M28.7 49.4l1.3 14.4" stroke="${accent}" stroke-width="0.65" opacity="0.55"/>`;
+  const pin = crestSpec
+    ? `<g transform="translate(36.2, 50.8) scale(0.24)">${buildCrestSvgMarkup(crestSpec, `${uid}-cp`)}</g>`
+    : `<circle cx="38" cy="53" r="1.4" fill="${tieShade}" stroke="${accent}" stroke-width="0.6"/>`;
+  return `${base}${lapels}${tie}${pin}`;
+}
+
 export function faceBodySvg(
   v: number[],
   kit: string,
@@ -485,7 +506,8 @@ export function faceBodySvg(
   bg = 'none',
   bare = false,
   showNo = true,
-  kitSpec?: KitVisualSpec
+  kitSpec?: KitVisualSpec,
+  isCoach = false
 ): string {
   const ki = v[0] ?? 2;
   const hi = v[1] ?? 0;
@@ -651,17 +673,22 @@ export function faceBodySvg(
 
   const torsoPath = 'M8 64c0-14 7-20 22-20s22 6 22 20z';
   const torsoDefs = `<defs><clipPath id="jk-${uid}"><path d="${torsoPath}"/></clipPath>${
-    pat === 11 ? `<linearGradient id="fg-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${kit}"/><stop offset="100%" stop-color="${trim}"/></linearGradient>` : ''
+    !isCoach && pat === 11
+      ? `<linearGradient id="fg-${uid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${kit}"/><stop offset="100%" stop-color="${trim}"/></linearGradient>`
+      : ''
   }</defs>`;
-  const torsoBody = `<g clip-path="url(#jk-${uid})">${renderFaceTorsoPattern(pat, kit, trim, accent, uid)}<path d="M12 52l4 12M48 52l-4 12" stroke="${accent}" stroke-width="1.6" opacity="0.32"/>${renderFaceCollar(collar, trim, accent)}</g><path d="${torsoPath}" fill="none" stroke="#0c1f15" stroke-opacity="0.35" stroke-width="0.8"/>`;
-  const chestCrest = kitSpec?.crestSpec
-    ? `<g transform="translate(35.8, 49.5) scale(0.32)">${buildCrestSvgMarkup(kitSpec.crestSpec, `${uid}-cc`)}</g>`
-    : '';
+  const torsoBody = isCoach
+    ? `<g clip-path="url(#jk-${uid})">${renderCoachSuitTorso(trim, accent, kitSpec?.crestSpec, uid)}</g><path d="${torsoPath}" fill="none" stroke="#020617" stroke-opacity="0.5" stroke-width="0.9"/>`
+    : `<g clip-path="url(#jk-${uid})">${renderFaceTorsoPattern(pat, kit, trim, accent, uid)}<path d="M12 52l4 12M48 52l-4 12" stroke="${accent}" stroke-width="1.6" opacity="0.32"/>${renderFaceCollar(collar, trim, accent)}</g><path d="${torsoPath}" fill="none" stroke="#0c1f15" stroke-opacity="0.35" stroke-width="0.8"/>`;
+  const chestCrest =
+    !isCoach && kitSpec?.crestSpec
+      ? `<g transform="translate(35.8, 49.5) scale(0.32)">${buildCrestSvgMarkup(kitSpec.crestSpec, `${uid}-cc`)}</g>`
+      : '';
   const noX = kitSpec?.crestSpec ? '22.5' : '30';
   const noY = kitSpec?.crestSpec ? '59.5' : '60';
   const noSize = kitSpec?.crestSpec ? '8.4' : '10';
   const noMarkup =
-    showNo && w >= 44
+    !isCoach && showNo && w >= 44
       ? `<text x="${noX}" y="${noY}" text-anchor="middle" font-size="${noSize}" font-weight="800" font-family="Sarabun" fill="#fff" stroke="#0007" stroke-width="0.9" paint-order="stroke" opacity="0.95">${no || 10}</text>`
       : '';
 
@@ -679,22 +706,25 @@ export const PlayerFace: React.FC<{
   bare?: boolean;
   kitColor?: string;
   trimColor?: string;
-}> = ({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor }) => {
+  isCoach?: boolean;
+}> = ({ player, team, state, careerProfile, club, isMyClub, size = 38, bare = false, kitColor, trimColor, isCoach = false }) => {
   const uid = React.useId().replace(/:/g, '');
   const q = player || {};
   const resolvedNo = q.no || (team && q.n ? getShirtNo(team, q) : undefined) || (q.me ? (careerProfile || state?.p)?.no : undefined);
   const v = visOf(resolvedNo ? { ...q, no: resolvedNo } : q, careerProfile || state?.p);
   const teamKit = team ? tc(team, state) : null;
-  const isGK = q.pos === 'GK' || q.ro === 'GK';
+  const isGK = !isCoach && (q.pos === 'GK' || q.ro === 'GK');
   const kc = kitColor
     ? kitColor
-    : isGK
-      ? pickGK(teamKit || '#2f6fd6')
-      : teamKit
-        ? teamKit
-        : q.me && (careerProfile || state?.p)
-          ? (careerProfile || state?.p)!.c
-          : '#2f6fd6';
+    : isCoach
+      ? '#1e293b'
+      : isGK
+        ? pickGK(teamKit || '#2f6fd6')
+        : teamKit
+          ? teamKit
+          : q.me && (careerProfile || state?.p)
+            ? (careerProfile || state?.p)!.c
+            : '#2f6fd6';
   const tr = trimColor ? trimColor : team ? tc(team, state, true) : club?.c2 || '#ffd75e';
   const bg = bare ? 'transparent' : `color-mix(in srgb, ${kc} 18%, transparent)`;
   const kitSpec = resolveKitVisualForFace(team, state, club, isMyClub, kc, tr, isGK, uid, q.n);
@@ -705,7 +735,7 @@ export const PlayerFace: React.FC<{
       height={Math.round((size * 64) / 60)}
       viewBox="0 0 60 64"
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, true, kitSpec) }}
+      dangerouslySetInnerHTML={{ __html: faceBodySvg(v, kc, tr, size, bg, bare, !isCoach, kitSpec, isCoach) }}
     />
   );
 };

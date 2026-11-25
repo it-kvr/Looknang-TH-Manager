@@ -4,7 +4,7 @@ import type { ClubAllTimePlayerRecord, GameState, Player, Team, TrophyRecord } f
 import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getClubLegacySummary } from '../engine/history';
-import { sortTable } from '../engine/simulation';
+import { sortTable, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { PlayerFace } from './SvgVisuals';
 
 interface ClubHistoryPanelProps {
@@ -83,12 +83,12 @@ function formatSeasonSpan(leg: ClubAllTimePlayerRecord): string {
       }
     }
     parts.push(start === prev ? `${start}` : `${start}–${prev}`);
-    return `ซีซั่น ${parts.join(', ')}`;
+    return `S${parts.join(', ')}`;
   }
   const first = leg.firstSeason ? Math.floor(leg.firstSeason) : 0;
   const last = Math.max(1, Math.floor(leg.lastSeason || 1));
-  if (first > 0 && first < last) return `ซีซั่น ${first}–${last}`;
-  return `ซีซั่น ${last}`;
+  if (first > 0 && first < last) return `S${first}–${last}`;
+  return `S${last}`;
 }
 
 export const TrophySvg: React.FC<{
@@ -317,7 +317,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
   const goalDiff = legacy.totalGf - legacy.totalGa;
 
   return (
-    <div className="space-y-3 mland:space-y-2">
+    <div className="space-y-3 mland:space-y-2 pb-3">
       {/* All-Time Overview Strip */}
       <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 mland:p-2.5 space-y-2.5 mland:space-y-1.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -326,7 +326,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
               เกียรติประวัติตลอดกาล · {team.name}
             </h3>
             <p className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate">
-              {TN[team.tier] || 'สโมสรทวีป'}
+              {TN[team.tier] || 'สโมสรทวีป'} · แฟนบอล {fmtFans(ensureTeamFans(team))} คน
               {legacy.bestLeagueFinish
                 ? ` · สถิติลีกดีสุด: อันดับ ${legacy.bestLeagueFinish.rank} ${TN[legacy.bestLeagueFinish.tier]} (S${legacy.bestLeagueFinish.season})`
                 : ''}
@@ -398,7 +398,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
           </div>
 
           {legacy.trophies.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mland:gap-1.5 max-h-[260px] overflow-y-auto pr-0.5 content-start">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 mland:gap-1.5 content-start">
               {legacy.trophies.map((tr, i) => {
                 const isGoldGlow = tr.type === 'asia' || (tr.type === 'league' && tr.tier === 2) || tr.type === 'award' || tr.type === 'nt';
                 const shelfBarClass =
@@ -454,19 +454,34 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
               ทำเนียบตำนานสโมสร
             </span>
             <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
-              แยกอันดับอิสระในแต่ละหมวด (สูงสุด 10 อันดับ/คอลัมน์)
+              แยกอันดับอิสระในแต่ละหมวด (สูงสุด 10 อันดับ/หมวด)
             </span>
           </div>
 
           {hasAnyLegend ? (
-            <div className="overflow-x-auto overflow-y-auto max-h-[430px]">
-              <div className="grid grid-cols-5 min-w-[780px] divide-x divide-[var(--line)]/65">
-                {METRIC_COLUMNS.map((col) => {
+            <div className="p-2.5 mland:p-2 bg-[var(--surface-2)]/20">
+              <div
+                className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 ${
+                  compact ? '' : 'xl:grid-cols-5'
+                } gap-2.5 mland:gap-2`}
+              >
+                {METRIC_COLUMNS.map((col, colIdx) => {
                   const list = columnLeaders[col.key];
+                  const spanCls =
+                    colIdx < 3
+                      ? `lg:col-span-2 ${compact ? '' : 'xl:col-span-1'}`
+                      : colIdx === 3
+                        ? `lg:col-span-3 ${compact ? '' : 'xl:col-span-1'}`
+                        : `sm:col-span-2 lg:col-span-3 ${compact ? '' : 'xl:col-span-1'}`;
+                  const isWideSmCard = colIdx === 4;
+
                   return (
-                    <div key={col.key} className="flex flex-col min-w-0">
+                    <div
+                      key={col.key}
+                      className={`flex flex-col min-w-0 rounded-xl border border-[var(--line)]/85 bg-[var(--surface)] overflow-hidden ${spanCls}`}
+                    >
                       <div
-                        className={`sticky top-0 z-10 px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface)] ${col.headerBgCls} flex items-center justify-between gap-1`}
+                        className={`px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface)] ${col.headerBgCls} flex items-center justify-between gap-1.5`}
                       >
                         <span className={`font-extrabold text-[11px] mland:text-[9.5px] ${col.accentCls} truncate`}>
                           {col.icon} {col.label}
@@ -477,7 +492,13 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                       </div>
 
                       {list.length > 0 ? (
-                        <div className="divide-y divide-[var(--line)]/50">
+                        <div
+                          className={
+                            isWideSmCard
+                              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 divide-y divide-[var(--line)]/50 sm:divide-y-0 lg:divide-y'
+                              : 'divide-y divide-[var(--line)]/50'
+                          }
+                        >
                           {list.map((leg, idx) => {
                             const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
                             const clickable = !!liveSqPlayer && !!onInspectPlayer;
@@ -502,21 +523,25 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                             return (
                               <div
                                 key={`${col.key}-${leg.name}`}
-                                className="px-2 py-1.5 mland:py-1 flex items-center gap-1.5 hover:bg-[var(--surface-2)]/35 transition-colors"
+                                className={`px-2 py-1.5 mland:py-1 flex items-center gap-1.5 hover:bg-[var(--surface-2)]/35 transition-colors ${
+                                  isWideSmCard
+                                    ? 'sm:border-b sm:border-[var(--line)]/50 lg:border-b-0 odd:sm:border-r odd:sm:border-[var(--line)]/50 lg:odd:border-r-0'
+                                    : ''
+                                }`}
                               >
                                 <span
                                   className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[9.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${rankCls}`}
                                 >
                                   {idx + 1}
                                 </span>
-                                <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                                <div className="w-6.5 h-6.5 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-6.5 [&>svg]:h-6.5 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
                                   <PlayerFace
                                     player={facePlayer}
                                     team={team}
                                     state={state}
                                     club={state.club}
                                     isMyClub={isUserClub}
-                                    size={28}
+                                    size={26}
                                   />
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -555,7 +580,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                           })}
                         </div>
                       ) : (
-                        <div className="flex-1 flex items-center justify-center py-8 px-2 text-[10.5px] mland:text-[9px] text-[var(--mut)]/75 text-center">
+                        <div className="flex-1 flex items-center justify-center py-6 px-2 text-[10.5px] mland:text-[9px] text-[var(--mut)]/75 text-center">
                           ยังไม่มีสถิติ
                         </div>
                       )}
@@ -578,7 +603,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
           <div className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
             สถิติสโมสรตลอดกาล
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-5 divide-y sm:divide-y-0 text-xs mland:text-[10px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-5 divide-y sm:divide-y-0 text-xs mland:text-[10px]">
             <div className="py-1.5 border-b border-[var(--line)]/60 flex justify-between gap-2">
               <span className="text-[var(--mut)]">ชนะขาดสุด</span>
               <b className="truncate text-right tabular">{rec?.bestWin?.txt || '-'}</b>
@@ -595,15 +620,23 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
               <span className="text-[var(--mut)]">ไร้พ่ายรวดสูงสุด</span>
               <b className="tabular">{rec?.unbeatenStreak || 0} นัด</b>
             </div>
-            <div className="py-1.5 border-b border-[var(--line)]/60 sm:border-b-0 flex justify-between gap-2">
+            <div className="py-1.5 border-b border-[var(--line)]/60 flex justify-between gap-2">
+              <span className="text-[var(--mut)]">ผู้ชมเกมเหย้าสูงสุด</span>
+              <b className="truncate text-right tabular">
+                {rec?.highestAttendance
+                  ? `${rec.highestAttendance.att.toLocaleString()} คน (พบ ${rec.highestAttendance.opp} · S${rec.highestAttendance.s})`
+                  : '-'}
+              </b>
+            </div>
+            <div className="py-1.5 border-b border-[var(--line)]/60 flex justify-between gap-2">
               <span className="text-[var(--mut)]">แต้มสูงสุด/ซีซั่น</span>
               <b className="tabular">{rec?.mostPoints ? `${rec.mostPoints.pts} แต้ม (S${rec.mostPoints.s})` : '-'}</b>
             </div>
-            <div className="py-1.5 border-b border-[var(--line)]/60 sm:border-b-0 flex justify-between gap-2">
+            <div className="py-1.5 border-b border-[var(--line)]/60 lg:border-b-0 flex justify-between gap-2">
               <span className="text-[var(--mut)]">ยิงสูงสุด/ซีซั่น</span>
               <b className="tabular">{rec?.mostGoalsSeason ? `${rec.mostGoalsSeason.gf} ลูก (S${rec.mostGoalsSeason.s})` : '-'}</b>
             </div>
-            <div className="py-1.5 border-b border-[var(--line)]/60 lg:border-b-0 flex justify-between gap-2">
+            <div className="py-1.5 border-b border-[var(--line)]/60 sm:border-b-0 flex justify-between gap-2">
               <span className="text-[var(--mut)]">ดาวซัลโวซีซั่นเดียว</span>
               <b className="truncate tabular">
                 {rec?.topSeasonScorer ? `${rec.topSeasonScorer.n} (${rec.topSeasonScorer.g} · S${rec.topSeasonScorer.s})` : '-'}
@@ -640,7 +673,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
         </div>
 
         {showClubLog && isUserClub && state.hist && state.hist.length > 0 ? (
-          <div className="p-3.5 mland:p-2 divide-y divide-[var(--line)]/60 max-h-60 overflow-y-auto text-xs mland:text-[10px]">
+          <div className="p-3.5 mland:p-2 divide-y divide-[var(--line)]/60 text-xs mland:text-[10px]">
             {state.hist
               .slice()
               .reverse()

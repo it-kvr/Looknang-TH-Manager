@@ -7,7 +7,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
@@ -250,6 +250,22 @@ export default function App() {
         }
       };
 
+      const recordHomeAttendance = () => {
+        if (homeId !== d.me || !payload.att || payload.att <= 0) return;
+        d.records = d.records || {};
+        if (payload.att > (d.records.highestAttendance?.att || 0)) {
+          d.records.highestAttendance = {
+            att: payload.att,
+            cap: payload.cap || payload.att,
+            txt: `ซ.${d.season} พบ ${A.name}`,
+            opp: A.name,
+            s: d.season,
+            kind
+          };
+        }
+      };
+      recordHomeAttendance();
+
       if (kind === 'cup') {
         const c = d.cup;
         const nx: number[] = [];
@@ -259,11 +275,13 @@ export default function App() {
           const ca = d.teams[c.ids[i + 1]];
           if (ch.id === homeId && ca.id === awayId) {
             nx[i / 2] = userWin.id;
+            updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind: 'cup', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ch.name} ${payload.gh}-${payload.ga} ${ca.name}${payload.penText ? ` (${payload.penText})` : ''}`);
           } else {
             const cr = simMatch(ch, ca, d);
             const cw = pickWinner(ch, ca, cr, d);
             nx[i / 2] = cw.id;
+            updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind: 'cup', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
             applyPositionAdaptation(d, ch, ca, cr);
             applyAiClubMatchMissions(d, ch, ca, cr);
@@ -288,6 +306,7 @@ export default function App() {
             if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === 'cup')) {
               winTeam.trophies.push({ season: d.season, title: 'แชมป์ถ้วยประชาชน', type: 'cup' });
             }
+            adjustTeamFans(winTeam, Math.round(ensureTeamFans(winTeam) * 0.1));
           }
           if (nx[0] === d.me) {
             d.trophies = d.trophies || [];
@@ -330,11 +349,13 @@ export default function App() {
           const aa = d.teams[c.ids[i + 1]];
           if (ah.id === homeId && aa.id === awayId) {
             nx[i / 2] = userWin.id;
+            updateTeamsFanbaseOnMatch(ah, payload.gh, aa, payload.ga, { kind: 'asia', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ah.name} ${payload.gh}-${payload.ga} ${aa.name}${payload.penText ? ` (${payload.penText})` : ''}`);
           } else {
             const ar = simMatch(ah, aa, d);
             const aw = pickWinner(ah, aa, ar, d);
             nx[i / 2] = aw.id;
+            updateTeamsFanbaseOnMatch(ah, ar.gh, aa, ar.ga, { kind: 'asia', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ah.name} ${ar.gh}-${ar.ga} ${aa.name}`);
             applyPositionAdaptation(d, ah, aa, ar);
             applyAiClubMatchMissions(d, ah, aa, ar);
@@ -359,6 +380,7 @@ export default function App() {
             if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === 'asia')) {
               winTeam.trophies.push({ season: d.season, title: 'แชมป์สโมสรทวีป', type: 'asia' });
             }
+            adjustTeamFans(winTeam, Math.round(ensureTeamFans(winTeam) * 0.16));
           }
           if (nx[0] === d.me) {
             d.trophies = d.trophies || [];
@@ -509,6 +531,9 @@ export default function App() {
           logFin(d, 'จ่ายโบนัสอัดฉีดชัยชนะ', -d.winBonus);
         }
         const ticketFanAdj = isHomeMatch ? (tpIdx === 0 ? 1 : tpIdx === 2 && diff <= 0 ? -1 : 0) : 0;
+        if (d.promo === 1 || ticketFanAdj !== 0) {
+          adjustTeamFans(me, (d.promo === 1 ? 350 : 0) + ticketFanAdj * 140);
+        }
         d.promo = 0;
         d.winBonus = 0;
         d.fan = clamp((d.fan ?? 55) + (diff > 0 ? 3 : diff < 0 ? -3 : 0) + ticketFanAdj, 5, 100);
@@ -697,7 +722,9 @@ export default function App() {
                 {state.mode === 'm' ? (
                   <>
                     <span className="opacity-40 shrink-0">·</span>
-                    <span className="shrink-0">แฟน {state.fan ?? 55}%</span>
+                    <span className="shrink-0" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
+                      แฟน {fmtFansShort(ensureTeamFans(me))}
+                    </span>
                     <span className="opacity-40 shrink-0">·</span>
                     <span className="shrink-0">บอร์ด {state.bd ?? 55}%</span>
                   </>
@@ -705,6 +732,10 @@ export default function App() {
                   <>
                     <span className="opacity-40 shrink-0">·</span>
                     <span className="font-semibold text-[var(--mut)] tabular shrink-0">ฟิต {state.p?.en ?? 100}%</span>
+                    <span className="opacity-40 shrink-0">·</span>
+                    <span className="shrink-0" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
+                      แฟน {fmtFansShort(ensureTeamFans(me))}
+                    </span>
                   </>
                 )}
               </div>
