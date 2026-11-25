@@ -9094,7 +9094,7 @@ export const MatchModal: React.FC<{
         case 'full_time':
           return <span className="text-[11px] leading-none shrink-0">🏁</span>;
         case 'goal':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">⚽</span>;
+          return <span className="inline-flex items-center justify-center w-5 h-5 text-[12.5px] leading-none shrink-0">⚽</span>;
         case 'own_goal':
           return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🤦</span>;
         case 'pen_goal':
@@ -11141,14 +11141,14 @@ export const MatchModal: React.FC<{
                       <>
                         <span className="inline-flex flex-wrap items-center gap-1.5">
                           <span>ฟอร์มคุณ ({fullTimeAnalysis.pf.mins} น.): <b>⭐ {fullTimeAnalysis.pf.rt.toFixed(1)}</b> ·</span>
-                          <span className="inline-flex items-center gap-0.5 tabular">
-                            {fullTimeAnalysis.pf.gl <= 1 && <span>{fullTimeAnalysis.pf.gl}</span>}
-                            <StatIconBadge kind="goal" count={Math.max(1, fullTimeAnalysis.pf.gl)} size="sm" />
+                          <span className="inline-flex items-center gap-1 tabular font-extrabold">
+                            <span>{fullTimeAnalysis.pf.gl}</span>
+                            <StatIconBadge kind="goal" count={1} size="sm" title={`ทำประตู ${fullTimeAnalysis.pf.gl} ลูก`} />
                           </span>
                           <span>·</span>
-                          <span className="inline-flex items-center gap-0.5 tabular">
-                            {fullTimeAnalysis.pf.as <= 1 && <span>{fullTimeAnalysis.pf.as}</span>}
-                            <StatIconBadge kind="assist" count={Math.max(1, fullTimeAnalysis.pf.as)} size="sm" />
+                          <span className="inline-flex items-center gap-1 tabular font-extrabold">
+                            <span>{fullTimeAnalysis.pf.as}</span>
+                            <StatIconBadge kind="assist" count={1} size="sm" title={`แอสซิสต์ ${fullTimeAnalysis.pf.as} ครั้ง`} />
                           </span>
                           {fullTimeAnalysis.pf.subIn && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subIn" size="xs" /> สำรอง</span>}
                           {fullTimeAnalysis.pf.subOut && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subOut" size="xs" /> เปลี่ยนออก</span>}

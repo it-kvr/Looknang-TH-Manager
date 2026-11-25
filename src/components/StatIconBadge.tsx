@@ -32,11 +32,11 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
     return (
       <span
         title={title || (n > 1 ? `ทำประตู ${n} ลูก` : 'ทำประตู')}
-        className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular"
+        className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular bg-transparent"
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
-        {showNum && <span className="font-extrabold">{numText}</span>}
-        <span aria-hidden="true" style={{ fontSize: px * 0.92, lineHeight: 1 }}>⚽</span>
+        {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
+        <span aria-hidden="true" className="leading-none inline-block" style={{ fontSize: Math.round(px * 0.94) }}>⚽</span>
       </span>
     );
   }
@@ -45,11 +45,11 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
     return (
       <span
         title={title || (n > 1 ? `แอสซิสต์ ${n} ครั้ง` : 'แอสซิสต์')}
-        className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular"
+        className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular bg-transparent"
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
-        {showNum && <span className="font-extrabold">{numText}</span>}
-        <span aria-hidden="true" style={{ fontSize: px * 0.92, lineHeight: 1 }}>👟</span>
+        {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
+        <span aria-hidden="true" className="leading-none inline-block" style={{ fontSize: Math.round(px * 0.94) }}>👟</span>
       </span>
     );
   }

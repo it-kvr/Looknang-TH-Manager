@@ -76,6 +76,7 @@ export const PlayerTraitsStrip: React.FC<{
   const [sectionTab, setSectionTab] = useState<'all' | 'personality' | 'style' | 'perk' | 'insight'>('all');
   const [ownFilter, setOwnFilter] = useState<'all' | 'owned' | 'unowned'>('all');
   const [query, setQuery] = useState('');
+  const [focusedEntryId, setFocusedEntryId] = useState<string | null>(null);
 
   const sigLabel = SIGL[sigKey] || sigKey;
   const age = player.age || careerProfile?.age || 24;
@@ -225,8 +226,43 @@ export const PlayerTraitsStrip: React.FC<{
       });
     });
 
+    // 7) Alternate & Adapting Positions (if present on player)
+    const pAltRoles = careerProfile?.altRoles?.length ? careerProfile.altRoles : player.altRoles || [];
+    const pRoleExp =
+      careerProfile?.roleExp && Object.keys(careerProfile.roleExp).length
+        ? careerProfile.roleExp
+        : player.roleExp || {};
+    const pMainRole = player.ro || careerProfile?.sp || 'CM';
+    pAltRoles.forEach((r) => {
+      entries.push({
+        id: `role_alt_${r}`,
+        section: 'insight',
+        subGroup: 'ความถนัดตำแหน่งเพิ่มเติม',
+        title: `🧩 ตำแหน่งถนัดเพิ่ม: ${r}`,
+        desc: `ลงเล่นตำแหน่ง ${r} ได้เต็ม 100% โดยไม่โดนหักพลังหลุดตำแหน่ง พร้อมเสริมความยืดหยุ่นให้แผนการเล่นของทีม`,
+        owned: true,
+        badgeText: 'ถนัดเพิ่ม',
+        tone: 'pos'
+      });
+    });
+    Object.entries(pRoleExp).forEach(([r, exp]) => {
+      if (exp <= 0 || r === pMainRole || pAltRoles.includes(r as never)) return;
+      const need =
+        pen(pMainRole, r) === 1 ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
+      entries.push({
+        id: `role_exp_${r}`,
+        section: 'insight',
+        subGroup: 'ความถนัดตำแหน่งเพิ่มเติม',
+        title: `🔄 กำลังฝึกตำแหน่ง: ${r} (${exp}/${need})`,
+        desc: `กำลังซึมซับตำแหน่ง ${r} (${exp}/${need} ขั้น) ระหว่างฝึกมีโอกาสเพิ่มค่าพลังย่อยประจำตำแหน่ง และเมื่อครบจะปลดล็อก +1 ค่าพลังหลัก +3 ค่าพลังย่อย พร้อมเล่นเต็ม 100%`,
+        owned: true,
+        badgeText: `${exp}/${need}`,
+        tone: 'sig'
+      });
+    });
+
     return entries;
-  }, [rawTrTitle, trShortName, archName, careerProfile, ownedTraitIds, talent, growthStage, peakAge, age, sigKey, pos]);
+  }, [rawTrTitle, trShortName, archName, careerProfile, ownedTraitIds, talent, growthStage, peakAge, age, sigKey, pos, player.altRoles, player.roleExp, player.ro]);
 
   const filteredEntries = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -285,187 +321,217 @@ export const PlayerTraitsStrip: React.FC<{
         ? `ช่วงท็อปฟอร์ม (อายุ ${peakAge - 2}–${peakAge + 4} ปี)`
         : `วัยพัฒนา ค่าพลังโตไว (ก่อนอายุ ${peakAge - 2} ปี)`;
 
+  const altRoles = careerProfile?.altRoles?.length ? careerProfile.altRoles : player.altRoles || [];
+  const roleExp =
+    careerProfile?.roleExp && Object.keys(careerProfile.roleExp).length
+      ? careerProfile.roleExp
+      : player.roleExp || {};
+  const expEntries = Object.entries(roleExp).filter(
+    ([r, exp]) => exp > 0 && r !== (player.ro || careerProfile?.sp) && !altRoles.includes(r as never)
+  );
+
+  const growthId =
+    isDeclining ? 'gr_dec' : growthStage === 'ช่วงพีค' ? 'gr_peak' : 'gr_grow';
+
+  const openDetailModal = (
+    tab: 'all' | 'personality' | 'style' | 'perk' | 'insight' = 'all',
+    entryId: string | null = null
+  ) => {
+    SFX.tap();
+    setSectionTab(tab);
+    setOwnFilter('all');
+    setQuery('');
+    setFocusedEntryId(entryId);
+    setShowGuideModal(true);
+  };
+
+  const focusedEntry = useMemo(
+    () => (focusedEntryId ? allGuideEntries.find((item) => item.id === focusedEntryId) || null : null),
+    [focusedEntryId, allGuideEntries]
+  );
+
   return (
     <>
-      <div className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-1.5 shadow-xs space-y-2 mland:space-y-1.5">
-        {/* Header + ? Button */}
-        <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-[var(--line)]/60">
-          <span className="text-[11px] mland:text-[9px] font-bold text-[var(--ink)]">
-            🧠 นิสัย · สไตล์ · เพดานพรสวรรค์
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              SFX.tap();
-              setSectionTab('all');
-              setOwnFilter('all');
-              setQuery('');
-              setShowGuideModal(true);
-            }}
-            title="ดูคำอธิบายนิสัยประจำตัว สไตล์การเล่น และข้อมูลเชิงลึกทั้งหมด"
-            aria-label="ดูคำอธิบายนิสัยประจำตัว สไตล์การเล่น และข้อมูลเชิงลึกทั้งหมด"
-            className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g-soft)] border border-[var(--line)] hover:border-[var(--g)] text-[9.5px] mland:text-[8px] font-extrabold text-[var(--ink)] cursor-pointer transition-colors"
-          >
-            <span className="w-3.5 h-3.5 rounded-full bg-[var(--g)] text-white inline-flex items-center justify-center text-[9px] font-black leading-none">
-              ?
-            </span>
-            <span>ทั้งหมด</span>
-          </button>
-        </div>
-
-        {/* Section 1: นิสัยประจำตัว + คำอธิบายครบ */}
-        <div className="space-y-1">
-          <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">นิสัยประจำตัว</div>
-          <div className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border space-y-0.5 ${persBadgeCls}`}>
-            <div className="text-[10.5px] mland:text-[8.5px] font-extrabold leading-snug">
-              {rawTrTitle}
-            </div>
-            {persDesc && (
-              <p className="text-[10px] mland:text-[8px] leading-snug opacity-90 whitespace-normal break-words">
-                {persDesc}
-              </p>
-            )}
+      <div className="shrink-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2 mland:p-1.5 shadow-xs space-y-1.5 mland:space-y-1">
+        {/* นิสัยประจำตัว (Compact + Clickable) */}
+        <div className="space-y-0.5">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">นิสัยประจำตัว</span>
+            <button
+              type="button"
+              onClick={() => openDetailModal('all', null)}
+              title="ดูคำอธิบายนิสัยประจำตัว สไตล์การเล่น และเพดานพรสวรรค์ทั้งหมด"
+              aria-label="ดูคำอธิบายทั้งหมด"
+              className="shrink-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-[var(--surface-2)] hover:bg-[var(--g-soft)] border border-[var(--line)] hover:border-[var(--g)] text-[9px] mland:text-[7.5px] font-extrabold text-[var(--ink)] cursor-pointer transition-colors"
+            >
+              <span className="w-3 h-3 rounded-full bg-[var(--g)] text-white inline-flex items-center justify-center text-[8px] font-black leading-none">
+                ?
+              </span>
+              <span>ทั้งหมด</span>
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              title={persDesc ? `${rawTrTitle} — กดเพื่อดูคำอธิบาย` : rawTrTitle}
+              onClick={() =>
+                openDetailModal('personality', matchedPers ? `pers_${matchedPers.id}` : null)
+              }
+              className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10.5px] mland:text-[8.5px] font-bold inline-flex items-center gap-1 leading-snug whitespace-normal text-left cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all ${persBadgeCls}`}
+            >
+              <span>{rawTrTitle}</span>
+            </button>
           </div>
         </div>
 
-        {/* Section 2: สายการเล่น & สไตล์การเล่นเฉพาะตัว + คำอธิบายครบ */}
-        <div className="space-y-1 pt-1.5 border-t border-[var(--line)]/50">
+        {/* สไตล์การเล่นเฉพาะตัว & สายการเล่น (Compact + Clickable) */}
+        <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/50">
           <div className="flex items-center justify-between text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">
-            <span>สไตล์การเล่นเฉพาะตัว</span>
+            <span>สไตล์การเล่น</span>
             <span className="tabular opacity-85">{traits.length} สไตล์</span>
           </div>
-          <div className="space-y-1">
+          <div className="flex flex-wrap gap-1">
             {archName && (
-              <div className="p-2 mland:p-1.5 rounded-xl mland:rounded-lg border bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#7a4f00] dark:text-[#fde047] space-y-0.5">
-                <div className="text-[10.5px] mland:text-[8.5px] font-extrabold leading-snug">
-                  สายการเล่น: {matchedArch ? `${matchedArch.icon} ${matchedArch.name}` : `🎯 ${archName}`}
-                </div>
-                {matchedArch?.desc && (
-                  <p className="text-[10px] mland:text-[8px] leading-snug opacity-90 whitespace-normal break-words">
-                    {matchedArch.desc}
-                  </p>
-                )}
-              </div>
+              <button
+                type="button"
+                title={matchedArch?.desc ? `${matchedArch.name} — กดเพื่อดูคำอธิบาย` : archName}
+                onClick={() =>
+                  openDetailModal('style', matchedArch ? `arch_${matchedArch.id}` : null)
+                }
+                className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-[var(--lamp-soft)] border-[var(--lamp)]/50 text-[#7a4f00] dark:text-[#fde047] text-[10.5px] mland:text-[8.5px] font-extrabold inline-flex items-center gap-1 leading-snug whitespace-normal text-left cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all"
+              >
+                <span>{matchedArch ? `${matchedArch.icon} ${matchedArch.name}` : `🎯 ${archName}`}</span>
+              </button>
             )}
             {traits.length > 0 ? (
               traits.map((t) => {
                 const isRisk = RISKY_TRAIT_IDS.has(t.id);
                 return (
-                  <div
+                  <button
                     key={t.id}
-                    className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border space-y-0.5 ${
+                    type="button"
+                    title={`${t.name} — กดเพื่อดูคำอธิบาย`}
+                    onClick={() => openDetailModal('style', `trait_${t.id}`)}
+                    className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10.5px] mland:text-[8.5px] font-bold inline-flex items-center gap-1 leading-snug whitespace-normal text-left cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all ${
                       isRisk
-                        ? 'bg-amber-500/10 border-amber-500/40 text-amber-900 dark:text-amber-200'
-                        : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--ink)]'
+                        ? 'bg-amber-500/12 border-amber-500/40 text-amber-800 dark:text-amber-200'
+                        : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
                     }`}
                   >
-                    <div className={`text-[10.5px] mland:text-[8.5px] font-extrabold leading-snug ${isRisk ? '' : 'text-[var(--g)]'}`}>
+                    <span>
                       {t.icon} {t.name}
-                    </div>
-                    <p className="text-[10px] mland:text-[8px] leading-snug text-[var(--mut)] whitespace-normal break-words">
-                      {t.desc}
-                    </p>
-                  </div>
+                    </span>
+                  </button>
                 );
               })
             ) : (
-              <div className="px-2 py-1.5 rounded-xl border border-dashed border-[var(--line)] text-[10px] mland:text-[8px] text-[var(--mut)]">
-                ยังไม่มีสไตล์การเล่นเฉพาะตัว
-              </div>
+              <button
+                type="button"
+                onClick={() => openDetailModal('style', null)}
+                className="px-2 py-0.5 rounded-lg border border-dashed border-[var(--line)] text-[10px] mland:text-[8px] text-[var(--mut)] hover:border-[var(--g)] cursor-pointer transition-colors"
+              >
+                ยังไม่มีสไตล์การเล่น
+              </button>
             )}
           </div>
         </div>
 
-        {/* Section 2b: สกิลติดตัวระดับอาชีพ (เฉพาะโหมดนักเตะอาชีพที่มีแล้ว) */}
+        {/* สกิลติดตัวระดับอาชีพ (เฉพาะโหมดนักเตะอาชีพที่มีแล้ว — Compact + Clickable) */}
         {careerProfile && (careerProfile.perks || []).length > 0 && (
-          <div className="space-y-1 pt-1.5 border-t border-[var(--line)]/50">
+          <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/50">
             <div className="flex items-center justify-between text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">
               <span>สกิลติดตัวระดับอาชีพ</span>
               <span className="tabular opacity-85">{(careerProfile.perks || []).length} สกิล</span>
             </div>
-            <div className="space-y-1">
+            <div className="flex flex-wrap gap-1">
               {(careerProfile.perks || []).map((pid) => {
                 const pk = CAREER_PERKS.find((x) => x.id === pid);
                 if (!pk) return null;
                 return (
-                  <div
+                  <button
                     key={pk.id}
-                    className="p-2 mland:p-1.5 rounded-xl mland:rounded-lg border bg-[var(--lamp-soft)]/70 border-[var(--lamp)]/45 space-y-0.5"
+                    type="button"
+                    title={`${pk.name} — กดเพื่อดูคำอธิบาย`}
+                    onClick={() => openDetailModal('perk', `perk_${pk.id}`)}
+                    className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-[var(--lamp-soft)]/70 border-[var(--lamp)]/45 text-[#7a4f00] dark:text-[#fde047] text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-snug whitespace-normal text-left cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all"
                   >
-                    <div className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[#7a4f00] dark:text-[#fde047] leading-snug">
-                      {pk.name}
-                    </div>
-                    <p className="text-[10px] mland:text-[8px] leading-snug text-[var(--mut)] whitespace-normal break-words">
-                      {pk.desc}
-                    </p>
-                  </div>
+                    {pk.name}
+                  </button>
                 );
               })}
             </div>
           </div>
         )}
 
-        {/* Section 3: เพดานพรสวรรค์ & ข้อมูลเชิงลึก */}
-        <div className="space-y-1.5 pt-1.5 border-t border-[var(--line)]/50">
-          <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">เพดานพรสวรรค์ &amp; ข้อมูลเชิงลึก</div>
-          <div className="p-2 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/55 border border-[var(--line)]/80 space-y-1">
-            <div className="flex flex-wrap items-center gap-1">
-              <TalentBadge talent={talent} variant="default" showLabel size="sm" />
-            </div>
-            <p className="text-[10px] mland:text-[8px] leading-snug text-[var(--mut)] whitespace-normal break-words">
-              {matchedTalentTier.desc}
-            </p>
+        {/* เพดานพรสวรรค์ & ข้อมูลเชิงลึก (Compact + Clickable) */}
+        <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/50">
+          <div className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)]">
+            เพดานพรสวรรค์ &amp; ข้อมูลเชิงลึก
           </div>
-          <div className="flex flex-wrap gap-1">
-            <span
-              title={growthHint}
-              className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-snug whitespace-normal ${growthBadgeCls}`}
+          <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              title={`${matchedTalentTier.label} (TL ${talent}/99) — กดเพื่อดูคำอธิบาย`}
+              onClick={() => openDetailModal('insight', matchedTalentTier.id)}
+              className="inline-flex cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all max-w-full text-left"
             >
-              📈 {growthStage} ({age} ปี) · {growthHint}
-            </span>
-            <span className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-sky-500/12 border-sky-500/40 text-sky-800 dark:text-sky-200 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-snug whitespace-normal">
-              ⚡ อาวุธประจำตัว: {sigLabel} +8
-            </span>
+              <TalentBadge talent={talent} variant="default" showLabel size="xs" />
+            </button>
+            <button
+              type="button"
+              title={`${growthHint} — กดเพื่อดูคำอธิบาย`}
+              onClick={() => openDetailModal('insight', growthId)}
+              className={`px-2 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-snug whitespace-normal cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all ${growthBadgeCls}`}
+            >
+              📈 {growthStage} ({age} ปี)
+            </button>
+            <button
+              type="button"
+              title={`อาวุธประจำตัว: ${sigLabel} +8 — กดเพื่อดูคำอธิบาย`}
+              onClick={() => openDetailModal('insight', `sig_${sigKey}`)}
+              className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-sky-500/12 border-sky-500/40 text-sky-800 dark:text-sky-200 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-snug whitespace-normal cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all"
+            >
+              ⚡ อาวุธ: {sigLabel} +8
+            </button>
           </div>
         </div>
 
-        {/* Section 3b: ตำแหน่งถนัดรอง & การปรับตัว */}
-        {(() => {
-          const altRoles = careerProfile?.altRoles?.length ? careerProfile.altRoles : player.altRoles || [];
-          const roleExp = careerProfile?.roleExp && Object.keys(careerProfile.roleExp).length ? careerProfile.roleExp : player.roleExp || {};
-          const expEntries = Object.entries(roleExp).filter(([r, exp]) => exp > 0 && r !== (player.ro || careerProfile?.sp) && !altRoles.includes(r as never));
-          if (!altRoles.length && !expEntries.length) return null;
-          return (
-            <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/45">
-              <div className="text-[9px] mland:text-[7.5px] font-bold text-[var(--mut)]">ตำแหน่งที่เล่นได้ &amp; กำลังปรับตัว</div>
-              <div className="flex flex-wrap gap-1">
-                {altRoles.map((r) => (
-                  <span
-                    key={r}
-                    title={`ลงเล่นตำแหน่ง ${r} ได้เต็ม 100% (ไม่โดนหักพลังหลุดตำแหน่ง) + เสริมความยืดหยุ่นแท็กติก`}
-                    className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-emerald-500/12 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight"
-                  >
-                    🧩 {r} (ถนัดเพิ่ม)
-                  </span>
-                ))}
-                {expEntries.map(([r, exp]) => {
-                  const need = pen(player.ro || careerProfile?.sp || 'CM', r) === 1
+        {/* ตำแหน่งถนัดรอง & การปรับตัว (Compact) */}
+        {(altRoles.length > 0 || expEntries.length > 0) && (
+          <div className="space-y-0.5 pt-1 border-t border-[var(--line)]/45">
+            <div className="text-[9px] mland:text-[7.5px] font-bold text-[var(--mut)]">ตำแหน่งที่เล่นได้</div>
+            <div className="flex flex-wrap gap-1">
+              {altRoles.map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  title={`ลงเล่นตำแหน่ง ${r} ได้เต็ม 100% — กดเพื่อดูคำอธิบาย`}
+                  onClick={() => openDetailModal('insight', `role_alt_${r}`)}
+                  className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-emerald-500/12 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all"
+                >
+                  🧩 {r} (ถนัดเพิ่ม)
+                </button>
+              ))}
+              {expEntries.map(([r, exp]) => {
+                const need =
+                  pen(player.ro || careerProfile?.sp || 'CM', r) === 1
                     ? ROLE_ADAPT_THRESHOLD_ADJ
                     : ROLE_ADAPT_THRESHOLD_CROSS;
-                  return (
-                    <span
-                      key={r}
-                      title={`กำลังซึมซับตำแหน่ง ${r} (${exp}/${need} ขั้น) — ระหว่างฝึกมีโอกาสเพิ่มค่าพลังย่อยประจำตำแหน่ง และเมื่อปลดล็อกจะได้ +1 ค่าพลังหลัก +3 ค่าพลังย่อย พร้อมเล่นเต็ม 100%`}
-                      className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-sky-500/10 border-sky-500/35 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight tabular"
-                    >
-                      🔄 ฝึก {r} ({exp}/{need})
-                    </span>
-                  );
-                })}
-              </div>
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    title={`กำลังซึมซับตำแหน่ง ${r} (${exp}/${need} ขั้น) — กดเพื่อดูคำอธิบาย`}
+                    onClick={() => openDetailModal('insight', `role_exp_${r}`)}
+                    className="px-2 mland:px-1.5 py-0.5 rounded-lg border bg-sky-500/10 border-sky-500/35 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8px] font-bold inline-flex items-center leading-tight tabular cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all"
+                  >
+                    🔄 ฝึก {r} ({exp}/{need})
+                  </button>
+                );
+              })}
             </div>
-          );
-        })()}
+          </div>
+        )}
       </div>
 
       {showGuideModal &&
@@ -558,6 +624,32 @@ export const PlayerTraitsStrip: React.FC<{
 
               {/* Scrollable All-Items Directory */}
               <div className="flex-1 min-h-0 overflow-y-auto p-3.5 space-y-4">
+                {focusedEntry && (
+                  <div className="p-3 rounded-2xl border-2 border-[var(--g)] bg-[var(--g-soft)]/55 shadow-sm space-y-1.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="text-[10px] font-extrabold text-[var(--g)] uppercase tracking-wide">
+                          🔍 รายละเอียดที่เลือก · {focusedEntry.subGroup}
+                        </div>
+                        <div className="text-sm font-extrabold text-[var(--ink)] leading-snug">
+                          {focusedEntry.title}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFocusedEntryId(null)}
+                        className="px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0"
+                      >
+                        ซ่อนกรอบนี้
+                      </button>
+                    </div>
+                    {focusedEntry.meta && (
+                      <div className="text-[10.5px] font-semibold text-[var(--mut)]">{focusedEntry.meta}</div>
+                    )}
+                    <p className="text-xs text-[var(--ink)] leading-relaxed">{focusedEntry.desc}</p>
+                  </div>
+                )}
+
                 {groupedEntries.length === 0 ? (
                   <div className="py-12 text-center text-xs text-[var(--mut)]">
                     ไม่พบรายการที่ตรงกับเงื่อนไขการค้นหา

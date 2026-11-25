@@ -1429,47 +1429,82 @@ export const FormationPitch: React.FC<{
               </g>
             )}
 
-            {/* Mid-Right Edge: Goals & Assists Badges (Number in front, non-overlapping) */}
-            {goalsCount > 0 && (() => {
-              const gW = goalsCount > 1 ? 19.5 : 12.5;
-              const gx = cx + 15;
-              const gy = cy - 8;
+            {/* Mid-Right Edge: Goals & Assists Icons (No background box, crisp outline + shadow) */}
+            {(goalsCount > 0 || assistsCount > 0) && (() => {
+              const gW = goalsCount > 1 ? 17.5 : goalsCount > 0 ? 10.5 : 0;
+              const aW = assistsCount > 1 ? 17.5 : assistsCount > 0 ? 10.5 : 0;
+              const gap = goalsCount > 0 && assistsCount > 0 ? 1.5 : 0;
+              const totalW = gW + gap + aW;
+              const baseX = Math.min(cx + 16.5, 294 - totalW);
+              const baseY = cy - 1.5;
+              const gx = baseX + gW / 2;
+              const ax = baseX + gW + gap + aW / 2;
               return (
-                <g transform={`translate(${gx},${gy})`}>
-                  <rect width={gW} height="11" rx="5.5" fill="#0b2018" stroke="#34d399" strokeWidth="0.95" />
-                  <text
-                    x={gW / 2}
-                    y="8.1"
-                    textAnchor="middle"
-                    fontSize="7.4"
-                    fontWeight="800"
-                    fontFamily="Kanit, Sarabun, sans-serif"
-                    fill="#ffffff"
-                  >
-                    {goalsCount > 1 ? `${goalsCount}⚽` : '⚽'}
-                  </text>
-                </g>
-              );
-            })()}
-            {assistsCount > 0 && (() => {
-              const aW = assistsCount > 1 ? 19.5 : 12.5;
-              const gap = goalsCount > 0 ? (goalsCount > 1 ? 21 : 14) : 0;
-              const ax = cx + 15 + gap;
-              const ay = cy - 8;
-              return (
-                <g transform={`translate(${ax},${ay})`}>
-                  <rect width={aW} height="11" rx="5.5" fill="#0c4a6e" stroke="#7dd3fc" strokeWidth="0.95" />
-                  <text
-                    x={aW / 2}
-                    y="8.1"
-                    textAnchor="middle"
-                    fontSize="7.4"
-                    fontWeight="800"
-                    fontFamily="Kanit, Sarabun, sans-serif"
-                    fill="#ffffff"
-                  >
-                    {assistsCount > 1 ? `${assistsCount}👟` : '👟'}
-                  </text>
+                <g className="pointer-events-none select-none">
+                  {goalsCount > 0 && (
+                    <g transform={`translate(${gx},${baseY})`}>
+                      {goalsCount > 1 ? (
+                        <text
+                          x="0"
+                          y="3.2"
+                          textAnchor="middle"
+                          fontSize="8.8"
+                          fontWeight="900"
+                          fontFamily="Kanit, Sarabun, sans-serif"
+                          fill="#ffffff"
+                          stroke="#06140d"
+                          strokeWidth="2.4"
+                          strokeLinejoin="round"
+                          paintOrder="stroke"
+                          style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.85))' }}
+                        >
+                          {goalsCount}⚽
+                        </text>
+                      ) : (
+                        <text
+                          x="0"
+                          y="3.4"
+                          textAnchor="middle"
+                          fontSize="9.6"
+                          style={{ filter: 'drop-shadow(0 1px 1.6px rgba(0,0,0,0.88))' }}
+                        >
+                          ⚽
+                        </text>
+                      )}
+                    </g>
+                  )}
+                  {assistsCount > 0 && (
+                    <g transform={`translate(${ax},${baseY})`}>
+                      {assistsCount > 1 ? (
+                        <text
+                          x="0"
+                          y="3.2"
+                          textAnchor="middle"
+                          fontSize="8.8"
+                          fontWeight="900"
+                          fontFamily="Kanit, Sarabun, sans-serif"
+                          fill="#ffffff"
+                          stroke="#06140d"
+                          strokeWidth="2.4"
+                          strokeLinejoin="round"
+                          paintOrder="stroke"
+                          style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.85))' }}
+                        >
+                          {assistsCount}👟
+                        </text>
+                      ) : (
+                        <text
+                          x="0"
+                          y="3.4"
+                          textAnchor="middle"
+                          fontSize="9.6"
+                          style={{ filter: 'drop-shadow(0 1px 1.6px rgba(0,0,0,0.88))' }}
+                        >
+                          👟
+                        </text>
+                      )}
+                    </g>
+                  )}
                 </g>
               );
             })()}
