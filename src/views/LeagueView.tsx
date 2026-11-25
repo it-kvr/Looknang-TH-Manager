@@ -1115,7 +1115,7 @@ export const LeagueView: React.FC<{
                   d.tv = tabIdx;
                 });
               }}
-              className={`seg-btn shrink-0 min-w-0 ${
+              className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2.5 text-xs mland:text-[10.5px] shrink-0 min-w-0 ${
                 sub === tabIdx
                   ? 'seg-btn-active'
                   : 'hover:bg-[var(--surface-2)]/70'
@@ -1130,7 +1130,7 @@ export const LeagueView: React.FC<{
         {/* Left Header Slot: Standings puts Season label in front of League Switcher; Stats/Power use tier pills */}
         {sub === 0 ? (
           <div className="order-1 flex items-center gap-1.5 min-w-0 shrink">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0 whitespace-nowrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold text-[var(--ink)] shadow-xs shrink-0 whitespace-nowrap">
               <span>🏆</span>
               <span>ตารางคะแนน · ซีซั่น {state.season}</span>
             </div>
@@ -1143,7 +1143,7 @@ export const LeagueView: React.FC<{
                   SFX.tap();
                   onUpdateState((d) => { d.lg = nextTier; });
                 }}
-                className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl pl-2.5 pr-7 mland:pl-2 mland:pr-5 py-1 mland:py-0.5 font-bold text-xs mland:text-[10px] text-[var(--ink)] cursor-pointer truncate max-w-[175px] sm:max-w-none transition-colors shadow-xs"
+                className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl pl-3 pr-7 mland:pl-2.5 mland:pr-6 py-1.5 mland:py-1 font-bold text-xs mland:text-[10.5px] text-[var(--ink)] cursor-pointer truncate max-w-[175px] sm:max-w-none transition-colors shadow-xs"
               >
                 {[0, 1, 2].map((tierIdx) => (
                   <option key={tierIdx} value={tierIdx}>
@@ -1159,7 +1159,7 @@ export const LeagueView: React.FC<{
                 title="กลับลีกของฉัน"
                 aria-label="กลับลีกของฉัน"
                 onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = me.tier; }); }}
-                className="btn btn-xs btn-gold shrink-0"
+                className="btn btn-sm btn-gold shrink-0"
               >
                 <span>↩</span>
                 <span>กลับลีกฉัน ★</span>
@@ -1177,7 +1177,7 @@ export const LeagueView: React.FC<{
                   type="button"
                   title={isMyTier ? `${lbl} (ลีกของคุณ)` : lbl}
                   onClick={() => { SFX.tap(); onUpdateState((d) => { d.lg = idx; }); }}
-                  className={`seg-btn min-w-0 ${
+                  className={`seg-btn py-1.5 mland:py-1 px-2.5 mland:px-2 text-xs mland:text-[10.5px] min-w-0 ${
                     active
                       ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs hover:text-[var(--bg)]'
                       : 'hover:bg-[var(--surface-2)]/70'
@@ -1197,7 +1197,7 @@ export const LeagueView: React.FC<{
             })}
           </div>
         ) : (
-          <div className="order-1 flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10px] font-bold text-[var(--ink)] shadow-xs shrink-0">
+          <div className="order-1 flex items-center gap-1.5 px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold text-[var(--ink)] shadow-xs shrink-0">
             <span>{sub === 4 ? '🏅' : '📅'}</span>
             <span>{sub === 4 ? 'รายการแข่งขันบอลถ้วย' : 'โปรแกรมการแข่งขัน'}</span>
           </div>

@@ -72,7 +72,7 @@ export const getPitchFaceCanvas = (vis: number[], kit: string, trim: string, isC
   if (existing === 'loading' || typeof Image === 'undefined' || typeof document === 'undefined') return null;
 
   PITCH_FACE_CACHE.set(key, 'loading');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, isCoach)}</svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, !isCoach, undefined, isCoach)}</svg>`;
   const img = new Image();
   img.onload = () => {
     const off = document.createElement('canvas');
@@ -648,30 +648,41 @@ export const drawLivePitchToCanvas = (
       ctx.arc(0, 0, cr, 0, Math.PI * 2);
       ctx.fill();
 
-      // Manager portrait face clipped inside suit frame
-      const coachFace = getPitchFaceCanvas(coachVis, '#1e293b', kit, true);
+      // Manager portrait face clipped inside suit frame (always formal suit + consistent tie color)
+      const tieCol = c.tieColor || trim;
+      const coachFace = getPitchFaceCanvas(coachVis, '#1e293b', tieCol, true);
       if (coachFace) {
         ctx.save();
         ctx.beginPath();
         ctx.arc(0, 0, Math.max(1, cr - 0.9), 0, Math.PI * 2);
         ctx.clip();
-        const fw = cr * 2.15;
+        const fw = cr * 2.08;
         const fh = (fw * 68) / 64;
-        ctx.drawImage(coachFace, -fw / 2, -fh * 0.47, fw, fh);
+        ctx.drawImage(coachFace, -fw / 2, -fh * 0.5, fw, fh);
         ctx.restore();
       } else {
-        // Fallback tie + minimal head while decoding SVG
-        ctx.fillStyle = kit;
+        // Fallback suit collar + tie + minimal head while decoding SVG
+        ctx.fillStyle = '#f8fafc';
         ctx.beginPath();
-        ctx.arc(Math.cos(c.facing) * cr * 0.38, Math.sin(c.facing) * cr * 0.38, cr * 0.28, 0, Math.PI * 2);
+        ctx.moveTo(-cr * 0.36, cr * 0.36);
+        ctx.lineTo(cr * 0.36, cr * 0.36);
+        ctx.lineTo(0, cr * 0.88);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = colDist(tieCol, '#f8fafc') < 90 ? '#b91c1c' : tieCol;
+        ctx.beginPath();
+        ctx.moveTo(-cr * 0.11, cr * 0.42);
+        ctx.lineTo(cr * 0.11, cr * 0.42);
+        ctx.lineTo(0, cr * 0.86);
+        ctx.closePath();
         ctx.fill();
         ctx.fillStyle = '#f1c27d';
         ctx.beginPath();
-        ctx.arc(0, -cr * 0.08, cr * 0.48, 0, Math.PI * 2);
+        ctx.arc(0, -cr * 0.12, cr * 0.46, 0, Math.PI * 2);
         ctx.fill();
         ctx.fillStyle = c.side === 'H' ? '#1f2937' : '#334155';
         ctx.beginPath();
-        ctx.arc(0, -cr * 0.18, cr * 0.46, Math.PI * 0.9, Math.PI * 2.1);
+        ctx.arc(0, -cr * 0.22, cr * 0.44, Math.PI * 0.9, Math.PI * 2.1);
         ctx.fill();
       }
 

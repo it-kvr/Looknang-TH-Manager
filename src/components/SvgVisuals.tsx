@@ -481,7 +481,12 @@ function renderCoachSuitTorso(tieCol: string, accent: string, crestSpec: Resolve
   const blazer = '#1e293b';
   const lapel = '#0f172a';
   const shirt = '#f8fafc';
-  const tieShade = colDist(tieCol, '#000000') < 65 ? '#334155' : tieCol;
+  const tieShade =
+    colDist(tieCol, '#f8fafc') < 90
+      ? '#b91c1c'
+      : colDist(tieCol, '#000000') < 65
+        ? '#334155'
+        : tieCol;
   const base = `<rect x="8" y="44" width="44" height="20" fill="${blazer}"/>`;
   const lapels =
     `<path d="M21 44h18l-9 18z" fill="${shirt}"/>` +
@@ -492,10 +497,13 @@ function renderCoachSuitTorso(tieCol: string, accent: string, crestSpec: Resolve
     `<path d="M28.1 46.8h3.8l-.8 2.8h-2.2z" fill="${tieShade}"/>` +
     `<path d="M28.7 49.4h2.6l1.3 11.2-2.6 3.2-2.6-3.2z" fill="${tieShade}"/>` +
     `<path d="M28.7 49.4l1.3 14.4" stroke="${accent}" stroke-width="0.65" opacity="0.55"/>`;
+  const pocketSquare =
+    `<path d="M14.8 56.2l3.8-2.2 1.2 2.2z" fill="${shirt}" opacity="0.92"/>` +
+    `<path d="M14.8 56.2l3.8-2.2" stroke="${tieShade}" stroke-width="0.8"/>`;
   const pin = crestSpec
     ? `<g transform="translate(36.2, 50.8) scale(0.24)">${buildCrestSvgMarkup(crestSpec, `${uid}-cp`)}</g>`
     : `<circle cx="38" cy="53" r="1.4" fill="${tieShade}" stroke="${accent}" stroke-width="0.6"/>`;
-  return `${base}${lapels}${tie}${pin}`;
+  return `${base}${lapels}${tie}${pocketSquare}${pin}`;
 }
 
 export function faceBodySvg(

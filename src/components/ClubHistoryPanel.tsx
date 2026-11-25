@@ -459,46 +459,29 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
           </div>
 
           {hasAnyLegend ? (
-            <div className="p-2.5 mland:p-2 bg-[var(--surface-2)]/20">
-              <div
-                className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 ${
-                  compact ? '' : 'xl:grid-cols-5'
-                } gap-2.5 mland:gap-2`}
-              >
-                {METRIC_COLUMNS.map((col, colIdx) => {
+            <div className="p-2 mland:p-1.5 bg-[var(--surface-2)]/20 overflow-x-auto">
+              <div className="grid grid-cols-5 gap-1.5 mland:gap-1 min-w-[600px] sm:min-w-0 mland:min-w-0 w-full">
+                {METRIC_COLUMNS.map((col) => {
                   const list = columnLeaders[col.key];
-                  const spanCls =
-                    colIdx < 3
-                      ? `lg:col-span-2 ${compact ? '' : 'xl:col-span-1'}`
-                      : colIdx === 3
-                        ? `lg:col-span-3 ${compact ? '' : 'xl:col-span-1'}`
-                        : `sm:col-span-2 lg:col-span-3 ${compact ? '' : 'xl:col-span-1'}`;
-                  const isWideSmCard = colIdx === 4;
 
                   return (
                     <div
                       key={col.key}
-                      className={`flex flex-col min-w-0 rounded-xl border border-[var(--line)]/85 bg-[var(--surface)] overflow-hidden ${spanCls}`}
+                      className="flex flex-col min-w-0 rounded-xl mland:rounded-lg border border-[var(--line)]/85 bg-[var(--surface)] overflow-hidden"
                     >
                       <div
-                        className={`px-2.5 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface)] ${col.headerBgCls} flex items-center justify-between gap-1.5`}
+                        className={`px-2 py-1.5 mland:px-1.5 mland:py-1 border-b border-[var(--line)] bg-[var(--surface)] ${col.headerBgCls} flex items-center justify-between gap-1`}
                       >
-                        <span className={`font-extrabold text-[11px] mland:text-[9.5px] ${col.accentCls} truncate`}>
+                        <span className={`font-extrabold text-[10.5px] mland:text-[9px] ${col.accentCls} truncate`}>
                           {col.icon} {col.label}
                         </span>
-                        <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
+                        <span className="text-[9px] mland:text-[7.5px] text-[var(--mut)] shrink-0">
                           {col.unit}
                         </span>
                       </div>
 
                       {list.length > 0 ? (
-                        <div
-                          className={
-                            isWideSmCard
-                              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 divide-y divide-[var(--line)]/50 sm:divide-y-0 lg:divide-y'
-                              : 'divide-y divide-[var(--line)]/50'
-                          }
-                        >
+                        <div className="divide-y divide-[var(--line)]/50">
                           {list.map((leg, idx) => {
                             const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
                             const clickable = !!liveSqPlayer && !!onInspectPlayer;
@@ -523,25 +506,21 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                             return (
                               <div
                                 key={`${col.key}-${leg.name}`}
-                                className={`px-2 py-1.5 mland:py-1 flex items-center gap-1.5 hover:bg-[var(--surface-2)]/35 transition-colors ${
-                                  isWideSmCard
-                                    ? 'sm:border-b sm:border-[var(--line)]/50 lg:border-b-0 odd:sm:border-r odd:sm:border-[var(--line)]/50 lg:odd:border-r-0'
-                                    : ''
-                                }`}
+                                className="px-1.5 py-1.5 mland:px-1 mland:py-1 flex items-center gap-1 hover:bg-[var(--surface-2)]/35 transition-colors"
                               >
                                 <span
-                                  className={`inline-flex items-center justify-center w-4 h-4 rounded border text-[9.5px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${rankCls}`}
+                                  className={`inline-flex items-center justify-center w-4 h-4 mland:w-3.5 mland:h-3.5 rounded border text-[9px] mland:text-[8px] font-extrabold tabular shrink-0 ${rankCls}`}
                                 >
                                   {idx + 1}
                                 </span>
-                                <div className="w-6.5 h-6.5 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-6.5 [&>svg]:h-6.5 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                                <div className="w-6 h-6 mland:w-5 mland:h-5 rounded-lg mland:rounded-md bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
                                   <PlayerFace
                                     player={facePlayer}
                                     team={team}
                                     state={state}
                                     club={state.club}
                                     isMyClub={isUserClub}
-                                    size={26}
+                                    size={24}
                                   />
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -552,16 +531,16 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                                         SFX.tap();
                                         onInspectPlayer!(liveSqPlayer!, team);
                                       }}
-                                      className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block w-full"
+                                      className="font-bold text-[10.5px] mland:text-[9px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block w-full"
                                     >
                                       {leg.name}
                                     </button>
                                   ) : (
-                                    <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate">
+                                    <div className="font-bold text-[10.5px] mland:text-[9px] text-[var(--ink)] truncate">
                                       {leg.name}
                                     </div>
                                   )}
-                                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular truncate">
+                                  <div className="text-[8.5px] mland:text-[7.5px] text-[var(--mut)] tabular truncate">
                                     {leg.ro || leg.pos} · {seasonText}
                                     {leg.stillAtClub && (
                                       <span className="text-[var(--g)] font-semibold"> · ทีมนี้</span>
@@ -569,7 +548,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                                   </div>
                                 </div>
                                 <span
-                                  className={`font-extrabold text-xs mland:text-[10.5px] tabular shrink-0 pl-0.5 ${
+                                  className={`font-extrabold text-[11px] mland:text-[9.5px] tabular shrink-0 pl-0.5 ${
                                     idx === 0 ? col.accentCls : 'text-[var(--ink)]'
                                   }`}
                                 >
@@ -580,7 +559,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                           })}
                         </div>
                       ) : (
-                        <div className="flex-1 flex items-center justify-center py-6 px-2 text-[10.5px] mland:text-[9px] text-[var(--mut)]/75 text-center">
+                        <div className="flex-1 flex items-center justify-center py-6 px-2 text-[10px] mland:text-[8.5px] text-[var(--mut)]/75 text-center">
                           ยังไม่มีสถิติ
                         </div>
                       )}
@@ -656,7 +635,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
       <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden">
         <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-2 bg-[var(--surface-2)]/60">
           <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
-            พงศาวดารสโมสรรายฤดูกาล
+            ประวัติศาสตร์สโมสรรายฤดูกาล
           </span>
           {isUserClub && state.hist && state.hist.length > 0 && (
             <button

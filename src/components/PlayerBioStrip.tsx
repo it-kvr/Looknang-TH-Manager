@@ -151,12 +151,11 @@ export const PlayerBioStrip: React.FC<{
           </div>
         </div>
         <div className="px-1 flex flex-col items-center justify-center">
-          <div className="text-[8px] mland:text-[6.5px] text-white/55 font-semibold leading-none">เท้าถนัด</div>
-          <div className="mt-0.5 inline-flex items-center justify-center gap-1 leading-none">
-            <FootPairIcon foot={bio.foot} size="xs" />
-            <span className="text-[9.5px] mland:text-[7.5px] font-extrabold text-emerald-300">
-              {fm.shortLabel}
-            </span>
+          <div className="text-[8px] mland:text-[6.5px] text-emerald-300 font-bold leading-none whitespace-nowrap">
+            {fm.shortLabel}
+          </div>
+          <div className="mt-0.5 inline-flex items-center justify-center leading-none">
+            <FootPairIcon foot={bio.foot} size="sm" />
           </div>
         </div>
       </div>
@@ -181,10 +180,11 @@ export const PlayerBioStrip: React.FC<{
         </div>
       </div>
       <div className="px-1 flex flex-col items-center justify-center" title={fm.titleText}>
-        <div className="text-[8.5px] mland:text-[7px] text-[var(--mut)] font-bold leading-none">เท้าถนัด</div>
-        <div className="mt-0.5 inline-flex items-center justify-center gap-0.5 leading-none whitespace-nowrap">
-          <FootPairIcon foot={bio.foot} size="xs" />
-          <span className={`text-[9.5px] mland:text-[7.5px] font-extrabold ${fm.textCls}`}>{fm.shortLabel}</span>
+        <div className={`text-[8.5px] mland:text-[7px] font-bold leading-none whitespace-nowrap ${fm.textCls}`}>
+          {fm.shortLabel}
+        </div>
+        <div className="mt-0.5 inline-flex items-center justify-center leading-none">
+          <FootPairIcon foot={bio.foot} size="sm" />
         </div>
       </div>
     </div>

@@ -1436,7 +1436,7 @@ export const FinanceClubView: React.FC<{
               R(0, EY_N.length - 1),
               0,
               R(0, FS_N.length - 1),
-              Math.random() < 0.45 ? R(1, ACC_N.length - 1) : 0
+              Math.random() < 0.35 ? 5 : 0
             ];
           });
           onToast('สุ่มหน้าตาหัวหน้าผู้ฝึกสอนใหม่แล้ว!');
@@ -2156,7 +2156,7 @@ export const FinanceClubView: React.FC<{
                     R(0, EY_N.length - 1),
                     0,
                     R(0, FS_N.length - 1),
-                    Math.random() < 0.45 ? R(1, ACC_N.length - 1) : 0
+                    Math.random() < 0.35 ? 5 : 0
                   ]
                 }));
               };

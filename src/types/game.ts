@@ -1188,6 +1188,7 @@ export interface LiveSidelineCoach {
   moodCooldown?: number;
   isUserCoach: boolean;
   vis?: number[];
+  tieColor?: string;
 }
 
 export interface GodBlessingPatch {

@@ -2,15 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   Check,
-  Clapperboard,
   FastForward,
   Flag,
   Gauge,
-  Navigation,
   Pause,
   Play,
   Star,
-  Tag,
   Users,
   Zap
 } from 'lucide-react';
@@ -48,7 +45,7 @@ interface MatchTimelineItem {
   who: string;
   detail?: string;
 }
-import { getShirtNo, visOf, xi, DT, injD, matchKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen } from '../engine/playerCore';
+import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance } from '../engine/simulation';
 import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
@@ -197,9 +194,9 @@ export const MatchModal: React.FC<{
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 5>(() => getDefaultMatchSpeed(settings));
-  const [cineSlowMo, setCineSlowMo] = useState(true);
-  const [showRunVectors, setShowRunVectors] = useState(true);
-  const [showPositions, setShowPositions] = useState(true);
+  const cineSlowMo = true;
+  const showRunVectors = true;
+  const showPositions = true;
   const [showRatings, setShowRatings] = useState(true);
   const [htStatMode, setHtStatMode] = useState<'rating' | 'ovr'>('rating');
   const [injuryAlert, setInjuryAlert] = useState<{ name: string; role: SubRole; no: number; games: number; minute: number } | null>(null);
@@ -461,6 +458,8 @@ export const MatchModal: React.FC<{
         isUser && Array.isArray(state.club?.managerVis) && state.club.managerVis.length >= 6
           ? [...state.club.managerVis]
           : getDefaultCoachVis(seedName);
+      const [, origTrim] = teamKits(orig, state);
+      const tieColor = isUser ? (state.club?.c2 || origTrim || '#facc15') : (origTrim || '#facc15');
       return {
         side,
         x: startX,
@@ -476,7 +475,8 @@ export const MatchModal: React.FC<{
         moodTimer: 0,
         moodCooldown: side === 'H' ? 6.5 : 9.0,
         isUserCoach: isUser,
-        vis: coachVis
+        vis: coachVis,
+        tieColor
       };
     };
     return {
@@ -7295,7 +7295,7 @@ export const MatchModal: React.FC<{
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, cineSlowMo, showRunVectors, showPositions, showRatings, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
+  }, [paused, done, speed, showRatings, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
@@ -8179,8 +8179,8 @@ export const MatchModal: React.FC<{
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
         <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
           <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2 gap-y-1">
-            {/* Left: Competition / League Tier + Weather & Kickoff Time */}
-            <div className="order-1 flex items-center gap-1 min-w-0 max-w-[66%] sm:max-w-[260px] md:max-w-[330px] lg:max-w-none mland:max-w-[250px] shrink">
+            {/* Left: Competition / League Tier + Weather & Kickoff Time + Attendance / Stadium Capacity */}
+            <div className="order-1 flex flex-wrap items-center gap-1 min-w-0 max-w-[66%] sm:max-w-[270px] md:max-w-[350px] lg:max-w-none mland:max-w-[265px] shrink">
               <span
                 className="inline-flex items-center px-2 mland:px-1.5 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--line)] text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate max-w-full shadow-2xs"
                 title={compTitle}
@@ -8220,6 +8220,14 @@ export const MatchModal: React.FC<{
                 <span className="hidden sm:inline mland:hidden">
                   {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
                 </span>
+              </span>
+              <span
+                className="inline-flex items-center gap-1 px-2 mland:px-1.5 py-0.5 rounded-full bg-[var(--surface)] border border-[var(--line)] text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold text-[var(--ink)] tabular shrink-0 shadow-2xs"
+                title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
+              >
+                <Users className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-[var(--g)] shrink-0" />
+                <span>{matchAttendance.att.toLocaleString()}</span>
+                <span className="text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
               </span>
             </div>
 
@@ -8333,6 +8341,24 @@ export const MatchModal: React.FC<{
                   </>
                 ) : (
                   <>
+                    <button
+                      type="button"
+                      title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนาม"
+                      aria-label="สลับเรตติ้งหรือพลัง"
+                      onClick={() => {
+                        SFX.tap();
+                        setShowRatings((v) => !v);
+                      }}
+                      className={`btn btn-md px-2.5 sm:px-3 mland:px-2 ${
+                        showRatings
+                          ? 'bg-amber-400/22 border border-amber-400/60 text-[#8a5b00] dark:text-[#fde047] shadow-2xs hover:bg-amber-400/30'
+                          : 'bg-sky-500/18 border border-sky-400/55 text-sky-700 dark:text-sky-300 shadow-2xs hover:bg-sky-500/25'
+                      }`}
+                    >
+                      {showRatings ? <Star className="w-3.5 h-3.5 fill-current shrink-0" /> : <Zap className="w-3.5 h-3.5 fill-current shrink-0" />}
+                      <span>{showRatings ? 'เรตติ้ง' : 'พลัง'}</span>
+                    </button>
+
                     {state.mode === 'm' && (
                       <button
                         type="button"
@@ -8359,7 +8385,7 @@ export const MatchModal: React.FC<{
                             return next;
                           });
                         }}
-                        className={`btn btn-sm ${
+                        className={`btn btn-md px-2.5 sm:px-3 mland:px-2 ${
                           autoSubEnabled
                             ? 'btn-primary'
                             : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
@@ -8371,13 +8397,13 @@ export const MatchModal: React.FC<{
                       </button>
                     )}
 
-                    <div className="seg-bar">
+                    <div className="seg-bar h-9 mland:h-7.5">
                       <button
                         type="button"
                         title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         onClick={() => setPaused((p) => !p)}
-                        className={`seg-btn ${paused ? 'seg-btn-active' : ''}`}
+                        className={`seg-btn h-full px-2.5 sm:px-3 mland:px-2 text-xs mland:text-[10.5px] ${paused ? 'seg-btn-active' : ''}`}
                       >
                         {paused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5" />}
                         <span className="hidden lg:inline">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
@@ -8387,7 +8413,7 @@ export const MatchModal: React.FC<{
                         title="ปรับความเร็วการแข่งขัน"
                         aria-label="ปรับความเร็วการแข่งขัน"
                         onClick={cycleMatchSpeed}
-                        className="seg-btn tabular"
+                        className="seg-btn h-full px-2.5 sm:px-3 mland:px-2 text-xs mland:text-[10.5px] tabular"
                       >
                         <Gauge className="w-3.5 h-3.5 opacity-80" />
                         <span>{speed}x</span>
@@ -8399,10 +8425,10 @@ export const MatchModal: React.FC<{
                       title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       onClick={skipToEnd}
-                      className="btn btn-sm btn-gold"
+                      className="btn btn-md btn-gold px-3 mland:px-2.5"
                     >
                       <FastForward className="w-3.5 h-3.5 shrink-0" />
-                      <span className="hidden sm:inline mland:hidden">ข้าม</span>
+                      <span className="hidden sm:inline mland:inline">ข้าม</span>
                     </button>
                   </>
                 )
@@ -8517,60 +8543,6 @@ export const MatchModal: React.FC<{
             <div className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
               {!(done && fullTimeAnalysis) ? (
                 <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
-                  {!done && matchPhaseUi !== 'halftime' && (
-                    <div className="px-2.5 py-1 mland:px-2 mland:py-0.5 bg-[var(--surface-2)]/95 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-1.5 shrink-0">
-                      <div className="flex items-center gap-1.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold tabular min-w-0">
-                        <span className="inline-flex items-center gap-1 text-[var(--ink)] font-bold">
-                          <Users className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
-                          <span>{matchAttendance.att.toLocaleString()}</span>
-                          <span className="text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
-                        </span>
-                      </div>
-
-                      <div className="seg-bar">
-                        <button
-                          type="button"
-                          title="เปิด/ปิดเส้นวิ่งทำทาง"
-                          aria-label="เปิด/ปิดเส้นวิ่งทำทาง"
-                          onClick={() => setShowRunVectors((v) => !v)}
-                          className={`seg-btn ${showRunVectors ? 'seg-btn-active' : ''}`}
-                        >
-                          <Navigation className="w-3 h-3 shrink-0" />
-                          <span className="hidden sm:inline">เส้น</span>
-                        </button>
-                        <button
-                          type="button"
-                          title="เปิด/ปิดป้ายตำแหน่งบนสนาม"
-                          aria-label="เปิด/ปิดป้ายตำแหน่งบนสนาม"
-                          onClick={() => setShowPositions((v) => !v)}
-                          className={`seg-btn ${showPositions ? 'seg-btn-active' : ''}`}
-                        >
-                          <Tag className="w-3 h-3 shrink-0" />
-                          <span className="hidden sm:inline">ป้าย</span>
-                        </button>
-                        <button
-                          type="button"
-                          title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนาม"
-                          aria-label="สลับเรตติ้งหรือพลัง"
-                          onClick={() => setShowRatings((v) => !v)}
-                          className={`seg-btn ${showRatings ? 'bg-amber-400/25 text-[#8a5b00] dark:text-[#fde047] shadow-xs' : 'bg-sky-500/20 text-sky-700 dark:text-sky-300 shadow-xs'}`}
-                        >
-                          {showRatings ? <Star className="w-3 h-3 fill-current shrink-0" /> : <Zap className="w-3 h-3 fill-current shrink-0" />}
-                          <span className="hidden sm:inline">{showRatings ? 'เรตติ้ง' : 'พลัง'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          title="เปิด/ปิดภาพช้าสโลว์โมชันจังหวะสำคัญ"
-                          aria-label="เปิด/ปิดภาพช้าสโลว์โมชัน"
-                          onClick={() => setCineSlowMo((v) => !v)}
-                          className={`seg-btn ${cineSlowMo ? 'seg-btn-active' : ''}`}
-                        >
-                          <Clapperboard className="w-3 h-3 shrink-0" />
-                          <span className="hidden sm:inline">สโล</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
 
                   {injuryAlert && !done && (
                     <div className="px-2.5 sm:px-3 py-1.5 mland:px-2 mland:py-1 bg-rose-950/95 border-b border-rose-400/50 flex flex-wrap items-center justify-between gap-2 text-white shrink-0">
