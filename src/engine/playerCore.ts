@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate, PreferredFoot } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, PlayerSeasonHistoryRecord, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate, PreferredFoot } from '../types/game';
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
@@ -107,56 +107,179 @@ export const SPW = (p: Position): SubRole =>
         ? P(['ST', 'ST', 'CF', 'LW', 'RW'])
         : 'GK';
 
+export interface PositionShirtGuide {
+  label: string;
+  primary: number[];
+  alt: number[];
+  reason: string;
+}
+
+const ROLE_SHIRT_POOLS: Record<SubRole, PositionShirtGuide> = {
+  GK: {
+    label: 'ผู้รักษาประตู (GK)',
+    primary: [1],
+    alt: [12, 13, 16, 22, 25, 31, 33, 99],
+    reason: 'เบอร์ 1 คือมือหนึ่ง ส่วน 12, 13 มักเป็นมือสอง และเบอร์สูงอย่าง 31, 99 มักเลือกตามปีเกิดหรือความชอบ'
+  },
+  RB: {
+    label: 'แบ็กขวา (RB)',
+    primary: [2],
+    alt: [12, 15, 22, 23, 27, 66],
+    reason: 'แบ็กขวาใช้เบอร์ 2 เป็นหลัก ฟูลแบ็กตัวสำรองหรือสายบุกยุคใหม่มักใช้เบอร์คู่หรือเบอร์เบิ้ล เช่น 22, 27, 66'
+  },
+  RWB: {
+    label: 'วิงแบ็กขวา (RWB)',
+    primary: [2],
+    alt: [12, 15, 22, 23, 27, 66],
+    reason: 'วิงแบ็กขวาใช้เบอร์ 2 เป็นหลัก ฟูลแบ็กตัวสำรองหรือสายบุกยุคใหม่มักใช้เบอร์คู่หรือเบอร์เบิ้ล เช่น 22, 27, 66'
+  },
+  LB: {
+    label: 'แบ็กซ้าย (LB)',
+    primary: [3],
+    alt: [12, 15, 22, 23, 27, 66],
+    reason: 'แบ็กซ้ายใช้เบอร์ 3 เป็นหลัก ฟูลแบ็กตัวสำรองหรือสายบุกยุคใหม่มักใช้เบอร์คู่หรือเบอร์เบิ้ล เช่น 22, 27, 66'
+  },
+  LWB: {
+    label: 'วิงแบ็กซ้าย (LWB)',
+    primary: [3],
+    alt: [12, 15, 22, 23, 27, 66],
+    reason: 'วิงแบ็กซ้ายใช้เบอร์ 3 เป็นหลัก ฟูลแบ็กตัวสำรองหรือสายบุกยุคใหม่มักใช้เบอร์คู่หรือเบอร์เบิ้ล เช่น 22, 27, 66'
+  },
+  CB: {
+    label: 'เซ็นเตอร์แบ็ก (CB)',
+    primary: [4, 5],
+    alt: [3, 6, 14, 15, 24, 26, 33],
+    reason: 'กองหลังตัวกลางที่ออกบอลดีมักชอบเบอร์ 4, 5, 6 ส่วนเบอร์ 24, 26 เป็นเบอร์ยอดนิยมของกองหลังตัวหลักยุคใหม่'
+  },
+  CDM: {
+    label: 'กองกลางตัวรับ (CDM)',
+    primary: [6, 4, 5],
+    alt: [8, 14, 16, 18, 25, 42],
+    reason: 'เบอร์ 6 คือตัวคุมจังหวะเกมรับ (หรือ 4, 5) ส่วนเบอร์ 14, 16, 18 เป็นเบอร์คลาสสิกของมิดฟิลด์ตัวตัดเกม'
+  },
+  LDM: {
+    label: 'กองกลางตัวรับซ้าย (LDM)',
+    primary: [6, 4, 5],
+    alt: [8, 14, 16, 18, 25, 42],
+    reason: 'เบอร์ 6 คือตัวคุมจังหวะเกมรับ (หรือ 4, 5) ส่วนเบอร์ 14, 16, 18 เป็นเบอร์คลาสสิกของมิดฟิลด์ตัวตัดเกม'
+  },
+  RDM: {
+    label: 'กองกลางตัวรับขวา (RDM)',
+    primary: [6, 4, 5],
+    alt: [8, 14, 16, 18, 25, 42],
+    reason: 'เบอร์ 6 คือตัวคุมจังหวะเกมรับ (หรือ 4, 5) ส่วนเบอร์ 14, 16, 18 เป็นเบอร์คลาสสิกของมิดฟิลด์ตัวตัดเกม'
+  },
+  CM: {
+    label: 'กองกลางสนาม (CM)',
+    primary: [8, 10],
+    alt: [7, 14, 19, 20, 21, 23, 47],
+    reason: 'เบอร์ 8 คือตัวเชื่อมเกมขึ้นลง ส่วนเบอร์ 10 และ 21, 23 มักเป็นเพลย์เมกเกอร์จอมสร้างสรรค์เกม'
+  },
+  LCM: {
+    label: 'กองกลางซ้าย (LCM)',
+    primary: [8, 10],
+    alt: [7, 14, 19, 20, 21, 23, 47],
+    reason: 'เบอร์ 8 คือตัวเชื่อมเกมขึ้นลง ส่วนเบอร์ 10 และ 21, 23 มักเป็นเพลย์เมกเกอร์จอมสร้างสรรค์เกม'
+  },
+  RCM: {
+    label: 'กองกลางขวา (RCM)',
+    primary: [8, 10],
+    alt: [7, 14, 19, 20, 21, 23, 47],
+    reason: 'เบอร์ 8 คือตัวเชื่อมเกมขึ้นลง ส่วนเบอร์ 10 และ 21, 23 มักเป็นเพลย์เมกเกอร์จอมสร้างสรรค์เกม'
+  },
+  CAM: {
+    label: 'กองกลางตัวรุก (CAM)',
+    primary: [10, 8],
+    alt: [7, 14, 19, 20, 21, 23, 47],
+    reason: 'เบอร์ 8 คือตัวเชื่อมเกมขึ้นลง ส่วนเบอร์ 10 และ 21, 23 มักเป็นเพลย์เมกเกอร์จอมสร้างสรรค์เกม'
+  },
+  LW: {
+    label: 'ปีกซ้าย (LW)',
+    primary: [7, 11],
+    alt: [10, 17, 19, 20, 22, 77],
+    reason: 'นักเตะริมเส้นสายความเร็วและเลี้ยงบอลมักเลือกเบอร์ 7, 11, 17 เพื่อสื่อถึงความคล่องตัวและเกมรุก'
+  },
+  RW: {
+    label: 'ปีกขวา (RW)',
+    primary: [7, 11],
+    alt: [10, 17, 19, 20, 22, 77],
+    reason: 'นักเตะริมเส้นสายความเร็วและเลี้ยงบอลมักเลือกเบอร์ 7, 11, 17 เพื่อสื่อถึงความคล่องตัวและเกมรุก'
+  },
+  LM: {
+    label: 'มิดฟิลด์ริมเส้นซ้าย (LM)',
+    primary: [11, 7],
+    alt: [10, 17, 19, 20, 22, 77],
+    reason: 'นักเตะริมเส้นสายความเร็วและเลี้ยงบอลมักเลือกเบอร์ 7, 11, 17 เพื่อสื่อถึงความคล่องตัวและเกมรุก'
+  },
+  RM: {
+    label: 'มิดฟิลด์ริมเส้นขวา (RM)',
+    primary: [7, 11],
+    alt: [10, 17, 19, 20, 22, 77],
+    reason: 'นักเตะริมเส้นสายความเร็วและเลี้ยงบอลมักเลือกเบอร์ 7, 11, 17 เพื่อสื่อถึงความคล่องตัวและเกมรุก'
+  },
+  ST: {
+    label: 'กองหน้าตัวเป้า (ST)',
+    primary: [9],
+    alt: [7, 10, 11, 14, 18, 19, 20, 99],
+    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
+  },
+  CF: {
+    label: 'กองหน้าตัวต่ำ (CF)',
+    primary: [9],
+    alt: [7, 10, 11, 14, 18, 19, 20, 99],
+    reason: 'กองหน้าจอมถล่มประตูมักยึดเบอร์ 9 เป็นหลัก หากเบอร์หลักไม่ว่างมักขยับไปใช้ 14, 18, 19 หรือ 99'
+  }
+};
+
+export function getPositionShirtGuide(ro?: SubRole | string, pos?: Position): PositionShirtGuide {
+  const norm = ((ro as string) === 'SS' ? 'CF' : ro) as SubRole;
+  if (norm && ROLE_SHIRT_POOLS[norm]) return ROLE_SHIRT_POOLS[norm];
+  if (pos === 'GK') return ROLE_SHIRT_POOLS.GK;
+  if (pos === 'DF') return ROLE_SHIRT_POOLS.CB;
+  if (pos === 'FW') return ROLE_SHIRT_POOLS.ST;
+  return ROLE_SHIRT_POOLS.CM;
+}
+
 export const NOP: Record<string, number[]> = {
-  GK: [1, 12, 13, 23, 30, 31],
-  DF: [2, 3, 4, 5, 15, 16, 22, 24, 25, 26],
-  MF: [6, 8, 10, 7, 14, 17, 18, 20, 21, 27, 28],
-  FW: [9, 11, 19, 29, 32, 33, 34]
+  GK: [1, 12, 13, 16, 22, 25, 31, 33, 99],
+  DF: [2, 3, 4, 5, 12, 14, 15, 22, 23, 24, 26, 27, 33, 66],
+  MF: [6, 8, 10, 7, 14, 16, 17, 18, 19, 20, 21, 23, 25, 42, 47],
+  FW: [9, 7, 10, 11, 14, 17, 18, 19, 20, 22, 77, 99]
+};
+
+const shuffleArr = <T,>(arr: T[]): T[] => {
+  const copy = arr.slice();
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 };
 
 export function getShirtNo(team: Team | null | undefined, q: Partial<Player>): number {
   if (q.no && q.no >= 1 && q.no <= 99) return q.no;
-  if (!team) return Array.isArray(q.vis) && q.vis[5] ? q.vis[5] : q.pos === 'GK' ? 1 : 10;
+  const guide = getPositionShirtGuide(q.ro, q.pos);
+  if (!team) return Array.isArray(q.vis) && q.vis[5] ? q.vis[5] : guide.primary[0] || 10;
   const used = new Set(team.sq.map((z) => z.no).filter((v): v is number => typeof v === 'number' && v >= 1 && v <= 99));
-  let n = (NOP[q.pos || 'MF'] || []).find((v) => !used.has(v));
+  const pool = [...guide.primary, ...guide.alt, ...(NOP[q.pos || 'MF'] || [])];
+  let n = pool.find((v) => !used.has(v));
   if (!n) {
-    for (let i = 35; i <= 99; i++) {
+    for (let i = 12; i <= 99; i++) {
       if (!used.has(i)) { n = i; break; }
     }
   }
   if (!n) {
-    for (let i = 1; i <= 34; i++) {
+    for (let i = 1; i <= 11; i++) {
       if (!used.has(i)) { n = i; break; }
     }
   }
   return n || 10;
 }
 
-const ROLE_PREFERRED_NOS: Record<SubRole, number[]> = {
-  GK: [1, 13, 23, 30, 31, 12],
-  RB: [2, 12, 15, 22, 24],
-  RWB: [2, 12, 22, 15, 24],
-  LB: [3, 12, 16, 21, 26],
-  LWB: [3, 12, 16, 21, 26],
-  CB: [4, 5, 6, 15, 16, 22, 24, 25],
-  CDM: [6, 4, 16, 14, 18, 21],
-  LDM: [6, 16, 14, 4, 18],
-  RDM: [6, 14, 16, 4, 18],
-  CM: [8, 6, 14, 18, 20, 21],
-  LCM: [8, 14, 18, 20, 6],
-  RCM: [8, 18, 14, 20, 6],
-  CAM: [10, 7, 20, 14, 21],
-  RM: [7, 11, 17, 14, 27],
-  LM: [11, 7, 17, 20, 28],
-  RW: [7, 11, 17, 19, 27],
-  LW: [11, 7, 17, 19, 28],
-  ST: [9, 10, 19, 11, 29],
-  CF: [9, 10, 11, 19, 29]
-};
-
 export function autoAssignAllTeamShirtNumbers(
   team: Team,
-  careerP?: PlayerCareerProfile | null
+  careerP?: PlayerCareerProfile | null,
+  randomize = false
 ): number {
   const starters = xi(team);
   const starterSlotMap = new Map<string, SubRole>();
@@ -180,20 +303,30 @@ export function autoAssignAllTeamShirtNumbers(
   const used = new Set<number>();
   const pickNextNo = (q: Player, isStarter: boolean): number => {
     const slotRole = starterSlotMap.get(q.n) || q.ro;
-    const rolePool = ROLE_PREFERRED_NOS[slotRole] || [];
+    const guide = getPositionShirtGuide(slotRole, q.pos);
     const posPool = NOP[q.pos] || [];
-    const candidates = isStarter
-      ? [...rolePool, ...posPool]
-      : [
-          ...(q.pos === 'GK' ? [13, 23, 30, 31, 12] : []),
-          ...posPool.filter((n) => n >= 12),
-          ...rolePool.filter((n) => n >= 12)
-        ];
+    const primaryPool = randomize ? shuffleArr(guide.primary) : guide.primary;
+    const altPool = randomize ? shuffleArr(guide.alt) : guide.alt;
+
+    let candidates: number[];
+    if (isStarter) {
+      // Starters occasionally adopt popular alt numbers (e.g. 66 RB, 23 CM, 99 ST) when randomizing per season
+      candidates = randomize && Math.random() < 0.28
+        ? [...altPool.slice(0, 3), ...primaryPool, ...altPool, ...posPool]
+        : [...primaryPool, ...altPool, ...posPool];
+    } else {
+      const altReserve = altPool.filter((n) => n >= 12);
+      const posReserve = posPool.filter((n) => n >= 12);
+      candidates = randomize
+        ? [...shuffleArr(altReserve), ...shuffleArr(posReserve), ...primaryPool, ...altPool]
+        : [...altReserve, ...posReserve, ...altPool];
+    }
 
     for (const n of candidates) {
       if (!used.has(n)) return n;
     }
-    for (let i = 12; i <= 99; i++) {
+    const fallbackRange = randomize ? shuffleArr(Array.from({ length: 88 }, (_, i) => i + 12)) : Array.from({ length: 88 }, (_, i) => i + 12);
+    for (const i of fallbackRange) {
       if (!used.has(i)) return i;
     }
     for (let i = 1; i <= 11; i++) {
@@ -220,7 +353,67 @@ export function autoAssignAllTeamShirtNumbers(
   return changed;
 }
 
-export function assignTeamShirtNumbers(team: Team) {
+export function assignTeamShirtNumbers(
+  team: Team,
+  opts?: { randomize?: boolean; careerP?: PlayerCareerProfile | null; keepMeNo?: boolean }
+) {
+  if (opts?.randomize) {
+    const used = new Set<number>();
+    const preservedMe = opts.keepMeNo ? team.sq.find((q) => q.me && q.no && q.no >= 1 && q.no <= 99) : undefined;
+    if (preservedMe?.no) {
+      used.add(preservedMe.no);
+    }
+    const starters = xi(team);
+    const starterSlotMap = new Map<string, SubRole>();
+    const slots = getFormationSlots(team);
+    starters.forEach((q, idx) => {
+      starterSlotMap.set(q.n, slots[idx]?.sp || q.ro);
+    });
+    const starterSet = new Set(starters.map((q) => q.n));
+    const ordered = [
+      ...shuffleArr(starters).map((q) => [q, true] as const),
+      ...shuffleArr(team.sq.filter((q) => !starterSet.has(q.n))).map((q) => [q, false] as const)
+    ];
+
+    ordered.forEach(([q, isStarter]) => {
+      if (preservedMe && q === preservedMe && q.no) {
+        if (Array.isArray(q.vis) && q.vis.length >= 6) q.vis[5] = q.no;
+        if (opts.careerP) opts.careerP.no = q.no;
+        return;
+      }
+      const role = starterSlotMap.get(q.n) || q.ro;
+      const guide = getPositionShirtGuide(role, q.pos);
+      const posPool = NOP[q.pos] || [];
+      const primaryPool = shuffleArr(guide.primary);
+      const altPool = shuffleArr(guide.alt);
+      const candidates = isStarter
+        ? Math.random() < 0.28
+          ? [...altPool.slice(0, 3), ...primaryPool, ...altPool, ...posPool]
+          : [...primaryPool, ...altPool, ...posPool]
+        : [...altPool.filter((n) => n >= 12), ...shuffleArr(posPool.filter((n) => n >= 12)), ...primaryPool, ...altPool];
+
+      let chosen = candidates.find((n) => !used.has(n));
+      if (!chosen) {
+        const rest = shuffleArr(Array.from({ length: 88 }, (_, i) => i + 12));
+        chosen = rest.find((n) => !used.has(n));
+      }
+      if (!chosen) {
+        for (let i = 1; i <= 11; i++) {
+          if (!used.has(i)) { chosen = i; break; }
+        }
+      }
+      q.no = chosen || 10;
+      used.add(q.no);
+      if (Array.isArray(q.vis) && q.vis.length >= 6) {
+        q.vis[5] = q.no;
+      }
+      if (q.me && opts.careerP) {
+        opts.careerP.no = q.no;
+      }
+    });
+    return;
+  }
+
   const used = new Set<number>();
   const ordered = [
     ...team.sq.filter((q) => q.me),
@@ -235,14 +428,16 @@ export function assignTeamShirtNumbers(team: Team) {
   });
   ordered.forEach((q) => {
     if (!q.no) {
-      let n = (NOP[q.pos] || []).find((v) => !used.has(v));
+      const guide = getPositionShirtGuide(q.ro, q.pos);
+      const pool = [...guide.primary, ...guide.alt, ...(NOP[q.pos] || [])];
+      let n = pool.find((v) => !used.has(v));
       if (!n) {
-        for (let i = 35; i <= 99; i++) {
+        for (let i = 12; i <= 99; i++) {
           if (!used.has(i)) { n = i; break; }
         }
       }
       if (!n) {
-        for (let i = 1; i <= 34; i++) {
+        for (let i = 1; i <= 11; i++) {
           if (!used.has(i)) { n = i; break; }
         }
       }
@@ -564,7 +759,7 @@ export function ensureAiTeamPhilosophies(s: GameState, allowSeasonRefresh = fals
       (t.wid ?? 1) === 1 &&
       (t.line ?? 1) === 1 &&
       (t.pass ?? 1) === 1;
-    if (isLegacyUniform || (allowSeasonRefresh && Math.random() < 0.18)) {
+    if (isLegacyUniform || (allowSeasonRefresh && Math.random() < 0.55)) {
       const avgOv = t.sq.length ? t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length : BASE[t.tier] || 55;
       const relDiff = Math.round(avgOv - (BASE[Math.min(t.tier, BASE.length - 1)] || 55));
       const ph = pickClubPhilosophy(t.id, t.tier, relDiff, true);
@@ -704,7 +899,7 @@ export function fitA(q: Player, a: CoreAttrs): CoreAttrs {
     const d = q.ov - OVF(q.pos, a);
     if (!d) break;
     ATT.forEach(([k]) => {
-      a[k] = clamp(a[k] + d, 10, 99);
+      a[k] = clamp(a[k] + d, 10, 199);
     });
   }
   return a;
@@ -845,33 +1040,33 @@ export function DT(q: Player, careerP?: PlayerCareerProfile | null): DtResult {
     ? { ...aSrc }
     : q.customA
       ? {
-          sh: clamp(Math.round(q.customA.sh), 1, 99),
-          ps: clamp(Math.round(q.customA.ps), 1, 99),
-          dr: clamp(Math.round(q.customA.dr), 1, 99),
-          tk: clamp(Math.round(q.customA.tk), 1, 99),
-          ph: clamp(Math.round(q.customA.ph), 1, 99)
+          sh: clamp(Math.round(q.customA.sh), 1, 199),
+          ps: clamp(Math.round(q.customA.ps), 1, 199),
+          dr: clamp(Math.round(q.customA.dr), 1, 199),
+          tk: clamp(Math.round(q.customA.tk), 1, 199),
+          ph: clamp(Math.round(q.customA.ph), 1, 199)
         }
       : fitA(
           q,
           Object.fromEntries(
-            ATT.map(([kk], i) => [kk, clamp(q.ov + (o[q.pos][kk] || 0) + (roleMod[q.ro]?.[kk] || 0) + ((h * (i + 3)) % 11) - 5, 10, 99)])
+            ATT.map(([kk], i) => [kk, clamp(q.ov + (o[q.pos][kk] || 0) + (roleMod[q.ro]?.[kk] || 0) + ((h * (i + 3)) % 11) - 5, 10, 199)])
           ) as unknown as CoreAttrs
         );
   const baseA: CoreAttrs =
     !po && q.coreSb
       ? {
-          sh: clamp(Math.round(rawBaseA.sh + (q.coreSb.sh || 0)), 1, 99),
-          ps: clamp(Math.round(rawBaseA.ps + (q.coreSb.ps || 0)), 1, 99),
-          dr: clamp(Math.round(rawBaseA.dr + (q.coreSb.dr || 0)), 1, 99),
-          tk: clamp(Math.round(rawBaseA.tk + (q.coreSb.tk || 0)), 1, 99),
-          ph: clamp(Math.round(rawBaseA.ph + (q.coreSb.ph || 0)), 1, 99)
+          sh: clamp(Math.round(rawBaseA.sh + (q.coreSb.sh || 0)), 1, 199),
+          ps: clamp(Math.round(rawBaseA.ps + (q.coreSb.ps || 0)), 1, 199),
+          dr: clamp(Math.round(rawBaseA.dr + (q.coreSb.dr || 0)), 1, 199),
+          tk: clamp(Math.round(rawBaseA.tk + (q.coreSb.tk || 0)), 1, 199),
+          ph: clamp(Math.round(rawBaseA.ph + (q.coreSb.ph || 0)), 1, 199)
         }
       : rawBaseA;
   const hv = (n: number) => {
     const raw = (((h * (n * 7 + 3)) ^ (h >> (n % 5))) % 21) - 10;
     return po || q.customA ? Math.round(raw * 0.2) : raw;
   };
-  const cl = (v: number) => clamp(Math.round(v), 1, 99);
+  const cl = (v: number) => clamp(Math.round(v), 1, 199);
   const ag = q.age || 24;
   const wing = ['LB', 'RB', 'LM', 'RM', 'LW', 'RW', 'LWB', 'RWB'].includes(q.ro);
 
@@ -1082,16 +1277,17 @@ export function injD(q: Player, n: number, careerP?: PlayerCareerProfile | null)
 
 export const ovMe = (p: PlayerCareerProfile) => OVF(p.pos, p.a);
 
-export function getOvGrowthScale(curOv: number, pot?: number): number {
-  let s = 1.0;
-  if (curOv >= 93) s = 0.04;
-  else if (curOv >= 89) s = 0.09;
-  else if (curOv >= 84) s = 0.18;
-  else if (curOv >= 78) s = 0.32;
-  else if (curOv >= 72) s = 0.50;
-  else if (curOv >= 64) s = 0.72;
-  if (pot != null && curOv >= pot) s *= 0.12;
-  return s;
+export function getOvGrowthScale(curOv: number, _pot?: number): number {
+  // Uncapped continuous growth until declining/retirement, with realistic tapering at elite tiers
+  if (curOv >= 106) return 0.025;
+  if (curOv >= 99) return 0.035;
+  if (curOv >= 93) return 0.05;
+  if (curOv >= 89) return 0.09;
+  if (curOv >= 84) return 0.18;
+  if (curOv >= 78) return 0.32;
+  if (curOv >= 72) return 0.50;
+  if (curOv >= 64) return 0.72;
+  return 1.0;
 }
 
 export interface PlayerDevProfile {
@@ -1117,7 +1313,7 @@ export function getPlayerDevProfile(q: Player, careerP?: PlayerCareerProfile | n
 
   let ageMult = 1.0;
   if (phase === 'peak') {
-    ageMult = avgRating >= 7.05 ? 0.72 : 0.55;
+    ageMult = avgRating >= 7.05 ? 0.75 : 0.58;
   } else if (phase === 'declining') {
     ageMult = avgRating >= 7.55 && age <= effPkEnd + 2 ? 0.12 : 0.04;
   }
@@ -1153,29 +1349,29 @@ export function trySuperstarBreakthrough(
 ): { brokeThrough: boolean; newPot: number; becameSuperstar: boolean } {
   const prof = getPlayerDevProfile(q, careerP);
   const curPot = q.pot || Math.max(q.ov + 2, 78);
-  if (prof.phase === 'declining' || !prof.strongSeason || q.ov < curPot - 3 || curPot >= 96) {
+  if (prof.phase === 'declining' || !prof.strongSeason || q.ov < curPot - 4 || curPot >= 195) {
     return { brokeThrough: false, newPot: curPot, becameSuperstar: false };
   }
   const tlVal = prof.D.tlVal;
   const talentFactor = 0.52 + (tlVal / 100) * 0.88;
   const formBoost = prof.avgRating >= 7.55 ? 1.55 : prof.avgRating >= 7.25 ? 1.25 : 0.95;
-  const ageFactor = prof.phase === 'growing' ? 1.15 : 0.82;
-  const chance = clamp(baseChance * talentFactor * formBoost * ageFactor, 0.005, 0.42);
+  const ageFactor = prof.phase === 'growing' ? 1.15 : 0.85;
+  const chance = clamp(baseChance * talentFactor * formBoost * ageFactor, 0.006, 0.42);
   if (Math.random() >= chance) {
     return { brokeThrough: false, newPot: curPot, becameSuperstar: false };
   }
-  const gain = (prof.avgRating >= 7.5 || tlVal >= 78) && Math.random() < 0.4 ? 2 : 1;
-  const newPot = clamp(curPot + gain, q.ov + 1, 96);
+  const gain = (prof.avgRating >= 7.5 || tlVal >= 78) && Math.random() < 0.45 ? 2 : 1;
+  const newPot = clamp(Math.max(curPot + gain, q.ov + 2), q.ov + 1, 199);
   const wasSuperstar = curPot >= 86;
   q.pot = newPot;
-  q.talent = clamp((q.talent ?? tlVal) + R(1, 2), 30, 98);
+  q.talent = clamp((q.talent ?? tlVal) + R(1, 2), 30, 99);
   if (q.me && careerP) {
     careerP.talent = q.talent;
   }
   return { brokeThrough: true, newPot, becameSuperstar: !wasSuperstar && newPot >= 86 };
 }
 
-export function autoGrow(p: PlayerCareerProfile, n = 1, potCap?: number): string {
+export function autoGrow(p: PlayerCareerProfile, n = 1, _potCap?: number): string {
   const map: Record<Position, StatKey[]> = {
     FW: ['sh', 'sh', 'sh', 'dr', 'dr', 'ps', 'ph'],
     MF: ['ps', 'ps', 'ps', 'dr', 'dr', 'sh', 'tk', 'ph'],
@@ -1186,16 +1382,16 @@ export function autoGrow(p: PlayerCareerProfile, n = 1, potCap?: number): string
   if (p.tr) w.push(p.tr, p.tr);
   const add: Partial<Record<StatKey, number>> = {};
   for (let i = 0; i < n; i++) {
-    const curOv = ovMe(p);
-    if (potCap != null && curOv >= potCap && Math.random() > 0.1) continue;
-    const av = w.filter((k) => p.a[k] < 99);
+    const av = w.filter((k) => p.a[k] < 199);
     if (!av.length) break;
     // Prefer attributes that haven't hit extreme levels yet for realistic multi-season balance
     const lowAv = av.filter((k) => p.a[k] < 80);
-    const k = lowAv.length && Math.random() < 0.8 ? P(lowAv) : P(av);
-    if (p.a[k] >= 88 && Math.random() > 0.2) continue;
-    if (p.a[k] >= 82 && Math.random() > 0.42) continue;
-    if (p.a[k] >= 75 && Math.random() > 0.68) continue;
+    const k = lowAv.length && Math.random() < 0.78 ? P(lowAv) : P(av);
+    if (p.a[k] >= 102 && Math.random() > 0.10) continue;
+    if (p.a[k] >= 95 && Math.random() > 0.16) continue;
+    if (p.a[k] >= 88 && Math.random() > 0.28) continue;
+    if (p.a[k] >= 82 && Math.random() > 0.48) continue;
+    if (p.a[k] >= 75 && Math.random() > 0.72) continue;
     p.a[k]++;
     p.trn = (p.trn || 0) + 1;
     add[k] = (add[k] || 0) + 1;
@@ -1209,7 +1405,7 @@ export function syncMe(s: GameState) {
   if (s.mode !== 'p' || !s.p) return;
   const q = s.teams[s.me]?.sq.find((x) => x.me);
   if (s.p.pts > 0) {
-    autoGrow(s.p, s.p.pts, q?.pot);
+    autoGrow(s.p, s.p.pts);
     s.p.pts = 0;
   }
   if (q) {
@@ -1246,7 +1442,7 @@ export function syncMe(s: GameState) {
     s.p.ht = syncedBio.heightCm;
     s.p.wt = syncedBio.weightKg;
     s.p.foot = syncedBio.foot;
-    if (!q.pot || q.pot < q.ov) q.pot = clamp(92, q.ov + 12, 95);
+    if (!q.pot || q.pot < q.ov + 4) q.pot = clamp(Math.max(92, q.ov + 6), q.ov + 4, 199);
     if (q.blessed) {
       q.customA = { ...s.p.a };
       if (s.p.sig) q.customSig = s.p.sig;
@@ -1406,6 +1602,239 @@ export function getPlayerSeasonProgression(
     tk: pt.a.tk,
     ph: pt.a.ph
   }));
+}
+
+export interface PlayerMultiSeasonChartPoint {
+  season: number;
+  label: string;
+  teamName: string;
+  ov: number;
+  sh: number;
+  ps: number;
+  dr: number;
+  tk: number;
+  ph: number;
+  isCurrent?: boolean;
+}
+
+export function getPlayerMultiSeasonProgression(
+  q: Player,
+  state: Pick<GameState, 'season' | 'md' | 'teams' | 'seasonArchives' | 'mode' | 'p'>,
+  careerP?: PlayerCareerProfile | null
+): PlayerMultiSeasonChartPoint[] {
+  const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
+  const pProf = isMe ? careerP || state.p : null;
+  const curSeason = state.season ?? 1;
+  const curOv = isMe && pProf ? ovMe(pProf) : q.ov;
+  const curDt = DT(q, pProf);
+  const curA = curDt.a;
+
+  const map = new Map<number, PlayerSeasonHistoryRecord>();
+  const rawHist = (pProf?.history && pProf.history.length ? pProf.history : q.history) || [];
+  rawHist.forEach((h) => {
+    if (h && typeof h.season === 'number') map.set(h.season, { ...h });
+  });
+
+  if (state.seasonArchives?.length) {
+    state.seasonArchives.forEach((arc) => {
+      if (map.has(arc.season)) return;
+      const found = arc.players.find((pl) => pl.name === q.n || (isMe && pl.isMe));
+      if (found) {
+        map.set(arc.season, {
+          season: arc.season,
+          teamId: arc.teamId,
+          teamName: arc.teamName,
+          tier: arc.tier,
+          ov: found.ov,
+          sp: found.sp,
+          sg: found.sg,
+          sa: found.sa,
+          cs: found.cs,
+          motm: found.motm,
+          yc: found.yc,
+          rc: found.rc,
+          avgRating: found.avgRating
+        });
+      }
+    });
+  }
+
+  const synthA = (ovTarget: number, refA: CoreAttrs): CoreAttrs => {
+    const scale = ovTarget / Math.max(1, curOv);
+    const seedA: CoreAttrs = {
+      sh: clamp(Math.round(refA.sh * scale), 10, 199),
+      ps: clamp(Math.round(refA.ps * scale), 10, 199),
+      dr: clamp(Math.round(refA.dr * scale), 10, 199),
+      tk: clamp(Math.round(refA.tk * scale), 10, 199),
+      ph: clamp(Math.round(refA.ph * scale), 10, 199)
+    };
+    return fitA({ ...q, ov: ovTarget }, seedA);
+  };
+
+  const pastRows = Array.from(map.values()).sort((a, b) => a.season - b.season);
+  const points: PlayerMultiSeasonChartPoint[] = [];
+
+  // Optional initial entry anchor (from careerP.b or Season 1 startA/seasonProg)
+  const firstPast = pastRows[0];
+  if (isMe && pProf?.b) {
+    const bOv = OVF(pProf.pos, pProf.b);
+    points.push({
+      season: 0,
+      label: 'เริ่มต้น',
+      teamName: firstPast?.teamName || state.teams.find((t) => t.sq.some((x) => x.n === q.n))?.name || '',
+      ov: bOv,
+      sh: pProf.b.sh,
+      ps: pProf.b.ps,
+      dr: pProf.b.dr,
+      tk: pProf.b.tk,
+      ph: pProf.b.ph
+    });
+  } else if (firstPast?.startA && firstPast?.startOv) {
+    points.push({
+      season: 0,
+      label: 'เริ่มต้น',
+      teamName: firstPast.teamName,
+      ov: firstPast.startOv,
+      sh: firstPast.startA.sh,
+      ps: firstPast.startA.ps,
+      dr: firstPast.startA.dr,
+      tk: firstPast.startA.tk,
+      ph: firstPast.startA.ph
+    });
+  } else if (!pastRows.length && q.seasonProg?.pts?.length && q.seasonProg.pts[0]) {
+    const s0 = q.seasonProg.pts[0];
+    if (s0.ov !== curOv || !sameCoreAttrs(s0.a, curA)) {
+      points.push({
+        season: 0,
+        label: `ต้น S${curSeason}`,
+        teamName: state.teams.find((t) => t.sq.some((x) => x.n === q.n))?.name || '',
+        ov: s0.ov,
+        sh: s0.a.sh,
+        ps: s0.a.ps,
+        dr: s0.a.dr,
+        tk: s0.a.tk,
+        ph: s0.a.ph
+      });
+    }
+  }
+
+  pastRows.forEach((r) => {
+    const attr = r.a ? { ...r.a } : synthA(r.ov, curA);
+    points.push({
+      season: r.season,
+      label: `S${r.season}`,
+      teamName: r.teamName,
+      ov: r.ov,
+      sh: attr.sh,
+      ps: attr.ps,
+      dr: attr.dr,
+      tk: attr.tk,
+      ph: attr.ph
+    });
+  });
+
+  if (!map.has(curSeason) && !q.retired) {
+    const curClubName = state.teams.find((t) => t.sq.some((x) => x.n === q.n))?.name || '';
+    points.push({
+      season: curSeason,
+      label: `S${curSeason} (ปัจจุบัน)`,
+      teamName: curClubName,
+      ov: curOv,
+      sh: curA.sh,
+      ps: curA.ps,
+      dr: curA.dr,
+      tk: curA.tk,
+      ph: curA.ph,
+      isCurrent: true
+    });
+  } else if (points.length) {
+    points[points.length - 1].isCurrent = true;
+  }
+
+  return points;
+}
+
+export const ROLE_ADAPT_THRESHOLD_ADJ = 4;
+export const ROLE_ADAPT_THRESHOLD_CROSS = 6;
+
+export function learnCareerTrait(d: GameState, traitId: string): { ok: boolean; msg: string } {
+  if (d.mode !== 'p' || !d.p) return { ok: false, msg: 'ใช้ได้เฉพาะโหมดนักเตะอาชีพ' };
+  const def = TRAIT_BY_ID[traitId];
+  if (!def) return { ok: false, msg: 'ไม่พบสไตล์การเล่นนี้' };
+  if (!def.pos.includes(d.p.pos)) return { ok: false, msg: `สไตล์ "${def.name}" ไม่เหมาะกับตำแหน่ง ${d.p.pos}` };
+  const cur = d.p.traits ? [...d.p.traits] : [];
+  if (cur.includes(traitId)) return { ok: false, msg: `มีสไตล์ "${def.name}" อยู่แล้ว` };
+  if (cur.length >= 6) return { ok: false, msg: 'มีสไตล์การเล่นครบสูงสุด 6 สไตล์แล้ว (ถอดสไตล์เดิมออกก่อน)' };
+  const conflict = cur.find((cid) => def.conflicts?.includes(cid) || TRAIT_BY_ID[cid]?.conflicts?.includes(def.id));
+  if (conflict) {
+    return { ok: false, msg: `ขัดแย้งกับสไตล์ "${TRAIT_BY_ID[conflict]?.name || conflict}"` };
+  }
+  const cost = 6;
+  if ((d.p.rep ?? 10) < cost) return { ok: false, msg: `ต้องใช้ชื่อเสียง ${cost} ★` };
+  d.p.rep = (d.p.rep ?? 10) - cost;
+  d.p.traits = [...cur, traitId];
+  syncMe(d);
+  return { ok: true, msg: `${def.icon} เรียนรู้สไตล์ "${def.name}" สำเร็จ! (-${cost} ★)` };
+}
+
+export function forgetCareerTrait(d: GameState, traitId: string): { ok: boolean; msg: string } {
+  if (d.mode !== 'p' || !d.p) return { ok: false, msg: 'ใช้ได้เฉพาะโหมดนักเตะอาชีพ' };
+  const cur = d.p.traits ? [...d.p.traits] : [];
+  if (!cur.includes(traitId)) return { ok: false, msg: 'ไม่พบสไตล์นี้' };
+  if (cur.length <= 1) return { ok: false, msg: 'ต้องมีสไตล์การเล่นติดตัวอย่างน้อย 1 สไตล์' };
+  const cost = 3;
+  if ((d.p.rep ?? 10) < cost) return { ok: false, msg: `ต้องใช้ชื่อเสียง ${cost} ★` };
+  d.p.rep = (d.p.rep ?? 10) - cost;
+  d.p.traits = cur.filter((id) => id !== traitId);
+  syncMe(d);
+  return { ok: true, msg: `ปรับเปลี่ยนถอดสไตล์ "${TRAIT_BY_ID[traitId]?.name || traitId}" แล้ว (-${cost} ★)` };
+}
+
+export function setCareerRoleTrainTarget(d: GameState, role: SubRole | null): { ok: boolean; msg: string } {
+  if (d.mode !== 'p' || !d.p) return { ok: false, msg: 'ใช้ได้เฉพาะโหมดนักเตะอาชีพ' };
+  if (!role) {
+    d.p.roleTrain = null;
+    syncMe(d);
+    return { ok: true, msg: 'ยกเลิกเป้าหมายฝึกตำแหน่งรองแล้ว' };
+  }
+  if (role === d.p.sp) return { ok: false, msg: `${role} เป็นตำแหน่งหลักของคุณอยู่แล้ว` };
+  if (d.p.altRoles?.includes(role)) return { ok: false, msg: `คุณปลดล็อกตำแหน่ง ${role} แล้ว` };
+  if ((d.p.pos === 'GK') !== (LINE[role] === 'GK')) {
+    return { ok: false, msg: 'ไม่สามารถฝึกสลับระหว่างตำแหน่งผู้รักษาประตูกับเอาต์ฟิลด์ได้' };
+  }
+  d.p.roleTrain = role;
+  syncMe(d);
+  return { ok: true, msg: `🎯 ตั้งเป้าหมายฝึกเล่นตำแหน่ง "${role}" รายสัปดาห์แล้ว!` };
+}
+
+export function switchCareerSignature(d: GameState, sigKey: string): { ok: boolean; msg: string } {
+  if (d.mode !== 'p' || !d.p) return { ok: false, msg: 'ใช้ได้เฉพาะโหมดนักเตะอาชีพ' };
+  if (!SIGL[sigKey]) return { ok: false, msg: 'ไม่พบอาวุธประจำตัวนี้' };
+  if (d.p.sig === sigKey) return { ok: false, msg: `ใช้อาวุธประจำตัว "${SIGL[sigKey]}" อยู่แล้ว` };
+  const cost = 5;
+  if ((d.p.rep ?? 10) < cost) return { ok: false, msg: `ต้องใช้ชื่อเสียง ${cost} ★` };
+  d.p.rep = (d.p.rep ?? 10) - cost;
+  d.p.sig = sigKey;
+  const meSq = d.teams[d.me]?.sq.find((q) => q.me);
+  if (meSq && meSq.blessed) meSq.customSig = sigKey;
+  syncMe(d);
+  return { ok: true, msg: `⚡ เปลี่ยนอาวุธประจำตัวเป็น "${SIGL[sigKey]}" (+8 โบนัสสกิล) สำเร็จ! (-${cost} ★)` };
+}
+
+export function trainCareerSignatureDrill(d: GameState): { ok: boolean; msg: string } {
+  if (d.mode !== 'p' || !d.p) return { ok: false, msg: 'ใช้ได้เฉพาะโหมดนักเตะอาชีพ' };
+  const sigKey = d.p.sig || (d.p.pos === 'GK' ? 'sv' : 'fin');
+  const curBonus = d.p.sb?.[sigKey] || 0;
+  if (curBonus >= 12) return { ok: false, msg: `ติวอาวุธ "${SIGL[sigKey] || sigKey}" เต็มขีดจำกัดการซ้อมพิเศษ (+12) แล้ว` };
+  const cost = 4;
+  if ((d.p.rep ?? 10) < cost) return { ok: false, msg: `ต้องใช้ชื่อเสียง ${cost} ★` };
+  if ((d.p.en ?? 100) < 25) return { ok: false, msg: 'พลังกายต่ำเกินไป พักฟื้นก่อนติวอาวุธพิเศษ' };
+  d.p.rep = (d.p.rep ?? 10) - cost;
+  d.p.en = Math.max(15, (d.p.en ?? 100) - 6);
+  d.p.sb = { ...(d.p.sb || {}), [sigKey]: curBonus + 1 };
+  d.p.sigDrills = (d.p.sigDrills || 0) + 1;
+  syncMe(d);
+  return { ok: true, msg: `🔥 ติวเข้มอาวุธประจำตัว "${SIGL[sigKey] || sigKey}" +1 (โบนัสรวม +${curBonus + 1})! (-${cost} ★)` };
 }
 
 export const vlu = (q: Player) => Math.round((q.ov * q.ov) / 40);
@@ -1690,15 +2119,15 @@ export function buildPlayerFromCareerProfile(
   const lp = opts?.livePlayer;
   const srcA = lp?.customA || p.a;
   const attrs: CoreAttrs = {
-    sh: clamp(Math.round(srcA?.sh ?? 55), 1, 99),
-    ps: clamp(Math.round(srcA?.ps ?? 55), 1, 99),
-    dr: clamp(Math.round(srcA?.dr ?? 55), 1, 99),
-    tk: clamp(Math.round(srcA?.tk ?? 55), 1, 99),
-    ph: clamp(Math.round(srcA?.ph ?? 55), 1, 99)
+    sh: clamp(Math.round(srcA?.sh ?? 55), 1, 199),
+    ps: clamp(Math.round(srcA?.ps ?? 55), 1, 199),
+    dr: clamp(Math.round(srcA?.dr ?? 55), 1, 199),
+    tk: clamp(Math.round(srcA?.tk ?? 55), 1, 199),
+    ph: clamp(Math.round(srcA?.ph ?? 55), 1, 199)
   };
-  const ov = clamp(Math.round(opts?.ovOverride ?? lp?.ov ?? OVF(p.pos, attrs)), 30, 99);
+  const ov = clamp(Math.round(opts?.ovOverride ?? lp?.ov ?? OVF(p.pos, attrs)), 30, 199);
   const talent = clamp(Math.round(p.talent ?? lp?.talent ?? 78), 25, 99);
-  const pot = clamp(Math.round(opts?.potOverride ?? lp?.pot ?? Math.max(ov + 14, Math.min(96, talent + 6))), ov, 99);
+  const pot = clamp(Math.round(opts?.potOverride ?? lp?.pot ?? Math.max(ov + 14, Math.min(96, talent + 6))), ov, 199);
   const ki = SKIN_P.indexOf(p.k);
   const hi = HAIR_P.indexOf(p.h);
   const no = clamp(p.no || lp?.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);

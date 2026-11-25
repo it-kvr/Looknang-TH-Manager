@@ -207,8 +207,23 @@ export const SeasonStatsModal: React.FC<{
               </div>
             </div>
 
-            {(rec.leagueBestScorer || rec.leagueBestAssist) && (
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] mland:text-[9.5px] text-[var(--mut)] pt-0.5">
+            {(rec.leagueCupStatus || rec.divCupStatus || rec.superCupStatus || rec.leagueBestScorer || rec.leagueBestAssist) && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] mland:text-[9.5px] text-[var(--mut)] pt-0.5">
+                {rec.leagueCupStatus && (
+                  <span>
+                    🥇 ลีกคัพ: <b className="text-[var(--ink)]">{rec.leagueCupStatus}</b>
+                  </span>
+                )}
+                {rec.divCupStatus && (
+                  <span>
+                    🛡️ ถ้วยดิวิชั่น: <b className="text-[var(--ink)]">{rec.divCupStatus}</b>
+                  </span>
+                )}
+                {rec.superCupStatus && (
+                  <span>
+                    🏅 แชมเปี้ยนส์คัพ: <b className="text-[var(--ink)]">{rec.superCupStatus}</b>
+                  </span>
+                )}
                 {rec.leagueBestScorer && (
                   <span>
                     👟 ดาวซัลโวลีก: <b className="text-[var(--ink)]">{rec.leagueBestScorer}</b>

@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
@@ -716,7 +716,7 @@ export function extractMatchHighlights(
   a: Team,
   r: MatchResult,
   opts?: {
-    kind?: 'league' | 'cup' | 'asia';
+    kind?: MatchKind | 'asia';
     label?: string;
     isDerby?: boolean;
     penText?: string;
@@ -945,7 +945,19 @@ export function extractMatchHighlights(
     text: statsBits.join(' · ')
   });
 
-  const matchLabel = opts?.label || (opts?.kind === 'cup' ? '🏆 ถ้วยประชาชน' : opts?.kind === 'asia' ? '🌏 บอลถ้วยทวีป' : '⚽ ลีก');
+  const matchLabel =
+    opts?.label ||
+    (opts?.kind === 'cup'
+      ? '🏆 ถ้วยประชาชน'
+      : opts?.kind === 'lc'
+        ? '🥇 ไทยลีก คัพ'
+        : opts?.kind === 'sc'
+          ? '🏅 แชมเปี้ยนส์ คัพ'
+          : opts?.kind === 'dc'
+            ? '🛡️ ถ้วยดิวิชั่น & ภูมิภาค'
+            : opts?.kind === 'asia' || opts?.kind === 'ac'
+              ? '🌏 บอลถ้วยทวีป'
+              : '⚽ ลีก');
   const scoreLine = `${h.name} ${r.gh}-${r.ga} ${a.name}${opts?.penText ? ` (${opts.penText})` : ''}`;
   const summaryBody = lines
     .filter((l) => l.kind !== 'summary')
@@ -1074,11 +1086,20 @@ export function updateTeamsFanbaseOnMatch(
   gh: number,
   a: Team,
   ga: number,
-  opts?: { kind?: 'league' | 'cup' | 'asia'; big?: boolean }
+  opts?: { kind?: MatchKind | 'asia'; big?: boolean }
 ) {
   const curH = ensureTeamFans(h);
   const curA = ensureTeamFans(a);
-  const kindMul = opts?.kind === 'asia' ? 1.55 : opts?.kind === 'cup' ? 1.25 : 1.0;
+  const kindMul =
+    opts?.kind === 'asia' || opts?.kind === 'ac'
+      ? 1.55
+      : opts?.kind === 'sc'
+        ? 1.35
+        : opts?.kind === 'cup' || opts?.kind === 'lc'
+          ? 1.25
+          : opts?.kind === 'dc'
+            ? 1.15
+            : 1.0;
   const bigMul = opts?.big ? 1.25 : 1.0;
   const margin = Math.abs(gh - ga);
   const upsetForH = a.tier > h.tier || curA > curH * 1.4;
@@ -1316,7 +1337,7 @@ export function computeMatchAttendance(
   h: Team,
   a: Team,
   s?: GameState | null,
-  opts?: { kind?: 'league' | 'cup' | 'asia'; derby?: boolean }
+  opts?: { kind?: MatchKind | 'asia'; derby?: boolean }
 ): { att: number; cap: number; pct: number } {
   const cap = getTeamStadiumCapacity(h, s);
   const homeFans = ensureTeamFans(h);
@@ -1328,7 +1349,18 @@ export function computeMatchAttendance(
   const moodRatio = isUserHome && s ? clamp(((s.fan ?? 55) + getActiveBoardModifiers(s).fan) / 100, 0.15, 1.0) : 0.62;
   const recentWins = (h.fm || '').slice(-4).split('').filter((c) => c === 'W').length;
   const formBoost = recentWins * 0.03;
-  const bigMatchBoost = opts?.kind === 'asia' ? 0.18 : opts?.kind === 'cup' ? 0.11 : opts?.derby ? 0.15 : 0;
+  const bigMatchBoost =
+    opts?.kind === 'asia' || opts?.kind === 'ac'
+      ? 0.18
+      : opts?.kind === 'sc'
+        ? 0.16
+        : opts?.kind === 'cup' || opts?.kind === 'lc'
+          ? 0.11
+          : opts?.kind === 'dc'
+            ? 0.08
+            : opts?.derby
+              ? 0.15
+              : 0;
   const fanbaseDraw = clamp(0.28 + (homeFans / Math.max(10000, cap * 1.85)) * 0.52, 0.28, 0.86);
   const awayTravel = clamp(awayFans / Math.max(60000, cap * 4), 0.02, 0.12);
   const fillRate = clamp(
@@ -1626,7 +1658,12 @@ export function startSeason(s: GameState) {
       q.motm = 0;
       q.tyc = 0;
     });
-    assignTeamShirtNumbers(t);
+    // Randomize shirt numbers across all teams each season (preserving Season 1 Career start number)
+    assignTeamShirtNumbers(t, {
+      randomize: true,
+      careerP: t.id === s.me ? s.p : null,
+      keepMeNo: (s.season ?? 1) === 1 && s.mode === 'p'
+    });
     t.sq.forEach((q) => {
       recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
     });
@@ -1654,6 +1691,9 @@ export function startSeason(s: GameState) {
     });
   s.md = 0;
   s.pc = false;
+  s.plc = false;
+  s.psc = false;
+  s.pdc = false;
   s.cup = {
     alive: true,
     r: 0,
@@ -1669,6 +1709,7 @@ export function startSeason(s: GameState) {
     ].sort(() => Math.random() - 0.5)
   };
   initAsia(s);
+  initExtraCups(s);
   mkMarket(s);
   s.schedRes = {};
   s.cupLog = [];
@@ -1823,29 +1864,32 @@ export function applyPositionAdaptation(
           if (isMePlayer && s?.p) {
             s.p.sb = { ...(s.p.sb || {}) };
             s.p.sb[sk] = (s.p.sb[sk] || 0) + 1;
-            if (s.p.customD && s.p.customD[sk] != null) s.p.customD[sk] = clamp(s.p.customD[sk] + 1, 1, 99);
+            if (s.p.customD && s.p.customD[sk] != null) s.p.customD[sk] = clamp(s.p.customD[sk] + 1, 1, 199);
           }
           devNotes.push(`${SIGL[sk] || sk} +1`);
         }
 
         const coreChance = ((age <= 24 ? 0.055 : 0.03) + (tl >= 75 ? 0.025 : 0) + (fastAdapt ? 0.025 : 0)) * ovScale * devProf.ageMult;
-        const softCap = clamp(q.pot || 86, 50, 96);
-        if (curOv < softCap && Math.random() < coreChance) {
+        if (Math.random() < coreChance) {
           const ck = P(target.cores);
           if (isMePlayer && s?.p) {
-            if (s.p.a[ck] < 96) {
-              s.p.a[ck] = clamp(s.p.a[ck] + 1, 1, 99);
+            if (s.p.a[ck] < 199) {
+              s.p.a[ck] = clamp(s.p.a[ck] + 1, 1, 199);
               q.ov = ovMe(s.p);
+              q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
               if (q.blessed && q.customA) q.customA = { ...s.p.a };
               devNotes.push(`${ATT.find((x) => x[0] === ck)?.[1] || ck} +1`);
             }
           } else {
             q.coreSb = { ...(q.coreSb || {}) };
             q.coreSb[ck] = (q.coreSb[ck] || 0) + 1;
-            if (q.customA) q.customA[ck] = clamp(q.customA[ck] + 1, 1, 99);
+            if (q.customA) q.customA[ck] = clamp(q.customA[ck] + 1, 1, 199);
             const dtAfter = DT(q, null);
-            const newOv = clamp(OVF(q.pos, dtAfter.a), 1, softCap);
-            if (newOv > q.ov) q.ov = newOv;
+            const newOv = clamp(OVF(q.pos, dtAfter.a), 1, 199);
+            if (newOv > q.ov) {
+              q.ov = newOv;
+              q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
+            }
             devNotes.push(`${ATT.find((x) => x[0] === ck)?.[1] || ck} +1`);
           }
         }
@@ -1900,21 +1944,45 @@ export function applyPositionAdaptation(
 
 export function maybeAiCoachExperimentTactics(s: GameState) {
   const curMd = s.md ?? 0;
-  if (curMd < 2) return;
+  if (curMd < 1) return;
+
+  const myTier = s.teams[s.me]?.tier ?? 0;
+  const findNextOppPow = (tm: Team): number | null => {
+    const fxList = tm.tier === myTier ? s.fx : s.fxo?.[tm.tier];
+    const roundPairs = fxList?.[curMd];
+    const pair = roundPairs?.find(([h, a]) => h === tm.id || a === tm.id);
+    if (!pair) return null;
+    const opp = s.teams[pair[0] === tm.id ? pair[1] : pair[0]];
+    if (!opp) return null;
+    const r = rate(opp, s);
+    return (r.at + r.df) / 2;
+  };
 
   s.teams.forEach((t) => {
     if (s.mode === 'm' && t.id === s.me) return;
+    if (t.tacticTrialMd != null && curMd - t.tacticTrialMd < 2) return;
+
     const recent = (t.fm || '').slice(-5);
-    if (recent.length < 2) return;
     const last2 = recent.slice(-2);
     const last3 = recent.slice(-3);
     const losses5 = recent.split('').filter((ch) => ch === 'L').length;
     const winless4 = recent.length >= 4 && !recent.includes('W');
+    const isSlump = last2 === 'LL' || last3 === 'LLL' || losses5 >= 3 || winless4;
 
-    if (last2 !== 'LL' && last3 !== 'LLL' && losses5 < 3 && !winless4) return;
-    if (t.tacticTrialMd != null && curMd - t.tacticTrialMd < 2) return;
+    const myRat = rate(t, s);
+    const myPow = (myRat.at + myRat.df) / 2;
+    const nextOppPow = findNextOppPow(t);
+    const oppDiff = nextOppPow != null ? nextOppPow - myPow : 0;
 
-    const tryChance = last3 === 'LLL' ? 0.65 : losses5 >= 4 ? 0.75 : last2 === 'LL' ? 0.34 : 0.42;
+    // Coaches adjust on slumps, against tactical mismatch / strong underdog opponents, or periodic evolution
+    let tryChance = 0;
+    if (isSlump) {
+      tryChance = last3 === 'LLL' ? 0.72 : losses5 >= 3 ? 0.76 : 0.45;
+    } else if (Math.abs(oppDiff) >= 3.2) {
+      tryChance = 0.34;
+    } else if (curMd >= 4 && (!t.tacticTrialMd || curMd - t.tacticTrialMd >= 5)) {
+      tryChance = 0.22;
+    }
     if (Math.random() >= tryChance) return;
 
     const fitSquad = t.sq.filter((q) => q.inj <= 0 && (q.sus || 0) <= 0);
@@ -1924,8 +1992,8 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
       MF: fitSquad.filter((q) => q.pos === 'MF').length,
       FW: fitSquad.filter((q) => q.pos === 'FW').length
     };
-    const concedingLots = t.ga > t.gf + 3;
-    const lowScoring = t.gf < Math.max(1, t.p) * 0.9;
+    const concedingLots = t.ga > t.gf + 2;
+    const lowScoring = t.gf < Math.max(1, t.p) * 0.95;
 
     const diffFormCandidates = CLUB_PHILOSOPHIES.filter((ph) => ph.form !== t.form);
     const candidates = diffFormCandidates.length ? diffFormCandidates : CLUB_PHILOSOPHIES.filter((ph) => ph.name !== t.philosophy);
@@ -1942,8 +2010,8 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
         score -= Math.max(0, needDF - availCounts.DF) * 4;
         score -= Math.max(0, needMF - availCounts.MF) * 4;
         score -= Math.max(0, needFW - availCounts.FW) * 4;
-        if (concedingLots && (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced' || needDF >= 4)) score += 3.5;
-        if (lowScoring && (ph.styleGroup === 'attack' || ph.styleGroup === 'control' || needFW >= 2)) score += 3.5;
+        if ((concedingLots || oppDiff >= 3) && (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced' || needDF >= 4)) score += 3.8;
+        if ((lowScoring || oppDiff <= -3) && (ph.styleGroup === 'attack' || ph.styleGroup === 'control' || needFW >= 2)) score += 3.8;
         score += Math.random() * 4.5;
         return { ph, score };
       })
@@ -1955,21 +2023,28 @@ export function maybeAiCoachExperimentTactics(s: GameState) {
 
     applyClubPhilosophy(t, chosen);
     t.tacticTrialMd = curMd;
-    t.tacticTrialLabel = `ทดลองแผน ${chosen.form} (${chosen.name})`;
-    t.tacFam = clamp(R(60, 74), 48, 86);
+    const reasonTag = isSlump
+      ? 'แก้เกมหลังผลงานสะดุด'
+      : oppDiff >= 3
+        ? 'รับมือคู่แข่งแกร่ง'
+        : oppDiff <= -3
+          ? 'เปิดเกมรุกบุกเต็มสูบ'
+          : 'หมุนเวียนแท็กติกตามสภาพทีม';
+    t.tacticTrialLabel = `แผน ${chosen.form} (${chosen.name}) · ${reasonTag}`;
+    t.tacFam = clamp(R(68, 86), 55, 90);
 
     if (s.mode === 'p' && t.id === s.me) {
       pushFeed(
         s,
-        'โค้ชลองแผนใหม่',
-        `🧭 โค้ชทดลองเปลี่ยนแผนใหม่เป็น ${chosen.form} (${chosen.name}) เพื่อแก้เกมหลังผลงานทีมสะดุด!`,
-        'urg'
+        'โค้ชปรับแผน',
+        `🧭 โค้ชปรับระบบใหม่เป็น ${chosen.form} (${chosen.name}) — ${reasonTag}`,
+        isSlump ? 'urg' : 'ok'
       );
-    } else if (t.tier === s.teams[s.me]?.tier && Math.random() < 0.3) {
+    } else if (t.tier === myTier && Math.random() < 0.25) {
       pushFeed(
         s,
         'ข่าวลีก',
-        `🧭 โค้ช ${t.name} ทดลองปรับแผนใหม่เป็น ${chosen.form} (${chosen.name}) หลังแพ้ต่อเนื่อง`,
+        `🧭 โค้ช ${t.name} ปรับแผนเป็น ${chosen.form} (${chosen.name}) (${reasonTag})`,
         ''
       );
     }
@@ -2203,20 +2278,30 @@ export function runPlayerWeek(s: GameState) {
   const curOv = ovMe(p);
   const devProf = getPlayerDevProfile(mePlayer, p);
   const ovScale = getOvGrowthScale(curOv, mePlayer.pot);
-  const potCeiling = mePlayer.pot || 88;
   const prodigyBonus = (perks.includes('prodigy') ? 0.025 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.015 : 0);
 
   if (ac.gr) {
     const k = ac.k || P([focus, focus, p.tr || 'sh', P(['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[])]);
     const kn = ATT.find((z) => z[0] === k)?.[1] || k;
-    const attrResistance = p.a[k] >= 88 ? 0.2 : p.a[k] >= 82 ? 0.42 : p.a[k] >= 75 ? 0.68 : 1;
+    const attrResistance =
+      p.a[k] >= 100
+        ? 0.06
+        : p.a[k] >= 95
+          ? 0.11
+          : p.a[k] >= 88
+            ? 0.2
+            : p.a[k] >= 82
+              ? 0.42
+              : p.a[k] >= 75
+                ? 0.68
+                : 1;
     const grChance =
       (ac.gr * 0.34 + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.012 : 0)) *
       ovScale *
       attrResistance *
       devProf.ageMult *
       devProf.formMult;
-    if (p.a[k] < 99 && curOv < potCeiling && devProf.phase !== 'declining' && Math.random() < grChance) {
+    if (p.a[k] < 199 && devProf.phase !== 'declining' && Math.random() < grChance) {
       p.a[k]++;
       p.trn = (p.trn || 0) + 1;
       m += ` · ${kn} เพิ่มเป็น ${p.a[k]}`;
@@ -2234,8 +2319,8 @@ export function runPlayerWeek(s: GameState) {
     const totalFans = adjustTeamFans(s.teams[s.me], fanAdded);
     m += ` · แฟนบอล +${fmtFans(fanAdded)} (รวม ${fmtFansShort(totalFans)})`;
   }
-  if (ac.pt && curOv < potCeiling && devProf.phase !== 'declining' && Math.random() < (ac.pt * 0.34 + prodigyBonus) * ovScale * devProf.ageMult) {
-    const g = autoGrow(p, 1, potCeiling);
+  if (ac.pt && devProf.phase !== 'declining' && Math.random() < (ac.pt * 0.34 + prodigyBonus) * ovScale * devProf.ageMult) {
+    const g = autoGrow(p, 1);
     if (g) m += ` · พัฒนาอัตโนมัติ (${g})`;
   }
   if (mePlayer.me && devProf.strongSeason) {
@@ -2250,6 +2335,35 @@ export function runPlayerWeek(s: GameState) {
     m += p.inj === 0 ? ' · 🩹 หายเจ็บพร้อมลงสนาม!' : ` · 🩹 พักฟื้นเหลือ ${p.inj} นัด`;
   }
   const meSq = s.teams[s.me]?.sq.find((q) => q.me);
+  if (p.roleTrain && p.roleTrain !== p.sp && !p.altRoles?.includes(p.roleTrain)) {
+    const targetRole = p.roleTrain;
+    const rawPen = pen(p.sp, targetRole);
+    const threshold = rawPen === 1 ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
+    const fastRole = perks.includes('adaptable') || hasTrait(mePlayer, 'versatile_utility', p);
+    const stepExp = fastRole && Math.random() < 0.55 ? 2 : 1;
+    p.roleExp = { ...(p.roleExp || {}), [targetRole]: (p.roleExp?.[targetRole] || 0) + stepExp };
+    if (meSq) meSq.roleExp = { ...p.roleExp };
+    if (p.roleExp[targetRole] >= threshold) {
+      const nextAlt = Array.from(new Set([...(p.altRoles || []), targetRole])).filter((r) => r !== p.sp);
+      p.altRoles = nextAlt;
+      delete p.roleExp[targetRole];
+      p.roleTrain = null;
+      const roleTarget = ROLE_ADAPT_TARGETS[targetRole] || ROLE_ADAPT_TARGETS.CM;
+      const masterSub = roleTarget.subs[0];
+      p.sb = { ...(p.sb || {}), [masterSub]: (p.sb?.[masterSub] || 0) + 1 };
+      if (meSq) {
+        meSq.altRoles = [...nextAlt];
+        meSq.roleExp = { ...p.roleExp };
+        meSq.sb = { ...p.sb };
+      }
+      const roleLabel = SPN[targetRole] || targetRole;
+      m += ` · 🧩 ปลดล็อกตำแหน่งถนัด ${targetRole}!`;
+      pushFeed(s, 'ตำแหน่งใหม่', `🧩 ${p.name} ฝึกตำแหน่ง ${targetRole} (${roleLabel}) สำเร็จ! (${SIGL[masterSub] || masterSub} +1)`, 'ok');
+      appendPlayerCareerLog(meSq, `🧩 ซีซั่น ${s.season}: ฝึกปลดล็อกตำแหน่งถนัดใหม่ ${targetRole} (${roleLabel})`, p);
+    } else {
+      m += ` · 🎯 ฝึก ${targetRole} (${p.roleExp[targetRole]}/${threshold})`;
+    }
+  }
   if (meSq) {
     const { notes: trainMissionNotes, summary } = applyTrainingMissionProgress(meSq, {
       careerPlan: p.plan ?? 1,
@@ -2370,7 +2484,10 @@ export const DILEMMAS: DilemmaTemplate[] = [
         apply: (s) => {
           const me = s.teams[s.me];
           const bn = me.sq.filter((q) => !xi(me).includes(q)).sort((a, b) => b.ov - a.ov)[0];
-          if (bn && bn.ov < (bn.pot || 90)) bn.ov++;
+          if (bn && getPlayerDevProfile(bn, null).phase !== 'declining') {
+            bn.ov = clamp(bn.ov + 1, 1, 199);
+            bn.pot = clamp(Math.max(bn.pot || bn.ov, bn.ov + 2), bn.ov, 199);
+          }
           return bn ? `${bn.n} ตั้งใจซ้อมหนักจนพัฒนาพลัง +1` : 'นักเตะตั้งใจซ้อมมากขึ้น';
         }
       },
@@ -2643,6 +2760,149 @@ export function simulateCpuCupRound(s: GameState) {
         logFin(s, 'รางวัลแชมป์ถ้วยประชาชน', 250);
         s.mgrRep = (s.mgrRep || 50) + 75;
       }
+    }
+  }
+}
+
+export const EXTRA_CUP_META: Record<
+  'lc' | 'sc' | 'dc',
+  { name: string; short: string; icon: string; trophyTitle: string; trophyType: TrophyRecord['type']; prize: number; rep: number }
+> = {
+  lc: {
+    name: 'ไทยลีก คัพ',
+    short: 'ลีกคัพ',
+    icon: '🥇',
+    trophyTitle: 'แชมป์ไทยลีก คัพ',
+    trophyType: 'league_cup',
+    prize: 200,
+    rep: 60
+  },
+  sc: {
+    name: 'ไทยแลนด์ แชมเปี้ยนส์ คัพ',
+    short: 'แชมเปี้ยนส์ คัพ',
+    icon: '🏅',
+    trophyTitle: 'แชมป์แชมเปี้ยนส์ คัพ',
+    trophyType: 'super_cup',
+    prize: 120,
+    rep: 45
+  },
+  dc: {
+    name: 'ถ้วยดิวิชั่น & ภูมิภาค',
+    short: 'ถ้วยดิวิชั่น',
+    icon: '🛡️',
+    trophyTitle: 'แชมป์ถ้วยดิวิชั่น',
+    trophyType: 'div_cup',
+    prize: 140,
+    rep: 45
+  }
+};
+
+export function initExtraCups(s: GameState) {
+  const rankTeams = (filterFn: (t: Team) => boolean) =>
+    s.teams
+      .filter(filterFn)
+      .map((t) => {
+        const r = rate(t, s);
+        return { id: t.id, pow: r.at + r.df };
+      })
+      .sort((a, b) => b.pow - a.pow)
+      .map((x) => x.id);
+
+  // 1. Thailand Champions Cup (Super Cup): 2 teams — prev League Champion vs prev FA Cup Champion (fallback top Tier 2 clubs)
+  const t2Ranked = rankTeams((t) => t.tier === 2);
+  let sc1 = s.prevLeagueChampId != null && s.teams[s.prevLeagueChampId] ? s.prevLeagueChampId : t2Ranked[0];
+  let sc2 = s.prevCupChampId != null && s.teams[s.prevCupChampId] && s.prevCupChampId !== sc1 ? s.prevCupChampId : t2Ranked.find((id) => id !== sc1) ?? t2Ranked[1];
+  if (sc1 == null) sc1 = s.teams[0]?.id ?? 0;
+  if (sc2 == null || sc2 === sc1) sc2 = s.teams.find((t) => t.id !== sc1)?.id ?? 1;
+  const scIds = [sc1, sc2];
+  s.sc = { alive: scIds.includes(s.me), r: 0, done: false, log: [], ids: scIds };
+  s.psc = false;
+
+  // 2. Thai League Cup: 16 teams prioritizing Tier 2 + top Tier 1 clubs (always including user club)
+  const lcRest = [
+    ...s.teams.filter((t) => t.id !== s.me && t.tier === 2).map((t) => t.id).sort(() => Math.random() - 0.5),
+    ...s.teams.filter((t) => t.id !== s.me && t.tier === 1).map((t) => t.id).sort(() => Math.random() - 0.5),
+    ...s.teams.filter((t) => t.id !== s.me && t.tier === 0).map((t) => t.id).sort(() => Math.random() - 0.5)
+  ].slice(0, 15);
+  const lcIds = [s.me, ...lcRest].sort(() => Math.random() - 0.5);
+  s.lc = { alive: true, r: 0, done: false, log: [], ids: lcIds };
+  s.plc = false;
+
+  // 3. Division & Regional Shield Cup: 16 teams prioritizing Tier 0 & Tier 1 clubs
+  const userInLowerTiers = (s.teams[s.me]?.tier ?? 0) <= 1;
+  const dcPool = [
+    ...s.teams.filter((t) => t.id !== s.me && t.tier === 1).map((t) => t.id).sort(() => Math.random() - 0.5),
+    ...s.teams.filter((t) => t.id !== s.me && t.tier === 0).map((t) => t.id).sort(() => Math.random() - 0.5),
+    ...s.teams.filter((t) => t.id !== s.me && t.tier === 2).map((t) => t.id).sort(() => Math.random() - 0.5)
+  ];
+  const dcIds = userInLowerTiers
+    ? [s.me, ...dcPool.slice(0, 15)].sort(() => Math.random() - 0.5)
+    : dcPool.slice(0, 16).sort(() => Math.random() - 0.5);
+  s.dc = { alive: dcIds.includes(s.me), r: 0, done: false, log: [], ids: dcIds };
+  s.pdc = false;
+}
+
+export function ensureSeasonExtraCups(s: GameState) {
+  if (s.lc && s.sc && s.dc) return;
+  const prevLc = s.lc;
+  const prevSc = s.sc;
+  const prevDc = s.dc;
+  initExtraCups(s);
+  if (prevLc) s.lc = prevLc;
+  if (prevSc) s.sc = prevSc;
+  if (prevDc) s.dc = prevDc;
+  if ((s.md ?? 0) >= 2 && s.sc && !s.sc.done && !s.psc) {
+    simulateCpuExtraCupRound(s, 'sc');
+  }
+}
+
+export function simulateCpuExtraCupRound(s: GameState, comp: 'lc' | 'sc' | 'dc') {
+  const c = s[comp];
+  if (!c || c.done) return;
+  const meta = EXTRA_CUP_META[comp];
+  const roundLabel = comp === 'sc' ? 'ชิงชนะเลิศ' : RN[c.r] || `รอบ ${c.r + 1}`;
+  const nx: number[] = [];
+  for (let i = 0; i < c.ids.length; i += 2) {
+    const H = s.teams[c.ids[i]];
+    const A = s.teams[c.ids[i + 1]];
+    if (!H || !A) {
+      if (H) nx.push(H.id);
+      else if (A) nx.push(A.id);
+      continue;
+    }
+    const r = simMatch(H, A, s);
+    const w = pickWinner(H, A, r, s);
+    nx.push(w.id);
+    c.log.push(`${roundLabel}: ${H.name} ${r.gh}-${r.ga} ${A.name}`);
+  }
+  c.ids = nx;
+  c.r++;
+  if (comp === 'lc') s.plc = false;
+  else if (comp === 'sc') s.psc = false;
+  else s.pdc = false;
+
+  if (c.alive && !nx.includes(s.me)) c.alive = false;
+  if (nx.length === 1) {
+    c.done = true;
+    const w = nx[0];
+    const winTeam = s.teams[w];
+    if (winTeam) {
+      winTeam.trophies = winTeam.trophies || [];
+      if (!winTeam.trophies.some((t) => t.season === s.season && t.type === meta.trophyType)) {
+        winTeam.trophies.push({ season: s.season, title: meta.trophyTitle, type: meta.trophyType });
+      }
+    }
+    if (w === s.me) {
+      s.trophies = s.trophies || [];
+      if (!s.trophies.some((t) => t.season === s.season && t.type === meta.trophyType)) {
+        s.trophies.push({ season: s.season, title: meta.trophyTitle, type: meta.trophyType });
+      }
+      if (s.mode === 'm') {
+        s.money += meta.prize;
+        logFin(s, `รางวัล${meta.trophyTitle}`, meta.prize);
+        s.mgrRep = (s.mgrRep || 50) + meta.rep;
+      }
+      pushFeed(s, meta.short, `${meta.icon} ยินดีด้วย! คว้า${meta.trophyTitle} ฤดูกาล ${s.season}!`, 'ok');
     }
   }
 }
@@ -3432,15 +3692,15 @@ export function afterMatchDay(
           devProf.formMult *
           (isFocus ? 1.45 : 1);
 
-        if (q.ov < (q.pot || 86)) {
-          if (Math.random() < chance) {
-            q.ov++;
-            gr.push(`${q.n} (${q.ov})`);
-          }
+        if (q.ov < 199 && Math.random() < chance) {
+          q.ov++;
+          q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
+          gr.push(`${q.n} (${q.ov})`);
         } else if (devProf.strongSeason && Math.random() < 0.25) {
           const bt = trySuperstarBreakthrough(q, null, 0.06);
           if (bt.brokeThrough) {
-            q.ov++;
+            q.ov = clamp(q.ov + 1, 1, 199);
+            q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
             gr.push(`${q.n} (${q.ov})`);
             breakthroughs.push(`${q.n} → ศักยภาพ ${bt.newPot}${bt.becameSuperstar ? ' 🌟ซุปตาร์!' : ''}`);
           }
@@ -3581,14 +3841,14 @@ export function afterMatchDay(
           devProf.formMult *
           (isAiFocus ? 1.35 : 1);
 
-        if (q.ov < (q.pot || 86)) {
-          if (Math.random() < aiTrainChance) {
-            q.ov++;
-          }
+        if (q.ov < 199 && Math.random() < aiTrainChance) {
+          q.ov++;
+          q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
         } else if (devProf.strongSeason && Math.random() < 0.25) {
           const bt = trySuperstarBreakthrough(q, null, 0.06);
           if (bt.brokeThrough) {
-            q.ov++;
+            q.ov = clamp(q.ov + 1, 1, 199);
+            q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
           }
         }
       }
@@ -3685,19 +3945,24 @@ export function afterMatchDay(
     s.derby = 0;
   }
 
-  // Trigger Thai FA Cup every 7 matchdays starting md 6 (when not clashing with Asia cup)
-  const cup = s.cup;
+  // Ensure older saves have extra cups initialized
+  ensureSeasonExtraCups(s);
+
+  // Trigger cups on non-overlapping matchdays
   const n = s.md + 1;
-  if (cup && !cup.done && cup.r < 4 && n === 7 * cup.r + 6) {
-    if (cup.alive && cup.ids.includes(s.me)) {
-      s.pc = true;
-      s.news = `🏆 ถึงคิวแข่งถ้วยประชาชน ${RN[cup.r]}`;
+
+  // Thailand Champions Cup (Super Cup): early season MD 2
+  const sc = s.sc;
+  if (sc && !sc.done && n === 2) {
+    if (sc.alive && sc.ids.includes(s.me)) {
+      s.psc = true;
+      s.news = '🏅 ถึงคิวชิงไทยแลนด์ แชมเปี้ยนส์ คัพ!';
     } else {
-      simulateCpuCupRound(s);
+      simulateCpuExtraCupRound(s, 'sc');
     }
   }
 
-  // Trigger Asian Cup
+  // Asian Club Cup: MD 3, 10, 17, 24
   const c = s.ac;
   if (c && !c.done && c.r < 4 && n === 7 * c.r + 3) {
     if (c.alive && c.ids.includes(s.me)) {
@@ -3705,6 +3970,39 @@ export function afterMatchDay(
       s.news = `🌏 ถึงคิวแข่งบอลถ้วยในทวีป ${RN[c.r]}`;
     } else {
       simulateCpuAsiaRound(s);
+    }
+  }
+
+  // Thai League Cup: MD 4, 11, 18, 25
+  const lc = s.lc;
+  if (lc && !lc.done && lc.r < 4 && n === 7 * lc.r + 4) {
+    if (lc.alive && lc.ids.includes(s.me)) {
+      s.plc = true;
+      s.news = `🥇 ถึงคิวแข่งไทยลีก คัพ ${RN[lc.r]}`;
+    } else {
+      simulateCpuExtraCupRound(s, 'lc');
+    }
+  }
+
+  // Division & Regional Shield Cup: MD 5, 12, 19, 26
+  const dc = s.dc;
+  if (dc && !dc.done && dc.r < 4 && n === 7 * dc.r + 5) {
+    if (dc.alive && dc.ids.includes(s.me)) {
+      s.pdc = true;
+      s.news = `🛡️ ถึงคิวแข่งถ้วยดิวิชั่น & ภูมิภาค ${RN[dc.r]}`;
+    } else {
+      simulateCpuExtraCupRound(s, 'dc');
+    }
+  }
+
+  // Thai FA Cup: MD 6, 13, 20, 27
+  const cup = s.cup;
+  if (cup && !cup.done && cup.r < 4 && n === 7 * cup.r + 6) {
+    if (cup.alive && cup.ids.includes(s.me)) {
+      s.pc = true;
+      s.news = `🏆 ถึงคิวแข่งถ้วยประชาชน ${RN[cup.r]}`;
+    } else {
+      simulateCpuCupRound(s);
     }
   }
 
@@ -4273,21 +4571,20 @@ export function growPlayers(s: GameState) {
         }
       }
 
-      // Gradual, steady offseason progression — hard to jump fast, steady while in growing/peak phase
+      // Gradual, uncapped progression until declining phase ("หมดช่วงพีค") or retirement ("แขวนสตั๊ด")
       let delta = 0;
-      const potCap = Math.max(q.ov, q.pot || 88);
       if (devProf.phase === 'growing') {
-        const growChance = clamp((0.26 + (tlVal - 50) * 0.0055) * ovScale * devProf.formMult, 0.06, 0.72);
-        if (q.ov < potCap && Math.random() < growChance) {
+        const growChance = clamp((0.26 + (tlVal - 50) * 0.0055) * ovScale * devProf.formMult, 0.03, 0.72);
+        if (q.ov < 199 && Math.random() < growChance) {
           delta = 1;
           if (q.age <= 20 && q.ov < 70 && tlVal >= 80 && devProf.sp >= 12 && Math.random() < 0.25) {
             delta = 2;
           }
         }
       } else if (devProf.phase === 'peak') {
-        // Still develops steadily if performing well until peak ends; never drops randomly in peak
-        if (q.ov < potCap && devProf.sp >= 10 && devProf.avgRating >= 6.8) {
-          const peakChance = clamp(0.20 * ovScale * devProf.formMult, 0.03, 0.35);
+        // Still develops continuously while performing well in peak phase; never drops randomly in peak
+        if (q.ov < 199 && devProf.sp >= 10 && devProf.avgRating >= 6.8) {
+          const peakChance = clamp(0.22 * ovScale * devProf.formMult, 0.02, 0.35);
           if (Math.random() < peakChance) delta = 1;
         }
       } else {
@@ -4302,7 +4599,10 @@ export function growPlayers(s: GameState) {
       }
 
       if (delta !== 0) {
-        q.ov = clamp(q.ov + delta, 25, potCap);
+        q.ov = clamp(q.ov + delta, 25, 199);
+        if (delta > 0) {
+          q.pot = clamp(Math.max(q.pot || q.ov, q.ov + 2), q.ov, 199);
+        }
       }
 
       // Natural Retirement ("จนกว่าจะแขวนสตั้ด"): age 33-39 (GK +2 yrs), stars in good form last longer
@@ -4560,17 +4860,48 @@ export function finishSeasonComputation(s: GameState) {
           ? 'ถึงรอบสุดท้าย'
           : 'ตกรอบถ้วยทวีป'
       : undefined;
-  s.hist.push(`ซีซั่น ${s.season}: ${TN[mt]} อันดับ ${pos} · ${cupStatus}${asiaStatus ? ` · ${asiaStatus}` : ''}`);
+  const leagueCupStatus =
+    s.lc && (s.lc.ids.includes(s.me) || s.lc.log.some((l) => l.includes(meTeam.name)))
+      ? s.lc.done && s.lc.ids[0] === s.me
+        ? 'แชมป์ไทยลีก คัพ'
+        : s.lc.alive
+          ? 'ถึงรอบสุดท้าย'
+          : 'ตกรอบลีกคัพ'
+      : undefined;
+  const superCupStatus =
+    s.sc && (s.sc.ids.includes(s.me) || s.sc.log.some((l) => l.includes(meTeam.name)))
+      ? s.sc.done && s.sc.ids[0] === s.me
+        ? 'แชมป์แชมเปี้ยนส์ คัพ'
+        : 'รองแชมป์'
+      : undefined;
+  const divCupStatus =
+    s.dc && (s.dc.ids.includes(s.me) || s.dc.log.some((l) => l.includes(meTeam.name)))
+      ? s.dc.done && s.dc.ids[0] === s.me
+        ? 'แชมป์ถ้วยดิวิชั่น'
+        : s.dc.alive
+          ? 'ถึงรอบสุดท้าย'
+          : 'ตกรอบถ้วยดิวิชั่น'
+      : undefined;
+  s.hist.push(`ซีซั่น ${s.season}: ${TN[mt]} อันดับ ${pos} · ${cupStatus}${leagueCupStatus ? ` · ${leagueCupStatus}` : ''}${asiaStatus ? ` · ${asiaStatus}` : ''}`);
 
   // Archive Team & Player Season Histories across all clubs in the pyramid
   const cupWinnerId = s.cup.done ? s.cup.ids[0] : -1;
   const asiaWinnerId = s.ac?.done ? s.ac.ids[0] : -1;
+  const lcWinnerId = s.lc?.done ? s.lc.ids[0] : -1;
+  const scWinnerId = s.sc?.done ? s.sc.ids[0] : -1;
+  const dcWinnerId = s.dc?.done ? s.dc.ids[0] : -1;
+  s.prevLeagueChampId = tb[2]?.[0]?.id ?? s.prevLeagueChampId;
+  if (cupWinnerId >= 0) s.prevCupChampId = cupWinnerId;
+
   s.teams.forEach((tm) => {
     const preTier = preTierByTeam.get(tm.id);
     const rk = rankByTeam.get(tm.id);
     const isChamp = rk ? rk.rank === 1 : false;
     const isCupChamp = tm.id === cupWinnerId;
     const isAsiaChamp = tm.id === asiaWinnerId;
+    const isLcChamp = tm.id === lcWinnerId;
+    const isScChamp = tm.id === scWinnerId;
+    const isDcChamp = tm.id === dcWinnerId;
 
     if (preTier != null && rk) {
       tm.trophies = tm.trophies || [];
@@ -4580,7 +4911,8 @@ export function finishSeasonComputation(s: GameState) {
       // Season-end fanbase growth/churn for every club based on trophies, promotion, and relegation
       let fanEndMul = 0.015;
       if (isAsiaChamp) fanEndMul += 0.22;
-      else if (isCupChamp) fanEndMul += 0.14;
+      else if (isCupChamp || isLcChamp) fanEndMul += 0.14;
+      else if (isScChamp || isDcChamp) fanEndMul += 0.09;
       if (isChamp) fanEndMul += preTier === 2 ? 0.16 : 0.12;
       else if (tm.tier > preTier) fanEndMul += 0.10;
       else if (tm.tier < preTier) fanEndMul -= 0.06;
@@ -4604,8 +4936,14 @@ export function finishSeasonComputation(s: GameState) {
         champion: isChamp,
         cupChampion: isCupChamp,
         asiaChampion: isAsiaChamp,
+        leagueCupChampion: isLcChamp,
+        superCupChampion: isScChamp,
+        divCupChampion: isDcChamp,
         cupStatus: tm.id === s.me ? cupStatus : isCupChamp ? 'แชมป์ถ้วย' : undefined,
         asiaStatus: tm.id === s.me ? asiaStatus : isAsiaChamp ? 'แชมป์ถ้วยทวีป' : undefined,
+        leagueCupStatus: tm.id === s.me ? leagueCupStatus : isLcChamp ? 'แชมป์ไทยลีก คัพ' : undefined,
+        superCupStatus: tm.id === s.me ? superCupStatus : isScChamp ? 'แชมป์แชมเปี้ยนส์ คัพ' : undefined,
+        divCupStatus: tm.id === s.me ? divCupStatus : isDcChamp ? 'แชมป์ถ้วยดิวิชั่น' : undefined,
         topScorer: tmScorer && (tmScorer.sg || 0) > 0 ? `${tmScorer.n} (${tmScorer.sg})` : undefined
       };
       tm.history = [...(tm.history || []).filter((h) => h.season !== s.season), teamHistEntry];
@@ -4614,12 +4952,18 @@ export function finishSeasonComputation(s: GameState) {
     const honor = isAsiaChamp
       ? 'แชมป์ทวีป'
       : isCupChamp
-        ? 'แชมป์ถ้วย'
-        : isChamp && preTier != null
-          ? `แชมป์ ${TN[preTier]}`
-          : preTier != null && tm.tier > preTier
-            ? 'เลื่อนชั้น'
-            : undefined;
+        ? 'แชมป์ถ้วยประชาชน'
+        : isLcChamp
+          ? 'แชมป์ไทยลีก คัพ'
+          : isScChamp
+            ? 'แชมป์แชมเปี้ยนส์ คัพ'
+            : isDcChamp
+              ? 'แชมป์ถ้วยดิวิชั่น'
+              : isChamp && preTier != null
+                ? `แชมป์ ${TN[preTier]}`
+                : preTier != null && tm.tier > preTier
+                  ? 'เลื่อนชั้น'
+                  : undefined;
 
     tm.sq.forEach((q) => {
       const sp = q.sp || 0;
@@ -4628,12 +4972,21 @@ export function finishSeasonComputation(s: GameState) {
       const cs = q.cs || 0;
       if (sp <= 0 && !q.me && tm.id !== s.me) return;
       const avgRating = calcSeasonAvgRating(q, sp, sg, sa, cs);
+      const curDt = DT(q, q.me ? s.p : null);
+      const startSnap = q.seasonProg?.s === s.season && q.seasonProg.pts?.[0] ? q.seasonProg.pts[0] : null;
       const pEntry: PlayerSeasonHistoryRecord = {
         season: s.season,
         teamId: tm.id,
         teamName: tm.name,
         tier: preTier ?? tm.tier,
         ov: q.me && s.p ? ovMe(s.p) : q.ov,
+        a: { sh: curDt.a.sh, ps: curDt.a.ps, dr: curDt.a.dr, tk: curDt.a.tk, ph: curDt.a.ph },
+        ...(startSnap
+          ? {
+              startOv: startSnap.ov,
+              startA: { ...startSnap.a }
+            }
+          : {}),
         sp,
         sg,
         sa,
@@ -4736,6 +5089,9 @@ export function finishSeasonComputation(s: GameState) {
     statusText: stText,
     cupStatus,
     asiaStatus,
+    leagueCupStatus,
+    superCupStatus,
+    divCupStatus,
     leagueBestScorer,
     leagueBestAssist,
     topScorer: bestTeamScorer
@@ -4772,6 +5128,9 @@ export function finishSeasonComputation(s: GameState) {
     ch,
     cupStatus,
     asiaStatus,
+    leagueCupStatus,
+    superCupStatus,
+    divCupStatus,
     bestScorer: leagueBestScorer,
     bestAssist: leagueBestAssist,
     offers,
@@ -4783,7 +5142,7 @@ export function finishSeasonComputation(s: GameState) {
 
 export function simulateInstantMatchPayload(
   s: GameState,
-  kind: 'league' | 'cup' | 'asia',
+  kind: MatchKind | 'asia',
   homeId: number,
   awayId: number
 ): FinishedMatchPayload {
@@ -4831,6 +5190,7 @@ export function simulateInstantMatchPayload(
   const myPlayedList = r.playedNames?.[s.me] || xi(meTeam).map((q) => q.n);
   const myGoalsCount = homeId === s.me ? r.gh : r.ga;
   const oppGoalsCount = homeId === s.me ? r.ga : r.gh;
+  const cardNames = new Set((r.cards || []).map((c) => c.who));
   meTeam.sq.forEach((q) => {
     if (!myPlayedList.includes(q.n)) return;
     if (s.mode === 'p' && q.me && pf && pf.played === false) return;
@@ -4842,7 +5202,10 @@ export function simulateInstantMatchPayload(
       wins: myGoalsCount > oppGoalsCount ? 1 : 0,
       cleanSheets: oppGoalsCount === 0 && (q.pos === 'GK' || q.pos === 'DF') ? 1 : 0,
       highRatings: qRt >= 7.2 ? 1 : 0,
-      goals: qGoals
+      motm: motm === q.n ? 1 : 0,
+      cleanGames: !cardNames.has(q.n) ? 1 : 0,
+      goals: qGoals,
+      assists: qAssists
     };
     if (q.pos === 'GK') {
       act.saves = R(2, 6) + (hasTrait(q, 'reflex_cat', s.p) ? R(1, 2) : 0);
@@ -4863,18 +5226,25 @@ export function simulateInstantMatchPayload(
         qAssists * 2 +
         (q.pos === 'MF' || q.pos === 'DF' ? R(1, 3) : R(0, 2)) +
         (hasTrait(q, 'early_crosser', s.p) || hasTrait(q, 'killer_passer', s.p) ? R(1, 2) : 0);
+      act.keyPasses =
+        qAssists +
+        (q.pos === 'MF' ? R(1, 3) : q.pos === 'FW' ? R(0, 2) : R(0, 1)) +
+        (hasTrait(q, 'through_ball_vision', s.p) || hasTrait(q, 'killer_passer', s.p) ? 1 : 0);
       act.dribbles =
         (q.pos === 'FW' || q.pos === 'MF' ? R(2, 6) : R(1, 3)) +
         (hasTrait(q, 'flair_dribbler', s.p) ? R(1, 3) : 0);
       act.tackles =
         (q.pos === 'DF' ? R(3, 6) : q.pos === 'MF' ? R(2, 4) : R(0, 2)) +
         (hasTrait(q, 'slide_tackler', s.p) || hasTrait(q, 'interception_hawk', s.p) ? R(1, 2) : 0);
+      act.interceptions =
+        (q.pos === 'DF' ? R(1, 4) : q.pos === 'MF' ? R(1, 3) : 0) +
+        (hasTrait(q, 'interception_hawk', s.p) ? 1 : 0);
       act.blocks = (q.pos === 'DF' ? R(0, 2) : R(0, 1)) + (hasTrait(q, 'body_blocker', s.p) ? 1 : 0);
       act.headers =
         (q.pos === 'DF' || q.pos === 'FW' ? R(1, 3) : R(0, 2)) +
         (hasTrait(q, 'aerial_menace', s.p) ? R(1, 2) : 0);
-      if (q.pos === 'MF' || q.pos === 'FW' || hasTrait(q, 'setpiece_specialist', s.p)) {
-        act.setpieces = R(0, 2) + (hasTrait(q, 'setpiece_specialist', s.p) ? 2 : 0);
+      if (q.pos === 'MF' || q.pos === 'FW' || q.pos === 'DF' || hasTrait(q, 'setpiece_specialist', s.p)) {
+        act.setpieces = (q.pos === 'DF' ? R(0, 1) : R(0, 2)) + (hasTrait(q, 'setpiece_specialist', s.p) ? 2 : 0);
       }
     }
     playerActions[q.n] = act;

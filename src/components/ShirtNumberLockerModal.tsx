@@ -2,7 +2,12 @@ import React, { useMemo, useState } from 'react';
 import type { GameState, Player, Team } from '../types/game';
 import { clamp } from '../utils/math';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, getTeamClubIdentity } from '../engine/playerCore';
+import {
+  getShirtNo,
+  getTeamClubIdentity,
+  getPositionShirtGuide,
+  autoAssignAllTeamShirtNumbers
+} from '../engine/playerCore';
 import { KitJersey } from './SvgVisuals';
 
 const ALL_SHIRT_NUMBERS = Array.from({ length: 99 }, (_, i) => i + 1);
@@ -15,9 +20,12 @@ export const ShirtNumberLockerModal: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
 }> = ({ player, team, state, onClose, onUpdateState, onToast }) => {
-  const [filter, setFilter] = useState<'all' | 'free' | 'taken'>('all');
+  const [filter, setFilter] = useState<'all' | 'recommended' | 'free' | 'taken'>('all');
   const currentNo = getShirtNo(team, player);
   const clubIdentity = useMemo(() => getTeamClubIdentity(team, state), [team, state]);
+  const shirtGuide = useMemo(() => getPositionShirtGuide(player.ro, player.pos), [player.ro, player.pos]);
+  const primarySet = useMemo(() => new Set(shirtGuide.primary), [shirtGuide.primary]);
+  const altSet = useMemo(() => new Set(shirtGuide.alt), [shirtGuide.alt]);
 
   const holderMap = useMemo(() => {
     const map = new Map<number, Player>();
@@ -35,17 +43,20 @@ export const ShirtNumberLockerModal: React.FC<{
       if (!h) free += 1;
       else if (h.n !== player.n) taken += 1;
     });
-    return { free, taken };
-  }, [holderMap, player.n]);
+    return { free, taken, recommended: new Set([...shirtGuide.primary, ...shirtGuide.alt]).size };
+  }, [holderMap, player.n, shirtGuide]);
 
   const visibleNumbers = useMemo(() => {
     if (filter === 'all') return ALL_SHIRT_NUMBERS;
+    if (filter === 'recommended') {
+      return [...shirtGuide.primary, ...shirtGuide.alt.filter((n) => !primarySet.has(n))];
+    }
     return ALL_SHIRT_NUMBERS.filter((num) => {
       const h = holderMap.get(num);
       if (filter === 'free') return !h || h.n === player.n;
       return Boolean(h && h.n !== player.n);
     });
-  }, [filter, holderMap, player.n]);
+  }, [filter, holderMap, player.n, shirtGuide, primarySet]);
 
   const handleSelectNumber = (rawNum: number) => {
     const nextNo = clamp(Math.round(rawNum) || 1, 1, 99);
@@ -76,6 +87,16 @@ export const ShirtNumberLockerModal: React.FC<{
       onToast(`เปลี่ยนเบอร์เสื้อ ${player.n.split(' ')[0]} เป็น #${nextNo} แล้ว`);
     }
     onClose();
+  };
+
+  const handleRandomizeTeamNumbers = () => {
+    SFX.tap();
+    onUpdateState((d) => {
+      const t = d.teams[d.me];
+      if (!t) return;
+      autoAssignAllTeamShirtNumbers(t, d.mode === 'p' ? d.p : null, true);
+    });
+    onToast(`🎲 สุ่มจัดเบอร์เสื้อให้ ${team.name} ตามตำแหน่ง (1–11 และเบอร์นิยม) แล้ว`);
   };
 
   return (
@@ -113,21 +134,48 @@ export const ShirtNumberLockerModal: React.FC<{
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="ปิดล็อกเกอร์เบอร์เสื้อ"
-            className="btn-icon rounded-full shrink-0"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {state.mode === 'm' && (
+              <button
+                type="button"
+                onClick={handleRandomizeTeamNumbers}
+                className="btn btn-xs btn-secondary whitespace-nowrap"
+                title="สุ่มจัดเบอร์ใหม่ทั้งสโมสรตามเบอร์ประเพณีของแต่ละตำแหน่ง"
+              >
+                🎲 สุ่มตามตำแหน่ง
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="ปิดล็อกเกอร์เบอร์เสื้อ"
+              className="btn-icon rounded-full shrink-0"
+            >
+              ✕
+            </button>
+          </div>
         </header>
+
+        {/* Position Tradition Guide */}
+        <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1 bg-[var(--g-soft)]/35 border-b border-[var(--line)]/70 flex flex-col gap-0.5 text-[10.5px] mland:text-[8.5px]">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="font-extrabold text-[var(--g)]">{shirtGuide.label} ({player.ro || player.pos})</span>
+            <span className="text-[var(--ink)] font-semibold tabular">
+              เบอร์หลัก (1–11): <b>{shirtGuide.primary.join(', ')}</b>
+            </span>
+            <span className="text-[var(--mut)] tabular">
+              · ทางเลือกยอดนิยม: {shirtGuide.alt.join(', ')}
+            </span>
+          </div>
+          <div className="text-[var(--mut)] leading-snug">{shirtGuide.reason}</div>
+        </div>
 
         {/* Filter & Legend Strip */}
         <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface)]/70 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2">
           <div className="seg-bar">
             {([
               ['all', 'ทั้งหมด (1–99)'],
+              ['recommended', `แนะนำ (${counts.recommended})`],
               ['free', `เบอร์ว่าง (${counts.free})`],
               ['taken', `เบอร์เพื่อน (${counts.taken})`]
             ] as const).map(([key, label]) => (
@@ -138,7 +186,7 @@ export const ShirtNumberLockerModal: React.FC<{
                   SFX.tap();
                   setFilter(key);
                 }}
-                className={`seg-btn ${filter === key ? 'seg-btn-active' : ''}`}
+                className={`seg-btn whitespace-nowrap ${filter === key ? 'seg-btn-active' : ''}`}
               >
                 {label}
               </button>
@@ -151,8 +199,8 @@ export const ShirtNumberLockerModal: React.FC<{
               <span>ใช้อยู่</span>
             </span>
             <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded bg-[var(--surface)] border border-[var(--line)] inline-block" />
-              <span>เบอร์ว่าง</span>
+              <span className="w-2.5 h-2.5 rounded bg-[var(--surface)] border-2 border-[var(--g)] inline-block" />
+              <span>เบอร์หลักตำแหน่ง</span>
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)] inline-block" />
@@ -168,6 +216,8 @@ export const ShirtNumberLockerModal: React.FC<{
               const holder = holderMap.get(num);
               const isCurrent = holder?.n === player.n || num === currentNo;
               const isTaken = Boolean(holder && !isCurrent);
+              const isPrimaryPos = primarySet.has(num);
+              const isAltPos = !isPrimaryPos && altSet.has(num);
               const holderShortName = holder ? holder.n.split(' ')[0] : '';
 
               return (
@@ -181,16 +231,29 @@ export const ShirtNumberLockerModal: React.FC<{
                       ? `เบอร์ปัจจุบันของ ${player.n}`
                       : isTaken
                         ? `เบอร์ #${num} เป็นของ ${holder!.n} (${holder!.ro}) — แตะเพื่อสลับ`
-                        : `เบอร์ #${num} ว่าง — แตะเพื่อเลือก`
+                        : `เบอร์ #${num} ว่าง${isPrimaryPos ? ' (เบอร์หลักประจำตำแหน่ง)' : isAltPos ? ' (เบอร์ยอดนิยมประจำตำแหน่ง)' : ''} — แตะเพื่อเลือก`
                   }
-                  className={`rounded-xl mland:rounded-lg border px-1.5 py-2 mland:py-1 text-center transition-all flex flex-col items-center justify-center gap-0.5 min-h-[52px] mland:min-h-[42px] ${
+                  className={`relative rounded-xl mland:rounded-lg border px-1.5 py-2 mland:py-1 text-center transition-all flex flex-col items-center justify-center gap-0.5 min-h-[52px] mland:min-h-[42px] ${
                     isCurrent
                       ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs cursor-default'
                       : isTaken
                         ? 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/55 text-[var(--ink)] hover:border-[var(--lamp)] hover:bg-[var(--lamp-soft)]/90 cursor-pointer'
-                        : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/30 cursor-pointer'
+                        : isPrimaryPos
+                          ? 'bg-[var(--g-soft)]/35 border-[var(--g)]/60 text-[var(--ink)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/60 cursor-pointer'
+                          : isAltPos
+                            ? 'bg-[var(--surface)] border-sky-500/45 text-[var(--ink)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/30 cursor-pointer'
+                            : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:bg-[var(--g-soft)]/30 cursor-pointer'
                   }`}
                 >
+                  {(isPrimaryPos || isAltPos) && !isCurrent && (
+                    <span
+                      className={`text-[7.5px] font-extrabold leading-none ${
+                        isPrimaryPos ? 'text-[var(--g)]' : 'text-sky-600 dark:text-sky-400'
+                      }`}
+                    >
+                      {isPrimaryPos ? 'หลัก' : 'นิยม'}
+                    </span>
+                  )}
                   <span className="text-sm mland:text-xs font-extrabold font-display tabular leading-none">
                     #{num}
                   </span>

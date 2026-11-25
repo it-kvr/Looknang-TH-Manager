@@ -11,6 +11,7 @@ export type SubRole =
 export type StatKey = 'sh' | 'ps' | 'dr' | 'tk' | 'ph';
 export type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';
 export type GameMode = 'm' | 'p';
+export type MatchKind = 'league' | 'cup' | 'ac' | 'lc' | 'sc' | 'dc';
 export type MainTab = 't' | 's' | 'q' | 'r' | 'k' | 'f' | 'u' | 'c' | 'p';
 export type TrainingFocus = 'FW' | 'MF' | 'DF' | 'F';
 export type TrainingProgramId = 'balanced' | 'attack' | 'defense' | 'tactics' | 'setpiece' | 'fitness' | 'recovery';
@@ -140,15 +141,20 @@ export type PersonalMissionMetric =
   | 'shots'
   | 'onTarget'
   | 'goals'
+  | 'assists'
   | 'crossAssists'
+  | 'keyPasses'
   | 'dribbles'
   | 'tackles'
+  | 'interceptions'
   | 'blocks'
   | 'headers'
   | 'saves'
   | 'cleanSheets'
   | 'wins'
   | 'highRatings'
+  | 'motm'
+  | 'cleanGames'
   | 'matches';
 
 export type MissionStageOutcome = 'ok' | 'fail';
@@ -299,6 +305,8 @@ export interface PlayerCareerProfile {
   inj?: number;
   missions?: PlayerMissionsState;
   history?: PlayerSeasonHistoryRecord[];
+  roleTrain?: SubRole | null;
+  sigDrills?: number;
 }
 
 export interface AutoRule {
@@ -455,6 +463,9 @@ export interface PlayerSeasonHistoryRecord {
   teamName: string;
   tier: number;
   ov: number;
+  a?: CoreAttrs;
+  startOv?: number;
+  startA?: CoreAttrs;
   sp: number;
   sg: number;
   sa: number;
@@ -482,8 +493,14 @@ export interface TeamSeasonHistoryRecord {
   champion?: boolean;
   cupChampion?: boolean;
   asiaChampion?: boolean;
+  leagueCupChampion?: boolean;
+  superCupChampion?: boolean;
+  divCupChampion?: boolean;
   cupStatus?: string;
   asiaStatus?: string;
+  leagueCupStatus?: string;
+  superCupStatus?: string;
+  divCupStatus?: string;
   topScorer?: string;
 }
 
@@ -514,7 +531,7 @@ export interface TrophyRecord {
   season: number;
   title: string;
   tier?: number;
-  type: 'league' | 'cup' | 'asia' | 'award' | 'nt';
+  type: 'league' | 'cup' | 'asia' | 'league_cup' | 'super_cup' | 'div_cup' | 'award' | 'nt';
 }
 
 export interface ClubRecords {
@@ -570,6 +587,9 @@ export interface SeasonArchiveRecord {
   statusText: string;
   cupStatus: string;
   asiaStatus?: string;
+  leagueCupStatus?: string;
+  superCupStatus?: string;
+  divCupStatus?: string;
   leagueBestScorer?: string;
   leagueBestAssist?: string;
   topScorer?: { name: string; pos: Position; sg: number; sp: number } | null;
@@ -655,11 +675,19 @@ export interface GameState {
   fxo?: Record<number, [number, number][][]>;
   pc: boolean;
   pa?: boolean;
+  plc?: boolean;
+  psc?: boolean;
+  pdc?: boolean;
   cup: CupState;
   ac?: AsiaCupState;
+  lc?: CupState;
+  sc?: CupState;
+  dc?: CupState;
   aq?: number[];
   aqs?: number;
   asia?: number[];
+  prevLeagueChampId?: number;
+  prevCupChampId?: number;
   p?: PlayerCareerProfile;
   club?: ClubIdentity;
   fan?: number;
@@ -700,7 +728,7 @@ export interface GameState {
   boardEffects?: BoardTempEffect[];
   boardFeedbackLog?: BoardFeedbackEntry[];
   schedRes?: Record<number, { h: number; a: number; gh: number; ga: number }>;
-  cupLog?: { md: number; comp: 'cup' | 'asia'; r: number; h: number; a: number; gh: number; ga: number; penText?: string }[];
+  cupLog?: { md: number; comp: 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; r: number; h: number; a: number; gh: number; ga: number; penText?: string }[];
   med?: number;
   merchLv?: number;
   turfLv?: number;
@@ -790,6 +818,7 @@ export interface PersonalMissionDef {
   icon: string;
   name: string;
   desc: string;
+  category?: 'attack' | 'playmaking' | 'defense' | 'gk' | 'physical';
   metric: PersonalMissionMetric;
   unit: string;
   targets: number[];

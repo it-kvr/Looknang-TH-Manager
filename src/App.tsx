@@ -7,7 +7,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
@@ -35,7 +35,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null } | null>(null);
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
-  const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
+  const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
   const [seasonStatsTarget, setSeasonStatsTarget] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -200,10 +200,12 @@ export default function App() {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
+    const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier };
+    ensureSeasonExtraCups(normalized);
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
     setSlot(targetSlot);
-    setState({ ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier });
+    setState(normalized);
     showToast('โหลดเซฟเรียบร้อย');
   };
 
@@ -214,6 +216,27 @@ export default function App() {
       if (idx >= 0) {
         const pairIdx = Math.floor(idx / 2) * 2;
         return { kind: 'asia' as const, homeId: state.ac.ids[pairIdx], awayId: state.ac.ids[pairIdx + 1], isDerby: false };
+      }
+    }
+    if (state.psc && state.sc && state.sc.alive && !state.sc.done) {
+      const idx = state.sc.ids.indexOf(state.me);
+      if (idx >= 0) {
+        const pairIdx = Math.floor(idx / 2) * 2;
+        return { kind: 'sc' as const, homeId: state.sc.ids[pairIdx], awayId: state.sc.ids[pairIdx + 1], isDerby: false };
+      }
+    }
+    if (state.plc && state.lc && state.lc.alive && !state.lc.done) {
+      const idx = state.lc.ids.indexOf(state.me);
+      if (idx >= 0) {
+        const pairIdx = Math.floor(idx / 2) * 2;
+        return { kind: 'lc' as const, homeId: state.lc.ids[pairIdx], awayId: state.lc.ids[pairIdx + 1], isDerby: false };
+      }
+    }
+    if (state.pdc && state.dc && state.dc.alive && !state.dc.done) {
+      const idx = state.dc.ids.indexOf(state.me);
+      if (idx >= 0) {
+        const pairIdx = Math.floor(idx / 2) * 2;
+        return { kind: 'dc' as const, homeId: state.dc.ids[pairIdx], awayId: state.dc.ids[pairIdx + 1], isDerby: false };
       }
     }
     if (state.pc && state.cup && state.cup.alive && !state.cup.done) {
@@ -234,7 +257,7 @@ export default function App() {
 
   const applyFinishedMatchToDraft = (
     d: GameState,
-    matchInfo: { kind: 'league' | 'cup' | 'asia'; homeId: number; awayId: number; isDerby: boolean },
+    matchInfo: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean },
     payload: FinishedMatchPayload
   ): { shouldConfetti: boolean; missionToast: string | null } => {
     const { kind, homeId, awayId, isDerby } = matchInfo;
@@ -322,6 +345,7 @@ export default function App() {
 
       if (kind === 'cup') {
         const c = d.cup;
+        const roundBefore = c.r;
         const nx: number[] = [];
         const userWin = pickWinner(H, A, resObj, d);
         for (let i = 0; i < c.ids.length; i += 2) {
@@ -341,6 +365,8 @@ export default function App() {
             applyAiClubMatchMissions(d, ch, ca, cr);
           }
         }
+        d.cupLog = d.cupLog || [];
+        d.cupLog.push({ md: d.md, comp: 'cup', r: roundBefore, h: homeId, a: awayId, gh: payload.gh, ga: payload.ga, penText: payload.penText });
         c.ids = nx;
         c.r++;
         d.pc = false;
@@ -394,8 +420,97 @@ export default function App() {
         return { shouldConfetti, missionToast };
       }
 
+      if (kind === 'lc' || kind === 'sc' || kind === 'dc') {
+        ensureSeasonExtraCups(d);
+        const c = kind === 'lc' ? d.lc! : kind === 'sc' ? d.sc! : d.dc!;
+        const meta = EXTRA_CUP_META[kind];
+        const roundBefore = c.r;
+        const roundLabel = kind === 'sc' ? 'ชิงชนะเลิศ' : RN[c.r] || `รอบ ${c.r + 1}`;
+        const nx: number[] = [];
+        const userWin = pickWinner(H, A, resObj, d);
+        for (let i = 0; i < c.ids.length; i += 2) {
+          const ch = d.teams[c.ids[i]];
+          const ca = d.teams[c.ids[i + 1]];
+          if (!ch || !ca) {
+            if (ch) nx.push(ch.id);
+            else if (ca) nx.push(ca.id);
+            continue;
+          }
+          if (ch.id === homeId && ca.id === awayId) {
+            nx.push(userWin.id);
+            updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind, big: c.ids.length <= 4 });
+            c.log.push(`${roundLabel}: ${ch.name} ${payload.gh}-${payload.ga} ${ca.name}${payload.penText ? ` (${payload.penText})` : ''}`);
+          } else {
+            const cr = simMatch(ch, ca, d);
+            const cw = pickWinner(ch, ca, cr, d);
+            nx.push(cw.id);
+            updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind, big: c.ids.length <= 4 });
+            c.log.push(`${roundLabel}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
+            applyPositionAdaptation(d, ch, ca, cr);
+            applyAiClubMatchMissions(d, ch, ca, cr);
+          }
+        }
+        d.cupLog = d.cupLog || [];
+        d.cupLog.push({ md: d.md, comp: kind, r: roundBefore, h: homeId, a: awayId, gh: payload.gh, ga: payload.ga, penText: payload.penText });
+        c.ids = nx;
+        c.r++;
+        if (kind === 'lc') d.plc = false;
+        else if (kind === 'sc') d.psc = false;
+        else d.pdc = false;
+
+        if (!nx.includes(d.me)) {
+          c.alive = false;
+          d.news = `${meta.icon} ตกรอบ${meta.name} (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          pushFeed(d, meta.short, d.news, 'urg');
+        } else {
+          d.news = `${meta.icon} ${nx.length === 1 ? `คว้า${meta.trophyTitle}!` : `ผ่านเข้ารอบ${meta.name}!`} (${H.name} ${payload.gh}-${payload.ga} ${A.name})`;
+          pushFeed(d, meta.short, d.news, 'ok');
+        }
+        if (nx.length === 1) {
+          c.done = true;
+          const winTeam = d.teams[nx[0]];
+          if (winTeam) {
+            winTeam.trophies = winTeam.trophies || [];
+            if (!winTeam.trophies.some((tr) => tr.season === d.season && tr.type === meta.trophyType)) {
+              winTeam.trophies.push({ season: d.season, title: meta.trophyTitle, type: meta.trophyType });
+            }
+            adjustTeamFans(winTeam, Math.round(ensureTeamFans(winTeam) * 0.09));
+          }
+          if (nx[0] === d.me) {
+            d.trophies = d.trophies || [];
+            if (!d.trophies.some((tr) => tr.season === d.season && tr.type === meta.trophyType)) {
+              d.trophies.push({ season: d.season, title: meta.trophyTitle, type: meta.trophyType });
+            }
+            if (d.mode === 'm') {
+              d.money += meta.prize;
+              logFin(d, `รางวัล${meta.trophyTitle}`, meta.prize);
+              d.mgrRep = (d.mgrRep || 50) + meta.rep;
+            } else if (d.p) {
+              const meSq = me.sq.find((q) => q.me);
+              appendPlayerCareerLog(meSq, `${meta.icon} ซีซั่น ${d.season}: คว้า${meta.trophyTitle}กับ ${me.name}`, d.p);
+            }
+            shouldConfetti = true;
+          }
+        }
+        applyLiveInjuries();
+        me.sq.forEach((q) => {
+          if ((q.sus || 0) > 0) q.sus = q.sus! - 1;
+          if ((q.inj || 0) > 0 && !liveInjNames.includes(q.n)) q.inj = Math.max(0, q.inj - 1);
+          if (q.me && d.p) {
+            d.p.sus = q.sus || 0;
+            d.p.inj = q.inj || 0;
+          }
+        });
+        applyMatchCards(d, H, A, payload.cards);
+        applyPositionAdaptation(d, H, A, resObj);
+        if (d.mode === 'p' && payload.pf) creditPlayerPerf(d, payload.pf);
+        recordMatchMissions();
+        return { shouldConfetti, missionToast };
+      }
+
       if (kind === 'asia' && d.ac) {
         const c = d.ac;
+        const roundBefore = c.r;
         const nx: number[] = [];
         const userWin = pickWinner(H, A, resObj, d);
         for (let i = 0; i < c.ids.length; i += 2) {
@@ -415,6 +530,8 @@ export default function App() {
             applyAiClubMatchMissions(d, ah, aa, ar);
           }
         }
+        d.cupLog = d.cupLog || [];
+        d.cupLog.push({ md: d.md, comp: 'asia', r: roundBefore, h: homeId, a: awayId, gh: payload.gh, ga: payload.ga, penText: payload.penText });
         c.ids = nx;
         c.r++;
         d.pa = false;
@@ -826,7 +943,17 @@ export default function App() {
               <div className="w-full flex items-center justify-between gap-1.5 mland:gap-1 px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)] min-w-0">
                 <div className="flex items-center gap-1.5 mland:gap-1 min-w-0 flex-1">
                   <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0 whitespace-nowrap">
-                    {nextMatchInfo.kind === 'asia' ? '🌏 ทวีป' : nextMatchInfo.kind === 'cup' ? '🏆 ถ้วย' : '⚽ นัดหน้า'}
+                    {nextMatchInfo.kind === 'asia'
+                      ? '🌏 ทวีป'
+                      : nextMatchInfo.kind === 'sc'
+                        ? '🏅 แชมเปี้ยนส์คัพ'
+                        : nextMatchInfo.kind === 'lc'
+                          ? '🥇 ลีกคัพ'
+                          : nextMatchInfo.kind === 'dc'
+                            ? '🛡️ ถ้วยดิวิชั่น'
+                            : nextMatchInfo.kind === 'cup'
+                              ? '🏆 ถ้วยปชช.'
+                              : '⚽ นัดหน้า'}
                     {nextMatchInfo.isDerby && <span className="ml-0.5 text-[var(--red)]">🔥</span>}
                   </span>
                   <div className="shrink-0 [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-4 mland:[&>svg]:h-4">
@@ -877,14 +1004,26 @@ export default function App() {
                 ? appSettings.autoSkipMatch
                   ? nextMatchInfo.kind === 'asia'
                     ? '⏭️ ข้ามถ้วยทวีป'
-                    : nextMatchInfo.kind === 'cup'
-                      ? '⏭️ ข้ามถ้วยปชช.'
-                      : `⏭️ ข้ามนัดที่ ${state.md + 1}`
+                    : nextMatchInfo.kind === 'sc'
+                      ? '⏭️ ข้ามแชมเปี้ยนส์คัพ'
+                      : nextMatchInfo.kind === 'lc'
+                        ? '⏭️ ข้ามลีกคัพ'
+                        : nextMatchInfo.kind === 'dc'
+                          ? '⏭️ ข้ามถ้วยดิวิชั่น'
+                          : nextMatchInfo.kind === 'cup'
+                            ? '⏭️ ข้ามถ้วยปชช.'
+                            : `⏭️ ข้ามนัดที่ ${state.md + 1}`
                   : nextMatchInfo.kind === 'asia'
                     ? '🌏 แข่งถ้วยทวีป'
-                    : nextMatchInfo.kind === 'cup'
-                      ? '🏆 แข่งถ้วยปชช.'
-                      : `▶ แข่งนัดที่ ${state.md + 1}`
+                    : nextMatchInfo.kind === 'sc'
+                      ? '🏅 แข่งแชมเปี้ยนส์คัพ'
+                      : nextMatchInfo.kind === 'lc'
+                        ? '🥇 แข่งลีกคัพ'
+                        : nextMatchInfo.kind === 'dc'
+                          ? '🛡️ แข่งถ้วยดิวิชั่น'
+                          : nextMatchInfo.kind === 'cup'
+                            ? '🏆 แข่งถ้วยปชช.'
+                            : `▶ แข่งนัดที่ ${state.md + 1}`
                 : '🏁 สรุปจบฤดูกาล'}
             </button>
             <button

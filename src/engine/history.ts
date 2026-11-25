@@ -10,7 +10,7 @@ import type {
 } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { clamp } from '../utils/math';
-import { ovMe } from './playerCore';
+import { ovMe, DT } from './playerCore';
 
 export function appendPlayerCareerLog(
   q: Player | null | undefined,
@@ -59,7 +59,13 @@ export function snapshotPlayerForRecord(
     customD: q.customD ? { ...q.customD } : undefined,
     sb: q.sb ? { ...q.sb } : undefined,
     coreSb: q.coreSb ? { ...q.coreSb } : undefined,
-    history: q.history ? q.history.map((h) => ({ ...h })) : undefined,
+    history: q.history
+      ? q.history.map((h) => ({
+          ...h,
+          a: h.a ? { ...h.a } : undefined,
+          startA: h.startA ? { ...h.startA } : undefined
+        }))
+      : undefined,
     careerLog: q.careerLog ? [...q.careerLog] : undefined,
     seasonProg: q.seasonProg
       ? {
@@ -230,9 +236,15 @@ export function getPlayerCareerSummary(
             ? 'เลื่อนชั้น'
             : arc.cupStatus === 'แชมป์ถ้วย'
               ? 'แชมป์ถ้วย'
-              : arc.asiaStatus === 'แชมป์ถ้วยทวีป'
-                ? 'แชมป์ทวีป'
-                : undefined;
+              : arc.leagueCupStatus === 'แชมป์ไทยลีก คัพ'
+                ? 'แชมป์ไทยลีก คัพ'
+                : arc.superCupStatus === 'แชมป์แชมเปี้ยนส์ คัพ'
+                  ? 'แชมป์แชมเปี้ยนส์ คัพ'
+                  : arc.divCupStatus === 'แชมป์ถ้วยดิวิชั่น'
+                    ? 'แชมป์ถ้วยดิวิชั่น'
+                    : arc.asiaStatus === 'แชมป์ถ้วยทวีป'
+                      ? 'แชมป์ทวีป'
+                      : undefined;
         baseMap.set(arc.season, {
           season: arc.season,
           teamId: arc.teamId,
@@ -264,6 +276,7 @@ export function getPlayerCareerSummary(
   const curYc = player.tyc ?? player.yc ?? 0;
   const curRc = player.rc || 0;
   const curOv = isMe && pProf ? ovMe(pProf) : player.ov;
+  const curA = { ...DT(player, pProf).a };
   const curAvg = calcSeasonAvgRating({ ...player, ov: curOv }, curSp, curSg, curSa, curCs);
 
   const currentRow: PlayerSeasonHistoryRecord | null =
@@ -274,6 +287,7 @@ export function getPlayerCareerSummary(
           teamName: team?.name || (player.free ? 'ฟรีเอเยนต์' : 'ตลาดซื้อขาย'),
           tier: team?.tier ?? 0,
           ov: curOv,
+          a: curA,
           sp: curSp,
           sg: curSg,
           sa: curSa,
@@ -387,8 +401,14 @@ export function getClubLegacySummary(team: Team, state: GameState, curRank?: num
         champion: arc.champion,
         cupChampion: arc.cupStatus === 'แชมป์ถ้วย',
         asiaChampion: arc.asiaStatus === 'แชมป์ถ้วยทวีป',
+        leagueCupChampion: arc.leagueCupStatus === 'แชมป์ไทยลีก คัพ',
+        superCupChampion: arc.superCupStatus === 'แชมป์แชมเปี้ยนส์ คัพ',
+        divCupChampion: arc.divCupStatus === 'แชมป์ถ้วยดิวิชั่น',
         cupStatus: arc.cupStatus,
         asiaStatus: arc.asiaStatus,
+        leagueCupStatus: arc.leagueCupStatus,
+        superCupStatus: arc.superCupStatus,
+        divCupStatus: arc.divCupStatus,
         topScorer: arc.topScorer ? `${arc.topScorer.name} (${arc.topScorer.sg})` : undefined
       });
     });

@@ -1,6 +1,7 @@
-import React from 'react';
-import type { Player, Team, GameState } from '../types/game';
+import React, { useMemo, useState } from 'react';
+import type { Player, Team, GameState, PersonalMissionDef } from '../types/game';
 import { clamp } from '../utils/math';
+import { SFX } from '../utils/audioTheme';
 import { statTierMeta, statBarColor, getPlayerMissionView, formatMissionRewardText, talentTierMeta } from '../engine/missions';
 
 export const StatBarRow: React.FC<{ label: string; value: number; compact?: boolean }> = ({
@@ -29,6 +30,17 @@ export const StatBarRow: React.FC<{ label: string; value: number; compact?: bool
   );
 };
 
+type MissionCategoryFilter = 'all' | NonNullable<PersonalMissionDef['category']>;
+
+const CATEGORY_TABS: { key: MissionCategoryFilter; label: string }[] = [
+  { key: 'all', label: 'ทั้งหมด' },
+  { key: 'attack', label: '⚔️ เกมรุก' },
+  { key: 'playmaking', label: '🎯 สร้างสรรค์' },
+  { key: 'defense', label: '🛡️ เกมรับ' },
+  { key: 'gk', label: '🧤 ผู้รักษาประตู' },
+  { key: 'physical', label: '🔥 ฟอร์ม & วินัย' }
+];
+
 export const PlayerMissionsPanel: React.FC<{
   player: Player;
   team: Team | null;
@@ -36,13 +48,30 @@ export const PlayerMissionsPanel: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
 }> = ({ player, state }) => {
+  const [catFilter, setCatFilter] = useState<MissionCategoryFilter>('all');
   const isMe = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
   const careerP = isMe ? state.p : null;
   const { mState, items, talent, passedStages, failedStages } = getPlayerMissionView(player, careerP, state);
   const tlMeta = talentTierMeta(talent);
-  const maxTotal = items.length * 5;
+  const maxTotal = items.reduce((sum, x) => sum + x.maxStage, 0);
   const subBonusSum = Object.values((isMe ? state.p?.sb : player.sb) || {}).reduce((a, b) => a + b, 0);
   const recentLogs = mState.recentLogs || [];
+
+  const availableTabs = useMemo(
+    () =>
+      CATEGORY_TABS.filter(
+        (t) => t.key === 'all' || items.some((x) => (x.def.category || 'physical') === t.key)
+      ),
+    [items]
+  );
+
+  const filteredItems = useMemo(
+    () =>
+      catFilter === 'all'
+        ? items
+        : items.filter((x) => (x.def.category || 'physical') === catFilter),
+    [items, catFilter]
+  );
 
   return (
     <div className="space-y-3 mland:space-y-2">
@@ -59,15 +88,41 @@ export const PlayerMissionsPanel: React.FC<{
             </span>
           </div>
           <div className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">
-            สะสมทุกภารกิจพร้อมกัน และ <b className="text-[var(--ink)]">ลุ้นอัปพลังอัตโนมัติทันที</b> เมื่อครบเป้า (สำเร็จ/พลาดขึ้นอยู่กับพรสวรรค์ &amp; วัย)
+            สะสมทุกภารกิจพร้อมกันได้สูงสุด <b className="text-[var(--ink)]">8 ขั้น</b> · หากสุ่มพลาด ความคืบหน้าจะลดเหลือ <b className="text-[var(--ink)]">72%</b> เพื่อเก็บสะสมลองใหม่ได้จนกว่าจะเลยช่วงพีค
           </div>
         </div>
         <div className="flex items-center gap-2.5 text-xs mland:text-[10px] tabular shrink-0">
           <span className="text-[var(--g)] font-bold">ผ่าน {passedStages}/{maxTotal}</span>
-          {failedStages > 0 && <span className="text-[var(--red)] font-bold">พลาด {failedStages}</span>}
+          {failedStages > 0 && <span className="text-[var(--red)] font-bold">เคยพลาด {failedStages}</span>}
           <span className="font-bold text-[var(--ink)]">โบนัส +{subBonusSum}</span>
         </div>
       </div>
+
+      {availableTabs.length > 2 && (
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+          {availableTabs.map((t) => {
+            const cnt = t.key === 'all' ? items.length : items.filter((x) => (x.def.category || 'physical') === t.key).length;
+            const active = catFilter === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setCatFilter(t.key);
+                }}
+                className={`px-2.5 py-1 rounded-lg text-[10.5px] mland:text-[8.5px] font-bold whitespace-nowrap shrink-0 border cursor-pointer transition-colors ${
+                  active
+                    ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                    : 'bg-[var(--surface-2)]/70 text-[var(--mut)] border-[var(--line)] hover:text-[var(--ink)]'
+                }`}
+              >
+                {t.label} ({cnt})
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {recentLogs.length > 0 && (
         <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)]/80 space-y-1">
@@ -82,7 +137,7 @@ export const PlayerMissionsPanel: React.FC<{
                     : 'bg-[var(--red-soft)] border-[var(--red)]/35 text-[var(--red)]'
                 }`}
               >
-                {lg.success ? '✓' : '✕'} {lg.icon} {lg.missionName} ขั้น {lg.stage} ({lg.chance}%){lg.success && lg.rewardText ? ` · ${lg.rewardText}` : ' · พลาดรอบนี้'}
+                {lg.success ? '✓' : '✕'} {lg.icon} {lg.missionName} ขั้น {lg.stage} ({lg.chance}%){lg.success && lg.rewardText ? ` · ${lg.rewardText}` : ' · ถอยเหลือ 72% ลองใหม่ได้'}
               </span>
             ))}
           </div>
@@ -90,7 +145,7 @@ export const PlayerMissionsPanel: React.FC<{
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mland:gap-1.5">
-        {items.map(({ def, stage, maxStage, completedAll, target, curVal, pct, nextRewards, nextCoreAmt, successChance, stageOutcomes }) => (
+        {filteredItems.map(({ def, stage, maxStage, completedAll, target, curVal, pct, nextRewards, nextCoreAmt, successChance, stageOutcomes }) => (
           <div
             key={def.id}
             className="p-3 mland:p-2 rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface-2)]/70 flex flex-col justify-between gap-2 mland:gap-1.5 transition-colors"
@@ -103,14 +158,14 @@ export const PlayerMissionsPanel: React.FC<{
                   </div>
                   <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{def.desc}</div>
                 </div>
-                <div className="flex items-center gap-0.5 shrink-0 pt-0.5" title="ประวัติ 5 ขั้น">
+                <div className="flex items-center flex-wrap justify-end gap-0.5 shrink-0 max-w-[144px] pt-0.5" title={`ประวัติ ${maxStage} ขั้น`}>
                   {Array.from({ length: maxStage }, (_, idx) => {
                     const out = stageOutcomes[idx] || (idx < stage ? 'ok' : undefined);
                     const isCur = !completedAll && idx === stage;
                     return (
                       <span
                         key={idx}
-                        className={`w-4 h-4 rounded text-[9px] font-extrabold flex items-center justify-center tabular border ${
+                        className={`w-3.5 h-3.5 rounded text-[8.5px] font-extrabold flex items-center justify-center tabular border ${
                           out === 'ok'
                             ? 'bg-[var(--g)] text-white border-[var(--g)]'
                             : out === 'fail'
@@ -120,7 +175,7 @@ export const PlayerMissionsPanel: React.FC<{
                                 : 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)]'
                         }`}
                       >
-                        {out === 'ok' ? '✓' : out === 'fail' ? '✕' : idx + 1}
+                        {out === 'ok' ? '✓' : out === 'fail' ? '↻' : idx + 1}
                       </span>
                     );
                   })}

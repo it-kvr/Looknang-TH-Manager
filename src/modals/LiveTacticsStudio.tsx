@@ -26,6 +26,8 @@ export interface LivePlayerMatchStats {
   blocks: number;
   setpieces?: number;
   crossAssists?: number;
+  keyPasses?: number;
+  interceptions?: number;
   dribbles?: number;
   headers?: number;
 }

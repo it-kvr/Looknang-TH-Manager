@@ -6,7 +6,7 @@ import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort } from '../engine/simulation';
+import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort, EXTRA_CUP_META } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { CupView } from './CupView';
 
@@ -59,35 +59,37 @@ export const LeagueView: React.FC<{
   };
 
   const renderNextMatchCard = () => {
-    let kind: 'league' | 'cup' | 'asia' = 'league';
-    let homeId = -1;
-    let awayId = -1;
-    let isDerby = false;
+    type NextKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
 
-    if (state.pa && state.ac && state.ac.alive && !state.ac.done) {
-      const idx = state.ac.ids.indexOf(state.me);
-      if (idx >= 0) {
-        const pairIdx = Math.floor(idx / 2) * 2;
-        kind = 'asia';
-        homeId = state.ac.ids[pairIdx];
-        awayId = state.ac.ids[pairIdx + 1];
-      }
-    } else if (state.pc && state.cup && state.cup.alive && !state.cup.done) {
-      const idx = state.cup.ids.indexOf(state.me);
-      if (idx >= 0) {
-        const pairIdx = Math.floor(idx / 2) * 2;
-        kind = 'cup';
-        homeId = state.cup.ids[pairIdx];
-        awayId = state.cup.ids[pairIdx + 1];
-      }
-    } else if (state.md < state.fx.length) {
-      const pair = state.fx[state.md].find((p) => p.includes(state.me));
-      if (pair) {
-        homeId = pair[0];
-        awayId = pair[1];
-        isDerby = (pair[0] ^ 1) === pair[1];
-      }
-    }
+    const findCupPair = (
+      cupObj: GameState['cup'] | undefined,
+      flag: boolean | undefined,
+      targetKind: NextKind
+    ): { kind: NextKind; homeId: number; awayId: number; isDerby: boolean } | null => {
+      if (!flag || !cupObj || !cupObj.alive || cupObj.done) return null;
+      const idx = cupObj.ids.indexOf(state.me);
+      if (idx < 0) return null;
+      const pairIdx = Math.floor(idx / 2) * 2;
+      return { kind: targetKind, homeId: cupObj.ids[pairIdx], awayId: cupObj.ids[pairIdx + 1], isDerby: false };
+    };
+
+    const resolved =
+      findCupPair(state.ac, state.pa, 'asia') ||
+      findCupPair(state.sc, state.psc, 'sc') ||
+      findCupPair(state.lc, state.plc, 'lc') ||
+      findCupPair(state.dc, state.pdc, 'dc') ||
+      findCupPair(state.cup, state.pc, 'cup') ||
+      (() => {
+        if (state.md < state.fx.length) {
+          const pair = state.fx[state.md].find((p) => p.includes(state.me));
+          if (pair) {
+            return { kind: 'league' as NextKind, homeId: pair[0], awayId: pair[1], isDerby: (pair[0] ^ 1) === pair[1] };
+          }
+        }
+        return { kind: 'league' as NextKind, homeId: -1, awayId: -1, isDerby: false };
+      })();
+
+    const { kind, homeId, awayId, isDerby } = resolved;
 
     if (homeId < 0 || awayId < 0 || !state.teams[homeId] || !state.teams[awayId]) {
       return (
@@ -111,9 +113,15 @@ export const LeagueView: React.FC<{
     const compLabel =
       kind === 'asia'
         ? `🌏 ถ้วยทวีป · ${state.ac ? RN[state.ac.r] || `รอบ ${state.ac.r + 1}` : ''}`
-        : kind === 'cup'
-          ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-          : `⚽ นัดที่ ${state.md + 1}/${state.fx.length} · ${isHome ? 'เกมเหย้า' : 'เกมเยือน'}`;
+        : kind === 'sc'
+          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · นัดชิงชนะเลิศ`
+          : kind === 'lc'
+            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${state.lc ? RN[state.lc.r] || `รอบ ${state.lc.r + 1}` : ''}`
+            : kind === 'dc'
+              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${state.dc ? RN[state.dc.r] || `รอบ ${state.dc.r + 1}` : ''}`
+              : kind === 'cup'
+                ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
+                : `⚽ นัดที่ ${state.md + 1}/${state.fx.length} · ${isHome ? 'เกมเหย้า' : 'เกมเยือน'}`;
 
     return (
       <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2.5 mland:space-y-1.5">
@@ -1293,7 +1301,19 @@ export const ScheduleCalendarView: React.FC<{
                 onClick={onPlayNext}
                 className="btn btn-xs btn-gold"
               >
-                {state.md >= totalMd ? '🏁 สรุปจบฤดูกาล' : state.pa ? '🌏 แข่งถ้วยทวีป' : state.pc ? '🏆 แข่งถ้วยประชาชน' : `▶ แข่งนัดที่ ${state.md + 1}`}
+                {state.md >= totalMd
+                  ? '🏁 สรุปจบฤดูกาล'
+                  : state.pa
+                    ? '🌏 แข่งถ้วยทวีป'
+                    : state.psc
+                      ? `${EXTRA_CUP_META.sc.icon} แข่ง${EXTRA_CUP_META.sc.short}`
+                      : state.plc
+                        ? `${EXTRA_CUP_META.lc.icon} แข่ง${EXTRA_CUP_META.lc.short}`
+                        : state.pdc
+                          ? `${EXTRA_CUP_META.dc.icon} แข่ง${EXTRA_CUP_META.dc.short}`
+                          : state.pc
+                            ? '🏆 แข่งถ้วยประชาชน'
+                            : `▶ แข่งนัดที่ ${state.md + 1}`}
               </button>
             )}
           </div>
@@ -1306,19 +1326,28 @@ export const ScheduleCalendarView: React.FC<{
 
         {/* Key Calendar Events Legend */}
         <div className="flex flex-wrap gap-1.5 mland:gap-1 text-[11px] mland:text-[9px]">
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-semibold">🟢 ตลาดเปิดรอบ 1: นัด 1–6</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-semibold">🟢 ตลาดเปิดรอบ 2: นัด 15–20</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp-soft)] text-[#7a4f00] dark:text-[var(--lamp)] font-semibold">🏆 ถ้วยประชาชน: นัด 6, 13, 20, 27</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🌏 ถ้วยทวีป: นัด 3, 10, 17, 24</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-semibold">🟢 ตลาดรอบ 1: นัด 1–6</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-semibold">🟢 ตลาดรอบ 2: นัด 15–20</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🏅 แชมเปี้ยนส์คัพ: 2</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🌏 ทวีป: 3,10,17,24</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🥇 ลีกคัพ: 4,11,18,25</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🛡️ ถ้วยดิวิชั่น: 5,12,19,26</span>
+          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp-soft)] text-[#7a4f00] dark:text-[var(--lamp)] font-semibold">🏆 ปชช.: 6,13,20,27</span>
         </div>
 
         {/* Immediate Cup / Asia Banner */}
-        {(state.pc || state.pa) && (
-          <div className="p-3 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px]">
+        {(state.pc || state.pa || state.plc || state.psc || state.pdc) && (
+          <div className="p-3 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10]">
             <span className="font-bold">
               {state.pa && state.ac
-                ? `🌏 คิวแข่งคั่นกลางสัปดาห์นี้: บอลถ้วยในทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`
-                : `🏆 คิวแข่งคั่นกลางสัปดาห์นี้: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
+                ? `🌏 คิวแข่งคั่นกลางสัปดาห์นี้: บอลถ้วยทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`
+                : state.psc && state.sc
+                  ? `${EXTRA_CUP_META.sc.icon} คิวแข่งคั่นกลางสัปดาห์นี้: ${EXTRA_CUP_META.sc.name} (นัดชิงชนะเลิศ)`
+                  : state.plc && state.lc
+                    ? `${EXTRA_CUP_META.lc.icon} คิวแข่งคั่นกลางสัปดาห์นี้: ${EXTRA_CUP_META.lc.name} ${RN[state.lc.r] || `รอบ ${state.lc.r + 1}`}`
+                    : state.pdc && state.dc
+                      ? `${EXTRA_CUP_META.dc.icon} คิวแข่งคั่นกลางสัปดาห์นี้: ${EXTRA_CUP_META.dc.name} ${RN[state.dc.r] || `รอบ ${state.dc.r + 1}`}`
+                      : `🏆 คิวแข่งคั่นกลางสัปดาห์นี้: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
             </span>
             {onPlayNext && (
               <button type="button" onClick={onPlayNext} className="btn btn-xs btn-gold">
@@ -1372,12 +1401,15 @@ export const ScheduleCalendarView: React.FC<{
             const opp = state.teams[isHome ? pair[1] : pair[0]];
             const isDerby = (pair[0] ^ 1) === pair[1];
             const ost = teamStats(opp, state);
-            const isNext = mdIdx === state.md && !state.pc && !state.pa;
+            const isNext = mdIdx === state.md && !state.pc && !state.pa && !state.plc && !state.psc && !state.pdc;
             const isPast = mdIdx < state.md;
             const isWindowOpen = mdIdx < 6 || (mdIdx >= 14 && mdIdx < 20);
             const rec = state.schedRes?.[mdIdx];
 
             const cupIdx = [6, 13, 20, 27].indexOf(mdNum);
+            const lcIdx = [4, 11, 18, 25].indexOf(mdNum);
+            const dcIdx = [5, 12, 19, 26].indexOf(mdNum);
+            const isSuperCup = mdNum === 2;
             const asiaIdx = [3, 10, 17, 24].indexOf(mdNum);
 
             let resLabel = '';
@@ -1420,6 +1452,9 @@ export const ScheduleCalendarView: React.FC<{
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     {isWindowOpen && <span title="ช่วงเปิดตลาดซื้อขาย" className="text-[10px] font-bold text-[var(--g)]">🟢 ตลาด</span>}
+                    {isSuperCup && <span title={EXTRA_CUP_META.sc.name} className="text-[10px] font-bold text-amber-600 dark:text-[var(--lamp)]">🏅 ซูเปอร์คัพ</span>}
+                    {lcIdx >= 0 && <span title={`กำหนด${EXTRA_CUP_META.lc.name} ${RN[lcIdx]}`} className="text-[10px] font-bold text-sky-600 dark:text-sky-400">🥇 ลีกคัพ</span>}
+                    {dcIdx >= 0 && <span title={`กำหนด${EXTRA_CUP_META.dc.name} ${RN[dcIdx]}`} className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">🛡️ ดิวิชั่น</span>}
                     {cupIdx >= 0 && <span title={`กำหนดถ้วยประชาชน ${RN[cupIdx]}`} className="text-[10px] font-bold text-[#9a6300] dark:text-[var(--lamp)]">🏆 ถ้วย</span>}
                     {asiaIdx >= 0 && <span title={`กำหนดถ้วยทวีป ${RN[asiaIdx]}`} className="text-[10px] font-bold text-[var(--g)]">🌏 ทวีป</span>}
                   </div>
@@ -1516,10 +1551,20 @@ export const ScheduleCalendarView: React.FC<{
               {cupLogs.map((cl, idx) => {
                 const ht = state.teams[cl.h];
                 const at = state.teams[cl.a];
+                const badge =
+                  cl.comp === 'asia'
+                    ? `🌏 ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                    : cl.comp === 'sc'
+                      ? `${EXTRA_CUP_META.sc.icon} ชิงชนะเลิศ`
+                      : cl.comp === 'lc'
+                        ? `${EXTRA_CUP_META.lc.icon} ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                        : cl.comp === 'dc'
+                          ? `${EXTRA_CUP_META.dc.icon} ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                          : `🏆 ${RN[cl.r] || `รอบ ${cl.r + 1}`}`;
                 return (
                   <div key={idx} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs">
                     <span className="font-bold shrink-0">
-                      {cl.comp === 'asia' ? '🌏' : '🏆'} {RN[cl.r] || `รอบ ${cl.r + 1}`}
+                      {badge}
                     </span>
                     <span className="truncate text-center flex-1">
                       {ht?.name} <b>{cl.gh}-{cl.ga}</b> {at?.name}
@@ -1532,8 +1577,8 @@ export const ScheduleCalendarView: React.FC<{
           ) : (
             <div className="text-xs text-[var(--mut)] space-y-1">
               <p>ยังไม่มีผลบอลถ้วยในฤดูกาลนี้</p>
-              <p>• บอลถ้วยทวีปจะแข่งช่วงนัดที่ 3, 10, 17, 24</p>
-              <p>• ถ้วยประชาชนจะแข่งช่วงนัดที่ 6, 13, 20, 27</p>
+              <p>• แชมเปี้ยนส์ คัพ: นัด 2 · ถ้วยทวีป: นัด 3, 10, 17, 24</p>
+              <p>• ไทยลีก คัพ: นัด 4, 11, 18, 25 · ถ้วยดิวิชั่น: นัด 5, 12, 19, 26 · ถ้วยประชาชน: นัด 6, 13, 20, 27</p>
             </div>
           )}
         </div>

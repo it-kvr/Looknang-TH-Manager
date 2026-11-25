@@ -100,19 +100,41 @@ export const TrophySvg: React.FC<{
 }> = ({ type, tier, uid, size = 54, muted = false }) => {
   const isAsia = type === 'asia';
   const isCup = type === 'cup';
+  const isLeagueCup = type === 'league_cup';
+  const isSuperCup = type === 'super_cup';
+  const isDivCup = type === 'div_cup';
   const isAward = type === 'award' || type === 'nt';
   const isSilverLeague = type === 'league' && tier === 1;
   const isBronzeLeague = type === 'league' && (tier === 0 || tier == null);
 
   // Palette per trophy prestige
-  const mainStops = isCup || isSilverLeague
-    ? ['#ffffff', '#cbd5e1', '#94a3b8', '#64748b']
-    : isBronzeLeague
-      ? ['#fde68a', '#f59e0b', '#b45309', '#78350f']
-      : ['#fef9c3', '#facc15', '#eab308', '#a16207'];
+  const mainStops =
+    isLeagueCup
+      ? ['#e0f2fe', '#7dd3fc', '#0284c7', '#075985']
+      : isDivCup
+        ? ['#d1fae5', '#34d399', '#059669', '#065f46']
+        : isSuperCup
+          ? ['#fef3c7', '#fbbf24', '#d97706', '#92400e']
+          : isCup || isSilverLeague
+            ? ['#ffffff', '#cbd5e1', '#94a3b8', '#64748b']
+            : isBronzeLeague
+              ? ['#fde68a', '#f59e0b', '#b45309', '#78350f']
+              : ['#fef9c3', '#facc15', '#eab308', '#a16207'];
 
-  const trimCol = isAsia ? '#10b981' : isCup ? '#eab308' : isSilverLeague ? '#facc15' : '#fef08a';
-  const baseCol = isAsia ? '#064e3b' : isCup ? '#1e293b' : '#291d09';
+  const trimCol = isAsia
+    ? '#10b981'
+    : isLeagueCup
+      ? '#38bdf8'
+      : isDivCup
+        ? '#34d399'
+        : isSuperCup
+          ? '#fde047'
+          : isCup
+            ? '#eab308'
+            : isSilverLeague
+              ? '#facc15'
+              : '#fef08a';
+  const baseCol = isAsia || isDivCup ? '#064e3b' : isLeagueCup ? '#0c2438' : isCup ? '#1e293b' : '#291d09';
 
   return (
     <svg
@@ -177,6 +199,45 @@ export const TrophySvg: React.FC<{
           <path d="M22 47.5h20l2 4.5H20l2-4.5z" fill={trimCol} />
           <rect x="17" y="52" width="30" height="7" rx="2" fill={`url(#tb-${uid})`} stroke={trimCol} strokeWidth="0.9" />
           <rect x="23" y="54.5" width="18" height="2" rx="1" fill="#fde047" opacity="0.9" />
+        </>
+      ) : isLeagueCup || isDivCup || isSuperCup ? (
+        <>
+          {isSuperCup ? (
+            <>
+              {/* Super Cup Royal Shield Plate */}
+              <path
+                d="M18 11h28l-2 15c0 10-5 15-12 18-7-3-12-8-12-18l-2-15z"
+                fill={`url(#tg-${uid})`}
+                stroke={mainStops[3]}
+                strokeWidth="1.4"
+              />
+              <path d="M22 14h20l-1.4 11c0 7.2-3.8 11-8.6 13.5-4.8-2.5-8.6-6.3-8.6-13.5L22 14z" fill="none" stroke="#ffffff" strokeOpacity="0.45" strokeWidth="1" />
+              <path d="M32 18l2 4.1 4.5.7-3.2 3.1.8 4.4-4.1-2.1-4.1 2.1.8-4.4-3.2-3.1 4.5-.7L32 18z" fill="#ffffff" fillOpacity="0.92" />
+            </>
+          ) : (
+            <>
+              {/* Modern Angled Cup / Shield Chalice */}
+              <path
+                d="M18 15c-4.5.2-7 3-7 7 0 4 3 6.8 8 7.5M46 15c4.5.2 7 3 7 7 0 4-3 6.8-8 7.5"
+                stroke={`url(#tg-${uid})`}
+                strokeWidth="2.8"
+                strokeLinecap="round"
+              />
+              <path
+                d="M19 12h26l-3.2 19c-.9 5.5-5 9.5-9.8 9.5s-8.9-4-9.8-9.5L19 12z"
+                fill={`url(#tg-${uid})`}
+                stroke={mainStops[3]}
+                strokeWidth="1.2"
+              />
+              <path d="M22.5 15h3.5l1.3 15c.2 2.4 1 4.3 2.2 5.7-3.2-1-5.2-3.8-5.7-7.7L22.5 15z" fill="#ffffff" fillOpacity="0.42" />
+              <circle cx="32" cy="24" r="5" fill={baseCol} stroke={trimCol} strokeWidth="1.2" />
+              <circle cx="32" cy="24" r="2.2" fill={trimCol} />
+            </>
+          )}
+          <rect x="29" y="40.5" width="6" height="7" rx="1.5" fill={`url(#tg-${uid})`} />
+          <rect x="21.5" y="47.5" width="21" height="3.5" rx="1.2" fill={trimCol} />
+          <rect x="17" y="51" width="30" height="7.8" rx="2" fill={`url(#tb-${uid})`} stroke={trimCol} strokeWidth="0.9" />
+          <rect x="23" y="53.8" width="18" height="2" rx="1" fill={trimCol} opacity="0.9" />
         </>
       ) : isCup ? (
         <>
@@ -266,16 +327,16 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
 
   const trophyCounts = useMemo(() => {
     let league = 0;
-    let cup = 0;
+    let domesticCup = 0;
     let asia = 0;
     let other = 0;
     legacy.trophies.forEach((tr) => {
       if (tr.type === 'league') league++;
-      else if (tr.type === 'cup') cup++;
+      else if (tr.type === 'cup' || tr.type === 'league_cup' || tr.type === 'super_cup' || tr.type === 'div_cup') domesticCup++;
       else if (tr.type === 'asia') asia++;
       else other++;
     });
-    return { league, cup, asia, other };
+    return { league, domesticCup, asia, other };
   }, [legacy.trophies]);
 
   const trophySeasons = useMemo(() => {
@@ -284,12 +345,30 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
     return Array.from(set).sort((a, b) => a - b);
   }, [legacy.trophies]);
 
-  const orderedCabinetTrophies = useMemo(() => {
-    const sorted = legacy.trophies
-      .slice()
-      .sort((a, b) => a.season - b.season);
-    if (selectedTrophySeason === 'all') return sorted;
-    return sorted.filter((tr) => tr.season === selectedTrophySeason);
+  const seasonTrophyGroups = useMemo(() => {
+    const trophyOrder: Record<TrophyRecord['type'], number> = {
+      asia: 0,
+      league: 1,
+      cup: 2,
+      league_cup: 3,
+      super_cup: 4,
+      div_cup: 5,
+      nt: 6,
+      award: 7
+    };
+    const grouped = new Map<number, TrophyRecord[]>();
+    legacy.trophies.forEach((tr) => {
+      if (selectedTrophySeason !== 'all' && tr.season !== selectedTrophySeason) return;
+      const arr = grouped.get(tr.season) || [];
+      arr.push(tr);
+      grouped.set(tr.season, arr);
+    });
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([season, items]) => ({
+        season,
+        items: items.slice().sort((a, b) => (trophyOrder[a.type] ?? 9) - (trophyOrder[b.type] ?? 9))
+      }));
   }, [legacy.trophies, selectedTrophySeason]);
 
   const columnLeaders = useMemo(() => {
@@ -409,7 +488,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                 ตู้โชว์ถ้วยรางวัล ({legacy.trophies.length})
               </span>
               <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular truncate">
-                ลีก {trophyCounts.league} · ปชช. {trophyCounts.cup} · ทวีป {trophyCounts.asia}
+                ลีก {trophyCounts.league} · บอลถ้วยใน ปท. {trophyCounts.domesticCup} · ทวีป {trophyCounts.asia}
                 {trophyCounts.other > 0 ? ` · อื่นๆ ${trophyCounts.other}` : ''}
               </span>
             </div>
@@ -500,63 +579,69 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                 className="pointer-events-none absolute inset-0 z-20 bg-[linear-gradient(118deg,rgba(255,255,255,0.09)_0%,rgba(255,255,255,0.03)_26%,transparent_44%,rgba(255,255,255,0.03)_68%,transparent_84%)]"
               />
 
-              {/* Single-Row Scrollable Cabinet Shelf */}
+              {/* Season-Grouped Side-by-Side Scrollable Cabinet Shelf */}
               <div
                 ref={trophyShelfRef}
                 className="relative z-10 overflow-x-auto scroll-smooth snap-x snap-mandatory"
               >
                 <div className="min-w-full w-max flex flex-col">
-                  {/* Single Row of Trophies */}
-                  <div className="flex flex-nowrap items-end gap-4 sm:gap-5 px-5 pt-4 mland:pt-3 pb-0">
-                    {orderedCabinetTrophies.map((tr, i) => {
-                      const prevSeason = i > 0 ? orderedCabinetTrophies[i - 1].season : null;
-                      const showSeasonDivider = selectedTrophySeason === 'all' && prevSeason !== null && prevSeason !== tr.season;
-                      const isGoldGlow = tr.type === 'asia' || (tr.type === 'league' && tr.tier === 2) || tr.type === 'award' || tr.type === 'nt';
-
+                  <div className="flex flex-nowrap items-end gap-5 sm:gap-6 px-5 pt-3.5 mland:pt-2.5 pb-0">
+                    {seasonTrophyGroups.map((grp, gIdx) => {
+                      const hasGold = grp.items.some(
+                        (tr) => tr.type === 'asia' || tr.type === 'super_cup' || (tr.type === 'league' && tr.tier === 2) || tr.type === 'award' || tr.type === 'nt'
+                      );
                       return (
-                        <React.Fragment key={`${tr.season}-${tr.type}-${i}`}>
-                          {showSeasonDivider && (
+                        <React.Fragment key={`grp-s-${grp.season}`}>
+                          {gIdx > 0 && (
                             <div
                               aria-hidden="true"
-                              className="self-stretch w-px my-2 bg-gradient-to-b from-transparent via-[#d4a84f]/30 to-[#d4a84f]/15 shrink-0"
+                              className="self-stretch w-px my-2 bg-gradient-to-b from-transparent via-[#d4a84f]/35 to-[#d4a84f]/20 shrink-0"
                             />
                           )}
-                          <div className="relative snap-start shrink-0 w-[112px] sm:w-[122px] mland:w-[98px] flex flex-col items-center text-center group pb-1.5">
-                            {/* Overhead Museum Spotlight Cone */}
+                          <div className="relative snap-start shrink-0 flex flex-col items-center pb-1.5 px-2.5 rounded-t-xl bg-white/[0.025] border-x border-t border-[#d4a84f]/20">
+                            {/* Group Overhead Museum Spotlight Cone */}
                             <div
                               aria-hidden="true"
-                              className="pointer-events-none absolute -top-4 left-1/2 -translate-x-1/2 w-24 h-24 opacity-60 group-hover:opacity-90 transition-opacity"
+                              className="pointer-events-none absolute -top-3 inset-x-0 h-28 opacity-65"
                               style={{
-                                background: isGoldGlow
-                                  ? 'radial-gradient(ellipse at 50% 8%, rgba(253, 224, 71, 0.30) 0%, rgba(245, 158, 11, 0.10) 45%, transparent 74%)'
-                                  : 'radial-gradient(ellipse at 50% 8%, rgba(226, 232, 240, 0.28) 0%, rgba(148, 163, 184, 0.08) 45%, transparent 74%)'
+                                background: hasGold
+                                  ? 'radial-gradient(ellipse at 50% 8%, rgba(253, 224, 71, 0.26) 0%, rgba(245, 158, 11, 0.08) 48%, transparent 78%)'
+                                  : 'radial-gradient(ellipse at 50% 8%, rgba(226, 232, 240, 0.22) 0%, rgba(148, 163, 184, 0.07) 48%, transparent 78%)'
                               }}
                             />
 
-                            {/* Engraved Season Tag Above Spotlight */}
-                            <div className="relative z-10 text-[9.5px] mland:text-[8px] font-bold tracking-wide text-[#fde68a]/85 tabular mb-1">
-                              ซีซั่น {tr.season}
+                            {/* Season Showcase Header */}
+                            <div className="relative z-10 flex items-center gap-1.5 mt-1 mb-1.5 px-2.5 py-0.5 rounded-md bg-[#2a1a0d]/85 border border-[#d4a84f]/40 text-[10px] mland:text-[8.5px] font-extrabold tracking-wide text-[#fde68a] tabular">
+                              <span>ซีซั่น {grp.season}</span>
+                              {grp.items.length > 1 && (
+                                <span className="text-[#facc15]">· {grp.items.length} แชมป์</span>
+                              )}
                             </div>
 
-                            {/* Trophy SVG Resting on Velvet Pedestal */}
-                            <div className="relative z-10 flex flex-col items-center transition-transform duration-200 group-hover:-translate-y-0.5">
-                              <TrophySvg
-                                type={tr.type}
-                                tier={tr.tier}
-                                uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${i}`}
-                                size={compact ? 54 : 62}
-                              />
-                              {/* Contact Floor Shadow */}
-                              <div className="w-12 h-1.5 rounded-full bg-black/75 blur-[1.5px] -mt-1" />
-                              {/* Dark Velvet Cushion Base */}
-                              <div className="w-16 h-1.5 rounded-t-sm bg-gradient-to-b from-[#2f241d] to-[#1a130f] border-x border-t border-[#d4a84f]/35" />
-                            </div>
-
-                            {/* Engraved Brass Nameplate Plaque Mounted on Shelf Front */}
-                            <div className="relative z-10 w-full mt-0.5 px-1.5 py-1 rounded bg-gradient-to-b from-[#f3d47b] via-[#d7a83f] to-[#a3751a] border border-[#fef08a]/65 shadow-[0_2px_5px_rgba(0,0,0,0.55)]">
-                              <div className="text-[10px] mland:text-[8.5px] font-extrabold text-[#241603] leading-tight line-clamp-2 min-h-[24px] mland:min-h-[20px] flex items-center justify-center">
-                                {tr.title}
-                              </div>
+                            {/* Side-by-Side Trophies Inside This Season */}
+                            <div className="relative z-10 flex flex-nowrap items-end gap-2.5 sm:gap-3.5">
+                              {grp.items.map((tr, i) => (
+                                <div
+                                  key={`${tr.season}-${tr.type}-${i}`}
+                                  className="w-[100px] sm:w-[112px] mland:w-[88px] flex flex-col items-center text-center group"
+                                >
+                                  <div className="relative flex flex-col items-center transition-transform duration-200 group-hover:-translate-y-0.5">
+                                    <TrophySvg
+                                      type={tr.type}
+                                      tier={tr.tier}
+                                      uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${grp.season}-${i}`}
+                                      size={compact ? 52 : 60}
+                                    />
+                                    <div className="w-11 h-1.5 rounded-full bg-black/75 blur-[1.5px] -mt-1" />
+                                    <div className="w-14 h-1.5 rounded-t-sm bg-gradient-to-b from-[#2f241d] to-[#1a130f] border-x border-t border-[#d4a84f]/35" />
+                                  </div>
+                                  <div className="w-full mt-0.5 px-1.5 py-1 rounded bg-gradient-to-b from-[#f3d47b] via-[#d7a83f] to-[#a3751a] border border-[#fef08a]/65 shadow-[0_2px_5px_rgba(0,0,0,0.55)]">
+                                    <div className="text-[9.5px] mland:text-[8px] font-extrabold text-[#241603] leading-tight line-clamp-2 min-h-[24px] mland:min-h-[20px] flex items-center justify-center">
+                                      {tr.title}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </React.Fragment>
@@ -820,7 +905,10 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                   const canDrill = !r.isCurrent && isUserClub && onOpenSeasonStats && archivedSeasonSet.has(r.season);
                   const cupSummary = [
                     r.champion ? 'แชมป์ลีก' : r.nextTier > r.tier ? 'เลื่อนชั้น' : r.nextTier < r.tier ? 'ตกชั้น' : null,
-                    r.cupChampion ? 'แชมป์ถ้วยปชช.' : r.cupStatus && r.cupStatus !== '-' ? r.cupStatus : null,
+                    r.cupChampion ? 'แชมป์ถ้วยปชช.' : r.cupStatus && r.cupStatus !== '-' ? `ปชช.: ${r.cupStatus}` : null,
+                    r.leagueCupChampion ? 'แชมป์ลีกคัพ' : r.leagueCupStatus && r.leagueCupStatus !== '-' ? `ลีกคัพ: ${r.leagueCupStatus}` : null,
+                    r.superCupChampion ? 'แชมป์แชมเปี้ยนส์คัพ' : r.superCupStatus && r.superCupStatus !== '-' ? `แชมเปี้ยนส์คัพ: ${r.superCupStatus}` : null,
+                    r.divCupChampion ? 'แชมป์ถ้วยดิวิชั่น' : r.divCupStatus && r.divCupStatus !== '-' ? `ดิวิชั่น: ${r.divCupStatus}` : null,
                     r.asiaChampion ? 'แชมป์ถ้วยทวีป' : r.asiaStatus && r.asiaStatus !== '-' && r.asiaStatus !== 'ไม่ได้เข้าร่วม' ? r.asiaStatus : null
                   ]
                     .filter(Boolean)

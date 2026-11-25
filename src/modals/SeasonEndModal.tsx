@@ -41,7 +41,11 @@ export const SeasonEndModal: React.FC<{
 
   const wonCup = summary.cupStatus === 'แชมป์ถ้วย';
   const wonAsia = summary.asiaStatus === 'แชมป์ถ้วยทวีป';
-  const majorTrophyCount = (summary.ch ? 1 : 0) + (wonCup ? 1 : 0) + (wonAsia ? 1 : 0);
+  const wonLc = summary.leagueCupStatus === 'แชมป์ไทยลีก คัพ';
+  const wonSc = summary.superCupStatus === 'แชมป์แชมเปี้ยนส์ คัพ';
+  const wonDc = summary.divCupStatus === 'แชมป์ถ้วยดิวิชั่น';
+  const majorTrophyCount =
+    (summary.ch ? 1 : 0) + (wonCup ? 1 : 0) + (wonAsia ? 1 : 0) + (wonLc ? 1 : 0) + (wonSc ? 1 : 0) + (wonDc ? 1 : 0);
   const isPromoted = summary.nt > summary.mt;
   const isRelegated = summary.nt < summary.mt;
   const metBoardGoal = state.mode === 'm' && state.obj != null && summary.pos <= state.obj;
@@ -96,12 +100,16 @@ export const SeasonEndModal: React.FC<{
 
   const headlineTitle = useMemo(() => {
     if (state.sack === 1) return 'สิ้นสุดภารกิจคุมทีม';
-    if (majorTrophyCount >= 3) return 'ทริปเปิลแชมป์ประวัติศาสตร์!';
+    if (majorTrophyCount >= 4) return 'กวาดแชมป์ถล่มทลายประวัติศาสตร์!';
+    if (majorTrophyCount === 3) return 'ทริปเปิลแชมป์ประวัติศาสตร์!';
     if (majorTrophyCount === 2) return 'ดับเบิลแชมป์สุดยิ่งใหญ่!';
     if (wonAsia) return 'เจ้ายุทธจักรลูกหนังทวีป!';
     if (summary.ch && isPromoted) return `แชมป์ ${TN[summary.mt]} & เลื่อนชั้น!`;
     if (summary.ch) return `แชมป์ ${TN[summary.mt]} อย่างยิ่งใหญ่!`;
     if (wonCup) return 'คว้าแชมป์ถ้วยประชาชน!';
+    if (wonLc) return 'คว้าแชมป์ไทยลีก คัพ!';
+    if (wonDc) return 'คว้าแชมป์ถ้วยดิวิชั่น & ภูมิภาค!';
+    if (wonSc) return 'คว้าแชมป์ไทยแลนด์ แชมเปี้ยนส์ คัพ!';
     if (isPromoted) return `เลื่อนชั้นสู่ ${TN[summary.nt]} สำเร็จ!`;
     if (summary.pos <= 3) return `จบอันดับ ${summary.pos} บนโพเดียมลีก!`;
     if (metBoardGoal) return 'บรรลุเป้าหมายบอร์ดบริหาร!';
@@ -109,7 +117,7 @@ export const SeasonEndModal: React.FC<{
     if (isSolidUpper) return 'ผลงานยอดเยี่ยมระดับหัวตาราง!';
     if (isRelegated) return 'ตกชั้น — ลุกขึ้นสู้ใหม่ฤดูกาลหน้า';
     return summary.stText || 'สรุปผลงานประจำฤดูกาล';
-  }, [state.sack, majorTrophyCount, wonAsia, summary.ch, summary.mt, summary.nt, summary.pos, summary.stText, wonCup, isPromoted, metBoardGoal, wonNtCallup, isSolidUpper, isRelegated]);
+  }, [state.sack, majorTrophyCount, wonAsia, summary.ch, summary.mt, summary.nt, summary.pos, summary.stText, wonCup, wonLc, wonDc, wonSc, isPromoted, metBoardGoal, wonNtCallup, isSolidUpper, isRelegated]);
 
   const celebrationPlan = useMemo(() => {
     if (celebrationLevel === 'grand') {
@@ -161,7 +169,15 @@ export const SeasonEndModal: React.FC<{
   const gd = arc ? arc.gf - arc.ga : me.gf - me.ga;
 
   const displayTrophies = useMemo(() => {
-    const list = trophiesWon.filter((t) => t.type === 'league' || t.type === 'cup' || t.type === 'asia');
+    const list = trophiesWon.filter(
+      (t) =>
+        t.type === 'league' ||
+        t.type === 'cup' ||
+        t.type === 'asia' ||
+        t.type === 'league_cup' ||
+        t.type === 'super_cup' ||
+        t.type === 'div_cup'
+    );
     if (list.length > 0) return list;
     return trophiesWon;
   }, [trophiesWon]);
@@ -326,13 +342,13 @@ export const SeasonEndModal: React.FC<{
               {/* Earned Trophies or Promotion Crest Podium */}
               {displayTrophies.length > 0 ? (
                 <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 mland:py-1 rounded-2xl bg-black/25 border border-amber-300/35">
-                  {displayTrophies.slice(0, 3).map((tr, i) => (
+                  {displayTrophies.slice(0, 5).map((tr, i) => (
                     <div key={`${tr.type}-${i}`} className="flex flex-col items-center">
                       <TrophySvg
                         type={tr.type}
                         tier={tr.tier}
                         uid={`end-${state.season}-${i}`}
-                        size={42}
+                        size={displayTrophies.length > 3 ? 34 : 42}
                       />
                     </div>
                   ))}
@@ -399,12 +415,19 @@ export const SeasonEndModal: React.FC<{
             </div>
 
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70 space-y-0.5">
-              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold">ถ้วยประชาชน &amp; ทวีป</div>
+              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold">รายการบอลถ้วย &amp; ทวีป</div>
               <div className={`font-extrabold text-sm mland:text-xs truncate ${wonCup ? 'text-[#b47b00] dark:text-[var(--lamp)]' : ''}`}>
                 {wonCup ? '🏆 ' : ''}{summary.cupStatus}
               </div>
-              <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">
-                {summary.asiaStatus ? `ทวีป: ${wonAsia ? '👑 ' : ''}${summary.asiaStatus}` : 'ไม่ได้ลุยถ้วยทวีป'}
+              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                {[
+                  summary.leagueCupStatus ? `🥇 ${summary.leagueCupStatus}` : null,
+                  summary.divCupStatus ? `🛡️ ${summary.divCupStatus}` : null,
+                  summary.superCupStatus ? `🏅 ${summary.superCupStatus}` : null,
+                  summary.asiaStatus ? `🌏 ${summary.asiaStatus}` : null
+                ]
+                  .filter(Boolean)
+                  .join(' · ') || 'ถ้วยประชาชนรายการเดียว'}
               </div>
             </div>
 
@@ -534,7 +557,20 @@ export const SeasonEndModal: React.FC<{
                         key={`${tr.title}-${idx}`}
                         className="px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--lamp)]/45 text-[11px] mland:text-[9.5px] font-bold"
                       >
-                        {tr.type === 'asia' ? '👑' : tr.type === 'cup' ? '🏆' : tr.type === 'nt' ? '🇹🇭' : '🥇'} {tr.title}
+                        {tr.type === 'asia'
+                          ? '👑'
+                          : tr.type === 'cup'
+                            ? '🏆'
+                            : tr.type === 'league_cup'
+                              ? '🥇'
+                              : tr.type === 'super_cup'
+                                ? '🏅'
+                                : tr.type === 'div_cup'
+                                  ? '🛡️'
+                                  : tr.type === 'nt'
+                                    ? '🇹🇭'
+                                    : '🏆'}{' '}
+                        {tr.title}
                       </span>
                     ))}
                   </div>

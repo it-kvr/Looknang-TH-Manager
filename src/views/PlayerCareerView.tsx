@@ -1,9 +1,24 @@
 import React, { useState } from 'react';
 import type { Player, GameState } from '../types/game';
 import { clamp } from '../utils/math';
-import { ATT, PACT, CAREER_PERKS } from '../data/thaiFootballData';
+import { ATT, PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, LINE, SPN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, getFormationSlots, xi, dtInfo, ovMe, syncMe, tc } from '../engine/playerCore';
+import {
+  getShirtNo,
+  getFormationSlots,
+  xi,
+  dtInfo,
+  ovMe,
+  syncMe,
+  tc,
+  learnCareerTrait,
+  forgetCareerTrait,
+  setCareerRoleTrainTarget,
+  switchCareerSignature,
+  trainCareerSignatureDrill,
+  ROLE_ADAPT_THRESHOLD_ADJ,
+  ROLE_ADAPT_THRESHOLD_CROSS
+} from '../engine/playerCore';
 import { statBarColor, statTierMeta, getPlayerTalent, talentTierMeta } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -20,6 +35,7 @@ export const PlayerCareerView: React.FC<{
   onOpenSeasonStats?: (season?: number) => void;
 }> = ({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
   const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
+  const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const p = state.p;
   if (!p) return null;
@@ -358,7 +374,7 @@ export const PlayerCareerView: React.FC<{
           {([
             ['plan', '📅 แผนฝึก'],
             ['missions', '🎯 ภารกิจ'],
-            ['perks', `🌟 สกิล (${perks.length})`],
+            ['perks', `🌟 สกิล & สไตล์`],
             ['stats', '📊 ค่าพลัง'],
             ['history', '📜 ประวัติ']
           ] as const).map(([k, lbl]) => (
@@ -471,40 +487,288 @@ export const PlayerCareerView: React.FC<{
           )}
 
           {careerTab === 'perks' && (
-            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-y-auto">
-              <div className="flex items-center justify-between shrink-0">
-                <h3 className="font-bold text-sm mland:text-xs">🌟 สกิลติดตัวนักเตะ (Career Perks)</h3>
-                <span className="text-xs mland:text-[10px] font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular">ชื่อเสียงคงเหลือ: ★ {p.rep ?? 10}</span>
+            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="seg-bar">
+                  {([
+                    ['perks', `🌟 ติดตัว (${perks.length})`],
+                    ['traits', `🧬 สไตล์ (${(p.traits || []).length}/6)`],
+                    ['roles', `🎯 ตำแหน่งรอง (${(p.altRoles || []).length})`],
+                    ['sig', '⚡ อาวุธประจำตัว']
+                  ] as const).map(([sk, slbl]) => (
+                    <button
+                      key={sk}
+                      type="button"
+                      onClick={() => { SFX.tap(); setSkillSubTab(sk); }}
+                      className={`seg-btn whitespace-nowrap ${skillSubTab === sk ? 'seg-btn-active' : ''}`}
+                    >
+                      {slbl}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs mland:text-[10px] font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular shrink-0">
+                  ชื่อเสียงคงเหลือ: ★ {p.rep ?? 10}
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 mland:gap-1.5 flex-1 content-start">
-                {CAREER_PERKS.map((pk) => {
-                  const owned = perks.includes(pk.id);
-                  const canBuy = !owned && (p.rep ?? 10) >= pk.cost;
-                  return (
-                    <div key={pk.id} className={`p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 ${owned ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs mland:text-[10px] truncate">{pk.name}</div>
-                        <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{pk.desc}</div>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={owned || !canBuy}
-                        onClick={() => {
-                          SFX.win();
-                          onUpdateState((d) => {
-                            if (!d.p) return;
-                            d.p.rep = (d.p.rep ?? 10) - pk.cost;
-                            d.p.perks = [...(d.p.perks || []), pk.id];
-                          });
-                          onToast(`ปลดล็อกสกิล "${pk.name}" แล้ว!`);
-                        }}
-                        className={`btn btn-sm shrink-0 ${owned ? 'btn-primary opacity-80' : 'btn-gold'}`}
-                      >
-                        {owned ? '✓ มีแล้ว' : `ปลด ${pk.cost}★`}
-                      </button>
+
+              <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+                {skillSubTab === 'perks' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5 content-start">
+                    {CAREER_PERKS.map((pk) => {
+                      const owned = perks.includes(pk.id);
+                      const canBuy = !owned && (p.rep ?? 10) >= pk.cost;
+                      return (
+                        <div key={pk.id} className={`p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 ${owned ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
+                          <div className="min-w-0">
+                            <div className="font-bold text-xs mland:text-[10] truncate">{pk.name}</div>
+                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{pk.desc}</div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={owned || !canBuy}
+                            onClick={() => {
+                              SFX.win();
+                              onUpdateState((d) => {
+                                if (!d.p) return;
+                                d.p.rep = (d.p.rep ?? 10) - pk.cost;
+                                d.p.perks = [...(d.p.perks || []), pk.id];
+                              });
+                              onToast(`ปลดล็อกสกิล "${pk.name}" แล้ว!`);
+                            }}
+                            className={`btn btn-sm shrink-0 whitespace-nowrap ${owned ? 'btn-primary opacity-80' : 'btn-gold'}`}
+                          >
+                            {owned ? '✓ มีแล้ว' : `ปลด ${pk.cost}★`}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {skillSubTab === 'traits' && (
+                  <div className="space-y-2">
+                    <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">
+                      เรียนรู้สไตล์การเล่นจริงในสนามให้เหมาะกับตำแหน่ง <b className="text-[var(--ink)]">{p.pos}</b> (สูงสุด 6 สไตล์ · เรียนเพิ่ม 6 ★ · ถอดเปลี่ยน 3 ★)
                     </div>
-                  );
-                })}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5">
+                      {FOOTBALL_TRAITS.filter((tr) => tr.pos.includes(p.pos)).map((tr) => {
+                        const myTraits = p.traits || [];
+                        const owned = myTraits.includes(tr.id);
+                        const conflictId = myTraits.find((cid) => tr.conflicts?.includes(cid));
+                        const isFitRole = !tr.roles || tr.roles.includes(p.sp) || (p.altRoles || []).some((r) => tr.roles?.includes(r));
+                        return (
+                          <div
+                            key={tr.id}
+                            className={`p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 ${
+                              owned
+                                ? 'bg-[var(--g-soft)]/60 border-[var(--g)]/55'
+                                : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="font-bold text-xs mland:text-[10] truncate">
+                                {tr.icon} {tr.name}
+                                {isFitRole && !owned && <span className="ml-1 text-[9.5px] text-[var(--g)]">· ถนัด</span>}
+                              </div>
+                              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">
+                                {tr.desc}
+                              </div>
+                              {conflictId && !owned && (
+                                <div className="text-[9.5px] text-[var(--red)] font-semibold">
+                                  ขัดกับ: {FOOTBALL_TRAITS.find((x) => x.id === conflictId)?.name || conflictId}
+                                </div>
+                              )}
+                            </div>
+                            {owned ? (
+                              <button
+                                type="button"
+                                disabled={myTraits.length <= 1 || (p.rep ?? 10) < 3}
+                                onClick={() => {
+                                  SFX.tap();
+                                  let resMsg = '';
+                                  onUpdateState((d) => {
+                                    resMsg = forgetCareerTrait(d, tr.id).msg;
+                                  });
+                                  if (resMsg) onToast(resMsg);
+                                }}
+                                className="btn btn-xs btn-secondary shrink-0 whitespace-nowrap"
+                              >
+                                ถอด 3★
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!!conflictId || myTraits.length >= 6 || (p.rep ?? 10) < 6}
+                                onClick={() => {
+                                  SFX.win();
+                                  let resMsg = '';
+                                  onUpdateState((d) => {
+                                    resMsg = learnCareerTrait(d, tr.id).msg;
+                                  });
+                                  if (resMsg) onToast(resMsg);
+                                }}
+                                className="btn btn-xs btn-primary shrink-0 whitespace-nowrap"
+                              >
+                                เรียน 6★
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {skillSubTab === 'roles' && (
+                  <div className="space-y-2.5">
+                    <div className="p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] text-[11px] mland:text-[9px] space-y-1">
+                      <div>
+                        ตำแหน่งหลัก: <b className="text-[var(--ink)]">{p.sp} ({SPN[p.sp] || p.sp})</b>
+                        {(p.altRoles || []).length > 0 && (
+                          <span className="ml-2 text-[var(--g)] font-bold">
+                            · ถนัดเสริม: {(p.altRoles || []).join(', ')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[var(--mut)]">
+                        เลือก 1 ตำแหน่งเพื่อเก็บประสบการณ์ซ้อมพิเศษรายสัปดาห์ควบคู่กับการลงแข่งจริงจนปลดล็อกเป็นตำแหน่งถนัดเสริม
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mland:gap-1.5">
+                      {ALL_SUB_ROLES.filter((r) => r !== p.sp && (p.pos === 'GK' ? r === 'GK' : r !== 'GK')).map((role) => {
+                        const unlocked = (p.altRoles || []).includes(role);
+                        const isTarget = p.roleTrain === role;
+                        const need = LINE[role] === p.pos ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
+                        const exp = p.roleExp?.[role] || 0;
+                        const pct = unlocked ? 100 : clamp(Math.round((exp / need) * 100), 0, 100);
+                        return (
+                          <div
+                            key={role}
+                            className={`p-2.5 mland:p-1.5 rounded-xl border flex flex-col justify-between gap-1.5 ${
+                              unlocked
+                                ? 'bg-[var(--g-soft)]/55 border-[var(--g)]/55'
+                                : isTarget
+                                  ? 'bg-[var(--lamp-soft)]/60 border-[var(--lamp)]'
+                                  : 'bg-[var(--surface-2)]/70 border-[var(--line)]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="font-bold text-xs mland:text-[10] truncate">
+                                  {role} · {SPN[role] || role}
+                                </div>
+                                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                                  {unlocked ? '✓ ปลดล็อกเล่นได้เต็มประสิทธิภาพ' : `ความคุ้นเคย: ${exp}/${need} ขั้น`}
+                                </div>
+                              </div>
+                              {!unlocked && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    SFX.tap();
+                                    let resMsg = '';
+                                    onUpdateState((d) => {
+                                      resMsg = setCareerRoleTrainTarget(d, isTarget ? null : role).msg;
+                                    });
+                                    if (resMsg) onToast(resMsg);
+                                  }}
+                                  className={`btn btn-xs shrink-0 whitespace-nowrap ${isTarget ? 'btn-gold' : 'btn-secondary'}`}
+                                >
+                                  {isTarget ? 'กำลังฝึก ✕' : 'ตั้งเป้าฝึก'}
+                                </button>
+                              )}
+                            </div>
+                            <div className="h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                              <div className="h-full rounded-full bg-[var(--g)] transition-all" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {skillSubTab === 'sig' && (
+                  <div className="space-y-2.5">
+                    {(() => {
+                      const activeSig = p.sig || details.D0.sig;
+                      const sigBonus = p.sb?.[activeSig] || 0;
+                      const sigKeys = (p.pos === 'GK'
+                        ? ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp']
+                        : Object.keys(SIGL).filter((k) => !['sv', 'rfx', 'hnd', 'cl', 'dist'].includes(k))
+                      );
+                      return (
+                        <>
+                          <div className="p-3 mland:p-2 rounded-xl bg-[var(--lamp-soft)]/55 border border-[var(--lamp)]/60 flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-xs sm:text-sm font-extrabold text-[var(--ink)]">
+                                ⚡ อาวุธประจำตัวปัจจุบัน: <span className="text-[#8a5b00] dark:text-[var(--lamp)]">{SIGL[activeSig] || activeSig}</span> (+8 สกิลพื้นฐาน)
+                              </div>
+                              <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
+                                โบนัสซ้อมพิเศษสะสม: <b className="text-[var(--g)]">+{sigBonus}/12</b> · ติวเฉพาะทางเพิ่ม +1 ถาวร (ใช้ 4 ★ และพลังกาย 6%)
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={sigBonus >= 12 || (p.rep ?? 10) < 4 || (p.en ?? 100) < 25}
+                              onClick={() => {
+                                SFX.win();
+                                let resMsg = '';
+                                onUpdateState((d) => {
+                                  resMsg = trainCareerSignatureDrill(d).msg;
+                                });
+                                if (resMsg) onToast(resMsg);
+                              }}
+                              className="btn btn-sm btn-gold shrink-0 whitespace-nowrap"
+                            >
+                              {sigBonus >= 12 ? 'เต็ม +12 แล้ว' : '🔥 ติวอาวุธ +1 (4 ★)'}
+                            </button>
+                          </div>
+
+                          <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">
+                            เปลี่ยนทักษะอาวุธประจำตัวใหม่ได้ทุกเมื่อ (ค่าใช้จ่าย 5 ★):
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-1.5">
+                            {sigKeys.map((sk) => {
+                              const isActive = activeSig === sk;
+                              const curSkillVal = details.D0.d[sk] || 60;
+                              return (
+                                <button
+                                  key={sk}
+                                  type="button"
+                                  disabled={isActive || (p.rep ?? 10) < 5}
+                                  onClick={() => {
+                                    SFX.tap();
+                                    let resMsg = '';
+                                    onUpdateState((d) => {
+                                      resMsg = switchCareerSignature(d, sk).msg;
+                                    });
+                                    if (resMsg) onToast(resMsg);
+                                  }}
+                                  className={`p-2 rounded-xl border text-left transition-colors cursor-pointer flex items-center justify-between gap-1 ${
+                                    isActive
+                                      ? 'bg-[var(--g-soft)] border-[var(--g)] font-bold'
+                                      : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)] disabled:opacity-55'
+                                  }`}
+                                >
+                                  <div className="min-w-0">
+                                    <div className="text-[11px] mland:text-[9px] truncate text-[var(--ink)]">{SIGL[sk] || sk}</div>
+                                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">ค่าพลัง {curSkillVal}</div>
+                                  </div>
+                                  <span className="text-[9.5px] font-bold shrink-0 text-[var(--g)]">
+                                    {isActive ? '✓ ใช้อยู่' : '5★'}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             </div>
           )}

@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import type { Position, Player, GameState, StatKey, PlayerCareerProfile } from '../types/game';
 import { SFX } from '../utils/audioTheme';
-import { getPlayerSeasonProgression } from '../engine/playerCore';
+import { getPlayerSeasonProgression, getPlayerMultiSeasonProgression } from '../engine/playerCore';
 
 type ChartMetricKey = 'ov' | StatKey;
+type ChartMode = 'multi' | 'season';
 
 const CHART_SERIES_META: Record<ChartMetricKey, { label: string; color: string; width: number }> = {
   ov: { label: 'พลังรวม', color: '#10b981', width: 2.4 },
@@ -27,19 +28,28 @@ interface TooltipEntry {
   name?: string;
   value?: number;
   color?: string;
-  payload?: { md?: number; label?: string };
+  payload?: { md?: number; season?: number; teamName?: string; label?: string; isCurrent?: boolean };
 }
 
 const SeasonProgressTooltip: React.FC<{
   active?: boolean;
   payload?: TooltipEntry[];
-}> = ({ active, payload }) => {
+  mode: ChartMode;
+}> = ({ active, payload, mode }) => {
   if (!active || !payload || !payload.length) return null;
-  const md = payload[0]?.payload?.md ?? 0;
+  const p = payload[0]?.payload;
+  const heading =
+    mode === 'multi'
+      ? p?.season === 0
+        ? `${p.label || 'เริ่มต้น'}${p.teamName ? ` · ${p.teamName}` : ''}`
+        : `ซีซั่น ${p?.season}${p?.isCurrent ? ' (ปัจจุบัน)' : ''}${p?.teamName ? ` · ${p.teamName}` : ''}`
+      : (p?.md ?? 0) === 0
+        ? 'เปิดซีซั่น (ก่อนนัดแรก)'
+        : `หลังจบแมตช์ที่ ${p?.md}`;
   return (
     <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] px-2.5 py-1.5 shadow-lg text-[10.5px] space-y-1">
       <div className="font-bold text-[var(--ink)] border-b border-[var(--line)]/60 pb-0.5 tabular">
-        {md === 0 ? 'เปิดซีซั่น (ก่อนนัดแรก)' : `หลังจบแมตช์ที่ ${md}`}
+        {heading}
       </div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular">
         {payload.map((entry) => (
@@ -58,7 +68,7 @@ const SeasonProgressTooltip: React.FC<{
 
 export const PlayerSeasonProgressionCard: React.FC<{
   player: Player;
-  state: Pick<GameState, 'season' | 'md'>;
+  state: Pick<GameState, 'season' | 'md'> & Partial<Pick<GameState, 'teams' | 'seasonArchives' | 'mode' | 'p'>>;
   careerProfile?: PlayerCareerProfile | null;
   variant?: 'overlay' | 'inline';
   defaultOpen?: boolean;
@@ -70,6 +80,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
   defaultOpen = false
 }) => {
   const [showProgChart, setShowProgChart] = useState(defaultOpen);
+  const [chartMode, setChartMode] = useState<ChartMode>('multi');
   const [chartScope, setChartScope] = useState<'key' | 'all'>('all');
   const [hiddenMetrics, setHiddenMetrics] = useState<Partial<Record<ChartMetricKey, boolean>>>({});
   const cardRef = useRef<HTMLDivElement>(null);
@@ -116,6 +127,36 @@ export const PlayerSeasonProgressionCard: React.FC<{
     [player, state, careerProfile]
   );
 
+  const multiSeries = useMemo(
+    () =>
+      getPlayerMultiSeasonProgression(
+        player,
+        {
+          season: state.season,
+          md: state.md,
+          teams: state.teams || [],
+          seasonArchives: state.seasonArchives,
+          mode: state.mode || 'm',
+          p: state.p ?? careerProfile ?? undefined
+        },
+        careerProfile
+      ),
+    [player, state, careerProfile]
+  );
+
+  const activeSeries: Array<{
+    label: string;
+    ov: number;
+    sh: number;
+    ps: number;
+    dr: number;
+    tk: number;
+    ph: number;
+    md?: number;
+    season?: number;
+    teamName?: string;
+  }> = chartMode === 'multi' ? multiSeries : seasonSeries;
+
   const chartKeys: ChartMetricKey[] = useMemo(
     () =>
       chartScope === 'all'
@@ -124,8 +165,8 @@ export const PlayerSeasonProgressionCard: React.FC<{
     [chartScope, player.pos]
   );
 
-  const startOv = seasonSeries[0]?.ov ?? player.ov;
-  const endOv = seasonSeries[seasonSeries.length - 1]?.ov ?? player.ov;
+  const startOv = activeSeries[0]?.ov ?? player.ov;
+  const endOv = activeSeries[activeSeries.length - 1]?.ov ?? player.ov;
   const ovDiff = endOv - startOv;
 
   const isOverlay = variant === 'overlay';
@@ -138,26 +179,26 @@ export const PlayerSeasonProgressionCard: React.FC<{
           : 'border-t border-[var(--line)]/70 px-3 py-2 mland:px-2 mland:py-1.5 space-y-1.5 mland:space-y-1'
       }
     >
-      <div className="h-[118px] sm:h-[124px] mland:h-[88px] w-full min-w-0">
+      <div className="h-[126px] sm:h-[134px] mland:h-[94px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={seasonSeries} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
+          <LineChart data={activeSeries} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" opacity={0.45} vertical={false} />
             <XAxis
               dataKey="label"
               tick={{ fontSize: 9, fill: 'var(--mut)' }}
               axisLine={false}
               tickLine={false}
-              minTickGap={14}
+              minTickGap={12}
             />
             <YAxis
-              width={28}
-              domain={[(min: number) => Math.max(1, Math.floor(min) - 2), (max: number) => Math.min(99, Math.ceil(max) + 2)]}
+              width={30}
+              domain={[(min: number) => Math.max(1, Math.floor(min) - 2), (max: number) => Math.min(199, Math.ceil(max) + 2)]}
               allowDecimals={false}
               tick={{ fontSize: 9, fill: 'var(--mut)' }}
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<SeasonProgressTooltip />} />
+            <Tooltip content={<SeasonProgressTooltip mode={chartMode} />} />
             {chartKeys.map((k) => {
               if (hiddenMetrics[k]) return null;
               const meta = CHART_SERIES_META[k];
@@ -169,8 +210,8 @@ export const PlayerSeasonProgressionCard: React.FC<{
                   name={meta.label}
                   stroke={meta.color}
                   strokeWidth={meta.width}
-                  dot={seasonSeries.length <= 2 ? { r: 2.8, strokeWidth: 1.5 } : { r: 1.6, strokeWidth: 1 }}
-                  activeDot={{ r: 3.8 }}
+                  dot={activeSeries.length <= 4 ? { r: 3, strokeWidth: 1.5 } : { r: 1.8, strokeWidth: 1 }}
+                  activeDot={{ r: 4 }}
                   animationDuration={220}
                 />
               );
@@ -184,8 +225,8 @@ export const PlayerSeasonProgressionCard: React.FC<{
           {chartKeys.map((k) => {
             const meta = CHART_SERIES_META[k];
             const isHidden = !!hiddenMetrics[k];
-            const curVal = seasonSeries[seasonSeries.length - 1]?.[k] ?? 0;
-            const initVal = seasonSeries[0]?.[k] ?? curVal;
+            const curVal = activeSeries[activeSeries.length - 1]?.[k] ?? 0;
+            const initVal = activeSeries[0]?.[k] ?? curVal;
             const diff = curVal - initVal;
             return (
               <button
@@ -214,11 +255,13 @@ export const PlayerSeasonProgressionCard: React.FC<{
             );
           })}
         </div>
-        {state.md === 0 && (
-          <span className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)]">
-            เปิดซีซั่น · อัปเดตหลังจบแต่ละนัด
-          </span>
-        )}
+        <span className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)]">
+          {chartMode === 'multi'
+            ? `เทียบตั้งแต่${activeSeries[0]?.label || 'เริ่มต้น'} → ${activeSeries[activeSeries.length - 1]?.label || `S${state.season}`}`
+            : state.md === 0
+              ? 'เปิดซีซั่น · อัปเดตหลังจบแต่ละนัด'
+              : `เฉพาะในซีซั่น ${state.season}`}
+        </span>
       </div>
     </div>
   );
@@ -250,12 +293,12 @@ export const PlayerSeasonProgressionCard: React.FC<{
             setShowProgChart((v) => !v);
           }
         }}
-        className="px-3 py-2 mland:px-2.5 mland:py-1 flex items-center justify-between gap-2 cursor-pointer select-none hover:bg-[var(--surface-2)]/40 transition-colors"
+        className="px-3 py-2 mland:px-2.5 mland:py-1 flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none hover:bg-[var(--surface-2)]/40 transition-colors"
       >
         <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 flex-1 text-[11px] mland:text-[8.5px] tabular">
           <span className="font-bold text-[var(--ink)] shrink-0 flex items-center gap-1">
             <span>📈</span>
-            <span>พัฒนาการ · ซีซั่น {state.season}</span>
+            <span>{chartMode === 'multi' ? `พัฒนาการรายซีซั่น (${activeSeries.length} ช่วง)` : `พัฒนาการ · ซีซั่น ${state.season}`}</span>
           </span>
 
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 mland:px-1 mland:py-0 rounded-md bg-[var(--surface-2)] border border-[var(--line)]/80 font-bold shrink-0">
@@ -280,8 +323,8 @@ export const PlayerSeasonProgressionCard: React.FC<{
             <div className="hidden sm:flex items-center gap-1.5 mland:gap-1 min-w-0 overflow-hidden">
               {(KEY_STATS_BY_POS[player.pos] || ['sh', 'ps', 'dr']).map((k) => {
                 const meta = CHART_SERIES_META[k];
-                const curV = seasonSeries[seasonSeries.length - 1]?.[k] ?? 0;
-                const initV = seasonSeries[0]?.[k] ?? curV;
+                const curV = activeSeries[activeSeries.length - 1]?.[k] ?? 0;
+                const initV = activeSeries[0]?.[k] ?? curV;
                 const d = curV - initV;
                 return (
                   <span
@@ -308,30 +351,56 @@ export const PlayerSeasonProgressionCard: React.FC<{
           onClick={(e) => e.stopPropagation()}
         >
           {showProgChart && (
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
-              <button
-                type="button"
-                onClick={() => { SFX.tap(); setChartScope('key'); }}
-                className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold cursor-pointer transition-colors ${
-                  chartScope === 'key'
-                    ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
-              >
-                จุดเด่น (4)
-              </button>
-              <button
-                type="button"
-                onClick={() => { SFX.tap(); setChartScope('all'); }}
-                className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold cursor-pointer transition-colors ${
-                  chartScope === 'all'
-                    ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
-              >
-                ครบ 6 ค่า
-              </button>
-            </div>
+            <>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setChartMode('multi'); }}
+                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    chartMode === 'multi'
+                      ? 'bg-[var(--g)] text-white shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  เทียบรายซีซั่น
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setChartMode('season'); }}
+                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    chartMode === 'season'
+                      ? 'bg-[var(--g)] text-white shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  ในซีซั่นนี้
+                </button>
+              </div>
+              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setChartScope('key'); }}
+                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    chartScope === 'key'
+                      ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  จุดเด่น (4)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); setChartScope('all'); }}
+                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    chartScope === 'all'
+                      ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  ครบ 6 ค่า
+                </button>
+              </div>
+            </>
           )}
 
           <button
@@ -340,7 +409,7 @@ export const PlayerSeasonProgressionCard: React.FC<{
               SFX.tap();
               setShowProgChart((v) => !v);
             }}
-            className={`px-2.5 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold cursor-pointer transition-colors shrink-0 ${
+            className={`px-2.5 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
               showProgChart
                 ? 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
                 : 'bg-[var(--g-soft)]/70 border-[var(--g)]/35 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
