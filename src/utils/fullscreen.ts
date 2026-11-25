@@ -230,7 +230,8 @@ export function onFullscreenChange(cb: (isFs: boolean) => void): () => void {
 export function bindAutoLandscapeFullscreen(): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => {};
   let inFlight = false;
-  let lastAttempt = 0;
+  let lastClickAttempt = 0;
+  let lastTouchAttempt = 0;
 
   const isAppleDevice =
     typeof navigator !== 'undefined' && /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
@@ -244,7 +245,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     );
   };
 
-  const tryEngage = (target: EventTarget | null) => {
+  const tryEngage = (target: EventTarget | null, source: 'click' | 'touch') => {
     if (shouldSkipTarget(target)) return;
     if (!shouldAutoMobileFullscreen()) return;
 
@@ -254,10 +255,14 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
 
     const now = Date.now();
-    if (inFlight || now - lastAttempt < 250) return;
+    if (inFlight) return;
+    if (source === 'click' && now - lastClickAttempt < 180) return;
+    if (source === 'touch' && now - lastTouchAttempt < 350) return;
 
     inFlight = true;
-    lastAttempt = now;
+    if (source === 'click') lastClickAttempt = now;
+    else lastTouchAttempt = now;
+
     enterImmersiveFullscreen()
       .catch(() => undefined)
       .finally(() => {
@@ -269,36 +274,71 @@ export function bindAutoLandscapeFullscreen(): () => void {
   const probe = document.createElement('div');
   probe.setAttribute('aria-hidden', 'true');
   probe.style.cssText =
-    'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;' +
+    'position:fixed;top:0;left:0;width:0;height:0;visibility:hidden;pointer-events:none;z-index:-1;' +
     'padding-top:env(safe-area-inset-top,0px);padding-right:env(safe-area-inset-right,0px);' +
     'padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);';
   document.body?.appendChild(probe);
 
+  const lvhProbe = document.createElement('div');
+  lvhProbe.setAttribute('aria-hidden', 'true');
+  lvhProbe.style.cssText =
+    'position:fixed;top:0;left:0;width:100vw;width:100lvw;height:100vh;height:100lvh;visibility:hidden;pointer-events:none;z-index:-1;';
+  document.body?.appendChild(lvhProbe);
+
   type SafeInsets = { t: number; r: number; b: number; l: number };
+  type LockedViewport = { w: number; h: number };
   const lockedByOri = new Map<string, SafeInsets>();
-  let lastOriKey = '';
+  const maxViewportByOri = new Map<string, LockedViewport>();
   let settleTimer: number | null = null;
   let fsSettleTimer: number | null = null;
   let initTimer1: number | null = null;
   let initTimer2: number | null = null;
+  let focusTimer: number | null = null;
+
+  const isEditingTextActive = (): boolean => {
+    const active = document.activeElement;
+    return (
+      active instanceof HTMLInputElement ||
+      active instanceof HTMLTextAreaElement ||
+      (active instanceof HTMLElement && active.isContentEditable)
+    );
+  };
 
   const getOriKey = (): string => {
     const scrOri = (screen as Screen & { orientation?: { angle?: number } }).orientation;
     const winOri = (window as unknown as { orientation?: number }).orientation;
     const angle = typeof scrOri?.angle === 'number' ? scrOri.angle : typeof winOri === 'number' ? winOri : 0;
+    const scrW = Math.round(window.screen?.width || 0);
+    const scrH = Math.round(window.screen?.height || 0);
     const isLand = window.innerWidth >= window.innerHeight;
-    return `${angle}-${isLand ? 'L' : 'P'}`;
+    return `${scrW}x${scrH}-${angle}-${isLand ? 'L' : 'P'}`;
   };
 
-  const readProbeInsets = (): SafeInsets => {
+  const readProbeInsets = (activeFs: boolean): SafeInsets => {
     const cs = window.getComputedStyle(probe);
     const isLand = window.innerWidth > window.innerHeight;
-    // In non-Apple (Android) landscape fullscreen/standalone, top & bottom insets are transient system bars (not cutouts)
-    const ignoreTopBottom = !isAppleDevice && isLand;
+    if (!isAppleDevice) {
+      if (isLand) {
+        // In Android landscape fullscreen/standalone, top & bottom bars are transient overlays (never cutouts)
+        return {
+          t: 0,
+          r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
+          b: 0,
+          l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
+        };
+      }
+      // In Android portrait fullscreen/standalone, bottom navigation bar is transient (not a notch)
+      return {
+        t: activeFs ? 0 : Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
+        r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
+        b: 0,
+        l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
+      };
+    }
     return {
-      t: ignoreTopBottom ? 0 : Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
+      t: Math.max(0, Math.round(parseFloat(cs.paddingTop) || 0)),
       r: Math.max(0, Math.round(parseFloat(cs.paddingRight) || 0)),
-      b: ignoreTopBottom ? 0 : Math.max(0, Math.round(parseFloat(cs.paddingBottom) || 0)),
+      b: Math.max(0, Math.round(parseFloat(cs.paddingBottom) || 0)),
       l: Math.max(0, Math.round(parseFloat(cs.paddingLeft) || 0))
     };
   };
@@ -317,10 +357,56 @@ export function bindAutoLandscapeFullscreen(): () => void {
     rootStyle.removeProperty('--sal');
   };
 
+  const clearLockedViewport = () => {
+    document.documentElement.classList.remove('kb-open');
+    rootStyle.removeProperty('--locked-vw');
+    rootStyle.removeProperty('--locked-vh');
+    rootStyle.removeProperty('--app-w');
+    rootStyle.removeProperty('--app-h');
+    rootStyle.removeProperty('--app-dvh');
+  };
+
+  const updateViewportLock = (standalone: boolean, activeFs: boolean) => {
+    if (!isMobileDevice() || (!standalone && !activeFs)) {
+      clearLockedViewport();
+      return;
+    }
+
+    const curW = Math.round(window.innerWidth || 0);
+    const curH = Math.round(window.innerHeight || 0);
+    const lvhRect = lvhProbe.getBoundingClientRect();
+    const lvwW = Math.round(lvhRect.width || 0);
+    const lvhH = Math.round(lvhRect.height || 0);
+    const refH = Math.max(curH, lvhH);
+    const vvH = Math.round(window.visualViewport?.height || curH);
+
+    const kbOpen = isEditingTextActive() && refH > 0 && vvH < refH * 0.78;
+    document.documentElement.classList.toggle('kb-open', kbOpen);
+    if (kbOpen) {
+      return;
+    }
+
+    const oriKey = getOriKey();
+    const candW = Math.max(curW, lvwW);
+    const candH = Math.max(curH, lvhH);
+    const prev = maxViewportByOri.get(oriKey);
+    const nextW = Math.max(prev?.w || 0, candW);
+    const nextH = Math.max(prev?.h || 0, candH);
+    if (nextW > 0 && nextH > 0) {
+      maxViewportByOri.set(oriKey, { w: nextW, h: nextH });
+      rootStyle.setProperty('--locked-vw', `${nextW}px`);
+      rootStyle.setProperty('--locked-vh', `${nextH}px`);
+      rootStyle.setProperty('--app-w', `${nextW}px`);
+      rootStyle.setProperty('--app-h', `${nextH}px`);
+      rootStyle.setProperty('--app-dvh', `${(nextH / 100).toFixed(4)}px`);
+    }
+  };
+
   const updateSafeAreas = () => {
     const standalone = isStandaloneDisplayMode();
     const activeFs = Boolean(getFullscreenElement());
     syncFullscreenClass(activeFs);
+    updateViewportLock(standalone, activeFs);
 
     if (!standalone && !activeFs) {
       clearLockedInsets();
@@ -328,11 +414,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
     }
 
     const oriKey = getOriKey();
-    if (oriKey !== lastOriKey) {
-      lastOriKey = oriKey;
-    }
-
-    const cur = readProbeInsets();
+    const cur = readProbeInsets(activeFs);
     const prev = lockedByOri.get(oriKey);
     const next: SafeInsets = !prev
       ? cur
@@ -347,19 +429,17 @@ export function bindAutoLandscapeFullscreen(): () => void {
   };
 
   const guardViewportScroll = () => {
-    const active = document.activeElement;
-    const editingText =
-      active instanceof HTMLInputElement ||
-      active instanceof HTMLTextAreaElement ||
-      (active instanceof HTMLElement && active.isContentEditable);
-    if (!editingText && (window.scrollX !== 0 || window.scrollY !== 0)) {
+    if (!isEditingTextActive() && (window.scrollX !== 0 || window.scrollY !== 0)) {
       window.scrollTo(0, 0);
     }
   };
 
-  // Use trusted click event so Chrome/Android never wastes the user activation on touchend
   const onClick = (e: MouseEvent) => {
-    tryEngage(e.target);
+    tryEngage(e.target, 'click');
+  };
+
+  const onTouchEnd = (e: TouchEvent) => {
+    tryEngage(e.target, 'touch');
   };
 
   const onVisibilityOrFocus = () => {
@@ -410,12 +490,23 @@ export function bindAutoLandscapeFullscreen(): () => void {
     guardViewportScroll();
   };
 
+  const onFocusStateChange = () => {
+    if (focusTimer) window.clearTimeout(focusTimer);
+    focusTimer = window.setTimeout(() => {
+      updateSafeAreas();
+      guardViewportScroll();
+    }, 120);
+  };
+
   window.addEventListener('click', onClick, { capture: true, passive: true });
+  window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
   window.addEventListener('focus', onVisibilityOrFocus);
   window.addEventListener('resize', onViewportResize, { passive: true });
   window.addEventListener('orientationchange', onOrientationChange, { passive: true });
   window.visualViewport?.addEventListener('resize', onViewportResize, { passive: true });
   window.visualViewport?.addEventListener('scroll', guardViewportScroll, { passive: true });
+  document.addEventListener('focusin', onFocusStateChange, { passive: true });
+  document.addEventListener('focusout', onFocusStateChange, { passive: true });
   document.addEventListener('visibilitychange', onVisibilityOrFocus);
   document.addEventListener('fullscreenchange', onFsChange);
   document.addEventListener('webkitfullscreenchange', onFsChange);
@@ -424,7 +515,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
 
   updateSafeAreas();
   initTimer1 = window.setTimeout(() => updateSafeAreas(), 250);
-  initTimer2 = window.setTimeout(() => updateSafeAreas(), 750);
+  initTimer2 = window.setTimeout(() => updateSafeAreas(), 800);
   if (isStandaloneDisplayMode() && shouldAutoMobileFullscreen()) {
     if (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported()) {
       enterImmersiveFullscreen().catch(() => undefined);
@@ -438,14 +529,20 @@ export function bindAutoLandscapeFullscreen(): () => void {
     if (fsSettleTimer) window.clearTimeout(fsSettleTimer);
     if (initTimer1) window.clearTimeout(initTimer1);
     if (initTimer2) window.clearTimeout(initTimer2);
+    if (focusTimer) window.clearTimeout(focusTimer);
     probe.remove();
+    lvhProbe.remove();
     clearLockedInsets();
+    clearLockedViewport();
     window.removeEventListener('click', onClick, { capture: true });
+    window.removeEventListener('touchend', onTouchEnd, { capture: true });
     window.removeEventListener('focus', onVisibilityOrFocus);
     window.removeEventListener('resize', onViewportResize);
     window.removeEventListener('orientationchange', onOrientationChange);
     window.visualViewport?.removeEventListener('resize', onViewportResize);
     window.visualViewport?.removeEventListener('scroll', guardViewportScroll);
+    document.removeEventListener('focusin', onFocusStateChange);
+    document.removeEventListener('focusout', onFocusStateChange);
     document.removeEventListener('visibilitychange', onVisibilityOrFocus);
     document.removeEventListener('fullscreenchange', onFsChange);
     document.removeEventListener('webkitfullscreenchange', onFsChange);

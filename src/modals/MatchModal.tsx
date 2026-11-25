@@ -14,9 +14,9 @@ import {
   Users,
   Zap
 } from 'lucide-react';
-import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle } from '../types/game';
+import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle, CoachOutfitId } from '../types/game';
 import { R, P, clamp } from '../utils/math';
-import { RN, TN, AR_T, TRAIT_BY_ID } from '../data/thaiFootballData';
+import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS } from '../data/thaiFootballData';
 import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
 
 type TimelineKind =
@@ -463,6 +463,15 @@ export const MatchModal: React.FC<{
           : getDefaultCoachVis(seedName);
       const [, origTrim] = teamKits(orig, state);
       const tieColor = isUser ? (state.club?.c2 || origTrim || '#facc15') : (origTrim || '#facc15');
+      const baseOutfit: CoachOutfitId = state.club?.managerOutfit || 'suit_navy';
+      let matchOutfit: CoachOutfitId = 'suit_navy';
+      if (isUser) {
+        if (state.club?.managerRandomOutfitPerMatch && COACH_OUTFITS.length > 0) {
+          matchOutfit = COACH_OUTFITS[R(0, COACH_OUTFITS.length - 1)]?.id || baseOutfit;
+        } else {
+          matchOutfit = baseOutfit;
+        }
+      }
       return {
         side,
         x: startX,
@@ -480,7 +489,7 @@ export const MatchModal: React.FC<{
         isUserCoach: isUser,
         vis: coachVis,
         tieColor,
-        outfit: isUser ? (state.club?.managerOutfit || 'suit_navy') : 'suit_navy'
+        outfit: matchOutfit
       };
     };
     return {
@@ -8179,7 +8188,7 @@ export const MatchModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
-      <div className="w-full max-w-6xl mland:max-w-[98vw] h-[96dvh] max-h-[96dvh] mland:h-[97dvh] mland:max-h-[97dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+      <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
         <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
           <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2 gap-y-1">
@@ -8650,7 +8659,7 @@ export const MatchModal: React.FC<{
                       ref={canvasRef}
                       onContextMenu={(e) => e.preventDefault()}
                       style={{ WebkitTouchCallout: 'none', touchAction: 'manipulation' }}
-                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(96dvh-100px)] mland:max-h-[calc(97dvh-86px)] object-contain mx-auto block select-none`}
+                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-100px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-86px)] object-contain mx-auto block select-none`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
 
@@ -8762,7 +8771,7 @@ export const MatchModal: React.FC<{
                           <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_235px] lg:grid-cols-[minmax(0,1fr)_265px] mland:grid-cols-[minmax(0,1fr)_205px] bg-[#0c351f]">
                             <div className="flex flex-col min-w-0">
                               {/* Tall SVG Formation Pitch Container */}
-                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 h-[400px] sm:h-[470px] lg:h-[520px] mland:h-[calc(97dvh-134px)] mland:min-h-[185px] select-none overflow-hidden flex items-center justify-center">
+                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 h-[400px] sm:h-[470px] lg:h-[520px] mland:h-[calc(var(--app-dvh,1dvh)*97-134px)] mland:min-h-[185px] select-none overflow-hidden flex items-center justify-center">
                                 {htPickedInfo && (
                                   <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 backdrop-blur-md border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                                     <div className="min-w-0 space-y-0.5">
@@ -9099,7 +9108,7 @@ export const MatchModal: React.FC<{
                     </div>
 
                     {/* Tall Full-Time SVG Formation Pitch Stage (Full Width) */}
-                    <div className="w-full h-[430px] sm:h-[510px] lg:h-[570px] mland:h-[calc(97dvh-105px)] mland:min-h-[210px] flex items-stretch overflow-hidden">
+                    <div className="w-full h-[430px] sm:h-[510px] lg:h-[570px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[210px] flex items-stretch overflow-hidden">
                       <div className="relative flex-1 min-w-0 p-1.5 sm:p-2 mland:p-1 select-none overflow-hidden flex items-center justify-center">
                         {/* Selected Player Detail Inspector Popover */}
                         {pickedInfo && (() => {

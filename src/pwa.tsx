@@ -88,8 +88,21 @@ export function registerPWA() {
       onRegisteredSW(_swUrl, reg) {
         if (!reg) return;
         swRegistration = reg;
+        const autoApplyWaitingOnBoot = () => {
+          if (!reg.waiting) return;
+          try {
+            if (window.sessionStorage.getItem('lk_sw_boot_applied') === '1') {
+              setNeedRefresh(true);
+              return;
+            }
+            window.sessionStorage.setItem('lk_sw_boot_applied', '1');
+          } catch {
+            // ignore storage restrictions
+          }
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        };
         if (reg.waiting) {
-          setNeedRefresh(true);
+          autoApplyWaitingOnBoot();
         }
         reg.addEventListener('updatefound', () => {
           const nw = reg.installing;

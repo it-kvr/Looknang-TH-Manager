@@ -1566,6 +1566,7 @@ export function ensureClubIdentity(s: GameState): ClubIdentity {
       managerName: 'หัวหน้าผู้ฝึกสอน',
       managerStyle: 'balanced',
       managerOutfit: 'suit_navy',
+      managerRandomOutfitPerMatch: false,
       managerVis: getDefaultCoachVis(t.name || 'coach')
     };
   }
@@ -1580,6 +1581,9 @@ export function ensureClubIdentity(s: GameState): ClubIdentity {
   }
   if (!s.club.managerOutfit) {
     s.club.managerOutfit = 'suit_navy';
+  }
+  if (typeof s.club.managerRandomOutfitPerMatch !== 'boolean') {
+    s.club.managerRandomOutfitPerMatch = false;
   }
   return s.club;
 }

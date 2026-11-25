@@ -19,6 +19,9 @@
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
   --sal: env(safe-area-inset-left, 0px);
+  --app-w: 100vw;
+  --app-h: 100dvh;
+  --app-dvh: 1dvh;
 }
 
 .dark {
@@ -91,6 +94,18 @@ html.is-standalone #root {
   overflow: hidden;
   overscroll-behavior: none;
   background-color: var(--bg);
+}
+
+html.is-fullscreen:not(.kb-open) body,
+html.is-standalone:not(.kb-open) body,
+html.is-fullscreen:not(.kb-open) .fixed.inset-0,
+html.is-standalone:not(.kb-open) .fixed.inset-0 {
+  top: 0;
+  left: 0;
+  right: auto;
+  bottom: auto;
+  width: var(--app-w, 100%);
+  height: var(--app-h, 100%);
 }
 
 html:fullscreen::backdrop,
@@ -210,11 +225,11 @@ button:not(:disabled):active {
 
 @media (orientation: landscape) and (max-height: 540px) {
   html {
-    font-size: clamp(11.5px, 3.05dvh, 13.5px);
+    font-size: clamp(11.5px, calc(var(--app-dvh, 1dvh) * 3.05), 13.5px);
   }
   html.is-fullscreen,
   html.is-standalone {
-    font-size: clamp(11.5px, 3.05vh, 13.5px);
+    font-size: clamp(11.5px, calc(var(--app-dvh, 1dvh) * 3.05), 13.5px);
   }
 }
 

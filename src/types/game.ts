@@ -242,6 +242,7 @@ export interface ClubIdentity {
   managerVis?: number[];
   managerStyle?: CoachStyleId;
   managerOutfit?: CoachOutfitId;
+  managerRandomOutfitPerMatch?: boolean;
 }
 
 export interface PlayerCareerProfile {

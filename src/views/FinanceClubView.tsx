@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer } from 'lucide-react';
+import { Pencil, Check, X, Dices, ArrowUpRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -120,6 +120,13 @@ export const FinanceClubView: React.FC<{
     vis: number[];
     style: CoachStyleId;
     outfit: CoachOutfitId;
+    randomOutfitPerMatch: boolean;
+  } | null>(null);
+  const [inlineCoachDraft, setInlineCoachDraft] = useState<{
+    vis: number[];
+    style: CoachStyleId;
+    outfit: CoachOutfitId;
+    randomOutfitPerMatch: boolean;
   } | null>(null);
   const [demolishTarget, setDemolishTarget] = useState<{
     key: FacilityKey;
@@ -147,6 +154,7 @@ export const FinanceClubView: React.FC<{
       setEditingCaptain(false);
       setShowCoachEditor(false);
       setCoachDraft(null);
+      setInlineCoachDraft(null);
     }
   }, [clubTab]);
 
@@ -1457,21 +1465,26 @@ export const FinanceClubView: React.FC<{
           onToast('บันทึกข้อมูลสโมสรแล้ว');
         };
 
-        const setCoachVisPart = (idx: number, val: number) => {
-          SFX.tap();
-          onUpdateState((d) => {
-            const cl = ensureClubIdentity(d);
-            const next = [...(cl.managerVis || getDefaultCoachVis(cl.managerName || cl.name || 'coach'))];
-            next[idx] = val;
-            cl.managerVis = next;
-          });
-        };
+        const savedCoachStyle = (k.managerStyle || 'balanced') as CoachStyleId;
+        const savedRandomOutfit = Boolean(k.managerRandomOutfitPerMatch);
+        const displayCoachVis = inlineCoachDraft?.vis ?? coachVis;
+        const displayCoachStyleId = inlineCoachDraft?.style ?? savedCoachStyle;
+        const displayCoachOutfitId = inlineCoachDraft?.outfit ?? curOutfit;
+        const displayRandomOutfit = inlineCoachDraft?.randomOutfitPerMatch ?? savedRandomOutfit;
+        const displayCoachStyle = COACH_STYLES.find((s) => s.id === displayCoachStyleId) || COACH_STYLES[0];
+        const displayCoachOutfit = COACH_OUTFITS.find((o) => o.id === displayCoachOutfitId) || COACH_OUTFITS[0];
+        const hasInlineCoachChanges = Boolean(
+          inlineCoachDraft &&
+            (inlineCoachDraft.style !== savedCoachStyle ||
+              inlineCoachDraft.outfit !== curOutfit ||
+              inlineCoachDraft.randomOutfitPerMatch !== savedRandomOutfit ||
+              inlineCoachDraft.vis.some((v, idx) => v !== (coachVis[idx] ?? 0)))
+        );
 
         const randomizeCoachVis = () => {
           SFX.tap();
-          onUpdateState((d) => {
-            const cl = ensureClubIdentity(d);
-            cl.managerVis = [
+          setInlineCoachDraft({
+            vis: [
               R(0, SKIN_P.length - 1),
               R(0, HAIR_P.length - 1),
               R(0, HS_N.length - 1),
@@ -1480,9 +1493,40 @@ export const FinanceClubView: React.FC<{
               0,
               R(0, FS_N.length - 1),
               Math.random() < 0.35 ? 5 : 0
-            ];
+            ],
+            style: displayCoachStyleId,
+            outfit: displayCoachOutfitId,
+            randomOutfitPerMatch: displayRandomOutfit
           });
-          onToast('สุ่มหน้าตาหัวหน้าผู้ฝึกสอนใหม่แล้ว!');
+        };
+
+        const toggleInlineRandomOutfit = () => {
+          SFX.tap();
+          setInlineCoachDraft({
+            vis: [...displayCoachVis],
+            style: displayCoachStyleId,
+            outfit: displayCoachOutfitId,
+            randomOutfitPerMatch: !displayRandomOutfit
+          });
+        };
+
+        const saveInlineCoach = () => {
+          if (!inlineCoachDraft) return;
+          SFX.tap();
+          onUpdateState((d) => {
+            const cl = ensureClubIdentity(d);
+            cl.managerVis = [...inlineCoachDraft.vis];
+            cl.managerStyle = inlineCoachDraft.style;
+            cl.managerOutfit = inlineCoachDraft.outfit;
+            cl.managerRandomOutfitPerMatch = inlineCoachDraft.randomOutfitPerMatch;
+          });
+          setInlineCoachDraft(null);
+          onToast('บันทึกข้อมูลโค้ชและตั้งค่าชุดเรียบร้อยแล้ว!');
+        };
+
+        const cancelInlineCoach = () => {
+          SFX.tap();
+          setInlineCoachDraft(null);
         };
 
         const coachFacePlayer: Player = {
@@ -1494,7 +1538,7 @@ export const FinanceClubView: React.FC<{
           pot: 75,
           fit: 100,
           inj: 0,
-          vis: coachVis
+          vis: displayCoachVis
         };
 
         const bdStatusText = bd < 30 ? 'วิกฤติ' : bd < 55 ? 'ต้องเร่งผลงาน' : bd >= 75 ? 'เชื่อมั่นสูง' : 'มั่นคง';
@@ -1730,9 +1774,10 @@ export const FinanceClubView: React.FC<{
                           SFX.tap();
                           setCoachDraft({
                             name: k.managerName || '',
-                            vis: [...coachVis],
-                            style: (k.managerStyle || 'balanced') as CoachStyleId,
-                            outfit: curOutfit
+                            vis: [...displayCoachVis],
+                            style: displayCoachStyleId,
+                            outfit: displayCoachOutfitId,
+                            randomOutfitPerMatch: displayRandomOutfit
                           });
                           setCoachEditorTab('look');
                           setShowCoachEditor(true);
@@ -1753,7 +1798,7 @@ export const FinanceClubView: React.FC<{
                             isMyClub
                             kitColor="#1e293b"
                             trimColor={k.c2 || '#facc15'}
-                            coachOutfit={curOutfit}
+                            coachOutfit={displayCoachOutfitId}
                             coachClubKit={k.c1 || me.kc[0]}
                             size={54}
                             bare
@@ -1766,14 +1811,14 @@ export const FinanceClubView: React.FC<{
                           {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular">
-                          {repRank} · ชื่อเสียง {rep}
+                          {repRank} · {displayRandomOutfit ? 'สุ่มชุดทุกนัด' : displayCoachOutfit.name}
                         </div>
                         <div className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
-                          {curStyle.icon} {curStyle.name} · {curStyle.effectDesc}
+                          {displayCoachStyle.icon} {displayCoachStyle.name} · {displayCoachStyle.effectDesc}
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                       <button
                         type="button"
                         onClick={randomizeCoachVis}
@@ -1785,21 +1830,44 @@ export const FinanceClubView: React.FC<{
                       </button>
                       <button
                         type="button"
+                        onClick={toggleInlineRandomOutfit}
+                        title="เปิด/ปิด การสุ่มชุดโค้ชใหม่แต่ละนัด"
+                        className={`btn btn-xs whitespace-nowrap shrink-0 ${
+                          displayRandomOutfit
+                            ? 'bg-[var(--g)] text-white border border-[var(--g)] shadow-xs'
+                            : 'btn-secondary'
+                        }`}
+                      >
+                        <Shuffle className="w-3 h-3" />
+                        <span>สุ่มชุดทุกนัด{displayRandomOutfit ? ' ✓' : ''}</span>
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => {
                           SFX.tap();
                           setCoachDraft({
                             name: k.managerName || '',
-                            vis: [...coachVis],
-                            style: (k.managerStyle || 'balanced') as CoachStyleId,
-                            outfit: curOutfit
+                            vis: [...displayCoachVis],
+                            style: displayCoachStyleId,
+                            outfit: displayCoachOutfitId,
+                            randomOutfitPerMatch: displayRandomOutfit
                           });
                           setCoachEditorTab('look');
                           setShowCoachEditor(true);
                         }}
-                        className="btn btn-xs btn-primary whitespace-nowrap shrink-0"
+                        className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
                       >
                         <Pencil className="w-3 h-3" />
                         <span>ปรับแต่งโค้ช</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!hasInlineCoachChanges}
+                        onClick={saveInlineCoach}
+                        className="btn btn-xs btn-primary whitespace-nowrap shrink-0"
+                      >
+                        <Check className="w-3 h-3" />
+                        <span>บันทึก</span>
                       </button>
                     </div>
                   </div>
@@ -1812,17 +1880,19 @@ export const FinanceClubView: React.FC<{
                     </div>
                     <div className="rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]/60 overflow-hidden bg-[var(--surface-2)]/35">
                       {COACH_STYLES.map((st) => {
-                        const active = (k.managerStyle || 'balanced') === st.id;
+                        const active = displayCoachStyleId === st.id;
                         return (
                           <button
                             key={st.id}
                             type="button"
                             onClick={() => {
                               SFX.tap();
-                              onUpdateState((d) => {
-                                ensureClubIdentity(d).managerStyle = st.id;
+                              setInlineCoachDraft({
+                                vis: [...displayCoachVis],
+                                style: st.id,
+                                outfit: displayCoachOutfitId,
+                                randomOutfitPerMatch: displayRandomOutfit
                               });
-                              onToast(`เปลี่ยนแนวทางคุมทีมเป็น "${st.name}"`);
                             }}
                             className={`w-full px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2.5 text-left cursor-pointer transition-colors ${
                               active ? 'bg-[var(--g-soft)]' : 'hover:bg-[var(--surface-2)]/80'
@@ -1865,6 +1935,31 @@ export const FinanceClubView: React.FC<{
                         );
                       })}
                     </div>
+
+                    {hasInlineCoachChanges && (
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <span className="text-[10.5px] font-semibold text-[#9a6700] dark:text-[var(--lamp)] truncate">
+                          มีการเปลี่ยนข้อมูลโค้ชที่ยังไม่บันทึก
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={cancelInlineCoach}
+                            className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                          >
+                            ยกเลิก
+                          </button>
+                          <button
+                            type="button"
+                            onClick={saveInlineCoach}
+                            className="btn btn-xs btn-primary whitespace-nowrap shrink-0"
+                          >
+                            <Check className="w-3 h-3" />
+                            <span>บันทึกโค้ช</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </section>
               </div>
@@ -2169,7 +2264,8 @@ export const FinanceClubView: React.FC<{
                 name: k.managerName || '',
                 vis: [...coachVis],
                 style: (k.managerStyle || 'balanced') as CoachStyleId,
-                outfit: curOutfit
+                outfit: curOutfit,
+                randomOutfitPerMatch: Boolean(k.managerRandomOutfitPerMatch)
               };
               const draftStyle = COACH_STYLES.find((s) => s.id === curDraft.style) || COACH_STYLES[0];
               const draftOutfit = COACH_OUTFITS.find((o) => o.id === curDraft.outfit) || COACH_OUTFITS[0];
@@ -2177,6 +2273,7 @@ export const FinanceClubView: React.FC<{
                 curDraft.name.trim() !== (k.managerName || '').trim() ||
                 curDraft.style !== ((k.managerStyle || 'balanced') as CoachStyleId) ||
                 curDraft.outfit !== curOutfit ||
+                curDraft.randomOutfitPerMatch !== Boolean(k.managerRandomOutfitPerMatch) ||
                 curDraft.vis.some((v, idx) => v !== (coachVis[idx] ?? 0));
 
               const draftCoachPlayer: Player = {
@@ -2219,6 +2316,15 @@ export const FinanceClubView: React.FC<{
                 }));
               };
 
+              const randomizeCoachOutfitDraft = () => {
+                SFX.tap();
+                const pool = COACH_OUTFITS.filter((o) => o.id !== curDraft.outfit);
+                const pick = (pool.length ? pool : COACH_OUTFITS)[R(0, (pool.length ? pool : COACH_OUTFITS).length - 1)];
+                if (pick) {
+                  setCoachDraft((prev) => ({ ...(prev || curDraft), outfit: pick.id }));
+                }
+              };
+
               const saveCoachDraft = () => {
                 SFX.tap();
                 const cleanName = curDraft.name.replace(/["'<>`]/g, '').trim();
@@ -2228,9 +2334,11 @@ export const FinanceClubView: React.FC<{
                   cl.managerVis = [...curDraft.vis];
                   cl.managerStyle = curDraft.style;
                   cl.managerOutfit = curDraft.outfit;
+                  cl.managerRandomOutfitPerMatch = curDraft.randomOutfitPerMatch;
                 });
                 setShowCoachEditor(false);
                 setCoachDraft(null);
+                setInlineCoachDraft(null);
                 onToast('บันทึกข้อมูล รูปลักษณ์ และการแต่งกายโค้ชเรียบร้อยแล้ว!');
               };
 
@@ -2240,7 +2348,8 @@ export const FinanceClubView: React.FC<{
                   name: k.managerName || '',
                   vis: [...coachVis],
                   style: (k.managerStyle || 'balanced') as CoachStyleId,
-                  outfit: curOutfit
+                  outfit: curOutfit,
+                  randomOutfitPerMatch: Boolean(k.managerRandomOutfitPerMatch)
                 });
                 onToast('คืนค่าโค้ชเดิมแล้ว');
               };
@@ -2253,12 +2362,12 @@ export const FinanceClubView: React.FC<{
 
               return (
                 <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-3 sm:p-4"
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-3 sm:p-4 mland:p-2"
                   onClick={closeCoachEditor}
                 >
                   <div
                     onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-3xl max-h-[92vh] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden"
+                    className="w-full max-w-3xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden"
                   >
                     {/* Modal Header */}
                     <div className="px-4 py-3 mland:py-2 border-b border-[var(--line)] flex items-center justify-between gap-3 shrink-0">
@@ -2420,12 +2529,47 @@ export const FinanceClubView: React.FC<{
                             <>
                               {/* Coach Outfit Selector */}
                               <div className="space-y-1.5 pb-3 border-b border-[var(--line)]/55">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[11px] font-bold text-[var(--mut)]">การแต่งกายของโค้ช</span>
-                                  <span className="text-[10.5px] font-semibold text-[var(--g)]">
-                                    {draftOutfit.name} · {draftOutfit.desc}
-                                  </span>
+                                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                                  <div className="min-w-0">
+                                    <span className="text-[11px] font-bold text-[var(--mut)]">การแต่งกายของโค้ช</span>
+                                    <span className="ml-1.5 text-[10.5px] font-semibold text-[var(--g)]">
+                                      {draftOutfit.name} · {draftOutfit.desc}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <button
+                                      type="button"
+                                      onClick={randomizeCoachOutfitDraft}
+                                      className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                                    >
+                                      <Dices className="w-3 h-3" />
+                                      <span>สุ่มชุด</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        SFX.tap();
+                                        setCoachDraft((prev) => ({
+                                          ...(prev || curDraft),
+                                          randomOutfitPerMatch: !(prev || curDraft).randomOutfitPerMatch
+                                        }));
+                                      }}
+                                      className={`btn btn-xs whitespace-nowrap shrink-0 ${
+                                        curDraft.randomOutfitPerMatch
+                                          ? 'bg-[var(--g)] text-white border border-[var(--g)] shadow-xs'
+                                          : 'btn-secondary'
+                                      }`}
+                                    >
+                                      <Shuffle className="w-3 h-3" />
+                                      <span>สุ่มชุดแต่ละนัด{curDraft.randomOutfitPerMatch ? ' ✓' : ''}</span>
+                                    </button>
+                                  </div>
                                 </div>
+                                {curDraft.randomOutfitPerMatch && (
+                                  <div className="text-[10.5px] text-[var(--g)] font-medium bg-[var(--g-soft)] border border-[var(--g)]/30 rounded-lg px-2.5 py-1">
+                                    เปิดอยู่: โค้ชจะสุ่มเปลี่ยนชุดข้างสนามใหม่อัตโนมัติทุกนัดที่ลงแข่งขัน (ชุดที่เลือกไว้ด้านล่างใช้แสดงในหน้าข้อมูลสโมสร)
+                                  </div>
+                                )}
                                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-1.5">
                                   {COACH_OUTFITS.map((outfitOpt) => {
                                     const active = curDraft.outfit === outfitOpt.id;

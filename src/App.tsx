@@ -581,6 +581,7 @@ export default function App() {
         return;
       }
       SFX.tap();
+      enterAutoMobileFullscreen().catch(() => undefined);
       if (nextMatchInfo.isDerby) {
         updateState((d) => { d.derby = 1; });
       }
