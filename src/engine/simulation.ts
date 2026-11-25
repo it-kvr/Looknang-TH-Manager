@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF } from './playerCore';
 import { applyTrainingMissionProgress } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers } from './history';
 
@@ -1624,11 +1624,13 @@ export function applyPositionAdaptation(
       q.roleExp = { ...(q.roleExp || {}) };
       q.roleExp[normSlot] = (q.roleExp[normSlot] || 0) + bonusExp;
 
-      // Gradually develop attributes toward the unfamiliar position's demands
+      // Gradually develop attributes toward the unfamiliar position's demands (diminishing returns at higher OVR)
       const target = ROLE_ADAPT_TARGETS[normSlot] || ROLE_ADAPT_TARGETS.CM;
       const devNotes: string[] = [];
+      const curOv = isMePlayer && s?.p ? ovMe(s.p) : q.ov;
+      const ovScale = getOvGrowthScale(curOv, q.pot);
       if (age <= 32) {
-        const subChance = (age <= 24 ? 0.68 : 0.52) + (fastAdapt ? 0.1 : 0);
+        const subChance = ((age <= 24 ? 0.28 : 0.18) + (fastAdapt ? 0.08 : 0)) * (0.45 + 0.55 * ovScale);
         if (Math.random() < subChance) {
           const sk = P(target.subs);
           q.sb = { ...(q.sb || {}) };
@@ -1641,12 +1643,12 @@ export function applyPositionAdaptation(
           devNotes.push(`${SIGL[sk] || sk} +1`);
         }
 
-        const coreChance = (age <= 24 ? 0.38 : 0.24) + (tl >= 75 ? 0.08 : 0) + (fastAdapt ? 0.08 : 0);
-        const softCap = clamp(Math.max(q.pot || 90, q.ov + 3), 50, 97);
-        if (q.ov < softCap && Math.random() < coreChance) {
+        const coreChance = ((age <= 24 ? 0.12 : 0.07) + (tl >= 75 ? 0.04 : 0) + (fastAdapt ? 0.04 : 0)) * ovScale;
+        const softCap = clamp(q.pot || 86, 50, 96);
+        if (curOv < softCap && Math.random() < coreChance) {
           const ck = P(target.cores);
           if (isMePlayer && s?.p) {
-            if (s.p.a[ck] < 98) {
+            if (s.p.a[ck] < 96) {
               s.p.a[ck] = clamp(s.p.a[ck] + 1, 1, 99);
               q.ov = ovMe(s.p);
               if (q.blessed && q.customA) q.customA = { ...s.p.a };
@@ -1657,9 +1659,8 @@ export function applyPositionAdaptation(
             q.coreSb[ck] = (q.coreSb[ck] || 0) + 1;
             if (q.customA) q.customA[ck] = clamp(q.customA[ck] + 1, 1, 99);
             const dtAfter = DT(q, null);
-            const newOv = clamp(OVF(q.pos, dtAfter.a), 1, 99);
+            const newOv = clamp(OVF(q.pos, dtAfter.a), 1, softCap);
             if (newOv > q.ov) q.ov = newOv;
-            if (q.ov > (q.pot || q.ov)) q.pot = q.ov;
             devNotes.push(`${ATT.find((x) => x[0] === ck)?.[1] || ck} +1`);
           }
         }
@@ -1932,7 +1933,8 @@ export function calcPlayerPerf(
     cardPenalty;
 
   rt = clamp(Math.round(rt * 10) / 10, 3.8, 10);
-  const b = () => (Math.random() < (mins >= 60 ? 0.42 : 0.28) ? 1 : 0);
+  const ovScale = getOvGrowthScale(ovMe(p));
+  const b = () => (Math.random() < (mins >= 60 ? 0.24 : 0.14) * ovScale ? 1 : 0);
   return {
     rt,
     gl,
@@ -1941,7 +1943,7 @@ export function calcPlayerPerf(
     op,
     vid,
     en,
-    pts: b() + (rt >= 7 ? b() : 0) + (rt >= 8.5 ? b() : 0),
+    pts: b() + (rt >= 7.2 ? b() : 0) + (rt >= 8.6 ? b() : 0),
     played: true,
     mins,
     subIn: meta?.subIn,
@@ -2007,12 +2009,16 @@ export function runPlayerWeek(s: GameState) {
   p.en = clamp((p.en ?? 100) + fatigueCost + ac.en + recBonus + healEnBonus + R(0, 7), 20, 100);
   let m = `${ac.i} ${ac.n}`;
   const focus = ({ FW: 'sh', MF: 'ps', DF: 'tk', GK: 'ph' } as Record<Position, StatKey>)[p.pos] || 'sh';
-  const prodigyBonus = (perks.includes('prodigy') ? 0.1 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.06 : 0);
+  const curOv = ovMe(p);
+  const ovScale = getOvGrowthScale(curOv);
+  const prodigyBonus = (perks.includes('prodigy') ? 0.07 : 0) + (D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23 ? 0.04 : 0);
 
   if (ac.gr) {
     const k = ac.k || P([focus, focus, p.tr || 'sh', P(['sh', 'ps', 'dr', 'tk', 'ph'] as StatKey[])]);
     const kn = ATT.find((z) => z[0] === k)?.[1] || k;
-    if (p.a[k] < 99 && Math.random() < ac.gr + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.06 : 0)) {
+    const attrResistance = p.a[k] >= 90 ? 0.35 : p.a[k] >= 84 ? 0.65 : 1;
+    const grChance = (ac.gr + prodigyBonus + (p.tr === k || (p.tr === 'tk' && k === 'ph') ? 0.04 : 0)) * ovScale * attrResistance;
+    if (p.a[k] < 99 && Math.random() < grChance) {
       p.a[k]++;
       p.trn = (p.trn || 0) + 1;
       m += ` · ${kn} เพิ่มเป็น ${p.a[k]}`;
@@ -2028,7 +2034,7 @@ export function runPlayerWeek(s: GameState) {
     s.fan = clamp((s.fan ?? 50) + ac.fan, 5, 100);
     m += ` · ขวัญแฟนบอล ${s.fan}%`;
   }
-  if (ac.pt && Math.random() < ac.pt + prodigyBonus) {
+  if (ac.pt && Math.random() < (ac.pt + prodigyBonus) * ovScale) {
     const g = autoGrow(p, 1);
     if (g) m += ` · พัฒนาอัตโนมัติ (${g})`;
   }
@@ -3189,22 +3195,24 @@ export function afterMatchDay(
           progMeta.positions === 'YOUNG'
             ? q.age <= 25
             : Array.isArray(progMeta.positions) && progMeta.positions.includes(q.pos);
-        const benchSharpBonus = plan.restStarters && !xiSet.has(q.n) ? 1.2 : 1;
-        const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.65;
-        const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.25 : 1;
+        const benchSharpBonus = plan.restStarters && !xiSet.has(q.n) ? 1.15 : 1;
+        const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.55;
+        const youthCoachMul = coachStyle === 'youth' && q.age <= 23 ? 1.2 : 1;
         const persTr = DT(q, s.p).tr;
-        const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.2 : 1;
-        const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.024 : stf.setPieceCoach * 0.01;
+        const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.15 : 1;
+        const roleCoachBonus = q.pos === 'GK' ? stf.gkCoach * 0.01 : stf.setPieceCoach * 0.004;
+        const ovScale = getOvGrowthScale(q.ov, q.pot);
         const chance =
-          (0.04 + 0.02 * lv * trCondFactor + stf.asst * 0.015 + Math.max(0, analyticsLv - 1) * 0.008 + roleCoachBonus) *
+          (0.016 + 0.008 * lv * trCondFactor + stf.asst * 0.006 + Math.max(0, analyticsLv - 1) * 0.0035 + roleCoachBonus) *
           progMeta.devMult *
           intMeta.devMult *
           benchSharpBonus *
           tlFactor *
           youthCoachMul *
           persDevMul *
-          (isFocus ? 2.2 : 1);
-        if ((matchesPos || isFocus) && q.age < 31 && q.ov < (q.pot || 92) && Math.random() < chance) {
+          ovScale *
+          (isFocus ? 1.85 : 1);
+        if ((matchesPos || isFocus) && q.age < 30 && q.ov < (q.pot || 86) && Math.random() < chance) {
           q.ov++;
           gr.push(`${q.n} (${q.ov})`);
         }
@@ -3302,6 +3310,34 @@ export function afterMatchDay(
     runPlayerWeek(s);
     if (s.p?.last) pushFeed(s, 'ฝึกซ้อม', s.p.last, /เพิ่มเป็น|ได้ \+1|พัฒนา/.test(s.p.last) ? 'ok' : '');
   }
+
+  // Active in-season training & mission progression for AI bot clubs so rival squads stay competitive
+  s.teams.forEach((t) => {
+    if (mg && t.id === s.me) return;
+    const aiXi = new Set(xi(t).map((z) => z.n));
+    const aiProg = t.tac === 'X' || t.tac === 'A' ? 'attack' : t.tac === 'D' || t.tac === 'Z' ? 'defense' : 'balanced';
+    t.sq.forEach((q) => {
+      if (q.me || q.inj > 0) return;
+      const isStarter = aiXi.has(q.n);
+      if (q.age <= 27 && q.ov < (q.pot || 86)) {
+        const aiTrainChance =
+          (0.012 + t.tier * 0.008) *
+          (isStarter ? 1.25 : 0.72) *
+          (0.75 + ((q.talent ?? 55) / 100) * 0.55) *
+          getOvGrowthScale(q.ov, q.pot);
+        if (Math.random() < aiTrainChance) {
+          q.ov++;
+        }
+      }
+      if (isStarter || q.age <= 23) {
+        applyTrainingMissionProgress(q, {
+          teamProgram: aiProg,
+          isTeamFocus: false,
+          state: null
+        });
+      }
+    });
+  });
 
   me.sq.forEach((q) => {
     recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, q.me ? s.p : null);
@@ -3949,15 +3985,22 @@ export function growPlayers(s: GameState) {
       }
       if (q.con && !q.loan) q.con.yr = Math.max(0, (q.con.yr ?? 2) - 1);
       const D = DT(q, s.p);
-      const delta =
+      const ovScale = getOvGrowthScale(q.ov, q.pot);
+      const rawYoungDelta =
         q.age < D.pk - 2
-          ? R(0, 3) + ((D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23) && Math.random() < 0.38 ? 1 : 0)
+          ? R(0, 2) + ((D.tr === 2 || D.tr === 10 || D.tr === 12 || D.tr === 23) && Math.random() < 0.35 ? 1 : 0) + (Math.random() < ovScale * 0.7 ? 1 : 0)
           : q.age > D.pk + 4
-            ? -R(0, 3) + (D.tr === 23 && Math.random() < 0.35 ? 1 : 0)
+            ? -R(1, 3) + (D.tr === 23 && Math.random() < 0.35 ? 1 : 0)
             : R(-1, 1);
-      q.ov = clamp(q.ov + delta + (t.id === s.me && q.age < 24 && (s.tr ?? 1) > 2 ? 1 : 0), 25, q.pot || 92);
+      const delta = rawYoungDelta > 0 && q.ov >= 86 ? (Math.random() < ovScale * 1.4 ? 1 : 0) : rawYoungDelta;
+      q.ov = clamp(q.ov + delta, 25, q.pot || 90);
       if (q.age > 35) {
-        Object.assign(q, mkPlayer(q.pos, BASE[t.tier], true));
+        const repOv = BASE[t.tier] + R(-1, 5) + (Math.random() < (t.tier >= 2 ? 0.25 : 0.14) ? R(3, 6) : 0);
+        const fresh = mkPlayer(q.pos, repOv, true);
+        if (fresh.age <= 21) {
+          fresh.pot = clamp(repOv + R(10, 20), 68, 94);
+        }
+        Object.assign(q, fresh);
         delete q.con;
         delete q.loan;
         delete q.loanOpt;

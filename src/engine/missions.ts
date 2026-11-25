@@ -14,7 +14,7 @@ import type {
 } from '../types/game';
 import { R, clamp } from '../utils/math';
 import { ATT, SIGL } from '../data/thaiFootballData';
-import { OVF, xi, DT, ovMe, syncMe, recordPlayerSeasonProgress } from './playerCore';
+import { OVF, xi, DT, ovMe, syncMe, recordPlayerSeasonProgress, getOvGrowthScale } from './playerCore';
 
 export const ovColor = (v: number): string => {
   if (v >= 100) return '#db2777';
@@ -174,16 +174,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'รับหน้าที่เล่นลูกตั้งเตะ (ฟรีคิก / เตะมุม / จุดโทษ) หรือซ้อมเตะนิ่ง',
     metric: 'setpieces',
     unit: 'ครั้ง',
-    targets: [4, 10, 20, 35, 55],
+    targets: [6, 16, 34, 60, 96],
     subRewards: [
-      { fk: 4, cur: 2 },
-      { fk: 5, cur: 3 },
-      { fk: 5, cur: 3, comp: 2 },
-      { fk: 6, cur: 4, comp: 2 },
-      { fk: 7, cur: 5, comp: 3 }
+      { fk: 2, cur: 1 },
+      { fk: 2, cur: 2 },
+      { fk: 3, cur: 2, comp: 1 },
+      { fk: 3, cur: 2, comp: 2 },
+      { fk: 4, cur: 3, comp: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -193,16 +193,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'จ่ายบอลสำเร็จในสนามแข่งขันอย่างต่อเนื่องเพื่อปลดล็อกวิสัยทัศน์เกม',
     metric: 'passes',
     unit: 'ครั้ง',
-    targets: [80, 220, 460, 820, 1300],
+    targets: [120, 360, 780, 1450, 2400],
     subRewards: [
-      { spass: 3, lpass: 2, rd: 2 },
-      { spass: 4, lpass: 3, crs: 2, rd: 2 },
-      { spass: 4, lpass: 4, crs: 3, rd: 3 },
-      { spass: 5, lpass: 4, crs: 3, rd: 4 },
-      { spass: 6, lpass: 5, crs: 4, rd: 4, comp: 2 }
+      { spass: 2, lpass: 1, rd: 1 },
+      { spass: 2, lpass: 2, crs: 1, rd: 1 },
+      { spass: 2, lpass: 2, crs: 2, rd: 2 },
+      { spass: 3, lpass: 2, crs: 2, rd: 2 },
+      { spass: 3, lpass: 3, crs: 2, rd: 2, comp: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [1, 1, 1, 1, 2]
+    coreRewards: [0, 1, 1, 1, 1]
   },
   {
     id: 'finishing',
@@ -211,16 +211,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'หาจังหวะยิงประตูและลุ้นจบสกอร์ในเกมจริงอย่างต่อเนื่อง',
     metric: 'shots',
     unit: 'ครั้ง',
-    targets: [12, 30, 60, 105, 165],
+    targets: [18, 48, 100, 180, 290],
     subRewards: [
-      { fin: 4, pw: 3, run: 2 },
-      { fin: 5, pw: 3, cur: 2 },
-      { fin: 5, pw: 4, comp: 2 },
-      { fin: 6, pw: 4, run: 3 },
-      { fin: 7, pw: 5, comp: 3 }
+      { fin: 2, pw: 2, run: 1 },
+      { fin: 2, pw: 2, cur: 1 },
+      { fin: 3, pw: 2, comp: 1 },
+      { fin: 3, pw: 2, run: 2 },
+      { fin: 4, pw: 3, comp: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF']
   },
   {
@@ -230,16 +230,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'ส่งบอลพุ่งตรงกรอบบังคับผู้รักษาประตูต้องออกแรงเซฟ',
     metric: 'onTarget',
     unit: 'ครั้ง',
-    targets: [6, 16, 32, 56, 90],
+    targets: [9, 25, 52, 95, 155],
     subRewards: [
-      { fin: 4, cur: 3 },
-      { fin: 5, cur: 3, pw: 2 },
-      { fin: 5, cur: 4, comp: 2 },
-      { fin: 6, cur: 4, run: 3 },
-      { fin: 7, cur: 5, comp: 3 }
+      { fin: 2, cur: 2 },
+      { fin: 2, cur: 2, pw: 1 },
+      { fin: 3, cur: 2, comp: 1 },
+      { fin: 3, cur: 2, run: 2 },
+      { fin: 4, cur: 3, comp: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF']
   },
   {
@@ -249,16 +249,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'ยิงประตูสำคัญพาทีมไล่ล่าแต้มในเกมจริง',
     metric: 'goals',
     unit: 'ประตู',
-    targets: [3, 8, 16, 28, 45],
+    targets: [4, 12, 26, 48, 80],
     subRewards: [
-      { fin: 4, run: 3, comp: 2 },
-      { fin: 5, run: 3, comp: 2 },
-      { fin: 5, pw: 4, comp: 3 },
-      { fin: 6, run: 4, comp: 3 },
-      { fin: 7, pw: 5, comp: 4 }
+      { fin: 2, run: 2, comp: 1 },
+      { fin: 2, run: 2, comp: 1 },
+      { fin: 3, pw: 2, comp: 2 },
+      { fin: 3, run: 2, comp: 2 },
+      { fin: 4, pw: 3, comp: 2 }
     ],
     coreReward: 'sh',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF']
   },
   {
@@ -268,16 +268,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'เปิดบอลเข้ากรอบ แทงทะลุช่อง หรือจ่ายให้เพื่อนยิงประตู',
     metric: 'crossAssists',
     unit: 'ครั้ง',
-    targets: [10, 24, 48, 82, 125],
+    targets: [14, 38, 80, 145, 230],
     subRewards: [
-      { crs: 4, cur: 3, run: 2 },
-      { crs: 5, cur: 3, fk: 2 },
-      { crs: 5, cur: 4, run: 3 },
-      { crs: 6, cur: 4, rd: 3 },
-      { crs: 7, cur: 5, run: 4 }
+      { crs: 2, cur: 2, run: 1 },
+      { crs: 2, cur: 2, fk: 1 },
+      { crs: 3, cur: 2, run: 2 },
+      { crs: 3, cur: 2, rd: 2 },
+      { crs: 4, cur: 3, run: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -287,16 +287,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'พาบอลแหวกแนวรับหรือโชว์สกิลเลี้ยงหลบคู่แข่งในเกม',
     metric: 'dribbles',
     unit: 'ครั้ง',
-    targets: [20, 50, 100, 175, 275],
+    targets: [28, 75, 160, 290, 460],
     subRewards: [
-      { spd: 4, run: 3, cur: 2 },
-      { spd: 4, run: 4, str: 2 },
-      { spd: 5, run: 4, cur: 3 },
-      { spd: 6, run: 5, str: 3 },
-      { spd: 7, run: 6, cur: 4 }
+      { spd: 2, run: 2, cur: 1 },
+      { spd: 2, run: 2, str: 1 },
+      { spd: 3, run: 2, cur: 2 },
+      { spd: 3, run: 3, str: 2 },
+      { spd: 4, run: 3, cur: 2 }
     ],
     coreReward: 'dr',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -306,16 +306,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'เข้าสกัดแย่งบอลและดักตัดทางบอลคู่แข่งอย่างแม่นยำ',
     metric: 'tackles',
     unit: 'ครั้ง',
-    targets: [16, 40, 80, 140, 220],
+    targets: [22, 60, 125, 225, 360],
     subRewards: [
-      { tkl: 4, mrk: 3, rd: 2 },
-      { tkl: 4, mrk: 4, rd: 3 },
-      { tkl: 5, mrk: 4, blk: 3, comp: 2 },
-      { tkl: 6, mrk: 5, rd: 4 },
-      { tkl: 7, mrk: 6, comp: 3 }
+      { tkl: 2, mrk: 2, rd: 1 },
+      { tkl: 2, mrk: 2, rd: 2 },
+      { tkl: 3, mrk: 2, blk: 2, comp: 1 },
+      { tkl: 3, mrk: 3, rd: 2 },
+      { tkl: 4, mrk: 3, comp: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['DF', 'MF']
   },
   {
@@ -325,16 +325,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'อ่านจังหวะพุ่งบล็อกลูกยิงอันตรายช่วยแนวรับและผู้รักษาประตู',
     metric: 'blocks',
     unit: 'ครั้ง',
-    targets: [5, 13, 26, 45, 72],
+    targets: [8, 22, 46, 82, 130],
     subRewards: [
-      { blk: 4, pos: 3, tol: 2 },
-      { blk: 5, pos: 3, str: 2 },
-      { blk: 5, mrk: 4, tol: 3 },
-      { blk: 6, pos: 4, comp: 3 },
-      { blk: 7, mrk: 5, str: 4 }
+      { blk: 2, pos: 2, tol: 1 },
+      { blk: 2, pos: 2, str: 1 },
+      { blk: 3, mrk: 2, tol: 2 },
+      { blk: 3, pos: 2, comp: 2 },
+      { blk: 4, mrk: 3, str: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['DF', 'MF']
   },
   {
@@ -344,16 +344,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'ดวลลูกกลางอากาศและเทกตัวโหม่งทั้งเกมรุกและเกมรับ',
     metric: 'headers',
     unit: 'ครั้ง',
-    targets: [10, 24, 48, 82, 130],
+    targets: [14, 36, 75, 135, 215],
     subRewards: [
-      { hd: 4, str: 3 },
-      { hd: 5, str: 3, pos: 2 },
-      { hd: 5, str: 4, comp: 2 },
-      { hd: 6, str: 5, pos: 3 },
-      { hd: 7, str: 5, comp: 3 }
+      { hd: 2, str: 2 },
+      { hd: 2, str: 2, pos: 1 },
+      { hd: 3, str: 2, comp: 1 },
+      { hd: 3, str: 3, pos: 2 },
+      { hd: 4, str: 3, comp: 2 }
     ],
     coreReward: 'ph',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['FW', 'MF', 'DF']
   },
   {
@@ -363,16 +363,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'เซฟลูกยิงตรงกรอบและออกมาชก/คว้าบอลกลางอากาศ',
     metric: 'saves',
     unit: 'ครั้ง',
-    targets: [15, 36, 70, 120, 185],
+    targets: [20, 52, 110, 195, 310],
     subRewards: [
-      { sv: 4, cl: 3, dist: 2 },
-      { sv: 5, cl: 4, comp: 2 },
-      { sv: 5, cl: 4, dist: 3 },
-      { sv: 6, cl: 5, comp: 3 },
-      { sv: 7, cl: 6, dist: 4 }
+      { sv: 2, cl: 2, dist: 1 },
+      { sv: 2, cl: 2, comp: 1 },
+      { sv: 3, cl: 2, dist: 2 },
+      { sv: 3, cl: 3, comp: 2 },
+      { sv: 4, cl: 3, dist: 2 }
     ],
     coreReward: 'tk',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['GK']
   },
   {
@@ -382,16 +382,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'คุมแนวรับให้ทีมไม่เสียประตูจนจบเกม',
     metric: 'cleanSheets',
     unit: 'นัด',
-    targets: [2, 5, 10, 17, 26],
+    targets: [3, 8, 17, 30, 46],
     subRewards: [
-      { pos: 4, comp: 3, rec: 2 },
-      { mrk: 4, comp: 3, sv: 3 },
-      { cl: 4, pos: 4, comp: 3 },
-      { sv: 5, mrk: 5, comp: 4 },
-      { pos: 6, cl: 5, comp: 5 }
+      { pos: 2, comp: 2, rec: 1 },
+      { mrk: 2, comp: 2, sv: 2 },
+      { cl: 2, pos: 2, comp: 2 },
+      { sv: 3, mrk: 3, comp: 2 },
+      { pos: 3, cl: 3, comp: 3 }
     ],
     coreReward: 'tk',
-    coreRewards: [1, 1, 1, 1, 2],
+    coreRewards: [0, 1, 1, 1, 1],
     posFilter: ['GK', 'DF']
   },
   {
@@ -401,16 +401,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'มีส่วนร่วมพาทีมคว้าชัยชนะในเกมการแข่งขันจริง',
     metric: 'wins',
     unit: 'นัด',
-    targets: [4, 10, 18, 30, 46],
+    targets: [6, 15, 30, 52, 82],
     subRewards: [
-      { comp: 4, sta: 3, rd: 2 },
-      { comp: 4, str: 3, run: 3 },
-      { comp: 5, sta: 4, rd: 3 },
-      { comp: 6, tol: 4, rec: 4 },
-      { comp: 7, sta: 5, rec: 5 }
+      { comp: 2, sta: 2, rd: 1 },
+      { comp: 2, str: 2, run: 2 },
+      { comp: 3, sta: 2, rd: 2 },
+      { comp: 3, tol: 2, rec: 2 },
+      { comp: 4, sta: 3, rec: 3 }
     ],
     coreReward: 'ph',
-    coreRewards: [1, 1, 1, 1, 2]
+    coreRewards: [0, 1, 1, 1, 1]
   },
   {
     id: 'mvp_form',
@@ -419,16 +419,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'โชว์ฟอร์มเด่นคว้าเรตติ้งหลังเกม 7.2 ขึ้นไปอย่างต่อเนื่อง',
     metric: 'highRatings',
     unit: 'นัด',
-    targets: [3, 8, 16, 28, 44],
+    targets: [4, 11, 24, 44, 72],
     subRewards: [
-      { comp: 4, rd: 3, cur: 2 },
-      { comp: 5, rd: 3, fin: 3 },
-      { comp: 5, rd: 4, spd: 3 },
-      { comp: 6, rd: 5, rec: 3 },
-      { comp: 7, rd: 6, sta: 4 }
+      { comp: 2, rd: 2, cur: 1 },
+      { comp: 2, rd: 2, fin: 2 },
+      { comp: 3, rd: 2, spd: 2 },
+      { comp: 3, rd: 3, rec: 2 },
+      { comp: 4, rd: 3, sta: 2 }
     ],
     coreReward: 'ps',
-    coreRewards: [1, 1, 1, 1, 2]
+    coreRewards: [0, 1, 1, 1, 1]
   },
   {
     id: 'ironman',
@@ -437,16 +437,16 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     desc: 'ลงสนามแข่งขันและรักษาวินัยฝึกซ้อมอย่างสม่ำเสมอ',
     metric: 'matches',
     unit: 'นัด',
-    targets: [5, 12, 24, 40, 62],
+    targets: [8, 20, 42, 74, 118],
     subRewards: [
-      { sta: 4, tol: 3, rec: 3 },
-      { sta: 4, tol: 4, rec: 3, comp: 2 },
-      { sta: 5, tol: 4, rec: 4, comp: 2 },
-      { sta: 6, tol: 5, rec: 4, str: 3 },
-      { sta: 7, tol: 6, rec: 5, comp: 3 }
+      { sta: 2, tol: 2, rec: 2 },
+      { sta: 2, tol: 2, rec: 2, comp: 1 },
+      { sta: 3, tol: 2, rec: 2, comp: 1 },
+      { sta: 3, tol: 3, rec: 2, str: 2 },
+      { sta: 4, tol: 3, rec: 3, comp: 2 }
     ],
     coreReward: 'ph',
-    coreRewards: [1, 1, 1, 1, 2]
+    coreRewards: [0, 1, 1, 1, 1]
   }
 ];
 
@@ -470,25 +470,30 @@ export function calcMissionSuccessChance(
   const talent = getPlayerTalent(q, careerP);
   const isProdigy = Boolean(q.me && careerP?.perks?.includes('prodigy'));
   const age = q.age || 24;
-  const pot = q.pot || q.ov;
+  const curOv = q.me && careerP ? ovMe(careerP) : (q.ov || 65);
+  const pot = q.pot || curOv;
 
-  // Base success probability scales strongly with talent (25-99)
-  // Stage difficulty increases each tier (0..4)
-  let chance = 28 + talent * 0.62 - stage * 7.5;
-  if (age <= 21) chance += 5;
+  // Base success probability scales with talent (25-99) and diminishes at higher OVR
+  let chance = 26 + talent * 0.56 - stage * 7.5;
+  if (age <= 21) chance += 4;
   else if (age >= 30) chance -= (age - 29) * 3.5;
 
-  // Reaching or exceeding potential makes breakthroughs harder (requires higher talent)
-  if (q.ov >= pot) chance -= 10;
-  else if (pot - q.ov >= 15) chance += 4;
+  // Diminishing returns for elite ratings so OVR doesn't cap early
+  if (curOv >= 76) {
+    chance -= Math.max(0, curOv - 76) * 1.45;
+  }
 
-  if (isProdigy) chance += 8;
-  if (state?.tr) chance += (state.tr - 1) * 1.0;
-  if (state?.staff?.asst) chance += state.staff.asst * 1.1;
-  if (state?.analyticsLv && state.analyticsLv > 1) chance += (state.analyticsLv - 1) * 0.7;
+  // Reaching or exceeding potential makes breakthroughs harder (requires higher talent)
+  if (curOv >= pot) chance -= 12;
+  else if (pot - curOv >= 15) chance += 3;
+
+  if (isProdigy) chance += 6;
+  if (state?.tr) chance += (state.tr - 1) * 0.65;
+  if (state?.staff?.asst) chance += state.staff.asst * 0.75;
+  if (state?.analyticsLv && state.analyticsLv > 1) chance += (state.analyticsLv - 1) * 0.5;
 
   // Never 100% guaranteed and never 0% impossible
-  return clamp(Math.round(chance), 15, 94);
+  return clamp(Math.round(chance), 12, 86);
 }
 
 export const getPlayerMissionView = (
@@ -543,6 +548,7 @@ export const formatMissionRewardText = (
   const subTxt = Object.entries(subRewards)
     .map(([k, v]) => `${SIGL[k] || k} +${v}`)
     .join(' · ');
+  if (coreAmt <= 0) return subTxt;
   const coreLbl = ATT.find((x) => x[0] === coreReward)?.[1] || coreReward;
   return `${subTxt} · ${coreLbl} +${coreAmt}`;
 };
@@ -556,42 +562,49 @@ const applyStageRewardToPlayer = (
 ) => {
   const rewards = def.subRewards[Math.min(stage, def.subRewards.length - 1)];
   const coreAmt = def.coreRewards?.[Math.min(stage, (def.coreRewards?.length || 1) - 1)] ?? 1;
+  const curOv = careerP ? ovMe(careerP) : q.ov;
+  const ovScale = getOvGrowthScale(curOv, q.pot);
 
   q.sb = { ...(q.sb || {}) };
   Object.entries(rewards).forEach(([sk, delta]) => {
-    q.sb![sk] = (q.sb![sk] || 0) + delta;
+    const scaledDelta = curOv >= 88 ? Math.max(1, Math.round(delta * 0.65)) : delta;
+    q.sb![sk] = (q.sb![sk] || 0) + scaledDelta;
     if (q.customD && q.customD[sk] != null) {
-      q.customD[sk] = clamp(q.customD[sk] + delta, 1, 99);
+      q.customD[sk] = clamp(q.customD[sk] + scaledDelta, 1, 99);
     }
   });
 
   if (careerP) {
     careerP.sb = { ...(careerP.sb || {}) };
     Object.entries(rewards).forEach(([sk, delta]) => {
-      careerP.sb![sk] = (careerP.sb![sk] || 0) + delta;
+      const scaledDelta = curOv >= 88 ? Math.max(1, Math.round(delta * 0.65)) : delta;
+      careerP.sb![sk] = (careerP.sb![sk] || 0) + scaledDelta;
       if (careerP.customD && careerP.customD[sk] != null) {
-        careerP.customD[sk] = clamp(careerP.customD[sk] + delta, 1, 99);
+        careerP.customD[sk] = clamp(careerP.customD[sk] + scaledDelta, 1, 99);
       }
     });
-    careerP.a[def.coreReward] = clamp(careerP.a[def.coreReward] + coreAmt, 1, 99);
+    if (coreAmt > 0 && (careerP.a[def.coreReward] < 86 || Math.random() < 0.35 + ovScale * 0.8)) {
+      careerP.a[def.coreReward] = clamp(careerP.a[def.coreReward] + coreAmt, 1, 99);
+    }
     careerP.rep = (careerP.rep || 10) + (stage >= 3 ? 3 : 2);
     q.ov = ovMe(careerP);
     if (q.blessed && q.customA) q.customA = { ...careerP.a };
     if (s) syncMe(s);
   } else {
-    q.coreSb = { ...(q.coreSb || {}) };
-    q.coreSb[def.coreReward] = (q.coreSb[def.coreReward] || 0) + coreAmt;
-    if (q.customA) {
-      q.customA[def.coreReward] = clamp(q.customA[def.coreReward] + coreAmt, 1, 99);
+    if (coreAmt > 0) {
+      q.coreSb = { ...(q.coreSb || {}) };
+      q.coreSb[def.coreReward] = (q.coreSb[def.coreReward] || 0) + coreAmt;
+      if (q.customA) {
+        q.customA[def.coreReward] = clamp(q.customA[def.coreReward] + coreAmt, 1, 99);
+      }
     }
     const afterDt = DT(q, null);
     const calcOv = clamp(OVF(q.pos, afterDt.a), 1, 99);
-    if (calcOv > q.ov) {
-      q.ov = calcOv;
-    } else if ((stage === 1 || stage === 4) && q.ov < 99) {
-      q.ov = clamp(q.ov + 1, 1, 99);
+    const potCap = stage >= 3 ? 98 : (q.pot || 86);
+    if (calcOv > q.ov && (q.ov < potCap || stage >= 3)) {
+      q.ov = clamp(calcOv, 1, stage >= 3 ? 98 : potCap);
     }
-    if (q.ov > (q.pot || q.ov)) q.pot = q.ov;
+    if (stage >= 3 && q.ov > (q.pot || q.ov)) q.pot = q.ov;
   }
   if (s) {
     recordPlayerSeasonProgress(q, s.season ?? 1, s.md ?? 0, careerP);
@@ -775,7 +788,7 @@ export const applyTrainingMissionProgress = (
   const mState = ensurePlayerMissions(q, opts.careerP);
   const mult = opts.isTeamFocus ? 2 : 1;
 
-  // Simultaneous multi-mission progress from training drills (no focus required)
+  // Measured training drill contributions so missions progress naturally alongside real matches
   const addSimultaneous = (metric: PersonalMissionMetric, base: number, label?: string) => {
     if (base <= 0) return;
     const total = base * mult;
@@ -784,43 +797,41 @@ export const applyTrainingMissionProgress = (
   };
 
   if (q.pos === 'GK') {
-    addSimultaneous('saves', opts.teamProgram === 'defense' ? 4 : 2, 'เซฟประตู');
-    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 12 : 6);
+    addSimultaneous('saves', opts.teamProgram === 'defense' ? 2 : 1, 'เซฟประตู');
+    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 5 : 2);
   } else {
-    // Baseline simultaneous training drills across all eligible areas for outfielders
-    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 16 : 8, 'จ่ายบอล');
-    addSimultaneous('dribbles', opts.teamProgram === 'fitness' || opts.teamProgram === 'setpiece' ? 4 : 2);
+    addSimultaneous('passes', opts.teamProgram === 'tactics' ? 7 : 3, 'จ่ายบอล');
+    addSimultaneous('dribbles', opts.teamProgram === 'fitness' || opts.teamProgram === 'setpiece' ? 2 : 1);
 
     if (q.pos === 'FW' || q.pos === 'MF') {
-      const attMult = opts.teamProgram === 'attack' ? 2 : 1;
-      addSimultaneous('shots', 3 * attMult, 'ยิงประตู');
-      addSimultaneous('onTarget', 2 * attMult);
-      addSimultaneous('crossAssists', 2 * attMult);
-      addSimultaneous('setpieces', opts.teamProgram === 'setpiece' ? 2 : opts.teamProgram === 'attack' ? 1 : 0);
+      const isAtt = opts.teamProgram === 'attack';
+      addSimultaneous('shots', isAtt ? 2 : 1, 'ยิงประตู');
+      if (isAtt || Math.random() < 0.55) addSimultaneous('onTarget', 1);
+      addSimultaneous('crossAssists', isAtt ? 2 : 1);
+      addSimultaneous('setpieces', opts.teamProgram === 'setpiece' ? 1 : 0);
     }
     if (q.pos === 'DF' || q.pos === 'MF') {
-      const defMult = opts.teamProgram === 'defense' ? 2 : 1;
-      addSimultaneous('tackles', 3 * defMult, 'เข้าสกัด');
-      addSimultaneous('blocks', opts.teamProgram === 'defense' ? 2 : q.pos === 'DF' ? 1 : 0);
-      addSimultaneous('headers', 2 * defMult);
+      const isDef = opts.teamProgram === 'defense';
+      addSimultaneous('tackles', isDef ? 2 : 1, 'เข้าสกัด');
+      addSimultaneous('blocks', isDef ? 1 : q.pos === 'DF' && Math.random() < 0.5 ? 1 : 0);
+      addSimultaneous('headers', isDef ? 2 : 1);
       if (q.pos === 'DF' && opts.teamProgram === 'setpiece') {
         addSimultaneous('setpieces', 1);
       }
     } else if (q.pos === 'FW') {
-      addSimultaneous('headers', 2);
+      addSimultaneous('headers', 1);
     }
   }
 
   // Career personal weekly plan drills
   if (opts.careerPlan === 0 && q.pos !== 'GK') {
-    addSimultaneous('shots', 2);
-    addSimultaneous('onTarget', 1);
+    addSimultaneous('shots', 1);
+    if (Math.random() < 0.6) addSimultaneous('onTarget', 1);
   } else if (opts.careerPlan === 1) {
-    addSimultaneous('passes', 10);
-    addSimultaneous('dribbles', 2);
+    addSimultaneous('passes', 4);
+    addSimultaneous('dribbles', 1);
   } else if (opts.careerPlan === 4 && q.pos !== 'GK') {
     addSimultaneous('setpieces', 1);
-    addSimultaneous('crossAssists', 1);
   }
 
   q.missions = mState;
@@ -829,31 +840,30 @@ export const applyTrainingMissionProgress = (
   return { notes, summary };
 };
 
-export const applyMatchMissionProgress = (
+type MatchMissionPayload = Pick<FinishedMatchPayload, 'gh' | 'ga' | 'evs' | 'pen' | 'pf' | 'playerActions'> & {
+  ratings?: Record<string, number>;
+  playedNames?: Record<number, string[]>;
+};
+
+const applyTeamMatchMissions = (
   s: GameState,
-  H: Team,
-  A: Team,
-  payload: FinishedMatchPayload
-): MissionResolveSummary => {
-  const combined: MissionResolveSummary = { upgraded: [], failed: [] };
-  const meTeam = s.teams[s.me];
-  if (!meTeam) return combined;
-
-  const isHomeMe = H.id === meTeam.id;
-  const myGoals = isHomeMe ? payload.gh : payload.ga;
-  const oppGoals = isHomeMe ? payload.ga : payload.gh;
-  const isWin = myGoals > oppGoals || Boolean(payload.pen && ((isHomeMe && payload.pen) || (!isHomeMe && !payload.pen)));
+  team: Team,
+  teamGoals: number,
+  oppGoals: number,
+  isWin: boolean,
+  payload: MatchMissionPayload,
+  trackForUser: boolean,
+  combined: MissionResolveSummary
+) => {
   const isCleanSheet = oppGoals === 0;
-
-  const playedList = new Set(payload.playedNames?.[meTeam.id] || xi(meTeam).map((q) => q.n));
+  const playedList = new Set(payload.playedNames?.[team.id] || xi(team).map((q) => q.n));
   const actionsMap = payload.playerActions || {};
 
-  meTeam.sq.forEach((q) => {
+  team.sq.forEach((q) => {
     const careerP = q.me && s.p ? s.p : null;
     if (q.me && payload.pf && payload.pf.played === false) return;
     if (!playedList.has(q.n) && !actionsMap[q.n]) return;
 
-    // Accumulate all eligible match milestones simultaneously
     addMissionStat(q, 'matches', 1, careerP);
     if (isWin) addMissionStat(q, 'wins', 1, careerP);
     if (isCleanSheet && (q.pos === 'GK' || q.pos === 'DF')) {
@@ -863,8 +873,8 @@ export const applyMatchMissionProgress = (
     const rt = q.me && payload.pf?.rt ? payload.pf.rt : payload.ratings?.[q.n] || 0;
     if (rt >= 7.2) addMissionStat(q, 'highRatings', 1, careerP);
 
-    const goals = payload.evs.filter((e) => !e.og && e.t === meTeam.id && e.who === q.n).length;
-    const assists = payload.evs.filter((e) => e.t === meTeam.id && e.as === q.n).length;
+    const goals = payload.evs.filter((e) => !e.og && e.t === team.id && e.who === q.n).length;
+    const assists = payload.evs.filter((e) => !e.og && e.t === team.id && e.as === q.n).length;
     if (goals > 0) addMissionStat(q, 'goals', goals, careerP);
 
     const acts = actionsMap[q.n];
@@ -875,36 +885,65 @@ export const applyMatchMissionProgress = (
         }
       });
     } else {
-      // Estimation fallback for instant-simmed matches
+      // Estimation fallback for instant-simmed & AI matches
       if (q.pos === 'GK') {
         addMissionStat(q, 'saves', R(2, 5), careerP);
-        addMissionStat(q, 'passes', R(10, 18), careerP);
+        addMissionStat(q, 'passes', R(8, 16), careerP);
       } else {
-        addMissionStat(q, 'passes', q.pos === 'MF' ? R(18, 32) : R(10, 22), careerP);
-        addMissionStat(q, 'dribbles', q.pos === 'FW' || q.pos === 'MF' ? R(2, 5) : R(0, 2), careerP);
+        addMissionStat(q, 'passes', q.pos === 'MF' ? R(14, 28) : R(8, 18), careerP);
+        addMissionStat(q, 'dribbles', q.pos === 'FW' || q.pos === 'MF' ? R(1, 4) : R(0, 2), careerP);
         if (q.pos === 'FW' || q.pos === 'MF') {
-          const sh = Math.max(goals * 2 + (q.pos === 'FW' ? R(1, 3) : R(0, 2)), 0);
+          const sh = Math.max(goals * 2 + (q.pos === 'FW' ? R(1, 2) : R(0, 2)), 0);
           if (sh > 0) {
             addMissionStat(q, 'shots', sh, careerP);
-            addMissionStat(q, 'onTarget', Math.max(goals, Math.round(sh * 0.5)), careerP);
+            addMissionStat(q, 'onTarget', Math.max(goals, Math.round(sh * 0.48)), careerP);
           }
         }
         if (assists > 0) addMissionStat(q, 'crossAssists', assists * 2 + 1, careerP);
         else if (q.pos === 'MF' || q.pos === 'DF') addMissionStat(q, 'crossAssists', R(0, 2), careerP);
         if (q.pos === 'DF' || q.pos === 'MF') {
-          addMissionStat(q, 'tackles', R(2, 5), careerP);
+          addMissionStat(q, 'tackles', R(2, 4), careerP);
           addMissionStat(q, 'blocks', R(0, 2), careerP);
         }
-        addMissionStat(q, 'headers', R(0, 3), careerP);
+        addMissionStat(q, 'headers', R(0, 2), careerP);
       }
     }
 
-    const res = resolvePlayerMissions(q, careerP, s);
-    combined.upgraded.push(...res.upgraded);
-    combined.failed.push(...res.failed);
+    const res = resolvePlayerMissions(q, careerP, trackForUser ? s : null);
+    if (trackForUser) {
+      combined.upgraded.push(...res.upgraded);
+      combined.failed.push(...res.failed);
+    }
   });
+  void teamGoals;
+};
 
-  void A;
+export const applyAiClubMatchMissions = (
+  s: GameState,
+  H: Team,
+  A: Team,
+  res: { gh: number; ga: number; evs: FinishedMatchPayload['evs']; pen?: boolean; ratings?: Record<string, number>; playedNames?: Record<number, string[]> }
+) => {
+  const dummyCombined: MissionResolveSummary = { upgraded: [], failed: [] };
+  const hWin = res.gh > res.ga || Boolean(res.pen);
+  const aWin = res.ga > res.gh || (res.gh === res.ga && res.pen === false);
+  if (H.id !== s.me) applyTeamMatchMissions(s, H, res.gh, res.ga, hWin, res, false, dummyCombined);
+  if (A.id !== s.me) applyTeamMatchMissions(s, A, res.ga, res.gh, aWin, res, false, dummyCombined);
+};
+
+export const applyMatchMissionProgress = (
+  s: GameState,
+  H: Team,
+  A: Team,
+  payload: FinishedMatchPayload
+): MissionResolveSummary => {
+  const combined: MissionResolveSummary = { upgraded: [], failed: [] };
+  const hWin = payload.gh > payload.ga || Boolean(payload.pen === true);
+  const aWin = payload.ga > payload.gh || Boolean(payload.gh === payload.ga && payload.pen === false);
+
+  applyTeamMatchMissions(s, H, payload.gh, payload.ga, hWin, payload, H.id === s.me, combined);
+  applyTeamMatchMissions(s, A, payload.ga, payload.gh, aWin, payload, A.id === s.me, combined);
+
   if (s.mode === 'p' && s.p) syncMe(s);
   return combined;
 };

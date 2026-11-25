@@ -19,7 +19,7 @@ type LegendMetric = 'goals' | 'assists' | 'apps' | 'cleanSheets' | 'motm';
 
 const METRIC_COLUMNS: { key: LegendMetric; label: string; shortLabel: string }[] = [
   { key: 'goals', label: 'ประตู', shortLabel: 'ประตู' },
-  { key: 'assists', label: 'แอสซิสต์', shortLabel: 'แอสซิส' },
+  { key: 'assists', label: 'แอสซิสต์', shortLabel: 'แอสซิสต์' },
   { key: 'apps', label: 'ลงเล่น', shortLabel: 'ลงเล่น' },
   { key: 'cleanSheets', label: 'คลีนชีต', shortLabel: 'คลีนชีต' },
   { key: 'motm', label: 'MOTM', shortLabel: 'MOTM' }
@@ -329,7 +329,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
       </div>
 
       {/* Trophy Cabinet Showcase + Club Hall of Fame */}
-      <div className="grid grid-cols-1 lg:grid-cols-[0.92fr_1.08fr] gap-3 mland:gap-2 items-stretch">
+      <div className="grid grid-cols-1 xl:grid-cols-[0.82fr_1.18fr] gap-3 mland:gap-2 items-stretch">
         {/* Trophy Cabinet */}
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 mland:p-2.5 flex flex-col gap-2.5 mland:gap-1.5">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)]/70">
@@ -392,174 +392,148 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
           )}
         </div>
 
-        {/* All-Time Legends Hall of Fame (With Faces, Seasons Played & All 5 Stats Directly) */}
-        <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 mland:p-2.5 flex flex-col gap-2 mland:gap-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)]/70">
+        {/* All-Time Legends Hall of Fame (With Faces, Seasons Played & Dedicated Columns for Each Stat) */}
+        <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden flex flex-col">
+          <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2 bg-[var(--surface-2)]/40">
             <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
               ทำเนียบตำนานสโมสร
             </span>
             <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
-              เรียงตาม <b className="text-[var(--g)]">{activeSortLabel}</b> · กดหัวคอลัมน์เพื่อสลับ
+              เรียงตาม <b className="text-[var(--g)]">{activeSortLabel}</b> · กดหัวคอลัมน์เพื่อจัดเรียง
             </span>
           </div>
 
           {sortedLegends.length > 0 ? (
-            <div className="flex-1 min-h-0 flex flex-col">
-              {/* Desktop & Landscape Column Headers */}
-              <div className="hidden sm:grid mland:grid sm:grid-cols-[1fr_220px] mland:grid-cols-[1fr_195px] items-center gap-2 pb-1.5 px-1 border-b border-[var(--line)]/70 text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">
-                <span>นักเตะ · ซีซั่นที่ลงเล่น</span>
-                <div className="grid grid-cols-5 gap-0.5 text-center">
-                  {METRIC_COLUMNS.map((col) => {
-                    const active = sortMetric === col.key;
+            <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto max-h-[340px]">
+              <table className="w-full text-left border-collapse min-w-[520px]">
+                <thead className="sticky top-0 z-10 bg-[var(--surface)] border-b border-[var(--line)] text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)]">
+                  <tr>
+                    <th className="py-2 pl-3 pr-1.5 w-8 text-center">#</th>
+                    <th className="py-2 px-2 text-left">นักเตะ · ซีซั่นที่เล่น</th>
+                    {METRIC_COLUMNS.map((col) => {
+                      const active = sortMetric === col.key;
+                      return (
+                        <th
+                          key={col.key}
+                          className={`py-2 px-2 text-center whitespace-nowrap w-[64px] border-l border-[var(--line)]/40 ${
+                            active ? 'bg-[var(--g-soft)]/55 text-[var(--g)]' : ''
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              setSortMetric(col.key);
+                            }}
+                            className={`inline-flex items-center justify-center gap-0.5 cursor-pointer transition-colors ${
+                              active ? 'font-extrabold text-[var(--g)]' : 'hover:text-[var(--ink)]'
+                            }`}
+                          >
+                            <span>{col.label}</span>
+                            {active && <span className="text-[9px] leading-none">↓</span>}
+                          </button>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--line)]/60">
+                  {sortedLegends.map((leg, idx) => {
+                    const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
+                    const clickable = !!liveSqPlayer && !!onInspectPlayer;
+                    const facePlayer: Partial<Player> = liveSqPlayer || {
+                      n: leg.name,
+                      pos: leg.pos,
+                      ro: leg.ro,
+                      no: leg.no,
+                      vis: leg.vis
+                    };
+                    const seasonText = formatSeasonSpan(leg);
+                    const rankCls =
+                      idx === 0
+                        ? 'bg-amber-400/20 text-[#9a6700] dark:text-[var(--lamp)] border-amber-400/45'
+                        : idx === 1
+                          ? 'bg-slate-400/20 text-slate-600 dark:text-slate-200 border-slate-400/40'
+                          : idx === 2
+                            ? 'bg-amber-700/20 text-amber-700 dark:text-amber-300 border-amber-600/40'
+                            : 'text-[var(--mut)] border-transparent';
+
                     return (
-                      <button
-                        key={col.key}
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setSortMetric(col.key);
-                        }}
-                        className={`py-0.5 rounded cursor-pointer transition-colors truncate ${
-                          active
-                            ? 'text-[var(--g)] font-extrabold underline decoration-[var(--g)]/60 underline-offset-2'
-                            : 'hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        {col.shortLabel}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="divide-y divide-[var(--line)]/60 max-h-[300px] overflow-y-auto pr-0.5">
-                {sortedLegends.map((leg, idx) => {
-                  const liveSqPlayer = team.sq.find((q) => q.n === leg.name);
-                  const clickable = !!liveSqPlayer && !!onInspectPlayer;
-                  const facePlayer: Partial<Player> = liveSqPlayer || {
-                    n: leg.name,
-                    pos: leg.pos,
-                    ro: leg.ro,
-                    no: leg.no,
-                    vis: leg.vis
-                  };
-                  const seasonText = formatSeasonSpan(leg);
-                  const rankCls =
-                    idx === 0
-                      ? 'text-[#b47b00] dark:text-[var(--lamp)]'
-                      : idx === 1
-                        ? 'text-slate-500 dark:text-slate-300'
-                        : idx === 2
-                          ? 'text-amber-700 dark:text-amber-400'
-                          : 'text-[var(--mut)]';
-
-                  return (
-                    <div
-                      key={leg.name}
-                      className="py-2 mland:py-1.5 px-1 flex flex-col sm:grid mland:grid sm:grid-cols-[1fr_220px] mland:grid-cols-[1fr_195px] sm:items-center mland:items-center gap-1.5 sm:gap-2"
-                    >
-                      {/* Left: Rank + Player Face + Name + Season(s) Played */}
-                      <div className="min-w-0 flex items-center gap-2 mland:gap-1.5">
-                        <span className={`w-4 text-center font-extrabold text-[11px] mland:text-[9.5px] tabular shrink-0 ${rankCls}`}>
-                          {idx + 1}
-                        </span>
-                        <div className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                          <PlayerFace
-                            player={facePlayer}
-                            team={team}
-                            state={state}
-                            club={state.club}
-                            isMyClub={isUserClub}
-                            size={36}
-                          />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          {clickable ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                onInspectPlayer!(liveSqPlayer!, team);
-                              }}
-                              className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block max-w-full"
-                            >
-                              {leg.name}
-                            </button>
-                          ) : (
-                            <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate">
-                              {leg.name}
+                      <tr key={leg.name} className="hover:bg-[var(--surface-2)]/35 transition-colors">
+                        <td className="py-2 mland:py-1.5 pl-3 pr-1.5 text-center align-middle">
+                          <span
+                            className={`inline-flex items-center justify-center w-5 h-5 rounded-md border text-[10.5px] mland:text-[9px] font-extrabold tabular ${rankCls}`}
+                          >
+                            {idx + 1}
+                          </span>
+                        </td>
+                        <td className="py-2 mland:py-1.5 px-2 align-middle">
+                          <div className="flex items-center gap-2.5 mland:gap-1.5 min-w-0">
+                            <div className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-center justify-center overflow-hidden shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+                              <PlayerFace
+                                player={facePlayer}
+                                team={team}
+                                state={state}
+                                club={state.club}
+                                isMyClub={isUserClub}
+                                size={36}
+                              />
                             </div>
-                          )}
-                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
-                            {leg.ro || leg.pos} · <span className="font-semibold text-[var(--ink)]/80">{seasonText}</span>
-                            {leg.stillAtClub && (
-                              <span className="text-[var(--g)] font-semibold"> · อยู่ในทีม</span>
-                            )}
+                            <div className="min-w-0 flex-1">
+                              {clickable ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    SFX.tap();
+                                    onInspectPlayer!(liveSqPlayer!, team);
+                                  }}
+                                  className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] hover:text-[var(--g)] truncate text-left cursor-pointer block max-w-[190px]"
+                                >
+                                  {leg.name}
+                                </button>
+                              ) : (
+                                <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] truncate max-w-[190px]">
+                                  {leg.name}
+                                </div>
+                              )}
+                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
+                                {leg.ro || leg.pos} · <span className="font-semibold text-[var(--ink)]/80">{seasonText}</span>
+                                {leg.stillAtClub && (
+                                  <span className="text-[var(--g)] font-semibold"> · อยู่ในทีม</span>
+                                )}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Right (Desktop & Landscape): All 5 Stats Aligned */}
-                      <div className="hidden sm:grid mland:grid grid-cols-5 gap-0.5 text-center tabular text-xs mland:text-[10.5px] items-center">
+                        </td>
                         {METRIC_COLUMNS.map((col) => {
                           const val = leg[col.key] || 0;
                           const isSortedCol = sortMetric === col.key;
                           return (
-                            <span
+                            <td
                               key={col.key}
-                              className={
-                                val === 0
-                                  ? 'text-[var(--mut)]/45 font-medium'
-                                  : isSortedCol
-                                    ? 'font-extrabold text-[var(--g)]'
-                                    : 'font-bold text-[var(--ink)]'
-                              }
-                            >
-                              {val}
-                            </span>
-                          );
-                        })}
-                      </div>
-
-                      {/* Mobile Portrait (<sm): Compact 5-stat row with inline labels */}
-                      <div className="grid grid-cols-5 gap-1 sm:hidden mland:hidden pl-6 text-center tabular">
-                        {METRIC_COLUMNS.map((col) => {
-                          const val = leg[col.key] || 0;
-                          const isSortedCol = sortMetric === col.key;
-                          return (
-                            <button
-                              key={col.key}
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                setSortMetric(col.key);
-                              }}
-                              className={`py-1 px-0.5 rounded-lg border text-center cursor-pointer ${
-                                isSortedCol
-                                  ? 'bg-[var(--g-soft)] border-[var(--g)]/40'
-                                  : 'bg-[var(--surface-2)]/55 border-[var(--line)]/50'
+                              className={`py-2 mland:py-1.5 px-2 text-center align-middle tabular text-xs mland:text-[10.5px] border-l border-[var(--line)]/40 ${
+                                isSortedCol ? 'bg-[var(--g-soft)]/35' : ''
                               }`}
                             >
-                              <div className="text-[8.5px] text-[var(--mut)] leading-none">{col.shortLabel}</div>
-                              <div
-                                className={`text-[11px] font-extrabold leading-tight mt-0.5 ${
+                              <span
+                                className={
                                   val === 0
-                                    ? 'text-[var(--mut)]/50'
+                                    ? 'text-[var(--mut)]/45 font-medium'
                                     : isSortedCol
-                                      ? 'text-[var(--g)]'
-                                      : 'text-[var(--ink)]'
-                                }`}
+                                      ? 'font-extrabold text-[var(--g)]'
+                                      : 'font-bold text-[var(--ink)]'
+                                }
                               >
                                 {val}
-                              </div>
-                            </button>
+                              </span>
+                            </td>
                           );
                         })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center py-6 text-xs mland:text-[10px] text-[var(--mut)] text-center">

@@ -8,7 +8,7 @@ import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition } from './engine/simulation';
-import { applyMatchMissionProgress } from './engine/missions';
+import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest } from './components/SvgVisuals';
 import { MainMenu } from './views/MainMenuView';
@@ -266,6 +266,7 @@ export default function App() {
             nx[i / 2] = cw.id;
             c.log.push(`${RN[c.r]}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
             applyPositionAdaptation(d, ch, ca, cr);
+            applyAiClubMatchMissions(d, ch, ca, cr);
           }
         }
         c.ids = nx;
@@ -336,6 +337,7 @@ export default function App() {
             nx[i / 2] = aw.id;
             c.log.push(`${RN[c.r]}: ${ah.name} ${ar.gh}-${ar.ga} ${aa.name}`);
             applyPositionAdaptation(d, ah, aa, ar);
+            applyAiClubMatchMissions(d, ah, aa, ar);
           }
         }
         c.ids = nx;
@@ -420,6 +422,7 @@ export default function App() {
         applyMatchResult(th, r.gh, ta, r.ga);
         tallyMatchPlayers(th, ta, r);
         applyPositionAdaptation(d, th, ta, r);
+        applyAiClubMatchMissions(d, th, ta, r);
         roundCards.push({ h: th, a: ta, cards: r.cards });
         r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
       });
@@ -435,6 +438,7 @@ export default function App() {
             applyMatchResult(th, r.gh, ta, r.ga);
             tallyMatchPlayers(th, ta, r);
             applyPositionAdaptation(d, th, ta, r);
+            applyAiClubMatchMissions(d, th, ta, r);
             roundCards.push({ h: th, a: ta, cards: r.cards });
             r.subs?.forEach((sb) => recordSubOut(sb.t, sb.outPlayer, sb.m));
           });

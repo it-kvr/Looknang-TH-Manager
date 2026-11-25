@@ -1043,6 +1043,17 @@ export function injD(q: Player, n: number, careerP?: PlayerCareerProfile | null)
 
 export const ovMe = (p: PlayerCareerProfile) => OVF(p.pos, p.a);
 
+export function getOvGrowthScale(curOv: number, pot?: number): number {
+  let s = 1.0;
+  if (curOv >= 92) s = 0.08;
+  else if (curOv >= 88) s = 0.16;
+  else if (curOv >= 83) s = 0.30;
+  else if (curOv >= 76) s = 0.50;
+  else if (curOv >= 68) s = 0.74;
+  if (pot != null && curOv >= pot) s *= 0.25;
+  return s;
+}
+
 export function autoGrow(p: PlayerCareerProfile, n = 1): string {
   const map: Record<Position, StatKey[]> = {
     FW: ['sh', 'sh', 'sh', 'dr', 'dr', 'ps', 'ph'],
@@ -1055,8 +1066,12 @@ export function autoGrow(p: PlayerCareerProfile, n = 1): string {
   const add: Partial<Record<StatKey, number>> = {};
   for (let i = 0; i < n; i++) {
     const av = w.filter((k) => p.a[k] < 99);
-    const k = av.length ? P(av) : ATT.map((z) => z[0]).find((z) => p.a[z] < 99);
-    if (!k) break;
+    if (!av.length) break;
+    // Prefer attributes that haven't hit extreme levels yet for realistic multi-season balance
+    const lowAv = av.filter((k) => p.a[k] < 86);
+    const k = lowAv.length && Math.random() < 0.78 ? P(lowAv) : P(av);
+    if (p.a[k] >= 90 && Math.random() > 0.35) continue;
+    if (p.a[k] >= 84 && Math.random() > 0.62) continue;
     p.a[k]++;
     p.trn = (p.trn || 0) + 1;
     add[k] = (add[k] || 0) + 1;
