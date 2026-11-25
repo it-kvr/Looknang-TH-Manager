@@ -144,6 +144,7 @@ export const FinanceClubView: React.FC<{
     founded: '2568'
   });
   const [identityDraft, setIdentityDraft] = useState<ClubIdentity | null>(null);
+  const [crestStudioTab, setCrestStudioTab] = useState<'shape' | 'icon'>('shape');
   const [coachEditorTab, setCoachEditorTab] = useState<'look' | 'style'>('look');
   const [coachDraft, setCoachDraft] = useState<{
     name: string;
@@ -3618,367 +3619,453 @@ export const FinanceClubView: React.FC<{
       {/* Club Tab 2: Crest & Jersey Studio */}
       {clubTab === 'identity' && (
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="grid grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            {/* Crest Studio */}
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-bold text-sm mland:text-xs">🛡️ สตูดิโอออกแบบตราสโมสร</h3>
-                <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
-                  {CREST_SHAPES[dk.shape]?.label} · {CREST_PATTERNS[dk.pat]}
-                </span>
-              </div>
-
-              <div>
-                <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">รูปทรงตรา ({CREST_SHAPES.length} แบบ)</div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {CREST_SHAPES.map((sh, i) => {
-                    const active = dk.shape === i;
-                    return (
-                      <button
-                        key={sh.label}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.shape = i; })}
-                        className={`flex flex-col items-center gap-1 py-1.5 px-1 rounded-xl text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer border transition-all ${
-                          active
-                            ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)] shadow-xs'
-                            : 'bg-[var(--surface-2)]/70 border-transparent text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
-                        }`}
-                      >
-                        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-                          <path d={sh.d} fill={dk.c1} stroke={active ? 'var(--g)' : 'var(--line)'} strokeWidth="1.6" />
-                        </svg>
-                        <span className="truncate max-w-full leading-tight">{sh.label}</span>
-                      </button>
-                    );
-                  })}
+          <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
+            {/* Left Panel: Crest Studio */}
+            <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+              <div className="px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] whitespace-nowrap">🛡️ ออกแบบตราสโมสร</h3>
+                  <span className="hidden sm:inline text-[10.5px] mland:text-[9.5px] font-medium text-[var(--mut)] truncate">
+                    {CREST_SHAPES[dk.shape]?.label} · {CREST_IC_NAMES[dk.icon] || dk.icon}
+                  </span>
                 </div>
-              </div>
-
-              <div>
-                <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">ลวดลายพื้นหลังตรา ({CREST_PATTERNS.length} แบบ)</div>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {CREST_PATTERNS.map((l, i) => {
-                    const active = dk.pat === i;
-                    const shPath = CREST_SHAPES[dk.shape % CREST_SHAPES.length]?.d || CREST_SHAPES[0].d;
-                    const patUid = `patprev-${i}`;
-                    return (
-                      <button
-                        key={l}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.pat = i; })}
-                        className={`flex items-center gap-1.5 py-1.5 px-2 rounded-xl text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer border transition-colors min-w-0 ${
-                          active
-                            ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
-                            : 'bg-[var(--surface-2)]/70 border-transparent text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
-                        }`}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
-                          <defs>
-                            <clipPath id={`cp-${patUid}`}>
-                              <path d={shPath} />
-                            </clipPath>
-                            {i === 9 && (
-                              <linearGradient id={`cg-${patUid}`} x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stopColor={dk.c1} />
-                                <stop offset="100%" stopColor={dk.c2} />
-                              </linearGradient>
-                            )}
-                            {i === 19 && (
-                              <radialGradient id={`cr-${patUid}`} cx="50%" cy="50%" r="55%">
-                                <stop offset="0%" stopColor={dk.c2} />
-                                <stop offset="100%" stopColor={dk.c1} />
-                              </radialGradient>
-                            )}
-                          </defs>
-                          <g clipPath={`url(#cp-${patUid})`}>
-                            {renderCrestPattern(i, patUid, dk.c1, dk.c2)}
-                          </g>
-                          <path d={shPath} fill="none" stroke={active ? '#ffffff' : 'var(--line)'} strokeWidth="1.5" />
-                        </svg>
-                        <span className="truncate">{l}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5 mland:gap-2">
-                <div>
-                  <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">สไตล์ขอบตรา</div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(['ขาว', 'ทอง', 'ขอบคู่', 'ดำเข้ม'] as const).map((lbl, i) => (
-                      <button
-                        key={lbl}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.crestBorder = i; })}
-                        className={`btn btn-xs w-full ${(dk.crestBorder ?? 0) === i ? 'btn-primary' : 'btn-secondary'}`}
-                      >
-                        {lbl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold mb-1.5">ดาวเกียรติยศบนตรา</div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[0, 1, 2, 3].map((stCnt) => (
-                      <button
-                        key={stCnt}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.stars = stCnt; })}
-                        className={`btn btn-xs w-full ${(dk.stars ?? 0) === stCnt ? 'btn-primary' : 'btn-secondary'}`}
-                      >
-                        {stCnt === 0 ? 'ไม่มี' : '⭐'.repeat(stCnt)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs mland:text-[10.5px] text-[var(--mut)] font-semibold">
-                    สัญลักษณ์กลางตรา ({Object.keys(CREST_IC).length} แบบ)
-                  </div>
+                <div className="seg-bar shrink-0">
                   <button
                     type="button"
-                    onClick={() => {
-                      const icKeys = Object.keys(CREST_IC);
-                      const picked = P(icKeys);
-                      patchIdentityDraft((cl) => { cl.icon = picked; });
-                    }}
-                    className="btn btn-xs btn-secondary hover:bg-[var(--g)] hover:text-white"
+                    onClick={() => setCrestStudioTab('shape')}
+                    className={`seg-btn whitespace-nowrap ${crestStudioTab === 'shape' ? 'active' : ''}`}
                   >
-                    🎲 สุ่มสัญลักษณ์
+                    ทรง &amp; ลายตรา
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrestStudioTab('icon')}
+                    className={`seg-btn whitespace-nowrap ${crestStudioTab === 'icon' ? 'active' : ''}`}
+                  >
+                    สัญลักษณ์ ({Object.keys(CREST_IC).length})
                   </button>
                 </div>
+              </div>
 
-                {/* Emblem contrast color selector */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mr-1">สีสัญลักษณ์:</span>
-                  {(
-                    [
-                      ['', 'อัตโนมัติ'],
-                      ['#ffffff', 'ขาว'],
-                      ['#0f172a', 'ดำเข้ม'],
-                      ['#facc15', 'ทอง'],
-                      ['#38bdf8', 'ฟ้า'],
-                      ['#ef4444', 'แดง']
-                    ] as const
-                  ).map(([colVal, lbl]) => {
-                    const active = (dk.iconColor || '') === colVal;
-                    return (
-                      <button
-                        key={lbl}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.iconColor = colVal; })}
-                        className={`btn btn-xs rounded-full! ${
-                          active
-                            ? 'btn-primary'
-                            : 'btn-secondary'
-                        }`}
-                      >
-                        {colVal && <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: colVal }} />}
-                        <span>{lbl}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Visual Vector Emblem Grid */}
-                <div className="grid grid-cols-6 gap-1.5">
-                  {Object.keys(CREST_IC).map((ic) => {
-                    const active = dk.icon === ic;
-                    return (
-                      <button
-                        key={ic}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.icon = ic; })}
-                        className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 rounded-xl cursor-pointer border transition-all ${
-                          active
-                            ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] ring-1 ring-[var(--g)] shadow-xs'
-                            : 'bg-[var(--surface-2)]/65 border-transparent text-[var(--ink)] hover:border-[var(--line)] hover:bg-[var(--surface-2)]'
-                        }`}
-                      >
-                        <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                          <g
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2.1"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
-                          />
-                        </svg>
-                        <span className="text-[9.5px] mland:text-[8.5px] font-semibold truncate max-w-full leading-tight">
-                          {CREST_IC_NAMES[ic] || ic}
+              <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-2 divide-y divide-[var(--line)]/55">
+                {crestStudioTab === 'shape' ? (
+                  <>
+                    {/* Shapes */}
+                    <div className="pb-2.5 mland:pb-2">
+                      <div className="flex items-center justify-between mb-1.5 mland:mb-1">
+                        <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold">รูปทรงตรา ({CREST_SHAPES.length} แบบ)</span>
+                        <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)]">
+                          {CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}
                         </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        {CREST_SHAPES.map((sh, i) => {
+                          const active = dk.shape === i;
+                          return (
+                            <button
+                              key={sh.label}
+                              type="button"
+                              onClick={() => patchIdentityDraft((cl) => { cl.shape = i; })}
+                              className={`flex items-center gap-1.5 py-1.5 px-2 mland:py-1 mland:px-1.5 rounded-lg text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer border transition-colors min-w-0 ${
+                                active
+                                  ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)]'
+                                  : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                              }`}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
+                                <path d={sh.d} fill={dk.c1} stroke={active ? 'var(--g)' : 'var(--line)'} strokeWidth="1.7" />
+                              </svg>
+                              <span className="truncate">{sh.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Border & Stars */}
+                    <div className="py-2.5 mland:py-2 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2">
+                      <div>
+                        <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">สไตล์ขอบตรา</div>
+                        <div className="seg-bar grid grid-cols-4 w-full">
+                          {(['ขาว', 'ทอง', 'ขอบคู่', 'ดำ'] as const).map((lbl, i) => (
+                            <button
+                              key={lbl}
+                              type="button"
+                              onClick={() => patchIdentityDraft((cl) => { cl.crestBorder = i; })}
+                              className={`seg-btn whitespace-nowrap px-1! ${(dk.crestBorder ?? 0) === i ? 'active' : ''}`}
+                            >
+                              {lbl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">ดาวเกียรติยศ</div>
+                        <div className="seg-bar grid grid-cols-4 w-full">
+                          {[0, 1, 2, 3].map((stCnt) => (
+                            <button
+                              key={stCnt}
+                              type="button"
+                              onClick={() => patchIdentityDraft((cl) => { cl.stars = stCnt; })}
+                              className={`seg-btn whitespace-nowrap px-1! tabular ${(dk.stars ?? 0) === stCnt ? 'active' : ''}`}
+                            >
+                              {stCnt === 0 ? 'ไม่มี' : '★'.repeat(stCnt)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Patterns */}
+                    <div className="pt-2.5 mland:pt-2">
+                      <div className="flex items-center justify-between mb-1.5 mland:mb-1">
+                        <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold">ลวดลายพื้นหลัง ({CREST_PATTERNS.length} แบบ)</span>
+                        <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)]">
+                          {CREST_PATTERNS[dk.pat]}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 sm:grid-cols-5 mland:grid-cols-5 gap-1">
+                        {CREST_PATTERNS.map((l, i) => {
+                          const active = dk.pat === i;
+                          const shPath = CREST_SHAPES[dk.shape % CREST_SHAPES.length]?.d || CREST_SHAPES[0].d;
+                          const patUid = `patprev-${i}`;
+                          return (
+                            <button
+                              key={l}
+                              type="button"
+                              onClick={() => patchIdentityDraft((cl) => { cl.pat = i; })}
+                              className={`flex items-center gap-1 py-1.5 px-1.5 mland:py-1 rounded-lg text-[10px] mland:text-[9px] font-semibold cursor-pointer border transition-colors min-w-0 ${
+                                active
+                                  ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                                  : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                              }`}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" className="shrink-0" aria-hidden="true">
+                                <defs>
+                                  <clipPath id={`cp-${patUid}`}>
+                                    <path d={shPath} />
+                                  </clipPath>
+                                  {i === 9 && (
+                                    <linearGradient id={`cg-${patUid}`} x1="0" y1="0" x2="1" y2="1">
+                                      <stop offset="0%" stopColor={dk.c1} />
+                                      <stop offset="100%" stopColor={dk.c2} />
+                                    </linearGradient>
+                                  )}
+                                  {i === 19 && (
+                                    <radialGradient id={`cr-${patUid}`} cx="50%" cy="50%" r="55%">
+                                      <stop offset="0%" stopColor={dk.c2} />
+                                      <stop offset="100%" stopColor={dk.c1} />
+                                    </radialGradient>
+                                  )}
+                                </defs>
+                                <g clipPath={`url(#cp-${patUid})`}>
+                                  {renderCrestPattern(i, patUid, dk.c1, dk.c2)}
+                                </g>
+                                <path d={shPath} fill="none" stroke={active ? '#ffffff' : 'var(--line)'} strokeWidth="1.5" />
+                              </svg>
+                              <span className="truncate">{l}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Emblem Color + Random */}
+                    <div className="pb-2.5 mland:pb-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mr-1">สีสัญลักษณ์:</span>
+                        {(
+                          [
+                            ['', 'อัตโนมัติ'],
+                            ['#ffffff', 'ขาว'],
+                            ['#0f172a', 'ดำ'],
+                            ['#facc15', 'ทอง'],
+                            ['#38bdf8', 'ฟ้า'],
+                            ['#ef4444', 'แดง']
+                          ] as const
+                        ).map(([colVal, lbl]) => {
+                          const active = (dk.iconColor || '') === colVal;
+                          return (
+                            <button
+                              key={lbl}
+                              type="button"
+                              onClick={() => patchIdentityDraft((cl) => { cl.iconColor = colVal; })}
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[10.5px] mland:text-[9.5px] font-semibold cursor-pointer transition-colors whitespace-nowrap ${
+                                active
+                                  ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                                  : 'bg-transparent border-[var(--line)]/70 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                              }`}
+                            >
+                              {colVal && (
+                                <span
+                                  className="w-2.5 h-2.5 rounded-xs border border-black/20 dark:border-white/25 shrink-0"
+                                  style={{ background: colVal }}
+                                />
+                              )}
+                              <span>{lbl}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const icKeys = Object.keys(CREST_IC);
+                          const picked = P(icKeys);
+                          patchIdentityDraft((cl) => { cl.icon = picked; });
+                        }}
+                        className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                      >
+                        <Shuffle className="w-3 h-3" />
+                        <span>สุ่ม</span>
                       </button>
-                    );
-                  })}
-                </div>
+                    </div>
+
+                    {/* Visual Vector Emblem Grid */}
+                    <div className="pt-2.5 mland:pt-2">
+                      <div className="grid grid-cols-6 gap-1">
+                        {Object.keys(CREST_IC).map((ic) => {
+                          const active = dk.icon === ic;
+                          return (
+                            <button
+                              key={ic}
+                              type="button"
+                              onClick={() => patchIdentityDraft((cl) => { cl.icon = ic; })}
+                              className={`flex flex-col items-center justify-center gap-0.5 py-1.5 px-1 mland:py-1 rounded-lg cursor-pointer border transition-colors min-w-0 ${
+                                active
+                                  ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)] ring-1 ring-[var(--g)]'
+                                  : 'bg-transparent border-[var(--line)]/50 text-[var(--ink)] hover:border-[var(--line)] hover:bg-[var(--surface-2)]/50'
+                              }`}
+                            >
+                              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+                                <g
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2.1"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  dangerouslySetInnerHTML={{ __html: CREST_IC[ic] }}
+                                />
+                              </svg>
+                              <span className="text-[9px] mland:text-[8px] font-semibold truncate max-w-full leading-tight">
+                                {CREST_IC_NAMES[ic] || ic}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            {/* Jersey Studio */}
-            <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm mland:text-xs">🎽 สตูดิโอสีชุดแข่ง &amp; ลายเสื้อ</h3>
-                <span className="text-[11px] font-semibold text-[var(--g)]">
-                  เหย้า: {KIT_PATTERNS[dk.kit || 0]}
+            {/* Right Panel: Jersey Studio */}
+            <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col min-h-0 overflow-hidden">
+              <div className="px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 shrink-0">
+                <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)] whitespace-nowrap">🎽 สีชุดแข่ง &amp; ลายเสื้อ</h3>
+                <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
+                  เหย้า: {KIT_PATTERNS[dk.kit || 0]} · {KIT_COLLARS[(dk.collar ?? 0) % 4]}
                 </span>
               </div>
 
-              <div>
-                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ชุดสีสโมสรยอดนิยม</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {clubPresets.map((pr) => {
-                    const active = dk.c1.toLowerCase() === pr.c1.toLowerCase() && dk.c2.toLowerCase() === pr.c2.toLowerCase();
-                    return (
+              <div className="flex-1 min-h-0 overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-2 divide-y divide-[var(--line)]/55">
+                {/* Popular Presets */}
+                <div className="pb-2.5 mland:pb-2">
+                  <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1.5 mland:mb-1">ชุดสียอดนิยม</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 mland:grid-cols-5 gap-1">
+                    {clubPresets.map((pr) => {
+                      const active = dk.c1.toLowerCase() === pr.c1.toLowerCase() && dk.c2.toLowerCase() === pr.c2.toLowerCase();
+                      return (
+                        <button
+                          key={pr.label}
+                          type="button"
+                          onClick={() => {
+                            patchIdentityDraft((cl) => {
+                              cl.c1 = pr.c1;
+                              cl.c2 = pr.c2;
+                              cl.c3 = pr.c3 || '';
+                            });
+                          }}
+                          className={`flex items-center gap-1.5 px-2 py-1.5 mland:py-1 rounded-lg text-[10px] mland:text-[9px] font-semibold cursor-pointer border transition-colors min-w-0 ${
+                            active
+                              ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)]'
+                              : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                          }`}
+                        >
+                          <span className="inline-flex items-center -space-x-0.5 shrink-0">
+                            <span className="w-2.5 h-2.5 rounded-xs border border-black/15 dark:border-white/25" style={{ background: pr.c1 }} />
+                            <span className="w-2.5 h-2.5 rounded-xs border border-black/15 dark:border-white/25" style={{ background: pr.c2 }} />
+                          </span>
+                          <span className="truncate">{pr.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3 Color Pickers (compact rows) */}
+                <div className="py-2.5 mland:py-2 space-y-2 mland:space-y-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold sm:w-24 shrink-0 whitespace-nowrap">
+                      สีหลัก (เหย้า)
+                    </span>
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {KIT_SW.map((col) => (
+                        <button
+                          key={col}
+                          type="button"
+                          disabled={colDist(col, dk.c2) < 150}
+                          title={colDist(col, dk.c2) < 150 ? 'สีใกล้กับชุดเยือนมากเกินไป' : col}
+                          onClick={() => patchIdentityDraft((cl) => { cl.c1 = col; })}
+                          className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-black/20 dark:border-white/25 disabled:opacity-20 cursor-pointer transition-shadow ${
+                            dk.c1 === col ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)]' : ''
+                          }`}
+                          style={{ background: col }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold sm:w-24 shrink-0 whitespace-nowrap">
+                      สีรอง / เยือน
+                    </span>
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {KIT_SW.map((col) => (
+                        <button
+                          key={col}
+                          type="button"
+                          disabled={colDist(col, dk.c1) < 150}
+                          title={colDist(col, dk.c1) < 150 ? 'สีใกล้กับชุดเหย้ามากเกินไป' : col}
+                          onClick={() => patchIdentityDraft((cl) => { cl.c2 = col; })}
+                          className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-black/20 dark:border-white/25 disabled:opacity-20 cursor-pointer transition-shadow ${
+                            dk.c2 === col ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)]' : ''
+                          }`}
+                          style={{ background: col }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                    <div className="flex items-center justify-between sm:w-24 shrink-0 gap-1">
+                      <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold whitespace-nowrap">สีขลิบ/ตัด</span>
                       <button
-                        key={pr.label}
                         type="button"
-                        onClick={() => {
-                          patchIdentityDraft((cl) => {
-                            cl.c1 = pr.c1;
-                            cl.c2 = pr.c2;
-                            cl.c3 = pr.c3 || '';
-                          });
-                        }}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer border ${
-                          active ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--ink)]' : 'bg-[var(--surface-2)] border-transparent hover:border-[var(--g)]'
+                        onClick={() => patchIdentityDraft((cl) => { cl.c3 = ''; })}
+                        className={`px-1.5 py-0.5 rounded-md border text-[9.5px] font-semibold cursor-pointer whitespace-nowrap ${
+                          !dk.c3
+                            ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]'
+                            : 'border-[var(--line)]/65 text-[var(--mut)] hover:text-[var(--ink)]'
                         }`}
                       >
-                        <span className="w-3 h-3 rounded-full border border-white/60" style={{ background: pr.c1 }} />
-                        <span className="w-3 h-3 rounded-full border border-black/20" style={{ background: pr.c2 }} />
-                        {pr.c3 && <span className="w-2.5 h-2.5 rounded-full border border-black/20" style={{ background: pr.c3 }} />}
-                        <span>{pr.label}</span>
+                        อัตโนมัติ
                       </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                <div>
-                  <div className="text-xs text-[var(--mut)] font-semibold mb-1">สีหลัก · ชุดเหย้า</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {KIT_SW.map((col) => (
-                      <button
-                        key={col}
-                        type="button"
-                        disabled={colDist(col, dk.c2) < 150}
-                        onClick={() => patchIdentityDraft((cl) => { cl.c1 = col; })}
-                        className={`w-6 h-6 rounded-full border-2 border-white disabled:opacity-25 cursor-pointer ${dk.c1 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
-                        style={{ background: col }}
-                      />
-                    ))}
+                    </div>
+                    <div className="flex flex-wrap gap-1 flex-1">
+                      {KIT_SW.map((col) => (
+                        <button
+                          key={col}
+                          type="button"
+                          onClick={() => patchIdentityDraft((cl) => { cl.c3 = col; })}
+                          className={`w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-black/20 dark:border-white/25 cursor-pointer transition-shadow ${
+                            dk.c3 === col ? 'ring-2 ring-[var(--ink)] ring-offset-1 ring-offset-[var(--surface)]' : ''
+                          }`}
+                          style={{ background: col }}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <div className="text-xs text-[var(--mut)] font-semibold mb-1">สีหลัก · ชุดเยือน / ลายรอง</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {KIT_SW.map((col) => (
-                      <button
-                        key={col}
-                        type="button"
-                        disabled={colDist(col, dk.c1) < 150}
-                        onClick={() => patchIdentityDraft((cl) => { cl.c2 = col; })}
-                        className={`w-6 h-6 rounded-full border-2 border-white disabled:opacity-25 cursor-pointer ${dk.c2 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
-                        style={{ background: col }}
-                      />
-                    ))}
+                {/* Home Kit Pattern */}
+                <div className="py-2.5 mland:py-2">
+                  <div className="flex items-center justify-between mb-1.5 mland:mb-1">
+                    <span className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold">ลายเสื้อชุดเหย้า ({KIT_PATTERNS.length} ลาย)</span>
+                    <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)]">{KIT_PATTERNS[dk.kit || 0]}</span>
                   </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-[var(--mut)] font-semibold">สีขลิบ &amp; เส้นตัด (Accent)</span>
-                    <button
-                      type="button"
-                      onClick={() => patchIdentityDraft((cl) => { cl.c3 = ''; })}
-                      className={`text-[11px] font-semibold cursor-pointer ${!dk.c3 ? 'text-[var(--g)] underline' : 'text-[var(--mut)]'}`}
-                    >
-                      อัตโนมัติ
-                    </button>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {KIT_SW.map((col) => (
-                      <button
-                        key={col}
-                        type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.c3 = col; })}
-                        className={`w-6 h-6 rounded-full border-2 border-white cursor-pointer ${dk.c3 === col ? 'ring-2 ring-[var(--lamp)] scale-110' : ''}`}
-                        style={{ background: col }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลายเสื้อชุดเหย้า ({KIT_PATTERNS.length} ลาย)</div>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {KIT_PATTERNS.map((l, i) => (
-                    <button
-                      key={l}
-                      type="button"
-                      onClick={() => patchIdentityDraft((cl) => { cl.kit = i; })}
-                      className={`btn btn-xs w-full truncate ${dk.kit === i ? 'btn-primary' : 'btn-secondary'}`}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div>
-                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ลายเสื้อชุดเยือน (แยกได้)</div>
-                  <select
-                    value={dk.awayKit != null ? String(dk.awayKit) : 'same'}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      patchIdentityDraft((cl) => {
-                        cl.awayKit = v === 'same' ? undefined : Number(v);
-                      });
-                    }}
-                    className="w-full px-2.5 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
-                  >
-                    <option value="same">ใช้ลายเดียวกับชุดเหย้า</option>
+                  <div className="grid grid-cols-4 sm:grid-cols-5 mland:grid-cols-5 gap-1">
                     {KIT_PATTERNS.map((l, i) => (
-                      <option key={l} value={i}>{l}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <div className="text-xs text-[var(--mut)] font-semibold mb-1.5">ทรงคอเสื้อ ({KIT_COLLARS.length} แบบ)</div>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {KIT_COLLARS.map((clbl, ci) => (
                       <button
-                        key={clbl}
+                        key={l}
                         type="button"
-                        onClick={() => patchIdentityDraft((cl) => { cl.collar = ci; })}
-                        className={`btn btn-xs w-full ${(dk.collar ?? 0) === ci ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => patchIdentityDraft((cl) => { cl.kit = i; })}
+                        className={`py-1.5 px-1.5 mland:py-1 rounded-lg border text-[10px] mland:text-[9px] font-semibold truncate cursor-pointer transition-colors ${
+                          dk.kit === i
+                            ? 'bg-[var(--g)] text-white border-[var(--g)]'
+                            : 'bg-transparent border-[var(--line)]/55 text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--line)]'
+                        }`}
                       >
-                        {clbl}
+                        {l}
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              <button
-                type="button"
-                onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = !(cl.cuffTrim ?? true); })}
-                className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-[var(--surface-2)] text-xs font-semibold cursor-pointer"
-              >
-                <span>แถบขลิบปลายแขนเสื้อ &amp; ชายเสื้อ</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${(dk.cuffTrim ?? true) ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
-                  {(dk.cuffTrim ?? true) ? 'เปิด' : 'ปิด'}
-                </span>
-              </button>
+                {/* Away Kit, Collar & Cuff Trim */}
+                <div className="pt-2.5 mland:pt-2 space-y-2 mland:space-y-1.5">
+                  <div>
+                    <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">ทรงคอเสื้อ</div>
+                    <div className="seg-bar grid grid-cols-4 w-full">
+                      {KIT_COLLARS.map((clbl, ci) => (
+                        <button
+                          key={clbl}
+                          type="button"
+                          onClick={() => patchIdentityDraft((cl) => { cl.collar = ci; })}
+                          className={`seg-btn whitespace-nowrap px-1! ${(dk.collar ?? 0) === ci ? 'active' : ''}`}
+                        >
+                          {clbl}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2">
+                    <div>
+                      <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">ลายเสื้อชุดเยือน</div>
+                      <select
+                        value={dk.awayKit != null ? String(dk.awayKit) : 'same'}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          patchIdentityDraft((cl) => {
+                            cl.awayKit = v === 'same' ? undefined : Number(v);
+                          });
+                        }}
+                        className="w-full px-2.5 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)]/75 border border-[var(--line)] text-[11px] mland:text-[10px] font-semibold text-[var(--ink)]"
+                      >
+                        <option value="same">ใช้ลายเดียวกับเหย้า</option>
+                        {KIT_PATTERNS.map((l, i) => (
+                          <option key={l} value={i}>{l}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div className="text-[11px] mland:text-[10px] text-[var(--mut)] font-semibold mb-1">แถบขลิบปลายแขน &amp; ชายเสื้อ</div>
+                      <div className="seg-bar grid grid-cols-2 w-full">
+                        <button
+                          type="button"
+                          onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = true; })}
+                          className={`seg-btn whitespace-nowrap ${(dk.cuffTrim ?? true) ? 'active' : ''}`}
+                        >
+                          เปิดใช้งาน
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => patchIdentityDraft((cl) => { cl.cuffTrim = false; })}
+                          className={`seg-btn whitespace-nowrap ${!(dk.cuffTrim ?? true) ? 'active' : ''}`}
+                        >
+                          ปิด
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

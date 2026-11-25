@@ -16,7 +16,7 @@ import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pu
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
-import { ClubCrest } from './components/SvgVisuals';
+import { ClubCrest, PlayerFace } from './components/SvgVisuals';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
 import { SquadTacticsView } from './views/SquadTacticsView';
@@ -957,6 +957,21 @@ export default function App() {
   }
 
   const me = state.teams[state.me];
+  const mePlayer = state.mode === 'p' && state.p
+    ? me.sq.find((q) => q.me || q.n === state.p?.name) || {
+        n: state.p.name,
+        pos: state.p.pos,
+        ro: state.p.sp,
+        no: state.p.no,
+        ov: ovMe(state.p),
+        age: state.p.age,
+        pot: 90,
+        fit: state.p.en ?? 100,
+        inj: 0,
+        me: 1 as const,
+        sb: state.p.sb
+      }
+    : null;
   const tabs: [MainTab, string, string][] =
     state.mode === 'm'
       ? [
@@ -969,7 +984,7 @@ export default function App() {
         ]
       : [
           ['t', '🏆', 'การแข่งขัน'],
-          ['p', '🌟', 'อาชีพ'],
+          ['p', '🌟', 'นักเตะ'],
           ['q', '⚽', 'ทีม & แผน'],
           ['k', '🧭', 'สโมสร & ย้ายทีม']
         ];
@@ -982,7 +997,7 @@ export default function App() {
         {/* Pinned Single-Row Horizontal Top HUD Bar */}
         <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
           <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
-          <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 shrink max-w-[36%]">
+          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 min-w-0 shrink max-w-[40%]">
             <button
               type="button"
               onClick={() => {
@@ -1007,6 +1022,20 @@ export default function App() {
             >
               <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
             </button>
+            {state.mode === 'p' && state.p && mePlayer && (
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  navigateToTab('p');
+                }}
+                aria-label="รูปนักเตะ"
+                title={state.p.name}
+                className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform overflow-hidden"
+              >
+                <PlayerFace player={mePlayer} team={me} state={state} careerProfile={state.p} size={30} bare />
+              </button>
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className="font-bold text-xs sm:text-sm mland:text-[11.5px] truncate font-display leading-tight tracking-tight">

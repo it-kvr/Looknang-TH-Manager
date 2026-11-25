@@ -481,6 +481,40 @@ export const MatchModal: React.FC<{
     c.moodCooldown = Math.max(c.moodCooldown || 0, 5.5 + Math.random() * 4.5);
   };
 
+  const getLiveHomeTeam = (): Team => {
+    const isUserMgr = state.mode === 'm' && meIsHome;
+    const aiH = aiCoachRef.current.H;
+    return {
+      ...homeOrig,
+      form: isUserMgr ? homeOrig.form : aiH.form,
+      cf: isUserMgr ? homeOrig.cf : aiH.cf,
+      tac: isUserMgr ? liveTacticsRef.current.tac : aiH.tac,
+      press: isUserMgr ? liveTacticsRef.current.press : aiH.press,
+      tempo: isUserMgr ? liveTacticsRef.current.tempo : aiH.tempo,
+      line: isUserMgr ? liveTacticsRef.current.line : aiH.line,
+      wid: isUserMgr ? liveTacticsRef.current.wid : aiH.wid,
+      pass: isUserMgr ? liveTacticsRef.current.pass : aiH.pass,
+      lu: simRef.current.homeLu
+    };
+  };
+
+  const getLiveAwayTeam = (): Team => {
+    const isUserMgr = state.mode === 'm' && !meIsHome;
+    const aiA = aiCoachRef.current.A;
+    return {
+      ...awayOrig,
+      form: isUserMgr ? awayOrig.form : aiA.form,
+      cf: isUserMgr ? awayOrig.cf : aiA.cf,
+      tac: isUserMgr ? liveTacticsRef.current.tac : aiA.tac,
+      press: isUserMgr ? liveTacticsRef.current.press : aiA.press,
+      tempo: isUserMgr ? liveTacticsRef.current.tempo : aiA.tempo,
+      line: isUserMgr ? liveTacticsRef.current.line : aiA.line,
+      wid: isUserMgr ? liveTacticsRef.current.wid : aiA.wid,
+      pass: isUserMgr ? liveTacticsRef.current.pass : aiA.pass,
+      lu: simRef.current.awayLu
+    };
+  };
+
   const buildInitialWorld = (): LiveMatchWorld => {
     const sr = simRef.current;
     const hAgents = buildAgentsForTeam(getLiveHomeTeam(), 'H', sr.homeLu, sr.sentOff, sr.yellows, sr.liveFit, state.p, myPlayerName);
@@ -674,40 +708,6 @@ export const MatchModal: React.FC<{
       wid: base.wid,
       pass: base.pass,
       pushShift
-    };
-  };
-
-  const getLiveHomeTeam = (): Team => {
-    const isUserMgr = state.mode === 'm' && meIsHome;
-    const aiH = aiCoachRef.current.H;
-    return {
-      ...homeOrig,
-      form: isUserMgr ? homeOrig.form : aiH.form,
-      cf: isUserMgr ? homeOrig.cf : aiH.cf,
-      tac: isUserMgr ? liveTacticsRef.current.tac : aiH.tac,
-      press: isUserMgr ? liveTacticsRef.current.press : aiH.press,
-      tempo: isUserMgr ? liveTacticsRef.current.tempo : aiH.tempo,
-      line: isUserMgr ? liveTacticsRef.current.line : aiH.line,
-      wid: isUserMgr ? liveTacticsRef.current.wid : aiH.wid,
-      pass: isUserMgr ? liveTacticsRef.current.pass : aiH.pass,
-      lu: simRef.current.homeLu
-    };
-  };
-
-  const getLiveAwayTeam = (): Team => {
-    const isUserMgr = state.mode === 'm' && !meIsHome;
-    const aiA = aiCoachRef.current.A;
-    return {
-      ...awayOrig,
-      form: isUserMgr ? awayOrig.form : aiA.form,
-      cf: isUserMgr ? awayOrig.cf : aiA.cf,
-      tac: isUserMgr ? liveTacticsRef.current.tac : aiA.tac,
-      press: isUserMgr ? liveTacticsRef.current.press : aiA.press,
-      tempo: isUserMgr ? liveTacticsRef.current.tempo : aiA.tempo,
-      line: isUserMgr ? liveTacticsRef.current.line : aiA.line,
-      wid: isUserMgr ? liveTacticsRef.current.wid : aiA.wid,
-      pass: isUserMgr ? liveTacticsRef.current.pass : aiA.pass,
-      lu: simRef.current.awayLu
     };
   };
 

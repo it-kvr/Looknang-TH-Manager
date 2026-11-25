@@ -580,11 +580,11 @@ export const MainMenu: React.FC<{
 
     return (
       <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] stage-viewport">
-        <div className="w-full max-w-6xl h-full max-h-[90%] sm:max-h-[min(86%,700px)] mland:max-h-[92%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
+        <div className="w-full max-w-7xl h-full max-h-[96%] sm:max-h-[min(94%,780px)] mland:max-h-[96%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
           {/* Top Navigation Bar: 3 clean zones */}
           <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]">
-            <div className="w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 flex items-center justify-between gap-3 sm:gap-6">
-              <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
+            <div className="w-full mx-auto px-3 sm:px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2 sm:gap-4">
+              <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
                 <button
                   type="button"
                   onClick={() => { SFX.tap(); goStep('menu'); }}
@@ -597,8 +597,8 @@ export const MainMenu: React.FC<{
                   <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display text-[var(--ink)] truncate leading-tight">
                     เลือกสโมสรเริ่มต้น
                   </h2>
-                  <p className="hidden sm:block mland:hidden text-[11px] text-[var(--mut)] truncate">
-                    ลีกระดับจังหวัด · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
+                  <p className="hidden sm:block mland:hidden text-[10.5px] text-[var(--mut)] truncate">
+                    ลีกระดับจังหวัด · แสดงครบทั้ง 16 สโมสร · ปรับแต่งชื่อ ตรา และชุดแข่งได้ภายหลัง
                   </p>
                 </div>
               </div>
@@ -630,10 +630,10 @@ export const MainMenu: React.FC<{
           </header>
 
           {/* Main 2-Column Club Selection & Dossier Workspace */}
-          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-3 mland:py-2 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.35fr_0.95fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.32fr_0.98fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-2.5">
-          {/* Left Column: Filter Bar + Club Roster Grid */}
-          <section className="flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-1.5">
-            <div className="shrink-0 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-hidden flex flex-col sm:grid sm:grid-cols-[1.58fr_0.92fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[1.58fr_0.92fr] mland:grid-rows-[minmax(0,1fr)] gap-2 sm:gap-3 mland:gap-2">
+          {/* Left Column: Filter Bar + Full 16-Club Single-Screen Grid */}
+          <section className="flex-1 min-h-0 flex flex-col gap-1.5 sm:gap-2 mland:gap-1">
+            <div className="shrink-0 flex flex-wrap items-center justify-between gap-1.5">
               <div className="seg-bar">
                 {(
                   [
@@ -660,16 +660,16 @@ export const MainMenu: React.FC<{
                   </button>
                 ))}
               </div>
-              <div className="hidden md:flex items-center gap-1.5 text-xs text-[var(--mut)] tabular">
+              <div className="hidden md:flex items-center gap-1.5 text-[11px] text-[var(--mut)] tabular">
                 <span>เซฟช่อง #{targetSlot}</span>
                 <span aria-hidden="true">·</span>
                 <span>คลิกทีมเพื่อดูรายละเอียด</span>
               </div>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
+            <div className="flex-1 min-h-0 overflow-y-auto sm:overflow-hidden mland:overflow-hidden flex flex-col">
               {filteredClubs.length === 0 ? (
-                <div className="h-full min-h-[160px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] flex flex-col items-center justify-center gap-2 p-6 text-center">
+                <div className="h-full min-h-[140px] rounded-2xl border border-[var(--line)] bg-[var(--surface)] flex flex-col items-center justify-center gap-2 p-6 text-center">
                   <p className="text-xs sm:text-sm font-semibold text-[var(--mut)]">
                     ไม่มีสโมสรในกลุ่มนี้จากการสุ่มรอบนี้
                   </p>
@@ -682,7 +682,7 @@ export const MainMenu: React.FC<{
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 mland:grid-cols-2 gap-2 mland:gap-1.5 pb-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 mland:grid-cols-4 gap-1.5 sm:gap-2 mland:gap-1 sm:h-full mland:h-full content-start sm:content-stretch mland:content-stretch auto-rows-min sm:auto-rows-fr mland:auto-rows-fr">
                   {filteredClubs.map(({ team: t, idx, squadAvg, tierBucket, tierTag }) => {
                     const isSelected = idx === activeIdx;
                     const primaryKit = t.kc?.[0] || '#158049';
@@ -693,7 +693,7 @@ export const MainMenu: React.FC<{
                         type="button"
                         onClick={() => { SFX.tap(); setSelectedClubIdx(idx); }}
                         aria-pressed={isSelected}
-                        className={`group rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer overflow-hidden flex flex-col min-w-0 ${
+                        className={`group rounded-xl mland:rounded-lg border text-left transition-all cursor-pointer overflow-hidden flex flex-col justify-between min-w-0 ${
                           isSelected
                             ? 'border-[var(--g)] bg-[var(--surface)] shadow-md ring-1 ring-[var(--g)]/35'
                             : 'border-[var(--line)] bg-[var(--surface)] hover:border-[var(--g)]/55 hover:bg-[var(--surface-2)]/45'
@@ -701,18 +701,18 @@ export const MainMenu: React.FC<{
                       >
                         <div
                           aria-hidden="true"
-                          className={`h-1 w-full shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'}`}
+                          className={`h-[3px] mland:h-[2px] w-full shrink-0 transition-opacity ${isSelected ? 'opacity-100' : 'opacity-65 group-hover:opacity-100'}`}
                           style={{ background: `linear-gradient(90deg, ${primaryKit}, ${secondaryKit})` }}
                         />
-                        <div className="px-3 py-2.5 mland:px-2.5 mland:py-1.5 flex items-center gap-2.5 mland:gap-2 min-w-0">
-                          <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                            <ClubCrest name={t.name} size={36} team={t} />
+                        <div className="flex-1 px-2 py-1.5 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 flex items-center gap-1.5 sm:gap-2 mland:gap-1 min-w-0">
+                          <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                            <ClubCrest name={t.name} size={28} team={t} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="font-display font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight text-[var(--ink)]">
+                            <div className="font-display font-bold text-[11px] sm:text-xs mland:text-[9.5px] truncate leading-tight text-[var(--ink)]">
                               {t.name}
                             </div>
-                            <div className="flex items-center gap-1 mt-1 mland:mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
+                            <div className="flex items-center gap-1 mt-0.5 text-[9.5px] sm:text-[10px] mland:text-[8px] text-[var(--mut)] truncate leading-tight">
                               <span
                                 className={`font-semibold shrink-0 ${
                                   tierBucket === 'top'
@@ -728,14 +728,14 @@ export const MainMenu: React.FC<{
                               <span className="shrink-0 font-medium text-[var(--ink)]/75">{t.form}</span>
                             </div>
                           </div>
-                          <div className="text-right shrink-0 pl-1">
+                          <div className="text-right shrink-0 pl-0.5">
                             <div
-                              className="text-sm sm:text-base mland:text-xs font-extrabold font-display tabular leading-none"
+                              className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular leading-none"
                               style={{ color: ovColor(squadAvg) }}
                             >
                               {squadAvg}
                             </div>
-                            <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] mt-0.5 leading-none">
+                            <div className="text-[8.5px] mland:text-[7px] text-[var(--mut)] mt-0.5 leading-none">
                               OVR
                             </div>
                           </div>
@@ -757,22 +757,22 @@ export const MainMenu: React.FC<{
             />
 
             {/* Dossier Identity Header */}
-            <div className="px-4 py-3 mland:px-3 mland:py-2 border-b border-[var(--line)]/75 flex items-center gap-3 mland:gap-2">
-              <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-14 sm:[&>svg]:h-14 mland:[&>svg]:w-9 mland:[&>svg]:h-9">
-                <ClubCrest name={selectedTeam.name} size={56} team={selectedTeam} />
+            <div className="px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/75 flex items-center gap-2.5 mland:gap-2">
+              <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                <ClubCrest name={selectedTeam.name} size={48} team={selectedTeam} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-[11px] mland:text-[9px] font-semibold text-[var(--g)] truncate">
+                <div className="text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--g)] truncate">
                   {selectedMeta.tierBucket === 'top'
                     ? 'กลุ่มเต็งลุ้นแชมป์ลีก'
                     : selectedMeta.tierBucket === 'mid'
                       ? 'กลุ่มกลางตารางสมดุล'
                       : 'ทีมพลังสู้ท้าทาย'}
                 </div>
-                <h3 className="font-display font-extrabold text-base sm:text-lg mland:text-xs text-[var(--ink)] truncate leading-tight mt-0.5">
+                <h3 className="font-display font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate leading-tight mt-0.5">
                   {selectedTeam.name}
                 </h3>
-                <div className="flex items-center gap-1.5 text-[11px] mland:text-[9px] text-[var(--mut)] truncate mt-0.5 tabular">
+                <div className="flex items-center gap-1.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5 tabular">
                   <span>ฐานแฟน ~{fmtFansShort(selectedTeam.fans || 9500)}</span>
                   <span aria-hidden="true">·</span>
                   <span>นักเตะ {selectedTeam.sq.length} คน</span>
@@ -780,25 +780,25 @@ export const MainMenu: React.FC<{
               </div>
               <div className="text-right shrink-0 pl-2 border-l border-[var(--line)]/75">
                 <div
-                  className="text-xl sm:text-2xl mland:text-base font-extrabold font-display tabular leading-none"
+                  className="text-lg sm:text-xl mland:text-sm font-extrabold font-display tabular leading-none"
                   style={{ color: ovColor(xiAvg) }}
                 >
                   {xiAvg}
                 </div>
-                <div className="text-[10px] mland:text-[8px] text-[var(--mut)] mt-0.5 whitespace-nowrap">
+                <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] mt-0.5 whitespace-nowrap">
                   11 ตัวจริง
                 </div>
               </div>
             </div>
 
             {/* Detailed Dossier Body (Desktop / Tablet / Mobile Landscape) */}
-            <div className="hidden sm:flex mland:flex flex-1 min-h-0 flex-col overflow-y-auto px-4 py-3 mland:px-3 mland:py-2 space-y-3.5 mland:space-y-2">
+            <div className="hidden sm:flex mland:flex flex-1 min-h-0 flex-col overflow-y-auto px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 space-y-2.5 mland:space-y-1.5">
               {/* Line Strength Breakdown */}
-              <div className="space-y-2 mland:space-y-1">
-                <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">
+              <div className="space-y-1.5 mland:space-y-1">
+                <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)]">
                   สมดุลขุมกำลัง
                 </div>
-                <div className="space-y-1.5 mland:space-y-1">
+                <div className="space-y-1">
                   {(
                     [
                       ['เกมรุก', attOv],
@@ -806,7 +806,7 @@ export const MainMenu: React.FC<{
                       ['เกมรับ & ประตู', defOv]
                     ] as const
                   ).map(([lbl, val]) => (
-                    <div key={lbl} className="grid grid-cols-[92px_1fr_32px] mland:grid-cols-[76px_1fr_26px] items-center gap-2 text-xs mland:text-[9.5px]">
+                    <div key={lbl} className="grid grid-cols-[88px_1fr_28px] mland:grid-cols-[72px_1fr_24px] items-center gap-2 text-xs mland:text-[9px]">
                       <span className="font-medium text-[var(--ink)]/85 truncate">{lbl}</span>
                       <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
                         <div
@@ -821,7 +821,7 @@ export const MainMenu: React.FC<{
               </div>
 
               {/* Tactical Profile Rows */}
-              <div className="border-t border-[var(--line)]/70 pt-2.5 mland:pt-1.5 space-y-1.5 mland:space-y-1 text-xs mland:text-[9.5px]">
+              <div className="border-t border-[var(--line)]/70 pt-2 mland:pt-1 space-y-1 text-xs mland:text-[9px]">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[var(--mut)]">ระบบการเล่น</span>
                   <span className="font-bold text-[var(--ink)] tabular">
@@ -837,26 +837,26 @@ export const MainMenu: React.FC<{
               </div>
 
               {/* Key Players List */}
-              <div className="border-t border-[var(--line)]/70 pt-2.5 mland:pt-1.5 space-y-1.5 mland:space-y-1">
-                <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">
+              <div className="border-t border-[var(--line)]/70 pt-2 mland:pt-1 space-y-1">
+                <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)]">
                   3 แข้งแกนหลักประจำทีม
                 </div>
                 <div className="divide-y divide-[var(--line)]/55">
                   {topStars.map((pl) => (
-                    <div key={pl.n} className="py-1.5 mland:py-1 flex items-center gap-2 mland:gap-1.5 min-w-0">
-                      <div className="shrink-0 [&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
-                        <PlayerFace player={pl} team={selectedTeam} size={28} bare />
+                    <div key={pl.n} className="py-1 mland:py-0.5 flex items-center gap-2 mland:gap-1.5 min-w-0">
+                      <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
+                        <PlayerFace player={pl} team={selectedTeam} size={24} bare />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] truncate leading-tight">
+                        <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] truncate leading-tight">
                           {pl.n}
                         </div>
-                        <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular leading-tight">
+                        <div className="text-[10px] mland:text-[8px] text-[var(--mut)] tabular leading-tight">
                           {SPN[pl.ro] || pl.ro} · อายุ {pl.age} ปี
                         </div>
                       </div>
                       <span
-                        className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display tabular shrink-0"
+                        className="text-xs mland:text-[10px] font-extrabold font-display tabular shrink-0"
                         style={{ color: ovColor(pl.ov) }}
                       >
                         {pl.ov}
@@ -868,7 +868,7 @@ export const MainMenu: React.FC<{
             </div>
 
             {/* Compact Mobile Portrait Metrics Strip */}
-            <div className="sm:hidden mland:hidden px-4 py-2 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 text-[11px] tabular bg-[var(--surface-2)]/35">
+            <div className="sm:hidden mland:hidden px-3 py-1.5 border-b border-[var(--line)]/65 flex items-center justify-between gap-2 text-[10.5px] tabular bg-[var(--surface-2)]/35">
               <span>รุก <strong className="text-[var(--ink)]">{attOv}</strong></span>
               <span className="text-[var(--mut)]" aria-hidden="true">·</span>
               <span>กลาง <strong className="text-[var(--ink)]">{midOv}</strong></span>
@@ -879,8 +879,8 @@ export const MainMenu: React.FC<{
             </div>
 
             {/* Primary CTA Footer */}
-            <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-2 border-t border-[var(--line)]/75 bg-[var(--surface-2)]/45 space-y-2 mland:space-y-1">
-              <p className="hidden sm:block mland:hidden text-[11px] text-[var(--mut)] leading-snug">
+            <div className="shrink-0 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 border-t border-[var(--line)]/75 bg-[var(--surface-2)]/45 space-y-1.5 mland:space-y-1">
+              <p className="hidden sm:block mland:hidden text-[10.5px] text-[var(--mut)] leading-snug">
                 ระดับ{['ง่าย', 'ปกติ', 'ยาก'][diff]}: {diffDesc}
               </p>
               <button
@@ -889,7 +889,7 @@ export const MainMenu: React.FC<{
                   SFX.tap();
                   onStartManager(targetSlot, previewClubs.names, previewClubs.t0, activeIdx, diff);
                 }}
-                className="btn btn-gold btn-lg w-full font-extrabold"
+                className="btn btn-gold btn-lg mland:btn-md w-full font-extrabold"
               >
                 <span className="truncate">รับคุมทีม {selectedTeam.name}</span>
                 <ChevronRight className="w-4 h-4 shrink-0" />
@@ -1101,23 +1101,35 @@ export const MainMenu: React.FC<{
 
     return (
       <div className="h-full w-full flex items-center justify-center overflow-hidden bg-[var(--bg)] stage-viewport">
-        <div className="w-full max-w-6xl h-full max-h-[92%] sm:max-h-[min(88%,720px)] mland:max-h-[94%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/55 shadow-xl">
+        <div className="w-full max-w-7xl h-full max-h-[96%] sm:max-h-[min(94%,740px)] mland:max-h-[96%] mx-auto my-auto flex flex-col overflow-hidden rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/60 shadow-xl">
           {/* Studio Header */}
           <header className="shrink-0 border-b border-[var(--line)] bg-[var(--surface)]">
-            <div className="w-full mx-auto px-3 sm:px-5 mland:px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5">
-                  <span>⚽</span>
-                  <span>สตูดิโอสร้างนักเตะ</span>
-                  {customRosterCount > 0 && (
-                    <span className="hidden sm:inline mland:inline px-1.5 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold">
-                      ทำเนียบ {customRosterCount} คน
-                    </span>
-                  )}
-                </h2>
-                <p className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate">
-                  ปรับแต่งข้อมูล หน้าตา สไตล์การเล่น และพลัง — เล่นอาชีพหรือดึงเป็นเด็กปั้นในทีมได้
-                </p>
+            <div className="w-full mx-auto px-3 sm:px-4 mland:px-3 py-2 mland:py-1 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => { SFX.tap(); goStep('menu'); }}
+                  className="btn btn-sm btn-secondary shrink-0"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+                  <span>กลับ</span>
+                </button>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate leading-tight text-[var(--ink)]">
+                    ⚽ สตูดิโอสร้างนักเตะ
+                  </h2>
+                  <div className="hidden sm:flex mland:hidden items-center gap-1.5 text-[10.5px] text-[var(--mut)] truncate tabular">
+                    <span>เซฟช่อง #{targetSlot}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>เล่นอาชีพหรือบันทึกเข้าทำเนียบผู้จัดการ</span>
+                    {customRosterCount > 0 && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-semibold text-[var(--g)]">ทำเนียบ {customRosterCount} คน</span>
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
@@ -1134,21 +1146,14 @@ export const MainMenu: React.FC<{
                 >
                   🔄 สุ่มทั้งหมด
                 </button>
-                <button
-                  type="button"
-                  onClick={() => goStep('menu')}
-                  className="btn btn-sm btn-secondary"
-                >
-                  ‹ กลับ
-                </button>
               </div>
             </div>
           </header>
 
           {/* Responsive Studio Grid */}
-          <div className="flex-1 min-h-0 w-full mx-auto px-3 sm:px-5 mland:px-3 py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[235px_1fr] md:grid-cols-[265px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[205px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-3 mland:gap-2">
-          {/* Left Column: Unified Collector Athlete Card + Traits + Action Buttons */}
-          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto pr-0.5 shrink-0">
+          <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[245px_1fr] md:grid-cols-[270px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[210px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-2.5 sm:gap-3 mland:gap-2">
+          {/* Left Column: Athlete Card Preview + Active Traits + Primary CTAs */}
+          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto shrink-0">
             <div className="flex flex-col gap-1.5 mland:gap-1 shrink-0">
               <AthleteCard
                 ov={ov}
@@ -1174,20 +1179,12 @@ export const MainMenu: React.FC<{
               />
 
               {cTraits.length > 0 && (
-                <div className="flex flex-wrap items-center justify-center gap-1 px-1">
-                  {cTraits.map((tid) => {
-                    const tr = TRAIT_BY_ID[tid];
-                    if (!tr) return null;
-                    return (
-                      <span
-                        key={tid}
-                        title={tr.desc}
-                        className="px-1.5 py-[2px] rounded-md border border-[var(--g)]/35 bg-[var(--g-soft)] text-[var(--g)] text-[9px] mland:text-[7.5px] font-bold truncate max-w-full"
-                      >
-                        {tr.icon} {tr.name}
-                      </span>
-                    );
-                  })}
+                <div className="px-2 py-1 mland:py-0.5 text-center text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] leading-snug">
+                  {cTraits
+                    .map((tid) => TRAIT_BY_ID[tid])
+                    .filter(Boolean)
+                    .map((tr) => `${tr.icon} ${tr.name}`)
+                    .join(' · ')}
                 </div>
               )}
             </div>
@@ -1210,13 +1207,13 @@ export const MainMenu: React.FC<{
             </div>
           </div>
 
-          {/* Right Column: 4-Tab Complete Customization Workspace */}
+          {/* Right Column: 4-Tab Clean Customization Workspace */}
           <div className="flex flex-col min-h-0 sm:h-full mland:h-full gap-2 mland:gap-1.5">
             <div className="seg-bar grid grid-cols-4 w-full shrink-0">
               {(
                 [
-                  ['info', '📝 ข้อมูล'],
-                  ['face', '🎭 หน้าตา'],
+                  ['info', '📝 ข้อมูล & ตำแหน่ง'],
+                  ['face', '🎭 หน้าตา & ชุด'],
                   ['arch', '✨ สไตล์ & นิสัย'],
                   ['stats', '📊 พลังละเอียด']
                 ] as const
@@ -1232,20 +1229,20 @@ export const MainMenu: React.FC<{
               ))}
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3.5 sm:p-4 mland:p-2.5">
-              {/* Tab 1: Identity, Age, Difficulty, Position & SubRole */}
-              <div className={`space-y-3.5 mland:space-y-2 ${crMobTab === 'info' ? '' : 'hidden'}`}>
-                <div className="space-y-1.5">
-                  <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)]">ชื่อนักเตะ &amp; เบอร์เสื้อ</div>
+            <div className="flex-1 min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] px-4 py-3 mland:px-3 mland:py-2">
+              {/* Tab 1: Identity, Bio, Difficulty, Position & SubRole (Compact Hairline Sections) */}
+              <div className={`divide-y divide-[var(--line)]/65 ${crMobTab === 'info' ? '' : 'hidden'}`}>
+                {/* Section 1: Name, Number, Age, Difficulty */}
+                <div className="pb-2.5 mland:pb-1.5 space-y-2 mland:space-y-1">
                   <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mland:gap-1.5">
                     <input
                       value={cName}
                       onChange={(e) => setCName(e.target.value.replace(/["'<>`]/g, ''))}
                       placeholder="กรอกชื่อ-นามสกุลนักเตะ (เว้นว่างสุ่มให้)"
                       maxLength={24}
-                      className="flex-1 min-w-[160px] px-3 py-2 mland:py-1.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-sm mland:text-xs font-medium focus:outline-none focus:border-[var(--g)]"
+                      className="flex-1 min-w-[160px] px-3 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)]/70 text-sm mland:text-xs font-medium focus:outline-none focus:border-[var(--g)]"
                     />
-                    <div className="flex items-center gap-1 px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)] shrink-0">
+                    <div className="flex items-center gap-1 px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)]/70 shrink-0">
                       <span className="text-xs text-[var(--mut)] font-bold">#</span>
                       <input
                         type="number"
@@ -1254,7 +1251,7 @@ export const MainMenu: React.FC<{
                         aria-label="หมายเลขเสื้อ"
                         value={cNo}
                         onChange={(e) => setCNo(clamp(parseInt(e.target.value, 10) || 1, 1, 99))}
-                        className="w-10 bg-transparent text-sm mland:text-xs font-extrabold text-center tabular focus:outline-none"
+                        className="w-9 bg-transparent text-sm mland:text-xs font-extrabold text-center tabular focus:outline-none"
                       />
                     </div>
                     <button
@@ -1265,72 +1262,63 @@ export const MainMenu: React.FC<{
                       🔄 สุ่มชื่อ
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">เบอร์ยอดนิยม:</span>
-                    {quickNumbers[cPos].map((num) => (
-                      <button
-                        key={num}
-                        type="button"
-                        onClick={() => { SFX.tap(); setCNo(num); }}
-                        className={`btn btn-xs tabular ${
-                          cNo === num ? 'btn-primary' : 'btn-secondary text-[var(--mut)] hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        #{num}
-                      </button>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Starting Age & Career Difficulty */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2">
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-1.5 mland:space-y-1">
-                    <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                      <span className="font-bold text-[var(--mut)]">อายุเริ่มต้น</span>
-                      <span className="font-bold text-[var(--g)]">เยาวชนดาวรุ่ง</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1">
-                      {[16, 17, 18, 19].map((ageOpt) => (
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold mr-0.5">เบอร์แนะนำ:</span>
+                      {quickNumbers[cPos].map((num) => (
                         <button
-                          key={ageOpt}
+                          key={num}
                           type="button"
-                          onClick={() => { SFX.tap(); setCAge(ageOpt); }}
-                          className={`btn btn-sm tabular ${
-                            cAge === ageOpt ? 'btn-primary' : 'btn-surface'
+                          onClick={() => { SFX.tap(); setCNo(num); }}
+                          className={`px-2 py-0.5 rounded-md text-[11px] mland:text-[9px] font-bold tabular cursor-pointer transition-colors ${
+                            cNo === num ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)] hover:text-[var(--ink)]'
                           }`}
                         >
-                          {ageOpt} ปี
+                          #{num}
                         </button>
                       ))}
                     </div>
-                  </div>
 
-                  <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-1.5 mland:space-y-1">
-                    <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                      <span className="font-bold text-[var(--mut)]">ความยากของลีก</span>
-                      <span className="font-semibold text-[var(--mut)]">{['ผ่อนคลาย', 'มาตรฐาน', 'ท้าทาย'][cDiff]}</span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1">
-                      {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((dlbl, didx) => (
-                        <button
-                          key={dlbl}
-                          type="button"
-                          onClick={() => { SFX.tap(); setCDiff(didx); }}
-                          className={`btn btn-sm ${
-                            cDiff === didx ? 'btn-gold font-extrabold' : 'btn-surface'
-                          }`}
-                        >
-                          {dlbl}
-                        </button>
-                      ))}
+                    <div className="flex flex-wrap items-center gap-3 mland:gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)]">อายุ:</span>
+                        <div className="seg-bar">
+                          {[16, 17, 18, 19].map((ageOpt) => (
+                            <button
+                              key={ageOpt}
+                              type="button"
+                              onClick={() => { SFX.tap(); setCAge(ageOpt); }}
+                              className={`seg-btn py-0.5 px-2 text-[11px] mland:text-[9px] tabular ${cAge === ageOpt ? 'seg-btn-active' : ''}`}
+                            >
+                              {ageOpt}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)]">ความยาก:</span>
+                        <div className="seg-bar">
+                          {(['ง่าย', 'ปกติ', 'ยาก'] as const).map((dlbl, didx) => (
+                            <button
+                              key={dlbl}
+                              type="button"
+                              onClick={() => { SFX.tap(); setCDiff(didx); }}
+                              className={`seg-btn py-0.5 px-2 text-[11px] mland:text-[9px] ${cDiff === didx ? 'seg-btn-active' : ''}`}
+                            >
+                              {dlbl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Height, Weight & Preferred Foot (Color-Coded) */}
-                <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                {/* Section 2: Height, Weight & Preferred Foot */}
+                <div className="py-2.5 mland:py-1.5 space-y-1.5 mland:space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]">
+                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
                       📐 สัดส่วนร่างกาย &amp; เท้าที่ถนัด
                     </span>
                     <button
@@ -1342,18 +1330,18 @@ export const MainMenu: React.FC<{
                         setCWt(rb.wt);
                         setCFoot(rb.foot);
                       }}
-                      className="btn btn-xs btn-surface"
+                      className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] hover:underline cursor-pointer"
                     >
                       🎲 สุ่มรูปร่าง
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5">
-                    <div className="p-2 mland:p-1 rounded-xl border bg-teal-500/10 border-teal-500/35 space-y-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-3 mland:gap-2 items-center">
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                        <span className="font-bold text-teal-700 dark:text-teal-300">📏 ส่วนสูง</span>
-                        <b className="tabular font-extrabold text-teal-700 dark:text-teal-300">{cHt} ซม.</b>
+                        <span className="font-semibold text-[var(--ink)]">ส่วนสูง</span>
+                        <b className="tabular font-extrabold text-[var(--g)]">{cHt} ซม.</b>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <button type="button" onClick={() => setCHt((v) => clamp(v - 1, 155, 205))} className="btn-icon w-6 h-6 text-xs">-</button>
                         <input
                           type="range"
@@ -1361,18 +1349,18 @@ export const MainMenu: React.FC<{
                           max={205}
                           value={cHt}
                           onChange={(e) => setCHt(Number(e.target.value))}
-                          className="flex-1 min-w-0 accent-teal-500"
+                          className="flex-1 min-w-0 accent-[var(--g)]"
                         />
                         <button type="button" onClick={() => setCHt((v) => clamp(v + 1, 155, 205))} className="btn-icon w-6 h-6 text-xs">+</button>
                       </div>
                     </div>
 
-                    <div className="p-2 mland:p-1 rounded-xl border bg-emerald-500/10 border-emerald-500/35 space-y-1">
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                        <span className="font-bold text-emerald-700 dark:text-emerald-300">⚖️ น้ำหนัก</span>
-                        <b className="tabular font-extrabold text-emerald-700 dark:text-emerald-300">{cWt} กก.</b>
+                        <span className="font-semibold text-[var(--ink)]">น้ำหนัก</span>
+                        <b className="tabular font-extrabold text-[var(--g)]">{cWt} กก.</b>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <button type="button" onClick={() => setCWt((v) => clamp(v - 1, 50, 110))} className="btn-icon w-6 h-6 text-xs">-</button>
                         <input
                           type="range"
@@ -1380,16 +1368,16 @@ export const MainMenu: React.FC<{
                           max={110}
                           value={cWt}
                           onChange={(e) => setCWt(Number(e.target.value))}
-                          className="flex-1 min-w-0 accent-emerald-500"
+                          className="flex-1 min-w-0 accent-[var(--g)]"
                         />
                         <button type="button" onClick={() => setCWt((v) => clamp(v + 1, 50, 110))} className="btn-icon w-6 h-6 text-xs">+</button>
                       </div>
                     </div>
 
-                    <div className="p-2 mland:p-1 rounded-xl border bg-[var(--surface)] border-[var(--line)] space-y-1">
+                    <div className="space-y-1">
                       <div className="flex items-center justify-between text-[11px] mland:text-[9.5px]">
-                        <span className="font-bold text-[var(--mut)]">เท้าถนัด</span>
-                        <span className={`inline-flex items-center gap-1 font-extrabold ${getFootColorMeta(cFoot).textCls}`}>
+                        <span className="font-semibold text-[var(--ink)]">เท้าถนัด</span>
+                        <span className={`inline-flex items-center gap-1 font-bold ${getFootColorMeta(cFoot).textCls}`}>
                           <FootPairIcon foot={cFoot} size="xs" />
                           <span>{getFootColorMeta(cFoot).label}</span>
                         </span>
@@ -1404,7 +1392,7 @@ export const MainMenu: React.FC<{
                               type="button"
                               onClick={() => { SFX.tap(); setCFoot(fk); }}
                               className={`btn btn-xs px-1 gap-0.5 text-[10px] mland:text-[8.5px] whitespace-nowrap ${
-                                active ? fm.buttonActiveCls : 'btn-surface text-[var(--mut)] hover:text-[var(--ink)]'
+                                active ? fm.buttonActiveCls : 'btn-secondary text-[var(--mut)] hover:text-[var(--ink)]'
                               }`}
                             >
                               <FootPairIcon foot={fk} size="xs" />
@@ -1417,11 +1405,11 @@ export const MainMenu: React.FC<{
                   </div>
                 </div>
 
-                {/* Primary Position */}
-                <div className="space-y-1.5 mland:space-y-1">
+                {/* Section 3: Primary Position & Sub-Role */}
+                <div className="pt-2.5 mland:pt-1.5 space-y-2 mland:space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs mland:text-[10px] font-bold text-[var(--mut)]">ตำแหน่งหลักในสนาม</span>
-                    <span className="text-[10.5px] mland:text-[9px] text-[var(--g)] font-semibold truncate">
+                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">ตำแหน่งหลักในสนาม</span>
+                    <span className="text-[10.5px] mland:text-[8.5px] text-[var(--g)] font-semibold truncate">
                       สูตร OVR: {posWeightSummary[cPos]}
                     </span>
                   </div>
@@ -1430,108 +1418,113 @@ export const MainMenu: React.FC<{
                       ['FW', '⚽ กองหน้า', 'ล่าตาข่าย & ริมเส้น'],
                       ['MF', '🎯 กองกลาง', 'คุมจังหวะ & สร้างเกม'],
                       ['DF', '🛡️ กองหลัง', 'สกัด & คุมแนวรับ'],
-                      ['GK', '🧤 ผู้รักษาประตู', 'เซฟ & สั่งการกรอบเขตโทษ']
+                      ['GK', '🧤 ผู้รักษาประตู', 'เซฟ & สั่งแนวรับ']
                     ] as [Position, string, string][]).map(([p, l, sub]) => (
                       <button
                         key={p}
                         type="button"
                         onClick={() => changePosition(p)}
-                        className={`p-2.5 mland:p-1.5 rounded-xl text-left border cursor-pointer transition-all ${
-                          cPos === p ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-sm' : 'bg-[var(--surface-2)] text-[var(--ink)] border-[var(--line)] hover:border-[var(--g)]'
+                        className={`px-2.5 py-2 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg text-left border cursor-pointer transition-all ${
+                          cPos === p
+                            ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
+                            : 'bg-[var(--surface-2)]/55 text-[var(--ink)] border-[var(--line)] hover:border-[var(--g)]'
                         }`}
                       >
-                        <div className="font-bold text-xs mland:text-[10.5px] truncate">{l}</div>
-                        <div className={`text-[10px] mland:text-[8.5px] mt-0.5 truncate ${cPos === p ? 'text-white/85' : 'text-[var(--mut)]'}`}>{sub}</div>
+                        <div className="font-bold text-xs mland:text-[10px] truncate">{l}</div>
+                        <div className={`text-[10px] mland:text-[8px] mt-0.5 truncate ${cPos === p ? 'text-white/85' : 'text-[var(--mut)]'}`}>{sub}</div>
                       </button>
                     ))}
                   </div>
-                </div>
 
-                {/* Sub-Role */}
-                <div className="space-y-1.5 mland:space-y-1">
-                  <div className="text-xs mland:text-[10px] font-bold text-[var(--mut)]">บทบาทเฉพาะทาง ({SPX[cPos].length} รูปแบบ)</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SPX[cPos].map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => changeSubRole(s)}
-                        className={`px-3 mland:px-2 py-1.5 mland:py-1 rounded-xl mland:rounded-lg text-xs mland:text-[10.5px] font-bold cursor-pointer transition-colors ${
-                          cSp === s ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                        }`}
-                      >
-                        {s} · {SPN[s]}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="text-xs mland:text-[10px] text-[var(--g)] font-semibold bg-[var(--g-soft)] border border-[var(--g)]/25 px-3 py-2 mland:py-1 rounded-xl leading-snug">
-                    💡 <b>{cSp} ({SPN[cSp] || cSp})</b>: {ROLE_HINT[cSp] || `ทำผลงานในบทบาท ${SPN[cSp] || cSp} ด้วยพลังเด่นเฉพาะทาง (${curArch.icon} ${curArch.name})`}
+                  <div className="space-y-1.5 mland:space-y-1 pt-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] mr-1">บทบาท:</span>
+                      {SPX[cPos].map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => changeSubRole(s)}
+                          className={`px-2.5 mland:px-2 py-1 mland:py-0.5 rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${
+                            cSp === s
+                              ? 'bg-[var(--g)] text-white shadow-xs'
+                              : 'bg-[var(--surface-2)]/70 border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                          }`}
+                        >
+                          {s} · {SPN[s]}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] mland:text-[9px] text-[var(--mut)] leading-snug">
+                      <b className="text-[var(--g)]">{cSp} ({SPN[cSp] || cSp})</b> — {ROLE_HINT[cSp] || `บทบาท ${SPN[cSp] || cSp} (${curArch.icon} ${curArch.name})`}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {/* Tab 2: Face, Hair & Kit Colors */}
-              <div className={`space-y-3.5 mland:space-y-2 ${crMobTab === 'face' ? '' : 'hidden'}`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <div className="font-bold text-xs sm:text-sm mland:text-xs">ใบหน้าแบบสุ่มเร็ว &amp; ปรับแต่งละเอียด</div>
-                    <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">เลือกหน้าต้นแบบแล้วปรับสีผิว ทรงผม หนวดเครา หรือสีเสื้อได้ทันที</div>
+              <div className={`divide-y divide-[var(--line)]/65 ${crMobTab === 'face' ? '' : 'hidden'}`}>
+                <div className="pb-2.5 mland:pb-1.5 space-y-2 mland:space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">เลือกใบหน้าต้นแบบ</span>
+                      <span className="hidden sm:inline ml-2 text-[11px] text-[var(--mut)]">คลิกเลือกแล้วปรับละเอียดด้านล่างได้</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={rerollFaceGallery}
+                      className="btn btn-xs btn-secondary shrink-0"
+                    >
+                      🎲 สุ่ม 6 หน้าใหม่
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={rerollFaceGallery}
-                    className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-bold cursor-pointer hover:border-[var(--g)] shrink-0"
-                  >
-                    🎲 สุ่ม 6 หน้าใหม่
-                  </button>
+
+                  <div className="grid grid-cols-3 sm:grid-cols-6 mland:grid-cols-6 gap-2 mland:gap-1.5">
+                    {faceChoices.map((f, idx) => {
+                      const isPicked =
+                        cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey && cAcc === (f.acc ?? 0);
+                      const sampleProfile: PlayerCareerProfile = {
+                        ...previewProfile,
+                        c: f.c,
+                        k: f.k,
+                        h: f.h,
+                        hs: f.hs,
+                        fh: f.fh,
+                        fs: f.fs,
+                        ey: f.ey,
+                        acc: f.acc ?? 0
+                      };
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            applyFaceTraits(f);
+                          }}
+                          className={`p-1.5 mland:p-1 rounded-xl border flex flex-col items-center gap-1 cursor-pointer transition-all ${
+                            isPicked
+                              ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]/50'
+                              : 'bg-[var(--surface-2)]/50 border-[var(--line)] hover:border-[var(--g)]'
+                          }`}
+                        >
+                          <PlayerFace player={previewPlayer} careerProfile={sampleProfile} size={38} />
+                          <span className="text-[9.5px] mland:hidden font-semibold text-[var(--mut)] truncate w-full text-center">
+                            {HS_N[f.hs]}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-6 mland:grid-cols-6 gap-2 mland:gap-1.5">
-                  {faceChoices.map((f, idx) => {
-                    const isPicked =
-                      cSkin === f.k && cHair === f.h && cHs === f.hs && cFh === f.fh && cFs === f.fs && cEy === f.ey && cAcc === (f.acc ?? 0);
-                    const sampleProfile: PlayerCareerProfile = {
-                      ...previewProfile,
-                      c: f.c,
-                      k: f.k,
-                      h: f.h,
-                      hs: f.hs,
-                      fh: f.fh,
-                      fs: f.fs,
-                      ey: f.ey,
-                      acc: f.acc ?? 0
-                    };
-                    return (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          applyFaceTraits(f);
-                        }}
-                        className={`p-2 mland:p-1 rounded-xl border flex flex-col items-center gap-1 cursor-pointer transition-all ${
-                          isPicked
-                            ? 'bg-[var(--g-soft)] border-[var(--g)] ring-2 ring-[var(--g)]/50'
-                            : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
-                        }`}
-                      >
-                        <PlayerFace player={previewPlayer} careerProfile={sampleProfile} size={42} />
-                        <span className="text-[10px] mland:hidden font-bold text-[var(--mut)] truncate w-full text-center">
-                          {HS_N[f.hs]}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-2.5 mland:gap-1.5">
+                <div className="py-2.5 mland:py-1.5 grid grid-cols-1 sm:grid-cols-3 mland:grid-cols-3 gap-3 mland:gap-2">
                   {[
                     ['สีเสื้อประจำตัว', kitPalette, cColor, setCColor],
                     ['โทนสีผิว', SKIN_P, cSkin, setCSkin],
                     ['สีผม & เครา', HAIR_P, cHair, setCHair]
                   ].map(([lbl, cols, cur, setter]) => (
-                    <div key={lbl as string} className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)]">
-                      <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">{lbl as string}</div>
+                    <div key={lbl as string} className="space-y-1">
+                      <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">{lbl as string}</div>
                       <div className="flex flex-wrap gap-1.5">
                         {(cols as string[]).map((col) => (
                           <button
@@ -1553,7 +1546,7 @@ export const MainMenu: React.FC<{
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-1.5 text-xs mland:text-[10px]">
+                <div className="pt-2.5 mland:pt-1.5 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-x-4 gap-y-2 mland:gap-y-1.5 text-xs mland:text-[10px]">
                   {[
                     ['รูปหน้า', FS_N, cFs, setCFs],
                     ['แววตา / อารมณ์', EY_N, cEy, setCEy],
@@ -1563,11 +1556,11 @@ export const MainMenu: React.FC<{
                   ].map(([lbl, arr, cur, setter]) => (
                     <div
                       key={lbl as string}
-                      className={`p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] space-y-1.5 mland:space-y-1 ${
+                      className={`space-y-1 ${
                         lbl === 'เอกลักษณ์ / เครื่องประดับ' ? 'sm:col-span-2 mland:col-span-2' : ''
                       }`}
                     >
-                      <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">{lbl as string}</div>
+                      <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">{lbl as string}</div>
                       <div className="flex flex-wrap gap-1">
                         {(arr as string[]).map((l, i) => (
                           <button
@@ -1577,8 +1570,8 @@ export const MainMenu: React.FC<{
                               SFX.tap();
                               (setter as React.Dispatch<React.SetStateAction<number>>)(i);
                             }}
-                            className={`px-2 py-1 mland:py-0.5 rounded-lg font-semibold cursor-pointer transition-colors ${
-                              cur === i ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                            className={`px-2 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9px] font-semibold cursor-pointer transition-colors ${
+                              cur === i ? 'bg-[var(--g)] text-white shadow-xs' : 'bg-[var(--surface-2)]/65 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
                             }`}
                           >
                             {l}
@@ -1591,108 +1584,108 @@ export const MainMenu: React.FC<{
               </div>
 
               {/* Tab 3: Archetype, Talent & Football Traits */}
-              <div className={`space-y-3.5 mland:space-y-2 ${crMobTab === 'arch' ? '' : 'hidden'}`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <div className="font-bold text-xs sm:text-sm mland:text-xs">สไตล์การเล่นประจำตำแหน่ง (+12 แต้มหลัก / +8 ย่อย)</div>
-                    <div className="text-[11px] mland:text-[9px] text-[var(--mut)]">
-                      ท่าไม้ตายสายนี้: <b className="text-[var(--g)]">🔥 {activeTabStatsBadge} (+8)</b>
+              <div className={`divide-y divide-[var(--line)]/65 ${crMobTab === 'arch' ? '' : 'hidden'}`}>
+                <div className="pb-2.5 mland:pb-1.5 space-y-2 mland:space-y-1.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">สไตล์ประจำตำแหน่ง</span>
+                      <span className="ml-2 text-[11px] mland:text-[9px] text-[var(--mut)]">
+                        ท่าประจำสาย: <b className="text-[var(--g)]">🔥 {activeTabStatsBadge} (+8)</b>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={rerollTalent}
+                        className="btn btn-xs btn-secondary"
+                      >
+                        🌟 สุ่มพรสวรรค์ ({cTalent})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={rerollStartingPoints}
+                        className="btn btn-xs btn-gold"
+                      >
+                        🎲 สุ่มแต้มใหม่
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={rerollTalent}
-                      className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-xs mland:text-[10px] font-bold cursor-pointer"
-                    >
-                      🌟 สุ่มพรสวรรค์ ({cTalent})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={rerollStartingPoints}
-                      className="px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[10px] font-bold cursor-pointer hover:brightness-105"
-                    >
-                      🎲 สุ่มแต้มใหม่
-                    </button>
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_0.95fr] mland:grid-cols-[1.2fr_0.95fr] gap-3 mland:gap-2 items-start">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                    {posArchs.map((arch) => {
-                      const active = curArch.id === arch.id;
-                      const coreTags = (Object.entries(arch.coreBonus) as [StatKey, number][]).map(
-                        ([k, v]) => `${ATT.find((x) => x[0] === k)?.[1]} +${v}`
-                      );
-                      return (
-                        <button
-                          key={arch.id}
-                          type="button"
-                          onClick={() => changeArchetype(arch)}
-                          className={`p-2.5 mland:p-1.5 rounded-xl text-left border cursor-pointer transition-all ${
-                            active ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-sm' : 'bg-[var(--surface-2)] border-[var(--line)] hover:border-[var(--g)]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-bold text-xs mland:text-[10.5px] truncate">{arch.icon} {arch.name}</span>
-                            <span className={`text-[9.5px] mland:text-[8px] font-bold shrink-0 px-1.5 py-0.5 rounded ${active ? 'bg-white/20 text-white' : 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]'}`}>
-                              🔥 {SIGL[arch.sig] || arch.sig}
-                            </span>
-                          </div>
-                          <div className={`text-[10.5px] mland:text-[9px] mt-1 leading-snug ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>
-                            {arch.desc}
-                          </div>
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            {coreTags.slice(0, 3).map((tg) => (
-                              <span key={tg} className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-bold ${active ? 'bg-white/20 text-white' : 'bg-[var(--surface)] text-[var(--g)]'}`}>
-                                {tg}
+                  <div className="grid grid-cols-1 lg:grid-cols-[1.32fr_0.88fr] mland:grid-cols-[1.28fr_0.9fr] gap-3 mland:gap-2 items-start">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {posArchs.map((arch) => {
+                        const active = curArch.id === arch.id;
+                        const coreTags = (Object.entries(arch.coreBonus) as [StatKey, number][]).map(
+                          ([k, v]) => `${ATT.find((x) => x[0] === k)?.[1]} +${v}`
+                        );
+                        return (
+                          <button
+                            key={arch.id}
+                            type="button"
+                            onClick={() => changeArchetype(arch)}
+                            className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg text-left border cursor-pointer transition-all ${
+                              active
+                                ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
+                                : 'bg-[var(--surface-2)]/50 border-[var(--line)] hover:border-[var(--g)]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <span className="font-bold text-xs mland:text-[10px] truncate">{arch.icon} {arch.name}</span>
+                              <span className={`text-[9.5px] mland:text-[8px] font-bold shrink-0 ${active ? 'text-white/90' : 'text-[#8a5b00] dark:text-[var(--lamp)]'}`}>
+                                🔥 {SIGL[arch.sig] || arch.sig}
                               </span>
-                            ))}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] space-y-2 mland:space-y-1">
-                    <div className="flex items-center justify-between text-xs mland:text-[10px]">
-                      <span className="font-bold">พลังหลักหลังสุ่ม</span>
-                      <span className="text-[10.5px] mland:text-[9px] font-semibold text-[var(--mut)]">OVR รวม {ov}</span>
+                            </div>
+                            <div className={`text-[10px] mland:text-[8.5px] mt-0.5 leading-snug line-clamp-2 ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>
+                              {arch.desc}
+                            </div>
+                            <div className={`text-[9.5px] mland:text-[8px] font-semibold mt-1 truncate ${active ? 'text-white/95' : 'text-[var(--g)]'}`}>
+                              {coreTags.slice(0, 3).join(' · ')}
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
-                    {ATT.map(([k, l]) => {
-                      const rolledAdd = cAttrs[k] - cBase[k];
-                      const archCoreAdd = curArch.coreBonus[k] || 0;
-                      return (
-                        <div key={k} className="flex items-center gap-2 text-xs mland:text-[10px]">
-                          <span className="w-24 mland:w-20 flex items-center gap-1 truncate shrink-0">
-                            <span className="font-semibold">{l}</span>
-                            {archCoreAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--g)]">+{archCoreAdd}</span>}
-                            {rolledAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--lamp)]">+{rolledAdd}</span>}
-                          </span>
-                          <div className="flex-1 h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface)] border border-[var(--line)]/65 overflow-hidden">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${cAttrs[k]}%`, background: statBarColor(cAttrs[k]) }} />
+
+                    <div className="lg:pl-3 lg:border-l border-[var(--line)]/65 space-y-2 mland:space-y-1">
+                      <div className="flex items-center justify-between text-xs mland:text-[10px]">
+                        <span className="font-bold text-[var(--ink)]">พลังหลักหลังสุ่ม</span>
+                        <span className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] tabular">OVR {ov}</span>
+                      </div>
+                      {ATT.map(([k, l]) => {
+                        const rolledAdd = cAttrs[k] - cBase[k];
+                        const archCoreAdd = curArch.coreBonus[k] || 0;
+                        return (
+                          <div key={k} className="flex items-center gap-2 text-xs mland:text-[9.5px]">
+                            <span className="w-24 mland:w-20 flex items-center gap-1 truncate shrink-0">
+                              <span className="font-semibold text-[var(--ink)]">{l}</span>
+                              {archCoreAdd > 0 && <span className="text-[9.5px] font-bold text-[var(--g)]">+{archCoreAdd}</span>}
+                              {rolledAdd > 0 && <span className="text-[9.5px] font-bold text-[#9a6700] dark:text-[var(--lamp)]">+{rolledAdd}</span>}
+                            </span>
+                            <div className="flex-1 h-2.5 mland:h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                              <div className="h-full rounded-full transition-all" style={{ width: `${cAttrs[k]}%`, background: statBarColor(cAttrs[k]) }} />
+                            </div>
+                            <span className="w-6 text-right font-extrabold tabular text-[var(--ink)]">{cAttrs[k]}</span>
                           </div>
-                          <span className="w-6 text-right font-extrabold tabular">{cAttrs[k]}</span>
-                        </div>
-                      );
-                    })}
-                    <div className="pt-1.5 border-t border-[var(--line)] flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
-                      <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์ (Talent)</span>
-                      <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
+                        );
+                      })}
+                      <div className="pt-1.5 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
+                        <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์</span>
+                        <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Football Personality Traits Selector + Readable Active Explanations */}
-                <div className="pt-2.5 border-t border-[var(--line)] space-y-2 mland:space-y-1.5">
+                {/* Football Personality Traits Selector */}
+                <div className="pt-2.5 mland:pt-1.5 space-y-2 mland:space-y-1">
                   <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-bold text-xs mland:text-[10.5px] truncate">✨ นิสัยลูกหนังตามตำแหน่ง (เลือก 1–4 อย่าง: {cTraits.length}/4)</span>
-                    </div>
+                    <span className="font-bold text-xs mland:text-[10px] truncate text-[var(--ink)]">
+                      ✨ นิสัยลูกหนัง (เลือก 1–4 อย่าง · {cTraits.length}/4)
+                    </span>
                     <button
                       type="button"
                       onClick={rerollTraits}
-                      className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold cursor-pointer hover:border-[var(--g)] shrink-0"
+                      className="btn btn-xs btn-secondary shrink-0"
                     >
                       🎲 สุ่มนิสัยใหม่
                     </button>
@@ -1707,12 +1700,12 @@ export const MainMenu: React.FC<{
                           type="button"
                           onClick={() => toggleTrait(tr.id)}
                           title={tr.desc}
-                          className={`px-2.5 py-1 rounded-lg text-[11px] mland:text-[9.5px] font-semibold border cursor-pointer transition-colors ${
+                          className={`px-2.5 py-1 mland:py-0.5 rounded-lg text-[11px] mland:text-[9px] font-semibold border cursor-pointer transition-colors ${
                             active
                               ? 'bg-[var(--g)] text-white border-[var(--g)] shadow-xs'
                               : hasConflict
-                                ? 'bg-[var(--surface-2)]/40 text-[var(--mut)] border-dashed border-[var(--line)] opacity-70'
-                                : 'bg-[var(--surface-2)] text-[var(--ink)] border-[var(--line)] hover:border-[var(--g)]'
+                                ? 'bg-[var(--surface-2)]/35 text-[var(--mut)] border-dashed border-[var(--line)] opacity-60'
+                                : 'bg-[var(--surface-2)]/65 text-[var(--ink)] border-[var(--line)] hover:border-[var(--g)]'
                           }`}
                         >
                           {tr.icon} {tr.name}
@@ -1720,14 +1713,13 @@ export const MainMenu: React.FC<{
                       );
                     })}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 pt-0.5 text-[10.5px] mland:text-[9px] text-[var(--mut)]">
                     {cTraits.map((tid) => {
                       const tr = TRAIT_BY_ID[tid];
                       if (!tr) return null;
                       return (
-                        <div key={tid} className="px-2.5 py-1.5 rounded-xl bg-[var(--g-soft)]/55 border border-[var(--g)]/30 text-[11px] mland:text-[9.5px]">
-                          <div className="font-bold text-[var(--ink)]">{tr.icon} {tr.name}</div>
-                          <div className="text-[var(--mut)] leading-snug mt-0.5">{tr.desc}</div>
+                        <div key={tid} className="truncate">
+                          <b className="text-[var(--ink)]">{tr.icon} {tr.name}</b> — {tr.desc}
                         </div>
                       );
                     })}
@@ -1735,9 +1727,9 @@ export const MainMenu: React.FC<{
                 </div>
               </div>
 
-              {/* Tab 4: Sub-stats Breakdown (Balanced 2+3 single-screen grid) */}
-              <div className={`space-y-2 mland:space-y-1 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* Tab 4: Sub-stats Breakdown (Clean Hairline Columns) */}
+              <div className={`space-y-2.5 mland:space-y-1.5 ${crMobTab === 'stats' ? '' : 'hidden'}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/65">
                   <div className="flex flex-wrap items-center gap-2 text-[11px] mland:text-[9px] text-[var(--mut)]">
                     <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)]">ค่าพลังเฉพาะด้าน</span>
                     <span>
@@ -1747,22 +1739,28 @@ export const MainMenu: React.FC<{
                   <button
                     type="button"
                     onClick={rerollStartingPoints}
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-xs mland:text-[9.5px] font-bold cursor-pointer hover:brightness-105 shrink-0"
+                    className="btn btn-xs btn-gold shrink-0"
                   >
                     🎲 สุ่มแต้มใหม่
                   </button>
                 </div>
-                {(() => {
-                  const renderSubCard = (g: (typeof subStats)[number]) => (
-                    <div key={g[0]} className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] space-y-1 mland:space-y-0.5">
-                      <div className="font-bold text-[11.5px] mland:text-[9.5px] pb-0.5 border-b border-[var(--line)]/60">{g[0]}</div>
+                <div
+                  className={`grid grid-cols-1 gap-x-4 gap-y-3 mland:gap-y-2 ${
+                    subStats.length === 6 ? 'sm:grid-cols-3 mland:grid-cols-3' : 'sm:grid-cols-2 mland:grid-cols-2'
+                  }`}
+                >
+                  {subStats.map((g) => (
+                    <div key={g[0]} className="space-y-1 mland:space-y-0.5">
+                      <div className="font-bold text-[11.5px] mland:text-[9.5px] pb-0.5 border-b border-[var(--line)]/65 text-[var(--ink)]">
+                        {g[0]}
+                      </div>
                       {g[1].map(([lbl, val, statKey]) => {
                         const isSig = statKey === curArch.sig;
                         const archBonus = statKey ? curArch.sbBonus[statKey] || 0 : 0;
                         const rolledSub = statKey ? cSubMap[statKey] || 0 : 0;
                         return (
                           <div key={lbl} className="flex items-center gap-1.5 text-[11px] mland:text-[9px]">
-                            <span className="w-[82px] sm:w-[90px] mland:w-[68px] shrink-0 truncate flex items-center gap-1 min-w-0">
+                            <span className="w-[88px] sm:w-[96px] mland:w-[72px] shrink-0 truncate flex items-center gap-1 min-w-0">
                               {isSig && <span className="text-[#9a6700] dark:text-[var(--lamp)] font-black shrink-0" title="ท่าไม้ตายประจำสาย">★</span>}
                               <span className={`truncate ${isSig ? 'font-bold text-[var(--ink)]' : archBonus > 0 ? 'font-semibold text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                                 {lbl}
@@ -1770,7 +1768,7 @@ export const MainMenu: React.FC<{
                               {archBonus > 0 && <span className="text-[9px] font-bold text-[var(--g)] shrink-0">+{archBonus}</span>}
                               {rolledSub > 0 && <span className="text-[9px] font-bold text-[#9a6700] dark:text-[var(--lamp)] shrink-0">+{rolledSub}</span>}
                             </span>
-                            <div className="flex-1 min-w-[36px] h-3 sm:h-3.5 mland:h-2.5 rounded-full bg-[var(--surface)] border border-[var(--line)]/65 overflow-hidden">
+                            <div className="flex-1 min-w-[36px] h-2 mland:h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                               <div className="h-full rounded-full transition-all" style={{ width: `${clamp(val, 6, 100)}%`, background: statBarColor(val) }} />
                             </div>
                             <b className="w-6 mland:w-5 text-right shrink-0 tabular text-[var(--ink)]">{val}</b>
@@ -1778,17 +1776,8 @@ export const MainMenu: React.FC<{
                         );
                       })}
                     </div>
-                  );
-                  return (
-                    <div
-                      className={`grid grid-cols-1 gap-1.5 mland:gap-1 ${
-                        subStats.length === 6 ? 'sm:grid-cols-3 mland:grid-cols-3' : 'sm:grid-cols-2 mland:grid-cols-2'
-                      }`}
-                    >
-                      {subStats.map(renderSubCard)}
-                    </div>
-                  );
-                })()}
+                  ))}
+                </div>
               </div>
             </div>
           </div>
