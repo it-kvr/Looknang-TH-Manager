@@ -104,7 +104,7 @@ export const SettingsModal: React.FC<{
   };
 
   const curMatchSpeed = getDefaultMatchSpeed(st);
-  const autoFsMobileOn = st.preferFullscreen === true;
+  const autoFsMobileOn = st.preferFullscreen !== false;
   const onMobile = isMobileDevice();
 
   return (
@@ -297,8 +297,10 @@ export const SettingsModal: React.FC<{
                   <div className="text-xs mland:text-[10px] font-bold truncate">🖥️ เต็มจออัตโนมัติ &amp; แนวนอน</div>
                   <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">
                     {autoFsMobileOn
-                      ? 'เปิดเต็มจอ (อาจมีแถบแจ้งเตือนวิธีออกจากเต็มจอของมือถือด้านล่าง)'
-                      : 'โหมดปกติ (แนะนำ · ไม่มีแถบแจ้งเตือนเบราว์เซอร์ด้านล่าง)'}
+                      ? onMobile
+                        ? 'เข้าเต็มจอและล็อกแนวนอนอัตโนมัติขณะเล่น'
+                        : 'เข้าสู่โหมดเต็มจออัตโนมัติเมื่อเปิดเล่น'
+                      : 'ปิดเต็มจออัตโนมัติ (แสดงแถบเบราว์เซอร์ปกติ)'}
                   </div>
                 </div>
                 <span className={`px-2.5 mland:px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${autoFsMobileOn ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, ChevronRight, Download, FolderInput, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
@@ -14,7 +14,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge } from '../components/TalentBadge';
 import { AthleteCard } from '../components/AthleteCard';
-import { enterAutoMobileFullscreen, enterLandscapeFullscreen, exitFullscreenSafe } from '../utils/fullscreen';
+import { enterAutoMobileFullscreen, enterLandscapeFullscreen, exitFullscreenSafe, getFullscreenElement, isMobileDevice, isPortraitViewport, onFullscreenChange } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
 
@@ -238,7 +238,19 @@ export const MainMenu: React.FC<{
     [refresh]
   );
   const [showImport, setShowImport] = useState(false);
-  const [preferFs, setPreferFs] = useState<boolean>(() => getSettings().preferFullscreen === true);
+  const [isFsActive, setIsFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
+  const [isPortraitMob, setIsPortraitMob] = useState<boolean>(() => isMobileDevice() && isPortraitViewport());
+  useEffect(() => {
+    const unbind = onFullscreenChange(setIsFsActive);
+    const checkOri = () => setIsPortraitMob(isMobileDevice() && isPortraitViewport());
+    window.addEventListener('resize', checkOri, { passive: true });
+    window.addEventListener('orientationchange', checkOri, { passive: true });
+    return () => {
+      unbind();
+      window.removeEventListener('resize', checkOri);
+      window.removeEventListener('orientationchange', checkOri);
+    };
+  }, []);
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
   const [starPoster, setStarPoster] = useState<{ pool: StarPosterCard[]; idx: number }>(() => {
     const pool = buildStarPosterPool(loadedSlots);
@@ -1868,29 +1880,42 @@ export const MainMenu: React.FC<{
             <button
               type="button"
               data-no-auto-fs="1"
-              onClick={() => {
+              onClick={async () => {
                 SFX.tap();
-                const next = !preferFs;
-                setPreferFs(next);
-                const cur = getSettings();
-                saveSettings({ ...cur, preferFullscreen: next });
-                if (next) {
-                  enterLandscapeFullscreen(true).catch(() => undefined);
-                  onToast('เปิดโหมดเต็มจอแล้ว');
+                if (!isFsActive || isPortraitMob) {
+                  const cur = getSettings();
+                  if (cur.preferFullscreen === false) {
+                    saveSettings({ ...cur, preferFullscreen: true });
+                  }
+                  const res = await enterLandscapeFullscreen(true);
+                  if (res.fullscreen) {
+                    onToast(res.landscape ? '📱 เปิดโหมดเต็มจอแนวนอนแล้ว' : 'เปิดโหมดเต็มจอแล้ว');
+                  } else {
+                    onToast('กรุณาหมุนเครื่องเป็นแนวนอนหรือแตะอีกครั้งเพื่อเข้าเต็มจอ');
+                  }
                 } else {
-                  exitFullscreenSafe().catch(() => undefined);
-                  onToast('ปิดเต็มจอแล้ว (ไม่ขึ้นแถบแจ้งเตือนเบราว์เซอร์ด้านล่าง)');
+                  await exitFullscreenSafe().catch(() => undefined);
                 }
               }}
-              title={preferFs ? 'สลับเป็นโหมดปกติ (ซ่อนแถบแจ้งเตือนเบราว์เซอร์ด้านล่าง)' : 'เปิดโหมดเต็มจอ'}
-              aria-label={preferFs ? 'ปิดโหมดเต็มจอ' : 'เปิดโหมดเต็มจอ'}
-              className={`h-8 w-8 sm:h-9 sm:w-9 mland:h-7 mland:w-7 rounded-xl mland:rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
-                preferFs
+              title={isFsActive && !isPortraitMob ? 'ออกจากโหมดเต็มจอ' : 'เต็มจอแนวนอน'}
+              aria-label={isFsActive && !isPortraitMob ? 'ออกจากโหมดเต็มจอ' : 'เปิดโหมดเต็มจอแนวนอน'}
+              className={`h-8 sm:h-9 mland:h-7 px-2.5 mland:px-2 rounded-xl mland:rounded-lg border inline-flex items-center justify-center gap-1.5 text-[11px] sm:text-xs mland:text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                isFsActive && !isPortraitMob
                   ? 'border-emerald-300/45 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
-                  : 'border-white/22 bg-[#11241a]/88 hover:bg-[#193325] text-white/80'
+                  : 'border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-white'
               }`}
             >
-              {preferFs ? <Minimize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" /> : <Maximize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" />}
+              {isFsActive && !isPortraitMob ? (
+                <Minimize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+              ) : (
+                <Maximize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
+              )}
+              <span className="hidden sm:inline mland:inline">
+                {isFsActive && !isPortraitMob ? 'ย่อจอ' : 'เต็มจอแนวนอน'}
+              </span>
+              <span className="sm:hidden mland:hidden">
+                {isFsActive && !isPortraitMob ? 'ย่อจอ' : 'แนวนอน'}
+              </span>
             </button>
             <button
               type="button"

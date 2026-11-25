@@ -1,17 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Maximize2, RotateCw, Settings } from 'lucide-react';
+import { Maximize2, Minimize2, Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
 import {
   bindAutoLandscapeFullscreen,
   enterAutoMobileFullscreen,
   enterLandscapeFullscreen,
+  exitFullscreenSafe,
+  getFullscreenElement,
   isMobileDevice,
-  isPortraitViewport
+  isPortraitViewport,
+  onFullscreenChange,
+  restoreAutoFullscreenMigration
 } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
-import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
+import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
@@ -47,92 +51,30 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
-  const [appSettings, setAppSettings] = useState<AppSettings>(() => getSettings());
+  const [appSettings, setAppSettings] = useState<AppSettings>(() => {
+    restoreAutoFullscreenMigration();
+    return getSettings();
+  });
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
   const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(() => isMobileDevice() && isPortraitViewport());
-  const [dismissedRotatePrompt, setDismissedRotatePrompt] = useState(false);
-  const [rotateHint, setRotateHint] = useState<string | null>(null);
+  const [isFsActive, setIsFsActive] = useState<boolean>(() => Boolean(getFullscreenElement()));
 
   useEffect(() => {
     const unbindFs = bindAutoLandscapeFullscreen();
+    const unbindFsState = onFullscreenChange(setIsFsActive);
     const checkOri = () => {
-      const portraitMob = isMobileDevice() && isPortraitViewport();
-      setIsPortraitMobile(portraitMob);
-      if (!portraitMob) {
-        setRotateHint(null);
-      }
+      setIsPortraitMobile(isMobileDevice() && isPortraitViewport());
     };
     window.addEventListener('resize', checkOri, { passive: true });
     window.addEventListener('orientationchange', checkOri, { passive: true });
     return () => {
       window.removeEventListener('resize', checkOri);
       window.removeEventListener('orientationchange', checkOri);
+      unbindFsState();
       unbindFs();
     };
   }, []);
-
-  const handleEnterLandscapeFullscreen = async () => {
-    unlockAudio();
-    SFX.tap();
-    const res = await enterLandscapeFullscreen(true);
-    window.setTimeout(() => {
-      if (isPortraitViewport()) {
-        setRotateHint(
-          res.fullscreen
-            ? 'เปิดเต็มจอแล้ว — กรุณาเอียงเครื่องเป็นแนวนอนเพื่อมุมมองเต็มสนาม'
-            : 'กรุณาหมุนเครื่องเป็นแนวนอน (อุปกรณ์/เบราว์เซอร์นี้ไม่รองรับการล็อกหมุนอัตโนมัติ)'
-        );
-      }
-    }, 280);
-  };
-
-  const landscapeOverlay =
-    isPortraitMobile && !dismissedRotatePrompt && appSettings.preferFullscreen === true ? (
-      <div
-        data-no-auto-fs="1"
-        className="fixed inset-0 z-[90] bg-[#040d08]/95 flex items-center justify-center p-5 safe-all text-white"
-      >
-        <div className="w-full max-w-sm rounded-3xl bg-gradient-to-b from-[#12261c] to-[#09150f] border border-emerald-400/30 shadow-2xl p-5 text-center space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-[var(--g-soft)] border border-[var(--g)]/45 flex items-center justify-center text-emerald-300 shadow-inner">
-            <RotateCw className="w-8 h-8 animate-[spin_6s_linear_infinite]" />
-          </div>
-          <div className="space-y-1.5">
-            <h2 className="text-lg font-extrabold font-display tracking-wide text-white">
-              เปิดโหมดแนวนอนเต็มจอ
-            </h2>
-            <p className="text-xs text-emerald-100/80 leading-relaxed">
-              ลูกหนังไทยออกแบบมาสำหรับหน้าจอแนวนอนเต็มจอ แตะปุ่มด้านล่างเพื่อเข้าเต็มจอและล็อกแนวนอนทันที
-            </p>
-          </div>
-          {rotateHint && (
-            <div className="px-3 py-2 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[11px] font-semibold text-[#ffe89e] leading-snug">
-              {rotateHint}
-            </div>
-          )}
-          <div className="space-y-2 pt-1">
-            <button
-              type="button"
-              onClick={handleEnterLandscapeFullscreen}
-              className="btn btn-gold btn-lg w-full font-extrabold shadow-lg"
-            >
-              <Maximize2 className="w-4 h-4 shrink-0" />
-              <span>เข้าโหมดแนวนอนเต็มจอเลย</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                setDismissedRotatePrompt(true);
-              }}
-              className="w-full py-2 text-[11.5px] font-semibold text-emerald-100/65 hover:text-white cursor-pointer"
-            >
-              เล่นแนวตั้งชั่วคราว
-            </button>
-          </div>
-        </div>
-      </div>
-    ) : null;
 
   const mainRef = useRef<HTMLElement | null>(null);
   const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
@@ -996,7 +938,6 @@ export default function App() {
           onLoadSave={handleLoadSave}
           onToast={showToast}
         />
-        {landscapeOverlay}
         {toast && (
           <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
             {toast}
@@ -1215,6 +1156,37 @@ export default function App() {
                             ? '🏆 แข่งถ้วยปชช.'
                             : `▶ แข่งนัดที่ ${state.md + 1}`
                 : '🏁 สรุปจบฤดูกาล'}
+            </button>
+            <button
+              type="button"
+              data-no-auto-fs="1"
+              onClick={async () => {
+                SFX.tap();
+                if (!isFsActive || isPortraitMobile) {
+                  if (appSettings.preferFullscreen === false) {
+                    const next = { ...appSettings, preferFullscreen: true };
+                    setAppSettings(next);
+                    saveSettings(next);
+                  }
+                  const res = await enterLandscapeFullscreen(true);
+                  if (res.fullscreen) {
+                    showToast(res.landscape ? '📱 เปิดโหมดเต็มจอแนวนอนแล้ว' : 'เปิดโหมดเต็มจอแล้ว');
+                  } else {
+                    showToast('กรุณาหมุนเครื่องเป็นแนวนอนหรือแตะอีกครั้งเพื่อเข้าเต็มจอ');
+                  }
+                } else {
+                  await exitFullscreenSafe().catch(() => undefined);
+                }
+              }}
+              aria-label={isFsActive && !isPortraitMobile ? 'ออกจากโหมดเต็มจอ' : 'เปิดโหมดเต็มจอแนวนอน'}
+              title={isFsActive && !isPortraitMobile ? 'ออกจากโหมดเต็มจอ' : 'เต็มจอแนวนอน'}
+              className="btn-icon w-9 h-9 mland:w-7.5 mland:h-7.5"
+            >
+              {isFsActive && !isPortraitMobile ? (
+                <Minimize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              ) : (
+                <Maximize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              )}
             </button>
             <button
               type="button"
@@ -1485,7 +1457,6 @@ export default function App() {
         />
       )}
 
-      {landscapeOverlay}
       {toast && (
         <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
           {toast}
