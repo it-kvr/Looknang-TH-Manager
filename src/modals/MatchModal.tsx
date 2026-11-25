@@ -9,7 +9,6 @@ import {
   Pause,
   Play,
   Route,
-  Shirt,
   Star,
   Tag,
   Users,
@@ -579,35 +578,6 @@ export const MatchModal: React.FC<{
   if (!worldRef.current) {
     worldRef.current = buildInitialWorld();
   }
-
-  const [liveCoachOutfitId, setLiveCoachOutfitId] = useState<CoachOutfitId>(() => {
-    const c = meIsHome ? worldRef.current?.sideline?.coachH : worldRef.current?.sideline?.coachA;
-    return c?.outfit || state.club?.managerOutfit || 'suit_navy';
-  });
-
-  const handleRandomizeLiveCoachOutfit = () => {
-    if (state.mode !== 'm') return;
-    SFX.tap();
-    const curId = liveCoachOutfitId;
-    const pool = COACH_OUTFITS.filter((o) => o.id !== curId);
-    const src = pool.length ? pool : COACH_OUTFITS;
-    const pick = src[R(0, src.length - 1)];
-    if (!pick) return;
-    const w = worldRef.current;
-    if (w?.sideline) {
-      const coach = meIsHome ? w.sideline.coachH : w.sideline.coachA;
-      coach.outfit = pick.id;
-      coach.gestureTimer = Math.max(coach.gestureTimer || 0, 1.1);
-    }
-    setLiveCoachOutfitId(pick.id);
-    setLogs((prev) => [
-      { m: minute, text: `👔 เปลี่ยนชุดโค้ชข้างสนามเป็น "${pick.name}"`, tone: 'sys' },
-      ...prev.slice(0, 79)
-    ]);
-  };
-
-  const liveCoachOutfitName =
-    COACH_OUTFITS.find((o) => o.id === liveCoachOutfitId)?.name || 'ชุดโค้ช';
 
   const getEffectiveTeamCfg = (side: 'H' | 'A', curMin: number) => {
     const isUserSide = (side === 'H' && meIsHome) || (side === 'A' && !meIsHome);
@@ -7838,16 +7808,6 @@ export const MatchModal: React.FC<{
               </span>
             </div>
           </div>
-
-          <div className="px-2.5 py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/85 border border-[var(--line)]/70 flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
-            <span className="inline-flex items-center gap-1 font-semibold text-[var(--mut)]">
-              <Users className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
-              <span>ผู้ชมเข้าสนาม</span>
-            </span>
-            <span className="font-extrabold text-[var(--ink)]">
-              {matchAttendance.att.toLocaleString()} / {matchAttendance.cap.toLocaleString()} คน ({matchAttendance.pct}%)
-            </span>
-          </div>
         </div>
       </div>
     );
@@ -8219,7 +8179,7 @@ export const MatchModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
+    <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
         <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
@@ -8273,6 +8233,7 @@ export const MatchModal: React.FC<{
                 <Users className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-[var(--g)] shrink-0" />
                 <span>{matchAttendance.att.toLocaleString()}</span>
                 <span className="text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
+                <span className="text-[var(--g)] font-extrabold">({matchAttendance.pct}%)</span>
               </span>
             </div>
 
@@ -8677,7 +8638,7 @@ export const MatchModal: React.FC<{
                           )}
                           <div className="pointer-events-none absolute top-0 left-0 right-0 h-[26px] sm:h-[29px] mland:h-[23px] flex items-center justify-center px-2 z-10">
                             <span
-                              className={`inline-flex items-center px-2.5 mland:px-2 py-[2px] rounded-full border backdrop-blur-xs text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold overflow-hidden ${
+                              className={`inline-flex items-center px-2.5 mland:px-2 py-[2px] rounded-full border text-[10px] sm:text-[11px] mland:text-[9px] leading-tight font-bold overflow-hidden ${
                                 miracleBannerUi || blessedListUi.length > 0 ? 'max-w-[46%] sm:max-w-[48%]' : 'max-w-[92%]'
                               } ${bannerCls}`}
                             >
@@ -8805,7 +8766,7 @@ export const MatchModal: React.FC<{
                               {/* Tall SVG Formation Pitch Container */}
                               <div className="relative w-full p-1.5 sm:p-2 mland:p-1 h-[400px] sm:h-[470px] lg:h-[520px] mland:h-[calc(var(--app-dvh,1dvh)*97-134px)] mland:min-h-[185px] select-none overflow-hidden flex items-center justify-center">
                                 {htPickedInfo && (
-                                  <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 backdrop-blur-md border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                                  <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                                     <div className="min-w-0 space-y-0.5">
                                       <div className="font-bold truncate flex items-center gap-1.5">
                                         <span className="text-[#facc15] tabular">#{htPickedInfo.no}</span>
@@ -9147,7 +9108,7 @@ export const MatchModal: React.FC<{
                           const pkPl = pickedInfo.team.sq.find((q) => q.n === pickedInfo.name);
                           const pkIsHome = pickedInfo.team.id === homeId;
                           return (
-                            <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/92 backdrop-blur-md border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                            <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="font-bold truncate flex items-center gap-1.5">
                                   {pkPl && (
@@ -9482,19 +9443,6 @@ export const MatchModal: React.FC<{
                           <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
                           <span>สโล</span>
                         </button>
-
-                        {state.mode === 'm' && (
-                          <button
-                            type="button"
-                            title={`สุ่มชุดโค้ชข้างสนามนัดนี้ (ปัจจุบัน: ${liveCoachOutfitName})`}
-                            aria-label="สุ่มชุดโค้ช"
-                            onClick={handleRandomizeLiveCoachOutfit}
-                            className="btn h-7 mland:h-6 px-2 mland:px-1.5 text-[11px] mland:text-[9.5px] rounded-lg mland:rounded-md bg-[var(--surface-2)]/75 border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/60 hover:bg-[var(--g-soft)]"
-                          >
-                            <Shirt className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
-                            <span>ชุดโค้ช</span>
-                          </button>
-                        )}
                       </div>
                     )}
 
@@ -9518,27 +9466,16 @@ export const MatchModal: React.FC<{
                         </button>
 
                         {state.mode === 'm' && (
-                          <>
-                            <button
-                              type="button"
-                              title={`สุ่มชุดโค้ชข้างสนามนัดนี้ (ปัจจุบัน: ${liveCoachOutfitName})`}
-                              onClick={handleRandomizeLiveCoachOutfit}
-                              className="btn btn-xs btn-secondary"
-                            >
-                              <Shirt className="w-3 h-3 shrink-0" />
-                              <span>สุ่มชุดโค้ช</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => openTacticsStudio()}
-                              className="btn btn-xs btn-surface"
-                            >
-                              <span>📋 แผน/เปลี่ยนตัว</span>
-                              <span className="px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9px] mland:text-[7.5px]">
-                                {5 - subsUsed.length}
-                              </span>
-                            </button>
-                          </>
+                          <button
+                            type="button"
+                            onClick={() => openTacticsStudio()}
+                            className="btn btn-xs btn-surface"
+                          >
+                            <span>📋 แผน/เปลี่ยนตัว</span>
+                            <span className="px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9px] mland:text-[7.5px]">
+                              {5 - subsUsed.length}
+                            </span>
+                          </button>
                         )}
                       </div>
                     )}

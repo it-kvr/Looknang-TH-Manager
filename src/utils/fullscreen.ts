@@ -306,10 +306,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
     const scrOri = (screen as Screen & { orientation?: { angle?: number } }).orientation;
     const winOri = (window as unknown as { orientation?: number }).orientation;
     const angle = typeof scrOri?.angle === 'number' ? scrOri.angle : typeof winOri === 'number' ? winOri : 0;
-    const scrW = Math.round(window.screen?.width || 0);
-    const scrH = Math.round(window.screen?.height || 0);
     const isLand = window.innerWidth >= window.innerHeight;
-    return `${scrW}x${scrH}-${angle}-${isLand ? 'L' : 'P'}`;
+    return `${angle}-${isLand ? 'L' : 'P'}`;
   };
 
   const readProbeInsets = (activeFs: boolean): SafeInsets => {

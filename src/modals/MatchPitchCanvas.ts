@@ -101,6 +101,8 @@ export const getPitchFaceCanvas = (
   return null;
 };
 
+let pitchBgCache: { key: string; canvas: HTMLCanvasElement } | null = null;
+
 export const drawLivePitchToCanvas = (
   canvas: HTMLCanvasElement,
   world: LiveMatchWorld,
@@ -117,13 +119,17 @@ export const drawLivePitchToCanvas = (
 ) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  const rect = canvas.getBoundingClientRect();
-  const cssW = Math.max(320, Math.round(rect.width || 640));
-  const cssH = Math.max(180, Math.round(rect.height || 330));
+  const cw = canvas.clientWidth;
+  const ch = canvas.clientHeight;
+  const rect = cw > 0 && ch > 0 ? null : canvas.getBoundingClientRect();
+  const cssW = Math.max(320, Math.round((cw > 0 ? cw : rect?.width) || 640));
+  const cssH = Math.max(180, Math.round((ch > 0 ? ch : rect?.height) || 330));
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
-    canvas.width = Math.round(cssW * dpr);
-    canvas.height = Math.round(cssH * dpr);
+  const pxW = Math.round(cssW * dpr);
+  const pxH = Math.round(cssH * dpr);
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -139,159 +145,249 @@ export const drawLivePitchToCanvas = (
   const env = world.env;
   const isRainy = env?.season === 'rainy';
   const isNight = env?.timeOfDay === 'night';
+  const puddleSig =
+    isRainy && env?.puddles?.length
+      ? env.puddles
+          .map((pd) => `${pd.x.toFixed(1)},${pd.y.toFixed(1)},${pd.rx.toFixed(1)},${pd.ry.toFixed(1)},${pd.rot.toFixed(2)},${pd.alpha.toFixed(2)}`)
+          .join(';')
+      : '';
+  const bgKey = `${cssW}x${cssH}@${dpr}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
 
-  // 1. Stadium apron & mowed turf stripes (reflecting season & day/night lighting)
-  const apronFill = isNight
-    ? isRainy
-      ? '#06160e'
-      : '#081d13'
-    : isRainy
-      ? '#103b25'
-      : '#165834';
-  ctx.fillStyle = apronFill;
-  ctx.fillRect(0, 0, cssW, cssH);
+  if (typeof document !== 'undefined') {
+    if (!pitchBgCache || pitchBgCache.key !== bgKey) {
+      const bgCanvas = pitchBgCache?.canvas || document.createElement('canvas');
+      if (bgCanvas.width !== pxW || bgCanvas.height !== pxH) {
+        bgCanvas.width = pxW;
+        bgCanvas.height = pxH;
+      }
+      const bctx = bgCanvas.getContext('2d');
+      if (bctx) {
+        bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  const stripeEven = isNight
-    ? isRainy
-      ? '#144b2e'
-      : '#195e39'
-    : isRainy
-      ? '#195836'
-      : '#217846';
-  const stripeOdd = isNight
-    ? isRainy
-      ? '#195937'
-      : '#1f6e44'
-    : isRainy
-      ? '#1f6840'
-      : '#298e53';
+        // 1. Stadium apron & mowed turf stripes (reflecting season & day/night lighting)
+        const apronFill = isNight
+          ? isRainy
+            ? '#06160e'
+            : '#081d13'
+          : isRainy
+            ? '#103b25'
+            : '#165834';
+        bctx.fillStyle = apronFill;
+        bctx.fillRect(0, 0, cssW, cssH);
 
-  const stripeCount = 12;
-  const stripeW = pw / stripeCount;
-  for (let i = 0; i < stripeCount; i++) {
-    ctx.fillStyle = i % 2 === 0 ? stripeEven : stripeOdd;
-    ctx.fillRect(padX + i * stripeW, padY, stripeW + 0.5, ph);
+        const stripeEven = isNight
+          ? isRainy
+            ? '#144b2e'
+            : '#195e39'
+          : isRainy
+            ? '#195836'
+            : '#217846';
+        const stripeOdd = isNight
+          ? isRainy
+            ? '#195937'
+            : '#1f6e44'
+          : isRainy
+            ? '#1f6840'
+            : '#298e53';
+
+        const stripeCount = 12;
+        const stripeW = pw / stripeCount;
+        for (let i = 0; i < stripeCount; i++) {
+          bctx.fillStyle = i % 2 === 0 ? stripeEven : stripeOdd;
+          bctx.fillRect(padX + i * stripeW, padY, stripeW + 0.5, ph);
+        }
+
+        // Subtle rainy-season surface water patches on the turf (static layer)
+        if (isRainy && env?.puddles?.length) {
+          env.puddles.forEach((pd) => {
+            const cxP = px(pd.x);
+            const cyP = py(pd.y);
+            const rX = Math.max(8, (pd.rx / 100) * pw);
+            const rY = Math.max(5, (pd.ry / 100) * ph);
+
+            bctx.save();
+            bctx.translate(cxP, cyP);
+            bctx.rotate(pd.rot);
+
+            bctx.fillStyle = isNight ? 'rgba(4, 18, 12, 0.26)' : 'rgba(6, 26, 16, 0.2)';
+            bctx.beginPath();
+            bctx.ellipse(0, 0, rX * 1.24, rY * 1.24, 0, 0, Math.PI * 2);
+            bctx.fill();
+
+            const wGrad = bctx.createRadialGradient(-rX * 0.22, -rY * 0.22, rX * 0.08, 0, 0, rX);
+            if (isNight) {
+              wGrad.addColorStop(0, `rgba(186, 230, 253, ${pd.alpha + 0.08})`);
+              wGrad.addColorStop(0.55, `rgba(125, 211, 252, ${pd.alpha * 0.72})`);
+              wGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+            } else {
+              wGrad.addColorStop(0, `rgba(219, 244, 255, ${pd.alpha + 0.06})`);
+              wGrad.addColorStop(0.55, `rgba(147, 210, 235, ${pd.alpha * 0.68})`);
+              wGrad.addColorStop(1, 'rgba(125, 211, 252, 0)');
+            }
+            bctx.fillStyle = wGrad;
+            bctx.beginPath();
+            bctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
+            bctx.fill();
+
+            bctx.strokeStyle = isNight ? 'rgba(224, 242, 254, 0.22)' : 'rgba(240, 249, 255, 0.26)';
+            bctx.lineWidth = 0.85;
+            bctx.beginPath();
+            bctx.ellipse(0, 0, rX * 0.78, rY * 0.78, 0, -2.5, -0.8);
+            bctx.stroke();
+
+            bctx.restore();
+          });
+        }
+
+        // Atmospheric stadium lighting: Summer Sun vs Night Floodlights vs Overcast Rainy Day
+        if (isNight) {
+          const nightVig = bctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.24, cssW * 0.5, cssH * 0.5, cssW * 0.72);
+          nightVig.addColorStop(0, 'rgba(255, 252, 230, 0.05)');
+          nightVig.addColorStop(0.62, 'rgba(6, 15, 28, 0.14)');
+          nightVig.addColorStop(1, 'rgba(2, 6, 16, 0.56)');
+          bctx.fillStyle = nightVig;
+          bctx.fillRect(0, 0, cssW, cssH);
+
+          const corners: [number, number][] = [
+            [8, 8],
+            [cssW - 8, 8],
+            [8, cssH - 8],
+            [cssW - 8, cssH - 8]
+          ];
+          corners.forEach(([fx, fy]) => {
+            const cone = bctx.createRadialGradient(fx, fy, 2, cssW * 0.5, cssH * 0.5, cssW * 0.62);
+            cone.addColorStop(0, isRainy ? 'rgba(215, 238, 255, 0.28)' : 'rgba(255, 248, 215, 0.3)');
+            cone.addColorStop(0.32, isRainy ? 'rgba(186, 230, 253, 0.09)' : 'rgba(254, 243, 199, 0.1)');
+            cone.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            bctx.fillStyle = cone;
+            bctx.fillRect(0, 0, cssW, cssH);
+
+            bctx.save();
+            bctx.fillStyle = isRainy ? 'rgba(224, 242, 254, 0.92)' : 'rgba(254, 249, 195, 0.94)';
+            bctx.shadowColor = isRainy ? '#7dd3fc' : '#fde047';
+            bctx.shadowBlur = 10;
+            bctx.beginPath();
+            bctx.arc(fx, fy, 3.2, 0, Math.PI * 2);
+            bctx.fill();
+            bctx.restore();
+          });
+        } else if (!isRainy) {
+          const sunX = cssW * (0.78 + Math.sin(env?.sunAngle ?? 0.4) * 0.12);
+          const sunY = cssH * 0.06;
+          const sunGlow = bctx.createRadialGradient(sunX, sunY, 8, sunX, sunY, cssW * 0.72);
+          sunGlow.addColorStop(0, 'rgba(255, 244, 179, 0.24)');
+          sunGlow.addColorStop(0.35, 'rgba(253, 224, 71, 0.09)');
+          sunGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+          bctx.fillStyle = sunGlow;
+          bctx.fillRect(0, 0, cssW, cssH);
+
+          bctx.save();
+          const beamGrad = bctx.createLinearGradient(sunX, 0, cssW * 0.2, cssH);
+          beamGrad.addColorStop(0, 'rgba(255, 246, 195, 0.1)');
+          beamGrad.addColorStop(0.55, 'rgba(255, 246, 195, 0.03)');
+          beamGrad.addColorStop(1, 'rgba(6, 26, 14, 0.14)');
+          bctx.fillStyle = beamGrad;
+          bctx.fillRect(0, 0, cssW, cssH);
+          bctx.restore();
+        } else {
+          const sheen = bctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.12, cssW * 0.5, cssH * 0.5, pw * 0.68);
+          sheen.addColorStop(0, 'rgba(215, 232, 238, 0.06)');
+          sheen.addColorStop(1, 'rgba(4, 16, 11, 0.24)');
+          bctx.fillStyle = sheen;
+          bctx.fillRect(0, 0, cssW, cssH);
+        }
+
+        // 2. Pitch markings
+        bctx.strokeStyle = 'rgba(240, 248, 240, 0.86)';
+        bctx.lineWidth = Math.max(1.2, cssW * 0.0024);
+        bctx.strokeRect(padX, padY, pw, ph);
+
+        // Halfway line & center circle
+        bctx.beginPath();
+        bctx.moveTo(px(50), py(0));
+        bctx.lineTo(px(50), py(100));
+        bctx.stroke();
+
+        bctx.beginPath();
+        bctx.arc(px(50), py(50), ph * 0.155, 0, Math.PI * 2);
+        bctx.stroke();
+
+        bctx.fillStyle = 'rgba(240,248,240,0.9)';
+        bctx.beginPath();
+        bctx.arc(px(50), py(50), 2.5, 0, Math.PI * 2);
+        bctx.fill();
+
+        // Penalty boxes & 6-yard boxes
+        const boxTop = py(21);
+        const boxH = ph * 0.58;
+        const boxW = pw * 0.165;
+        const sixTop = py(36.5);
+        const sixH = ph * 0.27;
+        const sixW = pw * 0.055;
+
+        bctx.strokeRect(padX, boxTop, boxW, boxH);
+        bctx.strokeRect(padX + pw - boxW, boxTop, boxW, boxH);
+        bctx.strokeRect(padX, sixTop, sixW, sixH);
+        bctx.strokeRect(padX + pw - sixW, sixTop, sixW, sixH);
+
+        // Penalty spots & arcs
+        bctx.beginPath();
+        bctx.arc(px(11), py(50), 2, 0, Math.PI * 2);
+        bctx.arc(px(89), py(50), 2, 0, Math.PI * 2);
+        bctx.fill();
+
+        bctx.beginPath();
+        bctx.arc(px(11), py(50), ph * 0.135, -0.68, 0.68);
+        bctx.stroke();
+        bctx.beginPath();
+        bctx.arc(px(89), py(50), ph * 0.135, Math.PI - 0.68, Math.PI + 0.68);
+        bctx.stroke();
+
+        // Corner arcs
+        const cr = Math.max(5, ph * 0.032);
+        [
+          [padX, padY, 0, Math.PI / 2],
+          [padX + pw, padY, Math.PI / 2, Math.PI],
+          [padX + pw, padY + ph, Math.PI, Math.PI * 1.5],
+          [padX, padY + ph, Math.PI * 1.5, Math.PI * 2]
+        ].forEach(([cx, cy, sa, ea]) => {
+          bctx.beginPath();
+          bctx.arc(cx, cy, cr, sa, ea);
+          bctx.stroke();
+        });
+
+        pitchBgCache = { key: bgKey, canvas: bgCanvas };
+      }
+    }
+    if (pitchBgCache && pitchBgCache.key === bgKey) {
+      ctx.drawImage(pitchBgCache.canvas, 0, 0, cssW, cssH);
+    }
   }
 
-  // Subtle rainy-season surface water patches on the turf (no raindrops)
+  // Dynamic splash ripple when ball passes across a rainy-season puddle
   if (isRainy && env?.puddles?.length) {
     const ball = world.ball;
-    env.puddles.forEach((pd, idx) => {
-      const cxP = px(pd.x);
-      const cyP = py(pd.y);
-      const rX = Math.max(8, (pd.rx / 100) * pw);
-      const rY = Math.max(5, (pd.ry / 100) * ph);
-
-      ctx.save();
-      ctx.translate(cxP, cyP);
-      ctx.rotate(pd.rot);
-
-      // Damp darker-grass halo around shallow water patch
-      ctx.fillStyle = isNight ? 'rgba(4, 18, 12, 0.26)' : 'rgba(6, 26, 16, 0.2)';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rX * 1.24, rY * 1.24, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Shallow reflective water sheen
-      const wGrad = ctx.createRadialGradient(-rX * 0.22, -rY * 0.22, rX * 0.08, 0, 0, rX);
-      if (isNight) {
-        wGrad.addColorStop(0, `rgba(186, 230, 253, ${pd.alpha + 0.08})`);
-        wGrad.addColorStop(0.55, `rgba(125, 211, 252, ${pd.alpha * 0.72})`);
-        wGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
-      } else {
-        wGrad.addColorStop(0, `rgba(219, 244, 255, ${pd.alpha + 0.06})`);
-        wGrad.addColorStop(0.55, `rgba(147, 210, 235, ${pd.alpha * 0.68})`);
-        wGrad.addColorStop(1, 'rgba(125, 211, 252, 0)');
-      }
-      ctx.fillStyle = wGrad;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rX, rY, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Soft surface glint on puddle edge
-      ctx.strokeStyle = isNight ? 'rgba(224, 242, 254, 0.22)' : 'rgba(240, 249, 255, 0.26)';
-      ctx.lineWidth = 0.85;
-      ctx.beginPath();
-      ctx.ellipse(0, 0, rX * 0.78, rY * 0.78, 0, -2.5, -0.8);
-      ctx.stroke();
-
-      // Subtle splash ripple if ball passes across this puddle
-      const distToBall = Math.hypot((ball.x - pd.x) / Math.max(1, pd.rx), (ball.y - pd.y) / Math.max(1, pd.ry));
-      if (ball.z < 3 && distToBall < 1.25) {
-        const ripPhase = ((world.minuteFloat * 40 + idx) % 1);
-        ctx.strokeStyle = `rgba(224, 242, 254, ${0.42 * (1 - ripPhase)})`;
-        ctx.lineWidth = 1.1;
-        ctx.beginPath();
-        ctx.ellipse(0, 0, rX * (0.45 + ripPhase * 0.6), rY * (0.45 + ripPhase * 0.6), 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-
-      ctx.restore();
-    });
-  }
-
-  // Atmospheric stadium lighting: Summer Sun vs Night Floodlights vs Overcast Rainy Day
-  if (isNight) {
-    // Deep nighttime outer vignette around stadium apron
-    const nightVig = ctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.24, cssW * 0.5, cssH * 0.5, cssW * 0.72);
-    nightVig.addColorStop(0, 'rgba(255, 252, 230, 0.05)');
-    nightVig.addColorStop(0.62, 'rgba(6, 15, 28, 0.14)');
-    nightVig.addColorStop(1, 'rgba(2, 6, 16, 0.56)');
-    ctx.fillStyle = nightVig;
-    ctx.fillRect(0, 0, cssW, cssH);
-
-    // 4 Corner Stadium Floodlight Cones illuminating the pitch
-    const corners: [number, number][] = [
-      [8, 8],
-      [cssW - 8, 8],
-      [8, cssH - 8],
-      [cssW - 8, cssH - 8]
-    ];
-    corners.forEach(([fx, fy]) => {
-      const cone = ctx.createRadialGradient(fx, fy, 2, cssW * 0.5, cssH * 0.5, cssW * 0.62);
-      cone.addColorStop(0, isRainy ? 'rgba(215, 238, 255, 0.28)' : 'rgba(255, 248, 215, 0.3)');
-      cone.addColorStop(0.32, isRainy ? 'rgba(186, 230, 253, 0.09)' : 'rgba(254, 243, 199, 0.1)');
-      cone.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.fillStyle = cone;
-      ctx.fillRect(0, 0, cssW, cssH);
-
-      // Crisp corner floodlight tower lamp glow
-      ctx.save();
-      ctx.fillStyle = isRainy ? 'rgba(224, 242, 254, 0.92)' : 'rgba(254, 249, 195, 0.94)';
-      ctx.shadowColor = isRainy ? '#7dd3fc' : '#fde047';
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.arc(fx, fy, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    });
-  } else if (!isRainy) {
-    // Summer Daylight: Warm golden sunlight beams & subtle stand shadow along far edge
-    const sunX = cssW * (0.78 + Math.sin(env?.sunAngle ?? 0.4) * 0.12);
-    const sunY = cssH * 0.06;
-    const sunGlow = ctx.createRadialGradient(sunX, sunY, 8, sunX, sunY, cssW * 0.72);
-    sunGlow.addColorStop(0, 'rgba(255, 244, 179, 0.24)');
-    sunGlow.addColorStop(0.35, 'rgba(253, 224, 71, 0.09)');
-    sunGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-    ctx.fillStyle = sunGlow;
-    ctx.fillRect(0, 0, cssW, cssH);
-
-    // Gentle diagonal sunlight shafts across the sunlit pitch
-    ctx.save();
-    const beamGrad = ctx.createLinearGradient(sunX, 0, cssW * 0.2, cssH);
-    beamGrad.addColorStop(0, 'rgba(255, 246, 195, 0.1)');
-    beamGrad.addColorStop(0.55, 'rgba(255, 246, 195, 0.03)');
-    beamGrad.addColorStop(1, 'rgba(6, 26, 14, 0.14)');
-    ctx.fillStyle = beamGrad;
-    ctx.fillRect(0, 0, cssW, cssH);
-    ctx.restore();
-  } else {
-    // Rainy Daylight: Cool overcast soft vignette
-    const sheen = ctx.createRadialGradient(cssW * 0.5, cssH * 0.5, pw * 0.12, cssW * 0.5, cssH * 0.5, pw * 0.68);
-    sheen.addColorStop(0, 'rgba(215, 232, 238, 0.06)');
-    sheen.addColorStop(1, 'rgba(4, 16, 11, 0.24)');
-    ctx.fillStyle = sheen;
-    ctx.fillRect(0, 0, cssW, cssH);
+    if (ball.z < 3) {
+      env.puddles.forEach((pd, idx) => {
+        const distToBall = Math.hypot((ball.x - pd.x) / Math.max(1, pd.rx), (ball.y - pd.y) / Math.max(1, pd.ry));
+        if (distToBall < 1.25) {
+          const cxP = px(pd.x);
+          const cyP = py(pd.y);
+          const rX = Math.max(8, (pd.rx / 100) * pw);
+          const rY = Math.max(5, (pd.ry / 100) * ph);
+          const ripPhase = (world.minuteFloat * 40 + idx) % 1;
+          ctx.save();
+          ctx.translate(cxP, cyP);
+          ctx.rotate(pd.rot);
+          ctx.strokeStyle = `rgba(224, 242, 254, ${0.42 * (1 - ripPhase)})`;
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, rX * (0.45 + ripPhase * 0.6), rY * (0.45 + ripPhase * 0.6), 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      });
+    }
   }
 
   // Miracle Comeback Stadium Energy Pulse
@@ -304,65 +400,6 @@ export const drawLivePitchToCanvas = (
     ctx.fillStyle = mGrad;
     ctx.fillRect(padX, padY, pw, ph);
   }
-
-  // 2. Pitch markings
-  ctx.strokeStyle = 'rgba(240, 248, 240, 0.86)';
-  ctx.lineWidth = Math.max(1.2, cssW * 0.0024);
-  ctx.strokeRect(padX, padY, pw, ph);
-
-  // Halfway line & center circle
-  ctx.beginPath();
-  ctx.moveTo(px(50), py(0));
-  ctx.lineTo(px(50), py(100));
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.arc(px(50), py(50), ph * 0.155, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.fillStyle = 'rgba(240,248,240,0.9)';
-  ctx.beginPath();
-  ctx.arc(px(50), py(50), 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Penalty boxes & 6-yard boxes
-  const boxTop = py(21);
-  const boxH = ph * 0.58;
-  const boxW = pw * 0.165;
-  const sixTop = py(36.5);
-  const sixH = ph * 0.27;
-  const sixW = pw * 0.055;
-
-  ctx.strokeRect(padX, boxTop, boxW, boxH);
-  ctx.strokeRect(padX + pw - boxW, boxTop, boxW, boxH);
-  ctx.strokeRect(padX, sixTop, sixW, sixH);
-  ctx.strokeRect(padX + pw - sixW, sixTop, sixW, sixH);
-
-  // Penalty spots & arcs
-  ctx.beginPath();
-  ctx.arc(px(11), py(50), 2, 0, Math.PI * 2);
-  ctx.arc(px(89), py(50), 2, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(px(11), py(50), ph * 0.135, -0.68, 0.68);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(px(89), py(50), ph * 0.135, Math.PI - 0.68, Math.PI + 0.68);
-  ctx.stroke();
-
-  // Corner arcs
-  const cr = Math.max(5, ph * 0.032);
-  [
-    [padX, padY, 0, Math.PI / 2],
-    [padX + pw, padY, Math.PI / 2, Math.PI],
-    [padX + pw, padY + ph, Math.PI, Math.PI * 1.5],
-    [padX, padY + ph, Math.PI * 1.5, Math.PI * 2]
-  ].forEach(([cx, cy, sa, ea]) => {
-    ctx.beginPath();
-    ctx.arc(cx, cy, cr, sa, ea);
-    ctx.stroke();
-  });
 
   // Goal frames & animated rippling nets
   const goalTop = py(42);
