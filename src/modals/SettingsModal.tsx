@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { Copy, Folder, FolderInput, Save, X } from 'lucide-react';
+import { AlertTriangle, Copy, Folder, FolderInput, Plus, Save, X } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { GameState, AppSettings } from '../types/game';
 import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
@@ -29,6 +29,7 @@ export const SettingsModal: React.FC<{
   const [importRaw, setImportRaw] = useState('');
   const [importFileName, setImportFileName] = useState('');
   const [targetSlot, setTargetSlot] = useState<number>(slot);
+  const [slotTick, setSlotTick] = useState(0);
   const [showFolderModal, setShowFolderModal] = useState(false);
   const [folderInitialTab, setFolderInitialTab] = useState<'folder' | 'code'>('folder');
   const [savingToFolder, setSavingToFolder] = useState(false);
@@ -548,50 +549,87 @@ export const SettingsModal: React.FC<{
                           ✓ เซฟนี้มีอยู่ในเกมแล้ว ไม่ต้องโหลดซ้ำ
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5">
-                          <select
-                            value={targetSlot}
-                            onChange={(e) => setTargetSlot(Number(e.target.value))}
-                            className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-semibold"
-                          >
-                            {(() => {
-                              const cnt = getSlotCount(parsedImport.mode);
-                              const opts = Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
-                                const existing = loadGameFromSlot(parsedImport.mode, k);
-                                const occName = existing
-                                  ? existing.mode === 'm'
-                                    ? existing.club?.name || existing.teams[existing.me]?.name
-                                    : existing.p?.name
-                                  : '';
-                                return (
-                                  <option key={k} value={k}>
-                                    ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
-                                  </option>
-                                );
-                              });
-                              if (cnt < MAX_SLOTS) {
-                                opts.push(
-                                  <option key={cnt + 1} value={cnt + 1}>
-                                    ➕ เพิ่มช่องใหม่ (#{cnt + 1})
-                                  </option>
-                                );
-                              }
-                              return opts;
-                            })()}
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.win();
-                              if (targetSlot > getSlotCount(parsedImport.mode)) {
-                                setSlotCount(parsedImport.mode, targetSlot);
-                              }
-                              onLoadSaveFile?.(parsedImport, targetSlot);
-                            }}
-                            className="btn btn-xs btn-primary shrink-0"
-                          >
-                            โหลดเลย
-                          </button>
+                        <div className="space-y-1.5">
+                          {(() => {
+                            void slotTick;
+                            const cnt = getSlotCount(parsedImport.mode);
+                            if (firstEmptySlot(parsedImport.mode) !== 0) return null;
+                            return (
+                              <div className="px-2 py-1.5 rounded-lg bg-[var(--lamp-soft)]/70 border border-[var(--lamp)]/60 flex flex-wrap items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[#7c5200] dark:text-[var(--lamp)]">
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                  <span>
+                                    {cnt < MAX_SLOTS
+                                      ? `ช่องเซฟ${parsedImport.mode === 'm' ? 'ผู้จัดการ' : 'นักเตะ'}ไม่พอ (${cnt}/${cnt}) กดเพิ่มช่องใหม่`
+                                      : `ช่องเซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว จะเขียนทับช่องเดิม`}
+                                  </span>
+                                </div>
+                                {cnt < MAX_SLOTS && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      SFX.tap();
+                                      const nextCap = setSlotCount(parsedImport.mode, cnt + 1);
+                                      setSlotTick((x) => x + 1);
+                                      setTargetSlot(nextCap);
+                                      onToast(`➕ เพิ่มช่องเซฟใหม่ (#${nextCap}) แล้ว`);
+                                    }}
+                                    className="h-8 mland:h-6 px-2.5 rounded-md bg-[var(--g)] text-white hover:brightness-110 text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-1 cursor-pointer shrink-0"
+                                  >
+                                    <Plus className="w-3 h-3 shrink-0 stroke-[2.5]" />
+                                    <span>เพิ่มช่อง (#{cnt + 1})</span>
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                          <div className="flex items-center gap-1.5">
+                            <select
+                              value={targetSlot}
+                              onChange={(e) => setTargetSlot(Number(e.target.value))}
+                              className="flex-1 min-w-0 h-9 mland:h-7 px-2 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-semibold"
+                            >
+                              {(() => {
+                                void slotTick;
+                                const cnt = getSlotCount(parsedImport.mode);
+                                const opts = Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
+                                  const existing = loadGameFromSlot(parsedImport.mode, k);
+                                  const occName = existing
+                                    ? existing.mode === 'm'
+                                      ? existing.club?.name || existing.teams[existing.me]?.name
+                                      : existing.p?.name
+                                    : '';
+                                  return (
+                                    <option key={k} value={k}>
+                                      ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
+                                    </option>
+                                  );
+                                });
+                                if (cnt < MAX_SLOTS) {
+                                  opts.push(
+                                    <option key={cnt + 1} value={cnt + 1}>
+                                      ➕ เพิ่มช่องใหม่ (#{cnt + 1})
+                                    </option>
+                                  );
+                                }
+                                return opts;
+                              })()}
+                            </select>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                SFX.win();
+                                if (targetSlot > getSlotCount(parsedImport.mode)) {
+                                  setSlotCount(parsedImport.mode, targetSlot);
+                                  setSlotTick((x) => x + 1);
+                                }
+                                onLoadSaveFile?.(parsedImport, targetSlot);
+                              }}
+                              className="btn h-9 mland:h-7 px-3 text-xs mland:text-[9.5px] btn-primary shrink-0"
+                            >
+                              โหลดเลย
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>

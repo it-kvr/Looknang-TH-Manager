@@ -236,6 +236,7 @@ export const MainMenu: React.FC<{
   const [confirmSaveSlot, setConfirmSaveSlot] = useState<{ mode: GameMode; k: number; d: GameState } | null>(null);
   const [confirmSaveNote, setConfirmSaveNote] = useState<string>('');
   const [slotActionBusy, setSlotActionBusy] = useState<boolean>(false);
+  const [slotFullPrompt, setSlotFullPrompt] = useState<{ mode: GameMode; curSlots: number } | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [slotCounts, setSlotCounts] = useState<{ m: number; p: number }>(() => ({
     m: getSlotCount('m'),
@@ -371,23 +372,17 @@ export const MainMenu: React.FC<{
   };
 
   const openManagerSetup = (slot: number) => {
-    let resolvedSlot = slot;
-    if (!resolvedSlot) {
+    if (!slot) {
+      SFX.tap();
       const cur = getSlotCount('m');
-      if (cur < MAX_SLOTS) {
-        const nextCap = setSlotCount('m', cur + 1);
-        setSlotCounts((prev) => ({ ...prev, m: nextCap }));
-        resolvedSlot = nextCap;
-      } else {
-        onToast(`เซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว กรุณาลบเซฟเก่าก่อน`);
-        return;
-      }
+      setSlotFullPrompt({ mode: 'm', curSlots: cur });
+      return;
     }
     SFX.tap();
     clearNamePool();
     const names = genClubNames();
     const t0 = names[0].map((n, i) => mkTeam(n, 0, i));
-    setTargetSlot(resolvedSlot);
+    setTargetSlot(slot);
     setPreviewClubs({ names, t0 });
     setSelectedClubIdx(0);
     setClubFilter('all');
@@ -416,20 +411,14 @@ export const MainMenu: React.FC<{
   };
 
   const openPlayerSetup = (slot: number) => {
-    let resolvedSlot = slot;
-    if (!resolvedSlot) {
+    if (!slot) {
+      SFX.tap();
       const cur = getSlotCount('p');
-      if (cur < MAX_SLOTS) {
-        const nextCap = setSlotCount('p', cur + 1);
-        setSlotCounts((prev) => ({ ...prev, p: nextCap }));
-        resolvedSlot = nextCap;
-      } else {
-        onToast(`เซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว กรุณาลบเซฟเก่าก่อน`);
-        return;
-      }
+      setSlotFullPrompt({ mode: 'p', curSlots: cur });
+      return;
     }
     SFX.tap();
-    setTargetSlot(resolvedSlot);
+    setTargetSlot(slot);
     const defaultArch = PLAYER_ARCHETYPES.find((a) => a.pos.includes('FW'))!;
     const rolled = rollStartingStats('FW', 'ST', defaultArch);
     const initTalent = R(62, 93);
@@ -542,6 +531,34 @@ export const MainMenu: React.FC<{
     occupiedEntries.sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.k - b.k);
 
     const rows: React.ReactNode[] = [];
+
+    if (emptySlotNums.length === 0) {
+      rows.push(
+        <div
+          key="slots-full-notice"
+          className="rounded-xl mland:rounded-lg border border-[var(--lamp)]/65 bg-[var(--lamp-soft)]/55 p-2.5 mland:p-2 space-y-2 mland:space-y-1.5"
+        >
+          <div className="flex items-start gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold text-[#7c5200] dark:text-[var(--lamp)] leading-snug">
+            <AlertTriangle className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 mt-0.5" />
+            <span>
+              {totalSlots < MAX_SLOTS
+                ? `ช่องเซฟเต็มแล้ว (${occupiedEntries.length}/${totalSlots} ช่อง) — ช่องเซฟไม่พอ กรุณากดเพิ่มช่องเซฟเพื่อสร้างเซฟเพิ่ม`
+                : `ช่องเซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว กรุณาลบเซฟเก่าหรือสำรองลงคลังเซฟก่อน`}
+            </span>
+          </div>
+          {totalSlots < MAX_SLOTS && (
+            <button
+              type="button"
+              onClick={() => handleAdjustSlotCount(m, 1)}
+              className="w-full h-10 sm:h-11 mland:h-8 px-3 rounded-xl mland:rounded-lg bg-[var(--g)] text-white hover:brightness-110 font-bold text-xs mland:text-[10px] inline-flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-all"
+            >
+              <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+              <span>เพิ่มช่องเซฟใหม่ (#{totalSlots + 1})</span>
+            </button>
+          )}
+        </div>
+      );
+    }
 
     occupiedEntries.forEach(({ k, d, pinned }) => {
       const meTeam = d.teams[d.me] || null;
@@ -2110,33 +2127,47 @@ export const MainMenu: React.FC<{
               </button>
 
               <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
-                <div className="shrink-0 px-2.5 mland:px-2 py-1.5 mland:py-1 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-1.5">
-                  <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
-                    เซฟผู้จัดการทีม
-                  </span>
-                  <div className="flex items-center gap-1 shrink-0">
+                <div className="shrink-0 px-2.5 mland:px-2 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/75 space-y-1.5 mland:space-y-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
+                      เซฟผู้จัดการทีม
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10.5px] mland:text-[8.5px] font-bold tabular shrink-0 border ${
+                        mCount >= slotCounts.m
+                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]'
+                          : 'bg-[var(--surface)] border-[var(--line)] text-[#9c6900] dark:text-[var(--lamp)]'
+                      }`}
+                    >
+                      {mCount >= slotCounts.m ? `เต็ม ${mCount}/${slotCounts.m}` : `${mCount}/${slotCounts.m} ช่อง`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('m', -1)}
                       disabled={slotCounts.m <= MIN_SLOTS}
                       title="ลดจำนวนช่องเซฟ"
                       aria-label="ลดจำนวนช่องเซฟผู้จัดการ"
-                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                      className="h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:text-[var(--red)] hover:border-[var(--red)]/55 hover:bg-[var(--red-soft)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-colors whitespace-nowrap"
                     >
-                      <Minus className="w-2.5 h-2.5" />
+                      <Minus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+                      <span>ลดช่อง</span>
                     </button>
-                    <span className="px-1 text-[10.5px] mland:text-[9px] font-bold tabular text-[#9c6900] dark:text-[var(--lamp)]">
-                      {mCount}/{slotCounts.m}
-                    </span>
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('m', 1)}
                       disabled={slotCounts.m >= MAX_SLOTS}
                       title="เพิ่มช่องเซฟ"
                       aria-label="เพิ่มช่องเซฟผู้จัดการ"
-                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--g)] hover:bg-[var(--g-soft)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                      className={`h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-all whitespace-nowrap ${
+                        mCount >= slotCounts.m && slotCounts.m < MAX_SLOTS
+                          ? 'bg-[var(--g)] border-[var(--g)] text-white hover:brightness-110 shadow-xs'
+                          : 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                      }`}
                     >
-                      <Plus className="w-2.5 h-2.5" />
+                      <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+                      <span>เพิ่มช่อง</span>
                     </button>
                   </div>
                 </div>
@@ -2170,33 +2201,47 @@ export const MainMenu: React.FC<{
               </button>
 
               <div className="flex-1 min-h-0 flex flex-col rounded-2xl mland:rounded-xl bg-[var(--surface)]/97 border border-[var(--line)] shadow-2xl overflow-hidden">
-                <div className="shrink-0 px-2.5 mland:px-2 py-1.5 mland:py-1 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-1.5">
-                  <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
-                    เซฟนักเตะอาชีพ
-                  </span>
-                  <div className="flex items-center gap-1 shrink-0">
+                <div className="shrink-0 px-2.5 mland:px-2 py-2 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/75 space-y-1.5 mland:space-y-1">
+                  <div className="flex items-center justify-between gap-1.5">
+                    <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] truncate">
+                      เซฟนักเตะอาชีพ
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10.5px] mland:text-[8.5px] font-bold tabular shrink-0 border ${
+                        pCount >= slotCounts.p
+                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]'
+                          : 'bg-[var(--surface)] border-[var(--line)] text-[var(--g)]'
+                      }`}
+                    >
+                      {pCount >= slotCounts.p ? `เต็ม ${pCount}/${slotCounts.p}` : `${pCount}/${slotCounts.p} ช่อง`}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('p', -1)}
                       disabled={slotCounts.p <= MIN_SLOTS}
                       title="ลดจำนวนช่องเซฟ"
                       aria-label="ลดจำนวนช่องเซฟนักเตะ"
-                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                      className="h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:text-[var(--red)] hover:border-[var(--red)]/55 hover:bg-[var(--red-soft)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-colors whitespace-nowrap"
                     >
-                      <Minus className="w-2.5 h-2.5" />
+                      <Minus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+                      <span>ลดช่อง</span>
                     </button>
-                    <span className="px-1 text-[10.5px] mland:text-[9px] font-bold tabular text-[var(--g)]">
-                      {pCount}/{slotCounts.p}
-                    </span>
                     <button
                       type="button"
                       onClick={() => handleAdjustSlotCount('p', 1)}
                       disabled={slotCounts.p >= MAX_SLOTS}
                       title="เพิ่มช่องเซฟ"
                       aria-label="เพิ่มช่องเซฟนักเตะ"
-                      className="w-5 h-5 mland:w-4 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--g)] hover:bg-[var(--g-soft)] hover:border-[var(--g)]/50 disabled:opacity-40 cursor-pointer flex items-center justify-center transition-colors"
+                      className={`h-10 sm:h-11 mland:h-8 px-2.5 rounded-xl mland:rounded-lg border disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-all whitespace-nowrap ${
+                        pCount >= slotCounts.p && slotCounts.p < MAX_SLOTS
+                          ? 'bg-[var(--g)] border-[var(--g)] text-white hover:brightness-110 shadow-xs'
+                          : 'bg-[var(--g-soft)] border-[var(--g)]/55 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                      }`}
                     >
-                      <Plus className="w-2.5 h-2.5" />
+                      <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+                      <span>เพิ่มช่อง</span>
                     </button>
                   </div>
                 </div>
@@ -2393,6 +2438,99 @@ export const MainMenu: React.FC<{
                 >
                   <Trash2 className="w-4 h-4 shrink-0" />
                   <span>ยืนยันลบเซฟ</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {slotFullPrompt && (() => {
+        const { mode, curSlots } = slotFullPrompt;
+        const isMgr = mode === 'm';
+        const canExpand = curSlots < MAX_SLOTS;
+        const modeTitle = isMgr ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
+        return (
+          <div
+            className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setSlotFullPrompt(null)}
+          >
+            <div
+              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 shadow-2xl space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 flex items-center justify-center text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm font-display text-[var(--ink)]">
+                    {canExpand
+                      ? `ช่องเซฟ${modeTitle}ไม่พอแล้ว (${curSlots}/${curSlots})`
+                      : `ช่องเซฟ${modeTitle}เต็มสูงสุดแล้ว (${MAX_SLOTS}/${MAX_SLOTS})`}
+                  </div>
+                  <div className="text-xs text-[var(--mut)] mt-0.5 leading-relaxed">
+                    {canExpand
+                      ? `ตอนนี้ช่องเซฟที่เปิดไว้เต็มทุกช่องแล้ว กรุณากดเพิ่มช่องเซฟเป็น ${curSlots + 1} ช่อง หรือลบเซฟเก่าที่ไม่ต้องการออกก่อน`
+                      : `ใช้งานครบขีดจำกัดสูงสุด ${MAX_SLOTS} ช่องต่อโหมดแล้ว กรุณาลบเซฟเก่าหรือสำรองลงคลังเซฟก่อนเริ่มใหม่`}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 pt-1">
+                {canExpand ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.win();
+                        const nextCap = setSlotCount(mode, curSlots + 1);
+                        setSlotCounts((prev) => ({ ...prev, [mode]: nextCap }));
+                        setSlotFullPrompt(null);
+                        onToast(`➕ เพิ่มช่องเซฟ${modeTitle}เป็น ${nextCap} ช่องแล้ว`);
+                        if (isMgr) openManagerSetup(nextCap);
+                        else openPlayerSetup(nextCap);
+                      }}
+                      className="btn h-11 px-4 text-xs sm:text-sm btn-primary w-full"
+                    >
+                      <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                      <span>เพิ่มช่องเซฟ (#{curSlots + 1}) และเริ่มเลย</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        const nextCap = setSlotCount(mode, curSlots + 1);
+                        setSlotCounts((prev) => ({ ...prev, [mode]: nextCap }));
+                        setSlotFullPrompt(null);
+                        onToast(`➕ เพิ่มช่องเซฟ${modeTitle}เป็น ${nextCap} ช่องแล้ว`);
+                      }}
+                      className="btn h-10 px-4 text-xs btn-secondary w-full"
+                    >
+                      <Plus className="w-4 h-4 shrink-0" />
+                      <span>เพิ่มช่องเซฟไว้ก่อน (#{curSlots + 1})</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setSlotFullPrompt(null);
+                      openImportModal();
+                    }}
+                    className="btn h-11 px-4 text-xs sm:text-sm btn-gold w-full"
+                  >
+                    <FolderInput className="w-4 h-4 shrink-0" />
+                    <span>เปิดคลังเซฟเพื่อสำรองข้อมูล</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSlotFullPrompt(null)}
+                  className="btn h-10 px-4 text-xs btn-secondary w-full"
+                >
+                  ปิดหน้าต่าง
                 </button>
               </div>
             </div>

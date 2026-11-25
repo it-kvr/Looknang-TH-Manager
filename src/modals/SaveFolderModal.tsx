@@ -6,7 +6,9 @@ import {
   Download,
   Folder,
   FolderInput,
+  Minus,
   Pin,
+  Plus,
   RefreshCw,
   Save,
   Trash2,
@@ -24,6 +26,7 @@ import {
   getSlotCount,
   loadGameFromSlot,
   MAX_SLOTS,
+  MIN_SLOTS,
   setSlotCount,
   togglePinnedFolderKey
 } from '../engine/playerCore';
@@ -263,6 +266,11 @@ export const SaveFolderModal: React.FC<{
   const [busy, setBusy] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [pinnedFolderKeys, setPinnedFolderKeys] = useState<string[]>(() => getPinnedFolderKeys());
+  const [slotCounts, setSlotCountsState] = useState<{ m: number; p: number }>(() => ({
+    m: getSlotCount('m'),
+    p: getSlotCount('p')
+  }));
+  const [slotMgmtMode, setSlotMgmtMode] = useState<GameMode>(currentState?.mode || 'm');
 
   // Tab 2: External File / Save Code
   const [codeText, setCodeText] = useState('');
@@ -292,13 +300,58 @@ export const SaveFolderModal: React.FC<{
     };
     addState(currentState);
     (['m', 'p'] as const).forEach((mode) => {
-      const cnt = getSlotCount(mode);
+      const cnt = slotCounts[mode];
       for (let k = 1; k <= cnt; k++) {
         addState(loadGameFromSlot(mode, k), `${mode}:${k}`);
       }
     });
     return { identityKeys, activeSlotKeys };
-  }, [currentState, entries]);
+  }, [currentState, entries, slotCounts]);
+
+  const slotUsage = useMemo(() => {
+    const calc = (mode: GameMode) => {
+      const cap = slotCounts[mode];
+      let used = 0;
+      for (let k = 1; k <= cap; k++) {
+        if (loadGameFromSlot(mode, k)) used += 1;
+      }
+      return { used, cap, empty: Math.max(0, cap - used) };
+    };
+    return { m: calc('m'), p: calc('p') };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slotCounts, entries, currentState]);
+
+  const activeSlotMgmtMode: GameMode = modeFilter === 'all' ? slotMgmtMode : modeFilter;
+
+  const handleAdjustSlotCount = (mode: GameMode, delta: 1 | -1) => {
+    SFX.tap();
+    const cur = getSlotCount(mode);
+    const modeLabel = mode === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
+    if (delta === 1) {
+      if (cur >= MAX_SLOTS) {
+        onToast(`โหมด${modeLabel}รองรับสูงสุด ${MAX_SLOTS} ช่องแล้ว`);
+        return;
+      }
+      const nextCap = setSlotCount(mode, cur + 1);
+      setSlotCountsState((prev) => ({ ...prev, [mode]: nextCap }));
+      onToast(`➕ เพิ่มช่องเซฟ${modeLabel}เป็น ${nextCap} ช่องแล้ว`);
+      return;
+    }
+    if (cur <= MIN_SLOTS) {
+      onToast(`ต้องมีอย่างน้อย ${MIN_SLOTS} ช่องเซฟ`);
+      return;
+    }
+    if (loadGameFromSlot(mode, cur)) {
+      onToast(`ช่อง #${cur} (${modeLabel}) ยังมีเซฟอยู่ กรุณาลบเซฟในช่องนั้นก่อนลดจำนวนช่อง`);
+      return;
+    }
+    const nextCap = setSlotCount(mode, cur - 1);
+    setSlotCountsState((prev) => ({ ...prev, [mode]: nextCap }));
+    if (typeof slotChoice === 'number' && slotChoice > nextCap) {
+      setSlotChoice('auto');
+    }
+    onToast(`➖ ลดช่องเซฟ${modeLabel}เหลือ ${nextCap} ช่องแล้ว`);
+  };
 
   const isEntryAlreadyInGame = (entry: FolderSaveEntry): boolean =>
     inGameSaveIndex.identityKeys.has(
@@ -484,9 +537,8 @@ export const SaveFolderModal: React.FC<{
   }, [filteredEntries, modeFilter]);
 
   const maxChoiceSlots = useMemo(
-    () => Math.max(getSlotCount('m'), getSlotCount('p')),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, currentState]
+    () => Math.max(slotCounts.m, slotCounts.p),
+    [slotCounts]
   );
 
   const renderSaveCard = (entry: FolderSaveEntry) => {
@@ -796,6 +848,7 @@ export const SaveFolderModal: React.FC<{
                       onClick={() => {
                         SFX.tap();
                         setModeFilter(key);
+                        if (key !== 'all') setSlotMgmtMode(key);
                       }}
                       className={`px-2.5 py-1 mland:py-0.5 rounded-lg font-bold cursor-pointer transition-colors ${
                         modeFilter === key
@@ -815,7 +868,7 @@ export const SaveFolderModal: React.FC<{
                     onChange={(e) =>
                       setSlotChoice(e.target.value === 'auto' ? 'auto' : Number(e.target.value))
                     }
-                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]"
+                    className="h-9 mland:h-7 px-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]"
                   >
                     <option value="auto">อัตโนมัติ</option>
                     {Array.from({ length: maxChoiceSlots }, (_, i) => i + 1).map((k) => (
@@ -826,6 +879,118 @@ export const SaveFolderModal: React.FC<{
                   </select>
                 </label>
               </div>
+
+              {/* Slot Capacity Manager — Large +/- Controls + Full-Slot Warning */}
+              {(() => {
+                const activeStats = slotUsage[activeSlotMgmtMode];
+                const isActiveFull = activeStats.empty === 0;
+                const fullModes: GameMode[] = (['m', 'p'] as const).filter(
+                  (md) => (modeFilter === 'all' || modeFilter === md) && slotUsage[md].empty === 0
+                );
+                return (
+                  <div className="shrink-0 p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mland:gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5 min-w-0">
+                        <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] shrink-0">
+                          ช่องเซฟในเกม:
+                        </span>
+                        {(['m', 'p'] as const).map((md) => {
+                          const st = slotUsage[md];
+                          const selected = activeSlotMgmtMode === md;
+                          const isFull = st.empty === 0;
+                          return (
+                            <button
+                              key={md}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                setSlotMgmtMode(md);
+                              }}
+                              className={`h-8 mland:h-7 px-2.5 rounded-lg border text-[11px] mland:text-[9.5px] font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors tabular ${
+                                selected
+                                  ? 'bg-[var(--surface)] border-[var(--g)] text-[var(--ink)] shadow-2xs'
+                                  : 'bg-[var(--surface)]/55 border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                              }`}
+                            >
+                              <span>{md === 'm' ? '📋 ผู้จัดการ' : '⚽ นักเตะ'}</span>
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] mland:text-[8.5px] font-extrabold ${
+                                  isFull
+                                    ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                                    : 'bg-[var(--g-soft)] text-[var(--g)]'
+                                }`}
+                              >
+                                {isFull ? `เต็ม ${st.used}/${st.cap}` : `${st.used}/${st.cap}`}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustSlotCount(activeSlotMgmtMode, -1)}
+                          disabled={activeStats.cap <= MIN_SLOTS}
+                          aria-label="ลดจำนวนช่องเซฟ"
+                          className="h-10 sm:h-11 mland:h-8 px-3.5 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--ink)] hover:border-[var(--red)]/60 hover:bg-[var(--red-soft)]/50 hover:text-[var(--red)] disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-colors whitespace-nowrap"
+                        >
+                          <Minus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+                          <span>ลดช่อง ({activeStats.cap})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustSlotCount(activeSlotMgmtMode, 1)}
+                          disabled={activeStats.cap >= MAX_SLOTS}
+                          aria-label="เพิ่มจำนวนช่องเซฟ"
+                          className={`h-10 sm:h-11 mland:h-8 px-4 rounded-xl mland:rounded-lg border disabled:opacity-40 cursor-pointer flex items-center justify-center gap-1.5 text-xs mland:text-[10px] font-bold transition-all whitespace-nowrap ${
+                            isActiveFull && activeStats.cap < MAX_SLOTS
+                              ? 'bg-[var(--g)] border-[var(--g)] text-white hover:brightness-110 shadow-xs'
+                              : 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                          }`}
+                        >
+                          <Plus className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0 stroke-[2.5]" />
+                          <span>เพิ่มช่อง</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {fullModes.length > 0 && (
+                      <div className="px-2.5 py-2 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--lamp-soft)]/55 border border-[var(--lamp)]/60 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-bold text-[#7c5200] dark:text-[var(--lamp)] min-w-0">
+                          <AlertTriangle className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                          <span className="leading-snug">
+                            ช่องเซฟ
+                            {fullModes.map((md) => (md === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ')).join(' และ ')}
+                            เต็มแล้ว — ช่องไม่พอ กด &ldquo;เพิ่มช่อง&rdquo; ก่อนโหลดเพื่อไม่ทับเซฟเดิม
+                          </span>
+                        </div>
+                        {activeStats.cap < MAX_SLOTS && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const targetMd = fullModes.includes(activeSlotMgmtMode)
+                                ? activeSlotMgmtMode
+                                : fullModes[0];
+                              if (slotUsage[targetMd].cap < MAX_SLOTS) {
+                                handleAdjustSlotCount(targetMd, 1);
+                              }
+                            }}
+                            className="h-9 mland:h-7 px-3 rounded-lg bg-[var(--g)] text-white hover:brightness-110 text-[11px] mland:text-[9.5px] font-bold inline-flex items-center gap-1 cursor-pointer shrink-0 whitespace-nowrap"
+                          >
+                            <Plus className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+                            <span>
+                              เพิ่มช่อง{fullModes.includes(activeSlotMgmtMode)
+                                ? (activeSlotMgmtMode === 'm' ? 'ผู้จัดการ' : 'นักเตะ')
+                                : (fullModes[0] === 'm' ? 'ผู้จัดการ' : 'นักเตะ')}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Scrollable Save List — Separated Cleanly by Mode */}
               <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 mland:flex-none mland:overflow-visible">
@@ -1084,52 +1249,83 @@ export const SaveFolderModal: React.FC<{
                         <span>เซฟนี้มีอยู่ในเกมแล้ว ไม่ต้องโหลดซ้ำ</span>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={codeTargetSlot}
-                          onChange={(e) => setCodeTargetSlot(Number(e.target.value))}
-                          className="flex-1 min-w-0 h-9 px-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
-                        >
-                          {(() => {
-                            const cnt = getSlotCount(parsedCode.mode);
-                            const options = Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
-                              const existing = loadGameFromSlot(parsedCode.mode, k);
-                              const occName = existing ? getStateDisplayName(existing) : '';
-                              return (
-                                <option key={k} value={k}>
-                                  ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
-                                </option>
-                              );
-                            });
-                            if (cnt < MAX_SLOTS) {
-                              options.push(
-                                <option key={cnt + 1} value={cnt + 1}>
-                                  ➕ เพิ่มช่องใหม่ (#{cnt + 1})
-                                </option>
-                              );
-                            }
-                            return options;
-                          })()}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            SFX.win();
-                            if (codeTargetSlot > getSlotCount(parsedCode.mode)) {
-                              setSlotCount(parsedCode.mode, codeTargetSlot);
-                            }
-                            await saveGameToAutoFolder(parsedCode, {
-                              slot: codeTargetSlot,
-                              isAutoSave: true
-                            });
-                            onLoadSave(parsedCode, codeTargetSlot);
-                            onClose();
-                          }}
-                          className="btn h-9 px-4 text-xs btn-primary shrink-0"
-                        >
-                          <Check className="w-3.5 h-3.5 shrink-0" />
-                          <span>โหลดใช้งาน</span>
-                        </button>
+                      <div className="space-y-2">
+                        {firstEmptySlot(parsedCode.mode) === 0 && (
+                          <div className="px-2.5 py-2 rounded-xl bg-[var(--lamp-soft)]/55 border border-[var(--lamp)]/60 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#7c5200] dark:text-[var(--lamp)]">
+                              <AlertTriangle className="w-4 h-4 shrink-0" />
+                              <span>
+                                {slotCounts[parsedCode.mode] < MAX_SLOTS
+                                  ? `ช่องเซฟ${parsedCode.mode === 'm' ? 'ผู้จัดการ' : 'นักเตะ'}ไม่พอ (เต็ม ${slotCounts[parsedCode.mode]}/${slotCounts[parsedCode.mode]} ช่อง) — กดเพิ่มช่องใหม่เพื่อไม่ต้องเขียนทับ`
+                                  : `ช่องเซฟเต็มสูงสุด ${MAX_SLOTS} ช่องแล้ว หากโหลดจะเขียนทับช่องที่เลือก`}
+                              </span>
+                            </div>
+                            {slotCounts[parsedCode.mode] < MAX_SLOTS && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  const nextCap = setSlotCount(parsedCode.mode, slotCounts[parsedCode.mode] + 1);
+                                  setSlotCountsState((prev) => ({ ...prev, [parsedCode.mode]: nextCap }));
+                                  setCodeTargetSlot(nextCap);
+                                  onToast(`➕ เพิ่มช่องเซฟใหม่ (#${nextCap}) แล้ว`);
+                                }}
+                                className="h-9 px-3 rounded-lg bg-[var(--g)] text-white hover:brightness-110 text-xs font-bold inline-flex items-center gap-1 cursor-pointer shrink-0"
+                              >
+                                <Plus className="w-3.5 h-3.5 shrink-0 stroke-[2.5]" />
+                                <span>เพิ่มช่อง (#{slotCounts[parsedCode.mode] + 1})</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <select
+                            value={codeTargetSlot}
+                            onChange={(e) => setCodeTargetSlot(Number(e.target.value))}
+                            className="flex-1 min-w-0 h-10 px-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
+                          >
+                            {(() => {
+                              const cnt = slotCounts[parsedCode.mode];
+                              const options = Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
+                                const existing = loadGameFromSlot(parsedCode.mode, k);
+                                const occName = existing ? getStateDisplayName(existing) : '';
+                                return (
+                                  <option key={k} value={k}>
+                                    ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
+                                  </option>
+                                );
+                              });
+                              if (cnt < MAX_SLOTS) {
+                                options.push(
+                                  <option key={cnt + 1} value={cnt + 1}>
+                                    ➕ เพิ่มช่องใหม่ (#{cnt + 1})
+                                  </option>
+                                );
+                              }
+                              return options;
+                            })()}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              SFX.win();
+                              if (codeTargetSlot > getSlotCount(parsedCode.mode)) {
+                                const nextCap = setSlotCount(parsedCode.mode, codeTargetSlot);
+                                setSlotCountsState((prev) => ({ ...prev, [parsedCode.mode]: nextCap }));
+                              }
+                              await saveGameToAutoFolder(parsedCode, {
+                                slot: codeTargetSlot,
+                                isAutoSave: true
+                              });
+                              onLoadSave(parsedCode, codeTargetSlot);
+                              onClose();
+                            }}
+                            className="btn h-10 px-4 text-xs btn-primary shrink-0"
+                          >
+                            <Check className="w-4 h-4 shrink-0" />
+                            <span>โหลดใช้งาน</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1283,97 +1479,132 @@ export const SaveFolderModal: React.FC<{
         )}
 
         {/* Confirm Slot Sub-dialog when slots are full and user is in auto mode */}
-        {confirmLoadEntry && (
-          <div
-            className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
-            onClick={() => setConfirmLoadEntry(null)}
-          >
+        {confirmLoadEntry && (() => {
+          const cnt = slotCounts[confirmLoadEntry.mode];
+          const canAddSlot = cnt < MAX_SLOTS;
+          const modeLabel = confirmLoadEntry.mode === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
+          return (
             <div
-              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
-              onClick={(e) => e.stopPropagation()}
+              className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+              onClick={() => setConfirmLoadEntry(null)}
             >
-              <div className="font-bold text-sm font-display">
-                {getSlotCount(confirmLoadEntry.mode) < MAX_SLOTS
-                  ? 'เลือกช่องที่จะโหลดใช้งาน (เพิ่มช่องใหม่หรือเขียนทับ)'
-                  : 'ช่องเซฟเต็มแล้ว — เลือกช่องที่จะเขียนทับ'}
-              </div>
-              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <SaveVisualDock
-                    mode={confirmLoadEntry.mode}
-                    name={confirmLoadEntry.name}
-                    preview={confirmLoadEntry.preview}
-                    compact
-                  />
-                  <div className="min-w-0">
-                    <div className="font-bold text-xs truncate">
-                      {confirmLoadEntry.label && !confirmLoadEntry.isAutoSave
-                        ? `${confirmLoadEntry.label} · `
-                        : ''}
-                      {confirmLoadEntry.name}
+              <div
+                className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 shadow-2xl space-y-3"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 flex items-center justify-center text-[#8a5b00] dark:text-[var(--lamp)] shrink-0">
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-sm font-display">
+                      {canAddSlot
+                        ? `ช่องเซฟ${modeLabel}เต็มแล้ว (${cnt}/${cnt} ช่อง)`
+                        : `ช่องเซฟ${modeLabel}เต็มสูงสุดแล้ว (${MAX_SLOTS}/${MAX_SLOTS})`}
                     </div>
-                    <div className="text-[11px] text-[var(--mut)] tabular">
-                      ซีซัน {confirmLoadEntry.season} · นัด {confirmLoadEntry.md}
+                    <div className="text-[11px] text-[var(--mut)] leading-snug mt-0.5">
+                      {canAddSlot
+                        ? `ช่องเซฟไม่พอ กรุณากดเพิ่มช่องใหม่ (#${cnt + 1}) หรือเลือกช่องเดิมด้านล่างเพื่อเขียนทับ`
+                        : 'กรุณาเลือกช่องเดิมที่ต้องการเขียนทับ หรือกลับไปลบเซฟเก่าออกก่อน'}
                     </div>
                   </div>
                 </div>
-                <SaveOvrBadge mode={confirmLoadEntry.mode} preview={confirmLoadEntry.preview} compact />
-              </div>
-              <select
-                value={confirmSlotNum}
-                onChange={(e) => setConfirmSlotNum(Number(e.target.value))}
-                className="w-full px-2.5 py-2 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
-              >
-                {(() => {
-                  const cnt = getSlotCount(confirmLoadEntry.mode);
-                  const opts = Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
-                    const existing = loadGameFromSlot(confirmLoadEntry.mode, k);
-                    const occName = existing
-                      ? existing.mode === 'm'
-                        ? existing.club?.name || existing.teams[existing.me]?.name
-                        : existing.p?.name
-                      : '';
-                    return (
-                      <option key={k} value={k}>
-                        ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
-                      </option>
-                    );
-                  });
-                  if (cnt < MAX_SLOTS) {
-                    opts.unshift(
+                <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <SaveVisualDock
+                      mode={confirmLoadEntry.mode}
+                      name={confirmLoadEntry.name}
+                      preview={confirmLoadEntry.preview}
+                      compact
+                    />
+                    <div className="min-w-0">
+                      <div className="font-bold text-xs truncate">
+                        {confirmLoadEntry.label && !confirmLoadEntry.isAutoSave
+                          ? `${confirmLoadEntry.label} · `
+                          : ''}
+                        {confirmLoadEntry.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--mut)] tabular">
+                        ซีซัน {confirmLoadEntry.season} · นัด {confirmLoadEntry.md}
+                      </div>
+                    </div>
+                  </div>
+                  <SaveOvrBadge mode={confirmLoadEntry.mode} preview={confirmLoadEntry.preview} compact />
+                </div>
+
+                {canAddSlot && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      const nextSlot = setSlotCount(confirmLoadEntry.mode, cnt + 1);
+                      setSlotCountsState((prev) => ({ ...prev, [confirmLoadEntry.mode]: nextSlot }));
+                      void handleLoadEntryDirect(confirmLoadEntry, nextSlot);
+                    }}
+                    className="btn h-11 px-4 text-xs sm:text-sm btn-primary w-full"
+                  >
+                    <Plus className="w-4 h-4 shrink-0 stroke-[2.5]" />
+                    <span>เพิ่มช่องเซฟใหม่ (#{cnt + 1}) แล้วโหลดเลย</span>
+                  </button>
+                )}
+
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold text-[var(--mut)]">
+                    หรือเลือกช่องที่จะโหลด / เขียนทับ:
+                  </div>
+                  <select
+                    value={confirmSlotNum}
+                    onChange={(e) => setConfirmSlotNum(Number(e.target.value))}
+                    className="w-full h-10 px-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
+                  >
+                    {Array.from({ length: cnt }, (_, idx) => idx + 1).map((k) => {
+                      const existing = loadGameFromSlot(confirmLoadEntry.mode, k);
+                      const occName = existing
+                        ? existing.mode === 'm'
+                          ? existing.club?.name || existing.teams[existing.me]?.name
+                          : existing.p?.name
+                        : '';
+                      return (
+                        <option key={k} value={k}>
+                          ช่อง #{k} {existing ? `(ทับ: ${occName})` : '(ว่าง)'}
+                        </option>
+                      );
+                    })}
+                    {canAddSlot && (
                       <option key={cnt + 1} value={cnt + 1}>
                         ➕ เพิ่มช่องใหม่ (#{cnt + 1})
                       </option>
-                    );
-                  }
-                  return opts;
-                })()}
-              </select>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setConfirmLoadEntry(null)}
-                  className="btn btn-md btn-secondary flex-1"
-                >
-                  ยกเลิก
-                </button>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    if (confirmSlotNum > getSlotCount(confirmLoadEntry.mode)) {
-                      setSlotCount(confirmLoadEntry.mode, confirmSlotNum);
-                    }
-                    void handleLoadEntryDirect(confirmLoadEntry, confirmSlotNum);
-                  }}
-                  className="btn btn-md btn-primary flex-1"
-                >
-                  ยืนยันโหลดใช้งาน
-                </button>
+                    )}
+                  </select>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmLoadEntry(null)}
+                    className="btn h-10 px-4 text-xs btn-secondary flex-1"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      if (confirmSlotNum > getSlotCount(confirmLoadEntry.mode)) {
+                        const nextCap = setSlotCount(confirmLoadEntry.mode, confirmSlotNum);
+                        setSlotCountsState((prev) => ({ ...prev, [confirmLoadEntry.mode]: nextCap }));
+                      }
+                      void handleLoadEntryDirect(confirmLoadEntry, confirmSlotNum);
+                    }}
+                    className="btn h-10 px-4 text-xs btn-gold flex-1"
+                  >
+                    ยืนยันโหลดใช้งาน
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
