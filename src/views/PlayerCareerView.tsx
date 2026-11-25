@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Player, GameState } from '../types/game';
+import type { Player, GameState, CupCompKey } from '../types/game';
 import { clamp } from '../utils/math';
 import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, SPN, ATT } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -23,6 +23,7 @@ import {
   ROLE_ADAPT_TARGETS
 } from '../engine/playerCore';
 import { getPlayerTalent } from '../engine/missions';
+import { CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
 import { ClubCrest } from '../components/SvgVisuals';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
@@ -40,6 +41,7 @@ export const PlayerCareerView: React.FC<{
 }> = ({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
   const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
   const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
+  const [statCompScope, setStatCompScope] = useState<'career' | 'league' | 'cup'>('career');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const p = state.p;
   if (!p) return null;
@@ -144,24 +146,106 @@ export const PlayerCareerView: React.FC<{
             )}
           </div>
 
-          <div className="grid grid-cols-4 gap-1 text-center">
-            <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-              <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">👕 ลง</div>
-              <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{p.ap}</div>
-            </div>
-            <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-              <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⚽ ยิง</div>
-              <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{p.gl}</div>
-            </div>
-            <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-              <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{p.pos === 'GK' ? '🧤 คลีน' : '🎯 จ่าย'}</div>
-              <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{p.pos === 'GK' ? (meSq?.cs || 0) : p.as}</div>
-            </div>
-            <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-              <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⭐ เรต</div>
-              <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none text-[#8a5b00] dark:text-[#fde047]">{avgRt}</div>
-            </div>
-          </div>
+          {(() => {
+            const cupT = getPlayerCupTotals(meSq, 'all');
+            const lgSp = meSq?.sp || 0;
+            const lgSg = meSq?.sg || 0;
+            const lgSa = meSq?.sa || 0;
+            const lgCs = meSq?.cs || 0;
+            const lgRt = (meSq?.sra || 0) > 0 ? ((meSq?.srs || 0) / Math.max(1, meSq?.sra || 1)).toFixed(2) : '-';
+            const cupRt = cupT.sra > 0 ? cupT.avgRating.toFixed(2) : '-';
+            const careerCs = lgCs + cupT.cs;
+
+            const dispSp = statCompScope === 'cup' ? cupT.sp : statCompScope === 'league' ? lgSp : p.ap;
+            const dispSg = statCompScope === 'cup' ? cupT.sg : statCompScope === 'league' ? lgSg : p.gl;
+            const disp3 =
+              p.pos === 'GK'
+                ? statCompScope === 'cup'
+                  ? cupT.cs
+                  : statCompScope === 'league'
+                    ? lgCs
+                    : careerCs
+                : statCompScope === 'cup'
+                  ? cupT.sa
+                  : statCompScope === 'league'
+                    ? lgSa
+                    : p.as;
+            const dispRt = statCompScope === 'cup' ? cupRt : statCompScope === 'league' ? lgRt : avgRt;
+
+            const playedCups = (['cup', 'lc', 'dc', 'sc', 'asia'] as CupCompKey[]).filter(
+              (k) => (meSq?.cupStats?.[k]?.sp || 0) > 0
+            );
+
+            return (
+              <div className="space-y-1">
+                <div className="seg-bar w-full grid grid-cols-3">
+                  {(
+                    [
+                      ['career', '🌟 อาชีพ'],
+                      ['league', '⚽ ลีก'],
+                      ['cup', `🏆 ถ้วย${cupT.sp > 0 ? ` (${cupT.sp})` : ''}`]
+                    ] as const
+                  ).map(([id, lbl]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setStatCompScope(id);
+                      }}
+                      className={`seg-btn py-0.5 px-1 text-[9.5px] mland:text-[7.5px] justify-center ${
+                        statCompScope === id ? 'seg-btn-active' : ''
+                      }`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-4 gap-1 text-center">
+                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">👕 ลง</div>
+                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSp}</div>
+                  </div>
+                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⚽ ยิง</div>
+                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
+                  </div>
+                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{p.pos === 'GK' ? '🧤 คลีน' : '🎯 จ่าย'}</div>
+                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
+                  </div>
+                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⭐ เรต</div>
+                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none text-[#8a5b00] dark:text-[#fde047]">{dispRt}</div>
+                  </div>
+                </div>
+
+                {statCompScope === 'cup' && (
+                  <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 text-[9px] mland:text-[7.5px] text-[var(--mut)] tabular leading-snug">
+                    {playedCups.length > 0 ? (
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        {playedCups.map((ck) => {
+                          const m = CUP_COMP_META[ck];
+                          const st = meSq!.cupStats![ck]!;
+                          return (
+                            <span key={ck} className="whitespace-nowrap">
+                              {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
+                              {st.sg > 0 ? `·${st.sg}⚽` : ''}
+                              {p.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}🎯` : ''}
+                              {st.motm > 0 ? `·${st.motm}👑` : ''}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span>ยังไม่ได้ลงเล่นรายการบอลถ้วยในซีซั่นนี้</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1.5">
             <span className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] font-semibold truncate">

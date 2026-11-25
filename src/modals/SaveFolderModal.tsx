@@ -105,56 +105,68 @@ const SaveVisualDock: React.FC<{
   const clubName = preview?.teamName || name;
   const primaryCol = preview?.club?.c1 || preview?.team?.kc?.[0] || (isMgr ? '#d97706' : '#158049');
   const boxCls = compact
-    ? 'w-9 h-9 mland:w-8 mland:h-8 rounded-lg'
-    : 'w-11 h-11 sm:w-12 sm:h-12 mland:w-9 mland:h-9 rounded-xl mland:rounded-lg';
+    ? 'w-11 h-11 mland:w-9 mland:h-9 rounded-xl mland:rounded-lg'
+    : 'w-14 h-14 sm:w-16 sm:h-16 mland:w-12 mland:h-12 rounded-2xl mland:rounded-xl';
 
   return (
-    <div className="relative flex items-center gap-1 shrink-0">
+    <div className="relative flex items-center gap-1.5 mland:gap-1 shrink-0">
       {/* Club Logo */}
       <div
-        className={`${boxCls} border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center overflow-hidden shadow-2xs`}
+        className={`${boxCls} border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center overflow-hidden shadow-xs`}
         style={{
-          backgroundImage: `radial-gradient(circle at 50% 25%, ${primaryCol}22, transparent 78%)`
+          backgroundImage: `radial-gradient(circle at 50% 28%, ${primaryCol}26, transparent 78%)`
         }}
         title={clubName}
       >
         {preview?.team || preview?.club ? (
-          <div className={compact ? '[&>svg]:w-6 [&>svg]:h-6' : '[&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6'}>
+          <div
+            className={
+              compact
+                ? '[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7'
+                : '[&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-[52px] sm:[&>svg]:h-[52px] mland:[&>svg]:w-9 mland:[&>svg]:h-9'
+            }
+          >
             <ClubCrest
               name={clubName}
-              size={compact ? 24 : 32}
+              size={compact ? 32 : 52}
               team={teamObj}
               club={preview?.club || null}
               isMyClub={isMgr}
             />
           </div>
         ) : (
-          <span className="text-base mland:text-xs leading-none">{isMgr ? '🛡️' : '🏟️'}</span>
+          <span className="text-xl mland:text-base leading-none">{isMgr ? '🛡️' : '🏟️'}</span>
         )}
       </div>
 
       {/* Player Avatar */}
       <div
-        className={`${boxCls} border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center overflow-hidden shadow-2xs`}
+        className={`${boxCls} border border-[var(--line)] bg-[var(--surface)] flex items-end justify-center overflow-hidden shadow-xs`}
         style={{
-          backgroundImage: `linear-gradient(180deg, ${primaryCol}18 0%, transparent 75%)`
+          backgroundImage: `linear-gradient(180deg, ${primaryCol}20 0%, transparent 78%)`
         }}
         title={preview?.player?.n || name}
       >
         {preview?.player || preview?.careerProfile ? (
-          <div className={compact ? '[&>svg]:w-8 [&>svg]:h-8' : '[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-end justify-center'}>
+          <div
+            className={
+              compact
+                ? '[&>svg]:w-10 [&>svg]:h-11 mland:[&>svg]:w-8 mland:[&>svg]:h-9 flex items-end justify-center'
+                : '[&>svg]:w-13 [&>svg]:h-14 sm:[&>svg]:w-15 sm:[&>svg]:h-16 mland:[&>svg]:w-11 mland:[&>svg]:h-12 flex items-end justify-center'
+            }
+          >
             <PlayerFace
               player={preview?.player || { n: name, pos: 'FW', ro: 'ST' }}
               team={teamObj}
               club={preview?.club || null}
               isMyClub={isMgr}
               careerProfile={(preview?.careerProfile as PlayerCareerProfile | null) || null}
-              size={compact ? 32 : 42}
+              size={compact ? 40 : 60}
               bare
             />
           </div>
         ) : (
-          <span className="text-base mland:text-xs leading-none">{isMgr ? '📋' : '⚽'}</span>
+          <span className="text-xl mland:text-base leading-none self-center">{isMgr ? '📋' : '⚽'}</span>
         )}
       </div>
 
@@ -182,10 +194,10 @@ const SaveOvrBadge: React.FC<{
 
   return (
     <div
-      className={`shrink-0 flex flex-col items-center justify-center rounded-xl mland:rounded-lg border text-white shadow-xs tabular ${
+      className={`shrink-0 flex flex-col items-center justify-center rounded-2xl mland:rounded-xl border text-white shadow-xs tabular ${
         compact
-          ? 'min-w-[44px] px-1.5 py-1'
-          : 'min-w-[54px] sm:min-w-[60px] mland:min-w-[48px] px-2 py-1 mland:px-1.5 mland:py-0.5'
+          ? 'min-w-[46px] h-11 mland:h-9 px-2 py-0.5'
+          : 'min-w-[56px] sm:min-w-[62px] mland:min-w-[48px] h-14 sm:h-16 mland:h-12 px-2 py-1 mland:px-1.5 mland:py-0.5'
       }`}
       style={{
         backgroundColor: col,
@@ -202,7 +214,7 @@ const SaveOvrBadge: React.FC<{
       </span>
       <span
         className={`font-display font-extrabold leading-tight ${
-          compact ? 'text-sm' : 'text-base sm:text-lg mland:text-sm'
+          compact ? 'text-sm mland:text-xs' : 'text-lg sm:text-xl mland:text-sm'
         }`}
       >
         {ov}
@@ -495,8 +507,11 @@ export const SaveFolderModal: React.FC<{
               : 'border-[var(--line)] bg-[var(--surface-2)]/55 hover:bg-[var(--surface)] hover:border-[var(--g)]/55 hover:shadow-xs'
         }`}
       >
-        {/* Top/Left Content: Logo + Player + Details + Max OVR */}
-        <div className="flex items-center gap-2.5 mland:gap-2 min-w-0 flex-1">
+        {/* Top/Left Content: Large Logo + Player + 2-Row Details + Max OVR */}
+        <div
+          className="flex items-center gap-3 mland:gap-2 min-w-0 flex-1"
+          title={`${entry.filename}${tierLabel ? ` · ${tierLabel}` : ''}${entry.size ? ` · ${fmtBytes(entry.size)}` : ''}`}
+        >
           <SaveVisualDock
             mode={entry.mode}
             name={entry.name}
@@ -504,13 +519,14 @@ export const SaveFolderModal: React.FC<{
             isPinned={isPinned}
           />
 
-          <div className="min-w-0 flex-1 space-y-0.5">
-            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-              <span className="font-extrabold text-[13px] sm:text-sm mland:text-[11px] truncate text-[var(--ink)] leading-tight">
+          <div className="min-w-0 flex-1 space-y-1 mland:space-y-0.5">
+            {/* Row 1: Primary Name + Checkpoint Note + Save Type */}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-extrabold text-[13.5px] sm:text-sm mland:text-[11px] truncate text-[var(--ink)] leading-tight">
                 {entry.name}
               </span>
               {entry.label && !entry.isAutoSave && (
-                <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-[160px]">
+                <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8px] font-bold text-[var(--ink)] truncate max-w-[130px] shrink-0">
                   🏷️ {entry.label}
                 </span>
               )}
@@ -525,65 +541,27 @@ export const SaveFolderModal: React.FC<{
               </span>
             </div>
 
-            {/* Player & Club Line */}
-            {pv && (
-              <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)]/85 truncate">
-                {isMgr ? (
-                  <>
-                    {pv.player ? (
-                      <span className="truncate">
-                        ⭐ {pv.player.n}{' '}
-                        <span className="text-[var(--mut)] font-bold">({pv.player.ro})</span>
-                      </span>
-                    ) : null}
-                    {tierLabel && (
-                      <>
-                        {pv.player && <span className="opacity-40">·</span>}
-                        <span className="text-[var(--mut)] truncate">{tierLabel}</span>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <span className="truncate">🛡️ {pv.teamName}</span>
-                    {pv.player && (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span className="text-[var(--g)] font-bold">{pv.player.ro}</span>
-                      </>
-                    )}
-                    {tierLabel && (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span className="text-[var(--mut)] truncate">{tierLabel}</span>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Season & Time Meta */}
-            <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] mland:text-[8px] text-[var(--mut)] tabular">
-              <span className="font-bold text-[var(--ink)]/80">
-                ซีซัน {entry.season} · นัด {entry.md}
+            {/* Row 2: Player/Club Identity + Season/MD + Saved Time */}
+            <div className="flex items-center gap-1.5 min-w-0 text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
+              {pv && (isMgr ? pv.player : pv.teamName) && (
+                <span className="font-semibold text-[var(--ink)]/85 truncate min-w-0">
+                  {isMgr && pv.player
+                    ? `⭐ ${pv.player.n} (${pv.player.ro})`
+                    : `🛡️ ${pv.teamName}${pv.player ? ` · ${pv.player.ro}` : ''}`}
+                </span>
+              )}
+              <span className="shrink-0 font-bold text-[var(--ink)]/75">
+                {pv && (isMgr ? pv.player : pv.teamName) ? '· ' : ''}ซีซัน {entry.season} นัด {entry.md}
               </span>
               {entry.savedAt > 0 && (
-                <>
-                  <span className="opacity-45">•</span>
-                  <span>{fmtSavedTime(entry.savedAt)}</span>
-                </>
-              )}
-              {entry.size > 0 && (
-                <>
-                  <span className="opacity-45">•</span>
-                  <span>{fmtBytes(entry.size)}</span>
-                </>
+                <span className="hidden sm:inline mland:inline shrink-0 opacity-80">
+                  • {fmtSavedTime(entry.savedAt)}
+                </span>
               )}
             </div>
           </div>
 
-          {/* Max OVR Badge (always visible beside info on mobile & desktop) */}
+          {/* Max OVR Badge */}
           <SaveOvrBadge mode={entry.mode} preview={pv} />
         </div>
 
@@ -661,7 +639,7 @@ export const SaveFolderModal: React.FC<{
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl h-[min(calc(var(--app-dvh,1dvh)*92),660px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-4xl h-[min(calc(var(--app-dvh,1dvh)*92),680px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

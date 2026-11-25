@@ -12,7 +12,7 @@ import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
@@ -316,6 +316,9 @@ export default function App() {
       playedNames: payload.playedNames,
       playedSlots: payload.playedSlots
     };
+    if (d.mode === 'p' && d.p && payload.pf?.played && payload.pf.rt > 0) {
+      resObj.ratings = { ...(resObj.ratings || {}), [d.p.name]: payload.pf.rt };
+    }
 
     const liveInjs = payload.injuries || [];
     const liveInjTeamIds = Array.from(new Set(liveInjs.map((x) => x.teamId)));
@@ -383,12 +386,14 @@ export default function App() {
           const ca = d.teams[c.ids[i + 1]];
           if (ch.id === homeId && ca.id === awayId) {
             nx[i / 2] = userWin.id;
+            tallyCupMatchPlayers('cup', ch, ca, resObj);
             updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind: 'cup', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ch.name} ${payload.gh}-${payload.ga} ${ca.name}${payload.penText ? ` (${payload.penText})` : ''}`);
           } else {
             const cr = simMatch(ch, ca, d);
             const cw = pickWinner(ch, ca, cr, d);
             nx[i / 2] = cw.id;
+            tallyCupMatchPlayers('cup', ch, ca, cr);
             updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind: 'cup', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
             applyPositionAdaptation(d, ch, ca, cr);
@@ -479,12 +484,14 @@ export default function App() {
           }
           if (ch.id === homeId && ca.id === awayId) {
             nx.push(userWin.id);
+            tallyCupMatchPlayers(kind, ch, ca, resObj);
             updateTeamsFanbaseOnMatch(ch, payload.gh, ca, payload.ga, { kind, big: c.ids.length <= 4 });
             c.log.push(`${roundLabel}: ${ch.name} ${payload.gh}-${payload.ga} ${ca.name}${payload.penText ? ` (${payload.penText})` : ''}`);
           } else {
             const cr = simMatch(ch, ca, d);
             const cw = pickWinner(ch, ca, cr, d);
             nx.push(cw.id);
+            tallyCupMatchPlayers(kind, ch, ca, cr);
             updateTeamsFanbaseOnMatch(ch, cr.gh, ca, cr.ga, { kind, big: c.ids.length <= 4 });
             c.log.push(`${roundLabel}: ${ch.name} ${cr.gh}-${cr.ga} ${ca.name}`);
             applyPositionAdaptation(d, ch, ca, cr);
@@ -570,12 +577,14 @@ export default function App() {
           const aa = d.teams[c.ids[i + 1]];
           if (ah.id === homeId && aa.id === awayId) {
             nx[i / 2] = userWin.id;
+            tallyCupMatchPlayers('asia', ah, aa, resObj);
             updateTeamsFanbaseOnMatch(ah, payload.gh, aa, payload.ga, { kind: 'asia', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ah.name} ${payload.gh}-${payload.ga} ${aa.name}${payload.penText ? ` (${payload.penText})` : ''}`);
           } else {
             const ar = simMatch(ah, aa, d);
             const aw = pickWinner(ah, aa, ar, d);
             nx[i / 2] = aw.id;
+            tallyCupMatchPlayers('asia', ah, aa, ar);
             updateTeamsFanbaseOnMatch(ah, ar.gh, aa, ar.ga, { kind: 'asia', big: c.ids.length <= 4 });
             c.log.push(`${RN[c.r]}: ${ah.name} ${ar.gh}-${ar.ga} ${aa.name}`);
             applyPositionAdaptation(d, ah, aa, ar);
@@ -650,9 +659,6 @@ export default function App() {
 
       // League Matchday
       if (isDerby) d.derby = 1;
-      if (d.mode === 'p' && d.p && payload.pf?.played && payload.pf.rt > 0) {
-        resObj.ratings = { ...(resObj.ratings || {}), [d.p.name]: payload.pf.rt };
-      }
       applyMatchResult(H, payload.gh, A, payload.ga);
       tallyMatchPlayers(H, A, resObj);
       applyPositionAdaptation(d, H, A, resObj);

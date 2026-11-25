@@ -26,6 +26,7 @@ export const SeasonStatsModal: React.FC<{
   });
 
   const [sortBy, setSortBy] = useState<SortKey>('avgRating');
+  const [compScope, setCompScope] = useState<'league' | 'cup' | 'all'>('league');
 
   const rec = sortedArchives.find((a) => a.season === selectedSeason) || sortedArchives[0];
   if (!rec) return null;
@@ -34,8 +35,42 @@ export const SeasonStatsModal: React.FC<{
   const archiveTeam = state.teams[rec.teamId];
   const isMyClubCrest = state.mode === 'm' && rec.teamId === state.me;
 
+  const scopedPlayers = useMemo(() => {
+    return rec.players.map((pl: SeasonPlayerStatRecord) => {
+      const cSp = pl.cupSp || 0;
+      const cSg = pl.cupSg || 0;
+      const cSa = pl.cupSa || 0;
+      const cCs = pl.cupCs || 0;
+      const cYc = pl.cupYc || 0;
+      const cRc = pl.cupRc || 0;
+      const cMotm = pl.cupMotm || 0;
+      const cRt = pl.cupAvgRating || 0;
+      if (compScope === 'cup') {
+        return { ...pl, sp: cSp, sg: cSg, sa: cSa, cs: cCs, yc: cYc, rc: cRc, motm: cMotm, avgRating: cRt };
+      }
+      if (compScope === 'all') {
+        const lgW = pl.avgRating > 0 ? pl.sp : 0;
+        const cupW = cRt > 0 ? cSp : 0;
+        const avgRating =
+          lgW + cupW > 0 ? Math.round(((pl.avgRating * lgW + cRt * cupW) / (lgW + cupW)) * 100) / 100 : 0;
+        return {
+          ...pl,
+          sp: pl.sp + cSp,
+          sg: pl.sg + cSg,
+          sa: pl.sa + cSa,
+          cs: pl.cs + cCs,
+          motm: pl.motm + cMotm,
+          avgRating
+        };
+      }
+      return pl;
+    });
+  }, [rec.players, compScope]);
+
+  const hasAnyCupStats = useMemo(() => rec.players.some((p) => (p.cupSp || 0) > 0), [rec.players]);
+
   const sortedPlayers = useMemo(() => {
-    const list = rec.players.slice();
+    const list = scopedPlayers.slice();
     return list.sort((a: SeasonPlayerStatRecord, b: SeasonPlayerStatRecord) => {
       if (sortBy === 'avgRating') {
         return b.avgRating - a.avgRating || b.sg + b.sa - (a.sg + a.sa) || b.sp - a.sp || b.ov - a.ov;
@@ -54,18 +89,54 @@ export const SeasonStatsModal: React.FC<{
       }
       return b.ov - a.ov || b.avgRating - a.avgRating || b.sp - a.sp;
     });
-  }, [rec.players, sortBy]);
+  }, [scopedPlayers, sortBy]);
+
+  const scopedTopScorer = useMemo(() => {
+    if (compScope === 'league' && rec.topScorer) return rec.topScorer;
+    const f = scopedPlayers
+      .filter((x) => x.sg > 0)
+      .slice()
+      .sort((a, b) => b.sg - a.sg || b.sa - a.sa || a.sp - b.sp || b.avgRating - a.avgRating)[0];
+    return f ? { name: f.name, pos: f.pos, sg: f.sg, sp: f.sp } : null;
+  }, [compScope, rec.topScorer, scopedPlayers]);
+
+  const scopedTopAssist = useMemo(() => {
+    if (compScope === 'league' && rec.topAssist) return rec.topAssist;
+    const f = scopedPlayers
+      .filter((x) => x.sa > 0)
+      .slice()
+      .sort((a, b) => b.sa - a.sa || b.sg - a.sg || a.sp - b.sp || b.avgRating - a.avgRating)[0];
+    return f ? { name: f.name, pos: f.pos, sa: f.sa, sp: f.sp } : null;
+  }, [compScope, rec.topAssist, scopedPlayers]);
+
+  const scopedTopRating = useMemo(() => {
+    if (compScope === 'league' && rec.topRating) return rec.topRating;
+    const f = scopedPlayers
+      .filter((x) => x.avgRating > 0 && x.sp > 0)
+      .slice()
+      .sort((a, b) => b.avgRating - a.avgRating || b.sp - a.sp || b.sg + b.sa - (a.sg + a.sa))[0];
+    return f ? { name: f.name, pos: f.pos, avgRating: f.avgRating, sp: f.sp, motm: f.motm } : null;
+  }, [compScope, rec.topRating, scopedPlayers]);
+
+  const scopedTopCleanSheet = useMemo(() => {
+    if (compScope === 'league' && rec.topCleanSheet) return rec.topCleanSheet;
+    const f = scopedPlayers
+      .filter((x) => x.pos === 'GK' && x.cs > 0)
+      .slice()
+      .sort((a, b) => b.cs - a.cs || b.sp - a.sp || b.avgRating - a.avgRating)[0];
+    return f ? { name: f.name, pos: f.pos, cs: f.cs, sp: f.sp } : null;
+  }, [compScope, rec.topCleanSheet, scopedPlayers]);
 
   const topMotm = useMemo(() => {
-    return rec.players
+    return scopedPlayers
       .filter((p) => p.motm > 0)
       .slice()
       .sort((a, b) => b.motm - a.motm || b.avgRating - a.avgRating)[0];
-  }, [rec.players]);
+  }, [scopedPlayers]);
 
-  const totalTeamGoals = rec.players.reduce((sum, p) => sum + p.sg, 0);
-  const totalTeamAssists = rec.players.reduce((sum, p) => sum + p.sa, 0);
-  const ratedPlayers = rec.players.filter((p) => p.avgRating > 0 && p.sp > 0);
+  const totalTeamGoals = scopedPlayers.reduce((sum, p) => sum + p.sg, 0);
+  const totalTeamAssists = scopedPlayers.reduce((sum, p) => sum + p.sa, 0);
+  const ratedPlayers = scopedPlayers.filter((p) => p.avgRating > 0 && p.sp > 0);
   const squadAvgRating = ratedPlayers.length
     ? (ratedPlayers.reduce((sum, p) => sum + p.avgRating, 0) / ratedPlayers.length).toFixed(2)
     : '-';
@@ -244,11 +315,11 @@ export const SeasonStatsModal: React.FC<{
               <div className="text-[11px] mland:text-[9px] font-bold text-[#9a6300] dark:text-[var(--lamp)]">
                 ⚽ ดาวยิงสูงสุดในทีม
               </div>
-              {rec.topScorer ? (
+              {scopedTopScorer ? (
                 <>
-                  <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{rec.topScorer.name}</div>
+                  <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{scopedTopScorer.name}</div>
                   <div className="text-[11px] mland:text-[9.5px] font-semibold tabular">
-                    {rec.topScorer.sg} ประตู · {rec.topScorer.sp} นัด ({rec.topScorer.pos})
+                    {scopedTopScorer.sg} ประตู · {scopedTopScorer.sp} นัด ({scopedTopScorer.pos})
                   </div>
                 </>
               ) : (
@@ -258,11 +329,11 @@ export const SeasonStatsModal: React.FC<{
 
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)]/60 border border-[var(--g)]/35 space-y-0.5">
               <div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)]">🎯 แอสซิสต์สูงสุดในทีม</div>
-              {rec.topAssist ? (
+              {scopedTopAssist ? (
                 <>
-                  <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{rec.topAssist.name}</div>
+                  <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{scopedTopAssist.name}</div>
                   <div className="text-[11px] mland:text-[9.5px] font-semibold tabular">
-                    {rec.topAssist.sa} ครั้ง · {rec.topAssist.sp} นัด ({rec.topAssist.pos})
+                    {scopedTopAssist.sa} ครั้ง · {scopedTopAssist.sp} นัด ({scopedTopAssist.pos})
                   </div>
                 </>
               ) : (
@@ -272,12 +343,12 @@ export const SeasonStatsModal: React.FC<{
 
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-0.5">
               <div className="text-[11px] mland:text-[9px] font-bold text-[var(--ink)]">⭐ คะแนนเฉลี่ยสูงสุด</div>
-              {rec.topRating ? (
+              {scopedTopRating ? (
                 <>
-                  <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{rec.topRating.name}</div>
+                  <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{scopedTopRating.name}</div>
                   <div className="text-[11px] mland:text-[9.5px] font-semibold tabular">
-                    <span className="text-[var(--g)] font-extrabold">{rec.topRating.avgRating.toFixed(2)}</span> ·{' '}
-                    {rec.topRating.sp} นัด{rec.topRating.motm > 0 ? ` · 👑${rec.topRating.motm}` : ''}
+                    <span className="text-[var(--g)] font-extrabold">{scopedTopRating.avgRating.toFixed(2)}</span> ·{' '}
+                    {scopedTopRating.sp} นัด{scopedTopRating.motm > 0 ? ` · 👑${scopedTopRating.motm}` : ''}
                   </div>
                 </>
               ) : (
@@ -286,14 +357,14 @@ export const SeasonStatsModal: React.FC<{
             </div>
 
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-0.5">
-              {rec.topCleanSheet ? (
+              {scopedTopCleanSheet ? (
                 <>
                   <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">🧤 คลีนชีตสูงสุด</div>
                   <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-                    {rec.topCleanSheet.name}
+                    {scopedTopCleanSheet.name}
                   </div>
                   <div className="text-[11px] mland:text-[9.5px] font-semibold tabular">
-                    {rec.topCleanSheet.cs} นัด · ลงเล่น {rec.topCleanSheet.sp} นัด
+                    {scopedTopCleanSheet.cs} นัด · ลงเล่น {scopedTopCleanSheet.sp} นัด
                   </div>
                 </>
               ) : topMotm ? (
@@ -316,8 +387,31 @@ export const SeasonStatsModal: React.FC<{
           {/* Full Squad Stats Table */}
           <section className="rounded-2xl mland:rounded-xl border border-[var(--line)] overflow-hidden bg-[var(--surface)]">
             <div className="px-3 py-2 mland:px-2 mland:py-1.5 bg-[var(--surface-2)]/80 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
-              <div className="font-bold text-xs sm:text-sm mland:text-[11px]">
-                👥 ตารางสถิตินักเตะทั้งหมด ({sortedPlayers.length} คน)
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-bold text-xs sm:text-sm mland:text-[11px]">
+                  👥 ตารางสถิตินักเตะทั้งหมด ({sortedPlayers.length} คน)
+                </div>
+                <div className="seg-bar bg-[var(--surface)]">
+                  {(
+                    [
+                      ['league', '⚽ บอลลีก'],
+                      ['cup', '🏆 บอลถ้วย'],
+                      ['all', '📊 รวมทั้งหมด']
+                    ] as const
+                  ).map(([id, lbl]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setCompScope(id);
+                      }}
+                      className={`seg-btn ${compScope === id ? 'seg-btn-active' : ''}`}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="seg-bar flex-wrap bg-[var(--surface)]">
                 {sortOptions.map((opt) => (
@@ -338,6 +432,12 @@ export const SeasonStatsModal: React.FC<{
               </div>
             </div>
 
+            {compScope === 'cup' && !hasAnyCupStats && (
+              <div className="px-3 py-2 bg-[var(--surface-2)]/40 border-b border-[var(--line)]/60 text-[11px] mland:text-[9.5px] text-[var(--mut)]">
+                ซีซั่นนี้ยังไม่มีบันทึกสถิตินักเตะรายคนสำหรับรายการบอลถ้วย
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs mland:text-[10px]">
                 <thead>
@@ -356,9 +456,9 @@ export const SeasonStatsModal: React.FC<{
                 </thead>
                 <tbody className="divide-y divide-[var(--line)]/60">
                   {sortedPlayers.map((pl, idx) => {
-                    const isTopGoal = rec.topScorer?.name === pl.name && pl.sg > 0;
-                    const isTopAst = rec.topAssist?.name === pl.name && pl.sa > 0;
-                    const isTopRt = rec.topRating?.name === pl.name && pl.avgRating > 0;
+                    const isTopGoal = scopedTopScorer?.name === pl.name && pl.sg > 0;
+                    const isTopAst = scopedTopAssist?.name === pl.name && pl.sa > 0;
+                    const isTopRt = scopedTopRating?.name === pl.name && pl.avgRating > 0;
                     return (
                       <tr
                         key={`${pl.name}-${pl.no || idx}`}

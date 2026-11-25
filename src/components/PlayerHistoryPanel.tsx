@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { GameState, Player, Team } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -18,6 +18,7 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
   state,
   onOpenSeasonStats
 }) => {
+  const [compScope, setCompScope] = useState<'all' | 'league' | 'cup'>('all');
   const isMe = !!player.me || (state.mode === 'p' && state.p?.name === player.n);
   const careerP = isMe ? state.p : null;
   const summary = getPlayerCareerSummary(player, team, state, careerP);
@@ -30,6 +31,43 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
   ];
 
   const isGk = player.pos === 'GK';
+
+  const topApps =
+    compScope === 'league'
+      ? summary.leagueTotals.apps
+      : compScope === 'cup'
+        ? summary.cupTotals.apps
+        : summary.totalApps;
+  const topGoals =
+    compScope === 'league'
+      ? summary.leagueTotals.goals
+      : compScope === 'cup'
+        ? summary.cupTotals.goals
+        : summary.totalGoals;
+  const topAssists =
+    compScope === 'league'
+      ? summary.leagueTotals.assists
+      : compScope === 'cup'
+        ? summary.cupTotals.assists
+        : summary.totalAssists;
+  const topCs =
+    compScope === 'league'
+      ? summary.leagueTotals.cleanSheets
+      : compScope === 'cup'
+        ? summary.cupTotals.cleanSheets
+        : summary.totalCleanSheets;
+  const topMotm =
+    compScope === 'league'
+      ? summary.leagueTotals.motm
+      : compScope === 'cup'
+        ? summary.cupTotals.motm
+        : summary.totalMotm;
+  const topAvg =
+    compScope === 'league'
+      ? summary.leagueTotals.avgRating
+      : compScope === 'cup'
+        ? summary.cupTotals.avgRating
+        : summary.avgRating;
 
   return (
     <div className="space-y-3 mland:space-y-2">
@@ -48,11 +86,36 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
                 : ''}
             </p>
           </div>
-          {summary.honors.length > 0 && (
-            <div className="text-[11px] mland:text-[9.5px] font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular">
-              🏆 เกียรติยศ {summary.honors.length} รายการ
+          <div className="flex flex-wrap items-center gap-2">
+            {summary.honors.length > 0 && (
+              <div className="text-[11px] mland:text-[9.5px] font-bold text-[#9a6700] dark:text-[var(--lamp)] tabular">
+                🏆 เกียรติยศ {summary.honors.length} รายการ
+              </div>
+            )}
+            <div className="seg-bar bg-[var(--surface-2)]">
+              {(
+                [
+                  ['all', '📊 รวมทั้งหมด'],
+                  ['league', '⚽ บอลลีก'],
+                  ['cup', `🏆 บอลถ้วย${summary.cupTotals.apps > 0 ? ` (${summary.cupTotals.apps})` : ''}`]
+                ] as const
+              ).map(([id, lbl]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setCompScope(id);
+                  }}
+                  className={`seg-btn py-0.5 px-2 text-[10.5px] mland:text-[8.5px] ${
+                    compScope === id ? 'seg-btn-active' : ''
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 mland:gap-1 pt-1 border-t border-[var(--line)]/70 text-center">
@@ -61,31 +124,31 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
             <div className="font-extrabold text-sm mland:text-xs font-display tabular">{summary.totalSeasons}</div>
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
-            <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">ลงเล่นรวม</div>
-            <div className="font-extrabold text-sm mland:text-xs font-display tabular">{summary.totalApps}</div>
+            <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">ลงเล่น</div>
+            <div className="font-extrabold text-sm mland:text-xs font-display tabular">{topApps}</div>
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center justify-center gap-1">
               <span>⚽</span> ประตู
             </div>
-            <div className="font-extrabold text-sm mland:text-xs font-display tabular">{summary.totalGoals}</div>
+            <div className="font-extrabold text-sm mland:text-xs font-display tabular">{topGoals}</div>
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center justify-center gap-1">
               <span>{isGk ? '🧤' : '🎯'}</span> {isGk ? 'คลีนชีต' : 'แอสซิสต์'}
             </div>
             <div className="font-extrabold text-sm mland:text-xs font-display tabular">
-              {isGk ? summary.totalCleanSheets : summary.totalAssists}
+              {isGk ? topCs : topAssists}
             </div>
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">MOTM</div>
-            <div className="font-extrabold text-sm mland:text-xs font-display tabular">{summary.totalMotm}</div>
+            <div className="font-extrabold text-sm mland:text-xs font-display tabular">{topMotm}</div>
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">เรตติ้งเฉลี่ย</div>
             <div className="font-extrabold text-sm mland:text-xs font-display tabular text-[var(--g)]">
-              {summary.avgRating > 0 ? summary.avgRating.toFixed(2) : '-'}
+              {topAvg > 0 ? topAvg.toFixed(2) : '-'}
             </div>
           </div>
         </div>
@@ -114,7 +177,10 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
       <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden">
         <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] flex items-center justify-between gap-2 bg-[var(--surface-2)]/60">
           <span className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)]">
-            ประวัติผลงานรายฤดูกาล
+            ประวัติผลงานรายฤดูกาล ·{' '}
+            <span className="text-[var(--mut)] font-normal">
+              {compScope === 'all' ? 'รวมลีก + บอลถ้วย' : compScope === 'league' ? 'เฉพาะบอลลีก' : 'เฉพาะบอลถ้วย'}
+            </span>
           </span>
           <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
             เรียงจากซีซั่นล่าสุด
@@ -142,6 +208,27 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
               <tbody className="divide-y divide-[var(--line)]/60">
                 {rows.map((r) => {
                   const canDrill = !r.isCurrent && onOpenSeasonStats && isUserClubId(r.teamId) && archivedSeasonSet.has(r.season);
+                  const cSp = r.cupSp || 0;
+                  const cSg = r.cupSg || 0;
+                  const cSa = r.cupSa || 0;
+                  const cCs = r.cupCs || 0;
+                  const cMotm = r.cupMotm || 0;
+                  const cRt = r.cupAvgRating || 0;
+
+                  const rowSp = compScope === 'cup' ? cSp : compScope === 'league' ? r.sp : r.sp + cSp;
+                  const rowSg = compScope === 'cup' ? cSg : compScope === 'league' ? r.sg : r.sg + cSg;
+                  const rowSa = compScope === 'cup' ? cSa : compScope === 'league' ? r.sa : r.sa + cSa;
+                  const rowCs = compScope === 'cup' ? cCs : compScope === 'league' ? r.cs : r.cs + cCs;
+                  const rowMotm = compScope === 'cup' ? cMotm : compScope === 'league' ? r.motm : r.motm + cMotm;
+                  const rowRt =
+                    compScope === 'cup'
+                      ? cRt
+                      : compScope === 'league'
+                        ? r.avgRating
+                        : r.sp + cSp > 0
+                          ? (r.avgRating * r.sp + cRt * cSp) / Math.max(1, (r.avgRating > 0 ? r.sp : 0) + (cRt > 0 ? cSp : 0))
+                          : 0;
+
                   return (
                     <tr
                       key={`${r.season}-${r.teamName}-${r.isCurrent ? 'cur' : 'past'}`}
@@ -169,16 +256,16 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
                           {r.ov}
                         </span>
                       </td>
-                      <td className="py-1.5 px-1.5 text-center tabular font-semibold">{r.sp}</td>
-                      <td className="py-1.5 px-1.5 text-center tabular font-bold">{r.sg}</td>
-                      <td className="py-1.5 px-1.5 text-center tabular">{r.sa}</td>
-                      <td className="py-1.5 px-1.5 text-center tabular text-[var(--mut)]">{r.cs}</td>
-                      <td className="py-1.5 px-1.5 text-center tabular text-[var(--mut)]">{r.motm}</td>
+                      <td className="py-1.5 px-1.5 text-center tabular font-semibold">{rowSp}</td>
+                      <td className="py-1.5 px-1.5 text-center tabular font-bold">{rowSg}</td>
+                      <td className="py-1.5 px-1.5 text-center tabular">{rowSa}</td>
+                      <td className="py-1.5 px-1.5 text-center tabular text-[var(--mut)]">{rowCs}</td>
+                      <td className="py-1.5 px-1.5 text-center tabular text-[var(--mut)]">{rowMotm}</td>
                       <td className="py-1.5 px-1.5 text-center tabular whitespace-nowrap text-[10.5px] mland:text-[9px]">
                         {r.yc > 0 || r.rc > 0 ? `${r.yc}/${r.rc}` : '-'}
                       </td>
                       <td className="py-1.5 px-1.5 text-center tabular font-bold text-[var(--g)]">
-                        {r.sp > 0 && r.avgRating > 0 ? r.avgRating.toFixed(2) : '-'}
+                        {rowSp > 0 && rowRt > 0 ? rowRt.toFixed(2) : '-'}
                       </td>
                       <td className="py-1.5 px-2.5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center justify-end gap-1.5">

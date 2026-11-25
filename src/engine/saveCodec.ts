@@ -1,10 +1,11 @@
-import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile } from '../types/game';
+import type { Position, SubRole, Mentality, CoreAttrs, CupCompKey, PlayerCupStatRecord, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
 import { ensureAiTeamPhilosophies, assignTeamShirtNumbers, OVF } from './playerCore';
 
 export const SAVE_B64U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 export const SAVE_POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
 export const SAVE_CON_ROLE: ('key' | 'rot' | 'pro')[] = ['key', 'rot', 'pro'];
+export const SAVE_CUP_KEYS: CupCompKey[] = ['cup', 'lc', 'dc', 'sc', 'asia'];
 
 export const packSavePlayer = (q: Player): unknown[] => {
   const posVal = SAVE_POS.indexOf(q.pos);
@@ -52,28 +53,58 @@ export const packSavePlayer = (q: Player): unknown[] => {
   if (q.sra) ex.sra = q.sra;
   if (q.motm) ex.mt = q.motm;
   if (q.tyc) ex.tyc = q.tyc;
+  if (q.cupStats) {
+    const packedCst: Record<string, number[]> = {};
+    SAVE_CUP_KEYS.forEach((ck) => {
+      const rec = q.cupStats?.[ck];
+      if (!rec) return;
+      if (rec.sp || rec.sg || rec.sa || rec.cs || rec.sra || rec.motm || rec.yc || rec.rc) {
+        packedCst[ck] = [
+          rec.sp || 0,
+          rec.sg || 0,
+          rec.sa || 0,
+          rec.cs || 0,
+          Math.round((rec.srs || 0) * 10) / 10,
+          rec.sra || 0,
+          rec.motm || 0,
+          rec.yc || 0,
+          rec.rc || 0
+        ];
+      }
+    });
+    if (Object.keys(packedCst).length) ex.cst = packedCst;
+  }
   if (q.talent !== undefined) ex.tl = q.talent;
   if (q.traits && q.traits.length) ex.ts = q.traits;
   if (q.altRoles && q.altRoles.length) ex.ar = q.altRoles;
   if (q.roleExp && Object.keys(q.roleExp).length) ex.re = q.roleExp;
   if (q.customPers !== undefined) ex.cp = q.customPers;
   if (q.history && q.history.length) {
-    ex.hi = q.history.map((h) => [
-      h.season,
-      h.teamId,
-      h.teamName,
-      h.tier,
-      h.ov,
-      h.sp,
-      h.sg,
-      h.sa,
-      h.cs,
-      h.motm,
-      h.yc,
-      h.rc,
-      h.avgRating,
-      ...(h.honor ? [h.honor] : [])
-    ]);
+    ex.hi = q.history.map((h) => {
+      const hasCupHist = Boolean(h.cupSp || h.cupSg || h.cupSa || h.cupCs || h.cupMotm || h.cupAvgRating);
+      const row: unknown[] = [
+        h.season,
+        h.teamId,
+        h.teamName,
+        h.tier,
+        h.ov,
+        h.sp,
+        h.sg,
+        h.sa,
+        h.cs,
+        h.motm,
+        h.yc,
+        h.rc,
+        h.avgRating
+      ];
+      if (hasCupHist) {
+        row.push(h.honor || '');
+        row.push([h.cupSp || 0, h.cupSg || 0, h.cupSa || 0, h.cupCs || 0, h.cupMotm || 0, h.cupAvgRating || 0]);
+      } else if (h.honor) {
+        row.push(h.honor);
+      }
+      return row;
+    });
   }
   if (q.careerLog && q.careerLog.length) ex.cl = q.careerLog;
   if (q.seasonProg && q.seasonProg.pts.length) {
@@ -161,6 +192,40 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (ex.sra !== undefined) p.sra = Number(ex.sra);
   if (ex.mt !== undefined) p.motm = Number(ex.mt);
   if (ex.tyc !== undefined) p.tyc = Number(ex.tyc);
+  if (ex.cst && typeof ex.cst === 'object') {
+    const rawCst = ex.cst as Record<string, unknown>;
+    const unpacked: Partial<Record<CupCompKey, PlayerCupStatRecord>> = {};
+    SAVE_CUP_KEYS.forEach((ck) => {
+      const entry = rawCst[ck];
+      if (Array.isArray(entry)) {
+        unpacked[ck] = {
+          sp: Number(entry[0] || 0),
+          sg: Number(entry[1] || 0),
+          sa: Number(entry[2] || 0),
+          cs: Number(entry[3] || 0),
+          srs: Number(entry[4] || 0),
+          sra: Number(entry[5] || 0),
+          motm: Number(entry[6] || 0),
+          ...(entry[7] ? { yc: Number(entry[7]) } : {}),
+          ...(entry[8] ? { rc: Number(entry[8]) } : {})
+        };
+      } else if (entry && typeof entry === 'object') {
+        const obj = entry as Partial<PlayerCupStatRecord>;
+        unpacked[ck] = {
+          sp: Number(obj.sp || 0),
+          sg: Number(obj.sg || 0),
+          sa: Number(obj.sa || 0),
+          cs: Number(obj.cs || 0),
+          srs: Number(obj.srs || 0),
+          sra: Number(obj.sra || 0),
+          motm: Number(obj.motm || 0),
+          ...(obj.yc ? { yc: Number(obj.yc) } : {}),
+          ...(obj.rc ? { rc: Number(obj.rc) } : {})
+        };
+      }
+    });
+    if (Object.keys(unpacked).length) p.cupStats = unpacked;
+  }
   if (ex.tl !== undefined) p.talent = Number(ex.tl);
   if (Array.isArray(ex.ts)) p.traits = ex.ts.map((x) => String(x));
   if (Array.isArray(ex.ar)) p.altRoles = ex.ar.map((x) => String(x) as SubRole);
@@ -169,6 +234,7 @@ export const unpackSavePlayer = (raw: unknown): Player => {
   if (Array.isArray(ex.hi)) {
     p.history = (ex.hi as unknown[]).map((item): PlayerSeasonHistoryRecord => {
       if (!Array.isArray(item)) return item as PlayerSeasonHistoryRecord;
+      const cupArr = Array.isArray(item[14]) ? (item[14] as unknown[]) : null;
       return {
         season: Number(item[0] || 1),
         teamId: Number(item[1] ?? -1),
@@ -183,7 +249,17 @@ export const unpackSavePlayer = (raw: unknown): Player => {
         yc: Number(item[10] || 0),
         rc: Number(item[11] || 0),
         avgRating: Number(item[12] || 0),
-        ...(item[13] ? { honor: String(item[13]) } : {})
+        ...(item[13] ? { honor: String(item[13]) } : {}),
+        ...(cupArr
+          ? {
+              cupSp: Number(cupArr[0] || 0),
+              cupSg: Number(cupArr[1] || 0),
+              cupSa: Number(cupArr[2] || 0),
+              cupCs: Number(cupArr[3] || 0),
+              cupMotm: Number(cupArr[4] || 0),
+              cupAvgRating: Number(cupArr[5] || 0)
+            }
+          : {})
       };
     });
   }

@@ -58,6 +58,20 @@ export interface PlayerSeasonProgression {
   pts: PlayerSeasonProgressPoint[];
 }
 
+export type CupCompKey = 'cup' | 'lc' | 'dc' | 'sc' | 'asia';
+
+export interface PlayerCupStatRecord {
+  sp: number;
+  sg: number;
+  sa: number;
+  cs: number;
+  srs: number;
+  sra: number;
+  motm: number;
+  yc?: number;
+  rc?: number;
+}
+
 export interface Player {
   id?: string;
   n: string;
@@ -117,6 +131,7 @@ export interface Player {
   sra?: number;
   motm?: number;
   tyc?: number;
+  cupStats?: Partial<Record<CupCompKey, PlayerCupStatRecord>>;
   history?: PlayerSeasonHistoryRecord[];
   careerLog?: string[];
   seasonProg?: PlayerSeasonProgression;
@@ -489,6 +504,12 @@ export interface PlayerSeasonHistoryRecord {
   yc: number;
   rc: number;
   avgRating: number;
+  cupSp?: number;
+  cupSg?: number;
+  cupSa?: number;
+  cupCs?: number;
+  cupMotm?: number;
+  cupAvgRating?: number;
   honor?: string;
 }
 
@@ -530,6 +551,11 @@ export interface ClubAllTimePlayerRecord {
   assists: number;
   cleanSheets: number;
   motm: number;
+  cupApps?: number;
+  cupGoals?: number;
+  cupAssists?: number;
+  cupCleanSheets?: number;
+  cupMotm?: number;
   seasons: number;
   firstSeason?: number;
   lastSeason: number;
@@ -581,6 +607,14 @@ export interface SeasonPlayerStatRecord {
   rc: number;
   motm: number;
   avgRating: number;
+  cupSp?: number;
+  cupSg?: number;
+  cupSa?: number;
+  cupCs?: number;
+  cupYc?: number;
+  cupRc?: number;
+  cupMotm?: number;
+  cupAvgRating?: number;
 }
 
 export interface SeasonArchiveRecord {

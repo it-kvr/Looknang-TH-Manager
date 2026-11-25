@@ -1,9 +1,9 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
-import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord } from './history';
+import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 
 export function rate(
   t: Team,
@@ -2908,6 +2908,7 @@ export function startSeason(s: GameState) {
       q.sra = 0;
       q.motm = 0;
       q.tyc = 0;
+      q.cupStats = {};
     });
     // Randomize shirt numbers across all teams each season (preserving Season 1 Career start number)
     assignTeamShirtNumbers(t, {
@@ -3035,6 +3036,90 @@ export function tallyMatchPlayers(h: Team, a: Team, r: MatchResult) {
     if (q) q.sg = (q.sg || 0) + 1;
     const w = e.as && t.sq.find((z) => z.n === e.as);
     if (w) w.sa = (w.sa || 0) + 1;
+  });
+}
+
+export const CUP_COMP_META: Record<
+  CupCompKey,
+  { key: CupCompKey; tabId: 'fa' | 'lc' | 'dc' | 'sc' | 'asia'; icon: string; short: string; name: string }
+> = {
+  cup: { key: 'cup', tabId: 'fa', icon: '🏆', short: 'ถ้วย ปชช.', name: 'ถ้วยประชาชน' },
+  lc: { key: 'lc', tabId: 'lc', icon: '🥇', short: 'ลีกคัพ', name: 'ไทยลีก คัพ' },
+  dc: { key: 'dc', tabId: 'dc', icon: '🛡️', short: 'ถ้วยดิวิชั่น', name: 'ถ้วยดิวิชั่น & ภูมิภาค' },
+  sc: { key: 'sc', tabId: 'sc', icon: '🏅', short: 'แชมเปี้ยนส์คัพ', name: 'ไทยแลนด์ แชมเปี้ยนส์ คัพ' },
+  asia: { key: 'asia', tabId: 'asia', icon: '🌏', short: 'ถ้วยทวีป', name: 'ชิงแชมป์สโมสรทวีป' }
+};
+
+export function normalizeCupCompKey(kind: string): CupCompKey {
+  if (kind === 'fa' || kind === 'cup') return 'cup';
+  if (kind === 'lc' || kind === 'dc' || kind === 'sc' || kind === 'asia') return kind;
+  return 'cup';
+}
+
+export { getPlayerCupTotals };
+
+function ensureCupStatBucket(q: Player, comp: CupCompKey): PlayerCupStatRecord {
+  if (!q.cupStats) q.cupStats = {};
+  if (!q.cupStats[comp]) {
+    q.cupStats[comp] = { sp: 0, sg: 0, sa: 0, cs: 0, srs: 0, sra: 0, motm: 0, yc: 0, rc: 0 };
+  }
+  return q.cupStats[comp]!;
+}
+
+export function tallyCupMatchPlayers(comp: CupCompKey, h: Team, a: Team, r: MatchResult) {
+  [
+    [h, r.ga],
+    [a, r.gh]
+  ].forEach(([tm, ga]) => {
+    const team = tm as Team;
+    const starterSet = xi(team);
+    const playedList = r.playedNames?.[team.id]?.length
+      ? team.sq.filter((q) => r.playedNames![team.id].includes(q.n))
+      : starterSet;
+    playedList.forEach((q) => {
+      const b = ensureCupStatBucket(q, comp);
+      b.sp += 1;
+      if (q.pos === 'GK' && (ga as number) === 0 && starterSet.includes(q)) {
+        b.cs += 1;
+      }
+      const matchRt = r.ratings?.[q.n];
+      if (typeof matchRt === 'number' && matchRt > 0) {
+        b.srs += matchRt;
+        b.sra += 1;
+      }
+      if (r.motm && r.motm === q.n) {
+        b.motm += 1;
+      }
+    });
+  });
+
+  r.evs.forEach((e) => {
+    const t = sTeamSafe(h, a, e.t);
+    if (!t || e.og) return;
+    const q = t.sq.find((z) => z.n === e.who);
+    if (q) {
+      ensureCupStatBucket(q, comp).sg += 1;
+    }
+    const w = e.as && t.sq.find((z) => z.n === e.as);
+    if (w) {
+      ensureCupStatBucket(w, comp).sa += 1;
+    }
+  });
+
+  r.cards?.forEach((c) => {
+    const t = sTeamSafe(h, a, c.t);
+    if (!t) return;
+    const q = t.sq.find((z) => z.n === c.who);
+    if (!q) return;
+    const b = ensureCupStatBucket(q, comp);
+    if (c.type === 'R') {
+      b.rc = (b.rc || 0) + 1;
+    } else if (c.type === 'Y2R') {
+      b.yc = (b.yc || 0) + 1;
+      b.rc = (b.rc || 0) + 1;
+    } else {
+      b.yc = (b.yc || 0) + 1;
+    }
   });
 }
 
@@ -4006,6 +4091,8 @@ export function simulateCpuAsiaRound(s: GameState) {
     const H = s.teams[c.ids[i]];
     const A = s.teams[c.ids[i + 1]];
     const r = simMatch(H, A, s);
+    tallyCupMatchPlayers('asia', H, A, r);
+    applyPositionAdaptation(s, H, A, r);
     applyAiClubMatchMissions(s, H, A, r);
     const w = pickWinner(H, A, r, s);
     nx[i / 2] = w.id;
@@ -4050,6 +4137,8 @@ export function simulateCpuCupRound(s: GameState) {
     const H = s.teams[c.ids[i]];
     const A = s.teams[c.ids[i + 1]];
     const r = simMatch(H, A, s);
+    tallyCupMatchPlayers('cup', H, A, r);
+    applyPositionAdaptation(s, H, A, r);
     applyAiClubMatchMissions(s, H, A, r);
     const w = pickWinner(H, A, r, s);
     nx[i / 2] = w.id;
@@ -4190,6 +4279,8 @@ export function simulateCpuExtraCupRound(s: GameState, comp: 'lc' | 'sc' | 'dc')
       continue;
     }
     const r = simMatch(H, A, s);
+    tallyCupMatchPlayers(comp, H, A, r);
+    applyPositionAdaptation(s, H, A, r);
     applyAiClubMatchMissions(s, H, A, r);
     const w = pickWinner(H, A, r, s);
     nx.push(w.id);
@@ -5966,30 +6057,42 @@ export function growPlayers(s: GameState) {
             existingRec.retiredAge = retiredAge;
             existingRec.stillAtClub = false;
             existingRec.snapshot = retiredSnapshot;
-          } else if ((q.sp || 0) > 0 || (q.sg || 0) > 0 || (q.sa || 0) > 0 || (q.cs || 0) > 0 || (q.motm || 0) > 0) {
-            const avg = calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0);
-            s.records.allTimePlayers.push({
-              name: retiredName,
-              pos: q.pos,
-              ro: q.ro,
-              no: q.no,
-              vis: q.vis ? [...q.vis] : undefined,
-              apps: q.sp || 0,
-              goals: q.sg || 0,
-              assists: q.sa || 0,
-              cleanSheets: q.cs || 0,
-              motm: q.motm || 0,
-              seasons: (q.sp || 0) > 0 ? 1 : 0,
-              firstSeason: s.season,
-              lastSeason: s.season,
-              playedSeasons: (q.sp || 0) > 0 ? [s.season] : undefined,
-              bestAvgRating: avg,
-              stillAtClub: false,
-              retired: true,
-              retiredSeason: s.season,
-              retiredAge,
-              snapshot: retiredSnapshot
-            });
+          } else {
+            const cupRetTotals = getPlayerCupTotals(q, 'all');
+            if ((q.sp || 0) > 0 || (q.sg || 0) > 0 || (q.sa || 0) > 0 || (q.cs || 0) > 0 || (q.motm || 0) > 0 || cupRetTotals.sp > 0) {
+              const avg = Math.max(
+                calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0),
+                cupRetTotals.avgRating
+              );
+              const playedAny = (q.sp || 0) > 0 || cupRetTotals.sp > 0;
+              s.records.allTimePlayers.push({
+                name: retiredName,
+                pos: q.pos,
+                ro: q.ro,
+                no: q.no,
+                vis: q.vis ? [...q.vis] : undefined,
+                apps: (q.sp || 0) + cupRetTotals.sp,
+                goals: (q.sg || 0) + cupRetTotals.sg,
+                assists: (q.sa || 0) + cupRetTotals.sa,
+                cleanSheets: (q.cs || 0) + cupRetTotals.cs,
+                motm: (q.motm || 0) + cupRetTotals.motm,
+                cupApps: cupRetTotals.sp || undefined,
+                cupGoals: cupRetTotals.sg || undefined,
+                cupAssists: cupRetTotals.sa || undefined,
+                cupCleanSheets: cupRetTotals.cs || undefined,
+                cupMotm: cupRetTotals.motm || undefined,
+                seasons: playedAny ? 1 : 0,
+                firstSeason: s.season,
+                lastSeason: s.season,
+                playedSeasons: playedAny ? [s.season] : undefined,
+                bestAvgRating: avg,
+                stillAtClub: false,
+                retired: true,
+                retiredSeason: s.season,
+                retiredAge,
+                snapshot: retiredSnapshot
+              });
+            }
           }
         }
         const repOv = BASE[t.tier] + R(-1, 5) + (Math.random() < (t.tier >= 2 ? 0.25 : 0.14) ? R(3, 6) : 0);
@@ -6008,6 +6111,7 @@ export function growPlayers(s: GameState) {
         delete q.missions;
         delete q.sb;
         delete q.coreSb;
+        delete q.cupStats;
         if (t.id === s.me) {
           const msg = `👋 อำลาสนาม: ${retiredName} (อายุ ${retiredAge} ปี) ประกาศแขวนสตั๊ด · ดาวรุ่ง ${fresh.n} ขึ้นชุดใหญ่`;
           s.hist.push(msg);
@@ -6321,8 +6425,19 @@ export function finishSeasonComputation(s: GameState) {
       const sg = q.sg || 0;
       const sa = q.sa || 0;
       const cs = q.cs || 0;
-      if (sp <= 0 && !q.me && tm.id !== s.me) return;
+      const cupT = getPlayerCupTotals(q, 'all');
+      if (sp <= 0 && cupT.sp <= 0 && !q.me && tm.id !== s.me) return;
       const avgRating = calcSeasonAvgRating(q, sp, sg, sa, cs);
+      const cupAvgRating =
+        cupT.avgRating > 0
+          ? cupT.avgRating
+          : cupT.sp > 0
+            ? clamp(
+                Math.round((6.2 + (cupT.sg * 1.05 + cupT.sa * 0.65 + cupT.cs * 0.5) / Math.max(1, cupT.sp) + ((q.ov || 60) - 60) / 90) * 100) / 100,
+                5.0,
+                9.5
+              )
+            : 0;
       const curDt = DT(q, q.me ? s.p : null);
       const startSnap = q.seasonProg?.s === s.season && q.seasonProg.pts?.[0] ? q.seasonProg.pts[0] : null;
       const pEntry: PlayerSeasonHistoryRecord = {
@@ -6346,14 +6461,27 @@ export function finishSeasonComputation(s: GameState) {
         yc: q.tyc ?? q.yc ?? 0,
         rc: q.rc || 0,
         avgRating,
+        ...(cupT.sp > 0
+          ? {
+              cupSp: cupT.sp,
+              cupSg: cupT.sg,
+              cupSa: cupT.sa,
+              cupCs: cupT.cs,
+              cupMotm: cupT.motm,
+              cupAvgRating
+            }
+          : {}),
         ...(honor ? { honor } : {})
       };
       q.history = [...(q.history || []).filter((h) => h.season !== s.season), pEntry].slice(-20);
       if (q.me && s.p) {
         s.p.history = [...q.history];
-        const summaryLine = `📅 จบซีซั่น ${s.season} (${tm.name}): ลง ${sp} นัด · ${sg} ประตู · ${sa} แอสซิสต์${avgRating > 0 ? ` · เฉลี่ย ${avgRating.toFixed(2)}` : ''}${honor ? ` · 🏆 ${honor}` : ''}`;
+        const totalAppsLog = sp + cupT.sp;
+        const totalGoalsLog = sg + cupT.sg;
+        const totalAstLog = sa + cupT.sa;
+        const summaryLine = `📅 จบซีซั่น ${s.season} (${tm.name}): ลง ${totalAppsLog} นัด${cupT.sp > 0 ? ` (ถ้วย ${cupT.sp})` : ''} · ${totalGoalsLog} ประตู · ${totalAstLog} แอสซิสต์${avgRating > 0 ? ` · เฉลี่ย ${avgRating.toFixed(2)}` : ''}${honor ? ` · 🏆 ${honor}` : ''}`;
         appendPlayerCareerLog(q, summaryLine, s.p);
-      } else if (honor && sp > 0) {
+      } else if (honor && (sp > 0 || cupT.sp > 0)) {
         appendPlayerCareerLog(q, `🏆 ซีซั่น ${s.season}: คว้า${honor}กับ ${tm.name}`);
       }
     });
@@ -6385,6 +6513,7 @@ export function finishSeasonComputation(s: GameState) {
       const yc = q.tyc ?? q.yc ?? 0;
       const rc = q.rc || 0;
       const avgRating = calcSeasonAvgRating(q, sp, sg, sa, cs);
+      const cupT = getPlayerCupTotals(q, 'all');
       return {
         name: q.n,
         pos: q.pos,
@@ -6400,7 +6529,19 @@ export function finishSeasonComputation(s: GameState) {
         yc,
         rc,
         motm,
-        avgRating
+        avgRating,
+        ...(cupT.sp > 0
+          ? {
+              cupSp: cupT.sp,
+              cupSg: cupT.sg,
+              cupSa: cupT.sa,
+              cupCs: cupT.cs,
+              cupYc: cupT.yc,
+              cupRc: cupT.rc,
+              cupMotm: cupT.motm,
+              cupAvgRating: cupT.avgRating
+            }
+          : {})
       };
     })
     .sort((a, b) => b.avgRating - a.avgRating || b.sg + b.sa - (a.sg + a.sa) || b.sp - a.sp || b.ov - a.ov);

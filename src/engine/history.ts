@@ -1,5 +1,6 @@
 import type {
   ClubAllTimePlayerRecord,
+  CupCompKey,
   GameState,
   Player,
   PlayerCareerProfile,
@@ -44,6 +45,41 @@ export function calcSeasonAvgRating(q: Partial<Player>, sp: number, sg: number, 
   );
 }
 
+export function getPlayerCupTotals(
+  q: Partial<Player> | null | undefined,
+  comp: CupCompKey | 'all' = 'all'
+): { sp: number; sg: number; sa: number; cs: number; srs: number; sra: number; motm: number; yc: number; rc: number; avgRating: number } {
+  const cs = q?.cupStats;
+  if (!cs) {
+    return { sp: 0, sg: 0, sa: 0, cs: 0, srs: 0, sra: 0, motm: 0, yc: 0, rc: 0, avgRating: 0 };
+  }
+  const keys: CupCompKey[] = comp === 'all' ? ['cup', 'lc', 'dc', 'sc', 'asia'] : [comp];
+  let sp = 0;
+  let sg = 0;
+  let sa = 0;
+  let cleanSheets = 0;
+  let srs = 0;
+  let sra = 0;
+  let motm = 0;
+  let yc = 0;
+  let rc = 0;
+  keys.forEach((k) => {
+    const rec = cs[k];
+    if (!rec) return;
+    sp += rec.sp || 0;
+    sg += rec.sg || 0;
+    sa += rec.sa || 0;
+    cleanSheets += rec.cs || 0;
+    srs += rec.srs || 0;
+    sra += rec.sra || 0;
+    motm += rec.motm || 0;
+    yc += rec.yc || 0;
+    rc += rec.rc || 0;
+  });
+  const avgRating = sra > 0 ? Math.round((srs / sra) * 100) / 100 : 0;
+  return { sp, sg, sa, cs: cleanSheets, srs, sra, motm, yc, rc, avgRating };
+}
+
 export function snapshotPlayerForRecord(
   q: Player,
   retiredInfo?: { season: number; age: number }
@@ -59,6 +95,11 @@ export function snapshotPlayerForRecord(
     customD: q.customD ? { ...q.customD } : undefined,
     sb: q.sb ? { ...q.sb } : undefined,
     coreSb: q.coreSb ? { ...q.coreSb } : undefined,
+    cupStats: q.cupStats
+      ? (Object.fromEntries(
+          Object.entries(q.cupStats).map(([k, v]) => [k, v ? { ...v } : v])
+        ) as Player['cupStats'])
+      : undefined,
     history: q.history
       ? q.history.map((h) => ({
           ...h,
@@ -112,16 +153,27 @@ export function mergeClubAllTimePlayers(
     const sa = q.sa || 0;
     const cs = q.cs || 0;
     const motm = q.motm || 0;
-    const avg = getAvgRating(q);
+    const cup = getPlayerCupTotals(q, 'all');
+    const seasonApps = sp + cup.sp;
+    const seasonGoals = sg + cup.sg;
+    const seasonAssists = sa + cup.sa;
+    const seasonCs = cs + cup.cs;
+    const seasonMotm = motm + cup.motm;
+    const avg = Math.max(getAvgRating(q), cup.avgRating);
     const cur = map.get(q.n);
     if (cur) {
       if (cur.lastSeason < season) {
-        cur.apps += sp;
-        cur.goals += sg;
-        cur.assists += sa;
-        cur.cleanSheets += cs;
-        cur.motm += motm;
-        if (sp > 0) {
+        cur.apps += seasonApps;
+        cur.goals += seasonGoals;
+        cur.assists += seasonAssists;
+        cur.cleanSheets += seasonCs;
+        cur.motm += seasonMotm;
+        cur.cupApps = (cur.cupApps || 0) + cup.sp;
+        cur.cupGoals = (cur.cupGoals || 0) + cup.sg;
+        cur.cupAssists = (cur.cupAssists || 0) + cup.sa;
+        cur.cupCleanSheets = (cur.cupCleanSheets || 0) + cup.cs;
+        cur.cupMotm = (cur.cupMotm || 0) + cup.motm;
+        if (seasonApps > 0) {
           cur.seasons += 1;
           const prevList = cur.playedSeasons || (cur.lastSeason > 0 ? [Math.floor(cur.lastSeason)] : []);
           if (!prevList.includes(sInt)) {
@@ -140,22 +192,31 @@ export function mergeClubAllTimePlayers(
       cur.stillAtClub = true;
       cur.retired = false;
       cur.snapshot = snapshotPlayerForRecord(q);
-    } else if (sp > 0 || sg > 0 || sa > 0 || cs > 0 || motm > 0) {
+    } else if (seasonApps > 0 || seasonGoals > 0 || seasonAssists > 0 || seasonCs > 0 || seasonMotm > 0) {
       map.set(q.n, {
         name: q.n,
         pos: q.pos,
         ro: q.ro,
         no: q.no,
         vis: q.vis ? [...q.vis] : undefined,
-        apps: sp,
-        goals: sg,
-        assists: sa,
-        cleanSheets: cs,
-        motm,
-        seasons: sp > 0 ? 1 : 0,
+        apps: seasonApps,
+        goals: seasonGoals,
+        assists: seasonAssists,
+        cleanSheets: seasonCs,
+        motm: seasonMotm,
+        ...(cup.sp > 0
+          ? {
+              cupApps: cup.sp,
+              cupGoals: cup.sg,
+              cupAssists: cup.sa,
+              cupCleanSheets: cup.cs,
+              cupMotm: cup.motm
+            }
+          : {}),
+        seasons: seasonApps > 0 ? 1 : 0,
         firstSeason: sInt,
         lastSeason: sInt,
-        playedSeasons: sp > 0 ? [sInt] : undefined,
+        playedSeasons: seasonApps > 0 ? [sInt] : undefined,
         bestAvgRating: avg,
         stillAtClub: true,
         snapshot: snapshotPlayerForRecord(q)
@@ -193,6 +254,15 @@ export function mergeClubAllTimePlayers(
     .slice(0, 100);
 }
 
+export interface CareerTotalsSplit {
+  apps: number;
+  goals: number;
+  assists: number;
+  cleanSheets: number;
+  motm: number;
+  avgRating: number;
+}
+
 export interface PlayerCareerSummary {
   seasons: PlayerSeasonHistoryRecord[];
   currentRow: PlayerSeasonHistoryRecord | null;
@@ -205,6 +275,8 @@ export interface PlayerCareerSummary {
   totalYellow: number;
   totalRed: number;
   avgRating: number;
+  leagueTotals: CareerTotalsSplit;
+  cupTotals: CareerTotalsSplit;
   honors: { season: number; honor: string; teamName: string }[];
   careerLog: string[];
 }
@@ -229,7 +301,7 @@ export function getPlayerCareerSummary(
     state.seasonArchives.forEach((arc) => {
       if (baseMap.has(arc.season)) return;
       const found = arc.players.find((pl) => pl.name === player.n || (isMe && pl.isMe));
-      if (found && (found.sp > 0 || found.sg > 0 || found.sa > 0)) {
+      if (found && (found.sp > 0 || (found.cupSp || 0) > 0 || found.sg > 0 || (found.cupSg || 0) > 0 || found.sa > 0 || (found.cupSa || 0) > 0)) {
         const honor = arc.champion
           ? `แชมป์ ${TN[arc.tier]}`
           : arc.nextTier > arc.tier
@@ -259,6 +331,16 @@ export function getPlayerCareerSummary(
           yc: found.yc,
           rc: found.rc,
           avgRating: found.avgRating,
+          ...(found.cupSp
+            ? {
+                cupSp: found.cupSp,
+                cupSg: found.cupSg || 0,
+                cupSa: found.cupSa || 0,
+                cupCs: found.cupCs || 0,
+                cupMotm: found.cupMotm || 0,
+                cupAvgRating: found.cupAvgRating || 0
+              }
+            : {}),
           honor
         });
       }
@@ -278,6 +360,7 @@ export function getPlayerCareerSummary(
   const curOv = isMe && pProf ? ovMe(pProf) : player.ov;
   const curA = { ...DT(player, pProf).a };
   const curAvg = calcSeasonAvgRating({ ...player, ov: curOv }, curSp, curSg, curSa, curCs);
+  const curCup = getPlayerCupTotals(player, 'all');
 
   const currentRow: PlayerSeasonHistoryRecord | null =
     !hasCurrentArchived && !player.retired
@@ -295,35 +378,66 @@ export function getPlayerCareerSummary(
           motm: curMotm,
           yc: curYc,
           rc: curRc,
-          avgRating: curAvg
+          avgRating: curAvg,
+          ...(curCup.sp > 0
+            ? {
+                cupSp: curCup.sp,
+                cupSg: curCup.sg,
+                cupSa: curCup.sa,
+                cupCs: curCup.cs,
+                cupMotm: curCup.motm,
+                cupAvgRating: curCup.avgRating
+              }
+            : {})
         }
       : null;
 
   const allRows = currentRow ? [currentRow, ...pastSeasons] : pastSeasons;
-  const sumApps = allRows.reduce((s, r) => s + r.sp, 0);
-  const sumGoals = allRows.reduce((s, r) => s + r.sg, 0);
-  const sumAssists = allRows.reduce((s, r) => s + r.sa, 0);
+  const lgApps = allRows.reduce((s, r) => s + r.sp, 0);
+  const lgGoals = allRows.reduce((s, r) => s + r.sg, 0);
+  const lgAssists = allRows.reduce((s, r) => s + r.sa, 0);
+  const lgCs = allRows.reduce((s, r) => s + r.cs, 0);
+  const lgMotm = allRows.reduce((s, r) => s + r.motm, 0);
+
+  const cupApps = allRows.reduce((s, r) => s + (r.cupSp || 0), 0);
+  const cupGoals = allRows.reduce((s, r) => s + (r.cupSg || 0), 0);
+  const cupAssists = allRows.reduce((s, r) => s + (r.cupSa || 0), 0);
+  const cupCs = allRows.reduce((s, r) => s + (r.cupCs || 0), 0);
+  const cupMotm = allRows.reduce((s, r) => s + (r.cupMotm || 0), 0);
+
+  const sumApps = lgApps + cupApps;
+  const sumGoals = lgGoals + cupGoals;
+  const sumAssists = lgAssists + cupAssists;
 
   // Career profile can hold pre-history match tallies from earlier saves
   const totalApps = isMe && pProf ? Math.max(sumApps, pProf.ap || 0) : sumApps;
   const totalGoals = isMe && pProf ? Math.max(sumGoals, pProf.gl || 0) : sumGoals;
   const totalAssists = isMe && pProf ? Math.max(sumAssists, pProf.as || 0) : sumAssists;
-  const totalCleanSheets = allRows.reduce((s, r) => s + r.cs, 0);
-  const totalMotm = allRows.reduce((s, r) => s + r.motm, 0);
+  const totalCleanSheets = lgCs + cupCs;
+  const totalMotm = lgMotm + cupMotm;
   const totalYellow = allRows.reduce((s, r) => s + r.yc, 0);
   const totalRed = allRows.reduce((s, r) => s + r.rc, 0);
 
-  let weightedSum = 0;
-  let weightedApps = 0;
+  let lgWeightedSum = 0;
+  let lgWeightedApps = 0;
+  let cupWeightedSum = 0;
+  let cupWeightedApps = 0;
   allRows.forEach((r) => {
     if (r.avgRating > 0 && r.sp > 0) {
-      weightedSum += r.avgRating * r.sp;
-      weightedApps += r.sp;
+      lgWeightedSum += r.avgRating * r.sp;
+      lgWeightedApps += r.sp;
+    }
+    if ((r.cupAvgRating || 0) > 0 && (r.cupSp || 0) > 0) {
+      cupWeightedSum += (r.cupAvgRating || 0) * (r.cupSp || 0);
+      cupWeightedApps += r.cupSp || 0;
     }
   });
+  const lgAvg = lgWeightedApps > 0 ? Math.round((lgWeightedSum / lgWeightedApps) * 100) / 100 : 0;
+  const cupAvg = cupWeightedApps > 0 ? Math.round((cupWeightedSum / cupWeightedApps) * 100) / 100 : 0;
+  const totalWeightedApps = lgWeightedApps + cupWeightedApps;
   const avgRating =
-    weightedApps > 0
-      ? Math.round((weightedSum / weightedApps) * 100) / 100
+    totalWeightedApps > 0
+      ? Math.round(((lgWeightedSum + cupWeightedSum) / totalWeightedApps) * 100) / 100
       : isMe && pProf && (pProf.ap || 0) > 0
         ? Math.round(((pProf.rs || 0) / pProf.ap) * 100) / 100
         : 0;
@@ -347,7 +461,7 @@ export function getPlayerCareerSummary(
   return {
     seasons: pastSeasons,
     currentRow,
-    totalSeasons: pastSeasons.length + (currentRow && (currentRow.sp > 0 || state.md > 0) ? 1 : 0),
+    totalSeasons: pastSeasons.length + (currentRow && (currentRow.sp > 0 || (currentRow.cupSp || 0) > 0 || state.md > 0) ? 1 : 0),
     totalApps,
     totalGoals,
     totalAssists,
@@ -356,6 +470,22 @@ export function getPlayerCareerSummary(
     totalYellow,
     totalRed,
     avgRating,
+    leagueTotals: {
+      apps: lgApps,
+      goals: lgGoals,
+      assists: lgAssists,
+      cleanSheets: lgCs,
+      motm: lgMotm,
+      avgRating: lgAvg
+    },
+    cupTotals: {
+      apps: cupApps,
+      goals: cupGoals,
+      assists: cupAssists,
+      cleanSheets: cupCs,
+      motm: cupMotm,
+      avgRating: cupAvg
+    },
     honors,
     careerLog: mergedLog.slice().reverse()
   };
@@ -490,7 +620,7 @@ export function getClubLegacySummary(team: Team, state: GameState, curRank?: num
   if (isUserClub && state.seasonArchives?.length) {
     state.seasonArchives.forEach((arc) => {
       arc.players.forEach((pl) => {
-        if (pl.sp > 0 || pl.sg > 0 || pl.sa > 0 || pl.cs > 0 || pl.motm > 0) {
+        if (pl.sp > 0 || (pl.cupSp || 0) > 0 || pl.sg > 0 || (pl.cupSg || 0) > 0 || pl.sa > 0 || (pl.cupSa || 0) > 0 || pl.cs > 0 || (pl.cupCs || 0) > 0 || pl.motm > 0 || (pl.cupMotm || 0) > 0) {
           let entry = archiveSeasonByPlayer.get(pl.name);
           if (!entry) {
             entry = { seasons: new Set<number>(), no: pl.no };
@@ -642,6 +772,21 @@ export function resolveClubLegendProfile(
     sa: latestArcPl?.sa ?? leg.assists,
     cs: latestArcPl?.cs ?? leg.cleanSheets,
     motm: latestArcPl?.motm ?? leg.motm,
+    ...(leg.cupApps
+      ? {
+          cupStats: {
+            cup: {
+              sp: leg.cupApps,
+              sg: leg.cupGoals || 0,
+              sa: leg.cupAssists || 0,
+              cs: leg.cupCleanSheets || 0,
+              srs: leg.bestAvgRating > 0 ? leg.bestAvgRating * leg.cupApps : 0,
+              sra: leg.bestAvgRating > 0 ? leg.cupApps : 0,
+              motm: leg.cupMotm || 0
+            }
+          }
+        }
+      : {}),
     retired: true,
     retiredSeason,
     careerLog: [

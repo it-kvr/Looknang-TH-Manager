@@ -27,6 +27,7 @@ export const LeagueView: React.FC<{
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
   const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
   const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
+  const [cupInitialStats, setCupInitialStats] = useState(false);
 
   const tb = useMemo(() => sortTable(state.teams.filter((t) => t.tier === vt)), [state.teams, vt]);
   const myLeaguePos = useMemo(() => {
@@ -970,8 +971,26 @@ export const LeagueView: React.FC<{
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
             <span className="text-[var(--mut)] font-medium">{TN[vt]}</span>
           </div>
-          <div className="flex items-center gap-2 text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] tabular-nums">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] tabular-nums">
             <span>ซีซั่น {state.season} · แข่งแล้ว {maxPlayedInTier}/{totalRounds} นัด · {isSeasonDone ? 'สรุปผลประจำฤดูกาล' : 'กำลังลุ้นรางวัล'}</span>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setCupInitialStats(true);
+                if (onShallowPatch) {
+                  onShallowPatch((prev) => ({ v: prev.v === 'c' ? 't' : prev.v, tv: 4 }));
+                } else {
+                  onUpdateState((d) => {
+                    if (d.v === 'c') d.v = 't';
+                    d.tv = 4;
+                  });
+                }
+              }}
+              className="btn btn-xs btn-secondary"
+            >
+              🏅 สถิติบอลถ้วย ›
+            </button>
             {onOpenSeasonStats && (state.seasonArchives?.length || 0) > 0 && (
               <button
                 type="button"
@@ -1163,6 +1182,7 @@ export const LeagueView: React.FC<{
               type="button"
               onClick={() => {
                 SFX.tap();
+                setCupInitialStats(false);
                 if (onShallowPatch) {
                   onShallowPatch((prev) => ({ v: prev.v === 'c' ? 't' : prev.v, tv: tabIdx }));
                 } else {
@@ -1276,7 +1296,15 @@ export const LeagueView: React.FC<{
       {sub === 1 && renderPowerComparison()}
       {sub === 2 && renderStatsAndAwards()}
       {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} />}
-      {sub === 4 && <CupView state={state} onInspectTeam={onInspectTeam} />}
+      {sub === 4 && (
+        <CupView
+          key={cupInitialStats ? 'cup-stats' : 'cup-results'}
+          state={state}
+          onInspectTeam={onInspectTeam}
+          onInspectPlayer={onInspectPlayer}
+          initialRightPane={cupInitialStats ? 'stats' : 'results'}
+        />
+      )}
 
       {prizeModalTier !== null && (
         <div

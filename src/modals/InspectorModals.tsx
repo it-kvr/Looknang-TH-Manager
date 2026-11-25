@@ -1,11 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import type { Position, Player, Team, GameState } from '../types/game';
+import type { Position, Player, Team, GameState, CupCompKey } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
-import { sortTable, teamStats, ensureTeamFans, fmtFans } from '../engine/simulation';
+import { sortTable, teamStats, ensureTeamFans, fmtFans, CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -38,6 +38,7 @@ export const PlayerInspectorModal: React.FC<{
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>(initialTab);
+  const [statCompScope, setStatCompScope] = useState<'league' | 'cup' | 'total'>('league');
   const isRetired = Boolean(livePlayer.retired);
   const effectiveMode = inspectMode === 'missions' && isRetired ? 'info' : inspectMode;
   const canDoMissions = !isRetired;
@@ -299,28 +300,113 @@ export const PlayerInspectorModal: React.FC<{
                   );
                 })()}
 
-                <div className="grid grid-cols-4 gap-1 text-center">
-                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">👕 ลง</div>
-                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{livePlayer.sp || 0}</div>
-                  </div>
-                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⚽ ยิง</div>
-                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{livePlayer.sg || 0}</div>
-                  </div>
-                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{livePlayer.pos === 'GK' ? '🧤 คลีน' : '🎯 จ่าย'}</div>
-                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{livePlayer.pos === 'GK' ? livePlayer.cs || 0 : livePlayer.sa || 0}</div>
-                  </div>
-                  <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⭐ เรต</div>
-                    <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none text-[#8a5b00] dark:text-[#fde047]">
-                      {(livePlayer.sra || 0) > 0
-                        ? ((livePlayer.srs || 0) / Math.max(1, livePlayer.sra || 1)).toFixed(1)
-                        : '-'}
+                {(() => {
+                  const cupT = getPlayerCupTotals(livePlayer, 'all');
+                  const lgSp = livePlayer.sp || 0;
+                  const lgSg = livePlayer.sg || 0;
+                  const lgSa = livePlayer.sa || 0;
+                  const lgCs = livePlayer.cs || 0;
+                  const lgRt = (livePlayer.sra || 0) > 0 ? ((livePlayer.srs || 0) / Math.max(1, livePlayer.sra || 1)).toFixed(1) : '-';
+                  const totSp = lgSp + cupT.sp;
+                  const totSg = lgSg + cupT.sg;
+                  const totSa = lgSa + cupT.sa;
+                  const totCs = lgCs + cupT.cs;
+                  const totSra = (livePlayer.sra || 0) + cupT.sra;
+                  const totRt = totSra > 0 ? (((livePlayer.srs || 0) + cupT.srs) / totSra).toFixed(1) : '-';
+                  const cupRt = cupT.sra > 0 ? cupT.avgRating.toFixed(1) : '-';
+
+                  const dispSp = statCompScope === 'cup' ? cupT.sp : statCompScope === 'total' ? totSp : lgSp;
+                  const dispSg = statCompScope === 'cup' ? cupT.sg : statCompScope === 'total' ? totSg : lgSg;
+                  const disp3 =
+                    livePlayer.pos === 'GK'
+                      ? statCompScope === 'cup'
+                        ? cupT.cs
+                        : statCompScope === 'total'
+                          ? totCs
+                          : lgCs
+                      : statCompScope === 'cup'
+                        ? cupT.sa
+                        : statCompScope === 'total'
+                          ? totSa
+                          : lgSa;
+                  const dispRt = statCompScope === 'cup' ? cupRt : statCompScope === 'total' ? totRt : lgRt;
+
+                  const playedCups = (['cup', 'lc', 'dc', 'sc', 'asia'] as CupCompKey[]).filter(
+                    (k) => (livePlayer.cupStats?.[k]?.sp || 0) > 0
+                  );
+
+                  return (
+                    <div className="space-y-1">
+                      <div className="seg-bar w-full grid grid-cols-3">
+                        {(
+                          [
+                            ['league', '⚽ บอลลีก'],
+                            ['cup', `🏆 บอลถ้วย${cupT.sp > 0 ? ` (${cupT.sp})` : ''}`],
+                            ['total', '📊 รวม']
+                          ] as const
+                        ).map(([id, lbl]) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              setStatCompScope(id);
+                            }}
+                            className={`seg-btn py-0.5 px-1 text-[9.5px] mland:text-[7.5px] justify-center ${
+                              statCompScope === id ? 'seg-btn-active' : ''
+                            }`}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-1 text-center">
+                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">👕 ลง</div>
+                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSp}</div>
+                        </div>
+                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⚽ ยิง</div>
+                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
+                        </div>
+                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{livePlayer.pos === 'GK' ? '🧤 คลีน' : '🎯 จ่าย'}</div>
+                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
+                        </div>
+                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
+                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⭐ เรต</div>
+                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none text-[#8a5b00] dark:text-[#fde047]">
+                            {dispRt}
+                          </div>
+                        </div>
+                      </div>
+
+                      {statCompScope === 'cup' && (
+                        <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 text-[9px] mland:text-[7.5px] text-[var(--mut)] tabular leading-snug">
+                          {playedCups.length > 0 ? (
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                              {playedCups.map((ck) => {
+                                const m = CUP_COMP_META[ck];
+                                const st = livePlayer.cupStats![ck]!;
+                                return (
+                                  <span key={ck} className="whitespace-nowrap">
+                                    {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
+                                    {st.sg > 0 ? `·${st.sg}⚽` : ''}
+                                    {livePlayer.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}🎯` : ''}
+                                    {st.motm > 0 ? `·${st.motm}👑` : ''}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span>ยังไม่ได้ลงเล่นรายการบอลถ้วยในซีซั่นนี้</span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1.5 text-[10px] mland:text-[8px]">
                   <span className="font-bold text-[var(--g)] tabular truncate">💎 {fmtMoney(vlu(livePlayer))}</span>
