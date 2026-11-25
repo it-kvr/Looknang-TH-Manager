@@ -824,7 +824,7 @@ export default function App() {
 
       <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
         {/* Center Game Stage */}
-        <main ref={mainRef} className="flex-1 min-h-0 overflow-hidden flex flex-col overflow-x-hidden pr-[env(safe-area-inset-right,0px)]">
+        <main ref={mainRef} className="flex-1 min-h-0 overflow-hidden flex flex-col overflow-x-hidden pr-[var(--sar,env(safe-area-inset-right,0px))]">
           <div className="max-w-7xl mland:max-w-none w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5">
 
           {curTab === 't' && (
@@ -909,7 +909,7 @@ export default function App() {
         </main>
 
         {/* Pinned Left-Rail Game Console Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-r border-[var(--line)] pl-[env(safe-area-inset-left,0px)] order-first w-[calc(70px+env(safe-area-inset-left,0px))] mland:w-[calc(62px+env(safe-area-inset-left,0px))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
+        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/95 backdrop-blur-md border-r border-[var(--line)] pl-[var(--sal,env(safe-area-inset-left,0px))] order-first w-[calc(70px+var(--sal,env(safe-area-inset-left,0px)))] mland:w-[calc(62px+var(--sal,env(safe-area-inset-left,0px)))] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto safe-bottom">
           <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
             {tabs.map(([key, icon, label]) => {
               const active = curTab === key;
