@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Scissors } from 'lucide-react';
 import type { Position, Player, Team, GameState, CupCompKey } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
@@ -15,6 +16,7 @@ import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressi
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
+import { PlayerAppearanceModal } from './PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { TalentBadge } from '../components/TalentBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
@@ -37,6 +39,7 @@ export const PlayerInspectorModal: React.FC<{
   const currentNo = liveTeam ? getShirtNo(liveTeam, livePlayer) : livePlayer.no || 10;
   const info = dtInfo(livePlayer, isMePlayer ? state.p : null);
   const [showLockerPicker, setShowLockerPicker] = useState(false);
+  const [showAppearanceModal, setShowAppearanceModal] = useState(false);
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>(initialTab);
   const [statCompScope, setStatCompScope] = useState<'league' | 'cup' | 'total'>('league');
   const isRetired = Boolean(livePlayer.retired);
@@ -215,6 +218,29 @@ export const PlayerInspectorModal: React.FC<{
                 } · อายุ ${livePlayer.age} ปี`}
                 bio={info.bio}
                 categories={summarizeStatGroups(info.G)}
+                renderStageTopLeft={
+                  isMePlayer && state.mode === 'p' && !isRetired
+                    ? (_palette, tone) => (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            SFX.tap();
+                            setShowAppearanceModal(true);
+                          }}
+                          title="ปรับแต่งทรงผมและหน้าตา"
+                          aria-label="ปรับแต่งทรงผมและหน้าตา"
+                          className={`w-6 h-6 mland:w-5 mland:h-5 rounded-lg border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
+                            tone === 'light'
+                              ? 'bg-white/85 hover:bg-white border-slate-300/85 text-slate-700 hover:text-[var(--g)] shadow-2xs'
+                              : 'bg-black/35 hover:bg-black/55 border-white/18 text-emerald-200 hover:text-white'
+                          }`}
+                        >
+                          <Scissors className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+                        </button>
+                      )
+                    : undefined
+                }
                 renderBadges={(palette) =>
                   isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
                     <>
@@ -429,6 +455,18 @@ export const PlayerInspectorModal: React.FC<{
                       <span>👕 เบอร์ #{currentNo}</span>
                       <span className="text-[var(--g)] font-extrabold">ล็อกเกอร์ ▾</span>
                     </button>
+                    {isMePlayer && state.mode === 'p' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setShowAppearanceModal(true);
+                        }}
+                        className="btn btn-xs btn-secondary shrink-0"
+                      >
+                        ✂️ ทรงผม
+                      </button>
+                    )}
                     {state.mode === 'm' && (
                       <button
                         type="button"
@@ -511,6 +549,14 @@ export const PlayerInspectorModal: React.FC<{
           team={liveTeam}
           state={state}
           onClose={() => setShowLockerPicker(false)}
+          onUpdateState={onUpdateState}
+          onToast={onToast}
+        />
+      )}
+      {showAppearanceModal && isMePlayer && state.mode === 'p' && !isRetired && (
+        <PlayerAppearanceModal
+          state={state}
+          onClose={() => setShowAppearanceModal(false)}
           onUpdateState={onUpdateState}
           onToast={onToast}
         />

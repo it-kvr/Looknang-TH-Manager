@@ -312,6 +312,7 @@ export const MainMenu: React.FC<{
   const [cBase, setCBase] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
   const [cAttrs, setCAttrs] = useState<CoreAttrs>(() => ({ sh: 65, ps: 38, dr: 47, tk: 28, ph: 48 }));
   const [cTalent, setCTalent] = useState<number>(() => R(62, 93));
+  const [cTalentTier, setCTalentTier] = useState<'any' | 'grind' | 'pro' | 'high' | 'legend'>('any');
   const [cTraits, setCTraits] = useState<string[]>(() => rollPlayerTraits('FW', 'ST', 55, 78));
   const [customRosterCount, setCustomRosterCount] = useState<number>(() => loadCustomPlayers().length);
 
@@ -1105,7 +1106,11 @@ export const MainMenu: React.FC<{
     });
 
     const ov = OVF(cPos, cAttrs);
-    const estPot = clamp(Math.max(88, cTalent + 6), ov + 18, 96);
+    const estPot = clamp(
+      cTalent >= 75 ? Math.max(85, cTalent + 6) : cTalent >= 55 ? Math.max(76, cTalent + 12) : Math.max(66, cTalent + 16),
+      ov + 10,
+      98
+    );
     const previewName = cName.trim() || 'นักเตะใหม่';
     const previewPlayer: Player = {
       n: previewName, pos: cPos, ro: cSp, ov, age: cAge, ht: cHt, wt: cWt, foot: cFoot, pot: estPot, talent: cTalent, traits: cTraits, fit: 100, inj: 0, no: cNo, me: 1, hg: 1, customCreated: 1
@@ -1180,11 +1185,28 @@ export const MainMenu: React.FC<{
       applyRolledStats(cPos, cSp, curArch);
     };
 
-    const rerollTalent = () => {
+    const talentRanges = [
+      { id: 'any', label: '🎲 สุ่มอิสระ', rangeLabel: '50–95', min: 50, max: 95 },
+      { id: 'grind', label: '🧱 ฝึกหนัก', rangeLabel: '35–49', min: 35, max: 49 },
+      { id: 'pro', label: '⚡ มาตรฐาน', rangeLabel: '50–69', min: 50, max: 69 },
+      { id: 'high', label: '🌟 พรสวรรค์สูง', rangeLabel: '70–84', min: 70, max: 84 },
+      { id: 'legend', label: '💎 อัจฉริยะ', rangeLabel: '85–97', min: 85, max: 97 }
+    ] as const;
+
+    const rerollTalent = (tierOverride?: typeof cTalentTier) => {
       SFX.tap();
-      const nextTalent = R(62, 95);
+      const targetTier = tierOverride ?? cTalentTier;
+      if (tierOverride) setCTalentTier(tierOverride);
+      const spec = talentRanges.find((r) => r.id === targetTier) || talentRanges[0];
+      const nextTalent = R(spec.min, spec.max);
       setCTalent(nextTalent);
       setCTraits(rollPlayerTraits(cPos, cSp, ov, nextTalent));
+    };
+
+    const setExactTalent = (nextVal: number) => {
+      const clamped = clamp(Math.round(nextVal), 35, 97);
+      setCTalent(clamped);
+      setCTalentTier(clamped < 50 ? 'grind' : clamped < 70 ? 'pro' : clamped < 85 ? 'high' : 'legend');
     };
 
     const rerollTraits = () => {
@@ -1346,63 +1368,44 @@ export const MainMenu: React.FC<{
 
           {/* Responsive Studio Grid */}
           <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[245px_1fr] md:grid-cols-[270px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[210px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-2.5 sm:gap-3 mland:gap-2">
-          {/* Left Column: Athlete Card Preview + Active Traits + Primary CTAs */}
-          <div className="flex flex-col justify-between gap-2 mland:gap-1.5 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto shrink-0">
-            <div className="flex flex-col gap-1.5 mland:gap-1 shrink-0">
-              <AthleteCard
-                ov={ov}
-                pot={estPot}
-                talent={cTalent}
-                roleLabel={cSp}
-                shirtNo={cNo}
-                kit1={cColor}
-                kit2="#fad05a"
-                faceProps={{
-                  player: previewPlayer,
-                  careerProfile: previewProfile,
-                  kitColor: cColor,
-                  trimColor: '#fad05a'
-                }}
-                name={previewName}
-                subtitle={`อายุ ${cAge} ปี · ${curArch.icon} ${curArch.name}`}
-                bio={previewBio}
-                categories={summarizeStatGroups(subStats)}
-                renderBadges={(palette) => (
-                  <span className={`text-[8.5px] mland:text-[7px] font-bold truncate max-w-[110px] ${palette.clubText}`}>
-                    {cTraits.length > 0 ? `✨ ${cTraits.length} นิสัยติดตัว` : 'นักเตะใหม่'}
-                  </span>
-                )}
-              />
+          {/* Left Column: Athlete Card Preview + Active Traits */}
+          <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto shrink-0">
+            <AthleteCard
+              ov={ov}
+              pot={estPot}
+              talent={cTalent}
+              roleLabel={cSp}
+              shirtNo={cNo}
+              kit1={cColor}
+              kit2="#fad05a"
+              faceProps={{
+                player: previewPlayer,
+                careerProfile: previewProfile,
+                kitColor: cColor,
+                trimColor: '#fad05a'
+              }}
+              name={previewName}
+              subtitle={`อายุ ${cAge} ปี · ${curArch.icon} ${curArch.name}`}
+              bio={previewBio}
+              categories={summarizeStatGroups(subStats)}
+              renderBadges={(palette) => (
+                <span className={`text-[8.5px] mland:text-[7px] font-bold truncate max-w-[110px] ${palette.clubText}`}>
+                  {cTraits.length > 0 ? `✨ ${cTraits.length} นิสัยติดตัว` : 'นักเตะใหม่'}
+                </span>
+              )}
+            />
 
-              <PlayerTraitsStrip
-                player={previewPlayer}
-                careerProfile={previewProfile}
-                trPair={previewDt.TR}
-                traits={previewDt.traits}
-                talent={cTalent}
-                growthStage={previewDt.gro}
-                peakAge={previewDt.D0.pk}
-                sigKey={previewDt.D0.sig}
-                archName={curArch.name}
-              />
-            </div>
-
-            <div className="shrink-0 space-y-1.5 mland:space-y-1">
-              <button
-                type="button"
-                onClick={startCareerNow}
-                className="btn btn-md btn-gold w-full font-extrabold truncate"
-              >
-                ⚽ เริ่มอาชีพช่อง #{targetSlot} ({cSp} · OVR {ov})
-              </button>
-              <button
-                type="button"
-                onClick={saveToCustomPool}
-                className="btn btn-sm btn-surface w-full border-[var(--g)]/50 text-[var(--g)] hover:bg-[var(--g-soft)] truncate"
-              >
-                💾 บันทึกตัวไว้ซื้อในโหมดผู้จัดการ
-              </button>
-            </div>
+            <PlayerTraitsStrip
+              player={previewPlayer}
+              careerProfile={previewProfile}
+              trPair={previewDt.TR}
+              traits={previewDt.traits}
+              talent={cTalent}
+              growthStage={previewDt.gro}
+              peakAge={previewDt.D0.pk}
+              sigKey={previewDt.D0.sig}
+              archName={curArch.name}
+            />
           </div>
 
           {/* Right Column: 4-Tab Clean Customization Workspace */}
@@ -1794,7 +1797,7 @@ export const MainMenu: React.FC<{
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
                         type="button"
-                        onClick={rerollTalent}
+                        onClick={() => rerollTalent()}
                         className="btn btn-xs btn-secondary"
                       >
                         🌟 สุ่มพรสวรรค์ ({cTalent})
@@ -1833,18 +1836,20 @@ export const MainMenu: React.FC<{
                                 🔥 {SIGL[arch.sig] || arch.sig}
                               </span>
                             </div>
-                            <div className={`text-[10px] mland:text-[8.5px] mt-0.5 leading-snug line-clamp-2 ${active ? 'text-white/90' : 'text-[var(--mut)]'}`}>
+                            <div className={`text-[10.5px] mland:text-[8.5px] mt-0.5 leading-snug whitespace-normal ${active ? 'text-white/92' : 'text-[var(--mut)]'}`}>
                               {arch.desc}
                             </div>
-                            <div className={`text-[9.5px] mland:text-[8px] font-semibold mt-1 truncate ${active ? 'text-white/95' : 'text-[var(--g)]'}`}>
-                              {coreTags.slice(0, 3).join(' · ')}
+                            <div className={`text-[9.5px] mland:text-[8px] font-semibold mt-1 flex flex-wrap gap-x-1.5 gap-y-0.5 ${active ? 'text-white/95' : 'text-[var(--g)]'}`}>
+                              {coreTags.map((tag) => (
+                                <span key={tag}>{tag}</span>
+                              ))}
                             </div>
                           </button>
                         );
                       })}
                     </div>
 
-                    <div className="lg:pl-3 lg:border-l border-[var(--line)]/65 space-y-2 mland:space-y-1">
+                    <div className="lg:pl-3 lg:border-l border-[var(--line)]/65 space-y-2 mland:space-y-1.5">
                       <div className="flex items-center justify-between text-xs mland:text-[10px]">
                         <span className="font-bold text-[var(--ink)]">พลังหลักหลังสุ่ม</span>
                         <span className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] tabular">OVR {ov}</span>
@@ -1866,9 +1871,58 @@ export const MainMenu: React.FC<{
                           </div>
                         );
                       })}
-                      <div className="pt-1.5 border-t border-[var(--line)]/60 flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
-                        <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์</span>
-                        <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
+                      <div className="pt-2 border-t border-[var(--line)]/60 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
+                          <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์ (เลือกช่วงได้)</span>
+                          <TalentBadge talent={cTalent} variant="meter" showLabel size="xs" />
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-1">
+                          {talentRanges.map((tr) => {
+                            const selected = cTalentTier === tr.id;
+                            return (
+                              <button
+                                key={tr.id}
+                                type="button"
+                                onClick={() => rerollTalent(tr.id)}
+                                className={`px-2 py-1 mland:py-0.5 rounded-lg border text-left cursor-pointer transition-colors flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px] font-bold ${
+                                  selected
+                                    ? 'bg-[var(--g-soft)] border-[var(--g)] text-[var(--g)]'
+                                    : 'bg-[var(--surface-2)]/55 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
+                                }`}
+                              >
+                                <span className="truncate">{tr.label}</span>
+                                <span className="tabular opacity-80 shrink-0">{tr.rangeLabel}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div className="flex items-center gap-1.5 pt-0.5">
+                          <button
+                            type="button"
+                            onClick={() => { SFX.tap(); setExactTalent(cTalent - 1); }}
+                            className="btn-icon w-6 h-6 mland:w-5 mland:h-5 text-xs"
+                            aria-label="ลดค่าพรสวรรค์"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="range"
+                            min={35}
+                            max={97}
+                            value={cTalent}
+                            onChange={(e) => setExactTalent(Number(e.target.value))}
+                            aria-label="ปรับค่าพรสวรรค์"
+                            className="flex-1 min-w-0 accent-[var(--g)]"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => { SFX.tap(); setExactTalent(cTalent + 1); }}
+                            className="btn-icon w-6 h-6 mland:w-5 mland:h-5 text-xs"
+                            aria-label="เพิ่มค่าพรสวรรค์"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1980,6 +2034,37 @@ export const MainMenu: React.FC<{
             </div>
           </div>
           </div>
+
+          {/* Pinned Studio Footer: Save & Start Career always visible without scrolling */}
+          <footer className="shrink-0 px-3 sm:px-4 mland:px-3 py-2 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface)] flex flex-col sm:flex-row mland:flex-row items-stretch sm:items-center mland:items-center justify-between gap-2 mland:gap-2">
+            <div className="hidden sm:flex mland:flex items-center gap-2 min-w-0 text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate">
+              <b className="text-[var(--ink)] truncate">{previewName}</b>
+              <span aria-hidden="true">·</span>
+              <span className="shrink-0">{cSp}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-bold text-[var(--g)] shrink-0">OVR {ov}</span>
+              <span aria-hidden="true">·</span>
+              <span className="shrink-0">POT {estPot}</span>
+              <span aria-hidden="true">·</span>
+              <span className="shrink-0">TL {cTalent}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:flex mland:flex items-center gap-2 mland:gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={saveToCustomPool}
+                className="btn btn-md mland:btn-sm btn-surface border-[var(--g)]/50 text-[var(--g)] hover:bg-[var(--g-soft)] truncate"
+              >
+                💾 บันทึกเข้าทำเนียบ
+              </button>
+              <button
+                type="button"
+                onClick={startCareerNow}
+                className="btn btn-md mland:btn-sm btn-gold font-extrabold truncate"
+              >
+                ⚽ เริ่มอาชีพช่อง #{targetSlot}
+              </button>
+            </div>
+          </footer>
         </div>
       </div>
     );

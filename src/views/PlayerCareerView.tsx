@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Scissors } from 'lucide-react';
 import type { Player, GameState, CupCompKey } from '../types/game';
 import { clamp } from '../utils/math';
 import { PACT, CAREER_PERKS, FOOTBALL_TRAITS, SIGL, ALL_SUB_ROLES, SPN, ATT } from '../data/thaiFootballData';
@@ -30,6 +31,7 @@ import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
+import { PlayerAppearanceModal } from '../modals/PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { StaminaBar } from '../components/StaminaBar';
 
@@ -43,6 +45,7 @@ export const PlayerCareerView: React.FC<{
   const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
   const [statCompScope, setStatCompScope] = useState<'career' | 'league' | 'cup'>('career');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
+  const [showAppearanceModal, setShowAppearanceModal] = useState(false);
   const p = state.p;
   if (!p) return null;
   const meTeam = state.teams[state.me];
@@ -94,6 +97,25 @@ export const PlayerCareerView: React.FC<{
           subtitle={`${meTeam.name} · อายุ ${p.age} ปี`}
           bio={details.bio}
           categories={summarizeStatGroups(details.G)}
+          renderStageTopLeft={(_palette, tone) => (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                SFX.tap();
+                setShowAppearanceModal(true);
+              }}
+              title="ปรับแต่งทรงผมและหน้าตา"
+              aria-label="ปรับแต่งทรงผมและหน้าตา"
+              className={`w-6 h-6 mland:w-5 mland:h-5 rounded-lg border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
+                tone === 'light'
+                  ? 'bg-white/85 hover:bg-white border-slate-300/85 text-slate-700 hover:text-[var(--g)] shadow-2xs'
+                  : 'bg-black/35 hover:bg-black/55 border-white/18 text-emerald-200 hover:text-white'
+              }`}
+            >
+              <Scissors className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+            </button>
+          )}
           renderBadges={(palette) => (
             <>
               <span className={`text-[9px] mland:text-[7px] font-bold tabular ${palette.repText}`}>
@@ -108,6 +130,31 @@ export const PlayerCareerView: React.FC<{
 
         {/* Personal Info Box below Portrait Card */}
         <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
+
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setShowAppearanceModal(true);
+              }}
+              className="btn btn-xs btn-secondary justify-center gap-1 px-1.5"
+            >
+              <span>✂️</span>
+              <span className="truncate">ทรงผม/โฉม</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setShowLockerPicker(true);
+              }}
+              className="btn btn-xs btn-secondary justify-center gap-1 px-1.5"
+            >
+              <span>👕</span>
+              <span className="tabular truncate">เบอร์ #{myShirtNo}</span>
+            </button>
+          </div>
 
           <StaminaBar value={p.en} variant="card" />
 
@@ -858,6 +905,14 @@ export const PlayerCareerView: React.FC<{
           team={meTeam}
           state={state}
           onClose={() => setShowLockerPicker(false)}
+          onUpdateState={onUpdateState}
+          onToast={onToast}
+        />
+      )}
+      {showAppearanceModal && (
+        <PlayerAppearanceModal
+          state={state}
+          onClose={() => setShowAppearanceModal(false)}
           onUpdateState={onUpdateState}
           onToast={onToast}
         />

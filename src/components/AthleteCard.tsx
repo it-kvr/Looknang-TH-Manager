@@ -23,6 +23,7 @@ export interface AthleteCardProps {
   shirtButtonTitle?: string;
   renderBadges?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
   renderHeaderAction?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
+  renderStageTopLeft?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
   kit1: string;
   kit2: string;
   faceProps: Omit<React.ComponentProps<typeof PlayerFace>, 'size' | 'bare'>;
@@ -44,6 +45,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   shirtButtonTitle,
   renderBadges,
   renderHeaderAction,
+  renderStageTopLeft,
   kit1,
   kit2,
   faceProps,
@@ -59,6 +61,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   const isLight = cardTone === 'light';
   const badgeNodes = renderBadges?.(cardPalette, cardTone);
   const actionNode = renderHeaderAction?.(cardPalette, cardTone);
+  const stageTopLeftNode = renderStageTopLeft?.(cardPalette, cardTone);
   const isCardGK =
     faceProps.isGK ?? (faceProps.player?.pos === 'GK' || faceProps.player?.ro === 'GK');
   const gkPalette = isCardGK ? resolveGkKitPalette(kit1, kit2, faceProps.kitColor) : null;
@@ -138,16 +141,19 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Neutral Studio Spotlight Portrait Stage */}
       <div
         className={`relative mx-2.5 my-1 mland:mx-1.5 mland:my-0.5 rounded-xl mland:rounded-lg border pt-1.5 mland:pt-1 flex items-end justify-center overflow-hidden ${
-          stretchStage ? 'flex-1 min-h-[64px] mland:min-h-[42px]' : ''
+          stretchStage ? 'flex-1 min-h-[64px] mland:min-h-[42px]' : 'min-h-[72px] mland:min-h-[48px]'
         } ${cardPalette.stageBox}`}
       >
+        {stageTopLeftNode && (
+          <div className="absolute top-1 left-1 z-20">{stageTopLeftNode}</div>
+        )}
         <CardStudioToggleButton
           tone={cardTone}
           onToggle={toggleCardTone}
           className="absolute top-1 right-1 z-20"
         />
         <div
-          className={`relative z-10 ${
+          className={`relative z-10 [&>svg]:block ${
             stretchStage
               ? '[&>svg]:w-[76px] [&>svg]:h-[82px] sm:[&>svg]:w-[88px] sm:[&>svg]:h-[94px] mland:[&>svg]:w-[48px] mland:[&>svg]:h-[52px]'
               : '[&>svg]:w-[60px] [&>svg]:h-[64px] mland:[&>svg]:w-[40px] mland:[&>svg]:h-[42px]'

@@ -97,7 +97,7 @@ export function getAthleteCardPalette(tone: CardStudioTone): AthleteCardPalette 
       statTrack: 'bg-slate-300/80',
       traitChip: 'bg-emerald-600/10 border-emerald-600/30 text-emerald-900',
       repText: 'text-amber-700',
-      capBadge: 'bg-slate-800 text-white',
+      capBadge: 'bg-slate-800 border border-transparent text-white',
       hgBadge: 'bg-emerald-600/12 border border-emerald-600/35 text-emerald-800'
     };
   }
@@ -114,16 +114,16 @@ export function getAthleteCardPalette(tone: CardStudioTone): AthleteCardPalette 
       'bg-white/12 hover:bg-white/25 border border-white/20 text-amber-200',
     clubIconWrap: 'bg-white/10 border border-white/15',
     stageBox:
-      'border-white/10 bg-gradient-to-b from-[#1f2d27] to-[#111915] shadow-inner',
+      'border-white/15 bg-gradient-to-b from-[#1f2d27] to-[#111915] shadow-inner',
     nameText: 'text-white',
     metaText: 'text-emerald-100/80',
     statsWrap: 'bg-[#060c09]/92 border-t border-white/10',
-    statCell: 'bg-white/[0.04]',
+    statCell: 'bg-white/[0.04] border border-white/[0.08]',
     statLabel: 'text-white/60',
     statTrack: 'bg-white/15',
     traitChip: 'bg-emerald-400/15 border-emerald-300/30 text-emerald-100',
     repText: 'text-amber-200/90',
-    capBadge: 'bg-white/18 text-white',
+    capBadge: 'bg-white/18 border border-transparent text-white',
     hgBadge: 'bg-emerald-400/20 border border-emerald-300/45 text-emerald-200'
   };
 }
