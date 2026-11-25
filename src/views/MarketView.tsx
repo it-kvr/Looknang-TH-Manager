@@ -366,8 +366,9 @@ export const MarketView: React.FC<{
           }
         } else {
           const srcList = offerDraft.source === 'mk' ? d.mk : d.scout?.results || [];
-          const mIdx = srcList[offerDraft.idx] ? offerDraft.idx : srcList.findIndex((p) => p.n === (offerDraft.playerName || q.n));
-          if (mIdx >= 0) {
+          const byName = srcList.findIndex((p) => p.n === (offerDraft.playerName || q.n));
+          const mIdx = byName >= 0 ? byName : offerDraft.idx;
+          if (mIdx >= 0 && srcList[mIdx]) {
             target = srcList[mIdx];
             removeFromSrc = () => srcList.splice(mIdx, 1);
           }

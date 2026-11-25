@@ -7,7 +7,6 @@ import type {
   PlayerMissionsState,
   MissionSeasonRecord,
   MissionStageOutcome,
-  MissionAttemptLog,
   Team,
   PlayerCareerProfile,
   GameState,

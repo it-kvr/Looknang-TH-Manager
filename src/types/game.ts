@@ -1,6 +1,3 @@
-import { R } from '../utils/math';
-import { pen } from '../engine/playerCore';
-
 export type Position = 'GK' | 'DF' | 'MF' | 'FW';
 export type SubRole =
   | 'GK'

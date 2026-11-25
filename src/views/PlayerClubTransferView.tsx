@@ -122,6 +122,7 @@ export const PlayerClubTransferView: React.FC<{
       const oldTeam = d.teams[d.me];
       const existingMe = oldTeam.sq.find((q) => q.me || q.n === d.p!.name);
       oldTeam.sq = oldTeam.sq.filter((q) => !q.me && q.n !== d.p!.name);
+      oldTeam.lu = null;
 
       let targetIdx = d.teams.findIndex((t) => t.name === mc.name);
       if (targetIdx < 0) {
@@ -139,6 +140,7 @@ export const PlayerClubTransferView: React.FC<{
         : { ...hgPlayer, me: 1, hg: 1, customCreated: 1 };
       targetTeam.sq = targetTeam.sq.filter((q) => !q.me && q.n !== movedPlayer.n);
       targetTeam.sq.push(movedPlayer);
+      targetTeam.lu = null;
       d.me = targetIdx;
       d.lg = targetTeam.tier;
       assignTeamShirtNumbers(targetTeam);
@@ -170,6 +172,7 @@ export const PlayerClubTransferView: React.FC<{
       const oldTeam = d.teams[d.me];
       const existingMe = oldTeam.sq.find((q) => q.me || q.n === d.p!.name);
       oldTeam.sq = oldTeam.sq.filter((q) => !q.me && q.n !== d.p!.name);
+      oldTeam.lu = null;
 
       const newIdx = d.teams.findIndex((t) => t.id === targetTeam.id);
       if (newIdx < 0) return;
@@ -180,6 +183,7 @@ export const PlayerClubTransferView: React.FC<{
       movedPlayer.me = 1;
       dest.sq = dest.sq.filter((q) => !q.me && q.n !== movedPlayer.n);
       dest.sq.push(movedPlayer);
+      dest.lu = null;
       d.me = newIdx;
       d.lg = dest.tier;
       assignTeamShirtNumbers(dest);

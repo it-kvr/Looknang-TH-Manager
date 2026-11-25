@@ -2,7 +2,7 @@ import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSea
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
-import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
+import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
 export function genPlayerName(): string {
@@ -60,23 +60,24 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
     const raw = localStorage.getItem(slotKey(m, slot));
     if (!raw) return null;
     const d = JSON.parse(raw) as GameState;
-    if (Array.isArray(d?.teams)) {
-      d.teams.forEach((tm) => {
-        tm.sq?.forEach((q) => {
-          if ((q.ro as string) === 'SS') q.ro = 'CF';
-        });
-        if (Array.isArray(tm.cf)) {
-          tm.cf = tm.cf.map(([sp, x, y]) => [((sp as string) === 'SS' ? 'CF' : sp) as SubRole, x, y]);
-        }
-        assignTeamShirtNumbers(tm);
-      });
-      if (d.mode === 'p' && d.p) {
-        if ((d.p.sp as string) === 'SS') d.p.sp = 'CF';
-        const mePl = d.teams[d.me]?.sq.find((q) => q.me);
-        if (mePl?.no) d.p.no = mePl.no;
-      }
-      ensureAiTeamPhilosophies(d, false);
+    if (!Array.isArray(d?.teams) || typeof d.me !== 'number' || d.me < 0 || d.me >= d.teams.length || !d.teams[d.me]) {
+      return null;
     }
+    d.teams.forEach((tm) => {
+      tm.sq?.forEach((q) => {
+        if ((q.ro as string) === 'SS') q.ro = 'CF';
+      });
+      if (Array.isArray(tm.cf)) {
+        tm.cf = tm.cf.map(([sp, x, y]) => [((sp as string) === 'SS' ? 'CF' : sp) as SubRole, x, y]);
+      }
+      assignTeamShirtNumbers(tm);
+    });
+    if (d.mode === 'p' && d.p) {
+      if ((d.p.sp as string) === 'SS') d.p.sp = 'CF';
+      const mePl = d.teams[d.me]?.sq.find((q) => q.me);
+      if (mePl?.no) d.p.no = mePl.no;
+    }
+    ensureAiTeamPhilosophies(d, false);
     return d;
   } catch {
     return null;

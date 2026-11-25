@@ -17,7 +17,6 @@ type FullscreenEl = HTMLElement & {
 };
 
 let landscapeLockSucceeded = false;
-let explicitExitAt = 0;
 let desktopExplicitExit = false;
 
 export function isPortraitViewport(): boolean {
@@ -168,7 +167,6 @@ export async function enterLandscapeFullscreen(
 
 export async function exitFullscreenSafe(): Promise<void> {
   if (typeof document === 'undefined') return;
-  explicitExitAt = Date.now();
   if (!isMobileDevice()) {
     desktopExplicitExit = true;
   }
@@ -232,14 +230,14 @@ export function isMobileDevice(): boolean {
 }
 
 export function getAutoFullscreenPref(): boolean {
-  if (typeof window === 'undefined') return true;
+  if (typeof window === 'undefined') return false;
   try {
     const raw = window.localStorage.getItem('lkset');
-    if (!raw) return true;
+    if (!raw) return false;
     const parsed = JSON.parse(raw) as { preferFullscreen?: boolean } | null;
-    return parsed?.preferFullscreen !== false;
+    return parsed?.preferFullscreen === true;
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -515,7 +513,7 @@ export function bindAutoLandscapeFullscreen(): () => void {
       return;
     }
 
-    if (isAppleStandalone || getFullscreenElement() || !isFullscreenSupported()) {
+    if (isAppleStandalone || isStandaloneDisplayMode() || desktopExplicitExit || getFullscreenElement() || !isFullscreenSupported()) {
       lockLandscapeOrientation().catch(() => undefined);
       return;
     }
@@ -545,8 +543,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
     if (document.visibilityState === 'visible') {
       updateSafeAreas();
       guardViewportScroll();
-      if (Date.now() < barPeekUntil) return;
-      if (shouldAutoMobileFullscreen()) {
+      if (Date.now() < barPeekUntil || desktopExplicitExit) return;
+      if (shouldAutoMobileFullscreen() && !isStandaloneDisplayMode()) {
         if (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported()) {
           enterImmersiveFullscreen().catch(() => undefined);
         } else {
@@ -573,26 +571,10 @@ export function bindAutoLandscapeFullscreen(): () => void {
     if (active) {
       barPeekUntil = 0;
       document.documentElement.classList.remove('is-fs-peek');
-    } else if (prevWasFs && !isMobileDevice()) {
+    } else if (prevWasFs) {
+      // Respect the user's exit from browser fullscreen instead of re-forcing it and
+      // repeatedly triggering Android Chrome's bottom "To exit full screen..." bar.
       desktopExplicitExit = true;
-    } else if (prevWasFs && Date.now() - explicitExitAt > 1200 && shouldAutoMobileFullscreen()) {
-      // User swiped to show mobile bars and Chrome exited DOM fullscreen:
-      // keep UI locked underneath and let bars display briefly before auto-hiding.
-      barPeekUntil = Date.now() + 2600;
-      barPeekTimer = window.setTimeout(() => {
-        barPeekTimer = null;
-        barPeekUntil = 0;
-        document.documentElement.classList.remove('is-fs-peek');
-        updateSafeAreas();
-        if (
-          document.visibilityState === 'visible' &&
-          shouldAutoMobileFullscreen() &&
-          !getFullscreenElement() &&
-          isFullscreenSupported()
-        ) {
-          enterImmersiveFullscreen(false).catch(() => undefined);
-        }
-      }, 2600);
     }
 
     syncFullscreenClass(active);
@@ -684,8 +666,8 @@ export function bindAutoLandscapeFullscreen(): () => void {
   updateSafeAreas();
   initTimer1 = window.setTimeout(() => updateSafeAreas(), 250);
   initTimer2 = window.setTimeout(() => updateSafeAreas(), 800);
-  if (getAutoFullscreenPref()) {
-    if (isStandaloneDisplayMode() || (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported())) {
+  if (getAutoFullscreenPref() && !isStandaloneDisplayMode()) {
+    if (!isAppleStandalone && !getFullscreenElement() && isFullscreenSupported()) {
       enterImmersiveFullscreen(false).catch(() => undefined);
     }
     if (isMobileDevice()) {

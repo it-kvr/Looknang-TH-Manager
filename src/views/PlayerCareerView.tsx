@@ -463,7 +463,7 @@ export const PlayerCareerView: React.FC<{
                       return (
                         <div key={pk.id} className={`p-2.5 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 ${owned ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)]'}`}>
                           <div className="min-w-0">
-                            <div className="font-bold text-xs mland:text-[10] truncate">{pk.name}</div>
+                            <div className="font-bold text-xs mland:text-[10px] truncate">{pk.name}</div>
                             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{pk.desc}</div>
                           </div>
                           <button
@@ -509,7 +509,7 @@ export const PlayerCareerView: React.FC<{
                             }`}
                           >
                             <div className="min-w-0">
-                              <div className="font-bold text-xs mland:text-[10] truncate">
+                              <div className="font-bold text-xs mland:text-[10px] truncate">
                                 {tr.icon} {tr.name}
                                 {isFitRole && !owned && <span className="ml-1 text-[9.5px] text-[var(--g)]">· ถนัด</span>}
                               </div>
@@ -598,7 +598,7 @@ export const PlayerCareerView: React.FC<{
                           >
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <div className="font-bold text-xs mland:text-[10] truncate">
+                                <div className="font-bold text-xs mland:text-[10px] truncate">
                                   {role} · {SPN[role] || role}
                                 </div>
                                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">

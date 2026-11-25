@@ -1,7 +1,7 @@
 import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId } from '../types/game';
 import { COACH_OUTFITS } from '../data/thaiFootballData';
 import { getTurfGradeSpec } from '../data/crestAndKitData';
-import { R, clamp } from '../utils/math';
+import { clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
 import { faceBodySvg } from '../components/SvgVisuals';
 

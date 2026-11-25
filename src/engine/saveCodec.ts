@@ -1,6 +1,6 @@
 import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
-import { ensureAiTeamPhilosophies } from './playerCore';
+import { ensureAiTeamPhilosophies, assignTeamShirtNumbers } from './playerCore';
 
 export const SAVE_B64U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 export const SAVE_POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
@@ -536,9 +536,55 @@ export const b64UrlToBytes = (str: string): Uint8Array => {
   return out;
 };
 
+const isValidImportedState = (d: GameState | null | undefined): d is GameState =>
+  Boolean(
+    d &&
+      Array.isArray(d.teams) &&
+      Array.isArray(d.fx) &&
+      ['m', 'p'].includes(d.mode) &&
+      typeof d.me === 'number' &&
+      d.me >= 0 &&
+      d.me < d.teams.length &&
+      Boolean(d.teams[d.me])
+  );
+
+const normalizeImportedSave = (d: GameState): GameState => {
+  d.teams.forEach((tm) => {
+    tm.sq?.forEach((q) => {
+      if ((q.ro as string) === 'SS') q.ro = 'CF';
+    });
+    if (Array.isArray(tm.cf)) {
+      tm.cf = tm.cf.map(([sp, x, y]) => [((sp as string) === 'SS' ? 'CF' : sp) as SubRole, x, y]);
+    }
+    assignTeamShirtNumbers(tm);
+  });
+  if (d.mode === 'p' && d.p) {
+    if ((d.p.sp as string) === 'SS') d.p.sp = 'CF';
+    const mePl = d.teams[d.me]?.sq.find((q) => q.me);
+    if (mePl?.no) d.p.no = mePl.no;
+  }
+  ensureAiTeamPhilosophies(d, false);
+  return d;
+};
+
 export const cleanImportJson = (raw: string): GameState | null => {
-  const trimmed = raw.trim().replace(/\s+/g, (m) => (m.includes('\n') || m.includes('\r') ? '' : m));
-  if (!trimmed) return null;
+  const cleanRaw = raw.replace(/^\uFEFF/, '').trim();
+  if (!cleanRaw) return null;
+
+  if (cleanRaw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(cleanRaw) as Record<string, unknown>;
+      if (parsed && typeof parsed === 'object' && typeof parsed.code === 'string') {
+        return cleanImportJson(parsed.code);
+      }
+      const d = parsed as unknown as GameState;
+      if (isValidImportedState(d)) return normalizeImportedSave(d);
+    } catch {
+      return null;
+    }
+  }
+
+  const trimmed = cleanRaw.replace(/\s+/g, (m) => (m.includes('\n') || m.includes('\r') ? '' : m));
   if (trimmed.startsWith('LK2:')) {
     try {
       const payload = trimmed.slice(4).replace(/\s+/g, '');
@@ -547,25 +593,19 @@ export const cleanImportJson = (raw: string): GameState | null => {
       const jsonStr = compactBytesToStr(rawBytes);
       const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
       const d = unpackSaveState(parsed);
-      if (!d || !Array.isArray(d.teams) || !Array.isArray(d.fx) || !['m', 'p'].includes(d.mode)) return null;
-      return d;
+      if (!isValidImportedState(d)) return null;
+      return normalizeImportedSave(d);
     } catch {
       return null;
     }
   }
   try {
-    const json = decodeURIComponent(escape(atob(raw.trim())));
+    const json = decodeURIComponent(escape(atob(cleanRaw)));
     const d = JSON.parse(json) as GameState;
-    if (!d || !Array.isArray(d.teams) || !Array.isArray(d.fx) || !['m', 'p'].includes(d.mode)) return null;
-    return d;
+    if (!isValidImportedState(d)) return null;
+    return normalizeImportedSave(d);
   } catch {
-    try {
-      const d = JSON.parse(raw.trim()) as GameState;
-      if (!d || !Array.isArray(d.teams) || !Array.isArray(d.fx) || !['m', 'p'].includes(d.mode)) return null;
-      return d;
-    } catch {
-      return null;
-    }
+    return null;
   }
 };
 
@@ -579,4 +619,140 @@ export const exportSaveCode = (s: GameState): string => {
   } catch {
     return btoa(unescape(encodeURIComponent(JSON.stringify(s))));
   }
+};
+
+export const SAVE_FILE_FORMAT = 'LOOKNANG_TH_SAVE';
+
+export interface SaveFileEnvelope {
+  format: typeof SAVE_FILE_FORMAT;
+  version: 2;
+  exportedAt: string;
+  mode: 'm' | 'p';
+  name: string;
+  season: number;
+  md: number;
+  label?: string;
+  code: string;
+}
+
+export const buildSaveFileName = (s: GameState, customTag?: string, includeTime = false): string => {
+  const rawName = s.mode === 'm' ? (s.club?.name || s.teams[s.me]?.name || 'club') : (s.p?.name || 'player');
+  const sanitize = (v: string) =>
+    v
+      .trim()
+      .replace(/[/\\?%*:|"<>]/g, '')
+      .replace(/\s+/g, '_')
+      .slice(0, 28);
+  const safeName = sanitize(rawName) || 'save';
+  const safeTag = customTag ? `-${sanitize(customTag)}` : '';
+  let timeSuffix = '';
+  if (includeTime) {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    timeSuffix = `-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  }
+  const modeTag = s.mode === 'm' ? 'manager' : 'player';
+  return `looknang-${modeTag}-${safeName}-s${s.season}-md${s.md}${safeTag}${timeSuffix}.json`;
+};
+
+export const buildSaveFilePayload = (s: GameState, label?: string): string => {
+  const name = s.mode === 'm' ? (s.club?.name || s.teams[s.me]?.name || 'สโมสร') : (s.p?.name || 'นักเตะ');
+  const envelope: SaveFileEnvelope = {
+    format: SAVE_FILE_FORMAT,
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    mode: s.mode,
+    name,
+    season: s.season,
+    md: s.md,
+    ...(label?.trim() ? { label: label.trim() } : {}),
+    code: exportSaveCode(s)
+  };
+  return JSON.stringify(envelope, null, 2);
+};
+
+export interface SavePreviewMeta {
+  mode: 'm' | 'p';
+  name: string;
+  season: number;
+  md: number;
+  exportedAt?: string;
+  label?: string;
+}
+
+export const inspectSavePreview = (raw: string): SavePreviewMeta | null => {
+  const cleanRaw = raw.replace(/^\uFEFF/, '').trim();
+  if (!cleanRaw) return null;
+  if (cleanRaw.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(cleanRaw) as Record<string, unknown>;
+      if (
+        parsed &&
+        parsed.format === SAVE_FILE_FORMAT &&
+        (parsed.mode === 'm' || parsed.mode === 'p') &&
+        typeof parsed.code === 'string' &&
+        typeof parsed.name === 'string'
+      ) {
+        return {
+          mode: parsed.mode,
+          name: parsed.name,
+          season: Number(parsed.season || 1),
+          md: Number(parsed.md || 0),
+          exportedAt: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : undefined,
+          label: typeof parsed.label === 'string' ? parsed.label : undefined
+        };
+      }
+    } catch {
+      // fallback below
+    }
+  }
+  const state = cleanImportJson(cleanRaw);
+  if (!state) return null;
+  return {
+    mode: state.mode,
+    name: state.mode === 'm' ? (state.club?.name || state.teams[state.me]?.name || 'สโมสร') : (state.p?.name || 'นักเตะ'),
+    season: state.season,
+    md: state.md
+  };
+};
+
+export const downloadSaveFile = (s: GameState, label?: string): { filename: string; bytes: number } => {
+  const filename = buildSaveFileName(s, label);
+  const payload = buildSaveFilePayload(s, label);
+  const blob = new Blob([payload], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+  return { filename, bytes: blob.size };
+};
+
+export const downloadRawSaveFile = (filename: string, rawText: string) => {
+  const blob = new Blob([rawText], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename.endsWith('.json') ? filename : `${filename}.json`;
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+};
+
+export const readSaveFileText = async (file: File): Promise<string> => {
+  if (typeof file.text === 'function') {
+    return file.text();
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error || new Error('File read error'));
+    reader.readAsText(file, 'utf-8');
+  });
 };

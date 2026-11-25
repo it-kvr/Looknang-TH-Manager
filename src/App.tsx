@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize2, RotateCw, Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
 import {
@@ -12,7 +12,7 @@ import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEve
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
-import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, pen, ovMe, logFin, pushFeed } from './engine/playerCore';
+import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
@@ -88,7 +88,7 @@ export default function App() {
   };
 
   const landscapeOverlay =
-    isPortraitMobile && !dismissedRotatePrompt && appSettings.preferFullscreen !== false ? (
+    isPortraitMobile && !dismissedRotatePrompt && appSettings.preferFullscreen === true ? (
       <div
         data-no-auto-fs="1"
         className="fixed inset-0 z-[90] bg-[#040d08]/95 flex items-center justify-center p-5 safe-all text-white"
@@ -297,6 +297,7 @@ export default function App() {
   const handleLoadSave = (_mode: GameMode, targetSlot: number, loaded: GameState) => {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
+    flushPendingSave();
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
     const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier };
     ensureSeasonExtraCups(normalized);
@@ -304,6 +305,7 @@ export default function App() {
     setNavResetSeq((n) => n + 1);
     setSlot(targetSlot);
     setState(normalized);
+    saveGameToSlot(normalized, targetSlot);
     showToast('โหลดเซฟเรียบร้อย');
   };
 
@@ -963,9 +965,11 @@ export default function App() {
         const idx = oldT.sq.findIndex((q) => q.me);
         const mePlayer = idx >= 0 ? oldT.sq.splice(idx, 1)[0] : null;
         if (mePlayer) {
+          oldT.lu = null;
           const newT = d.teams[transferToTeamId];
           const repIdx = newT.sq.findIndex((q) => q.pos === mePlayer.pos);
           newT.sq.splice(repIdx >= 0 ? repIdx : 0, 1, mePlayer);
+          newT.lu = null;
           assignTeamShirtNumbers(newT);
           d.p.no = mePlayer.no;
           d.me = transferToTeamId;
@@ -1438,12 +1442,21 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           state={state}
+          slot={slot}
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => {
             flushPendingSave();
             setShowSettings(false);
             setSeasonStatsTarget(null);
             setState(null);
+          }}
+          onSaveNow={() => {
+            flushPendingSave();
+            saveGameToSlot(state, slot);
+          }}
+          onLoadSaveFile={(loaded, targetSlot) => {
+            handleLoadSave(loaded.mode, targetSlot, loaded);
+            setShowSettings(false);
           }}
           onOpenSecretBoost={() => setShowSecretBoost(true)}
           onToast={showToast}

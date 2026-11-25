@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, Coins, X } from 'lucide-react';
 import type { MainTab, Player, Team, GameState } from '../types/game';
-import { RN, TN, PACT, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
+import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon } from '../engine/playerCore';
@@ -1457,7 +1457,7 @@ export const ScheduleCalendarView: React.FC<{
 
         {/* Immediate Cup / Asia Banner */}
         {(state.pc || state.pa || state.plc || state.psc || state.pdc) && (
-          <div className="p-3 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10]">
+          <div className="p-3 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px]">
             <span className="font-bold">
               {state.pa && state.ac
                 ? `🌏 คิวแข่งคั่นกลางสัปดาห์นี้: บอลถ้วยทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`

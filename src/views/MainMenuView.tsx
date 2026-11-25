@@ -1,19 +1,20 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, FolderInput, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Download, FolderInput, Maximize2, Minimize2, RefreshCw } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
 import { ATT, SPX, SPN, ROLE_HINT, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, FOOTBALL_TRAITS, TRAIT_BY_ID, ROLE_BASE_ATTRS, PLAYER_ARCHETYPES, NG, SFX0, KIT_P, SIGL, AR_T } from '../data/thaiFootballData';
-import { SFX, unlockAudio } from '../utils/audioTheme';
+import { SFX, unlockAudio, getSettings, saveSettings } from '../utils/audioTheme';
 import { genPlayerName, clearNamePool, genClubNames, NSL, loadGameFromSlot, deleteSlot, firstEmptySlot, mkTeam, OVF, dtInfo, summarizeStatGroups, rollPlayerTraits, rollPlayerBio, getPlayerBio, saveCustomPlayer, loadCustomPlayers, xi, teamKits, type PlayerBio, type StatCategorySummary } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
-import { cleanImportJson } from '../engine/saveCodec';
-import { ovColor, statBarColor, statTierMeta, getPlayerTalent } from '../engine/missions';
+import { downloadSaveFile } from '../engine/saveCodec';
+import { SaveFolderModal } from '../modals/SaveFolderModal';
+import { ovColor, statBarColor, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge } from '../components/TalentBadge';
 import { AthleteCard } from '../components/AthleteCard';
-import { enterAutoMobileFullscreen } from '../utils/fullscreen';
+import { enterAutoMobileFullscreen, enterLandscapeFullscreen, exitFullscreenSafe } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
 import type { ClubIdentity } from '../types/game';
 
@@ -237,7 +238,7 @@ export const MainMenu: React.FC<{
     [refresh]
   );
   const [showImport, setShowImport] = useState(false);
-  const [importText, setImportText] = useState('');
+  const [preferFs, setPreferFs] = useState<boolean>(() => getSettings().preferFullscreen === true);
   const [crMobTab, setCrMobTab] = useState<'info' | 'face' | 'arch' | 'stats'>('info');
   const [starPoster, setStarPoster] = useState<{ pool: StarPosterCard[]; idx: number }>(() => {
     const pool = buildStarPosterPool(loadedSlots);
@@ -438,16 +439,8 @@ export const MainMenu: React.FC<{
     }
   };
 
-  const handleImport = () => {
-    const parsed = cleanImportJson(importText);
-    if (!parsed) {
-      onToast('โค้ดเซฟไม่ถูกต้อง');
-      return;
-    }
-    const slot = firstEmptySlot(parsed.mode) || 1;
-    onLoadSave(parsed.mode, slot, parsed);
-    setShowImport(false);
-    onToast(`นำเข้าเซฟลงสล็อต ${slot} แล้ว`);
+  const openImportModal = () => {
+    setShowImport(true);
   };
 
   const renderSlotList = (m: GameMode) => {
@@ -466,56 +459,71 @@ export const MainMenu: React.FC<{
         const delKey = `${m}_${k}`;
         const isConfirm = confirmDel === delKey;
         rows.push(
-          <div key={k} className="flex items-center gap-1.5 mland:gap-1">
+          <div key={k} className="flex items-stretch gap-1 mland:gap-1">
             <button
               type="button"
               onClick={() => {
                 SFX.tap();
                 onLoadSave(m, k, d);
               }}
-              className="group flex-1 min-w-0 min-h-[48px] mland:min-h-[42px] text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer flex items-center gap-2.5 mland:gap-2"
+              className="group flex-1 min-w-0 min-h-[48px] mland:min-h-[42px] text-left px-2 py-1.5 sm:px-2.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border border-[var(--line)] bg-[var(--surface-2)]/75 hover:bg-[var(--surface-2)] hover:border-[var(--g)] transition-colors cursor-pointer flex items-center gap-1.5 sm:gap-2.5 mland:gap-2"
             >
-              <div className="shrink-0 w-9 h-9 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-center overflow-hidden">
+              <div className="shrink-0 w-8 h-8 sm:w-9 sm:h-9 mland:w-8 mland:h-8 rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-center overflow-hidden">
                 {isMgr ? (
-                  <div className="[&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                  <div className="[&>svg]:w-6 [&>svg]:h-6 sm:[&>svg]:w-7 sm:[&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
                     <ClubCrest name={name} size={28} team={meTeam} club={d.club} isMyClub />
                   </div>
                 ) : (
-                  <div className="[&>svg]:w-8 [&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
+                  <div className="[&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-7 mland:[&>svg]:h-7 flex items-center justify-center">
                     <PlayerFace player={mePlayer} team={meTeam} state={d} careerProfile={d.p} size={32} bare />
                   </div>
                 )}
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)] flex items-center gap-1.5">
+                <div className="font-bold text-[11px] sm:text-xs mland:text-[10.5px] truncate leading-tight text-[var(--ink)] flex items-center gap-1">
                   <span className={`font-display tabular shrink-0 ${isMgr ? 'text-[#a16c00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
                     #{k}
                   </span>
                   <span className="truncate">{name}</span>
                 </div>
-                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
+                <div className="text-[9.5px] sm:text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
                   ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
                   {!isMgr && d.p ? ` · ${d.p.pos}${meTeam ? ` · ${meTeam.name}` : ''}` : ''}
                 </div>
               </div>
 
-              <span className="text-xs font-bold text-[var(--mut)] group-hover:text-[var(--g)] shrink-0 transition-colors" aria-hidden="true">
+              <span className="hidden sm:inline text-xs font-bold text-[var(--mut)] group-hover:text-[var(--g)] shrink-0 transition-colors" aria-hidden="true">
                 ▶
               </span>
             </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteSlot(m, k)}
-              aria-label="ลบเซฟ"
-              className={`min-h-[48px] mland:min-h-[42px] px-2.5 mland:px-2 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[9.5px] font-bold cursor-pointer transition-colors shrink-0 ${
-                isConfirm
-                  ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
-                  : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50'
-              }`}
-            >
-              {isConfirm ? 'ลบ?' : '🗑'}
-            </button>
+            <div className="flex flex-col gap-1 shrink-0 w-7 mland:w-6">
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  const { filename } = downloadSaveFile(d);
+                  onToast(`💾 บันทึกไฟล์ "${filename}" ลงเครื่องแล้ว`);
+                }}
+                title="บันทึกไฟล์เซฟลงเครื่อง"
+                aria-label="บันทึกไฟล์เซฟลงเครื่อง"
+                className="flex-1 rounded-lg border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--g)] hover:border-[var(--g)]/50 transition-colors cursor-pointer flex items-center justify-center"
+              >
+                <Download className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSlot(m, k)}
+                aria-label="ลบเซฟ"
+                className={`flex-1 rounded-lg border text-[9.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors flex items-center justify-center leading-none ${
+                  isConfirm
+                    ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
+                    : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50'
+                }`}
+              >
+                {isConfirm ? 'ลบ?' : '🗑'}
+              </button>
+            </div>
           </div>
         );
       } else if (!shownEmpty) {
@@ -1856,14 +1864,41 @@ export const MainMenu: React.FC<{
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
             <button
               type="button"
-              onClick={() => { SFX.tap(); setShowImport(true); }}
-              className="h-8 sm:h-9 mland:h-7 px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
+              data-no-auto-fs="1"
+              onClick={() => {
+                SFX.tap();
+                const next = !preferFs;
+                setPreferFs(next);
+                const cur = getSettings();
+                saveSettings({ ...cur, preferFullscreen: next });
+                if (next) {
+                  enterLandscapeFullscreen(true).catch(() => undefined);
+                  onToast('เปิดโหมดเต็มจอแล้ว');
+                } else {
+                  exitFullscreenSafe().catch(() => undefined);
+                  onToast('ปิดเต็มจอแล้ว (ไม่ขึ้นแถบแจ้งเตือนเบราว์เซอร์ด้านล่าง)');
+                }
+              }}
+              title={preferFs ? 'สลับเป็นโหมดปกติ (ซ่อนแถบแจ้งเตือนเบราว์เซอร์ด้านล่าง)' : 'เปิดโหมดเต็มจอ'}
+              aria-label={preferFs ? 'ปิดโหมดเต็มจอ' : 'เปิดโหมดเต็มจอ'}
+              className={`h-8 w-8 sm:h-9 sm:w-9 mland:h-7 mland:w-7 rounded-xl mland:rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                preferFs
+                  ? 'border-emerald-300/45 bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30'
+                  : 'border-white/22 bg-[#11241a]/88 hover:bg-[#193325] text-white/80'
+              }`}
+            >
+              {preferFs ? <Minimize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" /> : <Maximize2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); openImportModal(); }}
+              className="h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg border border-white/22 bg-[#11241a]/88 hover:bg-[#193325] hover:border-white/38 text-[11px] sm:text-xs mland:text-[10px] font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_2px_8px_rgba(0,0,0,0.28)] transition-colors cursor-pointer inline-flex items-center gap-1.5 whitespace-nowrap shrink-0"
             >
               <FolderInput className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-emerald-200 shrink-0" />
-              <span>นำเข้าเซฟ</span>
+              <span>โหลด / นำเข้าเซฟ</span>
             </button>
             <PWAInstallButton variant="compact" tone="stadium" onToast={onToast} />
           </div>
@@ -2000,53 +2035,15 @@ export const MainMenu: React.FC<{
       </div>
 
       {showImport && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4"
-          onClick={() => setShowImport(false)}
-        >
-          <div
-            className="w-full max-w-md p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="font-bold text-sm font-display flex items-center gap-2">
-                <FolderInput className="w-4 h-4 text-[var(--g)] shrink-0" />
-                <span>นำเข้าโค้ดเซฟ</span>
-              </h3>
-              <button
-                type="button"
-                onClick={() => setShowImport(false)}
-                aria-label="ปิดหน้าต่าง"
-                className="btn-icon rounded-full!"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <textarea
-              value={importText}
-              onChange={(e) => setImportText(e.target.value)}
-              placeholder="วางโค้ดเซฟที่นี่..."
-              rows={4}
-              className="w-full p-2.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-mono"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setShowImport(false)}
-                className="btn btn-md btn-secondary"
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="button"
-                onClick={handleImport}
-                className="btn btn-md btn-primary flex-1"
-              >
-                ยืนยันนำเข้าเซฟ
-              </button>
-            </div>
-          </div>
-        </div>
+        <SaveFolderModal
+          onLoadSave={(loaded, chosenSlot) => {
+            onLoadSave(loaded.mode, chosenSlot, loaded);
+            setShowImport(false);
+            onToast(`โหลดเซฟลงสล็อต #${chosenSlot} แล้ว`);
+          }}
+          onClose={() => setShowImport(false)}
+          onToast={onToast}
+        />
       )}
     </div>
   );

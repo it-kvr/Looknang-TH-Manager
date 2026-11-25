@@ -13,7 +13,7 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { Position, SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle, CoachOutfitId } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, MatchPitchPuddle, CoachOutfitId } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
 import { getTurfGradeForLevel, getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
@@ -1649,7 +1649,6 @@ export const MatchModal: React.FC<{
   };
 
   const isAttackRight = (w: LiveMatchWorld, side: 'H' | 'A') => (side === 'H') !== w.secondHalf;
-  const attackDirOf = (w: LiveMatchWorld, side: 'H' | 'A') => (isAttackRight(w, side) ? 1 : -1);
 
   const tryTriggerInMatchInjury = (
     w: LiveMatchWorld,
@@ -1728,7 +1727,7 @@ export const MatchModal: React.FC<{
         // Instant skip mode auto-sub
         const bench = sideOrig.sq
           .filter((q) => !curPlayed.includes(q.n) && q.inj === 0 && (q.sus || 0) === 0 && !sr.sentOff.includes(q.n) && q.pos !== 'GK')
-          .sort((a, b) => (a.pos === pl.pos ? 1 : 0) - (b.pos === pl.pos ? 1 : 0) || b.ov - a.ov);
+          .sort((a, b) => (b.pos === pl.pos ? 1 : 0) - (a.pos === pl.pos ? 1 : 0) || b.ov - a.ov);
         const subIn = bench.find((b) => b.pos === pl.pos) || bench[0];
         const idx = curLu.indexOf(victim.id);
         if (subIn && idx >= 0) {
@@ -1737,13 +1736,34 @@ export const MatchModal: React.FC<{
           if (isHomeSide) sr.homeSubsCount++;
           else sr.awaySubsCount++;
           sr.subs.push({ m: curMin, t: sideOrig.id, inPlayer: subIn.n, outPlayer: victim.id });
+          const effSubTeam = victim.side === 'H' ? getLiveHomeTeam() : getLiveAwayTeam();
+          const rep = buildTeamAgents(effSubTeam, victim.side, curLu, w.secondHalf);
+          const agIdx = w.agents.findIndex((a) => a.id === victim.id);
+          if (agIdx >= 0 && rep[idx]) {
+            rep[idx].x = w.agents[agIdx].x;
+            rep[idx].y = w.agents[agIdx].y;
+            w.agents[agIdx] = rep[idx];
+            if (w.ball.carrierId === victim.id) w.ball.carrierId = subIn.n;
+            if (w.ball.targetId === victim.id) w.ball.targetId = subIn.n;
+          }
           pushLog(curMin, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ: 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+        } else {
+          victim.sentOff = true;
+          sr.sentOff.push(victim.id);
+          if (w.ball.carrierId === victim.id) w.ball.carrierId = null;
+          if (w.ball.targetId === victim.id) w.ball.targetId = null;
+          setSentOff(sr.sentOff.slice());
+          const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
+          pushLog(curMin, `⚠️ ไม่มีตัวสำรองพร้อมเปลี่ยน! ${sideOrig.name} จำใจเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
         }
       } else {
         victim.sentOff = true;
         sr.sentOff.push(victim.id);
+        if (w.ball.carrierId === victim.id) w.ball.carrierId = null;
+        if (w.ball.targetId === victim.id) w.ball.targetId = null;
         setSentOff(sr.sentOff.slice());
-        pushLog(curMin, `⚠️ เปลี่ยนตัวครบโควต้าแล้ว! ${sideOrig.name} จำใจเล่นด้วยผู้เล่นน้อยกว่า`, 'card');
+        const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
+        pushLog(curMin, `⚠️ เปลี่ยนตัวครบโควต้าแล้ว! ${sideOrig.name} จำใจเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
       }
       return true;
     }
@@ -1783,8 +1803,11 @@ export const MatchModal: React.FC<{
     } else {
       victim.sentOff = true;
       sr.sentOff.push(victim.id);
+      if (w.ball.carrierId === victim.id) w.ball.carrierId = null;
+      if (w.ball.targetId === victim.id) w.ball.targetId = null;
       setSentOff(sr.sentOff.slice());
-      pushLog(curMin, `⚠️ ${sideOrig.name} เปลี่ยนตัวไม่ได้แล้ว ต้องฝืนเล่นต่อด้วยผู้เล่น ${11 - sr.sentOff.length} คน`, 'card');
+      const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
+      pushLog(curMin, `⚠️ ${sideOrig.name} เปลี่ยนตัวไม่ได้แล้ว ต้องฝืนเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
     }
     return true;
   };
@@ -2875,7 +2898,6 @@ export const MatchModal: React.FC<{
       const nearDef = wallDef || corridorCands[0]?.d;
 
       const attBlessed = (shooter?.blessedMins ?? 0) > 0;
-      const gkBlessed = (gk?.blessedMins ?? 0) > 0;
       const miracleAtt = w.miracle?.side === side && w.miracle.minsLeft > 0;
       const miracleDef = w.miracle?.side === defSide && w.miracle.minsLeft > 0;
 
@@ -2891,6 +2913,7 @@ export const MatchModal: React.FC<{
             ? 0.14
             : clamp(0.11 + (corridorCands.length >= 2 ? 0.06 : 0) + (shotStyle === 'header' || shotStyle === 'diving_header' ? 0.03 : 0), 0.10, 0.21);
         if (defAgentBlessed) blockChance = clamp(blockChance + 0.16, 0.08, 0.52);
+        else if (miracleDef) blockChance = clamp(blockChance + 0.08, 0.06, 0.45);
         else if (attBlessed || miracleAtt) {
           blockChance *= 0.55;
           deflectChance *= 0.72;
@@ -3174,7 +3197,6 @@ export const MatchModal: React.FC<{
       if (sp.waitSec > 0) return;
       w.pendingSetPiece = null;
       const attPool = getTeamPool(sp.side);
-      const defSide = sp.side === 'H' ? 'A' : 'H';
       const attRight = isAttackRight(w, sp.side);
       const dir = attRight ? 1 : -1;
       const attTeam = sp.side === 'H' ? homeOrig : awayOrig;

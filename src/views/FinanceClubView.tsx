@@ -45,7 +45,6 @@ import {
   MAX_FACILITY_LV,
   MAX_STAFF_LV,
   STAFF_HIRE_COSTS,
-  ALL_FACILITY_KEYS,
   getFacilityUpgradeCost,
   getFacilityDemolishRefund,
   getFacilityCondition,
@@ -1864,7 +1863,6 @@ export const FinanceClubView: React.FC<{
   const cap = est.cap;
   const totV = me.sq.reduce((a, q) => a + Math.round((q.ov * q.ov) / 40), 0);
   const avgAge = (me.sq.reduce((a, q) => a + q.age, 0) / Math.max(1, me.sq.length)).toFixed(1);
-  const trophies = state.trophies || [];
   const bs = me.sq.slice().sort((a, b) => (b.sg || 0) - (a.sg || 0))[0];
   const ba = me.sq.slice().sort((a, b) => (b.sa || 0) - (a.sa || 0))[0];
   const bm = me.sq.slice().sort((a, b) => (b.ap || 0) - (a.ap || 0))[0];
@@ -2183,7 +2181,6 @@ export const FinanceClubView: React.FC<{
       {/* Club Tab 1: Basic Info + Board Confidence & Dressing Room */}
       {clubTab === 'info' && (() => {
         const coachVis = k.managerVis && k.managerVis.length >= 8 ? k.managerVis : getDefaultCoachVis(k.managerName || k.name || 'coach');
-        const curStyle = COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced')) || COACH_STYLES[0];
         const curOutfit = (k.managerOutfit || 'suit_navy') as CoachOutfitId;
         const capPlayer = me.sq.find((q) => q.n === me.cap) || topO;
         const captainCandidates = me.sq
