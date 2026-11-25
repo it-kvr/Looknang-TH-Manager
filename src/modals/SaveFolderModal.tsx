@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AlertTriangle,
   Check,
   Copy,
   Download,
@@ -12,7 +13,10 @@ import {
   Upload,
   X
 } from 'lucide-react';
-import type { GameMode, GameState } from '../types/game';
+import type { GameMode, GameState, PlayerCareerProfile, Team } from '../types/game';
+import { TN } from '../data/thaiFootballData';
+import { ovColor } from '../engine/missions';
+import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { SFX } from '../utils/audioTheme';
 import {
   firstEmptySlot,
@@ -28,7 +32,9 @@ import {
   downloadRawSaveFile,
   downloadSaveFile,
   exportSaveCode,
-  readSaveFileText
+  extractSaveVisualPreview,
+  readSaveFileText,
+  type SaveVisualPreview
 } from '../engine/saveCodec';
 import {
   GAME_AUTO_FOLDER_NAME,
@@ -67,6 +73,154 @@ const getStateDisplayName = (s: GameState): string =>
 const buildSaveIdentityKey = (mode: GameMode, name: string, season: number, md: number): string =>
   `${mode}|${name.trim()}|${Number(season || 1)}|${Number(md || 0)}`;
 
+const buildStubTeam = (preview?: SaveVisualPreview | null): Team | null => {
+  if (!preview?.team) return null;
+  return {
+    id: preview.team.id,
+    name: preview.team.name,
+    tier: preview.team.tier,
+    kc: preview.team.kc,
+    sq: [],
+    form: '4-4-2',
+    tac: 'B',
+    pts: 0,
+    gf: 0,
+    ga: 0,
+    w: 0,
+    d: 0,
+    l: 0,
+    p: 0
+  };
+};
+
+const SaveVisualDock: React.FC<{
+  mode: GameMode;
+  name: string;
+  preview?: SaveVisualPreview | null;
+  isPinned?: boolean;
+  compact?: boolean;
+}> = ({ mode, name, preview, isPinned = false, compact = false }) => {
+  const isMgr = mode === 'm';
+  const teamObj = buildStubTeam(preview);
+  const clubName = preview?.teamName || name;
+  const primaryCol = preview?.club?.c1 || preview?.team?.kc?.[0] || (isMgr ? '#d97706' : '#158049');
+  const boxCls = compact
+    ? 'w-9 h-9 mland:w-8 mland:h-8 rounded-lg'
+    : 'w-11 h-11 sm:w-12 sm:h-12 mland:w-9 mland:h-9 rounded-xl mland:rounded-lg';
+
+  return (
+    <div className="relative flex items-center gap-1 shrink-0">
+      {/* Club Logo */}
+      <div
+        className={`${boxCls} border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center overflow-hidden shadow-2xs`}
+        style={{
+          backgroundImage: `radial-gradient(circle at 50% 25%, ${primaryCol}22, transparent 78%)`
+        }}
+        title={clubName}
+      >
+        {preview?.team || preview?.club ? (
+          <div className={compact ? '[&>svg]:w-6 [&>svg]:h-6' : '[&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6'}>
+            <ClubCrest
+              name={clubName}
+              size={compact ? 24 : 32}
+              team={teamObj}
+              club={preview?.club || null}
+              isMyClub={isMgr}
+            />
+          </div>
+        ) : (
+          <span className="text-base mland:text-xs leading-none">{isMgr ? '🛡️' : '🏟️'}</span>
+        )}
+      </div>
+
+      {/* Player Avatar */}
+      <div
+        className={`${boxCls} border border-[var(--line)] bg-[var(--surface)] flex items-center justify-center overflow-hidden shadow-2xs`}
+        style={{
+          backgroundImage: `linear-gradient(180deg, ${primaryCol}18 0%, transparent 75%)`
+        }}
+        title={preview?.player?.n || name}
+      >
+        {preview?.player || preview?.careerProfile ? (
+          <div className={compact ? '[&>svg]:w-8 [&>svg]:h-8' : '[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-end justify-center'}>
+            <PlayerFace
+              player={preview?.player || { n: name, pos: 'FW', ro: 'ST' }}
+              team={teamObj}
+              club={preview?.club || null}
+              isMyClub={isMgr}
+              careerProfile={(preview?.careerProfile as PlayerCareerProfile | null) || null}
+              size={compact ? 32 : 42}
+              bare
+            />
+          </div>
+        ) : (
+          <span className="text-base mland:text-xs leading-none">{isMgr ? '📋' : '⚽'}</span>
+        )}
+      </div>
+
+      {isPinned && (
+        <span
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-[var(--lamp)] text-[#261900] border border-white/60 flex items-center justify-center shadow-xs"
+          title="ปักหมุดไว้บนสุด"
+        >
+          <Pin className="w-2.5 h-2.5 fill-current" />
+        </span>
+      )}
+    </div>
+  );
+};
+
+const SaveOvrBadge: React.FC<{
+  mode: GameMode;
+  preview?: SaveVisualPreview | null;
+  compact?: boolean;
+}> = ({ mode, preview, compact = false }) => {
+  if (!preview || !preview.maxOvr) return null;
+  const ov = mode === 'm' ? preview.maxOvr : preview.player?.ov || preview.maxOvr;
+  const col = ovColor(ov);
+  const peak = preview.peakOvr && preview.peakOvr > ov ? preview.peakOvr : null;
+
+  return (
+    <div
+      className={`shrink-0 flex flex-col items-center justify-center rounded-xl mland:rounded-lg border text-white shadow-xs tabular ${
+        compact
+          ? 'min-w-[44px] px-1.5 py-1'
+          : 'min-w-[54px] sm:min-w-[60px] mland:min-w-[48px] px-2 py-1 mland:px-1.5 mland:py-0.5'
+      }`}
+      style={{
+        backgroundColor: col,
+        borderColor: 'rgba(255,255,255,0.28)'
+      }}
+      title={
+        mode === 'm'
+          ? `ค่าพลังสูงสุดในทีม ${ov}${preview.squadAvg ? ` · เฉลี่ยทีม ${preview.squadAvg}` : ''}`
+          : `ค่าพลังปัจจุบัน ${ov}${peak ? ` · สูงสุด ${peak}` : ''}`
+      }
+    >
+      <span className="text-[8px] mland:text-[7px] font-bold uppercase tracking-wider opacity-90 leading-none">
+        {mode === 'm' ? 'พลังสูงสุด' : 'ค่าพลัง'}
+      </span>
+      <span
+        className={`font-display font-extrabold leading-tight ${
+          compact ? 'text-sm' : 'text-base sm:text-lg mland:text-sm'
+        }`}
+      >
+        {ov}
+      </span>
+      {mode === 'p' && peak && (
+        <span className="text-[8px] mland:text-[7px] font-bold opacity-90 leading-none">
+          สูงสุด {peak}
+        </span>
+      )}
+      {mode === 'm' && preview.squadAvg ? (
+        <span className="text-[8px] mland:text-[7px] font-bold opacity-90 leading-none">
+          ทีม {preview.squadAvg}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
 export const SaveFolderModal: React.FC<{
   currentState?: GameState | null;
   currentSlot?: number;
@@ -91,7 +245,8 @@ export const SaveFolderModal: React.FC<{
   const [slotChoice, setSlotChoice] = useState<'auto' | number>('auto');
   const [confirmLoadEntry, setConfirmLoadEntry] = useState<FolderSaveEntry | null>(null);
   const [confirmSlotNum, setConfirmSlotNum] = useState<number>(1);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteEntry, setConfirmDeleteEntry] = useState<FolderSaveEntry | null>(null);
+  const [confirmSaveOpen, setConfirmSaveOpen] = useState(false);
   const [saveLabel, setSaveLabel] = useState('');
   const [busy, setBusy] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
@@ -104,6 +259,15 @@ export const SaveFolderModal: React.FC<{
   const singleFileRef = useRef<HTMLInputElement | null>(null);
   const parsedCode = useMemo(() => (codeText.trim() ? cleanImportJson(codeText) : null), [codeText]);
   const [codeTargetSlot, setCodeTargetSlot] = useState<number>(currentSlot || 1);
+
+  const currentPreview = useMemo(
+    () => (currentState ? extractSaveVisualPreview(currentState) : null),
+    [currentState]
+  );
+  const parsedCodePreview = useMemo(
+    () => (parsedCode ? extractSaveVisualPreview(parsedCode) : null),
+    [parsedCode]
+  );
 
   const inGameSaveIndex = useMemo(() => {
     const identityKeys = new Set<string>();
@@ -188,7 +352,7 @@ export const SaveFolderModal: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSaveCheckpoint = async () => {
+  const executeSaveCheckpoint = async () => {
     if (!currentState) return;
     SFX.tap();
     onSaveCurrentSlot?.();
@@ -198,6 +362,7 @@ export const SaveFolderModal: React.FC<{
         label: saveLabel.trim() || undefined
       });
       setSaveLabel('');
+      setConfirmSaveOpen(false);
       await refreshFolderSaves();
       SFX.win();
       onToast(`💾 บันทึก "${saved.filename}" ลงโฟลเดอร์ ${GAME_AUTO_FOLDER_NAME} แล้ว`);
@@ -242,20 +407,19 @@ export const SaveFolderModal: React.FC<{
     }
   };
 
-  const handleDeleteEntry = async (entry: FolderSaveEntry) => {
-    if (confirmDeleteId !== entry.id) {
-      SFX.tap();
-      setConfirmDeleteId(entry.id);
-      window.setTimeout(() => {
-        setConfirmDeleteId((cur) => (cur === entry.id ? null : cur));
-      }, 3000);
-      return;
-    }
+  const executeDeleteEntry = async (entry: FolderSaveEntry) => {
     SFX.tap();
-    setConfirmDeleteId(null);
-    await entry.remove?.();
-    await refreshFolderSaves();
-    onToast(`🗑️ ลบไฟล์ "${entry.filename}" แล้ว`);
+    setBusy(true);
+    try {
+      await entry.remove?.();
+      setConfirmDeleteEntry(null);
+      await refreshFolderSaves();
+      onToast(`🗑️ ลบไฟล์ "${entry.filename}" แล้ว`);
+    } catch {
+      onToast('❌ ลบไฟล์เซฟไม่สำเร็จ');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleTogglePinEntry = (entry: FolderSaveEntry) => {
@@ -292,11 +456,204 @@ export const SaveFolderModal: React.FC<{
     });
   }, [availableEntries, modeFilter, pinnedFolderSet]);
 
+  const groupedSections = useMemo(() => {
+    const mList = filteredEntries.filter((e) => e.mode === 'm');
+    const pList = filteredEntries.filter((e) => e.mode === 'p');
+    const groups: Array<{ mode: GameMode; title: string; icon: string; list: FolderSaveEntry[] }> = [];
+    if (modeFilter === 'all') {
+      if (mList.length) groups.push({ mode: 'm', title: 'โหมดผู้จัดการทีม', icon: '📋', list: mList });
+      if (pList.length) groups.push({ mode: 'p', title: 'โหมดนักเตะอาชีพ', icon: '⚽', list: pList });
+    } else if (modeFilter === 'm' && mList.length) {
+      groups.push({ mode: 'm', title: 'โหมดผู้จัดการทีม', icon: '📋', list: mList });
+    } else if (modeFilter === 'p' && pList.length) {
+      groups.push({ mode: 'p', title: 'โหมดนักเตะอาชีพ', icon: '⚽', list: pList });
+    }
+    return groups;
+  }, [filteredEntries, modeFilter]);
+
   const maxChoiceSlots = useMemo(
     () => Math.max(getSlotCount('m'), getSlotCount('p')),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [entries, currentState]
   );
+
+  const renderSaveCard = (entry: FolderSaveEntry) => {
+    const isMgr = entry.mode === 'm';
+    const alreadyInGame = isEntryAlreadyInGame(entry);
+    const isPinned = pinnedFolderSet.has(entry.filename);
+    const pv = entry.preview;
+    const tierLabel = pv && typeof pv.tier === 'number' && TN[pv.tier] ? TN[pv.tier] : '';
+
+    return (
+      <div
+        key={entry.id}
+        className={`group p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mland:gap-2 ${
+          isPinned
+            ? 'border-[var(--lamp)]/70 bg-[var(--lamp-soft)]/20 hover:bg-[var(--surface)] shadow-2xs'
+            : alreadyInGame
+              ? 'border-[var(--g)]/45 bg-[var(--surface)] shadow-2xs'
+              : 'border-[var(--line)] bg-[var(--surface-2)]/55 hover:bg-[var(--surface)] hover:border-[var(--g)]/55 hover:shadow-xs'
+        }`}
+      >
+        {/* Top/Left Content: Logo + Player + Details + Max OVR */}
+        <div className="flex items-center gap-2.5 mland:gap-2 min-w-0 flex-1">
+          <SaveVisualDock
+            mode={entry.mode}
+            name={entry.name}
+            preview={pv}
+            isPinned={isPinned}
+          />
+
+          <div className="min-w-0 flex-1 space-y-0.5">
+            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+              <span className="font-extrabold text-[13px] sm:text-sm mland:text-[11px] truncate text-[var(--ink)] leading-tight">
+                {entry.name}
+              </span>
+              {entry.label && !entry.isAutoSave && (
+                <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-[160px]">
+                  🏷️ {entry.label}
+                </span>
+              )}
+              <span
+                className={`px-1.5 py-0.5 rounded-md text-[9.5px] mland:text-[8px] font-bold shrink-0 border ${
+                  entry.isAutoSave
+                    ? 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)]'
+                    : 'bg-[var(--lamp-soft)]/70 text-[#9a6700] dark:text-[var(--lamp)] border-[var(--lamp)]/40'
+                }`}
+              >
+                {entry.isAutoSave ? 'สำรอง' : 'จุดเซฟ'}
+              </span>
+            </div>
+
+            {/* Player & Club Line */}
+            {pv && (
+              <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--ink)]/85 truncate">
+                {isMgr ? (
+                  <>
+                    {pv.player ? (
+                      <span className="truncate">
+                        ⭐ {pv.player.n}{' '}
+                        <span className="text-[var(--mut)] font-bold">({pv.player.ro})</span>
+                      </span>
+                    ) : null}
+                    {tierLabel && (
+                      <>
+                        {pv.player && <span className="opacity-40">·</span>}
+                        <span className="text-[var(--mut)] truncate">{tierLabel}</span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <span className="truncate">🛡️ {pv.teamName}</span>
+                    {pv.player && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span className="text-[var(--g)] font-bold">{pv.player.ro}</span>
+                      </>
+                    )}
+                    {tierLabel && (
+                      <>
+                        <span className="opacity-40">·</span>
+                        <span className="text-[var(--mut)] truncate">{tierLabel}</span>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Season & Time Meta */}
+            <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] mland:text-[8px] text-[var(--mut)] tabular">
+              <span className="font-bold text-[var(--ink)]/80">
+                ซีซัน {entry.season} · นัด {entry.md}
+              </span>
+              {entry.savedAt > 0 && (
+                <>
+                  <span className="opacity-45">•</span>
+                  <span>{fmtSavedTime(entry.savedAt)}</span>
+                </>
+              )}
+              {entry.size > 0 && (
+                <>
+                  <span className="opacity-45">•</span>
+                  <span>{fmtBytes(entry.size)}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Max OVR Badge (always visible beside info on mobile & desktop) */}
+          <SaveOvrBadge mode={entry.mode} preview={pv} />
+        </div>
+
+        {/* Actions Bar — spacious, clear buttons with confirmation */}
+        <div className="flex items-center justify-end gap-1.5 pt-1.5 border-t border-[var(--line)]/55 sm:pt-0 sm:border-t-0 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleTogglePinEntry(entry)}
+            title={isPinned ? 'เลิกปักหมุด' : 'ปักหมุดเซฟนี้ไว้บนสุด'}
+            aria-label={isPinned ? 'เลิกปักหมุด' : 'ปักหมุดเซฟนี้ไว้บนสุด'}
+            className={`w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+              isPinned
+                ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
+                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[#8a5b00] hover:border-[var(--lamp)]/60'
+            }`}
+          >
+            <Pin className={`w-4 h-4 mland:w-3.5 mland:h-3.5 ${isPinned ? 'fill-current' : ''}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={async () => {
+              SFX.tap();
+              const raw = await entry.readRaw();
+              downloadRawSaveFile(entry.filename, raw);
+              onToast(`💾 ส่งออกสำเนา "${entry.filename}" แล้ว`);
+            }}
+            title="ดาวน์โหลดสำเนาไฟล์เซฟนี้"
+            aria-label="ดาวน์โหลดสำเนาไฟล์เซฟนี้"
+            className="btn-icon w-9 h-9 mland:w-7 mland:h-7 rounded-xl mland:rounded-lg"
+          >
+            <Download className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+          </button>
+
+          {entry.remove && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                SFX.tap();
+                setConfirmDeleteEntry(entry);
+              }}
+              title="ลบไฟล์เซฟนี้"
+              aria-label="ลบไฟล์เซฟนี้"
+              className="h-9 mland:h-7 px-3 mland:px-2 rounded-xl mland:rounded-lg border border-[var(--red)]/35 bg-[var(--surface)] text-[var(--red)] hover:bg-[var(--red-soft)] hover:border-[var(--red)] text-xs mland:text-[9.5px] font-bold transition-colors cursor-pointer inline-flex items-center justify-center gap-1 shrink-0"
+            >
+              <Trash2 className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+              <span>ลบ</span>
+            </button>
+          )}
+
+          {alreadyInGame ? (
+            <span className="h-9 mland:h-7 px-3 mland:px-2 rounded-xl mland:rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/35 text-xs mland:text-[9.5px] font-bold text-[var(--g)] inline-flex items-center gap-1 shrink-0">
+              <Check className="w-3.5 h-3.5 shrink-0" />
+              <span>มีในเกม</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => handlePickLoadEntry(entry)}
+              className="btn h-9 mland:h-7 px-3.5 mland:px-2.5 rounded-xl! mland:rounded-lg! text-xs mland:text-[9.5px] btn-primary shrink-0"
+            >
+              โหลดใช้งาน
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -304,7 +661,7 @@ export const SaveFolderModal: React.FC<{
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl h-[min(calc(var(--app-dvh,1dvh)*90),620px)] mland:h-[calc(var(--app-dvh,1dvh)*94)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
+        className="w-full max-w-3xl h-[min(calc(var(--app-dvh,1dvh)*92),660px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -356,7 +713,7 @@ export const SaveFolderModal: React.FC<{
           </div>
         </div>
 
-        {/* Body — stays uniform size across tabs */}
+        {/* Body */}
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden mland:overflow-y-auto p-3.5 mland:p-2.5">
           {tab === 'folder' && (
             <div className="flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-2 mland:flex-none">
@@ -364,9 +721,18 @@ export const SaveFolderModal: React.FC<{
               <div className="shrink-0 p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] space-y-2 mland:space-y-1.5">
                 <div className="flex items-center justify-between gap-2.5">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="w-8 h-8 mland:w-7 mland:h-7 rounded-xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center text-base mland:text-sm shrink-0 shadow-2xs">
-                      📁
-                    </div>
+                    {currentState && currentPreview ? (
+                      <SaveVisualDock
+                        mode={currentState.mode}
+                        name={getStateDisplayName(currentState)}
+                        preview={currentPreview}
+                        compact
+                      />
+                    ) : (
+                      <div className="w-9 h-9 mland:w-7 mland:h-7 rounded-xl bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center text-base mland:text-sm shrink-0 shadow-2xs">
+                        📁
+                      </div>
+                    )}
                     <div className="min-w-0">
                       <div className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] flex items-center gap-1.5 flex-wrap">
                         <span>โฟลเดอร์เกม:</span>
@@ -380,45 +746,56 @@ export const SaveFolderModal: React.FC<{
                         )}
                       </div>
                       <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5">
-                        จัดเก็บไฟล์จุดเซฟและสำรองข้อมูลเกมให้อัตโนมัติ พร้อมโหลดใช้งานข้ามรอบได้ทันที
+                        แสดงโลโก้สโมสร นักเตะเด่น และค่าพลังสูงสุด แยกตามโหมดให้เลือกโหลดง่าย
                       </div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={loadingList}
-                    onClick={() => {
-                      SFX.tap();
-                      void refreshFolderSaves();
-                    }}
-                    title="รีเฟรชรายการไฟล์เซฟ"
-                    aria-label="รีเฟรชรายการไฟล์เซฟ"
-                    className="btn-icon w-8 h-8 mland:w-7 mland:h-7 rounded-xl shrink-0"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingList ? 'animate-spin' : ''}`} />
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {currentState && currentPreview && (
+                      <SaveOvrBadge mode={currentState.mode} preview={currentPreview} compact />
+                    )}
+                    <button
+                      type="button"
+                      disabled={loadingList}
+                      onClick={() => {
+                        SFX.tap();
+                        void refreshFolderSaves();
+                      }}
+                      title="รีเฟรชรายการไฟล์เซฟ"
+                      aria-label="รีเฟรชรายการไฟล์เซฟ"
+                      className="btn-icon w-9 h-9 mland:w-7 mland:h-7 rounded-xl shrink-0"
+                    >
+                      <RefreshCw className={`w-4 h-4 mland:w-3.5 mland:h-3.5 ${loadingList ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
                 </div>
 
                 {currentState && (
-                  <div className="pt-2 border-t border-[var(--line)]/70 flex flex-wrap items-center gap-1.5">
+                  <div className="pt-2 border-t border-[var(--line)]/70 flex flex-wrap items-center gap-2">
                     <input
                       type="text"
                       value={saveLabel}
                       onChange={(e) => setSaveLabel(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') void handleSaveCheckpoint();
+                        if (e.key === 'Enter') {
+                          SFX.tap();
+                          setConfirmSaveOpen(true);
+                        }
                       }}
                       placeholder="ตั้งชื่อโน้ตจุดเซฟ (ไม่ใส่ก็ได้ เช่น ก่อนนัดชิง)"
                       maxLength={32}
-                      className="flex-1 min-w-[160px] px-2.5 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px]"
+                      className="flex-1 min-w-[160px] h-9 mland:h-7 px-3 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px]"
                     />
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void handleSaveCheckpoint()}
-                      className="btn btn-sm btn-primary shrink-0"
+                      onClick={() => {
+                        SFX.tap();
+                        setConfirmSaveOpen(true);
+                      }}
+                      className="btn h-9 mland:h-7 px-4 mland:px-3 text-xs mland:text-[10px] btn-primary shrink-0"
                     >
-                      <Save className="w-3.5 h-3.5 shrink-0" />
+                      <Save className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
                       <span>สร้างจุดเซฟเลย</span>
                     </button>
                   </div>
@@ -431,8 +808,8 @@ export const SaveFolderModal: React.FC<{
                   {(
                     [
                       ['all', `ทั้งหมด (${modeCounts.all})`],
-                      ['m', `ผู้จัดการ (${modeCounts.m})`],
-                      ['p', `นักเตะ (${modeCounts.p})`]
+                      ['m', `📋 ผู้จัดการ (${modeCounts.m})`],
+                      ['p', `⚽ นักเตะ (${modeCounts.p})`]
                     ] as const
                   ).map(([key, label]) => (
                     <button
@@ -460,7 +837,7 @@ export const SaveFolderModal: React.FC<{
                     onChange={(e) =>
                       setSlotChoice(e.target.value === 'auto' ? 'auto' : Number(e.target.value))
                     }
-                    className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] font-bold text-[var(--ink)]"
+                    className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)]"
                   >
                     <option value="auto">อัตโนมัติ</option>
                     {Array.from({ length: maxChoiceSlots }, (_, i) => i + 1).map((k) => (
@@ -472,167 +849,54 @@ export const SaveFolderModal: React.FC<{
                 </label>
               </div>
 
-              {/* Scrollable Save List */}
+              {/* Scrollable Save List — Separated Cleanly by Mode */}
               <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 mland:flex-none mland:overflow-visible">
                 {loadingList ? (
                   <div className="h-full min-h-[160px] flex items-center justify-center p-6 rounded-2xl border border-dashed border-[var(--line)] bg-[var(--surface-2)]/30 text-center text-xs text-[var(--mut)]">
                     กำลังดึงรายการไฟล์เซฟจากโฟลเดอร์ {GAME_AUTO_FOLDER_NAME}...
                   </div>
-                ) : filteredEntries.length ? (
-                  <div className="space-y-2">
-                    {filteredEntries.map((entry) => {
-                      const isMgr = entry.mode === 'm';
-                      const isConfirmDel = confirmDeleteId === entry.id;
-                      const alreadyInGame = isEntryAlreadyInGame(entry);
-                      const isPinned = pinnedFolderSet.has(entry.filename);
+                ) : groupedSections.length ? (
+                  <div className="space-y-3.5 mland:space-y-2.5">
+                    {groupedSections.map((group) => {
+                      const isMgrGroup = group.mode === 'm';
                       return (
-                        <div
-                          key={entry.id}
-                          className={`group p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl border transition-all flex items-center justify-between gap-2.5 ${
-                            isPinned
-                              ? 'border-[var(--lamp)]/65 bg-[var(--lamp-soft)]/22 hover:bg-[var(--surface)] shadow-2xs'
-                              : alreadyInGame
-                                ? 'border-[var(--g)]/40 bg-[var(--surface)] shadow-2xs'
-                                : 'border-[var(--line)] bg-[var(--surface-2)]/55 hover:bg-[var(--surface)] hover:border-[var(--g)]/55 hover:shadow-xs'
-                          }`}
+                        <section
+                          key={group.mode}
+                          className="rounded-2xl mland:rounded-xl border border-[var(--line)] bg-[var(--surface)]/75 overflow-hidden"
                         >
-                          {/* Mode Badge Tile */}
                           <div
-                            className={`relative w-10 h-10 mland:w-8 mland:h-8 rounded-xl mland:rounded-lg border flex flex-col items-center justify-center shrink-0 ${
-                              isMgr
-                                ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'
-                                : 'bg-[var(--g-soft)] border-[var(--g)]/40'
+                            className={`px-3 py-2 mland:px-2.5 mland:py-1 border-b border-[var(--line)] flex items-center justify-between gap-2 ${
+                              isMgrGroup
+                                ? 'bg-[var(--lamp-soft)]/35'
+                                : 'bg-[var(--g-soft)]/35'
                             }`}
                           >
-                            <span className="text-base mland:text-xs leading-none">{isMgr ? '📋' : '⚽'}</span>
-                            {isPinned && (
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm mland:text-xs leading-none">{group.icon}</span>
                               <span
-                                className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[var(--lamp)] text-[#261900] flex items-center justify-center shadow-xs"
-                                title="ปักหมุดไว้บนสุด"
-                              >
-                                <Pin className="w-2.5 h-2.5 fill-current" />
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Center Info */}
-                          <div className="min-w-0 flex-1 space-y-1 mland:space-y-0.5">
-                            <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                              <span className="font-extrabold text-[13px] sm:text-sm mland:text-[11px] truncate text-[var(--ink)] leading-tight">
-                                {entry.name}
-                              </span>
-                              {entry.label && !entry.isAutoSave && (
-                                <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] truncate max-w-[160px]">
-                                  🏷️ {entry.label}
-                                </span>
-                              )}
-                              <span
-                                className={`px-1.5 py-0.5 rounded-md text-[9.5px] mland:text-[8px] font-bold shrink-0 ${
-                                  isMgr
-                                    ? 'bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)]'
-                                    : 'bg-[var(--g-soft)] text-[var(--g)]'
+                                className={`font-extrabold text-xs mland:text-[10.5px] font-display truncate ${
+                                  isMgrGroup
+                                    ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                                    : 'text-[var(--g)]'
                                 }`}
                               >
-                                {isMgr ? 'ผู้จัดการ' : 'นักเตะ'}
-                              </span>
-                              <span
-                                className={`px-1.5 py-0.5 rounded-md text-[9.5px] mland:text-[8px] font-bold shrink-0 border ${
-                                  entry.isAutoSave
-                                    ? 'bg-[var(--surface)] text-[var(--mut)] border-[var(--line)]'
-                                    : 'bg-[var(--lamp-soft)]/70 text-[#9a6700] dark:text-[var(--lamp)] border-[var(--lamp)]/40'
-                                }`}
-                              >
-                                {entry.isAutoSave ? 'สำรอง' : 'จุดเซฟ'}
+                                {group.title}
                               </span>
                             </div>
-
-                            <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                              <span className="font-bold text-[var(--ink)]/85">
-                                ซีซัน {entry.season} · นัด {entry.md}
-                              </span>
-                              {entry.savedAt > 0 && (
-                                <>
-                                  <span className="opacity-45">•</span>
-                                  <span>{fmtSavedTime(entry.savedAt)}</span>
-                                </>
-                              )}
-                              {entry.size > 0 && (
-                                <>
-                                  <span className="opacity-45">•</span>
-                                  <span>{fmtBytes(entry.size)}</span>
-                                </>
-                              )}
-                            </div>
-
-                            <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)]/75 font-mono truncate">
-                              {entry.filename}
-                            </div>
-                          </div>
-
-                          {/* Right Actions */}
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleTogglePinEntry(entry)}
-                              title={isPinned ? 'เลิกปักหมุด' : 'ปักหมุดเซฟนี้ไว้บนสุด'}
-                              aria-label={isPinned ? 'เลิกปักหมุด' : 'ปักหมุดเซฟนี้ไว้บนสุด'}
-                              className={`w-8 h-8 mland:w-6 mland:h-6 rounded-xl mland:rounded-lg border flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
-                                isPinned
-                                  ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] text-[#8a5b00] dark:text-[var(--lamp)]'
-                                  : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[#8a5b00] hover:border-[var(--lamp)]/60'
+                            <span
+                              className={`px-2 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold tabular border ${
+                                isMgrGroup
+                                  ? 'bg-[var(--surface)] border-[var(--lamp)]/40 text-[#8a5b00] dark:text-[var(--lamp)]'
+                                  : 'bg-[var(--surface)] border-[var(--g)]/35 text-[var(--g)]'
                               }`}
                             >
-                              <Pin className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${isPinned ? 'fill-current' : ''}`} />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                SFX.tap();
-                                const raw = await entry.readRaw();
-                                downloadRawSaveFile(entry.filename, raw);
-                                onToast(`💾 ส่งออกสำเนา "${entry.filename}" แล้ว`);
-                              }}
-                              title="ดาวน์โหลดสำเนาไฟล์เซฟนี้"
-                              aria-label="ดาวน์โหลดสำเนาไฟล์เซฟนี้"
-                              className="btn-icon w-8 h-8 mland:w-6 mland:h-6 rounded-xl mland:rounded-lg"
-                            >
-                              <Download className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
-                            </button>
-
-                            {entry.remove && (
-                              <button
-                                type="button"
-                                onClick={() => void handleDeleteEntry(entry)}
-                                title={isConfirmDel ? 'แตะอีกครั้งเพื่อยืนยันลบ' : 'ลบไฟล์เซฟนี้'}
-                                aria-label="ลบไฟล์เซฟนี้"
-                                className={`h-8 mland:h-6 px-2.5 mland:px-1.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[9px] font-bold transition-colors cursor-pointer flex items-center justify-center ${
-                                  isConfirmDel
-                                    ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
-                                    : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50'
-                                }`}
-                              >
-                                {isConfirmDel ? 'ลบ?' : <Trash2 className="w-3.5 h-3.5 mland:w-3 mland:h-3" />}
-                              </button>
-                            )}
-
-                            {alreadyInGame ? (
-                              <span className="h-8 mland:h-6 px-2.5 mland:px-2 rounded-xl mland:rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/35 text-[10.5px] mland:text-[9px] font-bold text-[var(--g)] inline-flex items-center gap-1 shrink-0">
-                                <Check className="w-3 h-3 shrink-0" />
-                                <span>มีในเกม</span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                disabled={busy}
-                                onClick={() => handlePickLoadEntry(entry)}
-                                className="btn btn-xs h-8 mland:h-6 px-3 mland:px-2 rounded-xl! mland:rounded-lg! btn-primary shrink-0"
-                              >
-                                โหลดใช้งาน
-                              </button>
-                            )}
+                              {group.list.length} รายการ
+                            </span>
                           </div>
-                        </div>
+                          <div className="p-2 mland:p-1.5 space-y-2 mland:space-y-1.5">
+                            {group.list.map((entry) => renderSaveCard(entry))}
+                          </div>
+                        </section>
                       );
                     })}
                   </div>
@@ -664,15 +928,24 @@ export const SaveFolderModal: React.FC<{
             <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-3 mland:space-y-2 mland:flex-none mland:overflow-visible">
               {currentState && (
                 <div className="p-3 sm:p-3.5 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] space-y-2.5">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] flex items-center gap-1.5">
-                        <span>📤 ส่งออกเซฟปัจจุบันไปเครื่องอื่น</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <SaveVisualDock
+                        mode={currentState.mode}
+                        name={getStateDisplayName(currentState)}
+                        preview={currentPreview}
+                        compact
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] flex items-center gap-1.5">
+                          <span>📤 ส่งออกเซฟปัจจุบันไปเครื่องอื่น</span>
+                        </div>
+                        <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] mt-0.5 truncate tabular">
+                          {currentState.mode === 'm' ? '📋 ผู้จัดการทีม' : '⚽ นักเตะอาชีพ'} ·{' '}
+                          <span className="font-bold text-[var(--ink)]">{getStateDisplayName(currentState)}</span> · ซีซัน {currentState.season} นัด {currentState.md}
+                        </div>
                       </div>
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] mt-0.5 truncate tabular">
-                        {currentState.mode === 'm' ? '📋 ผู้จัดการทีม' : '⚽ นักเตะอาชีพ'} ·{' '}
-                        <span className="font-bold text-[var(--ink)]">{getStateDisplayName(currentState)}</span> · ซีซัน {currentState.season} นัด {currentState.md}
-                      </div>
+                      <SaveOvrBadge mode={currentState.mode} preview={currentPreview} compact />
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
@@ -683,7 +956,7 @@ export const SaveFolderModal: React.FC<{
                           const { filename } = downloadSaveFile(currentState, saveLabel);
                           onToast(`💾 ดาวน์โหลดไฟล์ "${filename}" ลงเครื่องแล้ว`);
                         }}
-                        className="btn btn-xs btn-primary"
+                        className="btn h-8 mland:h-7 px-3 text-xs mland:text-[9.5px] btn-primary"
                       >
                         <Download className="w-3.5 h-3.5 shrink-0" />
                         <span>ดาวน์โหลด .json</span>
@@ -697,7 +970,7 @@ export const SaveFolderModal: React.FC<{
                           navigator.clipboard?.writeText(c).catch(() => undefined);
                           onToast(`คัดลอกโค้ดเซฟ (${c.length.toLocaleString()} ตัวอักษร) แล้ว`);
                         }}
-                        className="btn btn-xs btn-secondary"
+                        className="btn h-8 mland:h-7 px-3 text-xs mland:text-[9.5px] btn-secondary"
                       >
                         <Copy className="w-3.5 h-3.5 shrink-0" />
                         <span>คัดลอกโค้ด</span>
@@ -801,25 +1074,31 @@ export const SaveFolderModal: React.FC<{
                 {parsedCode && (
                   <div className="p-3 rounded-xl bg-[var(--surface)] border border-[var(--g)]/45 shadow-2xs space-y-2.5">
                     <div className="flex items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
-                            parsedCode.mode === 'm'
-                              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'
-                              : 'bg-[var(--g-soft)] border-[var(--g)]/40'
-                          }`}
-                        >
-                          <span className="text-sm leading-none">{parsedCode.mode === 'm' ? '📋' : '⚽'}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="font-extrabold text-xs truncate text-[var(--ink)]">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <SaveVisualDock
+                          mode={parsedCode.mode}
+                          name={getStateDisplayName(parsedCode)}
+                          preview={parsedCodePreview}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-extrabold text-xs sm:text-sm truncate text-[var(--ink)]">
                             {getStateDisplayName(parsedCode)}
                           </div>
+                          {parsedCodePreview && (
+                            <div className="text-[10.5px] font-semibold text-[var(--ink)]/85 truncate">
+                              {parsedCode.mode === 'm'
+                                ? parsedCodePreview.player
+                                  ? `⭐ ${parsedCodePreview.player.n} (${parsedCodePreview.player.ro})`
+                                  : TN[parsedCodePreview.tier] || ''
+                                : `🛡️ ${parsedCodePreview.teamName}`}
+                            </div>
+                          )}
                           <div className="text-[10.5px] text-[var(--mut)] tabular">
-                            {parsedCode.mode === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ'} · ซีซัน {parsedCode.season} · นัด {parsedCode.md}
+                            {parsedCode.mode === 'm' ? '📋 ผู้จัดการทีม' : '⚽ นักเตะอาชีพ'} · ซีซัน {parsedCode.season} · นัด {parsedCode.md}
                           </div>
                         </div>
                       </div>
+                      <SaveOvrBadge mode={parsedCode.mode} preview={parsedCodePreview} />
                     </div>
                     {parsedCodeAlreadyInGame ? (
                       <div className="px-2.5 py-1.5 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/35 text-[11px] font-bold text-[var(--g)] text-center flex items-center justify-center gap-1">
@@ -831,7 +1110,7 @@ export const SaveFolderModal: React.FC<{
                         <select
                           value={codeTargetSlot}
                           onChange={(e) => setCodeTargetSlot(Number(e.target.value))}
-                          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
+                          className="flex-1 min-w-0 h-9 px-2.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs font-semibold"
                         >
                           {(() => {
                             const cnt = getSlotCount(parsedCode.mode);
@@ -868,7 +1147,7 @@ export const SaveFolderModal: React.FC<{
                             onLoadSave(parsedCode, codeTargetSlot);
                             onClose();
                           }}
-                          className="btn btn-sm btn-primary shrink-0"
+                          className="btn h-9 px-4 text-xs btn-primary shrink-0"
                         >
                           <Check className="w-3.5 h-3.5 shrink-0" />
                           <span>โหลดใช้งาน</span>
@@ -882,10 +1161,153 @@ export const SaveFolderModal: React.FC<{
           )}
         </div>
 
+        {/* Confirm Save Checkpoint Sub-dialog */}
+        {confirmSaveOpen && currentState && (
+          <div
+            className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => !busy && setConfirmSaveOpen(false)}
+          >
+            <div
+              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 flex items-center justify-center text-[var(--g)] shrink-0">
+                  <Save className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm font-display">ยืนยันสร้างจุดเซฟใหม่?</div>
+                  <div className="text-[11px] text-[var(--mut)]">บันทึกจุดเซฟปัจจุบันเก็บแยกไว้ในคลังเซฟ</div>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <SaveVisualDock
+                    mode={currentState.mode}
+                    name={getStateDisplayName(currentState)}
+                    preview={currentPreview}
+                    compact
+                  />
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs truncate text-[var(--ink)]">
+                      {getStateDisplayName(currentState)}
+                    </div>
+                    <div className="text-[10.5px] text-[var(--mut)] tabular">
+                      ซีซัน {currentState.season} · นัด {currentState.md}
+                    </div>
+                  </div>
+                </div>
+                <SaveOvrBadge mode={currentState.mode} preview={currentPreview} compact />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[var(--mut)] block">
+                  โน้ตจุดเซฟ (ไม่บังคับ)
+                </label>
+                <input
+                  type="text"
+                  value={saveLabel}
+                  onChange={(e) => setSaveLabel(e.target.value)}
+                  placeholder="เช่น ก่อนนัดชิง, จบฤดูกาล"
+                  maxLength={32}
+                  className="w-full h-9 px-3 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmSaveOpen(false)}
+                  className="btn btn-md btn-secondary flex-1"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void executeSaveCheckpoint()}
+                  className="btn btn-md btn-primary flex-1"
+                >
+                  <Save className="w-4 h-4 shrink-0" />
+                  <span>{busy ? 'กำลังบันทึก...' : 'ยืนยันบันทึก'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Confirm Delete Sub-dialog */}
+        {confirmDeleteEntry && (
+          <div
+            className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => !busy && setConfirmDeleteEntry(null)}
+          >
+            <div
+              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 flex items-center justify-center text-[var(--red)] shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm font-display text-[var(--red)]">ยืนยันการลบไฟล์เซฟ?</div>
+                  <div className="text-[11px] text-[var(--mut)]">เมื่อลบแล้วจะไม่สามารถกู้คืนไฟล์นี้ได้</div>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <SaveVisualDock
+                    mode={confirmDeleteEntry.mode}
+                    name={confirmDeleteEntry.name}
+                    preview={confirmDeleteEntry.preview}
+                    compact
+                  />
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs truncate text-[var(--ink)]">
+                      {confirmDeleteEntry.label && !confirmDeleteEntry.isAutoSave
+                        ? `${confirmDeleteEntry.label} · `
+                        : ''}
+                      {confirmDeleteEntry.name}
+                    </div>
+                    <div className="text-[10.5px] text-[var(--mut)] tabular">
+                      {confirmDeleteEntry.mode === 'm' ? '📋 ผู้จัดการทีม' : '⚽ นักเตะอาชีพ'} · ซีซัน {confirmDeleteEntry.season} · นัด {confirmDeleteEntry.md}
+                    </div>
+                  </div>
+                </div>
+                <SaveOvrBadge mode={confirmDeleteEntry.mode} preview={confirmDeleteEntry.preview} compact />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setConfirmDeleteEntry(null)}
+                  className="btn btn-md btn-secondary flex-1"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void executeDeleteEntry(confirmDeleteEntry)}
+                  className="btn btn-md bg-[var(--red)] text-white hover:brightness-110 flex-1"
+                >
+                  <Trash2 className="w-4 h-4 shrink-0" />
+                  <span>{busy ? 'กำลังลบ...' : 'ยืนยันลบเซฟ'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Confirm Slot Sub-dialog when slots are full and user is in auto mode */}
         {confirmLoadEntry && (
           <div
-            className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
             onClick={() => setConfirmLoadEntry(null)}
           >
             <div
@@ -897,17 +1319,27 @@ export const SaveFolderModal: React.FC<{
                   ? 'เลือกช่องที่จะโหลดใช้งาน (เพิ่มช่องใหม่หรือเขียนทับ)'
                   : 'ช่องเซฟเต็มแล้ว — เลือกช่องที่จะเขียนทับ'}
               </div>
-              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs space-y-0.5">
-                <div className="font-bold truncate">
-                  {confirmLoadEntry.mode === 'm' ? '📋' : '⚽'}{' '}
-                  {confirmLoadEntry.label && !confirmLoadEntry.isAutoSave
-                    ? `${confirmLoadEntry.label} · `
-                    : ''}
-                  {confirmLoadEntry.name}
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <SaveVisualDock
+                    mode={confirmLoadEntry.mode}
+                    name={confirmLoadEntry.name}
+                    preview={confirmLoadEntry.preview}
+                    compact
+                  />
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs truncate">
+                      {confirmLoadEntry.label && !confirmLoadEntry.isAutoSave
+                        ? `${confirmLoadEntry.label} · `
+                        : ''}
+                      {confirmLoadEntry.name}
+                    </div>
+                    <div className="text-[11px] text-[var(--mut)] tabular">
+                      ซีซัน {confirmLoadEntry.season} · นัด {confirmLoadEntry.md}
+                    </div>
+                  </div>
                 </div>
-                <div className="text-[11px] text-[var(--mut)] tabular">
-                  ซีซัน {confirmLoadEntry.season} · นัด {confirmLoadEntry.md}
-                </div>
+                <SaveOvrBadge mode={confirmLoadEntry.mode} preview={confirmLoadEntry.preview} compact />
               </div>
               <select
                 value={confirmSlotNum}
@@ -943,7 +1375,7 @@ export const SaveFolderModal: React.FC<{
                 <button
                   type="button"
                   onClick={() => setConfirmLoadEntry(null)}
-                  className="btn btn-md btn-secondary"
+                  className="btn btn-md btn-secondary flex-1"
                 >
                   ยกเลิก
                 </button>

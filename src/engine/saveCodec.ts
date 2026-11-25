@@ -1,6 +1,6 @@
-import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState } from '../types/game';
+import type { Position, SubRole, Mentality, CoreAttrs, Player, PlayerMissionsState, PlayerSeasonHistoryRecord, CustomSlot, Team, TeamSeasonHistoryRecord, TrophyRecord, GameState, ClubIdentity, PlayerCareerProfile } from '../types/game';
 import { ALL_SUB_ROLES } from '../data/thaiFootballData';
-import { ensureAiTeamPhilosophies, assignTeamShirtNumbers } from './playerCore';
+import { ensureAiTeamPhilosophies, assignTeamShirtNumbers, OVF } from './playerCore';
 
 export const SAVE_B64U = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 export const SAVE_POS: Position[] = ['GK', 'DF', 'MF', 'FW'];
@@ -623,6 +623,142 @@ export const exportSaveCode = (s: GameState): string => {
 
 export const SAVE_FILE_FORMAT = 'LOOKNANG_TH_SAVE';
 
+export interface SaveVisualPlayerPreview {
+  n: string;
+  pos: Position;
+  ro: SubRole;
+  ov: number;
+  pot?: number;
+  no?: number;
+  me?: number;
+  vis?: number[];
+}
+
+export interface SaveVisualTeamPreview {
+  id: number;
+  name: string;
+  tier: number;
+  kc: [string, string];
+}
+
+export interface SaveVisualPreview {
+  teamName: string;
+  tier: number;
+  maxOvr: number;
+  peakOvr?: number;
+  squadAvg?: number;
+  team?: SaveVisualTeamPreview | null;
+  club?: ClubIdentity | null;
+  player?: SaveVisualPlayerPreview | null;
+  careerProfile?: Pick<
+    PlayerCareerProfile,
+    'name' | 'pos' | 'sp' | 'c' | 'k' | 'h' | 'hs' | 'fh' | 'fs' | 'ey' | 'acc' | 'no'
+  > | null;
+}
+
+export const extractSaveVisualPreview = (s: GameState): SaveVisualPreview => {
+  const meTeam = Array.isArray(s.teams) && typeof s.me === 'number' ? s.teams[s.me] || null : null;
+  const teamStub: SaveVisualTeamPreview | null = meTeam
+    ? {
+        id: meTeam.id,
+        name: meTeam.name,
+        tier: meTeam.tier ?? 0,
+        kc: Array.isArray(meTeam.kc) ? [meTeam.kc[0], meTeam.kc[1]] : ['#158049', '#ffffff']
+      }
+    : null;
+
+  if (s.mode === 'm') {
+    const teamName = s.club?.name || meTeam?.name || 'สโมสร';
+    const sq = Array.isArray(meTeam?.sq) ? meTeam.sq : [];
+    const sorted = sq.slice().sort((a, b) => (b.ov || 0) - (a.ov || 0));
+    const top = sorted[0] || null;
+    const maxOvr = top ? Number(top.ov || 0) : 0;
+    const squadAvg = sq.length
+      ? Math.round(sq.reduce((sum, q) => sum + Number(q.ov || 0), 0) / sq.length)
+      : 0;
+    return {
+      teamName,
+      tier: meTeam?.tier ?? 0,
+      maxOvr,
+      peakOvr: top?.pot ? Number(top.pot) : maxOvr,
+      squadAvg,
+      team: teamStub,
+      club: s.club ? { ...s.club } : null,
+      player: top
+        ? {
+            n: top.n,
+            pos: top.pos,
+            ro: top.ro,
+            ov: Number(top.ov || 0),
+            ...(top.pot ? { pot: Number(top.pot) } : {}),
+            ...(top.no ? { no: Number(top.no) } : {}),
+            ...(top.me ? { me: top.me } : {}),
+            ...(Array.isArray(top.vis) ? { vis: top.vis.slice(0, 8) } : {})
+          }
+        : null,
+      careerProfile: null
+    };
+  }
+
+  const p = s.p;
+  const mePl = meTeam?.sq?.find((q) => q.me) || null;
+  const ov = mePl?.ov ? Number(mePl.ov) : p?.a ? OVF(p.pos, p.a) : 60;
+  const histMax = Math.max(
+    0,
+    ...(mePl?.history || []).map((h) => Number(h.ov || 0)),
+    ...(p?.history || []).map((h) => Number(h.ov || 0))
+  );
+  const peakOvr = Math.max(ov, Number(mePl?.pot || 0), Number(p?.talent || 0), histMax);
+  const teamName = meTeam?.name || 'ไร้สังกัด / ทีมชาติ';
+
+  return {
+    teamName,
+    tier: meTeam?.tier ?? 0,
+    maxOvr: Math.max(ov, histMax),
+    peakOvr,
+    team: teamStub,
+    club: null,
+    player: mePl
+      ? {
+          n: mePl.n || p?.name || 'นักเตะ',
+          pos: mePl.pos || p?.pos || 'FW',
+          ro: mePl.ro || p?.sp || 'ST',
+          ov,
+          pot: peakOvr,
+          no: mePl.no ?? p?.no,
+          me: 1,
+          ...(Array.isArray(mePl.vis) ? { vis: mePl.vis.slice(0, 8) } : {})
+        }
+      : p
+        ? {
+            n: p.name,
+            pos: p.pos,
+            ro: p.sp,
+            ov,
+            pot: peakOvr,
+            no: p.no,
+            me: 1
+          }
+        : null,
+    careerProfile: p
+      ? {
+          name: p.name,
+          pos: p.pos,
+          sp: p.sp,
+          c: p.c,
+          k: p.k,
+          h: p.h,
+          hs: p.hs,
+          fh: p.fh,
+          fs: p.fs,
+          ey: p.ey,
+          ...(p.acc !== undefined ? { acc: p.acc } : {}),
+          ...(p.no !== undefined ? { no: p.no } : {})
+        }
+      : null
+  };
+};
+
 export interface SaveFileEnvelope {
   format: typeof SAVE_FILE_FORMAT;
   version: 2;
@@ -632,6 +768,7 @@ export interface SaveFileEnvelope {
   season: number;
   md: number;
   label?: string;
+  preview?: SaveVisualPreview;
   code: string;
 }
 
@@ -666,6 +803,7 @@ export const buildSaveFilePayload = (s: GameState, label?: string): string => {
     season: s.season,
     md: s.md,
     ...(label?.trim() ? { label: label.trim() } : {}),
+    preview: extractSaveVisualPreview(s),
     code: exportSaveCode(s)
   };
   return JSON.stringify(envelope, null, 2);
@@ -678,7 +816,11 @@ export interface SavePreviewMeta {
   md: number;
   exportedAt?: string;
   label?: string;
+  preview?: SaveVisualPreview;
 }
+
+const isValidSaveVisualPreview = (v: unknown): v is SaveVisualPreview =>
+  Boolean(v && typeof v === 'object' && typeof (v as SaveVisualPreview).maxOvr === 'number');
 
 export const inspectSavePreview = (raw: string): SavePreviewMeta | null => {
   const cleanRaw = raw.replace(/^\uFEFF/, '').trim();
@@ -693,13 +835,23 @@ export const inspectSavePreview = (raw: string): SavePreviewMeta | null => {
         typeof parsed.code === 'string' &&
         typeof parsed.name === 'string'
       ) {
+        let preview = isValidSaveVisualPreview(parsed.preview) ? parsed.preview : undefined;
+        if (!preview) {
+          try {
+            const decoded = cleanImportJson(parsed.code);
+            if (decoded) preview = extractSaveVisualPreview(decoded);
+          } catch {
+            // ignore decode fallback failure
+          }
+        }
         return {
           mode: parsed.mode,
           name: parsed.name,
           season: Number(parsed.season || 1),
           md: Number(parsed.md || 0),
           exportedAt: typeof parsed.exportedAt === 'string' ? parsed.exportedAt : undefined,
-          label: typeof parsed.label === 'string' ? parsed.label : undefined
+          label: typeof parsed.label === 'string' ? parsed.label : undefined,
+          ...(preview ? { preview } : {})
         };
       }
     } catch {
@@ -712,7 +864,8 @@ export const inspectSavePreview = (raw: string): SavePreviewMeta | null => {
     mode: state.mode,
     name: state.mode === 'm' ? (state.club?.name || state.teams[state.me]?.name || 'สโมสร') : (state.p?.name || 'นักเตะ'),
     season: state.season,
-    md: state.md
+    md: state.md,
+    preview: extractSaveVisualPreview(state)
   };
 };
 

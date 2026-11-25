@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ChevronRight, FolderInput, Minus, Pin, Plus, RefreshCw, Save, Trash2 } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, Team, PlayerCareerProfile, GameState, PlayerArchetype, PreferredFoot } from '../types/game';
 import { R, P, clamp } from '../utils/math';
@@ -232,7 +232,10 @@ export const MainMenu: React.FC<{
   const [selectedClubIdx, setSelectedClubIdx] = useState<number>(0);
   const [clubFilter, setClubFilter] = useState<'all' | 'top' | 'mid' | 'underdog'>('all');
   const [diff, setDiff] = useState<number>(1);
-  const [confirmDel, setConfirmDel] = useState<string | null>(null);
+  const [confirmDelSlot, setConfirmDelSlot] = useState<{ mode: GameMode; k: number; d: GameState } | null>(null);
+  const [confirmSaveSlot, setConfirmSaveSlot] = useState<{ mode: GameMode; k: number; d: GameState } | null>(null);
+  const [confirmSaveNote, setConfirmSaveNote] = useState<string>('');
+  const [slotActionBusy, setSlotActionBusy] = useState<boolean>(false);
   const [refresh, setRefresh] = useState(0);
   const [slotCounts, setSlotCounts] = useState<{ m: number; p: number }>(() => ({
     m: getSlotCount('m'),
@@ -453,17 +456,30 @@ export const MainMenu: React.FC<{
     goStep('cr');
   };
 
-  const handleDeleteSlot = (mode: GameMode, k: number) => {
-    const key = `${mode}_${k}`;
-    if (confirmDel === key) {
-      deleteSlot(mode, k);
-      setPinnedSlots(getPinnedSlotIds());
-      setConfirmDel(null);
-      setRefresh((x) => x + 1);
-      onToast('ลบเซฟเรียบร้อย');
-    } else {
-      setConfirmDel(key);
-      setTimeout(() => setConfirmDel((cur) => (cur === key ? null : cur)), 3000);
+  const executeDeleteSlot = (mode: GameMode, k: number) => {
+    SFX.tap();
+    deleteSlot(mode, k);
+    setPinnedSlots(getPinnedSlotIds());
+    setConfirmDelSlot(null);
+    setRefresh((x) => x + 1);
+    onToast(`🗑️ ลบเซฟช่อง #${k} เรียบร้อย`);
+  };
+
+  const executeArchiveSlot = async (mode: GameMode, k: number, d: GameState, customLabel: string) => {
+    SFX.tap();
+    setSlotActionBusy(true);
+    try {
+      const saved = await saveGameToAutoFolder(d, {
+        label: customLabel.trim() || `สำรองช่อง #${k}`
+      });
+      setConfirmSaveSlot(null);
+      setConfirmSaveNote('');
+      SFX.win();
+      onToast(`💾 บันทึกจุดเซฟ "${saved.filename}" ลงคลังเซฟ (${GAME_AUTO_FOLDER_NAME}) แล้ว`);
+    } catch {
+      onToast('❌ บันทึกไฟล์ลงคลังเซฟไม่สำเร็จ');
+    } finally {
+      setSlotActionBusy(false);
     }
   };
 
@@ -533,8 +549,12 @@ export const MainMenu: React.FC<{
       const mePlayer = !isMgr && d.p
         ? meTeam?.sq?.find((q) => q.me) || { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1 }
         : null;
-      const delKey = `${m}_${k}`;
-      const isConfirm = confirmDel === delKey;
+      const topMgrPlayer = isMgr
+        ? meTeam?.sq?.slice().sort((a, b) => (b.ov || 0) - (a.ov || 0))[0] || null
+        : null;
+      const slotOvr = isMgr
+        ? topMgrPlayer?.ov || 0
+        : meTeam?.sq?.find((q) => q.me)?.ov || (d.p?.a ? OVF(d.p.pos, d.p.a) : 0);
 
       rows.push(
         <div
@@ -586,57 +606,63 @@ export const MainMenu: React.FC<{
               </div>
             </div>
 
+            {slotOvr > 0 && (
+              <span
+                className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-display font-extrabold text-white tabular shadow-2xs"
+                style={{ backgroundColor: ovColor(slotOvr) }}
+                title={isMgr ? `พลังสูงสุดในทีม ${slotOvr}` : `ค่าพลัง ${slotOvr}`}
+              >
+                {slotOvr}
+              </span>
+            )}
+
             <span className="text-xs mland:text-[10px] font-bold text-[var(--mut)] group-hover:text-[var(--g)] group-hover:translate-x-0.5 shrink-0 transition-all" aria-hidden="true">
               ▶
             </span>
           </button>
 
-          <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 border-t border-[var(--line)]/55 bg-[var(--surface)]/55 flex items-center justify-between gap-1">
+          <div className="px-2 py-1.5 mland:px-1.5 mland:py-1 border-t border-[var(--line)]/55 bg-[var(--surface)]/55 flex items-center justify-between gap-1.5">
             <button
               type="button"
               onClick={() => handleTogglePinSlot(m, k)}
               title={pinned ? 'เลิกปักหมุดเซฟนี้' : 'ปักหมุดเซฟนี้ไว้บนสุด'}
-              className={`px-1.5 py-0.5 rounded-md border text-[9.5px] mland:text-[8px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
+              className={`h-7 mland:h-5.5 px-2 mland:px-1.5 rounded-lg mland:rounded-md border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors ${
                 pinned
                   ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/65 text-[#8a5b00] dark:text-[var(--lamp)]'
                   : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[#8a5b00] hover:border-[var(--lamp)]/50'
               }`}
             >
-              <Pin className={`w-2.5 h-2.5 shrink-0 ${pinned ? 'fill-current' : ''}`} />
-              <span>{pinned ? 'ปักหมุดแล้ว' : 'ปักหมุด'}</span>
+              <Pin className={`w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0 ${pinned ? 'fill-current' : ''}`} />
+              <span>{pinned ? 'ปักหมุด' : 'ปักหมุด'}</span>
             </button>
 
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={async () => {
+                onClick={() => {
                   SFX.tap();
-                  try {
-                    const saved = await saveGameToAutoFolder(d, { label: `สำรองช่อง #${k}` });
-                    SFX.win();
-                    onToast(`💾 บันทึกจุดเซฟ "${saved.filename}" ลงโฟลเดอร์ ${GAME_AUTO_FOLDER_NAME} แล้ว`);
-                  } catch {
-                    onToast('❌ บันทึกไฟล์ลงโฟลเดอร์เกมไม่สำเร็จ');
-                  }
+                  setConfirmSaveNote(`สำรองช่อง #${k}`);
+                  setConfirmSaveSlot({ mode: m, k, d });
                 }}
                 title="สร้างจุดเซฟลงคลังเซฟ"
                 aria-label="สร้างจุดเซฟลงคลังเซฟ"
-                className="w-6 h-5 mland:w-5 mland:h-4 rounded-md border border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--g)] hover:border-[var(--g)]/50 transition-colors cursor-pointer flex items-center justify-center"
+                className="h-7 mland:h-5.5 px-2.5 mland:px-2 rounded-lg mland:rounded-md border border-[var(--g)]/40 bg-[var(--surface)] text-[var(--g)] hover:bg-[var(--g-soft)] hover:border-[var(--g)] text-[10px] mland:text-[8.5px] font-bold transition-colors cursor-pointer inline-flex items-center justify-center gap-1"
               >
-                <Save className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+                <Save className="w-3.5 h-3.5 mland:w-2.5 mland:h-2.5 shrink-0" />
+                <span>เซฟ</span>
               </button>
               <button
                 type="button"
-                onClick={() => handleDeleteSlot(m, k)}
+                onClick={() => {
+                  SFX.tap();
+                  setConfirmDelSlot({ mode: m, k, d });
+                }}
                 title="ลบเซฟช่องนี้"
                 aria-label="ลบเซฟ"
-                className={`min-w-6 h-5 mland:min-w-5 mland:h-4 px-1 rounded-md border text-[9px] mland:text-[8px] font-bold cursor-pointer transition-colors flex items-center justify-center leading-none ${
-                  isConfirm
-                    ? 'bg-[var(--red-soft)] border-[var(--red)] text-[var(--red)]'
-                    : 'border-[var(--line)] bg-[var(--surface)] text-[var(--mut)] hover:text-[var(--red)] hover:border-[var(--red)]/50'
-                }`}
+                className="h-7 mland:h-5.5 px-2.5 mland:px-2 rounded-lg mland:rounded-md border border-[var(--red)]/40 bg-[var(--surface)] text-[var(--red)] hover:bg-[var(--red-soft)] hover:border-[var(--red)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors inline-flex items-center justify-center gap-1"
               >
-                {isConfirm ? 'ลบ?' : <Trash2 className="w-3 h-3 mland:w-2.5 mland:h-2.5" />}
+                <Trash2 className="w-3.5 h-3.5 mland:w-2.5 mland:h-2.5 shrink-0" />
+                <span>ลบ</span>
               </button>
             </div>
           </div>
@@ -2203,6 +2229,176 @@ export const MainMenu: React.FC<{
           onToast={onToast}
         />
       )}
+
+      {confirmSaveSlot && (() => {
+        const { mode, k, d } = confirmSaveSlot;
+        const isMgr = mode === 'm';
+        const meTeam = d.teams[d.me] || null;
+        const titleName = isMgr ? d.club?.name || meTeam?.name || 'สโมสร' : d.p?.name || 'นักเตะ';
+        const topPl = isMgr
+          ? meTeam?.sq?.slice().sort((a, b) => (b.ov || 0) - (a.ov || 0))[0] || null
+          : meTeam?.sq?.find((q) => q.me) || (d.p ? { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1, ov: OVF(d.p.pos, d.p.a) } : null);
+        const ov = topPl?.ov || 0;
+        return (
+          <div
+            className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => !slotActionBusy && setConfirmSaveSlot(null)}
+          >
+            <div
+              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 flex items-center justify-center text-[var(--g)] shrink-0">
+                  <Save className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm font-display">ยืนยันบันทึกเซฟลงคลัง?</div>
+                  <div className="text-[11px] text-[var(--mut)]">
+                    สร้างจุดเซฟจากช่อง #{k} ลงคลังเซฟ ({GAME_AUTO_FOLDER_NAME})
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center overflow-hidden">
+                      <ClubCrest name={titleName} size={26} team={meTeam} club={isMgr ? d.club : null} isMyClub={isMgr} />
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center overflow-hidden">
+                      <PlayerFace player={topPl} team={meTeam} state={d} careerProfile={isMgr ? null : d.p} size={32} bare />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs truncate text-[var(--ink)]">{titleName}</div>
+                    <div className="text-[10.5px] text-[var(--mut)] tabular">
+                      ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
+                    </div>
+                  </div>
+                </div>
+                {ov > 0 && (
+                  <span
+                    className="px-2 py-1 rounded-lg text-xs font-display font-extrabold text-white tabular shrink-0"
+                    style={{ backgroundColor: ovColor(ov) }}
+                  >
+                    {ov}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[var(--mut)] block">ชื่อโน้ตจุดเซฟ</label>
+                <input
+                  type="text"
+                  value={confirmSaveNote}
+                  onChange={(e) => setConfirmSaveNote(e.target.value)}
+                  maxLength={32}
+                  placeholder={`สำรองช่อง #${k}`}
+                  className="w-full h-9 px-3 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-xs"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  disabled={slotActionBusy}
+                  onClick={() => setConfirmSaveSlot(null)}
+                  className="btn btn-md btn-secondary flex-1"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  disabled={slotActionBusy}
+                  onClick={() => void executeArchiveSlot(mode, k, d, confirmSaveNote)}
+                  className="btn btn-md btn-primary flex-1"
+                >
+                  <Save className="w-4 h-4 shrink-0" />
+                  <span>{slotActionBusy ? 'กำลังบันทึก...' : 'ยืนยันบันทึก'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {confirmDelSlot && (() => {
+        const { mode, k, d } = confirmDelSlot;
+        const isMgr = mode === 'm';
+        const meTeam = d.teams[d.me] || null;
+        const titleName = isMgr ? d.club?.name || meTeam?.name || 'สโมสร' : d.p?.name || 'นักเตะ';
+        const topPl = isMgr
+          ? meTeam?.sq?.slice().sort((a, b) => (b.ov || 0) - (a.ov || 0))[0] || null
+          : meTeam?.sq?.find((q) => q.me) || (d.p ? { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1, ov: OVF(d.p.pos, d.p.a) } : null);
+        const ov = topPl?.ov || 0;
+        return (
+          <div
+            className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setConfirmDelSlot(null)}
+          >
+            <div
+              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl space-y-3"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 flex items-center justify-center text-[var(--red)] shrink-0">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="font-bold text-sm font-display text-[var(--red)]">ยืนยันลบช่องเซฟ #{k}?</div>
+                  <div className="text-[11px] text-[var(--mut)]">เมื่อลบแล้วจะไม่สามารถกู้คืนเซฟในช่องนี้ได้</div>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <div className="w-9 h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center overflow-hidden">
+                      <ClubCrest name={titleName} size={26} team={meTeam} club={isMgr ? d.club : null} isMyClub={isMgr} />
+                    </div>
+                    <div className="w-9 h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center overflow-hidden">
+                      <PlayerFace player={topPl} team={meTeam} state={d} careerProfile={isMgr ? null : d.p} size={32} bare />
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-bold text-xs truncate text-[var(--ink)]">{titleName}</div>
+                    <div className="text-[10.5px] text-[var(--mut)] tabular">
+                      {isMgr ? '📋 ผู้จัดการทีม' : '⚽ นักเตะอาชีพ'} · ซีซัน {d.season} · นัด {d.md}/{d.fx?.length || 30}
+                    </div>
+                  </div>
+                </div>
+                {ov > 0 && (
+                  <span
+                    className="px-2 py-1 rounded-lg text-xs font-display font-extrabold text-white tabular shrink-0"
+                    style={{ backgroundColor: ovColor(ov) }}
+                  >
+                    {ov}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelSlot(null)}
+                  className="btn btn-md btn-secondary flex-1"
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={() => executeDeleteSlot(mode, k)}
+                  className="btn btn-md bg-[var(--red)] text-white hover:brightness-110 flex-1"
+                >
+                  <Trash2 className="w-4 h-4 shrink-0" />
+                  <span>ยืนยันลบเซฟ</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -3,8 +3,10 @@ import {
   buildSaveFileName,
   buildSaveFilePayload,
   cleanImportJson,
+  extractSaveVisualPreview,
   inspectSavePreview,
-  readSaveFileText
+  readSaveFileText,
+  type SaveVisualPreview
 } from './saveCodec';
 
 export const GAME_AUTO_FOLDER_NAME = 'LooknangTH_Saves';
@@ -24,6 +26,7 @@ export interface FolderSaveEntry {
   slot?: number;
   savedAt: number;
   size: number;
+  preview?: SaveVisualPreview;
   readRaw: () => Promise<string>;
   remove?: () => Promise<void>;
 }
@@ -47,6 +50,7 @@ interface StoredVaultSave {
   slot?: number;
   savedAt: number;
   size: number;
+  preview?: SaveVisualPreview;
   raw: string;
 }
 
@@ -205,6 +209,7 @@ const listOpfsDirectorySaves = async (): Promise<FolderSaveEntry[]> => {
           slot: slotMatch ? Number(slotMatch[1]) : undefined,
           savedAt: meta.exportedAt ? Date.parse(meta.exportedAt) || file.lastModified : file.lastModified,
           size: file.size,
+          ...(meta.preview ? { preview: meta.preview } : {}),
           readRaw: async () => text,
           remove: async () => {
             await removeOpfsSaveFile(item.name);
@@ -291,6 +296,7 @@ export const saveGameToAutoFolder = async (
       ? buildAutoSaveFilename(state.mode, slot)
       : buildSaveFileName(state, cleanLabel, true);
   const raw = buildSaveFilePayload(state, cleanLabel);
+  const preview = extractSaveVisualPreview(state);
   const name =
     state.mode === 'm'
       ? state.club?.name || state.teams[state.me]?.name || 'สโมสร'
@@ -321,6 +327,7 @@ export const saveGameToAutoFolder = async (
       ...(slot ? { slot } : {}),
       savedAt: now,
       size,
+      preview,
       raw
     };
     const db = await openVaultDb();
@@ -344,6 +351,7 @@ export const saveGameToAutoFolder = async (
     slot,
     savedAt: now,
     size,
+    preview,
     readRaw: async () => raw,
     remove: async () => {
       await removeOpfsSaveFile(filename);
@@ -423,6 +431,7 @@ export const listAutoFolderSaves = async (): Promise<{
 
   for (const rec of idbRows) {
     const isAuto = Boolean(rec.isAutoSave || rec.filename.startsWith('autosave-'));
+    const preview = rec.preview || (rec.raw ? inspectSavePreview(rec.raw)?.preview : undefined);
     const entry: FolderSaveEntry = {
       id: rec.id,
       source: 'vault',
@@ -436,6 +445,7 @@ export const listAutoFolderSaves = async (): Promise<{
       slot: rec.slot,
       savedAt: rec.savedAt,
       size: rec.size,
+      ...(preview ? { preview } : {}),
       readRaw: async () => rec.raw,
       remove: async () => {
         await removeOpfsSaveFile(rec.filename);
@@ -485,6 +495,7 @@ export const readFileListAsSaveEntries = async (files: FileList | File[]): Promi
         label: meta.label,
         savedAt: meta.exportedAt ? Date.parse(meta.exportedAt) || file.lastModified : file.lastModified,
         size: file.size,
+        ...(meta.preview ? { preview: meta.preview } : {}),
         readRaw: async () => text
       });
     } catch {

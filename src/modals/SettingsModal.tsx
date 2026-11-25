@@ -385,7 +385,7 @@ export const SettingsModal: React.FC<{
               />
 
               {/* Primary Save & Save Vault Actions */}
-              <div className="grid grid-cols-2 gap-1.5 mland:gap-1">
+              <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
                 <button
                   type="button"
                   disabled={savingToFolder}
@@ -404,9 +404,9 @@ export const SettingsModal: React.FC<{
                       setSavingToFolder(false);
                     }
                   }}
-                  className="btn btn-xs btn-primary flex items-center justify-center gap-1 whitespace-nowrap"
+                  className="btn btn-sm btn-primary flex items-center justify-center gap-1.5 whitespace-nowrap"
                 >
-                  <Save className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <Save className="w-4 h-4 mland:w-3 mland:h-3 shrink-0" />
                   <span>{savingToFolder ? 'กำลังบันทึก...' : 'สร้างจุดเซฟทันที'}</span>
                 </button>
 
@@ -417,9 +417,9 @@ export const SettingsModal: React.FC<{
                     setFolderInitialTab('folder');
                     setShowFolderModal(true);
                   }}
-                  className="btn btn-xs btn-gold flex items-center justify-center gap-1 whitespace-nowrap"
+                  className="btn btn-sm btn-gold flex items-center justify-center gap-1.5 whitespace-nowrap"
                 >
-                  <Folder className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <Folder className="w-4 h-4 mland:w-3 mland:h-3 shrink-0" />
                   <span>เปิดคลังเซฟ</span>
                 </button>
               </div>
