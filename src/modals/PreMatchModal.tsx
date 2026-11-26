@@ -730,45 +730,48 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
             </div>
           </div>
 
-          {/* Right Top Corner: Play Button & Match Actions */}
+          {/* Right Top Corner: Uniform-Height Kickoff & Match Actions (matching MatchModal dock) */}
           <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
             {isMgr && (
               <button
                 type="button"
                 title="จัดทัพเต็ม"
+                aria-label="จัดทัพเต็ม"
                 onClick={() => {
                   SFX.tap();
                   onOpenFullTactics();
                 }}
-                className="btn btn-sm mland:btn-xs btn-secondary px-2 mland:px-1.5"
+                className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                <SlidersHorizontal className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
                 <span className="hidden xl:inline">จัดทัพเต็ม</span>
               </button>
             )}
             <button
               type="button"
               title="จำลองผลเกมนี้ทันที"
+              aria-label="ข้ามเกม"
               onClick={() => {
                 SFX.tap();
                 onQuickSim();
               }}
-              className="btn btn-sm mland:btn-xs btn-secondary px-2.5 mland:px-2"
+              className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
             >
-              <FastForward className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
-              <span>ข้ามเกม</span>
+              <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+              <span className="hidden sm:inline mland:inline">ข้าม</span>
             </button>
             <button
               type="button"
+              title="เริ่มแข่ง"
+              aria-label="เริ่มแข่ง"
               onClick={() => {
                 SFX.whistle();
                 onKickOff(matchEnv);
               }}
-              className="btn btn-md mland:btn-sm btn-gold px-3.5 sm:px-4 mland:px-2.5 font-extrabold shadow-sm"
+              className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] px-3 sm:px-4 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
             >
-              <Play className="w-3.5 h-3.5 mland:w-3 mland:h-3 fill-current shrink-0" />
-              <span className="hidden sm:inline mland:hidden">ลงสนามแข่งขัน</span>
-              <span className="sm:hidden mland:inline">เล่น</span>
+              <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
+              <span>เริ่มแข่ง</span>
             </button>
             <button
               type="button"
@@ -777,15 +780,16 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 onClose();
               }}
               aria-label="ปิดหน้าก่อนแข่ง"
-              className="btn-icon w-7 h-7 mland:w-6 mland:h-6 shrink-0"
+              title="ปิด"
+              className="btn btn-surface w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 mland:w-[38px] mland:h-[38px] p-0 rounded-xl mland:rounded-lg shrink-0"
             >
-              <X className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+              <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
             </button>
           </div>
         </div>
 
         {/* MAIN 2-COLUMN BODY */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] mland:grid-cols-[1.42fr_1fr] overflow-y-auto lg:overflow-hidden mland:overflow-hidden">
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.62fr_1fr] mland:grid-cols-[1.56fr_1fr] overflow-y-auto lg:overflow-hidden mland:overflow-hidden">
           {/* LEFT COLUMN: LINEUPS & TACTICS */}
           <div className="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r mland:border-b-0 mland:border-r border-[var(--line)] overflow-hidden">
             {/* Content Area */}
@@ -866,64 +870,62 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.95fr_1.05fr] mland:grid-cols-[0.9fr_1.1fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
-                {/* Formation Pitch Visual (Full Height & Width with Compact Floating Pill Inside) */}
-                <div className="p-1.5 sm:p-2 mland:p-1 bg-[#092818] flex items-center justify-center h-[390px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
-                  {/* Compact Team & Compare Toggle Floating Inside Pitch */}
-                  <div className="absolute top-1.5 left-1.5 right-1.5 z-10 flex justify-center pointer-events-none">
-                    <div className="pointer-events-auto w-full max-w-[330px] grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[#05180e]/85 border border-white/20 shadow-lg">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setSwapPickName(null);
-                          setViewMode('H');
-                        }}
-                        title={homeTeam.name}
-                        className={`h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
-                          viewMode === 'H'
-                            ? 'bg-emerald-500 text-white shadow-xs'
-                            : 'text-white/80 hover:text-white hover:bg-white/10'
-                        }`}
-                      >
-                        <span className="shrink-0">{isNeutralVenue ? '🏟️' : '🏠'}</span>
-                        <span className="truncate">{homeTeam.name}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setSwapPickName(null);
-                          setViewMode('A');
-                        }}
-                        title={awayTeam.name}
-                        className={`h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
-                          viewMode === 'A'
-                            ? 'bg-emerald-500 text-white shadow-xs'
-                            : 'text-white/80 hover:text-white hover:bg-white/10'
-                        }`}
-                      >
-                        <span className="shrink-0">{isNeutralVenue ? '🏟️' : '✈️'}</span>
-                        <span className="truncate">{awayTeam.name}</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setSwapPickName(null);
-                          setViewMode('compare');
-                        }}
-                        title="เทียบ 2 ทีม"
-                        className="h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold inline-flex items-center justify-center gap-1 text-white/85 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer transition-colors whitespace-nowrap"
-                      >
-                        <ArrowLeftRight className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
-                        <span>เทียบ</span>
-                      </button>
-                    </div>
+              <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.06fr_0.94fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
+                {/* Formation Pitch Visual (Full Height & Width with Compact Logo Switcher Inside) */}
+                <div className="p-1.5 sm:p-2 mland:p-1 bg-[#092818] flex items-center justify-center h-[400px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
+                  {/* Compact Logo-Only Team & Compare Switcher Inside Pitch */}
+                  <div className="absolute top-2 left-2 z-20 flex items-center gap-0.5 p-0.5 rounded-lg bg-[#05180e]/85 border border-white/20 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('H');
+                      }}
+                      title={homeTeam.name}
+                      aria-label={homeTeam.name}
+                      className={`h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center cursor-pointer transition-colors mland:[&>svg]:w-4 mland:[&>svg]:h-4 ${
+                        viewMode === 'H'
+                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
+                          : 'opacity-75 hover:opacity-100 hover:bg-white/10'
+                      }`}
+                    >
+                      <ClubCrest name={homeTeam.name} size={18} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('A');
+                      }}
+                      title={awayTeam.name}
+                      aria-label={awayTeam.name}
+                      className={`h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center cursor-pointer transition-colors mland:[&>svg]:w-4 mland:[&>svg]:h-4 ${
+                        viewMode === 'A'
+                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
+                          : 'opacity-75 hover:opacity-100 hover:bg-white/10'
+                      }`}
+                    >
+                      <ClubCrest name={awayTeam.name} size={18} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('compare');
+                      }}
+                      title="เทียบ 2 ทีม"
+                      aria-label="เทียบ 2 ทีม"
+                      className="h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                    </button>
                   </div>
 
                   {/* Full-Height Formation Pitch */}
-                  <div className="h-full min-h-0 w-full flex items-center justify-center pt-4 mland:pt-3.5">
+                  <div className="h-full min-h-0 w-full flex items-center justify-center">
                     <FormationPitch
                       team={activeTeam}
                       state={state}
@@ -1182,7 +1184,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           </div>
 
           {/* RIGHT COLUMN: ASSISTANT COACH NOTES (MANAGER) + STADIUM, WEATHER & PITCH CONDITIONS */}
-          <div className="flex flex-col min-h-0 overflow-y-auto p-3 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-2 bg-[var(--surface)]">
+          <div className="flex flex-col min-h-0 overflow-y-auto p-2.5 sm:p-3 mland:p-2 space-y-2.5 mland:space-y-1.5 bg-[var(--surface)]">
             {isMgr && assistantReport && (
               <section
                 aria-label="บันทึกโน้ตจากผู้ช่วยโค้ช"
