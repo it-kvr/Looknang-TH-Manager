@@ -3549,12 +3549,42 @@ export const drawLivePitchToCanvas = (
         ctx.fill();
       }
 
+      // Outer golden halo ring for the user's coach
+      if (c.isUserCoach) {
+        ctx.strokeStyle = 'rgba(250, 204, 21, 0.52)';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(0, 0, cr + 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       // Crisp suit ring
       ctx.strokeStyle = c.isUserCoach ? '#facc15' : trim;
       ctx.lineWidth = c.isUserCoach ? 1.7 : 1.3;
       ctx.beginPath();
       ctx.arc(0, 0, cr, 0, Math.PI * 2);
       ctx.stroke();
+
+      // User coach star badge ("★ ฉัน") anchored neatly below the coach without clipping or colliding with bubbles above
+      if (c.isUserCoach) {
+        const badgeLabel = '★ ฉัน';
+        ctx.font = '800 8px Sarabun, sans-serif';
+        const bw = measureTextCached(ctx, badgeLabel) + 7;
+        const bh = 10.5;
+        const bx = clamp(0, -cx + bw / 2 + 4, cssW - cx - bw / 2 - 4);
+        const by = Math.min(cr + 4.8, cssH - cy - bh / 2 - 1.5);
+        ctx.fillStyle = 'rgba(250, 204, 21, 0.96)';
+        ctx.strokeStyle = 'rgba(26, 18, 0, 0.55)';
+        ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        ctx.roundRect(bx - bw / 2, by - bh / 2, bw, bh, 3.5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#1a1200';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(badgeLabel, bx, by + 0.3);
+      }
 
       // Tactical shout callout bubble or emotion emoji bubble with clean pointer tail
       if (c.shoutText && c.shoutTimer > 0) {

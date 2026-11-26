@@ -14,6 +14,7 @@ import {
 import { ClubCrest, KitJersey, PlayerFace } from './SvgVisuals';
 import { CaptainBadge } from './CaptainBadge';
 import { PositionBadge } from './PositionBadge';
+import { OvrBadge } from './OvrBadge';
 
 type LockerFilter = 'ALL' | 'XI' | Position;
 
@@ -390,7 +391,7 @@ export const LockerRoomPanel: React.FC<{
                         {isStarter ? 'ตัวจริง' : 'สำรอง'}
                       </span>
                     </span>
-                    <span className="font-extrabold text-[var(--ink)] shrink-0">OVR {q.ov}</span>
+                    <OvrBadge ov={q.ov} size="2xs" />
                   </div>
 
                   {/* Locker Compartment Interior */}
@@ -490,7 +491,7 @@ export const LockerRoomPanel: React.FC<{
                         <span aria-hidden="true">·</span>
                         <span>อายุ {selectedPlayer.age}</span>
                         <span aria-hidden="true">·</span>
-                        <span>OVR {selectedPlayer.ov}</span>
+                        <OvrBadge ov={selectedPlayer.ov} size="2xs" prefix="OVR" />
                       </div>
                     </div>
 

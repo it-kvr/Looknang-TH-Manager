@@ -16,11 +16,11 @@ import {
   pushFeed,
   wagOf
 } from '../engine/playerCore';
-import { statTierMeta } from '../engine/missions';
 import { evaluateNationalTeamCallup } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 export const PlayerClubTransferView: React.FC<{
   state: GameState;
@@ -289,9 +289,7 @@ export const PlayerClubTransferView: React.FC<{
             <span className={`px-2 py-1 rounded-lg border ${isMyStarter ? 'bg-[var(--g-soft)] border-[var(--g)]/40 text-[var(--g)]' : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'}`}>
               {isMyStarter ? '⭐ ตัวจริง XI' : '🪑 สำรอง/หมุนเวียน'}
             </span>
-            <span className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] tabular">
-              OVR {ov}
-            </span>
+            <OvrBadge ov={ov} size="sm" prefix="OVR" />
           </div>
           <div className="seg-bar grid grid-cols-2 shrink-0">
             <button
@@ -398,8 +396,8 @@ export const PlayerClubTransferView: React.FC<{
                           </div>
                         </div>
                       </div>
-                      <div className="text-right shrink-0">
-                        <div className={`text-sm mland:text-xs font-extrabold tabular ${statTierMeta(q.ov).textClass}`}>{q.ov}</div>
+                      <div className="flex flex-col items-end gap-0.5 shrink-0">
+                        <OvrBadge ov={q.ov} size="xs" />
                         <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">⚽ {q.sg || 0} · 👟 {q.sa || 0}</div>
                       </div>
                     </div>
@@ -550,8 +548,8 @@ export const PlayerClubTransferView: React.FC<{
                             </div>
                           </div>
                         </div>
-                        <div className="text-right shrink-0 tabular">
-                          <div className={`font-extrabold ${statTierMeta(row.ov).textClass}`}>OVR {row.ov}</div>
+                        <div className="flex flex-col items-end gap-0.5 shrink-0 tabular">
+                          <OvrBadge ov={row.ov} size="xs" prefix="OVR" />
                           <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">คะแนน {row.score.toFixed(1)}</div>
                         </div>
                       </div>
@@ -576,7 +574,7 @@ export const PlayerClubTransferView: React.FC<{
                         {t.cap === q.n && <CaptainBadge team={t} state={state} size="xs" className="shrink-0" />}
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">({t.name})</span>
                       </div>
-                      <span className={`font-extrabold tabular shrink-0 ${statTierMeta(q.ov).textClass}`}>OVR {q.ov}</span>
+                      <OvrBadge ov={q.ov} size="xs" prefix="OVR" />
                     </div>
                   ))
                 )}

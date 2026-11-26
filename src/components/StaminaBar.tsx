@@ -118,7 +118,7 @@ export const StaminaBar: React.FC<StaminaBarProps> = ({
         <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9px] font-bold">
           <span className="text-[var(--ink)] inline-flex items-center gap-1 truncate">
             <span aria-hidden="true">⚡</span>
-            <span>{label || 'พลังกาย'}</span>
+            <span>{label || 'ความฟิต'}</span>
           </span>
           <span className={`tabular font-extrabold shrink-0 inline-flex items-center gap-1 ${textColor}`}>
             <span>{meta.label}</span>

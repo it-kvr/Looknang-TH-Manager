@@ -17,8 +17,8 @@ import {
 } from 'lucide-react';
 import type { GameMode, GameState, PlayerCareerProfile, Team } from '../types/game';
 import { TN } from '../data/thaiFootballData';
-import { ovColor } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { getOvrTierStyle } from '../components/OvrBadge';
 import { SFX } from '../utils/audioTheme';
 import {
   firstEmptySlot,
@@ -192,20 +192,16 @@ const SaveOvrBadge: React.FC<{
 }> = ({ mode, preview, compact = false }) => {
   if (!preview || !preview.maxOvr) return null;
   const ov = mode === 'm' ? preview.maxOvr : preview.player?.ov || preview.maxOvr;
-  const col = ovColor(ov);
+  const tierStyle = getOvrTierStyle(ov);
   const peak = preview.peakOvr && preview.peakOvr > ov ? preview.peakOvr : null;
 
   return (
     <div
-      className={`shrink-0 flex flex-col items-center justify-center rounded-2xl mland:rounded-xl border text-white shadow-xs tabular ${
+      className={`shrink-0 flex flex-col items-center justify-center rounded-2xl mland:rounded-xl border text-white tabular ${tierStyle.badgeCls} ${
         compact
           ? 'min-w-[46px] h-11 mland:h-9 px-2 py-0.5'
           : 'min-w-[56px] sm:min-w-[62px] mland:min-w-[48px] h-14 sm:h-16 mland:h-12 px-2 py-1 mland:px-1.5 mland:py-0.5'
       }`}
-      style={{
-        backgroundColor: col,
-        borderColor: 'rgba(255,255,255,0.28)'
-      }}
       title={
         mode === 'm'
           ? `ค่าพลังสูงสุดในทีม ${ov}${preview.squadAvg ? ` · เฉลี่ยทีม ${preview.squadAvg}` : ''}`

@@ -20,12 +20,13 @@ import {
 } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { OVF, dtInfo, rollPlayerTraits, rollPlayerBio, getPlayerBio, visOf, rndVis } from '../engine/playerCore';
-import { ovColor, statTierMeta, getPlayerTalent } from '../engine/missions';
+import { statTierMeta, getPlayerTalent } from '../engine/missions';
 import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/blessings';
 import { PlayerFace } from './SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
 import { TalentBadge } from './TalentBadge';
 import { PotentialBadge } from './PotentialBadge';
+import { OvrBadge } from './OvrBadge';
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 const GK_SIG_KEYS = ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp'];
@@ -325,11 +326,11 @@ export const PlayerBlessingEditor: React.FC<{
         ['str', 'แข็งแกร่ง'],
         ['sta', 'ความอึด'],
         ['agi', 'ความคล่องตัว'],
-        ['jmp', 'พลังกระโดด']
+        ['jmp', 'กระโดดสูง']
       ]
     ],
     [
-      '❤️ ความฟิต',
+      '🔋 พลังงาน',
       [
         ['tol', 'ทนต่อบาดเจ็บ'],
         ['rec', 'ฟื้นตัวเร็ว'],
@@ -424,9 +425,7 @@ export const PlayerBlessingEditor: React.FC<{
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs mland:text-[10.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] flex items-center gap-1.5">
             <span>✨ พรของพระเจ้า · ปรับแต่งค่าพลังเฉพาะตัว</span>
-            <span className="px-2 py-0.5 rounded-lg text-white text-[11px] font-extrabold tabular" style={{ background: ovColor(ov) }}>
-              OVR {ov}
-            </span>
+            <OvrBadge ov={ov} size="sm" prefix="OVR" />
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <button type="button" onClick={() => shiftAllStatsBy(5)} className="btn btn-xs btn-surface">
@@ -666,8 +665,8 @@ export const PlayerBlessingEditor: React.FC<{
 
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between text-[10px]">
-              <span className="text-[var(--mut)] font-semibold">OVR รวม</span>
-              <b className={`tabular text-xs ${statTierMeta(ov).textClass}`}>{ov}</b>
+              <span className="text-[var(--mut)] font-semibold">พลังรวม</span>
+              <OvrBadge ov={ov} variant="inline" size="sm" />
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => handleOvChange(ov - 1)} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>

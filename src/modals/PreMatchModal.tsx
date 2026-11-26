@@ -35,7 +35,6 @@ import {
 import { getMatchBroadcastChannel } from '../engine/liveStreamChat';
 import { buildMatchEnvironment, getStadiumDisplayName, type MatchFixtureKind } from '../engine/matchEnv';
 import { buildAssistantCoachNotes, recommendMatchPlanAndLineup, type AssistantAppliedPlanResult } from '../engine/assistantNotes';
-import { ovColor, ovTextColorClass } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
 import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
@@ -44,6 +43,7 @@ import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 interface PreMatchModalProps {
   state: GameState;
@@ -472,7 +472,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         : { icon: <Moon className="w-4 h-4 text-amber-300" />, title: 'เตะกลางคืน · ท้องฟ้าโปร่ง', sub: 'อากาศเย็นสบาย แสงไฟสนาม' }
       : matchEnv.season === 'rainy'
         ? { icon: <CloudRain className="w-4 h-4 text-sky-500" />, title: 'กลางวัน · ฤดูฝน', sub: 'ฟ้าครึ้ม มีฝนปรอย/สนามชุ่มน้ำ' }
-        : { icon: <Sun className="w-4 h-4 text-amber-500" />, title: 'กลางวัน · แดดออก', sub: 'อากาศร้อน ใช้พลังงานสูงขึ้นเล็กน้อย' };
+        : { icon: <Sun className="w-4 h-4 text-amber-500" />, title: 'กลางวัน · แดดออก', sub: 'อากาศร้อน เสียความฟิตเร็วขึ้นเล็กน้อย' };
 
   const grassLenText = matchEnv.grassLength === 'short' ? 'ตัดสั้น (บอลไว)' : matchEnv.grassLength === 'long' ? 'หญ้ายาว (บอลหนืด)' : 'ปานกลาง (มาตรฐาน)';
   const dirtPct = Math.round((matchEnv.dirtMix || 0) * 100);
@@ -513,7 +513,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
     const showSwapCol = canEditRow && !compact;
     const gridColsCls = showSwapCol
-      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_24px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_22px_auto]'
+      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_26px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_23px_auto]'
       : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_24px]';
 
     return (
@@ -597,9 +597,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         </div>
 
         <div className="flex items-center justify-start">
-          <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(pl.ov)}`}>
-            {pl.ov}
-          </span>
+          <OvrBadge ov={pl.ov} size="2xs" />
         </div>
 
         {showSwapCol && (

@@ -14,6 +14,7 @@ import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 export const TeamTrainingView: React.FC<{
   state: GameState;
@@ -109,8 +110,9 @@ export const TeamTrainingView: React.FC<{
                           <span className="truncate">{q.n}</span>
                           {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                         </div>
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5">
-                          OVR {q.ov} {passedStages > 0 ? `· ✓${passedStages}` : ''}
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5 flex items-center gap-1">
+                          <OvrBadge ov={q.ov} variant="inline" size="xs" prefix="OVR" />
+                          {passedStages > 0 ? <span>· ✓{passedStages}</span> : null}
                         </div>
                       </div>
                     </div>
@@ -457,7 +459,7 @@ export const TeamTrainingView: React.FC<{
                             </span>
                           ) : (
                             <>
-                              <span>OVR {q.ov}</span>
+                              <OvrBadge ov={q.ov} variant="inline" size="xs" prefix="OVR" />
                               <span aria-hidden="true">·</span>
                               <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
                               <span aria-hidden="true">·</span>

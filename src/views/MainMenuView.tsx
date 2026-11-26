@@ -17,6 +17,7 @@ import { PotentialBadge } from '../components/PotentialBadge';
 import { AthleteCard } from '../components/AthleteCard';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { OvrBadge } from '../components/OvrBadge';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
@@ -638,13 +639,11 @@ export const MainMenu: React.FC<{
             </div>
 
             {slotOvr > 0 && (
-              <span
-                className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-display font-extrabold text-white tabular shadow-2xs"
-                style={{ backgroundColor: ovColor(slotOvr) }}
+              <OvrBadge
+                ov={slotOvr}
+                size="xs"
                 title={isMgr ? `พลังสูงสุดในทีม ${slotOvr}` : `ค่าพลัง ${slotOvr}`}
-              >
-                {slotOvr}
-              </span>
+              />
             )}
 
             <span className="text-xs mland:text-[10px] font-bold text-[var(--mut)] group-hover:text-[var(--g)] group-hover:translate-x-0.5 shrink-0 transition-all" aria-hidden="true">
@@ -1060,12 +1059,7 @@ export const MainMenu: React.FC<{
                           {SPN[pl.ro] || pl.ro} · อายุ {pl.age} ปี
                         </div>
                       </div>
-                      <span
-                        className="text-xs mland:text-[10px] font-extrabold font-display tabular shrink-0"
-                        style={{ color: ovColor(pl.ov) }}
-                      >
-                        {pl.ov}
-                      </span>
+                      <OvrBadge ov={pl.ov} size="xs" />
                     </div>
                   ))}
                 </div>
@@ -1863,7 +1857,7 @@ export const MainMenu: React.FC<{
                     <div className="lg:pl-3 lg:border-l border-[var(--line)]/65 space-y-2 mland:space-y-1.5">
                       <div className="flex items-center justify-between text-xs mland:text-[10px]">
                         <span className="font-bold text-[var(--ink)]">พลังหลักหลังสุ่ม</span>
-                        <span className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] tabular">OVR {ov}</span>
+                        <OvrBadge ov={ov} size="xs" prefix="OVR" />
                       </div>
                       {ATT.map(([k, l]) => {
                         const rolledAdd = cAttrs[k] - cBase[k];
@@ -2174,7 +2168,7 @@ export const MainMenu: React.FC<{
               <span aria-hidden="true">·</span>
               <span className="shrink-0">{cSp}</span>
               <span aria-hidden="true">·</span>
-              <span className="font-bold text-[var(--g)] shrink-0">OVR {ov}</span>
+              <OvrBadge ov={ov} variant="inline" size="sm" prefix="OVR" />
               <span aria-hidden="true">·</span>
               <PotentialBadge pot={estPot} variant="inline" size="xs" className="shrink-0" />
               <span aria-hidden="true">·</span>
@@ -2581,14 +2575,7 @@ export const MainMenu: React.FC<{
                     </div>
                   </div>
                 </div>
-                {ov > 0 && (
-                  <span
-                    className="px-2 py-1 rounded-lg text-xs font-display font-extrabold text-white tabular shrink-0"
-                    style={{ backgroundColor: ovColor(ov) }}
-                  >
-                    {ov}
-                  </span>
-                )}
+                {ov > 0 && <OvrBadge ov={ov} size="sm" />}
               </div>
 
               <div className="space-y-1">
@@ -2672,14 +2659,7 @@ export const MainMenu: React.FC<{
                     </div>
                   </div>
                 </div>
-                {ov > 0 && (
-                  <span
-                    className="px-2 py-1 rounded-lg text-xs font-display font-extrabold text-white tabular shrink-0"
-                    style={{ backgroundColor: ovColor(ov) }}
-                  >
-                    {ov}
-                  </span>
-                )}
+                {ov > 0 && <OvrBadge ov={ov} size="sm" />}
               </div>
 
               <div className="flex gap-2 pt-1">

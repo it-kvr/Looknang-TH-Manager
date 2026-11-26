@@ -4,7 +4,6 @@ import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { assignTeamShirtNumbers, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, type CreatedPlayerCandidate } from '../engine/playerCore';
-import { ovColor } from '../engine/missions';
 import { appendPlayerCareerLog } from '../engine/history';
 import {
   LEAGUE_TRANSFER_RULES,
@@ -25,6 +24,7 @@ import { PotentialBadge } from '../components/PotentialBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { TransferMarketIcon } from '../components/TransferMarketIcon';
+import { OvrBadge } from '../components/OvrBadge';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -485,9 +485,7 @@ export const MarketView: React.FC<{
               </div>
               <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-1" />
             </div>
-            <span className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-xl text-white font-bold text-sm mland:text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-              {q.ov}
-            </span>
+            <OvrBadge ov={q.ov} size="lg" />
             <button
               type="button"
               onClick={() => setOfferDraft(null)}
@@ -710,9 +708,7 @@ export const MarketView: React.FC<{
               </div>
               <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-1" />
             </div>
-            <span className="px-2 py-0.5 rounded-lg text-white font-bold text-xs tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-              {q.ov}
-            </span>
+            <OvrBadge ov={q.ov} size="md" />
             <button
               type="button"
               onClick={() => setRenewIdx(null)}
@@ -806,7 +802,7 @@ export const MarketView: React.FC<{
   };
 
   const marketTabs: { id: MarketTab; icon: React.ReactNode; label: string; count?: string }[] = [
-    { id: 'buy', icon: <TransferMarketIcon size={14} className="w-[14px] h-[14px] mland:w-[12px] mland:h-[12px]" />, label: 'ซื้อ & ยืมนักเตะ', count: `${activeCount}` },
+    { id: 'buy', icon: <TransferMarketIcon size={14} className="w-[14px] h-[14px] mland:w-[12px] mland:h-[12px] mland:!text-[11px]" />, label: 'ซื้อ & ยืมนักเตะ', count: `${activeCount}` },
     { id: 'sell', icon: '🏷️', label: 'ขายออก & ข้อเสนอ', count: incomingOffers.length > 0 ? `${incomingOffers.length} ดีลเข้า` : listedPlayers.length > 0 ? `${listedPlayers.length} ตั้งขาย` : undefined },
     { id: 'scout', icon: '🔍', label: 'แมวมองสโมสร', count: state.scout?.results ? 'รายงานพร้อม' : state.scout ? `รอ ${state.scout.turnsLeft} นัด` : undefined },
     { id: 'con', icon: '📋', label: 'สัญญา & เยาวชน', count: expiringCount + loanPlayers.length > 0 ? `${expiringCount + loanPlayers.length} ใกล้หมด` : undefined }
@@ -896,7 +892,7 @@ export const MarketView: React.FC<{
                     }`}
                   >
                     <span className="inline-flex items-center justify-center gap-1">
-                      <TransferMarketIcon size={13} className="w-[13px] h-[13px] mland:w-[11px] mland:h-[11px]" />
+                      <TransferMarketIcon size={13} className="w-[13px] h-[13px] mland:w-[11px] mland:h-[11px] mland:!text-[10.5px]" />
                       <span>ตลาด</span>
                     </span>
                   </button>
@@ -1061,7 +1057,7 @@ export const MarketView: React.FC<{
                 <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
                   {marketSource === 'mk' ? (
                     <span className="inline-flex items-center gap-1.5">
-                      <TransferMarketIcon size={16} className="w-4 h-4 mland:w-[13px] mland:h-[13px]" />
+                      <TransferMarketIcon size={16} className="w-4 h-4 mland:w-[13px] mland:h-[13px] mland:!text-[12px]" />
                       <span>รายชื่อนักเตะในตลาดกลาง</span>
                     </span>
                   ) : marketSource === 'club'
@@ -1114,9 +1110,7 @@ export const MarketView: React.FC<{
                           </div>
                           <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         </button>
-                        <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                          {q.ov}
-                        </span>
+                        <OvrBadge ov={q.ov} size="sm" />
                         <button
                           type="button"
                           disabled={!!q.locked || blockedByWindow}
@@ -1164,9 +1158,7 @@ export const MarketView: React.FC<{
                           </div>
                           <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         </button>
-                        <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                          {q.ov}
-                        </span>
+                        <OvrBadge ov={q.ov} size="sm" />
                         <button
                           type="button"
                           disabled={!!q.locked || blockedByWindow}
@@ -1351,9 +1343,7 @@ export const MarketView: React.FC<{
                           )}
                         </div>
                       </button>
-                      <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                        {q.ov}
-                      </span>
+                      <OvrBadge ov={q.ov} size="sm" />
                       <div className="flex items-center gap-1 shrink-0 ml-auto sm:ml-0">
                         <button
                           type="button"
@@ -1479,12 +1469,7 @@ export const MarketView: React.FC<{
                             <span>· ลดค่าเหนื่อย {fmtMoneyNum(wg)}/นัด</span>
                           </div>
                         </button>
-                        <span
-                          className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0"
-                          style={{ background: ovColor(targetQ.ov) }}
-                        >
-                          {targetQ.ov}
-                        </span>
+                        <OvrBadge ov={targetQ.ov} size="sm" />
                       </div>
 
                       <div className="flex flex-wrap items-center justify-between gap-2 pl-0.5">
@@ -1722,12 +1707,7 @@ export const MarketView: React.FC<{
                           ) : null}
                         </div>
                       </button>
-                      <span
-                        className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10px] font-bold tabular shrink-0"
-                        style={{ background: ovColor(q.ov) }}
-                      >
-                        {q.ov}
-                      </span>
+                      <OvrBadge ov={q.ov} size="sm" />
                       {q.loan ? (
                         <span className="px-2 py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold whitespace-nowrap shrink-0">
                           ยืมตัว
@@ -1920,9 +1900,7 @@ export const MarketView: React.FC<{
                         </div>
                         <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                       </button>
-                      <span className="w-9 mland:w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                        {q.ov}
-                      </span>
+                      <OvrBadge ov={q.ov} size="sm" />
                       <button
                         type="button"
                         disabled={!!q.locked || blockedByWindow}
@@ -2010,9 +1988,7 @@ export const MarketView: React.FC<{
                         {ROLE_L[c.role]} · ค่าเหนื่อย {fmtMoneyNum(c.wg)}/นัด
                       </div>
                     </button>
-                    <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                      {q.ov}
-                    </span>
+                    <OvrBadge ov={q.ov} size="sm" />
                     <button
                       type="button"
                       onClick={() => {
@@ -2116,9 +2092,7 @@ export const MarketView: React.FC<{
                         </div>
                         <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                       </button>
-                      <span className="w-8 text-center py-0.5 rounded-lg text-white text-xs mland:text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(q.ov) }}>
-                        {q.ov}
-                      </span>
+                      <OvrBadge ov={q.ov} size="sm" />
                       <button
                         type="button"
                         disabled={me.sq.length >= tx.maxSquad || tx.curWage + wagOf(q) > tx.wageCap}

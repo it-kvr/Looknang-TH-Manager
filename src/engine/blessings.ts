@@ -171,7 +171,7 @@ export function applySecretBoost(
       d.p.inj = 0;
       d.p.sus = 0;
       syncMe(d);
-      return '🩺 ฟื้นฟูพลังกาย 100% & ล้างบาดเจ็บ/แบนสำเร็จ!';
+      return '🩺 ฟื้นฟูความฟิต 100% & ล้างบาดเจ็บ/แบนสำเร็จ!';
     }
     const t = d.teams[d.me];
     if (t) {

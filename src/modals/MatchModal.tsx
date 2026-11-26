@@ -8858,7 +8858,7 @@ export const MatchModal: React.FC<{
           if (alertLoggedRef.current.has(logKey)) return;
           alertLoggedRef.current.add(logKey);
           const reasons: string[] = [];
-          if (lowFit) reasons.push(`พลังงานเหลือ ${fVal}% (เสี่ยงบาดเจ็บ)`);
+          if (lowFit) reasons.push(`ความฟิตเหลือ ${fVal}% (เสี่ยงบาดเจ็บ)`);
           if (lowForm) reasons.push(`ฟอร์มตก ${fmVal.toFixed(1)}`);
           pushLog(curMin, `🩺 แจ้งเตือนเปลี่ยนตัว (${pl.ro} ${pl.n}): ${reasons.join(' · ')} — แนะนำพักเพื่อป้องกันบาดเจ็บ`, 'sys');
           SFX.tap();
@@ -8869,7 +8869,7 @@ export const MatchModal: React.FC<{
         const myFm = Number((sr.liveForm[myPlayerName] ?? 6.5).toFixed(1));
         if (myF <= alertCfg.fitTh && !alertLoggedRef.current.has(`${myPlayerName}:pfit`)) {
           alertLoggedRef.current.add(`${myPlayerName}:pfit`);
-          pushLog(curMin, `🩺 คำเตือนร่างกาย: พลังงานคุณเหลือ ${myF}% เสี่ยงบาดเจ็บหากฝืนเร่งสปีดต่อเนื่อง`, 'sys');
+          pushLog(curMin, `🩺 คำเตือนร่างกาย: ความฟิตคุณเหลือ ${myF}% เสี่ยงบาดเจ็บหากฝืนเร่งสปีดต่อเนื่อง`, 'sys');
         } else if (myFm <= alertCfg.formTh && !alertLoggedRef.current.has(`${myPlayerName}:pform`)) {
           alertLoggedRef.current.add(`${myPlayerName}:pform`);
           pushLog(curMin, `📉 ฟอร์มการเล่นของคุณตกลงมาที่ ${myFm.toFixed(1)} ต้องรีบเรียกจังหวะเกมกลับมา!`, 'sys');
@@ -11596,6 +11596,11 @@ export const MatchModal: React.FC<{
                   : 'balanced'
               }
               onSetHalftimeTalk={(tone) => setSelectedHalftimeTalk(tone)}
+              pitchMode={htPitchMode}
+              onChangePitchMode={setHtPitchMode}
+              statMode={htStatMode}
+              onToggleStatMode={() => setHtStatMode((m) => (m === 'rating' ? 'ovr' : 'rating'))}
+              matchStats={matchStats}
             />
           ) : done && fullTimeAnalysis ? (
             <FullTimeMatchStage

@@ -19,6 +19,7 @@ import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
 import { StaminaBar } from './components/StaminaBar';
 import { TransferMarketIcon } from './components/TransferMarketIcon';
+import { OvrBadge } from './components/OvrBadge';
 import stadiumHeroBg from './assets/images/thai_stadium_hero_1795511663761.jpg';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -1142,7 +1143,7 @@ export default function App() {
           ['t', '🏆', 'การแข่งขัน'],
           ['q', '⚽', 'ทีม & แผน'],
           ['r', '🏋️', 'ฝึกซ้อม'],
-          ['k', <TransferMarketIcon size={18} className="w-[18px] h-[18px] mland:w-[15px] mland:h-[15px]" />, 'ตลาด'],
+          ['k', <TransferMarketIcon size={18} className="w-[18px] h-[18px] mland:w-[15px] mland:h-[15px] mland:!text-[13px]" />, 'ตลาด'],
           ['f', '💰', 'การเงิน'],
           ['u', '🏟️', 'สโมสร']
         ]
@@ -1220,9 +1221,13 @@ export default function App() {
                 <span className="font-bold text-xs sm:text-[15px] mland:text-xs truncate font-display leading-tight tracking-tight text-[var(--ink)]">
                   {state.mode === 'p' && state.p ? state.p.name : me.name}
                 </span>
-                <span className={`sm:hidden text-[11px] font-extrabold tabular shrink-0 ${state.mode === 'm' && state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                  {state.mode === 'm' ? fmtMoney(state.money) : `OVR ${state.p ? ovMe(state.p) : 60}`}
-                </span>
+                {state.mode === 'm' ? (
+                  <span className={`sm:hidden text-[11px] font-extrabold tabular shrink-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                    {fmtMoney(state.money)}
+                  </span>
+                ) : (
+                  <OvrBadge ov={state.p ? ovMe(state.p) : 60} size="2xs" prefix="OVR" className="sm:hidden" />
+                )}
               </div>
               <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1.5 truncate tabular leading-tight mt-0.5 mland:mt-0">
                 {state.mode === 'p' && (
@@ -1299,9 +1304,7 @@ export default function App() {
                     className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">OVR</div>
-                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--g)] leading-tight mt-0.5">
-                      {state.p ? ovMe(state.p) : 60}
-                    </div>
+                    <OvrBadge ov={state.p ? ovMe(state.p) : 60} variant="inline" size="xs" className="mt-0.5" />
                   </button>
                   <button
                     type="button"
@@ -1317,10 +1320,10 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('p'); }}
-                    title={`พลังกาย ${myStaminaVal}%`}
+                    title={`ความฟิต ${myStaminaVal}%`}
                     className="flex flex-col justify-center px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">พลังกาย</div>
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ความฟิต</div>
                     <div className="mt-0.5">
                       <StaminaBar
                         value={myStaminaVal}

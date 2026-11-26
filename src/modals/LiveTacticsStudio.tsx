@@ -15,15 +15,15 @@ import { AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
-import { ovColor, ovTextColorClass } from '../engine/missions';
 import { Check } from 'lucide-react';
 import { FormationPitch, PlayerFace, ClubCrest, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
-import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { StaminaBar } from '../components/StaminaBar';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 export type ManagerHalftimeTalk = 'attack' | 'press' | 'balanced' | 'counter' | 'defend';
 
@@ -98,6 +98,19 @@ interface LiveTacticsStudioProps {
   onToggleAutoSub?: () => void;
   selectedHalftimeTalk?: ManagerHalftimeTalk;
   onSetHalftimeTalk?: (tone: ManagerHalftimeTalk) => void;
+  pitchMode?: 'all' | 'H' | 'A';
+  onChangePitchMode?: (mode: 'all' | 'H' | 'A') => void;
+  statMode?: 'rating' | 'ovr';
+  onToggleStatMode?: () => void;
+  matchStats?: {
+    possH: number;
+    shotsH: number;
+    shotsA: number;
+    onTargetH: number;
+    onTargetA: number;
+    xgH: number;
+    xgA: number;
+  };
 }
 
 interface DragRuntime {
@@ -178,9 +191,21 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   autoSubEnabled,
   onToggleAutoSub,
   selectedHalftimeTalk = 'balanced',
-  onSetHalftimeTalk
+  onSetHalftimeTalk,
+  pitchMode,
+  onChangePitchMode,
+  statMode,
+  onToggleStatMode,
+  matchStats
 }) => {
-  const [pitchTeamView, setPitchTeamView] = useState<'me' | 'opp'>('me');
+  const [localPitchMode, setLocalPitchMode] = useState<'all' | 'H' | 'A'>(() => (meIsHome ? 'H' : 'A'));
+  const effectivePitchMode = pitchMode ?? localPitchMode;
+  const setEffectivePitchMode = (mode: 'all' | 'H' | 'A') => {
+    if (onChangePitchMode) onChangePitchMode(mode);
+    else setLocalPitchMode(mode);
+  };
+  const effectiveStatMode = statMode ?? 'rating';
+
   const [dragUi, setDragUi] = useState<{
     source: 'bench' | 'pitch';
     player: Player;
@@ -193,86 +218,73 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragRuntime | null>(null);
 
+  const homeOrig = meIsHome ? meTeamOrig : oppTeamOrig;
+  const awayOrig = meIsHome ? oppTeamOrig : meTeamOrig;
+  const curHomeLu = meIsHome ? liveLu : liveOppLu;
+  const curAwayLu = meIsHome ? liveOppLu : liveLu;
+
   const myLiveTeam = meIsHome ? liveHome : liveAway;
-  const oppLiveTeam = meIsHome ? liveAway : liveHome;
-  const isMeView = pitchTeamView === 'me';
+  const myTeamSide: 'H' | 'A' = meIsHome ? 'H' : 'A';
+  const canInteractWithMyPitch = effectivePitchMode === 'all' || effectivePitchMode === myTeamSide;
 
-  const activeTeam = isMeView ? meTeamOrig : oppTeamOrig;
-  const activeLiveTeam = isMeView ? myLiveTeam : oppLiveTeam;
-  const activeLu = isMeView ? liveLu : liveOppLu;
-  const activeKit = isMeView ? (meIsHome ? homeKit : awayKit) : (meIsHome ? awayKit : homeKit);
-  const activeGkKit = isMeView ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? awayGkKit : homeGkKit);
-  const activeTrim = isMeView ? (meIsHome ? homeTrim : awayTrim) : (meIsHome ? awayTrim : homeTrim);
-
-  const activeSlots = useMemo(() => getFormationSlots(activeLiveTeam), [activeLiveTeam]);
-
-  const pitchNodes = useMemo(() => {
-    return activeLu.map((name, i) => {
-      const pl = activeTeam.sq.find((q) => q.n === name) || activeTeam.sq[i];
-      const slot = activeSlots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
-      const no = pl ? getShirtNo(activeTeam, pl) : i + 1;
+  const buildTeamPitchMeta = (teamOrig: Team, xiNames: string[]): Record<string, PitchPlayerMeta> => {
+    const out: Record<string, PitchPlayerMeta> = {};
+    const slots = getFormationSlots(teamOrig.id === liveHome.id ? liveHome : liveAway);
+    xiNames.forEach((name, i) => {
+      const pl = teamOrig.sq.find((q) => q.n === name) || teamOrig.sq[i];
+      const slot = slots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
       const fitVal = Math.round(liveFitMap[name] ?? pl?.fit ?? 100);
       const rt = Number((liveFormMap[name] ?? 6.5).toFixed(1));
-      const goals = evs.filter((e) => !e.og && e.t === activeTeam.id && e.who === name).length;
-      const assists = evs.filter((e) => e.t === activeTeam.id && e.as === name).length;
-      const cards = matchCards.filter((c) => c.t === activeTeam.id && c.who === name);
+      const goals = evs.filter((e) => !e.og && e.t === teamOrig.id && e.who === name).length;
+      const assists = evs.filter((e) => !e.og && e.t === teamOrig.id && e.as === name).length;
+      const cards = matchCards.filter((c) => c.t === teamOrig.id && c.who === name);
       const isRed = sentOff.includes(name) || cards.some((c) => c.type === 'R' || c.type === 'Y2R');
-      const yellowCnt = isRed ? 0 : (matchYellows[name] || (cards.some((c) => c.type === 'Y') ? 1 : 0));
+      const yellowCards = isRed ? 0 : (matchYellows[name] || (cards.some((c) => c.type === 'Y') ? 1 : 0));
       const isInjured = injuredNames.includes(name);
-      const subInEv = subLog.find((s) => s.t === activeTeam.id && s.inPlayer === name);
+      const subInEv = subLog.find((s) => s.t === teamOrig.id && s.inPlayer === name);
       const offPosPen = pl ? playerPen(pl, slot.sp) : 0;
-      const xPct = clamp(10 + (slot.x / 100) * 80, 10, 90);
-      const yPct = clamp(12 + ((slot.y - 12) / 80) * 74, 12, 86);
-      const nodeKit = slot.pos === 'GK' ? activeGkKit : activeKit;
-      const nodeTrim = slot.pos === 'GK' ? '#ffffff' : activeTrim;
+      out[name] = {
+        rating: rt,
+        goals,
+        assists,
+        yellowCards,
+        isRed,
+        isInjured,
+        subInMin: subInEv?.m,
+        fitVal,
+        offPosPen
+      };
+    });
+    return out;
+  };
+
+  const homePitchMeta = useMemo(
+    () => buildTeamPitchMeta(homeOrig, curHomeLu),
+    [homeOrig, liveHome, liveAway, curHomeLu, liveFitMap, liveFormMap, evs, matchCards, sentOff, matchYellows, injuredNames, subLog]
+  );
+
+  const awayPitchMeta = useMemo(
+    () => buildTeamPitchMeta(awayOrig, curAwayLu),
+    [awayOrig, liveHome, liveAway, curAwayLu, liveFitMap, liveFormMap, evs, matchCards, sentOff, matchYellows, injuredNames, subLog]
+  );
+
+  const mySlots = useMemo(() => getFormationSlots(myLiveTeam), [myLiveTeam]);
+
+  const myPitchNodes = useMemo(() => {
+    return liveLu.map((name, i) => {
+      const pl = meTeamOrig.sq.find((q) => q.n === name) || meTeamOrig.sq[i];
+      const slot = mySlots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
+      const fitVal = Math.round(liveFitMap[name] ?? pl?.fit ?? 100);
       return {
         idx: i,
         name,
         shortName: name.split(' ')[0] || name,
         player: pl,
         slot,
-        no,
-        fitVal,
-        rt,
-        goals,
-        assists,
-        isRed,
-        yellowCnt,
-        isInjured,
-        subInEv,
-        offPosPen,
-        xPct,
-        yPct,
-        kit: nodeKit,
-        trim: nodeTrim,
-        isMe: Boolean(pl?.me)
+        fitVal
       };
     });
-  }, [
-    activeLu,
-    activeTeam,
-    activeSlots,
-    liveFitMap,
-    liveFormMap,
-    evs,
-    matchCards,
-    sentOff,
-    matchYellows,
-    injuredNames,
-    subLog,
-    activeGkKit,
-    activeKit,
-    activeTrim
-  ]);
-
-  const teamPitchStats = useMemo(() => {
-    const alive = pitchNodes.filter((n) => !n.isRed);
-    const avgFit = Math.round(alive.reduce((s, n) => s + n.fitVal, 0) / Math.max(1, alive.length));
-    const avgRt = alive.reduce((s, n) => s + n.rt, 0) / Math.max(1, alive.length);
-    const offPosCount = pitchNodes.filter((n) => n.offPosPen > 0).length;
-    const lowFitCount = alive.filter((n) => n.fitVal <= subAlertFitTh).length;
-    return { avgFit, avgRt, offPosCount, lowFitCount };
-  }, [pitchNodes, subAlertFitTh]);
+  }, [liveLu, meTeamOrig, mySlots, liveFitMap]);
 
   const findNearestPitchTarget = (clientX: number, clientY: number, excludeName: string, liftPx: number): DropTargetState | null => {
     const host = pitchRef.current;
@@ -350,7 +362,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     benchList,
     subsUsed,
     sentOff,
-    isMeView,
+    canInteractWithMyPitch,
     onSubstitute,
     onSwapStarters,
     setSubPickOut,
@@ -361,7 +373,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     benchList,
     subsUsed,
     sentOff,
-    isMeView,
+    canInteractWithMyPitch,
     onSubstitute,
     onSwapStarters,
     setSubPickOut,
@@ -432,7 +444,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       clearDrag();
 
       if (!wasActive) {
-        if (d.source === 'pitch' && actionsRef.current.isMeView && !actionsRef.current.sentOff.includes(d.player.n)) {
+        if (d.source === 'pitch' && actionsRef.current.canInteractWithMyPitch && !actionsRef.current.sentOff.includes(d.player.n)) {
           SFX.tap();
           actionsRef.current.setSubPickOut(actionsRef.current.subPickOut === d.player.n ? null : d.player.n);
         }
@@ -485,7 +497,10 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   ) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     if (source === 'bench' && subsUsed.length >= 5) return;
-    if (source === 'pitch' && (!isMeView || sentOff.includes(player.n))) return;
+    if (source === 'pitch' && (!canInteractWithMyPitch || sentOff.includes(player.n))) return;
+    if (source === 'bench' && !canInteractWithMyPitch) {
+      setEffectivePitchMode(myTeamSide);
+    }
     const targetEl = e.target as HTMLElement | null;
     if (targetEl?.closest?.('button[data-no-drag="1"]')) return;
 
@@ -544,7 +559,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   const dragCompatibilityBanner = useMemo(() => {
     if (!dragUi || !dropTarget) return null;
     if (dragUi.source === 'bench' && dropTarget.kind === 'pitch') {
-      const outNode = pitchNodes.find((n) => n.name === dropTarget.name);
+      const outNode = myPitchNodes.find((n) => n.name === dropTarget.name);
       if (!outNode) return null;
       const inFit = Math.round(dragUi.player.fit ?? 100);
       const fitDiff = inFit - outNode.fitVal;
@@ -558,7 +573,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     }
     if (dragUi.source === 'pitch' && dropTarget.kind === 'bench') {
       const benchObj = benchList.find((b) => b.n === dropTarget.name);
-      const outNode = pitchNodes.find((n) => n.name === dragUi.player.n);
+      const outNode = myPitchNodes.find((n) => n.name === dragUi.player.n);
       if (!benchObj || !outNode) return null;
       const pn = playerPen(benchObj, outNode.slot.sp);
       const fitLabel = pn === 0 ? '✅ ตรงตำแหน่ง' : pn === 1 ? '🟡 เล่นแทนได้' : '⚠️ ต่างตำแหน่ง';
@@ -574,29 +589,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       };
     }
     return null;
-  }, [dragUi, dropTarget, pitchNodes, benchList]);
-
-  const pitchMatchMeta = useMemo(() => {
-    const out: Record<string, PitchPlayerMeta> = {};
-    pitchNodes.forEach((n) => {
-      out[n.name] = {
-        rating: n.rt,
-        goals: n.goals,
-        assists: n.assists,
-        yellowCards: n.yellowCnt,
-        isRed: n.isRed,
-        isInjured: n.isInjured,
-        subInMin: n.subInEv?.m,
-        fitVal: n.fitVal,
-        offPosPen: n.offPosPen
-      };
-    });
-    return out;
-  }, [pitchNodes]);
-
+  }, [dragUi, dropTarget, myPitchNodes, benchList]);
 
   const mySubsList = subLog.filter((s) => s.t === meTeamOrig.id);
-  const mySlots = useMemo(() => getFormationSlots(myLiveTeam), [myLiveTeam]);
   const selectedPitchOut = useMemo(() => {
     if (subPickOut && liveLu.includes(subPickOut) && !sentOff.includes(subPickOut)) return subPickOut;
     return null;
@@ -679,8 +674,51 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     matchYellows
   ]);
 
+  const renderInteractiveFormationPitch = (side: 'H' | 'A', singleView: boolean) => {
+    const isMySide = side === myTeamSide;
+    const teamModel = side === 'H' ? liveHome : liveAway;
+    const xiNames = side === 'H' ? curHomeLu : curAwayLu;
+    const kit = side === 'H' ? homeKit : awayKit;
+    const gkKit = side === 'H' ? homeGkKit : awayGkKit;
+    const trim = side === 'H' ? homeTrim : awayTrim;
+    const meta = side === 'H' ? homePitchMeta : awayPitchMeta;
+    return (
+      <FormationPitch
+        team={teamModel}
+        state={state}
+        lineupNames={xiNames}
+        kitOverride={kit}
+        gkKitOverride={gkKit}
+        trimOverride={trim}
+        matchMeta={meta}
+        statMode={effectiveStatMode}
+        showFitBar={true}
+        showPitchCrest={true}
+        subAlertFitTh={subAlertFitTh}
+        dragSourceName={isMySide && dragUi?.source === 'pitch' ? dragUi.player.n : null}
+        dropTargetName={isMySide && dropTarget?.kind === 'pitch' ? dropTarget.name : null}
+        selectedPlayerName={isMySide ? subPickOut : null}
+        validDropHighlight={isMySide && dragUi?.source === 'bench' && subsUsed.length < 5}
+        disableRedPlayers={isMySide}
+        dropAttrPrefix={isMySide ? 'tactics' : 'default'}
+        onPlayerPointerDown={
+          isMySide
+            ? (e, player, slotSp, slotIdx) => {
+                startPointerDrag(e, 'pitch', player, slotSp, slotIdx);
+              }
+            : undefined
+        }
+        className={
+          singleView
+            ? 'aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none'
+            : 'aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none'
+        }
+      />
+    );
+  };
+
   return (
-    <div className="grid grid-cols-[1.28fr_1fr] mland:grid-cols-[1.22fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden relative">
+    <div className="grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden relative">
       {/* Floating Drag Ghost Badge */}
       {dragUi && (
         <div
@@ -697,7 +735,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             <div className="font-bold truncate flex items-center gap-1">
               <span>{dragUi.player.n.split(' ')[0]}</span>
               <PositionBadge role={dragUi.role || dragUi.player.ro} size="xs" />
-              <span className="text-[var(--g)] font-extrabold tabular">{dragUi.player.ov}</span>
+              <OvrBadge ov={dragUi.player.ov} size="2xs" />
             </div>
             <div className="text-[10px] font-semibold text-[var(--mut)] truncate">
               {dropTarget
@@ -714,106 +752,131 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         </div>
       )}
 
-      {/* LEFT COLUMN: Unified SVG Formation Pitch + Detailed Player Stats Strip */}
-      <div className="flex flex-col min-h-0 gap-2 mland:gap-1.5 overflow-hidden">
-        <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-xs flex flex-col">
-          {/* Pitch Top Bar */}
-          <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-2 text-[var(--ink)]">
-            <div className="flex items-center gap-1.5 min-w-0 text-[11px] mland:text-[9.5px] font-bold">
-              <span className="truncate">
-                📋 แผน {activeLiveTeam.cf ? 'กำหนดเอง' : activeLiveTeam.form}
-                {isMeView ? ` · ${AR_T[liveTac]}` : ''}
-              </span>
-              <span className="text-[var(--mut)]/50">·</span>
-              <span className={`tabular shrink-0 ${getStaminaMeta(teamPitchStats.avgFit, subAlertFitTh).txtCls}`}>
-                {teamPitchStats.avgFit}% ⚡
-              </span>
-              <span className="text-[var(--mut)]/50">·</span>
-              <span className="tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">{teamPitchStats.avgRt.toFixed(1)} ⭐</span>
-              {teamPitchStats.offPosCount > 0 && (
-                <span className="text-[10px] mland:text-[8.5px] text-amber-600 dark:text-amber-300 font-bold tabular shrink-0">
-                  · {teamPitchStats.offPosCount} ⚠️
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  setPitchTeamView('me');
-                }}
-                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[116px] inline-flex items-center gap-1 ${
-                  isMeView ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
-              >
-                <span className="truncate">{meTeamOrig.name}</span>
-                <MyTeamBadge size="2xs" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  setPitchTeamView('opp');
-                }}
-                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[96px] truncate ${
-                  !isMeView ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
-              >
-                {oppTeamOrig.name}
-              </button>
-            </div>
-          </div>
-
-          {/* Drag Compatibility Live Banner (Appears cleanly during drag) */}
-          {dragCompatibilityBanner && (
-            <div
-              className={`shrink-0 px-2.5 py-1 text-[10.5px] mland:text-[9px] font-bold text-center truncate border-b border-[var(--line)] ${
-                dragCompatibilityBanner.tone === 'emerald'
-                  ? 'bg-emerald-600/95 text-white'
-                  : dragCompatibilityBanner.tone === 'amber'
-                    ? 'bg-amber-500/95 text-[#1c1300]'
-                    : dragCompatibilityBanner.tone === 'rose'
-                      ? 'bg-rose-600/95 text-white'
-                      : 'bg-sky-600/95 text-white'
-              }`}
-            >
-              {dragCompatibilityBanner.text}
-            </div>
-          )}
-
-          {/* Unified Interactive SVG Formation Pitch */}
+      {/* LEFT COLUMN: Same Unified #092818 Full-Height Formation Pitch Stage as Halftime / Match View */}
+      <div className="flex flex-col min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#092818] shadow-inner flex flex-col">
+          {/* Unified Interactive SVG Formation Pitch Container with Inside Logo Switcher */}
           <div
             ref={pitchRef}
             onContextMenu={(e) => e.preventDefault()}
-            className="relative flex-1 min-h-0 w-full p-2 mland:p-1.5 select-none overflow-hidden flex items-center justify-center"
+            className="relative flex-1 min-h-0 w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] select-none overflow-hidden flex items-center justify-center"
           >
-            <FormationPitch
-              team={activeLiveTeam}
-              state={state}
-              lineupNames={activeLu}
-              kitOverride={activeKit}
-              gkKitOverride={activeGkKit}
-              trimOverride={activeTrim}
-              matchMeta={pitchMatchMeta}
-              statMode="rating"
-              showFitBar={true}
-              dragSourceName={isMeView && dragUi?.source === 'pitch' ? dragUi.player.n : null}
-              dropTargetName={isMeView && dropTarget?.kind === 'pitch' ? dropTarget.name : null}
-              selectedPlayerName={isMeView ? subPickOut : null}
-              validDropHighlight={isMeView && dragUi?.source === 'bench' && subsUsed.length < 5}
-              subAlertFitTh={subAlertFitTh}
-              disableRedPlayers={true}
-              dropAttrPrefix={isMeView ? 'tactics' : 'default'}
-              onPlayerPointerDown={
-                isMeView
-                  ? (e, player, slotSp, slotIdx) => {
-                      startPointerDrag(e, 'pitch', player, slotSp, slotIdx);
-                    }
-                  : undefined
-              }
-            />
+            {/* Compact Logo-Only Team Switcher Inside Pitch (matching Halftime & Post-Match) */}
+            <div className="absolute top-2 left-2 z-20 flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/88 border border-white/25 shadow-lg">
+              <button
+                type="button"
+                title="แสดงแผนทั้งสองทีม"
+                aria-label="แสดงแผนทั้งสองทีม"
+                onClick={() => {
+                  SFX.tap();
+                  setEffectivePitchMode('all');
+                }}
+                className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                  effectivePitchMode === 'all'
+                    ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                    : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                }`}
+              >
+                <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
+                  <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={meIsHome} />
+                  <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={!meIsHome} />
+                </span>
+              </button>
+              <button
+                type="button"
+                title={homeOrig.name}
+                aria-label={homeOrig.name}
+                onClick={() => {
+                  SFX.tap();
+                  setEffectivePitchMode('H');
+                }}
+                className={`relative h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                  effectivePitchMode === 'H'
+                    ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                    : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                }`}
+              >
+                <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={meIsHome} />
+                {meIsHome && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
+              </button>
+              <button
+                type="button"
+                title={awayOrig.name}
+                aria-label={awayOrig.name}
+                onClick={() => {
+                  SFX.tap();
+                  setEffectivePitchMode('A');
+                }}
+                className={`relative h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                  effectivePitchMode === 'A'
+                    ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                    : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                }`}
+              >
+                <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={!meIsHome} />
+                {!meIsHome && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
+              </button>
+            </div>
+
+            {/* Drag Compatibility Live Banner (Floats cleanly during drag) */}
+            {dragCompatibilityBanner && (
+              <div
+                className={`pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 z-30 max-w-[92%] px-3 py-1 rounded-xl text-[10.5px] mland:text-[9px] font-bold text-center truncate border border-white/25 shadow-xl ${
+                  dragCompatibilityBanner.tone === 'emerald'
+                    ? 'bg-emerald-600/95 text-white'
+                    : dragCompatibilityBanner.tone === 'amber'
+                      ? 'bg-amber-500/95 text-[#1c1300]'
+                      : dragCompatibilityBanner.tone === 'rose'
+                        ? 'bg-rose-600/95 text-white'
+                        : 'bg-sky-600/95 text-white'
+                }`}
+              >
+                {dragCompatibilityBanner.text}
+              </div>
+            )}
+
+            <div className="h-full min-h-0 w-full flex items-center justify-center overflow-hidden">
+              {effectivePitchMode === 'all' ? (
+                <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
+                  <div className="h-full min-h-0 w-full flex items-center justify-center">
+                    {renderInteractiveFormationPitch('H', false)}
+                  </div>
+                  <div className="h-full min-h-0 w-full flex items-center justify-center">
+                    {renderInteractiveFormationPitch('A', false)}
+                  </div>
+                </div>
+              ) : (
+                renderInteractiveFormationPitch(effectivePitchMode, true)
+              )}
+            </div>
           </div>
+
+          {/* Compact 1st-Half Stats Summary Strip at Halftime (matching Halftime Pitch Stage) */}
+          {matchPhaseUi === 'halftime' && matchStats && (
+            <div className="shrink-0 bg-[#082414]/95 border-t border-white/12 px-2.5 py-1.5 mland:px-2 mland:py-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] mland:text-[8.5px] text-white/85 tabular">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-[#fde047]">📊 สรุปครึ่งแรก (45&apos;)</span>
+                {onToggleStatMode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      onToggleStatMode();
+                    }}
+                    className="px-1.5 py-[1px] rounded bg-white/10 hover:bg-white/20 text-[9.5px] mland:text-[8px] font-bold text-white cursor-pointer"
+                  >
+                    {effectiveStatMode === 'rating' ? '⭐ เรตติ้ง' : '⚡ พลัง'}
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                <span>ครองบอล <b className="text-white">{matchStats.possH}% - {100 - matchStats.possH}%</b></span>
+                <span>ยิง <b className="text-white">{matchStats.shotsH} - {matchStats.shotsA}</b></span>
+                <span>เข้ากรอบ <b className="text-white">{matchStats.onTargetH} - {matchStats.onTargetA}</b></span>
+                <span>xG <b className="text-white">{matchStats.xgH.toFixed(2)} - {matchStats.xgA.toFixed(2)}</b></span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -939,14 +1002,17 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             );
           })()}
 
-          {/* Draggable Substitutes Bench */}
-          <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-1.5 mland:space-y-1">
-            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] mland:text-[9.5px]">
-              <span className="font-bold text-[var(--g)] flex items-center gap-1 shrink-0">
-                <span className="tabular font-extrabold">{benchList.length}</span>
-                <span>🪑 ตัวสำรอง</span>
+          {/* Substitutes Bench (Post-Match Lineup Style + Clickable Fitness Recommendation Button) */}
+          <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
+            {/* Top Bar: Title + Auto-Sub Toggle */}
+            <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-1.5 text-[11px] mland:text-[9.5px]">
+              <span className="font-extrabold text-[var(--ink)] flex items-center gap-1.5 min-w-0 truncate">
+                <span>👥 รายชื่อตัวสำรอง</span>
+                <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular">
+                  ({benchList.length} คน)
+                </span>
               </span>
-              <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              <div className="flex items-center gap-1.5 shrink-0">
                 {onToggleAutoSub && (
                   <button
                     type="button"
@@ -955,7 +1021,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                       onToggleAutoSub();
                     }}
                     title="ออโต้ปรับตำแหน่งระหว่างเกม & เปลี่ยนตัวอัตโนมัติ (สลับตำแหน่งให้ตรงบทบาทและส่งตัวฟิต/ดาวรุ่งลง)"
-                    className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10px] mland:text-[8.5px] font-extrabold border cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+                    className={`px-2 py-0.5 mland:px-1.5 rounded-lg text-[10px] mland:text-[8.5px] font-extrabold border cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
                       autoSubEnabled
                         ? 'bg-emerald-500/18 border-emerald-500 text-emerald-700 dark:text-emerald-300'
                         : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
@@ -964,60 +1030,69 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                     {autoSubEnabled ? '🤖 ออโต้: เปิด' : '🤖 ออโต้: ปิด'}
                   </button>
                 )}
-                {subsUsed.length < 5 && smartAutoSub ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const rep = onAutoSubstitute(smartAutoSub.outName);
-                      if (rep) setSubPickOut(null);
-                    }}
-                    title={`เปลี่ยนตัวอัตโนมัติ: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName}`}
-                    className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer hover:brightness-110 shadow-xs whitespace-nowrap shrink-0"
-                  >
-                    ⚡ เปลี่ยนทันที
-                  </button>
-                ) : (
-                  <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold truncate">
-                    {subsUsed.length >= 5 ? 'ใช้โควต้าเปลี่ยนตัวครบ 5 คนแล้ว' : 'ไม่มีตัวสำรองที่พร้อมลงสนาม'}
-                  </span>
-                )}
               </div>
             </div>
 
-            {subsUsed.length < 5 && smartAutoSub && (
-              <div className="px-2 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px]">
-                <div className="min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                  <span className="font-extrabold text-[var(--ink)] shrink-0">
-                    {smartAutoSub.isExplicitPick ? 'ที่เลือก:' : smartAutoSub.isInjured ? 'บาดเจ็บ:' : 'แนะนำ:'}
+            {/* Interactive Fitness / Substitution Recommendation Button */}
+            {subsUsed.length < 5 && smartAutoSub ? (
+              <div className="px-2 py-1.5 mland:px-1.5 mland:py-1 bg-[var(--surface-2)]/40 border-b border-[var(--line)] flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rep = onAutoSubstitute(smartAutoSub.outName);
+                    if (rep) setSubPickOut(null);
+                  }}
+                  title={`กดเพื่อเปลี่ยนตัวตามคำแนะนำ: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName}`}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] hover:brightness-110 active:scale-[0.99] text-white shadow-xs transition-all cursor-pointer flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px]"
+                >
+                  <div className="min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left">
+                    <span className="font-black shrink-0">
+                      {smartAutoSub.isExplicitPick ? '⚡ เปลี่ยนที่เลือก:' : smartAutoSub.isInjured ? '🩺 แนะนำเปลี่ยนเจ็บ:' : '⚡ แนะนำความฟิต:'}
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-black/25 font-bold">
+                      <StatIconBadge kind="subOut" size="xs" />
+                      <span>{smartAutoSub.outShort} ({smartAutoSub.outFit}%)</span>
+                    </span>
+                    <span className="opacity-85 font-bold">→</span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-white/20 font-extrabold">
+                      <StatIconBadge kind="subIn" size="xs" />
+                      <span>{smartAutoSub.inPlayer.n.split(' ')[0]} ({smartAutoSub.inPlayer.ro} · {smartAutoSub.inPlayer.ov})</span>
+                    </span>
+                  </div>
+                  <span className="px-2 py-0.5 rounded-md bg-white text-[var(--g)] font-black text-[9.5px] mland:text-[8px] shrink-0 whitespace-nowrap shadow-2xs">
+                    เปลี่ยนเลย
                   </span>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-rose-500/10 border border-rose-500/25 text-[var(--red)] font-bold">
-                    <StatIconBadge kind="subOut" size="xs" />
-                    <span>ออก {smartAutoSub.outShort} ({smartAutoSub.outFit}%)</span>
-                    {smartAutoSub.isInjured && <StatIconBadge kind="injury" size="xs" />}
-                  </span>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-emerald-500/10 border border-emerald-500/25 text-[var(--g)] font-bold">
-                    <StatIconBadge kind="subIn" size="xs" />
-                    <span>เข้า {smartAutoSub.inPlayer.n.split(' ')[0]} ({smartAutoSub.inPlayer.ro} · {smartAutoSub.inPlayer.ov})</span>
-                  </span>
-                </div>
-                {smartAutoSub.isExplicitPick ? (
+                </button>
+                {smartAutoSub.isExplicitPick && (
                   <button
                     type="button"
                     onClick={() => setSubPickOut(null)}
-                    className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 whitespace-nowrap"
+                    title="ยกเลิกการเลือกตัวผู้เล่น"
+                    aria-label="ยกเลิกการเลือก"
+                    className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 whitespace-nowrap"
                   >
                     ✕ ยกเลิก
                   </button>
-                ) : (
-                  <span className="text-[9px] mland:text-[8px] text-[var(--mut)] shrink-0 hidden sm:inline whitespace-nowrap">หรือลากเปลี่ยนเอง</span>
                 )}
               </div>
+            ) : (
+              <div className="px-2.5 py-1 mland:px-2 bg-[var(--surface-2)]/35 border-b border-[var(--line)] text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">
+                {subsUsed.length >= 5 ? 'ใช้โควต้าเปลี่ยนตัวครบ 5 คนแล้ว' : 'ไม่มีตัวสำรองที่พร้อมลงสนาม'}
+              </div>
             )}
+
+            {/* Post-Match Style Sticky Section Header */}
+            <div className="px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+              <span>ตัวสำรอง</span>
+              <span className="tabular text-[var(--mut)]">
+                เปลี่ยนแล้ว {mySubsList.length}/5 · คงเหลือ {benchList.length}
+              </span>
+            </div>
 
             {benchList.length === 0 ? (
               <div className="py-3 text-center text-[11px] text-[var(--mut)]">ไม่มีตัวสำรองที่พร้อมลงสนาม</div>
             ) : (
-              <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden divide-y divide-[var(--line)]/50">
+              <div className="divide-y divide-[var(--line)]/50">
                 {benchList.map((pl) => {
                   const f = Math.round(pl.fit ?? 100);
                   const no = getShirtNo(meTeamOrig, pl);
@@ -1028,9 +1103,10 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   const canQuickSub = subsUsed.length < 5 && Boolean(selectedPitchOut);
                   const meKitColor = pl.pos === 'GK' ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? homeKit : awayKit);
                   const meTrimColor = pl.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
+                  const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
                   const rowCols = canQuickSub
-                    ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_48px_24px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_22px_auto]'
-                    : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_48px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_24px]';
+                    ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_30px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_26px_auto]'
+                    : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_34px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_28px]';
 
                   return (
                     <div
@@ -1054,12 +1130,15 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                           : isDraggingThis
                             ? 'opacity-40 bg-[var(--surface-2)]'
                             : isAutoRecommended
-                              ? 'bg-[var(--g-soft)]/45 hover:bg-[var(--g-soft)]/65'
-                              : compatPen === 0
-                                ? 'bg-emerald-500/[0.04] hover:bg-emerald-500/[0.09]'
-                                : 'hover:bg-[var(--surface-2)]/65'
+                              ? 'bg-[var(--g-soft)]/55 hover:bg-[var(--g-soft)]/75'
+                              : isMePlayer
+                                ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                                : compatPen === 0
+                                  ? 'bg-emerald-500/[0.04] hover:bg-emerald-500/[0.09]'
+                                  : 'hover:bg-[var(--surface-2)]/65'
                       } ${subsUsed.length < 5 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-75'}`}
                     >
+                      {/* 1. รูป */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={
@@ -1080,6 +1159,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         />
                       </div>
 
+                      {/* 2. ตำแหน่ง */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
@@ -1088,6 +1168,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         <PositionBadge role={pl.ro} size="2xs" />
                       </div>
 
+                      {/* 3. เบอร์ */}
                       <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
@@ -1096,10 +1177,20 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         #{no}
                       </div>
 
+                      {/* 4. ชื่อ */}
                       <div className="flex items-center justify-start gap-1 min-w-0">
                         <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">{pl.n}</span>
                         {meTeamOrig.cap === pl.n && (
                           <CaptainBadge team={meTeamOrig} state={state} size="xs" className="shrink-0" />
+                        )}
+                        {isMePlayer && (
+                          <span
+                            title="ตัวคุณ"
+                            aria-label="ตัวคุณ"
+                            className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8px] font-black shrink-0"
+                          >
+                            ★
+                          </span>
                         )}
                         {(pl.hg || pl.customCreated) && (
                           <span title="เด็กปั้นสโมสร" className="text-[10px] mland:text-[8.5px] shrink-0">🌱</span>
@@ -1111,14 +1202,14 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         )}
                       </div>
 
-                      <div className="flex items-center justify-start">
-                        <StaminaBar value={f} variant="compact" restThreshold={subAlertFitTh} className="w-full" />
+                      {/* 5. ความฟิต */}
+                      <div className="flex items-center justify-start min-w-0">
+                        <StaminaBar value={f} variant="compact" showStatusLabel restThreshold={subAlertFitTh} className="w-full" />
                       </div>
 
+                      {/* 6. พลัง */}
                       <div className="flex items-center justify-start">
-                        <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(pl.ov)}`}>
-                          {pl.ov}
-                        </span>
+                        <OvrBadge ov={pl.ov} size="2xs" />
                       </div>
 
                       {canQuickSub && (
@@ -1143,7 +1234,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             )}
 
             {mySubsList.length > 0 && (
-              <div className="pt-1.5 border-t border-[var(--line)] space-y-1 text-[10px] mland:text-[8.5px]">
+              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/40 border-t border-[var(--line)] space-y-1 text-[10px] mland:text-[8.5px]">
                 <div className="font-bold text-[var(--mut)] flex items-center justify-between">
                   <span>🔄 เปลี่ยนตัวแล้ว</span>
                   <span className="tabular font-extrabold">{mySubsList.length}/5</span>

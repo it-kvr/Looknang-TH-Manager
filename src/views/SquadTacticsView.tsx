@@ -4,7 +4,6 @@ import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio, autoAssignTeamRoles, scoreCaptainCandidate, scoreSetPieceCandidate, teamKits, pickGK } from '../engine/playerCore';
-import { ovColor, ovTextColorClass } from '../engine/missions';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from '../modals/MatchSharedComponents';
@@ -16,6 +15,7 @@ import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/Sq
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
@@ -669,9 +669,7 @@ export const SquadTacticsView: React.FC<{
         </div>
 
         <div className="flex items-center justify-start">
-          <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(q.ov)}`}>
-            {q.ov}
-          </span>
+          <OvrBadge ov={q.ov} size="2xs" />
         </div>
       </div>
     );
@@ -1951,9 +1949,7 @@ export const SquadTacticsView: React.FC<{
                           </div>
 
                           <div className="flex items-center justify-center gap-0.5">
-                            <span className="px-1.5 mland:px-1 py-0.5 rounded-lg text-white text-[11px] mland:text-[9.5px] font-bold tabular" style={{ background: ovColor(q.ov) }}>
-                              {q.ov}
-                            </span>
+                            <OvrBadge ov={q.ov} size="sm" />
                             <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                           </div>
 

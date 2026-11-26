@@ -11,6 +11,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { OvrBadge } from '../components/OvrBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -437,8 +438,8 @@ export const LeagueView: React.FC<{
           tone: p.en < 52 ? 'urg' : 'warn',
           urgent: true,
           icon: '😴',
-          tag: 'พลังกาย',
-          title: `พลังกายเหลือ ${p.en}% — แนะนำพักผ่อน`,
+          tag: 'ความฟิต',
+          title: `ความฟิตเหลือ ${p.en}% — แนะนำพักผ่อน`,
           detail: 'ต่ำกว่า 58% โค้ชอาจดรอปเป็นสำรอง',
           actionLabel: 'ตั้งพักผ่อน',
           onAction: () => {
@@ -812,7 +813,7 @@ export const LeagueView: React.FC<{
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="px-2 py-0.5 rounded-lg text-white text-[11px] mland:text-[10px] font-bold tabular" style={{ background: ovColor(st.ovSq) }}>{st.ovSq}</span>
+                  <OvrBadge ov={st.ovSq} size="xs" />
                   {!isMe && (
                     <span className={`text-[10.5px] mland:text-[9.5px] font-bold tabular ${df > 0 ? 'text-[var(--red)]' : df < 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                       {df > 0 ? `+${df}` : df}
@@ -986,7 +987,14 @@ export const LeagueView: React.FC<{
       }
     ];
 
-    const board = (ic: React.ReactNode, title: string, valFn: (q: Player) => number, fmt: (q: Player) => React.ReactNode, filterFn?: (q: Player) => boolean) => {
+    const board = (
+      ic: React.ReactNode,
+      title: string,
+      valFn: (q: Player) => number,
+      fmt: (q: Player) => React.ReactNode,
+      filterFn?: (q: Player) => boolean,
+      renderBadge?: (q: Player) => React.ReactNode
+    ) => {
       const list = ps.filter((x) => (!filterFn || filterFn(x.q)) && valFn(x.q) > 0).sort((a, b) => valFn(b.q) - valFn(a.q) || b.q.ov - a.q.ov).slice(0, 5);
       return (
         <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
@@ -1015,7 +1023,11 @@ export const LeagueView: React.FC<{
                         {isMine && <MyTeamBadge size="2xs" />}
                       </div>
                     </div>
-                    <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center shrink-0">{fmt(x.q)}</span>
+                    {renderBadge ? (
+                      renderBadge(x.q)
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center shrink-0">{fmt(x.q)}</span>
+                    )}
                   </button>
                 );
               })}
@@ -1216,7 +1228,7 @@ export const LeagueView: React.FC<{
               (q) => (q.sra || 0) >= 1
             )}
             {board('💎', 'ค่าตัวสูงสุด', vlu, (q) => fmtMoneyNum(vlu(q)))}
-            {board('⚡', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`)}
+            {board('⚡', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`, undefined, (q) => <OvrBadge ov={q.ov} size="sm" />)}
           </div>
         </div>
       </div>
@@ -1520,8 +1532,8 @@ export const ScheduleCalendarView: React.FC<{
       : `นัดที่ ${(months[monthIdx]?.start ?? 0) + 1}–${Math.min(totalMd, months[monthIdx]?.end ?? totalMd)}`;
 
   const milestoneSchedule = [
-    { icon: '🟢', name: 'ตลาดซื้อขายรอบ 1', rounds: 'นัด 1–6' },
-    { icon: '🟢', name: 'ตลาดซื้อขายรอบ 2', rounds: 'นัด 15–20' },
+    { icon: '✍🏻', name: 'ตลาดซื้อขายรอบ 1', rounds: 'นัด 1–6' },
+    { icon: '✍🏻', name: 'ตลาดซื้อขายรอบ 2', rounds: 'นัด 15–20' },
     { icon: EXTRA_CUP_META.sc.icon, name: EXTRA_CUP_META.sc.name, rounds: 'นัด 2' },
     { icon: '🌏', name: 'บอลถ้วยทวีป', rounds: 'นัด 3, 10, 17, 24' },
     { icon: EXTRA_CUP_META.lc.icon, name: EXTRA_CUP_META.lc.name, rounds: 'นัด 4, 11, 18, 25' },

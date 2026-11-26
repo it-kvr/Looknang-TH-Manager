@@ -168,7 +168,6 @@ export const PlayerCareerView: React.FC<{
           careerProfile={p}
           isMePlayer
           isMyTeam
-          starterSlot={mySlot}
           onUpdateState={onUpdateState}
           onToast={onToast}
           onOpenSeasonStats={onOpenSeasonStats}
@@ -217,7 +216,7 @@ export const PlayerCareerView: React.FC<{
                   <StaminaBar
                     value={p.en}
                     variant="inline"
-                    label="พลังกาย"
+                    label="ความฟิต"
                     barWidthClass="w-10 mland:w-8"
                     className="px-2 py-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]"
                   />
@@ -283,8 +282,8 @@ export const PlayerCareerView: React.FC<{
               <div className="shrink-0 pt-1.5 border-t border-[var(--line)]/60 flex flex-wrap items-center justify-between gap-2 text-[11px] mland:text-[9px]">
                 <span className="text-[var(--mut)]">
                   {(p.en ?? 100) < 70
-                    ? '😴 พลังกายเริ่มต่ำ แนะนำเลือก "พักผ่อน" หรือ "ซ้อมเบา" เพื่อเลี่ยงอาการบาดเจ็บ'
-                    : '💪 พลังกายพร้อมเต็มที่ เหมาะสำหรับเร่งซ้อมพัฒนาค่าพลังหรือดูวิดีโอก่อนแข่ง'}
+                    ? '😴 ความฟิตเริ่มต่ำ แนะนำเลือก "พักผ่อน" หรือ "ซ้อมเบา" เพื่อเลี่ยงอาการบาดเจ็บ'
+                    : '💪 ความฟิตพร้อมเต็มที่ เหมาะสำหรับเร่งซ้อมพัฒนาค่าพลังหรือดูวิดีโอก่อนแข่ง'}
                 </span>
                 {p.last && (
                   <span className="px-2 py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-bold">
@@ -544,7 +543,7 @@ export const PlayerCareerView: React.FC<{
                                 ⚡ อาวุธประจำตัวปัจจุบัน: <span className="text-[#8a5b00] dark:text-[var(--lamp)]">{SIGL[activeSig] || activeSig}</span> (+8 ค่าพลังพื้นฐาน)
                               </div>
                               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular">
-                                โบนัสซ้อมพิเศษสะสม: <b className="text-[var(--g)]">+{sigBonus}/12</b> · ติวเฉพาะทางเพิ่ม +1 ถาวร (ใช้ 4 ★ และพลังกาย 6%)
+                                โบนัสซ้อมพิเศษสะสม: <b className="text-[var(--g)]">+{sigBonus}/12</b> · ติวเฉพาะทางเพิ่ม +1 ถาวร (ใช้ 4 ★ และความฟิต 6%)
                               </div>
                             </div>
                             <button

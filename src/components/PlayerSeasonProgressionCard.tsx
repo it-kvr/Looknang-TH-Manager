@@ -14,7 +14,7 @@ const CHART_SERIES_META: Record<ChartMetricKey, { label: string; color: string; 
   def: { label: 'ป้องกัน', color: '#8b5cf6', width: 1.65 },
   gk: { label: 'ประตู', color: '#f97316', width: 1.65 },
   phy: { label: 'ร่างกาย', color: '#06b6d4', width: 1.65 },
-  fit: { label: 'ความฟิต', color: '#ec4899', width: 1.65 },
+  fit: { label: 'พลังงาน', color: '#ec4899', width: 1.65 },
   tal: { label: 'พรสวรรค์', color: '#f59e0b', width: 1.65 }
 };
 

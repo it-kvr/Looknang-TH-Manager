@@ -15,7 +15,6 @@ export interface PlayerCardOverviewBoxProps {
   isMePlayer?: boolean;
   isMyTeam?: boolean;
   isRetired?: boolean;
-  starterSlot?: string | null;
   onUpdateState?: (updater: (draft: GameState) => void) => void;
   onToast?: (msg: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
@@ -29,7 +28,6 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
   isMePlayer = false,
   isMyTeam = false,
   isRetired = false,
-  starterSlot = null,
   onUpdateState,
   onToast,
   onOpenSeasonStats
@@ -54,17 +52,13 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
         ? `เจ็บพัก ${injCount} นัด`
         : fitVal < 65
           ? '⚠️ ร่างกายอ่อนล้า'
-          : starterSlot
-            ? `⭐ ตัวจริง (${starterSlot})`
-            : careerProfile
-              ? '🪑 ตัวสำรอง'
-              : '✅ พร้อมลงสนาม';
+          : '✅ พร้อมลงสนาม';
 
   const statusToneCls = isRetired
     ? 'bg-amber-500/10 border-amber-500/35'
     : injCount > 0 || susCount > 0
       ? 'bg-[var(--red-soft)] border-[var(--red)]/40'
-      : fitVal < 65 || (careerProfile && !starterSlot)
+      : fitVal < 65
         ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'
         : 'bg-[var(--g-soft)] border-[var(--g)]/35';
 
@@ -161,10 +155,7 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
         <div className="flex items-center justify-between font-bold gap-1">
           <span className="truncate tabular inline-flex items-center gap-1" style={{ color: fitCol }}>
             {isInjuredStatus && <StatIconBadge kind="injury" size="xs" />}
-            <span className="truncate">
-              {statusText}
-              {!isRetired && ` · ⚡${fitVal}%`}
-            </span>
+            <span className="truncate">{statusText}</span>
           </span>
         </div>
 
@@ -184,7 +175,7 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
               onToast?.(
                 injCount - 1 <= 0
                   ? '💆 กายภาพส่วนตัวสำเร็จ! คุณหายเจ็บพร้อมลงสนามแล้ว'
-                  : `💆 กายภาพส่วนตัวสำเร็จ! ลดวันพักเหลือ ${injCount - 1} นัด (+12% พลังกาย)`
+                  : `💆 กายภาพส่วนตัวสำเร็จ! ลดวันพักเหลือ ${injCount - 1} นัด (+12% ความฟิต)`
               );
             }}
             className="btn btn-xs btn-primary w-full"

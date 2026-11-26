@@ -4131,7 +4131,7 @@ export const DILEMMAS: DilemmaTemplate[] = [
     options: [
       {
         label: 'ไปร่วมกิจกรรมอย่างเต็มใจ',
-        hint: 'ชื่อเสียง +5 · แฟนบอลเพิ่มขึ้น · พลังกาย -6%',
+        hint: 'ชื่อเสียง +5 · แฟนบอลเพิ่มขึ้น · ความฟิต -6%',
         apply: (s) => {
           if (s.p) {
             s.p.rep = (s.p.rep || 0) + 5;

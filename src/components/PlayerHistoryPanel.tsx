@@ -3,8 +3,8 @@ import type { GameState, Player, Team } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getPlayerCareerSummary } from '../engine/history';
-import { ovColor } from '../engine/missions';
 import { StatIconBadge } from './StatIconBadge';
+import { OvrBadge } from './OvrBadge';
 
 interface PlayerHistoryPanelProps {
   player: Player;
@@ -250,12 +250,7 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
                         </div>
                       </td>
                       <td className="py-1.5 px-1.5 text-center tabular">
-                        <span
-                          className="inline-block min-w-[24px] px-1 py-0.5 rounded text-white text-[10.5px] mland:text-[9px] font-bold leading-none"
-                          style={{ background: ovColor(r.ov) }}
-                        >
-                          {r.ov}
-                        </span>
+                        <OvrBadge ov={r.ov} size="xs" />
                       </td>
                       <td className="py-1.5 px-1.5 text-center tabular font-semibold">{rowSp}</td>
                       <td className="py-1.5 px-1.5 text-center tabular font-bold">{rowSg}</td>

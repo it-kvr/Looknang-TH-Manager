@@ -1714,7 +1714,7 @@ export const getMissionTrainingHint = (def: PersonalMissionDef): string => {
     case 'braces':
       return 'ซ้อมโปรแกรมเกมรุก · ดันแผนบุก/เพรสซิ่งสูง';
     case 'clutchActions':
-      return 'ลงเล่นครบ 90 นาทีในเกมสูสี · เก็บพลังกายให้พร้อมช่วงท้ายเกม';
+      return 'ลงเล่นครบ 90 นาทีในเกมสูสี · เก็บความฟิตให้พร้อมช่วงท้ายเกม';
     case 'crossAssists':
     case 'assists':
     case 'keyPasses':

@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import type { GameState, Player, Team } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { ensureCon, logFin, vlu, wagOf } from '../engine/playerCore';
-import { ovColor } from '../engine/missions';
 import {
   getLeagueTransferContext,
   quickSellSquadPlayers,
@@ -11,6 +10,7 @@ import {
 } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
+import { OvrBadge } from '../components/OvrBadge';
 import { SFX } from '../utils/audioTheme';
 
 export const SquadRenewModal: React.FC<{
@@ -59,12 +59,7 @@ export const SquadRenewModal: React.FC<{
               เหลือสัญญา <b>{con.yr} ปี</b> · ค่าเหนื่อยเดิม {fmtMoneyNum(con.wg)}/นัด
             </div>
           </div>
-          <span
-            className="px-2 py-0.5 rounded-lg text-white font-bold text-xs tabular shrink-0"
-            style={{ background: ovColor(player.ov) }}
-          >
-            {player.ov}
-          </span>
+          <OvrBadge ov={player.ov} size="md" />
           <button
             type="button"
             onClick={onClose}
@@ -324,12 +319,7 @@ export const SquadSellModal: React.FC<{
                           อายุ {q.age} · ประเมิน {fmtMoney(val)}
                         </div>
                       </div>
-                      <span
-                        className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white tabular"
-                        style={{ background: ovColor(q.ov) }}
-                      >
-                        {q.ov}
-                      </span>
+                      <OvrBadge ov={q.ov} size="xs" />
                       <span className="text-xs font-bold text-emerald-400 tabular">+{fmtMoney(quickVal)}</span>
                     </div>
                   );
@@ -489,12 +479,7 @@ export const SquadReleaseModal: React.FC<{
                         เหลือ {con.yr} ปี · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
                       </div>
                     </div>
-                    <span
-                      className="px-1.5 py-0.5 rounded text-[10px] font-bold text-white tabular"
-                      style={{ background: ovColor(q.ov) }}
-                    >
-                      {q.ov}
-                    </span>
+                    <OvrBadge ov={q.ov} size="xs" />
                     <span className={`text-xs font-bold tabular ${relCost > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                       {relCost > 0 ? `-${fmtMoney(relCost)}` : 'ฟรี'}
                     </span>

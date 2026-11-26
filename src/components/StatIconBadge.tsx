@@ -127,7 +127,6 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
   }
 
   if (kind === 'cleansheet') {
-    const iconW = Math.round(px * 1.18);
     return (
       <span
         title={title || (n > 1 ? `คลีนชีต ${n} นัด` : 'คลีนชีต')}
@@ -135,38 +134,7 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
         {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
-        <svg viewBox="0 0 24 20" width={iconW} height={px} aria-hidden="true" className="shrink-0">
-          {/* Left Goalkeeper Glove */}
-          <g transform="translate(0.5 0.5) rotate(-8 6.5 11)">
-            <path
-              d="M3.2 14.2 V9.4 C3.2 8.7 4 8.6 4.2 9.3 V6.5 C4.2 5.7 5.2 5.7 5.4 6.5 V5.2 C5.4 4.3 6.5 4.3 6.7 5.2 V6.2 C7 5.5 8 5.6 8.1 6.4 V9.4 L9.2 8.3 C9.8 7.8 10.6 8.5 10.1 9.2 L8.3 12.6 C7.9 13.5 7.3 14.2 6.5 14.2 Z"
-              fill="#14b8a6"
-              stroke="#064e3b"
-              strokeWidth="1.05"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M4.2 13.2 V9.7 C4.2 9.1 4.8 9.1 4.9 9.6 V6.9 C4.9 6.4 5.5 6.4 5.6 6.9 V5.8 C5.6 5.2 6.3 5.2 6.4 5.8 V6.8 C6.7 6.3 7.4 6.4 7.5 6.9 V10.1 L8.8 9 C9.1 8.8 9.5 9.1 9.2 9.5 L7.6 12.4 C7.3 13 6.9 13.3 6.3 13.3 Z"
-              fill="#ffffff"
-            />
-            <rect x="3.2" y="14.1" width="3.7" height="2.4" rx="0.8" fill="#0f766e" stroke="#064e3b" strokeWidth="0.95" />
-          </g>
-          {/* Right Goalkeeper Glove */}
-          <g transform="translate(23.5 0.5) scale(-1 1) rotate(-8 6.5 11)">
-            <path
-              d="M3.2 14.2 V9.4 C3.2 8.7 4 8.6 4.2 9.3 V6.5 C4.2 5.7 5.2 5.7 5.4 6.5 V5.2 C5.4 4.3 6.5 4.3 6.7 5.2 V6.2 C7 5.5 8 5.6 8.1 6.4 V9.4 L9.2 8.3 C9.8 7.8 10.6 8.5 10.1 9.2 L8.3 12.6 C7.9 13.5 7.3 14.2 6.5 14.2 Z"
-              fill="#14b8a6"
-              stroke="#064e3b"
-              strokeWidth="1.05"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M4.2 13.2 V9.7 C4.2 9.1 4.8 9.1 4.9 9.6 V6.9 C4.9 6.4 5.5 6.4 5.6 6.9 V5.8 C5.6 5.2 6.3 5.2 6.4 5.8 V6.8 C6.7 6.3 7.4 6.4 7.5 6.9 V10.1 L8.8 9 C9.1 8.8 9.5 9.1 9.2 9.5 L7.6 12.4 C7.3 13 6.9 13.3 6.3 13.3 Z"
-              fill="#ffffff"
-            />
-            <rect x="3.2" y="14.1" width="3.7" height="2.4" rx="0.8" fill="#0f766e" stroke="#064e3b" strokeWidth="0.95" />
-          </g>
-        </svg>
+        <span aria-hidden="true" className="leading-none inline-block" style={{ fontSize: Math.round(px * 0.94) }}>🧤</span>
       </span>
     );
   }

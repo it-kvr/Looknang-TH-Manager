@@ -3,9 +3,9 @@ import type { GameState, SeasonArchiveRecord, SeasonPlayerStatRecord } from '../
 import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest } from '../components/SvgVisuals';
-import { ovColor } from '../engine/missions';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 type SortKey = 'avgRating' | 'sg' | 'sa' | 'sp' | 'motm' | 'ov';
 
@@ -491,12 +491,7 @@ export const SeasonStatsModal: React.FC<{
                           </div>
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center">
-                          <span
-                            className="inline-block px-1.5 py-0.5 rounded text-white text-[10px] mland:text-[8.5px] font-bold tabular"
-                            style={{ background: ovColor(pl.ov) }}
-                          >
-                            {pl.ov}
-                          </span>
+                          <OvrBadge ov={pl.ov} size="xs" />
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center font-semibold tabular">{pl.sp}</td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center font-bold tabular">

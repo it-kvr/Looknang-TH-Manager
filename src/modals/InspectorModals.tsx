@@ -5,7 +5,7 @@ import { fmtMoney } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
-import { ovColor, ovTextColorClass, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
+import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
@@ -25,6 +25,7 @@ import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -305,7 +306,6 @@ export const PlayerInspectorModal: React.FC<{
                 isMePlayer={isMePlayer}
                 isMyTeam={isMyTeam}
                 isRetired={isRetired}
-                starterSlot={pitchSlotSp}
                 onUpdateState={onUpdateState}
                 onToast={onToast}
               />
@@ -820,9 +820,7 @@ export const TeamInspectorModal: React.FC<{
                           </div>
 
                           <div className="flex items-center justify-start">
-                            <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(q.ov)}`}>
-                              {q.ov}
-                            </span>
+                            <OvrBadge ov={q.ov} size="2xs" />
                           </div>
                         </button>
                       );

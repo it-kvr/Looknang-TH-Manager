@@ -1441,11 +1441,11 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
         ['แข็งแกร่ง', d.str, 'str'],
         ['ความอึด', d.sta, 'sta'],
         ['ความคล่องตัว', d.agi, 'agi'],
-        ['พลังกระโดด', d.jmp, 'jmp']
+        ['กระโดดสูง', d.jmp, 'jmp']
       ]
     ],
     [
-      '❤️ ความฟิต',
+      '🔋 พลังงาน',
       [
         ['ฟิตปัจจุบัน', f],
         ['ทนต่อบาดเจ็บ', d.tol, 'tol'],
@@ -1505,7 +1505,7 @@ const STAT_GROUP_META_BY_TITLE: Record<string, { key: StatGroupKey; shortLabel: 
   '🛡️ ป้องกัน': { key: 'def', shortLabel: 'ป้องกัน' },
   '🧤 ผู้รักษาประตู': { key: 'gk', shortLabel: 'ประตู' },
   '💪 ร่างกาย': { key: 'phy', shortLabel: 'ร่างกาย' },
-  '❤️ ความฟิต': { key: 'fit', shortLabel: 'ความฟิต' },
+  '🔋 พลังงาน': { key: 'fit', shortLabel: 'พลังงาน' },
   '🌟 พรสวรรค์': { key: 'tal', shortLabel: 'พรสวรรค์' }
 };
 
@@ -2254,7 +2254,7 @@ export function trainCareerSignatureDrill(d: GameState): { ok: boolean; msg: str
   if (curBonus >= 12) return { ok: false, msg: `ติวอาวุธ "${SIGL[sigKey] || sigKey}" เต็มขีดจำกัดการซ้อมพิเศษ (+12) แล้ว` };
   const cost = 4;
   if ((d.p.rep ?? 10) < cost) return { ok: false, msg: `ต้องใช้ชื่อเสียง ${cost} ★` };
-  if ((d.p.en ?? 100) < 25) return { ok: false, msg: 'พลังกายต่ำเกินไป พักฟื้นก่อนติวอาวุธพิเศษ' };
+  if ((d.p.en ?? 100) < 25) return { ok: false, msg: 'ความฟิตต่ำเกินไป พักฟื้นก่อนติวอาวุธพิเศษ' };
   d.p.rep = (d.p.rep ?? 10) - cost;
   d.p.en = Math.max(15, (d.p.en ?? 100) - 6);
   d.p.sb = { ...(d.p.sb || {}), [sigKey]: curBonus + 1 };

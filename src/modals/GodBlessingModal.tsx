@@ -2,12 +2,12 @@ import React, { useMemo, useState } from 'react';
 import type { Position, Player, Team, GameState } from '../types/game';
 import { TN, SPN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { ovColor } from '../engine/missions';
 import { getPlayerBio } from '../engine/playerCore';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerBlessingEditor } from '../components/PlayerBlessingEditor';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { PositionBadge } from '../components/PositionBadge';
+import { OvrBadge } from '../components/OvrBadge';
 
 export const GodBlessingModal: React.FC<{
   state: GameState;
@@ -84,7 +84,7 @@ export const GodBlessingModal: React.FC<{
               >
                 <option value={String(state.me)}>⭐ ทีมของเรา · {state.teams[state.me]?.name}</option>
                 <option value="yth">🎓 อคาเดมีเยาวชน ({state.yth.length})</option>
-                <option value="mk">⇄ ตลาดซื้อขาย / ฟรีเอเยนต์ ({state.mk.length})</option>
+                <option value="mk">✍🏻 ตลาดซื้อขาย / ฟรีเอเยนต์ ({state.mk.length})</option>
                 {state.teams
                   .filter((t) => t.id !== state.me)
                   .map((t) => (
@@ -146,9 +146,7 @@ export const GodBlessingModal: React.FC<{
                           {pl.altRoles?.length ? `+${pl.altRoles.slice(0, 2).join(',')} · ` : ''}อายุ {pl.age}
                         </div>
                       </div>
-                      <span className="px-1.5 py-0.5 rounded-md text-white text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(pl.ov) }}>
-                        {pl.ov}
-                      </span>
+                      <OvrBadge ov={pl.ov} size="xs" />
                     </button>
                   );
                 })

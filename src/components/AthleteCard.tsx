@@ -8,6 +8,7 @@ import { PotentialBadge } from './PotentialBadge';
 import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
 import { PositionBadge } from './PositionBadge';
 import { StatIconBadge } from './StatIconBadge';
+import { OvrBadge } from './OvrBadge';
 import {
   CardStudioToggleButton,
   getAthleteCardPalette,
@@ -103,13 +104,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Balanced Single-Row Top Header: OVR | Role · #NO  <->  Potential · Talent */}
       <div className="px-2.5 pt-1.5 pb-1 mland:px-2 mland:pt-1 mland:pb-0.5 flex items-center justify-between gap-1.5 shrink-0 min-w-0">
         <div className="flex items-center gap-1.5 mland:gap-1 leading-none min-w-0">
-          <span
-            className={`text-[18px] sm:text-[19px] mland:text-[14px] font-extrabold font-display tabular leading-none shrink-0 ${
-              isLight ? statTierMeta(ov).textClass : statTierMeta(ov).darkTextClass
-            }`}
-          >
-            {ov}
-          </span>
+          <OvrBadge ov={ov} variant="card" tone={cardTone} />
           <span
             aria-hidden="true"
             className={`w-px h-3 mland:h-2.5 shrink-0 ${isLight ? 'bg-slate-300' : 'bg-white/20'}`}
