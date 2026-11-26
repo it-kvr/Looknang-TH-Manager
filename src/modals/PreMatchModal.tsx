@@ -675,8 +675,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   <span className="font-bold text-[var(--ink)]">XI {homeXiOv}</span>
                 </div>
               </div>
-              <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                <ClubCrest name={homeTeam.name} size={30} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                <ClubCrest name={homeTeam.name} size={44} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
               </div>
             </div>
 
@@ -698,8 +698,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   : 'bg-[var(--surface)]/85 border-[var(--line)]'
               }`}
             >
-              <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
-                <ClubCrest name={awayTeam.name} size={30} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+              <div className="shrink-0 [&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
+                <ClubCrest name={awayTeam.name} size={44} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1 min-w-0">
@@ -874,7 +874,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 {/* Formation Pitch Visual (Full Height & Width with Compact Logo Switcher Inside) */}
                 <div className="p-1.5 sm:p-2 mland:p-1 bg-[#092818] flex items-center justify-center h-[400px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
                   {/* Compact Logo-Only Team & Compare Switcher Inside Pitch */}
-                  <div className="absolute top-2 left-2 z-20 flex items-center gap-0.5 p-0.5 rounded-lg bg-[#05180e]/85 border border-white/20 shadow-lg">
+                  <div className="absolute top-2 left-2 z-20 flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/88 border border-white/25 shadow-lg">
                     <button
                       type="button"
                       onClick={() => {
@@ -884,13 +884,13 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       }}
                       title={homeTeam.name}
                       aria-label={homeTeam.name}
-                      className={`h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center cursor-pointer transition-colors mland:[&>svg]:w-4 mland:[&>svg]:h-4 ${
+                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                         viewMode === 'H'
-                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
-                          : 'opacity-75 hover:opacity-100 hover:bg-white/10'
+                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
                       }`}
                     >
-                      <ClubCrest name={homeTeam.name} size={18} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+                      <ClubCrest name={homeTeam.name} size={32} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
                     </button>
                     <button
                       type="button"
@@ -901,13 +901,13 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       }}
                       title={awayTeam.name}
                       aria-label={awayTeam.name}
-                      className={`h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center cursor-pointer transition-colors mland:[&>svg]:w-4 mland:[&>svg]:h-4 ${
+                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                         viewMode === 'A'
-                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
-                          : 'opacity-75 hover:opacity-100 hover:bg-white/10'
+                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
                       }`}
                     >
-                      <ClubCrest name={awayTeam.name} size={18} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+                      <ClubCrest name={awayTeam.name} size={32} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
                     </button>
                     <button
                       type="button"
@@ -918,9 +918,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       }}
                       title="เทียบ 2 ทีม"
                       aria-label="เทียบ 2 ทีม"
-                      className="h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center text-white/85 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                      className="h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center text-white/90 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                     >
-                      <ArrowLeftRight className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                      <ArrowLeftRight className="w-4.5 h-4.5 sm:w-5 sm:h-5 mland:w-4 mland:h-4" />
                     </button>
                   </div>
 
@@ -1132,25 +1132,6 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                             <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> ≥75% พร้อม
                           </span>
                         </div>
-                      </div>
-                    )}
-
-                    {/* Active Swap Selection Bar */}
-                    {canEditActiveTeam && swapPickName && (
-                      <div className="flex items-center justify-between gap-2 px-2 py-1 mb-1 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/55 text-[10px] mland:text-[8.5px] shrink-0">
-                        <span className="font-bold text-[var(--g)] truncate">
-                          กำลังเลือก <b className="text-[var(--ink)]">{swapPickName.split(' ')[0]}</b> — กดเลือกนักเตะอีกคนเพื่อเปลี่ยนตัวหรือสลับตำแหน่ง
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setSwapPickName(null);
-                          }}
-                          className="px-1.5 py-0.5 rounded border border-[var(--g)]/50 bg-[var(--surface)] text-[var(--ink)] font-bold shrink-0 cursor-pointer"
-                        >
-                          ยกเลิก
-                        </button>
                       </div>
                     )}
 
