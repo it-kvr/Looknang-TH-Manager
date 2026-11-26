@@ -10817,6 +10817,36 @@ export const MatchModal: React.FC<{
           }
         : {})
     }));
+    const playerSaves: Record<string, number> = {};
+    Object.entries(srDone.playerStats).forEach(([name, st]) => {
+      if ((st.saves || 0) > 0) playerSaves[name] = st.saves;
+    });
+    const buildPlayedSlots = (tm: Team, initXi: string[]) => {
+      const slots = getFormationSlots(tm);
+      const map: Record<string, SubRole> = {};
+      initXi.forEach((n, idx) => {
+        const pl = tm.sq.find((q) => q.n === n);
+        if (slots[idx]?.sp) map[n] = slots[idx].sp;
+        else if (pl?.ro) map[n] = pl.ro;
+      });
+      srDone.subs
+        .filter((sb) => sb.t === tm.id)
+        .forEach((sb) => {
+          if (!map[sb.inPlayer]) {
+            const plIn = tm.sq.find((q) => q.n === sb.inPlayer);
+            map[sb.inPlayer] = map[sb.outPlayer] || plIn?.ro || 'CM';
+          }
+        });
+      return map;
+    };
+    const archivedStreamComments: ArchivedStreamComment[] = liveComments.slice(0, 80).map((cm) => ({
+      id: cm.id,
+      m: cm.m,
+      user: cm.user,
+      text: cm.text,
+      kind: cm.kind,
+      ...(cm.donateBaht ? { donateBaht: cm.donateBaht } : {})
+    }));
     SFX.tap();
     onFinish({
       gh: srDone.gh,
@@ -10831,12 +10861,32 @@ export const MatchModal: React.FC<{
       onTargetA: matchStats.onTargetA,
       passesH: matchStats.passesH,
       passesA: matchStats.passesA,
+      cornersH: matchStats.cornersH,
+      cornersA: matchStats.cornersA,
+      foulsH: matchStats.foulsH,
+      foulsA: matchStats.foulsA,
+      offsidesH: matchStats.offsidesH,
+      offsidesA: matchStats.offsidesA,
+      savesH: matchStats.savesH,
+      savesA: matchStats.savesA,
+      ...(Object.keys(playerSaves).length ? { playerSaves } : {}),
       att: matchAttendance.att,
       cap: matchAttendance.cap,
       streamViewers: liveViewersRef.current,
       streamPeakViewers: peakViewersRef.current,
+      ...(archivedStreamComments.length ? { streamComments: archivedStreamComments } : {}),
       pen: penResult ? penResult.winnerHome : undefined,
       penText: penResult?.text,
+      ...(shootoutUi
+        ? {
+            shootout: {
+              hKicks: shootoutUi.hKicks.slice(),
+              aKicks: shootoutUi.aKicks.slice(),
+              hScore: shootoutUi.hScore,
+              aScore: shootoutUi.aScore
+            }
+          }
+        : {}),
       ratings: fullTimeAnalysis.ratings,
       motm: fullTimeAnalysis.motm,
       pf: fullTimeAnalysis.pf,
@@ -10849,7 +10899,21 @@ export const MatchModal: React.FC<{
         [homeId]: initialHomeXi.slice(),
         [awayId]: initialAwayXi.slice()
       },
+      playedSlots: {
+        [homeId]: buildPlayedSlots(liveHome, initialHomeXi),
+        [awayId]: buildPlayedSlots(liveAway, initialAwayXi)
+      },
       injuries: srDone.injuries.slice(),
+      captains: {
+        H: srDone.captainH || liveCaptains.H,
+        A: srDone.captainA || liveCaptains.A
+      },
+      formations: {
+        H: liveHome.form || homeOrig.form || '4-4-2',
+        A: liveAway.form || awayOrig.form || '4-4-2'
+      },
+      matchEnv,
+      timeline: srDone.timeline.slice(),
       playerActions,
       logs: compactLogs,
       ...(srDone.varHistory.length ? { varReplays: srDone.varHistory.slice() } : {})

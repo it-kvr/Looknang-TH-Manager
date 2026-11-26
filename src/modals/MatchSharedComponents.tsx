@@ -9,10 +9,12 @@ import type {
   MatchTimelineItem,
   Player,
   PlayerPerfResult,
+  SubRole,
   Team,
   TeamFacilityMatchModifiers,
   TimelineKind
 } from '../types/game';
+import { LINE } from '../data/thaiFootballData';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { SFX } from '../utils/audioTheme';
 import { useScrollTopOnChange } from '../utils/scrollReset';
@@ -1359,6 +1361,7 @@ export const FullTimeMatchStage: React.FC<{
   awayTrim: string;
   initialHomeXi: string[];
   initialAwayXi: string[];
+  playedSlots?: Record<number, Record<string, SubRole>>;
   captains: { H: string; A: string };
   gh: number;
   ga: number;
@@ -1402,6 +1405,7 @@ export const FullTimeMatchStage: React.FC<{
   awayTrim,
   initialHomeXi,
   initialAwayXi,
+  playedSlots,
   captains,
   gh,
   ga,
@@ -1480,17 +1484,29 @@ export const FullTimeMatchStage: React.FC<{
 
   const pickedInfo = ftPickedPlayer
     ? (() => {
-        const t = homeOrig.sq.find((q) => q.n === ftPickedPlayer) ? homeOrig : awayOrig;
+        const t = homeOrig.sq.find((q) => q.n === ftPickedPlayer)
+          ? homeOrig
+          : awayOrig.sq.find((q) => q.n === ftPickedPlayer)
+            ? awayOrig
+            : fullTimeAnalysis.playedNames[awayId]?.includes(ftPickedPlayer)
+              ? awayOrig
+              : homeOrig;
         const p = t.sq.find((q) => q.n === ftPickedPlayer) || null;
         const no = p ? getShirtNo(t, p) : 0;
         const rt = fullTimeAnalysis.ratings[ftPickedPlayer] ?? 6.5;
         const gl = evs.filter((e) => !e.og && e.t === t.id && e.who === ftPickedPlayer).length;
         const as = evs.filter((e) => !e.og && e.t === t.id && e.as === ftPickedPlayer).length;
+        const slotRole = playedSlots?.[t.id]?.[ftPickedPlayer];
+        const role = p?.ro || slotRole || ((t.id === homeId ? initialHomeXi : initialAwayXi)[0] === ftPickedPlayer ? 'GK' : 'CM');
+        const linePos = p?.pos || LINE[role] || 'MF';
+        const oppGoals = t.id === homeId ? ga : gh;
+        const cleanSheet = oppGoals === 0 && (linePos === 'GK' || linePos === 'DF');
+        const saves = playerSavesMap[ftPickedPlayer] || 0;
         const subIn = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.inPlayer === ftPickedPlayer);
         const subOut = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.outPlayer === ftPickedPlayer);
         const cards = fullTimeAnalysis.cards.filter((c) => c.t === t.id && c.who === ftPickedPlayer);
         const isMotm = fullTimeAnalysis.motm === ftPickedPlayer;
-        return { name: ftPickedPlayer, team: t, pl: p, role: p?.ro || 'CM', no, rt, gl, as, subIn, subOut, cards, isMotm };
+        return { name: ftPickedPlayer, team: t, pl: p, role, no, rt, gl, as, cleanSheet, saves, subIn, subOut, cards, isMotm };
       })()
     : null;
 
@@ -1537,6 +1553,7 @@ export const FullTimeMatchStage: React.FC<{
       side: 'H' | 'A';
       team: Team;
       pl: Player | null;
+      role: SubRole | null;
       name: string;
       no: number | null;
       rt: number | null;
@@ -1573,11 +1590,14 @@ export const FullTimeMatchStage: React.FC<{
 
         const buildRow = (name: string, pl: Player | null, isStarter: boolean, didPlay: boolean, xiIndex: number): FtPlayerRow => {
           const no = pl ? getShirtNo(team, pl) : null;
+          const slotRole = playedSlots?.[team.id]?.[name];
+          const role = pl?.ro || slotRole || (isStarter && xiIndex === 0 ? 'GK' : null);
+          const linePos = pl?.pos || (role ? LINE[role] : undefined);
           const rt = didPlay ? (fullTimeAnalysis.ratings[name] ?? 6.5) : null;
           const goals = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.who === name).length : 0;
           const ownGoals = didPlay ? evs.filter((e) => e.og && e.t !== team.id && e.who === name).length : 0;
           const assists = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.as === name).length : 0;
-          const cleanSheet = didPlay && oppGoals === 0 && Boolean(pl && (pl.pos === 'GK' || pl.pos === 'DF'));
+          const cleanSheet = didPlay && oppGoals === 0 && Boolean(linePos === 'GK' || linePos === 'DF');
           const saves = didPlay ? (playerSavesMap[name] || 0) : 0;
           const pCards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name) : [];
           const yellowCards = pCards.filter((c) => c.type === 'Y').length;
@@ -1593,6 +1613,7 @@ export const FullTimeMatchStage: React.FC<{
             side,
             team,
             pl,
+            role,
             name,
             no,
             rt,
@@ -1660,20 +1681,27 @@ export const FullTimeMatchStage: React.FC<{
         ? homeOrig
         : awayOrig.sq.some((q) => q.n === motmName)
           ? awayOrig
-          : null
+          : fullTimeAnalysis.playedNames[awayId]?.includes(motmName)
+            ? awayOrig
+            : fullTimeAnalysis.playedNames[homeId]?.includes(motmName)
+              ? homeOrig
+              : null
       : null;
     const motmPlayer = motmTeam?.sq.find((q) => q.n === motmName) || null;
+    const motmRole = motmPlayer?.ro || (motmTeam ? playedSlots?.[motmTeam.id]?.[motmName || ''] : undefined);
+    const motmPos = motmPlayer?.pos || (motmRole ? LINE[motmRole] : undefined);
     const motmNo = motmTeam && motmPlayer ? getShirtNo(motmTeam, motmPlayer) : null;
     const motmRt = motmName ? (fullTimeAnalysis.ratings[motmName] ?? 6.5) : 0;
     const motmGl = motmTeam && motmName ? evs.filter((e) => !e.og && e.t === motmTeam.id && e.who === motmName).length : 0;
     const motmAs = motmTeam && motmName ? evs.filter((e) => !e.og && e.t === motmTeam.id && e.as === motmName).length : 0;
     const motmCs =
-      motmTeam && motmPlayer
-        ? (motmTeam.id === homeId ? ga : gh) === 0 && (motmPlayer.pos === 'GK' || motmPlayer.pos === 'DF')
+      motmTeam && (motmPos === 'GK' || motmPos === 'DF')
+        ? (motmTeam.id === homeId ? ga : gh) === 0
         : false;
+    const motmSaves = motmName ? (playerSavesMap[motmName] || 0) : 0;
 
     const gridColsCls =
-      'grid-cols-[22px_34px_24px_minmax(0,1fr)_56px_42px] mland:grid-cols-[19px_30px_21px_minmax(0,1fr)_50px_38px]';
+      'grid-cols-[22px_34px_28px_minmax(0,1fr)_64px_44px] mland:grid-cols-[19px_30px_25px_minmax(0,1fr)_56px_40px]';
 
     const renderPlayerRow = (item: FtPlayerRow) => {
       const isPicked = ftPickedPlayer === item.name;
@@ -1740,12 +1768,12 @@ export const FullTimeMatchStage: React.FC<{
 
           {/* 2. ตำแหน่ง */}
           <div className="flex items-center justify-center">
-            {item.pl?.ro ? <PositionBadge role={item.pl.ro} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
+            {item.role ? <PositionBadge role={item.role} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
           </div>
 
           {/* 3. เบอร์ */}
-          <div className="text-center text-[10.5px] mland:text-[9px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular">
-            {item.no != null ? item.no : '—'}
+          <div className="text-center text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+            {item.no != null ? `#${item.no}` : '—'}
           </div>
 
           {/* 4. ชื่อ */}
@@ -1873,7 +1901,7 @@ export const FullTimeMatchStage: React.FC<{
                 <span className="px-1 py-[1px] rounded bg-amber-400 text-[#1c1300] text-[8.5px] mland:text-[7.5px] font-black tracking-wide shrink-0">
                   MOTM
                 </span>
-                {motmPlayer?.ro && <PositionBadge role={motmPlayer.ro} size="2xs" />}
+                {motmRole && <PositionBadge role={motmRole} size="2xs" />}
                 {motmNo != null && (
                   <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
                     #{motmNo}
@@ -1892,7 +1920,8 @@ export const FullTimeMatchStage: React.FC<{
               <div className="flex items-center gap-1 shrink-0 tabular">
                 {motmGl > 0 && <StatIconBadge kind="goal" count={motmGl} size="xs" />}
                 {motmAs > 0 && <StatIconBadge kind="assist" count={motmAs} size="xs" />}
-                {motmCs && <StatIconBadge kind="cleansheet" count={1} size="xs" />}
+                {motmCs && <StatIconBadge kind="cleansheet" count={1} size="xs" title={motmSaves > 0 ? `คลีนชีต · เซฟ ${motmSaves} ครั้ง` : 'คลีนชีต'} />}
+                {!motmCs && motmSaves > 0 && <StatIconBadge kind="save" count={motmSaves} size="xs" title={`เซฟ ${motmSaves} ครั้ง`} />}
                 <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-[#1c1300] text-[10.5px] mland:text-[9px] font-black shadow-2xs">
                   ⭐ {motmRt.toFixed(1)}
                 </span>
@@ -2072,6 +2101,8 @@ export const FullTimeMatchStage: React.FC<{
                         <span className="px-1.5 rounded bg-[#facc15]/20 text-[#facc15] font-extrabold">⭐ {pickedInfo.rt.toFixed(1)}</span>
                         {pickedInfo.gl > 0 && <StatIconBadge kind="goal" count={pickedInfo.gl} size="sm" />}
                         {pickedInfo.as > 0 && <StatIconBadge kind="assist" count={pickedInfo.as} size="sm" />}
+                        {pickedInfo.cleanSheet && <StatIconBadge kind="cleansheet" count={1} size="xs" title={pickedInfo.saves > 0 ? `คลีนชีต · เซฟ ${pickedInfo.saves} ครั้ง` : 'คลีนชีต'} />}
+                        {!pickedInfo.cleanSheet && pickedInfo.saves > 0 && <StatIconBadge kind="save" count={pickedInfo.saves} size="xs" title={`เซฟ ${pickedInfo.saves} ครั้ง`} />}
                         {pickedInfo.cards.map((c, idx) => (
                           <StatIconBadge key={idx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
                         ))}
