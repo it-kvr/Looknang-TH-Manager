@@ -5,6 +5,7 @@ import { SFX } from '../utils/audioTheme';
 import { ensureCon, logFin, syncMe, vlu, wagOf } from '../engine/playerCore';
 import { CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
 import { getStaminaMeta } from './StaminaBar';
+import { StatIconBadge } from './StatIconBadge';
 
 export interface PlayerCardOverviewBoxProps {
   player: Player;
@@ -44,6 +45,7 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
   const ycCount = player.yc ?? careerProfile?.yc ?? 0;
   const rcCount = player.rc ?? careerProfile?.rc ?? 0;
 
+  const isInjuredStatus = !isRetired && susCount === 0 && injCount > 0;
   const statusText = isRetired
     ? player.retiredSeason
       ? `👋 แขวนสตั๊ดแล้ว (จบ S${player.retiredSeason})`
@@ -51,7 +53,7 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
     : susCount > 0
       ? `🟥 แบน ${susCount} นัด`
       : injCount > 0
-        ? `🩹 เจ็บพัก ${injCount} นัด`
+        ? `เจ็บพัก ${injCount} นัด`
         : fitVal < 65
           ? '⚠️ ร่างกายอ่อนล้า'
           : starterSlot
@@ -159,9 +161,12 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
       {/* Status & Discipline Row */}
       <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${statusToneCls}`}>
         <div className="flex items-center justify-between font-bold gap-1">
-          <span className="truncate tabular" style={{ color: fitCol }}>
-            {statusText}
-            {!isRetired && ` · ⚡${fitVal}%`}
+          <span className="truncate tabular inline-flex items-center gap-1" style={{ color: fitCol }}>
+            {isInjuredStatus && <StatIconBadge kind="injury" size="xs" />}
+            <span className="truncate">
+              {statusText}
+              {!isRetired && ` · ⚡${fitVal}%`}
+            </span>
           </span>
           <span className="tabular text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
             🟨{ycCount}/3 · 🟥{rcCount}

@@ -437,7 +437,7 @@ export const SeasonStatsModal: React.FC<{
               <table className="w-full text-left border-collapse text-xs mland:text-[10px]">
                 <thead>
                   <tr className="bg-[var(--surface-2)]/45 text-[10.5px] mland:text-[9px] text-[var(--mut)] border-b border-[var(--line)]">
-                    <th className="py-2 mland:py-1 px-2.5 mland:px-1.5 w-7 text-center">#</th>
+                    <th className="py-2 mland:py-1 px-2.5 mland:px-1.5 w-7 text-left">#</th>
                     <th className="py-2 mland:py-1 px-2 mland:px-1.5">นักเตะ</th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">OVR</th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">ลงเล่น</th>
@@ -465,24 +465,22 @@ export const SeasonStatsModal: React.FC<{
                               : ''
                         }
                       >
-                        <td className="py-1.5 mland:py-1 px-2.5 mland:px-1.5 text-center text-[var(--mut)] font-bold tabular">
+                        <td className="py-1.5 mland:py-1 px-2.5 mland:px-1.5 text-left text-[var(--mut)] font-bold tabular">
                           {idx + 1}
                         </td>
                         <td className="py-1.5 mland:py-1 px-2 mland:px-1.5 min-w-[140px]">
                           <div className="flex items-center gap-1.5 min-w-0">
+                            <PositionBadge role={pl.ro} size="xs" />
                             {pl.no != null && (
-                              <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular w-5 shrink-0">
+                              <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] tabular w-[22px] text-left shrink-0">
                                 #{pl.no}
                               </span>
                             )}
-                            <span className="font-bold truncate">
-                              {pl.name}
-                              {pl.isMe && <span className="ml-1 text-[var(--lamp)]">★</span>}
-                            </span>
-                            <PositionBadge role={pl.ro} size="xs" />
-                            {isTopRt && <span title="คะแนนเฉลี่ยสูงสุดในทีม">⭐</span>}
-                            {isTopGoal && <span title="ดาวซัลโวทีม">⚽</span>}
-                            {isTopAst && <span title="แอสซิสต์สูงสุดทีม">👟</span>}
+                            <span className="font-bold truncate">{pl.name}</span>
+                            {pl.isMe && <span className="text-[var(--lamp)] shrink-0">★</span>}
+                            {isTopRt && <span className="shrink-0" title="คะแนนเฉลี่ยสูงสุดในทีม">⭐</span>}
+                            {isTopGoal && <span className="shrink-0" title="ดาวซัลโวทีม">⚽</span>}
+                            {isTopAst && <span className="shrink-0" title="แอสซิสต์สูงสุดทีม">👟</span>}
                           </div>
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center">

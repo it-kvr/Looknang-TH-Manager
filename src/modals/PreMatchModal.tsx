@@ -522,27 +522,27 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
       >
         <span className="flex items-center gap-0.5 sm:gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-5 [&_svg]:h-auto mland:[&_svg]:w-4 mland:[&_svg]:h-auto">
           <PlayerFace player={pl} team={team} state={state} size={22} />
-          <span className="text-[9.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center shrink-0 whitespace-nowrap">
+          <PositionBadge role={slotLabel} size="xs" />
+          <span className="text-[9.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] w-[22px] mland:w-[19px] text-left shrink-0 whitespace-nowrap">
             #{no}
           </span>
-          <PositionBadge role={slotLabel} size="xs" />
         </span>
 
-        <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">
+        <span className="flex-1 min-w-0 flex items-center gap-1 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold">
+          <span className="truncate">{pl.n}</span>
+          {isCap && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
           {isMePlayer && (
             <span
               title="ตัวคุณ"
               aria-label="ตัวคุณ"
-              className="inline-flex items-center justify-center w-3.5 h-3.5 mr-1 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black align-middle"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
             >
               ★
             </span>
           )}
-          {isCap && <CaptainBadge team={team} state={state} size="xs" className="mr-1" />}
-          {(pl.hg || pl.customCreated) ? <span title="เด็กปั้นสโมสร" className="mr-0.5">🌱</span> : null}
-          {pl.n}
+          {(pl.hg || pl.customCreated) ? <span title="เด็กปั้นสโมสร" className="shrink-0">🌱</span> : null}
           {isStarter && slotLabel !== pl.ro && (
-            <span className="ml-1 text-[8.5px] text-[var(--mut)]">
+            <span className="text-[8.5px] text-[var(--mut)] shrink-0">
               ({pl.ro}{pen === 2 ? ' ⚠️' : ''})
             </span>
           )}
@@ -557,8 +557,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           </div>
         ) : pl.inj > 0 ? (
           <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[46px] sm:w-[52px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}`}>
-            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular text-right">
-              🩹พัก {pl.inj}น
+            <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
+              <StatIconBadge kind="injury" size="xs" />
+              <span>พัก {pl.inj}น</span>
             </span>
           </div>
         ) : (

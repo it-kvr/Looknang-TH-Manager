@@ -590,24 +590,24 @@ export const SquadTacticsView: React.FC<{
           className={`flex items-center gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4 ${isMgr ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
         >
           <PlayerFace player={q} team={me} state={state} size={20} />
-          <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">#{no}</span>
           <PositionBadge role={slotSp || q.ro} size="xs" />
+          <span className="text-[9.5px] font-bold tabular text-[var(--mut)] w-[22px] text-left shrink-0 whitespace-nowrap">#{no}</span>
         </span>
-        <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">
+        <span className="flex-1 min-w-0 flex items-center gap-1 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold">
+          <span className="truncate">{q.n}</span>
+          {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
           {isMe && (
             <span
               title="ตัวคุณ"
               aria-label="ตัวคุณ"
-              className="inline-flex items-center justify-center w-3.5 h-3.5 mr-1 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black align-middle"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
             >
               ★
             </span>
           )}
-          {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="mr-1" />}
-          {(q.hg || q.customCreated) ? <span title="เด็กปั้นสโมสร" className="mr-0.5">🌱</span> : null}
-          {q.n}
+          {(q.hg || q.customCreated) ? <span title="เด็กปั้นสโมสร" className="shrink-0">🌱</span> : null}
           {slotSp && slotSp !== q.ro && (
-            <span className="ml-1 text-[8.5px] text-[var(--mut)]">({q.ro}{pn === 2 ? ' ⚠️' : ''})</span>
+            <span className="text-[8.5px] text-[var(--mut)] shrink-0">({q.ro}{pn === 2 ? ' ⚠️' : ''})</span>
           )}
         </span>
         {/* Unified Stamina Gauge & Rotation Status */}
@@ -620,7 +620,10 @@ export const SquadTacticsView: React.FC<{
           </div>
         ) : q.inj > 0 ? (
           <div className="flex flex-col items-stretch justify-center shrink-0 w-[64px] sm:w-[74px] mland:w-[56px]">
-            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular text-right">🩹พัก {q.inj}น</span>
+            <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
+              <StatIconBadge kind="injury" size="xs" />
+              <span>พัก {q.inj}น</span>
+            </span>
           </div>
         ) : (
           <StaminaBar
@@ -1756,7 +1759,7 @@ export const SquadTacticsView: React.FC<{
                         />
                       </div>
                     )}
-                    <div className="text-center">#</div>
+                    <div className="text-left">#</div>
                     <div>นักเตะ</div>
                     <div>ตำแหน่ง</div>
                     <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>อายุ</div>
@@ -1812,7 +1815,7 @@ export const SquadTacticsView: React.FC<{
                             </div>
                           )}
 
-                          <div className="flex items-center justify-center text-xs mland:text-[10px] font-bold text-[var(--mut)] tabular">
+                          <div className="flex items-center justify-start text-xs mland:text-[10px] font-bold text-[var(--mut)] tabular">
                             #{no}
                           </div>
 
@@ -1820,6 +1823,8 @@ export const SquadTacticsView: React.FC<{
                             <PlayerFace player={q} team={me} state={state} size={26} />
                             <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
                               <div className="font-bold text-xs mland:text-[10px] truncate flex items-center gap-1">
+                                <span className="truncate">{q.n}</span>
+                                {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                                 {isMe && (
                                   <span
                                     title="ตัวคุณ"
@@ -1830,8 +1835,6 @@ export const SquadTacticsView: React.FC<{
                                   </span>
                                 )}
                                 {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
-                                {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" />}
-                                <span className="truncate">{q.n}</span>
                                 {(q.hg || q.customCreated) ? (
                                   <span className="px-1 rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0" title="เด็กปั้นสโมสร">
                                     🌱 เด็กปั้น
@@ -1852,7 +1855,10 @@ export const SquadTacticsView: React.FC<{
                                     <span>แบน {q.sus} นัด</span>
                                   </span>
                                 ) : q.inj > 0 ? (
-                                  <span>🩹 เจ็บ {q.inj} นัด</span>
+                                  <span className="inline-flex items-center gap-1 text-[var(--red)] font-bold">
+                                    <StatIconBadge kind="injury" size="xs" />
+                                    <span>เจ็บ {q.inj} นัด</span>
+                                  </span>
                                 ) : (q.yc || 0) > 0 ? (
                                   <span className="inline-flex items-center gap-1">
                                     <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />

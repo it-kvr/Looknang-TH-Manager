@@ -23,6 +23,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -1691,9 +1692,15 @@ export const MarketView: React.FC<{
                             <span className="text-[10px] mland:text-[8.5px] text-blue-600 dark:text-blue-400 font-bold shrink-0">[ยืม]</span>
                           ) : null}
                         </div>
-                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5">
-                          อายุ {q.age} ปี · ประเมิน {fmtMoneyNum(marketVal)} · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
-                          {q.inj > 0 ? <span className="text-[var(--red)] font-semibold"> · 🩹 เจ็บ {q.inj} นัด</span> : null}
+                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1">
+                          <span>อายุ {q.age} ปี · ประเมิน {fmtMoneyNum(marketVal)} · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด</span>
+                          {q.inj > 0 ? (
+                            <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-semibold">
+                              <span>·</span>
+                              <StatIconBadge kind="injury" size="xs" />
+                              <span>เจ็บ {q.inj} นัด</span>
+                            </span>
+                          ) : null}
                         </div>
                       </button>
                       <span

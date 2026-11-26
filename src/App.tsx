@@ -344,7 +344,7 @@ export default function App() {
         pl.inj = Math.max(pl.inj || 0, inj.games);
         if (pl.me && d.p) d.p.inj = pl.inj;
         if (teamObj.id === d.me || d.p?.name === pl.n) {
-          pushFeed(d, 'บาดเจ็บในสนาม', `🩹 ${pl.n} (${teamObj.name}) บาดเจ็บระหว่างแข่ง คาดพัก ${inj.games} นัด`, 'urg');
+          pushFeed(d, 'บาดเจ็บในสนาม', `✚ ${pl.n} (${teamObj.name}) บาดเจ็บระหว่างแข่ง คาดพัก ${inj.games} นัด`, 'urg');
         }
       });
     };

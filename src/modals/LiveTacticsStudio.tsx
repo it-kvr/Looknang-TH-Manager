@@ -19,6 +19,8 @@ import { ovColor } from '../engine/missions';
 import { FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { PositionBadge } from '../components/PositionBadge';
+import { CaptainBadge } from '../components/CaptainBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 
 export interface LivePlayerMatchStats {
   shots: number;
@@ -910,8 +912,10 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   <b className="text-[var(--ink)]">
                     {smartAutoSub.isExplicitPick ? 'ที่เลือก:' : smartAutoSub.isInjured ? 'บาดเจ็บ:' : 'แนะนำ:'}
                   </b>{' '}
-                  <span className="text-[var(--red)] font-bold">
-                    {smartAutoSub.outShort} ({smartAutoSub.outFit}%{smartAutoSub.isInjured ? ' 🩹' : ''})
+                  <span className="text-[var(--red)] font-bold inline-flex items-center gap-0.5 align-middle">
+                    <span>{smartAutoSub.outShort} ({smartAutoSub.outFit}%</span>
+                    {smartAutoSub.isInjured && <StatIconBadge kind="injury" size="xs" />}
+                    <span>)</span>
                   </span>{' '}
                   ⇄{' '}
                   <span className="text-[var(--g)] font-bold">
@@ -984,12 +988,15 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         className="flex items-center gap-1 shrink-0 py-0.5 pr-0.5 [&_svg]:w-4 [&_svg]:h-4"
                       >
                         <PlayerFace player={pl} team={meTeamOrig} state={state} careerProfile={state.p} size={20} />
-                        <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center">#{no}</span>
                         <PositionBadge role={pl.ro} size="2xs" />
+                        <span className="text-[9.5px] font-bold tabular text-[var(--mut)] w-[22px] text-left shrink-0">#{no}</span>
                       </span>
 
                       <div className="flex-1 min-w-0 flex items-center gap-1">
                         <span className="text-[10.5px] mland:text-[9.5px] font-semibold truncate">{pl.n}</span>
+                        {meTeamOrig.cap === pl.n && (
+                          <CaptainBadge team={meTeamOrig} state={state} size="xs" className="shrink-0" />
+                        )}
                         {(pl.hg || pl.customCreated) && (
                           <span title="เด็กปั้นสโมสร" className="text-[9.5px] shrink-0">🌱</span>
                         )}

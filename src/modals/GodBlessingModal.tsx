@@ -7,6 +7,7 @@ import { getPlayerBio } from '../engine/playerCore';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerBlessingEditor } from '../components/PlayerBlessingEditor';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
+import { PositionBadge } from '../components/PositionBadge';
 
 export const GodBlessingModal: React.FC<{
   state: GameState;
@@ -136,12 +137,13 @@ export const GodBlessingModal: React.FC<{
                     >
                       <PlayerFace player={pl} team={pTeam} state={state} size={26} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs mland:text-[10.5px] font-bold truncate flex items-center gap-1">
-                          {pl.blessed && <span title="ได้รับพรของพระเจ้า">✨</span>}
+                        <div className="text-xs mland:text-[10.5px] font-bold flex items-center gap-1 min-w-0">
+                          <PositionBadge role={pl.ro} size="2xs" />
                           <span className="truncate">{pl.n}</span>
+                          {pl.blessed && <span className="shrink-0" title="ได้รับพรของพระเจ้า">✨</span>}
                         </div>
                         <div className="text-[10px] mland:text-[9px] text-[var(--mut)]">
-                          {pl.ro}{pl.altRoles?.length ? `+${pl.altRoles.slice(0, 2).join(',')}` : ''} · อายุ {pl.age}
+                          {pl.altRoles?.length ? `+${pl.altRoles.slice(0, 2).join(',')} · ` : ''}อายุ {pl.age}
                         </div>
                       </div>
                       <span className="px-1.5 py-0.5 rounded-md text-white text-[10.5px] font-bold tabular shrink-0" style={{ background: ovColor(pl.ov) }}>

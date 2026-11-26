@@ -3798,7 +3798,7 @@ export function runPlayerWeek(s: GameState) {
   if ((p.inj || 0) > 0) {
     const healStep = (p.plan === 2 ? 2 : 1) + (perks.includes('quick_healer') ? 1 : 0);
     p.inj = Math.max(0, (p.inj || 0) - healStep);
-    m += p.inj === 0 ? ' · 🩹 หายเจ็บพร้อมลงสนาม!' : ` · 🩹 พักฟื้นเหลือ ${p.inj} นัด`;
+    m += p.inj === 0 ? ' · ✚ หายเจ็บพร้อมลงสนาม!' : ` · ✚ พักฟื้นเหลือ ${p.inj} นัด`;
   }
   const meSq = s.teams[s.me]?.sq.find((q) => q.me);
   if (p.roleTrain && p.roleTrain !== p.sp && !p.altRoles?.includes(p.roleTrain)) {
@@ -5181,7 +5181,7 @@ export function afterMatchDay(
         q.inj = injD(q, R(1, 5), s.p);
         if (mine) {
           s.news = `${q.n} บาดเจ็บ ${q.inj} นัด`;
-          pushFeed(s, 'บาดเจ็บ', `🩹 ${q.n} บาดเจ็บพัก ${q.inj} นัด`, 'urg');
+          pushFeed(s, 'บาดเจ็บ', `✚ ${q.n} บาดเจ็บพัก ${q.inj} นัด`, 'urg');
         }
       }
     });
@@ -6241,7 +6241,7 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
     (q, t) => `⚠️ ${q.n} (${t}) เข้าสกัดหนักโดนผู้ตัดสินเรียกเตือน`,
     (q, t) => `😮 ${q.n} (${t}) ยิงเฉียดเสาไปนิดเดียว`,
     (q) => `🎯 ${q.n} ปั่นโค้งเกือบเสียบสามเหลี่ยม`,
-    (q, t) => `🩹 ${q.n} (${t}) ปะทะหนักลงไปนอน แต่ลุกมาเล่นต่อได้`,
+    (q, t) => `✚ ${q.n} (${t}) ปะทะหนักลงไปนอน แต่ลุกมาเล่นต่อได้`,
     (_, t) => `🚩 ${t} ได้ลูกเตะมุมกดดันหน้ากรอบ`,
     (q) => `🎙️ ${q.n} คุมจังหวะจ่ายบอลกลางสนามได้เนียนตา`,
     (_, t) => `👏 แฟนบอล${t}ร้องเชียร์สนั่นสนาม`,

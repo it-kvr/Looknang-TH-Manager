@@ -9,6 +9,7 @@ import { ovColor } from '../engine/missions';
 import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort, EXTRA_CUP_META, getLeaguePrizeMoney } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -210,9 +211,9 @@ export const LeagueView: React.FC<{
       id: string;
       kind: 'alert' | 'feed';
       tone: NewsTone;
-      icon: string;
+      icon: React.ReactNode;
       tag: string;
-      title: string;
+      title: React.ReactNode;
       detail: string;
       urgent?: boolean;
       actionLabel?: string;
@@ -416,7 +417,7 @@ export const LeagueView: React.FC<{
           kind: 'alert',
           tone: 'urg',
           urgent: true,
-          icon: '🩹',
+          icon: <StatIconBadge kind="injury" size="xs" />,
           tag: 'ห้องพยาบาล',
           title: `นักเตะบาดเจ็บ ${injuredList.length} คน`,
           detail: injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj}นัด)`).join(', '),
@@ -450,7 +451,7 @@ export const LeagueView: React.FC<{
           kind: 'alert',
           tone: 'urg',
           urgent: true,
-          icon: '🩹',
+          icon: <StatIconBadge kind="injury" size="xs" />,
           tag: 'อาการเจ็บ',
           title: `บาดเจ็บพักอีก ${p.inj} นัด`,
           detail: 'ทำกายภาพส่วนตัวได้ที่หน้าอาชีพนักเตะ',
@@ -480,7 +481,18 @@ export const LeagueView: React.FC<{
         urgent: f.tone === 'urg' || f.tone === 'offer',
         icon: f.tone === 'urg' ? '🚨' : f.tone === 'offer' ? '💼' : f.tone === 'ok' ? '✨' : '📰',
         tag: `${f.cat} · นัด ${f.m}`,
-        title: f.txt,
+        title: f.txt.includes('✚')
+          ? (
+            <span className="inline-flex items-center gap-1">
+              {f.txt.split('✚').map((part, pIdx) => (
+                <React.Fragment key={pIdx}>
+                  {pIdx > 0 && <StatIconBadge kind="injury" size="xs" />}
+                  {part}
+                </React.Fragment>
+              ))}
+            </span>
+          )
+          : f.txt,
         detail: `ซีซั่น ${f.s}`
       });
     });
@@ -537,8 +549,9 @@ export const LeagueView: React.FC<{
                 className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 mland:gap-1.5 ${toneCls[it.tone]}`}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] truncate">
-                    {it.icon} {it.tag}
+                  <div className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] truncate flex items-center gap-1">
+                    {it.icon}
+                    <span className="truncate">{it.tag}</span>
                   </div>
                   <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate">
                     {it.title}
@@ -954,13 +967,15 @@ export const LeagueView: React.FC<{
                     onClick={() => onInspectPlayer(x.q, x.t)}
                     className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${isMine ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
                   >
-                    <span className={`w-4 text-[11px] font-bold text-center tabular ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
+                    <span className={`w-4 text-[11px] font-bold text-left tabular shrink-0 ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
                     <PlayerFace player={x.q} team={x.t} state={state} club={state.club} isMyClub={isMine && state.mode === 'm'} size={28} />
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
-                      <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1">
-                        <ClubCrest name={x.t.name} size={12} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                      <div className="font-bold text-[11.5px] mland:text-[10px] flex items-center gap-1 min-w-0">
                         <PositionBadge role={x.q.ro || x.q.pos} size="2xs" />
+                        <span className="truncate">{x.q.n}</span>
+                      </div>
+                      <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
+                        <ClubCrest name={x.t.name} size={12} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                         <span className="truncate">{x.t.name}</span>
                       </div>
                     </div>
@@ -1116,7 +1131,7 @@ export const LeagueView: React.FC<{
                                 isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/75'
                               }`}
                             >
-                              <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-center shrink-0">
+                              <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-left shrink-0">
                                 {idx + 2}
                               </span>
                               <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
@@ -1130,12 +1145,12 @@ export const LeagueView: React.FC<{
                                 />
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] truncate">
-                                  {entry.q.n}
-                                </div>
-                                <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
-                                  <ClubCrest name={entry.t.name} size={12} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                                <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] flex items-center gap-1 min-w-0">
                                   <PositionBadge role={entry.q.ro} size="2xs" />
+                                  <span className="truncate">{entry.q.n}</span>
+                                </div>
+                                <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
+                                  <ClubCrest name={entry.t.name} size={12} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                                   <span className="truncate">{entry.t.name}</span>
                                 </div>
                               </div>

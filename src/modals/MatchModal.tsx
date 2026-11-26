@@ -261,6 +261,17 @@ const MatchLogRow = React.memo<{
 
   const shownCrestTeamIds = new Set<number>();
 
+  const renderTextSeg = (seg: string, keyPrefix: string) => {
+    if (!seg.includes('✚')) return seg;
+    const parts = seg.split('✚');
+    return parts.map((part, i) => (
+      <React.Fragment key={`${keyPrefix}-${i}`}>
+        {i > 0 && <StatIconBadge kind="injury" size="xs" />}
+        {part}
+      </React.Fragment>
+    ));
+  };
+
   const renderInlineEventText = () => {
     if (hits.length > 0) {
       hits.sort((a, b) => a.start - b.start);
@@ -268,7 +279,7 @@ const MatchLogRow = React.memo<{
       let cursor = 0;
       hits.forEach((h, hIdx) => {
         if (h.start > cursor) {
-          nodes.push(<span key={`t-${hIdx}`}>{l.text.slice(cursor, h.start)}</span>);
+          nodes.push(<span key={`t-${hIdx}`}>{renderTextSeg(l.text.slice(cursor, h.start), `t-${hIdx}`)}</span>);
         }
         const htTeam = h.entry.team;
         const htPlayer = h.entry.player;
@@ -303,7 +314,7 @@ const MatchLogRow = React.memo<{
         cursor = h.end;
       });
       if (cursor < l.text.length) {
-        nodes.push(<span key="tail">{l.text.slice(cursor)}</span>);
+        nodes.push(<span key="tail">{renderTextSeg(l.text.slice(cursor), 'tail')}</span>);
       }
       return nodes;
     }
@@ -313,18 +324,18 @@ const MatchLogRow = React.memo<{
       if (tIdx >= 0) {
         return (
           <>
-            <span>{l.text.slice(0, tIdx)}</span>
+            <span>{renderTextSeg(l.text.slice(0, tIdx), 'team-pre')}</span>
             <span className="inline-flex items-center mr-1 align-middle">
               <ClubCrest name={vTeam.name} size={14} team={vTeam} club={state.club} isMyClub={vIsMe} />
             </span>
             <span>{vTeam.name}</span>
-            <span>{l.text.slice(tIdx + vTeam.name.length)}</span>
+            <span>{renderTextSeg(l.text.slice(tIdx + vTeam.name.length), 'team-post')}</span>
           </>
         );
       }
     }
 
-    return l.text;
+    return renderTextSeg(l.text, 'plain');
   };
 
   const hasInlinePlayer = hits.length > 0;
@@ -2289,12 +2300,12 @@ export const MatchModal: React.FC<{
       type: 'injury',
       x: victim.x,
       y: victim.y,
-      label: `🩹 ${victim.shortName} เจ็บ! (${games} นัด)`,
+      label: `✚ ${victim.shortName} เจ็บ! (${games} นัด)`,
       color: '#ef4444',
       ttl: 2.8,
       maxTtl: 2.8
     });
-    pushLog(curMin, `🩹 บาดเจ็บในสนาม!! ${victim.id} (${sideOrig.name}) เจ็บระหว่างเล่น · คาดพัก ${games} นัด`, 'card');
+    pushLog(curMin, `✚ บาดเจ็บในสนาม!! ${victim.id} (${sideOrig.name}) เจ็บระหว่างเล่น · คาดพัก ${games} นัด`, 'card');
     pushTimeline(curMin, victim.side, 'injury', victim.id, `พัก ${games} นัด`);
 
     const isHomeSide = victim.side === 'H';
@@ -2308,9 +2319,9 @@ export const MatchModal: React.FC<{
 
     if (state.mode === 'm' && isMySide) {
       if (subsCount < 5 && !isInstantStep) {
-        w.phaseLabel = `🩹 ด่วน! ${victim.shortName} บาดเจ็บ ต้องเปลี่ยนตัวออก!`;
+        w.phaseLabel = `✚ ด่วน! ${victim.shortName} บาดเจ็บ ต้องเปลี่ยนตัวออก!`;
         w.phaseTone = 'danger';
-        triggerDramaSlow(w, 1.8, `🩹 ${victim.shortName} บาดเจ็บ!`);
+        triggerDramaSlow(w, 1.8, `✚ ${victim.shortName} บาดเจ็บ!`);
         setInjuryAlert({
           name: victim.id,
           role: pl.ro,
@@ -2343,7 +2354,7 @@ export const MatchModal: React.FC<{
             if (w.ball.carrierId === victim.id) w.ball.carrierId = subIn.n;
             if (w.ball.targetId === victim.id) w.ball.targetId = subIn.n;
           }
-          pushLog(curMin, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ: 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+          pushLog(curMin, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ: 🟢 ${subIn.n} เข้าแทน ✚ ${victim.id}`, 'sub');
           ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
         } else {
           victim.sentOff = true;
@@ -2399,7 +2410,7 @@ export const MatchModal: React.FC<{
       setSubLog(sr.subs.slice());
       syncSidelineBenches(w);
       triggerCoachShout(w, isHomeSide ? 'H' : 'A', '🔄 แทนคนเจ็บด่วน!', 2.3);
-      pushLog(curMin, `🔄 เปลี่ยนตัวฉุกเฉิน (${sideOrig.name}): 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+      pushLog(curMin, `🔄 เปลี่ยนตัวฉุกเฉิน (${sideOrig.name}): 🟢 ${subIn.n} เข้าแทน ✚ ${victim.id}`, 'sub');
       ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
     } else {
       victim.sentOff = true;
@@ -10082,7 +10093,7 @@ export const MatchModal: React.FC<{
     setSubLog(sr.subs.slice());
     syncSidelineBenches(w);
     triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 แทนคนเจ็บด่วน!', 2.4);
-    pushLog(minute, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ (${meTeamOrig.name}): 🟢 ${bestSub.n} เข้าแทน 🩹 ${injuryAlert.name}`, 'sub');
+    pushLog(minute, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ (${meTeamOrig.name}): 🟢 ${bestSub.n} เข้าแทน ✚ ${injuryAlert.name}`, 'sub');
     ensureOnPitchCaptain(w, meIsHome ? 'H' : 'A', minute, 'inj', false);
     setInjuryAlert(null);
     setSubPickOut(null);
@@ -10429,7 +10440,7 @@ export const MatchModal: React.FC<{
         case 'red':
           return <StatIconBadge kind="red" size="xs" />;
         case 'injury':
-          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🩹</span>;
+          return <StatIconBadge kind="injury" size="xs" />;
         case 'var_no_goal':
           return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[11.5px] leading-none shrink-0">🖥</span>;
         case 'miracle':
@@ -11281,7 +11292,7 @@ export const MatchModal: React.FC<{
                   {injuryAlert && !done && (
                     <div className="px-2.5 sm:px-3 py-1.5 mland:px-2 mland:py-1 bg-rose-950/95 border-b border-rose-400/50 flex flex-wrap items-center justify-between gap-2 text-white shrink-0">
                       <span className="text-[11px] sm:text-xs mland:text-[10px] font-bold text-rose-200 flex items-center gap-1.5 min-w-0">
-                        <span className="animate-pulse shrink-0">🩹</span>
+                        <span className="animate-pulse shrink-0 inline-flex"><StatIconBadge kind="injury" size="sm" /></span>
                         <span className="truncate">
                           ด่วน น.{injuryAlert.minute}&apos;: #{injuryAlert.no} {injuryAlert.role} {injuryAlert.name} บาดเจ็บ (พัก {injuryAlert.games} นัด)
                         </span>

@@ -1362,17 +1362,17 @@ export const drawLivePitchToCanvas = (
       const ix = px(fx.x);
       const iy = py(fx.y);
       ctx.save();
-      ctx.globalAlpha = alpha * 0.95;
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+      ctx.globalAlpha = alpha * 0.96;
+      ctx.fillStyle = '#ffffff';
       ctx.strokeStyle = '#ef4444';
       ctx.lineWidth = 2.2;
       ctx.beginPath();
-      ctx.arc(ix, iy, 12 + (1 - alpha) * 14, 0, Math.PI * 2);
+      ctx.arc(ix, iy, 11 + (1 - alpha) * 10, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(ix - 5, iy - 1.5, 10, 3);
-      ctx.fillRect(ix - 1.5, iy - 5, 3, 10);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(ix - 5.5, iy - 1.8, 11, 3.6);
+      ctx.fillRect(ix - 1.8, iy - 5.5, 3.6, 11);
       ctx.restore();
     } else if (fx.type === 'slip') {
       const sx = px(fx.x);
@@ -2629,9 +2629,11 @@ export const drawLivePitchToCanvas = (
     ctx.globalAlpha = Math.min(1, alpha * 1.4);
     const fxX = clamp(px(fx.x), 58, cssW - 58);
     const fxY = clamp(py(fx.y) - 22 - (1 - alpha) * 10, 18, cssH - 18);
+    const hasMedCross = fx.label.startsWith('✚ ');
+    const textLabel = hasMedCross ? fx.label.slice(2) : fx.label;
     ctx.font = '800 11px Sarabun, sans-serif';
-    const tw = measureTextCached(ctx, fx.label);
-    const bw = tw + 14;
+    const tw = measureTextCached(ctx, textLabel);
+    const bw = tw + (hasMedCross ? 28 : 14);
     ctx.fillStyle = 'rgba(10, 24, 17, 0.9)';
     ctx.strokeStyle = fx.color;
     ctx.lineWidth = 1.5;
@@ -2639,10 +2641,23 @@ export const drawLivePitchToCanvas = (
     ctx.roundRect(fxX - bw / 2, fxY - 10, bw, 20, 999);
     ctx.fill();
     ctx.stroke();
+    if (hasMedCross) {
+      const cxIcon = fxX - bw / 2 + 11;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(cxIcon, fxY, 5.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(cxIcon - 3.1, fxY - 1.05, 6.2, 2.1);
+      ctx.fillRect(cxIcon - 1.05, fxY - 3.1, 2.1, 6.2);
+    }
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(fx.label, fxX, fxY);
+    ctx.fillText(textLabel, hasMedCross ? fxX + 7 : fxX, fxY);
     ctx.restore();
   });
 

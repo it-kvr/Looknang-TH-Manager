@@ -12,6 +12,8 @@ import { TalentBadge } from '../components/TalentBadge';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { PositionBadge } from '../components/PositionBadge';
+import { CaptainBadge } from '../components/CaptainBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 
 export const TeamTrainingView: React.FC<{
   state: GameState;
@@ -101,11 +103,14 @@ export const TeamTrainingView: React.FC<{
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <PlayerFace player={q} team={me} state={state} size={26} />
-                      <div className="min-w-0">
-                        <div className="text-xs mland:text-[10px] font-bold truncate">{q.n}</div>
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs mland:text-[10px] font-bold flex items-center gap-1 min-w-0">
                           <PositionBadge role={q.ro} size="2xs" />
-                          <span className="truncate">OVR {q.ov} {passedStages > 0 ? `· ✓${passedStages}` : ''}</span>
+                          <span className="truncate">{q.n}</span>
+                          {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
+                        </div>
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate mt-0.5">
+                          OVR {q.ov} {passedStages > 0 ? `· ✓${passedStages}` : ''}
                         </div>
                       </div>
                     </div>
@@ -336,11 +341,14 @@ export const TeamTrainingView: React.FC<{
                     });
                     d.trainingPlan = { ...cur, doubleSessionMd: curTurn };
                   });
-                  onToast(`🩹 กายภาพกลุ่มสำเร็จ! ลดวันเจ็บ ${reduced} คน (-1 นัด) · ฟิต +8%`);
+                  onToast(`✚ กายภาพกลุ่มสำเร็จ! ลดวันเจ็บ ${reduced} คน (-1 นัด) · ฟิต +8%`);
                 }}
                 className="p-2.5 mland:p-1.5 rounded-xl bg-sky-500/10 border border-sky-500/35 text-left cursor-pointer disabled:opacity-45 hover:border-sky-500 space-y-0.5"
               >
-                <div className="font-bold text-xs mland:text-[10px] text-sky-700 dark:text-sky-300">🩹 กายภาพกลุ่ม ({injuredSq.length})</div>
+                <div className="font-bold text-xs mland:text-[10px] text-sky-700 dark:text-sky-300 flex items-center gap-1">
+                  <StatIconBadge kind="injury" size="xs" />
+                  <span>กายภาพกลุ่ม ({injuredSq.length})</span>
+                </div>
                 <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">{injuredSq.length === 0 ? 'ไม่มีคนเจ็บ' : `${fmtMoney(15)} · ลดวันเจ็บ -1 นัด · ฟิต +8%`}</div>
               </button>
             </div>
@@ -433,16 +441,20 @@ export const TeamTrainingView: React.FC<{
                   <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer">
                     <PlayerFace player={q} team={me} state={state} size={26} />
                     <div className="min-w-0 flex-1">
-                      <div className="text-xs mland:text-[10px] font-bold truncate flex items-center gap-1">
+                      <div className="text-xs mland:text-[10px] font-bold flex items-center gap-1 min-w-0">
                         <PositionBadge role={q.ro} size="xs" />
                         <span className="truncate">{q.n}</span>
+                        {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                         {isStarter && <span className="text-[9px] shrink-0" title="ตัวจริง">⭐</span>}
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <StaminaBar value={f} variant="inline" barWidthClass="w-14 sm:w-16 mland:w-12" />
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular inline-flex items-center gap-1 flex-wrap">
                           {q.inj > 0 ? (
-                            `🩹${q.inj}นัด`
+                            <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
+                              <StatIconBadge kind="injury" size="xs" />
+                              <span>{q.inj}นัด</span>
+                            </span>
                           ) : (
                             <>
                               <span>OVR {q.ov}</span>

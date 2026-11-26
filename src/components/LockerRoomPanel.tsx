@@ -418,13 +418,13 @@ export const LockerRoomPanel: React.FC<{
                   {/* Locker Nameplate */}
                   <div className="px-2 py-1.5 mland:px-1.5 mland:py-1 flex items-center justify-between gap-1.5 min-w-0">
                     <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate flex items-center gap-1 min-w-0">
+                      <span className="truncate">{q.n}</span>
+                      {isCap ? <CaptainBadge team={team} state={state} size="xs" className="shrink-0" /> : null}
                       {isMe ? (
                         <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0" title="ตัวคุณ">
                           ★
                         </span>
                       ) : null}
-                      {isCap ? <CaptainBadge team={team} state={state} size="xs" className="shrink-0" /> : null}
-                      <span className="truncate">{q.n}</span>
                     </span>
                     <span
                       className={`text-xs mland:text-[10px] font-extrabold font-display tabular shrink-0 ${
@@ -474,13 +474,13 @@ export const LockerRoomPanel: React.FC<{
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display text-[var(--ink)] truncate flex items-center gap-1 leading-tight">
-                        {isSelectedMe ? (
-                          <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">★</span>
-                        ) : null}
+                        <span className="truncate">{selectedPlayer.n}</span>
                         {team.cap === selectedPlayer.n ? (
                           <CaptainBadge team={team} state={state} size="sm" className="shrink-0" />
                         ) : null}
-                        <span className="truncate">{selectedPlayer.n}</span>
+                        {isSelectedMe ? (
+                          <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">★</span>
+                        ) : null}
                       </div>
                       <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5 leading-tight flex items-center gap-1">
                         <PositionBadge role={selectedPlayer.ro} size="2xs" />

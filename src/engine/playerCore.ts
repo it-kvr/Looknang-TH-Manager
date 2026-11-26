@@ -1483,7 +1483,7 @@ export function dtInfo(q: Player, careerP?: PlayerCareerProfile | null) {
     (q.sus || 0) > 0
       ? `🟥 โดนแบน ${q.sus} นัด`
       : q.inj > 0
-        ? `🩹 บาดเจ็บ ${q.inj} นัด`
+        ? `✚ บาดเจ็บ ${q.inj} นัด`
         : f < 60
           ? `⚠️ เหนื่อยล้า (${f}%)`
           : `✅ พร้อมลง (${f}%)`;

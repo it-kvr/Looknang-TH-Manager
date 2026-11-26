@@ -1,6 +1,6 @@
 import React from 'react';
 
-export type StatIconKind = 'goal' | 'assist' | 'yellow' | 'red' | 'subIn' | 'subOut' | 'save';
+export type StatIconKind = 'goal' | 'assist' | 'yellow' | 'red' | 'subIn' | 'subOut' | 'save' | 'injury';
 
 interface StatIconBadgeProps {
   kind: StatIconKind;
@@ -105,6 +105,22 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
               {numText}
             </text>
           )}
+        </svg>
+      </span>
+    );
+  }
+
+  if (kind === 'injury') {
+    return (
+      <span
+        title={title || (n > 1 ? `บาดเจ็บ ${n} นัด` : 'บาดเจ็บ')}
+        className="inline-flex items-center justify-center shrink-0 select-none leading-none align-middle"
+        style={{ width: px, height: px }}
+      >
+        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true">
+          <circle cx="10" cy="10" r="8.8" fill="#ffffff" stroke="#ef4444" strokeWidth="1.5" />
+          <rect x="8.2" y="4.5" width="3.6" height="11" rx="1" fill="#ef4444" />
+          <rect x="4.5" y="8.2" width="11" height="3.6" rx="1" fill="#ef4444" />
         </svg>
       </span>
     );

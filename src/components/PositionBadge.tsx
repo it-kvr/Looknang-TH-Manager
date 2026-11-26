@@ -29,11 +29,17 @@ export function getPositionCanvasPalette(roleOrPos?: string | null): { bg: strin
 export const PositionBadge: React.FC<{
   role: string;
   size?: '2xs' | 'xs' | 'sm';
+  fixedWidth?: boolean;
   className?: string;
   title?: string;
-}> = ({ role, size = 'xs', className = '', title }) => {
-  const sizeCls =
-    size === '2xs'
+}> = ({ role, size = 'xs', fixedWidth = true, className = '', title }) => {
+  const sizeCls = fixedWidth
+    ? size === '2xs'
+      ? 'w-[28px] mland:w-[24px] px-0.5 py-[0.5px] rounded text-[8.5px] mland:text-[7.5px]'
+      : size === 'sm'
+        ? 'w-[36px] mland:w-[30px] px-0.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px]'
+        : 'w-[32px] mland:w-[27px] px-0.5 py-[1px] rounded text-[9px] mland:text-[8px]'
+    : size === '2xs'
       ? 'px-1 py-[0.5px] rounded text-[8.5px] mland:text-[7.5px]'
       : size === 'sm'
         ? 'px-1.5 mland:px-1 py-0.5 rounded-md text-[10px] mland:text-[8.5px]'

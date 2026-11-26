@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { PositionBadge } from '../components/PositionBadge';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -1778,7 +1779,7 @@ export const FinanceClubView: React.FC<{
                                   squadPl && onInspectPlayer ? 'hover:bg-[var(--surface-2)]/70 cursor-pointer' : 'cursor-default'
                                 }`}
                               >
-                                <span className={`w-5 text-center font-extrabold text-xs tabular shrink-0 ${idx === 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                <span className={`w-5 text-left font-extrabold text-xs tabular shrink-0 ${idx === 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                                   {idx + 1}
                                 </span>
                                 {squadPl && (
@@ -1794,8 +1795,10 @@ export const FinanceClubView: React.FC<{
                                 </span>
                                 <div className="flex-1 min-w-0 space-y-1">
                                   <div className="flex items-center justify-between gap-2 text-xs">
-                                    <span className="font-bold truncate">
-                                      {row.name} <span className="text-[10px] font-medium text-[var(--mut)]">· {row.ro}</span>
+                                    <span className="flex items-center gap-1.5 min-w-0">
+                                      <PositionBadge role={row.ro} size="2xs" />
+                                      <span className="font-bold truncate">{row.name}</span>
+                                      {me.cap === row.name && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                                     </span>
                                     <span className="tabular shrink-0 font-bold">
                                       {row.units.toLocaleString()} ตัว{' '}
@@ -2004,7 +2007,9 @@ export const FinanceClubView: React.FC<{
                         <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
                           <PlayerFace player={q} team={me} state={state} club={state.club} isMyClub size={22} />
                         </div>
-                        <span className="truncate">{q.ro} · {q.n}</span>
+                        <PositionBadge role={q.ro} size="2xs" />
+                        <span className="font-semibold truncate">{q.n}</span>
+                        {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                       </div>
                       <b className="tabular text-[var(--mut)] shrink-0">{fmtMoneyNum(wagOf(q))}/นัด</b>
                     </div>
@@ -3002,14 +3007,15 @@ export const FinanceClubView: React.FC<{
                                   {row.roleLabel}
                                 </div>
                                 <div className="flex items-center gap-1 min-w-0 leading-tight mt-0.5">
-                                  {row.isCaptain && (
-                                    <CaptainBadge team={me} state={state} size="xs" />
-                                  )}
+                                  <PositionBadge role={pl.ro} size="2xs" />
                                   <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] group-hover:text-[var(--g)] truncate">
                                     {pl.n}
                                   </span>
+                                  {row.isCaptain && (
+                                    <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />
+                                  )}
                                   <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] shrink-0 tabular">
-                                    · {pl.ro} #{rowShirtNo}
+                                    #{rowShirtNo}
                                   </span>
                                 </div>
                               </div>

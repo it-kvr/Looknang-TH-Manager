@@ -751,7 +751,12 @@ export const TeamInspectorModal: React.FC<{
                             <PlayerFace player={q} team={team} state={state} careerProfile={isMe ? state.p : null} size={28} />
                           </div>
                           <div className="min-w-0">
-                            <div className="font-semibold truncate flex items-center gap-1 leading-tight">
+                            <div className="font-semibold flex items-center gap-1 leading-tight min-w-0">
+                              <PositionBadge role={q.ro} size="2xs" />
+                              <span className="text-[var(--mut)] tabular w-[24px] mland:w-[21px] text-left shrink-0">#{getShirtNo(team, q)}</span>
+                              <span className="truncate">{q.n}</span>
+                              {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+                              {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
                               {isMe && (
                                 <span
                                   title="ตัวคุณ"
@@ -761,13 +766,8 @@ export const TeamInspectorModal: React.FC<{
                                   ★
                                 </span>
                               )}
-                              <span className="text-[var(--mut)] tabular shrink-0">#{getShirtNo(team, q)}</span>
-                              {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
-                              {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" />}
-                              <span className="truncate">{q.n}</span>
                             </div>
                             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 flex-wrap">
-                              <PositionBadge role={q.ro} size="2xs" />
                               <span>อายุ {q.age}</span>
                               <PlayerBioStrip bio={qBio} variant="inline" className="hidden sm:inline-flex" />
                               <span>·</span>
@@ -785,7 +785,9 @@ export const TeamInspectorModal: React.FC<{
                                   · <StatIconBadge kind="red" count={q.sus} size="xs" /> แบน
                                 </span>
                               ) : q.inj > 0 ? (
-                                <span>· 🩹{q.inj}</span>
+                                <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
+                                  · <StatIconBadge kind="injury" size="xs" /> {q.inj}
+                                </span>
                               ) : (q.yc || 0) > 0 ? (
                                 <span className="inline-flex items-center gap-0.5">
                                   · <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" /> {q.yc}/3

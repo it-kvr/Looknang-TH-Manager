@@ -831,7 +831,7 @@ export const CupView: React.FC<{
                                       : 'bg-[var(--surface-2)]/35 border-[var(--line)]/70 hover:border-[var(--g)]/60'
                                   }`}
                                 >
-                                  <span className={`w-4 text-[11px] mland:text-[9px] font-extrabold tabular text-center shrink-0 ${
+                                  <span className={`w-4 text-[11px] mland:text-[9px] font-extrabold tabular text-left shrink-0 ${
                                     idx === 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--mut)]'
                                   }`}>
                                     {idx + 1}
@@ -847,12 +847,13 @@ export const CupView: React.FC<{
                                     />
                                   </div>
                                   <div className="flex-1 min-w-0">
-                                    <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
-                                      {isMine ? '★ ' : ''}{item.q.n}
-                                    </div>
-                                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 tabular">
-                                      <ClubCrest name={item.t.name} size={12} team={item.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                                    <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] flex items-center gap-1 min-w-0">
                                       <PositionBadge role={item.q.ro} size="2xs" />
+                                      <span className="truncate">{item.q.n}</span>
+                                      {isMine && <span className="text-[var(--lamp)] shrink-0">★</span>}
+                                    </div>
+                                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
+                                      <ClubCrest name={item.t.name} size={12} team={item.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                                       <span className="truncate">{item.t.name}</span>
                                       <span aria-hidden="true">·</span>
                                       <span className="shrink-0">{item.st.sp}น</span>

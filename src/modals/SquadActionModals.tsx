@@ -10,6 +10,7 @@ import {
   validateBatchSquadRemoval
 } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
+import { PositionBadge } from '../components/PositionBadge';
 import { SFX } from '../utils/audioTheme';
 
 export const SquadRenewModal: React.FC<{
@@ -315,9 +316,12 @@ export const SquadSellModal: React.FC<{
                     >
                       <PlayerFace player={q} team={team} state={state} size={32} />
                       <div className="flex-1 min-w-0">
-                        <div className="text-xs font-bold truncate">{q.n}</div>
+                        <div className="text-xs font-bold flex items-center gap-1 min-w-0">
+                          <PositionBadge role={q.ro} size="2xs" />
+                          <span className="truncate">{q.n}</span>
+                        </div>
                         <div className="text-[10px] text-[var(--mut)]">
-                          {q.ro} · อายุ {q.age} · ประเมิน {fmtMoney(val)}
+                          อายุ {q.age} · ประเมิน {fmtMoney(val)}
                         </div>
                       </div>
                       <span
@@ -476,11 +480,13 @@ export const SquadReleaseModal: React.FC<{
                   >
                     <PlayerFace player={q} team={team} state={state} size={32} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-xs font-bold truncate">
-                        {q.n} {q.loan ? <span className="text-[10px] text-amber-400">(ยืมตัว)</span> : null}
+                      <div className="text-xs font-bold flex items-center gap-1 min-w-0">
+                        <PositionBadge role={q.ro} size="2xs" />
+                        <span className="truncate">{q.n}</span>
+                        {q.loan ? <span className="text-[10px] text-amber-400 shrink-0">(ยืมตัว)</span> : null}
                       </div>
                       <div className="text-[10px] text-[var(--mut)]">
-                        {q.ro} · เหลือ {con.yr} ปี · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
+                        เหลือ {con.yr} ปี · ค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
                       </div>
                     </div>
                     <span

@@ -16,6 +16,7 @@ import { TalentBadge, TalentTierIcon } from '../components/TalentBadge';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { AthleteCard } from '../components/AthleteCard';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { PositionBadge } from '../components/PositionBadge';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
@@ -1050,10 +1051,12 @@ export const MainMenu: React.FC<{
                         <PlayerFace player={pl} team={selectedTeam} size={24} bare />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] truncate leading-tight">
-                          {pl.n}
+                        <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
+                          <PositionBadge role={pl.ro} size="2xs" />
+                          <span className="truncate">{pl.n}</span>
+                          {selectedTeam.cap === pl.n && <CaptainBadge team={selectedTeam} size="xs" className="shrink-0" />}
                         </div>
-                        <div className="text-[10px] mland:text-[8px] text-[var(--mut)] tabular leading-tight">
+                        <div className="text-[10px] mland:text-[8px] text-[var(--mut)] tabular leading-tight mt-0.5">
                           {SPN[pl.ro] || pl.ro} · อายุ {pl.age} ปี
                         </div>
                       </div>
