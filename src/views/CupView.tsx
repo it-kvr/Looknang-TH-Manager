@@ -723,7 +723,7 @@ export const CupView: React.FC<{
 
                 const catTabs: { id: CupStatCat; lbl: string }[] = [
                   { id: 'sg', lbl: '⚽ ประตู' },
-                  { id: 'sa', lbl: '🎯 จ่าย' },
+                  { id: 'sa', lbl: '👟 จ่าย' },
                   { id: 'cs', lbl: '🧤 คลีน' },
                   { id: 'motm', lbl: '👑 MOTM' },
                   { id: 'rt', lbl: '⭐ เรตติ้ง' },
@@ -780,7 +780,7 @@ export const CupView: React.FC<{
                               tone: 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/45'
                             },
                             {
-                              title: '🎯 จอมแอสซิสต์',
+                              title: '👟 จอมแอสซิสต์',
                               entry: topAst,
                               val: topAst ? `${topAst.st.sa} ครั้ง` : '-',
                               tone: 'bg-[var(--g-soft)]/55 border-[var(--g)]/35'

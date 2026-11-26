@@ -1313,7 +1313,7 @@ export const MarketView: React.FC<{
                             <span className="inline-flex flex-wrap items-center gap-1.5 px-1.5 py-[1px] rounded bg-emerald-500/10 border border-emerald-500/25 text-[var(--ink)] font-bold">
                               <span>👕 {cs.apps} นัด</span>
                               <span>⚽ {cs.goals}</span>
-                              <span>{q.pos === 'GK' ? `🧤 ${cs.cleanSheets}` : `🎯 ${cs.assists}`}</span>
+                              <span>{q.pos === 'GK' ? `🧤 ${cs.cleanSheets}` : `👟 ${cs.assists}`}</span>
                               {cs.avgRating > 0 && <span className="text-[#8a5b00] dark:text-[#fde047]">⭐ {cs.avgRating.toFixed(2)}</span>}
                               {cs.motm > 0 && <span>👑 {cs.motm}</span>}
                               {cs.ntCaps > 0 && <span>🇹🇭 {cs.ntCaps}</span>}

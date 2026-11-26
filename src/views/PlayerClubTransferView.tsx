@@ -274,7 +274,7 @@ export const PlayerClubTransferView: React.FC<{
                     </div>
                     <div className="text-right shrink-0">
                       <div className={`text-sm mland:text-xs font-extrabold tabular ${statTierMeta(q.ov).textClass}`}>{q.ov}</div>
-                      <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">⚽ {q.sg || 0} · 🎯 {q.sa || 0}</div>
+                      <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">⚽ {q.sg || 0} · 👟 {q.sa || 0}</div>
                     </div>
                   </div>
                 );

@@ -1145,7 +1145,7 @@ export const LeagueView: React.FC<{
 
           {/* 6 Complementary Stat Leaderboards (non-overlapping with Golden Boot & Golden Glove) */}
           <div className="grid grid-cols-3 gap-2 mland:gap-1.5 content-start">
-            {board('🎯', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
+            {board('👟', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
             {board('🔥', 'มีส่วนร่วมประตู (G+A)', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
             {board('🌟', 'แมนออฟเดอะแมตช์ (MOTM)', (q) => q.motm || 0, (q) => `${q.motm || 0} ครั้ง`)}
             {board(

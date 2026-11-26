@@ -482,7 +482,7 @@ export const SeasonEndModal: React.FC<{
                     accent: 'border-[var(--g)]/35'
                   },
                   {
-                    label: '🎯 จอมแอสซิสต์ทีม',
+                    label: '👟 จอมแอสซิสต์ทีม',
                     name: arc.topAssist?.name,
                     stat: arc.topAssist ? `${arc.topAssist.sa} แอสซิสต์ (${arc.topAssist.sp} นัด)` : '-',
                     player: assistPlayer,
@@ -535,7 +535,7 @@ export const SeasonEndModal: React.FC<{
                   )}
                   {summary.bestAssist && (
                     <div className="truncate text-[var(--ink)]">
-                      🎯 จอมแอสซิสต์: <b>{summary.bestAssist}</b>
+                      👟 จอมแอสซิสต์: <b>{summary.bestAssist}</b>
                     </div>
                   )}
                 </div>

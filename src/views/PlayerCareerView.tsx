@@ -259,7 +259,7 @@ export const PlayerCareerView: React.FC<{
                     <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
                   </div>
                   <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{p.pos === 'GK' ? '🧤 คลีน' : '🎯 จ่าย'}</div>
+                    <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{p.pos === 'GK' ? '🧤 คลีน' : '👟 จ่าย'}</div>
                     <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
                   </div>
                   <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
@@ -278,7 +278,7 @@ export const PlayerCareerView: React.FC<{
                           <span key={ck} className="whitespace-nowrap">
                             {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
                             {st.sg > 0 ? `·${st.sg}⚽` : ''}
-                            {p.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}🎯` : ''}
+                            {p.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}👟` : ''}
                             {st.motm > 0 ? `·${st.motm}👑` : ''}
                           </span>
                         );

@@ -5206,12 +5206,12 @@ export const MatchModal: React.FC<{
           y: carrier.y,
           toX: destX,
           toY: destY,
-          label: `🎯 เปิดคัทแบ็คตัดหลัง!`,
+          label: `👟 เปิดคัทแบ็คตัดหลัง!`,
           color: '#f472b6',
           ttl: 1.5,
           maxTtl: 1.5
         });
-        w.phaseLabel = `🎯 ${carrier.shortName} ลากสุดเส้นเปิดตัดหลังสวยๆ ให้ ${cTarget.shortName}!`;
+        w.phaseLabel = `👟 ${carrier.shortName} ลากสุดเส้นเปิดตัดหลังสวยๆ ให้ ${cTarget.shortName}!`;
         w.phaseTone = 'attack';
         SFX.pass();
         return;
@@ -6767,7 +6767,7 @@ export const MatchModal: React.FC<{
         });
         w.phaseLabel = `⚡ ${target.shortName} วิ่งมาซัดคัทแบ็คจังหวะเดียว!!`;
         w.phaseTone = 'danger';
-        triggerDramaSlow(w, 1.15, `🎯 คัทแบ็คจบสกอร์! · ${target.shortName}`);
+        triggerDramaSlow(w, 1.15, `👟 คัทแบ็คจบสกอร์! · ${target.shortName}`);
         SFX.shot();
       } else if (nearDef) {
         bumpPlayerStat(nearDef.id, 'tackles');

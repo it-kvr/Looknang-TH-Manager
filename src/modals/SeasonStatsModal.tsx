@@ -152,7 +152,7 @@ export const SeasonStatsModal: React.FC<{
   const sortOptions: { key: SortKey; label: string }[] = [
     { key: 'avgRating', label: '⭐ คะแนนเฉลี่ย' },
     { key: 'sg', label: '⚽ ประตู' },
-    { key: 'sa', label: '🎯 แอสซิสต์' },
+    { key: 'sa', label: '👟 แอสซิสต์' },
     { key: 'sp', label: '👕 ลงเล่น' },
     { key: 'motm', label: '👑 MOTM' },
     { key: 'ov', label: 'OVR' }
@@ -297,12 +297,12 @@ export const SeasonStatsModal: React.FC<{
                 )}
                 {rec.leagueBestScorer && (
                   <span>
-                    👟 ดาวซัลโวลีก: <b className="text-[var(--ink)]">{rec.leagueBestScorer}</b>
+                    ⚽ ดาวซัลโวลีก: <b className="text-[var(--ink)]">{rec.leagueBestScorer}</b>
                   </span>
                 )}
                 {rec.leagueBestAssist && (
                   <span>
-                    🎯 แอสซิสต์สูงสุดลีก: <b className="text-[var(--ink)]">{rec.leagueBestAssist}</b>
+                    👟 แอสซิสต์สูงสุดลีก: <b className="text-[var(--ink)]">{rec.leagueBestAssist}</b>
                   </span>
                 )}
               </div>
@@ -328,7 +328,7 @@ export const SeasonStatsModal: React.FC<{
             </div>
 
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)]/60 border border-[var(--g)]/35 space-y-0.5">
-              <div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)]">🎯 แอสซิสต์สูงสุดในทีม</div>
+              <div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)]">👟 แอสซิสต์สูงสุดในทีม</div>
               {scopedTopAssist ? (
                 <>
                   <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{scopedTopAssist.name}</div>
@@ -483,7 +483,7 @@ export const SeasonStatsModal: React.FC<{
                             </span>
                             {isTopRt && <span title="คะแนนเฉลี่ยสูงสุดในทีม">⭐</span>}
                             {isTopGoal && <span title="ดาวซัลโวทีม">⚽</span>}
-                            {isTopAst && <span title="แอสซิสต์สูงสุดทีม">🎯</span>}
+                            {isTopAst && <span title="แอสซิสต์สูงสุดทีม">👟</span>}
                           </div>
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center">

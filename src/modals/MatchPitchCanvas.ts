@@ -2171,7 +2171,7 @@ export const drawLivePitchToCanvas = (
     const sub = gb.isOwnGoal
       ? `${gb.teamName} ได้ประตูส้มหล่น!`
       : gb.assister
-        ? `🎯 แอสซิสต์: ${gb.assister}`
+        ? `👟 แอสซิสต์: ${gb.assister}`
         : gb.isMyGoal
           ? '🎉 เฮลั่นสนาม!'
           : '🔥 ตุงตาข่าย!';

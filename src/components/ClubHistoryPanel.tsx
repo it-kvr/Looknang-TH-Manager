@@ -36,7 +36,7 @@ const METRIC_COLUMNS: {
   {
     key: 'assists',
     label: 'แอสซิสต์',
-    icon: '🎯',
+    icon: '👟',
     unit: 'ครั้ง',
     accentCls: 'text-sky-700 dark:text-sky-300',
     headerBgCls: 'bg-sky-500/10'

@@ -397,7 +397,7 @@ export const PlayerInspectorModal: React.FC<{
                           <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
                         </div>
                         <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{livePlayer.pos === 'GK' ? '🧤 คลีน' : '🎯 จ่าย'}</div>
+                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{livePlayer.pos === 'GK' ? '🧤 คลีน' : '👟 จ่าย'}</div>
                           <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
                         </div>
                         <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
@@ -418,7 +418,7 @@ export const PlayerInspectorModal: React.FC<{
                                 <span key={ck} className="whitespace-nowrap">
                                   {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
                                   {st.sg > 0 ? `·${st.sg}⚽` : ''}
-                                  {livePlayer.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}🎯` : ''}
+                                  {livePlayer.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}👟` : ''}
                                   {st.motm > 0 ? `·${st.motm}👑` : ''}
                                 </span>
                               );
@@ -845,7 +845,7 @@ export const TeamInspectorModal: React.FC<{
                     <div className="truncate text-[var(--mut)] tabular">
                       ⚽ <b className="text-[var(--ink)]">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</b>
                       <span className="mx-1.5">·</span>
-                      🎯 <b className="text-[var(--ink)]">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</b>
+                      👟 <b className="text-[var(--ink)]">{topAssist ? `${topAssist.n.split(' ')[0]} (${topAssist.sa || 0})` : '-'}</b>
                     </div>
                     {formChars.length > 0 && (
                       <div className="flex items-center gap-0.5 shrink-0" title="ฟอร์ม 5 นัดล่าสุด">
