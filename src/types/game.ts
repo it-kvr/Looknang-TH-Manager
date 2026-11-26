@@ -1251,7 +1251,19 @@ export interface PendingSetPiece {
   setupElapsed?: number;
 }
 
+export type VarScenario =
+  | 'offside_line'
+  | 'goal_line_tech'
+  | 'foul_buildup'
+  | 'box_edge_foul'
+  | 'handball_box'
+  | 'gk_clash_box'
+  | 'late_slide'
+  | 'dogso'
+  | 'reckless_duel';
+
 export interface VarReplaySnapshot {
+  scenario?: VarScenario;
   attRight: boolean;
   attId?: string;
   attShort: string;
@@ -1269,6 +1281,7 @@ export interface VarReplaySnapshot {
   incidentY: number;
   defLineX: number;
   offsideMarginCm?: number;
+  goalLineMm?: number;
   foulKind?: string;
   inBox?: boolean;
 }

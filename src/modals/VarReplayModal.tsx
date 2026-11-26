@@ -120,12 +120,25 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
         ? 'หยุดภาพตรวจจุดชี้ขาด'
         : 'สโลว์โมชันจังหวะปะทะ';
 
+  const sc = activeRecord.varState.replay?.scenario;
   const kindLabel =
     activeRecord.kind === 'goal'
-      ? 'ตรวจสอบประตู / ล้ำหน้า'
+      ? sc === 'goal_line_tech'
+        ? 'โกล์ไลน์ · เช็กบอลข้ามเส้น'
+        : sc === 'foul_buildup'
+          ? 'ตรวจสอบฟาวล์จังหวะก่อนยิง'
+          : 'ตรวจสอบประตู / เส้นล้ำหน้า'
       : activeRecord.kind === 'penalty'
-        ? 'ตรวจสอบจุดโทษ & เส้นเขต'
-        : 'ตรวจสอบฟาวล์รุนแรง / ใบแดง';
+        ? sc === 'handball_box'
+          ? 'ตรวจสอบแฮนด์บอลในเขตโทษ'
+          : sc === 'gk_clash_box'
+            ? 'ตรวจสอบผู้รักษาประตูปะทะในกรอบ'
+            : 'ตรวจสอบจุดโทษ & เส้นเขต'
+        : sc === 'dogso'
+          ? 'ตรวจสอบตัดเกมหลุดเดี่ยว (DOGSO)'
+          : sc === 'reckless_duel'
+            ? 'ตรวจสอบปะทะรุนแรง / นอกเกม'
+            : 'ตรวจสอบฟาวล์รุนแรง / ใบแดง';
 
   const activeIdx = records.findIndex((r) => r.id === activeRecord.id);
 

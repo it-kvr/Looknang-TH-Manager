@@ -926,6 +926,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       gkKitOverride={activeGkKit}
                       trimOverride={activeTrim}
                       showFitBar={true}
+                      showPitchCrest={true}
                       selectedPlayerName={swapPickName}
                       onPlayerClick={canEditActiveTeam ? (pl) => handleQuickSwap(pl.n) : undefined}
                       className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"

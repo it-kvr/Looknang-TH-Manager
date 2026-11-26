@@ -5380,10 +5380,32 @@ export const MatchModal: React.FC<{
           const willAwardPen = !overturn;
           const gkPen = defPool.find((d) => !d.sentOff && d.pos === 'GK');
           const boxLineX = attRight ? 83 : 17;
-          const replayIncidentX = willAwardPen
-            ? attRight ? clamp(carrier.x, 84.5, 93.5) : clamp(carrier.x, 6.5, 15.5)
-            : attRight ? clamp(Math.min(carrier.x, 81.4), 76.5, 81.6) : clamp(Math.max(carrier.x, 18.6), 18.4, 23.5);
-          const replayIncidentY = clamp(carrier.y, 26, 74);
+          const penRoll = Math.random();
+          const penScenario: 'box_edge_foul' | 'handball_box' | 'gk_clash_box' =
+            penRoll < 0.28 && distToGoal < 16
+              ? 'gk_clash_box'
+              : penRoll < 0.56
+                ? 'handball_box'
+                : 'box_edge_foul';
+          const replayIncidentX =
+            penScenario === 'gk_clash_box'
+              ? attRight ? clamp(carrier.x, 89.5, 95.5) : clamp(carrier.x, 4.5, 10.5)
+              : willAwardPen
+                ? attRight ? clamp(carrier.x, 84.5, 93.5) : clamp(carrier.x, 6.5, 15.5)
+                : attRight ? clamp(Math.min(carrier.x, 81.4), 76.5, 81.6) : clamp(Math.max(carrier.x, 18.6), 18.4, 23.5);
+          const replayIncidentY = penScenario === 'gk_clash_box' ? clamp(carrier.y, 38, 62) : clamp(carrier.y, 26, 74);
+          const penReason =
+            penScenario === 'handball_box'
+              ? `เช็กจังหวะแฮนด์บอลของ ${nearestDef.shortName} ในกรอบเขตโทษ`
+              : penScenario === 'gk_clash_box'
+                ? `เช็กจังหวะผู้รักษาประตูปะทะ ${carrier.shortName} ในกรอบ`
+                : `เช็กจุดโทษ & ใบเหลือง/แดงของ ${nearestDef.shortName}`;
+          const penLog =
+            penScenario === 'handball_box'
+              ? `🖥 ผู้ตัดสินเช็ก VAR จังหวะบอลพุ่งโดนแขน ${nearestDef.id} (${defTeam.name}) ในเขตโทษ!`
+              : penScenario === 'gk_clash_box'
+                ? `🖥 ผู้ตัดสินเช็ก VAR จังหวะผู้รักษาประตู ${defTeam.name} พุ่งปะทะ ${carrier.id} ในกรอบ!`
+                : `🖥 ผู้ตัดสินขอเช็ก VAR จังหวะ ${nearestDef.id} (${defTeam.name}) สกัดใส่ ${carrier.id} ในกรอบเขตโทษ!`;
           w.varReview = {
             kind: 'penalty',
             side,
@@ -5396,8 +5418,9 @@ export const MatchModal: React.FC<{
             culpritSide: defSide,
             overturn: !willAwardPen,
             distToGoal,
-            reasonText: `เช็กจุดโทษ & ใบเหลือง/แดงของ ${nearestDef.shortName}`,
+            reasonText: penReason,
             replay: {
+              scenario: penScenario,
               attRight,
               attId: carrier.id,
               attShort: carrier.shortName,
@@ -5409,8 +5432,8 @@ export const MatchModal: React.FC<{
               defVis: nearestDef.vis,
               gkNo: gkPen?.no,
               gkVis: gkPen?.vis,
-              passFromX: clamp(replayIncidentX + (attRight ? -5.5 : 5.5), 4, 96),
-              passFromY: clamp(replayIncidentY + (replayIncidentY < 50 ? -2.2 : 2.2), 18, 82),
+              passFromX: clamp(replayIncidentX + (attRight ? -7.5 : 7.5), 4, 96),
+              passFromY: clamp(replayIncidentY + (replayIncidentY < 50 ? 8.5 : -8.5), 14, 86),
               incidentX: replayIncidentX,
               incidentY: replayIncidentY,
               defLineX: boxLineX,
@@ -5422,21 +5445,21 @@ export const MatchModal: React.FC<{
             type: 'var',
             x: carrier.x,
             y: carrier.y,
-            label: '🖥 VAR เช็กจุดโทษ!',
+            label: penScenario === 'handball_box' ? '🖥 VAR เช็กแฮนด์บอล!' : '🖥 VAR เช็กจุดโทษ!',
             color: '#38bdf8',
             ttl: 6.0,
             maxTtl: 6.0
           });
-          triggerDramaSlow(w, 6.0, '🖥 VAR เช็กจุดโทษ');
+          triggerDramaSlow(w, 6.0, penScenario === 'handball_box' ? '🖥 VAR เช็กแฮนด์บอล' : '🖥 VAR เช็กจุดโทษ');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
           b.progress = 1;
           b.flightType = 'carry';
           b.shotStyle = undefined;
-          w.phaseLabel = `🖥 VAR กำลังเช็กจังหวะฟาวล์ในเขตโทษ!`;
+          w.phaseLabel = penScenario === 'handball_box' ? '🖥 VAR กำลังเช็กแฮนด์บอลในเขตโทษ!' : '🖥 VAR กำลังเช็กจังหวะฟาวล์ในเขตโทษ!';
           w.phaseTone = 'setpiece';
-          pushLog(curMin, `🖥 ผู้ตัดสินขอเช็ก VAR จังหวะ ${nearestDef.id} (${defTeam.name}) สกัดใส่ ${carrier.id} ในกรอบเขตโทษ!`, 'sys');
+          pushLog(curMin, penLog, 'sys');
           return;
         }
 
@@ -5445,6 +5468,8 @@ export const MatchModal: React.FC<{
           const upgradeRed = Math.random() < (foulKind === 'dogso' ? 0.56 : defVolatile ? 0.28 : 0.18);
           const replayIncX = clamp(carrier.x, 12, 88);
           const replayIncY = clamp(carrier.y, 14, 86);
+          const foulScenario: 'dogso' | 'late_slide' | 'reckless_duel' =
+            foulKind === 'dogso' ? 'dogso' : foulKind === 'late_slide' ? 'late_slide' : 'reckless_duel';
           w.varReview = {
             kind: 'foul_card',
             side,
@@ -5459,10 +5484,13 @@ export const MatchModal: React.FC<{
             pendingCardUpgrade: upgradeRed ? 'R' : 'Y',
             distToGoal,
             reasonText:
-              foulKind === 'dogso'
+              foulScenario === 'dogso'
                 ? `เช็กจังหวะตัดเกมหลุดเดี่ยวของ ${nearestDef.shortName} (DOGSO)`
-                : `เช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName} (ลุ้นใบแดง)`,
+                : foulScenario === 'reckless_duel'
+                  ? `เช็กจังหวะปะทะรุนแรง / นอกเกมของ ${nearestDef.shortName}`
+                  : `เช็กจังหวะเสียบสกัดเปิดปุ่มของ ${nearestDef.shortName} (ลุ้นใบแดง)`,
             replay: {
+              scenario: foulScenario,
               attRight,
               attId: carrier.id,
               attShort: carrier.shortName,
@@ -6915,44 +6943,81 @@ export const MatchModal: React.FC<{
     const attTeam = vr.side === 'H' ? homeOrig : awayOrig;
     const defSide = vr.side === 'H' ? 'A' : 'H';
 
+    const sc = vr.replay?.scenario;
     if (vr.kind === 'goal') {
       if (vr.overturn) {
         // Disallowed by VAR!
-        recordVar('❌ ริบประตู', '❌ VAR ริบประตู (ล้ำหน้า)', 'no_goal');
+        const overturnShort =
+          sc === 'goal_line_tech'
+            ? '❌ ไม่ข้ามเส้น'
+            : sc === 'foul_buildup'
+              ? '❌ ฟาวล์ก่อนยิง'
+              : '❌ ริบประตู';
+        const overturnDetail =
+          sc === 'goal_line_tech'
+            ? 'โกล์ไลน์ชี้บอลยังไม่ข้ามเส้น'
+            : sc === 'foul_buildup'
+              ? 'VAR ริบประตู (ฟาวล์ก่อนยิง)'
+              : 'VAR ริบประตู (ล้ำหน้า)';
+        recordVar(overturnShort, `❌ ${overturnDetail}`, 'no_goal');
         SFX.foul();
         SFX.boo(0.92);
-        if (vr.side === 'H') w.offsidesH++;
-        else w.offsidesA++;
+        if (sc === 'offside_line' || !sc) {
+          if (vr.side === 'H') w.offsidesH++;
+          else w.offsidesA++;
+        }
         const offX = isAttackRight(w, vr.side) ? 84 : 16;
         addWorldFx(w, {
           type: 'offside',
           x: offX,
           y: vr.y,
           offsideX: offX,
-          label: `🖥❌ VAR ริบประตู!`,
+          label: sc === 'goal_line_tech' ? '🖥❌ บอลไม่ข้ามเส้น!' : sc === 'foul_buildup' ? '🖥❌ ฟาวล์ก่อนยิง!' : '🖥❌ VAR ริบประตู!',
           color: '#ef4444',
           ttl: 3.4,
           maxTtl: 3.4
         });
-        triggerDramaSlow(w, 2.2, `🖥❌ VAR ริบประตู!`);
-        w.pendingSetPiece = { type: 'offside', side: defSide, x: offX, y: 50, waitSec: 2.1 };
-        w.phaseLabel = `🖥❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
+        triggerDramaSlow(w, 2.2, sc === 'goal_line_tech' ? '🖥❌ ยังไม่ข้ามเส้น!' : '🖥❌ VAR ริบประตู!');
+        w.pendingSetPiece = { type: sc === 'goal_line_tech' ? 'goalkick' : sc === 'foul_buildup' ? 'freekick' : 'offside', side: defSide, x: offX, y: 50, waitSec: 2.1 };
+        w.phaseLabel =
+          sc === 'goal_line_tech'
+            ? `🖥❌ โกล์ไลน์ชี้บอลยังไม่ข้ามเส้นเต็มใบ!`
+            : `🖥❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
         w.phaseTone = 'offside';
-        pushLog(curMin, `🖥❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card', varId);
-        pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, 'VAR ริบประตู (ล้ำหน้า)', varId);
+        const overturnLog =
+          sc === 'goal_line_tech'
+            ? `🖥❌ โกล์ไลน์!! บอลยังไม่ข้ามเส้นประตูเต็มใบของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`
+            : sc === 'foul_buildup'
+              ? `🖥❌ VAR ริบประตู!! พบจังหวะฟาวล์ก่อนทำประตูของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`
+              : `🖥❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`;
+        pushLog(curMin, overturnLog, 'card', varId);
+        pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, overturnDetail, varId);
       } else {
         // Goal stands!
-        recordVar('✅ ให้ประตู', '✅ VAR ยืนยันให้ประตู', 'goal');
+        const confirmShort = sc === 'goal_line_tech' ? '✅ ข้ามเส้น!' : '✅ ให้ประตู';
+        const confirmLabel =
+          sc === 'goal_line_tech'
+            ? '✅ โกล์ไลน์ยืนยันบอลข้ามเส้น'
+            : sc === 'foul_buildup'
+              ? '✅ VAR ยืนยันปะทะปกติ ให้ประตู'
+              : '✅ VAR ยืนยันให้ประตู';
+        recordVar(confirmShort, confirmLabel, 'goal');
         addWorldFx(w, {
           type: 'var',
           x: 50,
           y: 22,
-          label: '🖥✅ VAR ยืนยันให้ประตู!',
+          label: sc === 'goal_line_tech' ? '🖥✅ ข้ามเส้นเต็มใบ! ประตู!' : '🖥✅ VAR ยืนยันให้ประตู!',
           color: '#22c55e',
           ttl: 3.0,
           maxTtl: 3.0
         });
-        pushLog(curMin, `🖥✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`, 'goal', varId);
+        const confirmLog =
+          sc === 'goal_line_tech'
+            ? `🖥✅ โกล์ไลน์ยืนยัน: บอลข้ามเส้นเต็มใบแล้ว — ให้เป็นประตูของ ${attTeam.name}!`
+            : sc === 'foul_buildup'
+              ? `🖥✅ VAR ยืนยัน: ปะทะปกติก่อนยิง — ให้เป็นประตูของ ${attTeam.name}!`
+              : `🖥✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`;
+        pushLog(curMin, confirmLog, 'goal', varId);
         awardGoalToTeam(
           w,
           vr.side,
@@ -7075,12 +7140,16 @@ export const MatchModal: React.FC<{
         const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId);
         fkCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 ใบแดง';
       }
-      recordVar('🟡 นอกเขต', `🖥 VAR ชี้ฟาวล์นอกเขต${fkCardTxt}`, 'freekick');
+      recordVar(
+        sc === 'handball_box' ? '🟡 ไม่แฮนด์บอล' : sc === 'gk_clash_box' ? '🟡 ไม่ฟาวล์' : '🟡 นอกเขต',
+        sc === 'handball_box' ? `🖥 VAR ชี้ไม่แฮนด์บอล / นอกเขต${fkCardTxt}` : `🖥 VAR ชี้ฟาวล์นอกเขต${fkCardTxt}`,
+        'freekick'
+      );
       addWorldFx(w, {
         type: 'var',
         x: edgeX,
         y: vr.y,
-        label: `🖥 VAR: ฟาวล์นอกเขต${fkCardTxt}`,
+        label: sc === 'handball_box' ? `🖥 VAR: ไม่แฮนด์บอล${fkCardTxt}` : `🖥 VAR: ฟาวล์นอกเขต${fkCardTxt}`,
         color: '#38bdf8',
         ttl: 3.0,
         maxTtl: 3.0,
@@ -7090,7 +7159,14 @@ export const MatchModal: React.FC<{
       w.pendingSetPiece = { type: 'freekick', side: vr.side, x: edgeX, y: vr.y, waitSec: 1.65, wallPlayers: edgeWall };
       w.phaseLabel = `🖥 VAR ชี้ฟาวล์นอกเขต${fkCardTxt} (${attTeam.name})`;
       w.phaseTone = 'setpiece';
-      pushLog(curMin, `🖥 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys', varId);
+      pushLog(
+        curMin,
+        sc === 'handball_box'
+          ? `🖥 VAR ยืนยัน: แขนแนบลำตัว/อยู่นอกกรอบ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`
+          : `🖥 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`,
+        fkCardTxt ? 'card' : 'sys',
+        varId
+      );
     } else {
       SFX.foul();
       SFX.boo(0.85);
@@ -7107,12 +7183,16 @@ export const MatchModal: React.FC<{
           penCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 เหลืองแดง!';
         }
       }
-      recordVar('🚨 จุดโทษ!', `🚨 VAR ชี้จุดโทษ!${penCardTxt}`, 'penalty');
+      recordVar(
+        sc === 'handball_box' ? '🚨 แฮนด์บอล!' : '🚨 จุดโทษ!',
+        sc === 'handball_box' ? `🚨 VAR แฮนด์บอลจุดโทษ!${penCardTxt}` : `🚨 VAR ชี้จุดโทษ!${penCardTxt}`,
+        'penalty'
+      );
       addWorldFx(w, {
         type: 'penalty',
         x: spotX,
         y: 50,
-        label: `🖥✅ VAR จุดโทษ!${penCardTxt}`,
+        label: sc === 'handball_box' ? `🖥🚨 แฮนด์บอล! จุดโทษ!${penCardTxt}` : `🖥✅ VAR จุดโทษ!${penCardTxt}`,
         color: '#ef4444',
         ttl: 3.2,
         maxTtl: 3.2
@@ -7121,8 +7201,17 @@ export const MatchModal: React.FC<{
       w.pendingSetPiece = { type: 'penalty', side: vr.side, x: spotX, y: 50, waitSec: 2.0 };
       w.phaseLabel = `🖥🚨 VAR ให้จุดโทษ${penCardTxt} (${attTeam.name})!`;
       w.phaseTone = 'danger';
-      pushLog(curMin, `🖥🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card', varId);
-      pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, 'VAR ชี้จุดโทษ', varId);
+      pushLog(
+        curMin,
+        sc === 'handball_box'
+          ? `🖥🚨 VAR ชี้แฮนด์บอลในเขตโทษ!! ${attTeam.name} ได้ลูกจุดโทษ${penCardTxt}!`
+          : sc === 'gk_clash_box'
+            ? `🖥🚨 VAR ชี้ผู้รักษาประตูกระแทกฟาวล์ในกรอบ!! ${attTeam.name} ได้ลูกจุดโทษ${penCardTxt}!`
+            : `🖥🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`,
+        'card',
+        varId
+      );
+      pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, sc === 'handball_box' ? 'VAR แฮนด์บอลจุดโทษ' : 'VAR ชี้จุดโทษ', varId);
     }
   };
 
@@ -7835,16 +7924,18 @@ export const MatchModal: React.FC<{
           return;
         }
 
-        // Tight-call VAR Goal Check (~15% chance on open-play goals, skipped on Own Goals)
-        if (b.flightType === 'shot' && !plan?.ownGoalCulpritId && w.varChecks < 2 && Math.random() < 0.15) {
+        // Tight-call VAR Goal Check (~18% chance on open-play goals, skipped on Own Goals)
+        if (b.flightType === 'shot' && !plan?.ownGoalCulpritId && w.varChecks < 2 && Math.random() < 0.18) {
           w.varChecks++;
-          const overturn = Math.random() < 0.34;
+          const goalVarRoll = Math.random();
+          const goalScenario: 'offside_line' | 'goal_line_tech' | 'foul_buildup' =
+            goalVarRoll < 0.27 ? 'goal_line_tech' : goalVarRoll < 0.48 ? 'foul_buildup' : 'offside_line';
+          const overturn = Math.random() < (goalScenario === 'goal_line_tech' ? 0.30 : 0.34);
           const sortedOutfieldDefs = defPool
             .filter((d) => !d.sentOff && d.pos !== 'GK')
             .slice()
             .sort((a, d2) => (attRightNow ? d2.x - a.x : a.x - d2.x));
           const lastDef = sortedOutfieldDefs[0] || defPool[0];
-          const baseShotX = shooter?.x ?? b.fromX;
           const baseShotY = shooter?.y ?? b.fromY;
           const rawDefLineX = lastDef
             ? attRightNow
@@ -7854,16 +7945,47 @@ export const MatchModal: React.FC<{
               ? 84
               : 16;
           const marginCm = Math.round(10 + Math.random() * 34);
-          const replayAttX = overturn
-            ? attRightNow
-              ? clamp(rawDefLineX + 2.3, 74, 94.5)
-              : clamp(rawDefLineX - 2.3, 5.5, 26)
-            : attRightNow
-              ? clamp(rawDefLineX - 1.9, 71, 91.5)
-              : clamp(rawDefLineX + 1.9, 8.5, 29);
-          const replayAttY = clamp(baseShotY, 26, 74);
-          const passerX = clamp(replayAttX + (attRightNow ? -11 : 11), 28, 72);
-          const passerY = clamp(replayAttY + (replayAttY < 50 ? 9 : -9), 18, 82);
+          const goalLineMm = Math.round(8 + Math.random() * 44);
+          const replayAttX =
+            goalScenario === 'goal_line_tech'
+              ? attRightNow ? 91.5 : 8.5
+              : goalScenario === 'foul_buildup'
+                ? attRightNow ? clamp(rawDefLineX - 1.5, 72, 89) : clamp(rawDefLineX + 1.5, 11, 28)
+                : overturn
+                  ? attRightNow
+                    ? clamp(rawDefLineX + 2.3, 74, 94.5)
+                    : clamp(rawDefLineX - 2.3, 5.5, 26)
+                  : attRightNow
+                    ? clamp(rawDefLineX - 1.9, 71, 91.5)
+                    : clamp(rawDefLineX + 1.9, 8.5, 29);
+          const replayAttY = goalScenario === 'goal_line_tech' ? clamp(baseShotY, 43, 57) : clamp(baseShotY, 26, 74);
+          const passerX =
+            goalScenario === 'goal_line_tech'
+              ? attRightNow ? 91.5 : 8.5
+              : clamp(replayAttX + (attRightNow ? -11 : 11), 28, 72);
+          const passerY =
+            goalScenario === 'goal_line_tech'
+              ? clamp(replayAttY + (replayAttY < 50 ? 3.5 : -3.5), 41, 59)
+              : clamp(replayAttY + (replayAttY < 50 ? 9 : -9), 18, 82);
+
+          const goalReason =
+            goalScenario === 'goal_line_tech'
+              ? `โกล์ไลน์กำลังเช็กจังหวะยิงของ ${scorerShort} ว่าข้ามเส้นเต็มใบหรือไม่`
+              : goalScenario === 'foul_buildup'
+                ? `กำลังเช็กจังหวะปะทะก่อนยิงของ ${scorerShort}`
+                : `กำลังตีเส้นเช็กจังหวะล้ำหน้าของ ${scorerShort}`;
+          const goalFxLabel =
+            goalScenario === 'goal_line_tech'
+              ? '🖥 โกล์ไลน์เช็กข้ามเส้น!'
+              : goalScenario === 'foul_buildup'
+                ? '🖥 VAR เช็กฟาวล์ก่อนยิง!'
+                : '🖥 VAR เช็กประตู!';
+          const goalLog =
+            goalScenario === 'goal_line_tech'
+              ? `🖥 จังหวะก้ำกึ่งบนเส้นประตู! โกล์ไลน์ & VAR กำลังเช็กลูกยิงของ ${scorerName}`
+              : goalScenario === 'foul_buildup'
+                ? `🖥 บอลเข้าประตูไปแล้ว แต่ VAR เรียกเช็กจังหวะปะทะก่อนยิงของ ${scorerName}!`
+                : `🖥 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`;
 
           w.varReview = {
             kind: 'goal',
@@ -7877,8 +7999,9 @@ export const MatchModal: React.FC<{
             x: b.toX,
             y: b.toY,
             overturn,
-            reasonText: `กำลังตีเส้นเช็กจังหวะล้ำหน้าของ ${scorerShort}`,
+            reasonText: goalReason,
             replay: {
+              scenario: goalScenario,
               attRight: attRightNow,
               attId: scorerName,
               attShort: scorerShort,
@@ -7895,24 +8018,25 @@ export const MatchModal: React.FC<{
               incidentX: replayAttX,
               incidentY: replayAttY,
               defLineX: rawDefLineX,
-              offsideMarginCm: marginCm
+              offsideMarginCm: marginCm,
+              goalLineMm
             }
           };
           addWorldFx(w, {
             type: 'var',
             x: b.toX,
             y: b.toY,
-            label: '🖥 VAR เช็กประตู!',
+            label: goalFxLabel,
             color: '#38bdf8',
             ttl: 6.2,
             maxTtl: 6.2
           });
-          triggerDramaSlow(w, 6.2, `🖥 VAR เช็กประตู · ${scorerShort}`);
+          triggerDramaSlow(w, 6.2, `${goalFxLabel} · ${scorerShort}`);
           SFX.var();
           b.shotStyle = undefined;
           w.phaseLabel = `🖥 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
           w.phaseTone = 'setpiece';
-          pushLog(curMin, `🖥 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`, 'sys');
+          pushLog(curMin, goalLog, 'sys');
           return;
         }
 
@@ -12353,58 +12477,56 @@ export const MatchModal: React.FC<{
                           {/* Halftime Stage: Full-Height Pitch + Compact Right-Side Tactical Panel */}
                           <div className={`grid ${state.mode === 'm' ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_240px] mland:grid-cols-[minmax(0,1fr)_190px]' : 'grid-cols-1'} bg-[#092818]`}>
                             <div className="flex flex-col min-w-0">
-                              {/* Full-Height SVG Formation Pitch Container with Enlarged Logo Switcher & Pitch Crest */}
-                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex flex-col gap-1.5 mland:gap-1">
-                                {/* Top Stage Bar: Enlarged Logo Team Switcher (Top-Left) */}
-                                <div className="shrink-0 flex items-center justify-between gap-2 z-20">
-                                  <div className="flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/90 border border-white/25 shadow-lg">
-                                    <button
-                                      type="button"
-                                      title="แสดงแผนทั้งสองทีม"
-                                      aria-label="แสดงแผนทั้งสองทีม"
-                                      onClick={() => setHtPitchMode('all')}
-                                      className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
-                                        htPitchMode === 'all'
-                                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                                      }`}
-                                    >
-                                      <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
-                                        <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                        <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                                      </span>
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title={homeOrig.name}
-                                      aria-label={homeOrig.name}
-                                      onClick={() => setHtPitchMode('H')}
-                                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
-                                        htPitchMode === 'H'
-                                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                                      }`}
-                                    >
-                                      <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title={awayOrig.name}
-                                      aria-label={awayOrig.name}
-                                      onClick={() => setHtPitchMode('A')}
-                                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
-                                        htPitchMode === 'A'
-                                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                                      }`}
-                                    >
-                                      <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                                    </button>
-                                  </div>
+                              {/* Full-Height SVG Formation Pitch Container with Inside Logo Switcher & Pitch Crest */}
+                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex items-center justify-center">
+                                {/* Compact Logo-Only Team Switcher Inside Pitch */}
+                                <div className="absolute top-2 left-2 z-20 flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/88 border border-white/25 shadow-lg">
+                                  <button
+                                    type="button"
+                                    title="แสดงแผนทั้งสองทีม"
+                                    aria-label="แสดงแผนทั้งสองทีม"
+                                    onClick={() => setHtPitchMode('all')}
+                                    className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                                      htPitchMode === 'all'
+                                        ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                        : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
+                                      <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                      <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                    </span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title={homeOrig.name}
+                                    aria-label={homeOrig.name}
+                                    onClick={() => setHtPitchMode('H')}
+                                    className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                                      htPitchMode === 'H'
+                                        ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                        : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title={awayOrig.name}
+                                    aria-label={awayOrig.name}
+                                    onClick={() => setHtPitchMode('A')}
+                                    className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                                      htPitchMode === 'A'
+                                        ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                        : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                                    }`}
+                                  >
+                                    <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                  </button>
                                 </div>
 
                                 {htPickedInfo && (
-                                  <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                                  <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                                     <div className="min-w-0 space-y-0.5">
                                       <div className="font-bold truncate flex items-center gap-1.5">
                                         <span className="text-[#facc15] tabular">#{htPickedInfo.no}</span>
@@ -12454,7 +12576,7 @@ export const MatchModal: React.FC<{
                                   </div>
                                 )}
 
-                                <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
+                                <div className="h-full min-h-0 w-full flex items-center justify-center overflow-hidden">
                                   {htPitchMode === 'all' ? (
                                     <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
                                       <div className="h-full min-h-0 w-full flex items-center justify-center">
@@ -12472,6 +12594,7 @@ export const MatchModal: React.FC<{
                                           subAlertFitTh={subAlertFitTh}
                                           selectedPlayerName={htPickedPlayer}
                                           onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                          className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                                         />
                                       </div>
                                       <div className="h-full min-h-0 w-full flex items-center justify-center">
@@ -12489,6 +12612,7 @@ export const MatchModal: React.FC<{
                                           subAlertFitTh={subAlertFitTh}
                                           selectedPlayerName={htPickedPlayer}
                                           onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                          className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                                         />
                                       </div>
                                     </div>
@@ -12507,6 +12631,7 @@ export const MatchModal: React.FC<{
                                       subAlertFitTh={subAlertFitTh}
                                       selectedPlayerName={htPickedPlayer}
                                       onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                      className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                                     />
                                   )}
                                 </div>
@@ -12649,53 +12774,51 @@ export const MatchModal: React.FC<{
                   <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#092818] shadow-xs w-full flex flex-col">
                     {/* Full-Time Full-Height SVG Formation Pitch Stage with Inside Logo Switcher */}
                     <div className="w-full h-[495px] sm:h-[575px] lg:h-[635px] mland:h-[calc(var(--app-dvh,1dvh)*97-95px)] mland:min-h-[215px] flex items-stretch overflow-hidden bg-[#092818]">
-                      <div className="relative flex-1 min-w-0 p-1.5 sm:p-2 mland:p-1 select-none overflow-hidden flex flex-col gap-1.5 mland:gap-1">
-                        {/* Top Stage Bar: Enlarged Logo Team Switcher (Left) */}
-                        <div className="shrink-0 flex items-center justify-between gap-2 z-20">
-                          <div className="flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/90 border border-white/25 shadow-lg shrink-0">
-                            <button
-                              type="button"
-                              title="แสดงเรตติ้งทั้งสองทีม"
-                              aria-label="แสดงเรตติ้งทั้งสองทีม"
-                              onClick={() => setFtPitchMode('all')}
-                              className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
-                                ftPitchMode === 'all'
-                                  ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                  : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                              }`}
-                            >
-                              <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
-                                <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                              </span>
-                            </button>
-                            <button
-                              type="button"
-                              title={homeOrig.name}
-                              aria-label={homeOrig.name}
-                              onClick={() => setFtPitchMode('H')}
-                              className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
-                                ftPitchMode === 'H'
-                                  ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                  : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                              }`}
-                            >
-                              <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                            </button>
-                            <button
-                              type="button"
-                              title={awayOrig.name}
-                              aria-label={awayOrig.name}
-                              onClick={() => setFtPitchMode('A')}
-                              className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
-                                ftPitchMode === 'A'
-                                  ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                  : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                              }`}
-                            >
-                              <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                            </button>
-                          </div>
+                      <div className="relative flex-1 min-w-0 p-1.5 sm:p-2 mland:p-1 select-none overflow-hidden flex items-center justify-center">
+                        {/* Compact Logo-Only Team Switcher Inside Pitch */}
+                        <div className="absolute top-2 left-2 z-20 flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/88 border border-white/25 shadow-lg shrink-0">
+                          <button
+                            type="button"
+                            title="แสดงเรตติ้งทั้งสองทีม"
+                            aria-label="แสดงเรตติ้งทั้งสองทีม"
+                            onClick={() => setFtPitchMode('all')}
+                            className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                              ftPitchMode === 'all'
+                                ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                            }`}
+                          >
+                            <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
+                              <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                              <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            title={homeOrig.name}
+                            aria-label={homeOrig.name}
+                            onClick={() => setFtPitchMode('H')}
+                            className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                              ftPitchMode === 'H'
+                                ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                            }`}
+                          >
+                            <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                          </button>
+                          <button
+                            type="button"
+                            title={awayOrig.name}
+                            aria-label={awayOrig.name}
+                            onClick={() => setFtPitchMode('A')}
+                            className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                              ftPitchMode === 'A'
+                                ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                            }`}
+                          >
+                            <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                          </button>
                         </div>
 
                         {/* Selected Player Detail Inspector Popover */}
@@ -12703,7 +12826,7 @@ export const MatchModal: React.FC<{
                           const pkPl = pickedInfo.team.sq.find((q) => q.n === pickedInfo.name);
                           const pkIsHome = pickedInfo.team.id === homeId;
                           return (
-                            <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                            <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="font-bold truncate flex items-center gap-1.5">
                                   {pkPl && (
@@ -12745,7 +12868,7 @@ export const MatchModal: React.FC<{
                           );
                         })()}
 
-                        <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
+                        <div className="h-full min-h-0 w-full flex items-center justify-center overflow-hidden">
                           {ftPitchMode === 'all' ? (
                             <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1.5 items-stretch">
                               <div className="h-full min-h-0 w-full flex items-center justify-center">
@@ -12762,6 +12885,7 @@ export const MatchModal: React.FC<{
                                   showPitchCrest={true}
                                   selectedPlayerName={ftPickedPlayer}
                                   onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                  className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                                 />
                               </div>
                               <div className="h-full min-h-0 w-full flex items-center justify-center">
@@ -12778,6 +12902,7 @@ export const MatchModal: React.FC<{
                                   showPitchCrest={true}
                                   selectedPlayerName={ftPickedPlayer}
                                   onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                  className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                                 />
                               </div>
                             </div>
@@ -12795,6 +12920,7 @@ export const MatchModal: React.FC<{
                               showPitchCrest={true}
                               selectedPlayerName={ftPickedPlayer}
                               onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                              className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                             />
                           )}
                         </div>

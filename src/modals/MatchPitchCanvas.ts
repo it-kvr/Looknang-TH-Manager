@@ -222,18 +222,35 @@ const renderVarMonitorPanel = (
   ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 7.5 : 8.5}px Sarabun, sans-serif`;
   ctx.fillText(isStandalone ? '🖥 จอภาพช้า VAR · รีเพลย์มุมซูม' : 'จอภาพช้า VAR', monX + (isStandalone ? 22 : 15), monY + hdrH / 2 + 0.8);
 
+  const sc = rep?.scenario;
   const statusTag = showVerdict
-    ? verdictPositiveForCall && vr.kind === 'goal'
-      ? 'ยืนยันประตู'
-      : vr.kind === 'goal'
-        ? 'ล้ำหน้า!'
-        : vr.kind === 'penalty'
+    ? vr.kind === 'goal'
+      ? sc === 'goal_line_tech'
+        ? vr.overturn
+          ? 'ไม่ข้ามเส้น'
+          : 'ข้ามเต็มใบ'
+        : sc === 'foul_buildup'
           ? vr.overturn
-            ? 'นอกเขตโทษ'
-            : 'จุดโทษ!'
-          : vr.pendingCardUpgrade === 'R'
-            ? 'ใบแดง!'
-            : 'ใบเหลือง'
+            ? 'ฟาวล์ก่อนยิง'
+            : 'ปะทะปกติ'
+          : verdictPositiveForCall
+            ? 'ยืนยันประตู'
+            : 'ล้ำหน้า!'
+      : vr.kind === 'penalty'
+        ? sc === 'handball_box'
+          ? vr.overturn
+            ? 'ไม่แฮนด์บอล'
+            : 'แฮนด์บอล!'
+          : sc === 'gk_clash_box'
+            ? vr.overturn
+              ? 'ถึงบอลก่อน'
+              : 'รวบในเขต!'
+            : vr.overturn
+              ? 'นอกเขตโทษ'
+              : 'จุดโทษ!'
+        : vr.pendingCardUpgrade === 'R'
+          ? 'ใบแดง!'
+          : 'ใบเหลือง'
     : pct >= 0.48
       ? 'หยุดภาพตรวจจุด'
       : 'สโลว์โมชัน';
@@ -266,18 +283,34 @@ const renderVarMonitorPanel = (
   let camCenterY = rep?.incidentY ?? 50;
   let spanX = 28;
   if (vr.kind === 'goal') {
-    camCenterX = attRight ? 88 : 12;
-    camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
-    spanX = 30;
+    if (sc === 'goal_line_tech') {
+      camCenterX = attRight ? 96.4 : 3.6;
+      camCenterY = clamp(rep?.incidentY ?? 50, 40, 60);
+      spanX = 16;
+    } else if (sc === 'foul_buildup') {
+      camCenterX = attRight ? clamp(rep?.incidentX ?? 82, 72, 90) : clamp(rep?.incidentX ?? 18, 10, 28);
+      camCenterY = clamp(rep?.incidentY ?? 50, 28, 72);
+      spanX = 31;
+    } else {
+      camCenterX = attRight ? 88 : 12;
+      camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
+      spanX = 30;
+    }
   } else if (vr.kind === 'penalty') {
-    const boxEdge = attRight ? 83 : 17;
-    camCenterX = attRight ? clamp(boxEdge + 2, 78, 92) : clamp(boxEdge - 2, 8, 22);
-    camCenterY = clamp(rep?.incidentY ?? 50, 26, 74);
-    spanX = 24;
+    if (sc === 'gk_clash_box') {
+      camCenterX = attRight ? 92 : 8;
+      camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
+      spanX = 22;
+    } else {
+      const boxEdge = attRight ? 83 : 17;
+      camCenterX = attRight ? clamp(boxEdge + 2, 78, 92) : clamp(boxEdge - 2, 8, 22);
+      camCenterY = clamp(rep?.incidentY ?? 50, 26, 74);
+      spanX = 24;
+    }
   } else {
     camCenterX = clamp(rep?.incidentX ?? vr.x, 12, 88);
     camCenterY = clamp(rep?.incidentY ?? vr.y, 16, 84);
-    spanX = 21;
+    spanX = sc === 'dogso' ? 27 : 21;
   }
   const spanY = spanX * (scrH / Math.max(1, scrW)) * pitchAspect;
   const minFX = camCenterX - spanX / 2;
@@ -304,7 +337,7 @@ const renderVarMonitorPanel = (
   ctx.lineTo(mx(50), my(100));
   ctx.stroke();
 
-  const boxLineHighlight = vr.kind === 'penalty' && pct >= 0.36;
+  const boxLineHighlight = vr.kind === 'penalty' && pct >= 0.36 && sc !== 'gk_clash_box';
   ctx.save();
   if (boxLineHighlight && attRight) {
     ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
@@ -329,17 +362,181 @@ const renderVarMonitorPanel = (
   ctx.arc(mx(11.5), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
   ctx.fill();
 
-  const mGoalD = Math.max(4, mx(100) - mx(97.2));
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = isStandalone ? 2 : 1.5;
+  const mGoalD = Math.max(5, mx(100) - mx(97.2));
+  const mGoalTop = my(42);
+  const mGoalH = my(58) - mGoalTop;
+  const drawVarGoalNet = (gx: number) => {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+    ctx.fillRect(gx, mGoalTop, mGoalD, mGoalH);
+    ctx.beginPath();
+    ctx.rect(gx, mGoalTop, mGoalD, mGoalH);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 0.7;
+    const step = Math.max(3.5, mGoalD / 4);
+    for (let nx = gx; nx <= gx + mGoalD; nx += step) {
+      ctx.beginPath();
+      ctx.moveTo(nx, mGoalTop);
+      ctx.lineTo(nx, mGoalTop + mGoalH);
+      ctx.stroke();
+    }
+    for (let ny = mGoalTop; ny <= mGoalTop + mGoalH; ny += step) {
+      ctx.beginPath();
+      ctx.moveTo(gx, ny);
+      ctx.lineTo(gx + mGoalD, ny);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = isStandalone ? 2.1 : 1.5;
+    ctx.strokeRect(gx, mGoalTop, mGoalD, mGoalH);
+  };
   if (attRight) {
-    ctx.fillRect(mx(100), my(42), mGoalD, my(58) - my(42));
-    ctx.strokeRect(mx(100), my(42), mGoalD, my(58) - my(42));
+    drawVarGoalNet(mx(100));
   } else {
-    ctx.fillRect(mx(0) - mGoalD, my(42), mGoalD, my(58) - my(42));
-    ctx.strokeRect(mx(0) - mGoalD, my(42), mGoalD, my(58) - my(42));
+    drawVarGoalNet(mx(0) - mGoalD);
   }
+
+  const drawVarSoccerBall = (
+    fx: number,
+    fy: number,
+    spinPhase: number,
+    opts?: {
+      z?: number;
+      radiusScale?: number;
+      glowColor?: string;
+      trailPts?: { x: number; y: number; z?: number }[];
+      trailColor?: string;
+    }
+  ) => {
+    const zVal = opts?.z ?? 0;
+    const baseR = isStandalone ? 5.6 : smallText ? 3.5 : 4.2;
+    const ballR = baseR * (1 + clamp(zVal / 26, 0, 0.45)) * (opts?.radiusScale ?? 1);
+    const bx = mx(fx);
+    const byGround = my(fy);
+    const drawBy = byGround - zVal * (isStandalone ? 1.05 : 0.72);
+
+    // Motion / shot comet trail
+    if (opts?.trailPts && opts.trailPts.length >= 2) {
+      ctx.save();
+      ctx.lineCap = 'round';
+      const nPts = opts.trailPts.length;
+      for (let ti = 1; ti < nPts; ti++) {
+        const p0 = opts.trailPts[ti - 1];
+        const p1 = opts.trailPts[ti];
+        const ratio = ti / nPts;
+        ctx.strokeStyle = opts.trailColor || 'rgba(250, 204, 21, 0.55)';
+        ctx.globalAlpha = ratio * 0.68;
+        ctx.lineWidth = Math.max(1.2, ballR * 1.35 * ratio);
+        ctx.beginPath();
+        ctx.moveTo(mx(p0.x), my(p0.y) - (p0.z || 0) * (isStandalone ? 1.05 : 0.72));
+        ctx.lineTo(mx(p1.x), my(p1.y) - (p1.z || 0) * (isStandalone ? 1.05 : 0.72));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // 3D ground shadow
+    ctx.save();
+    ctx.fillStyle = `rgba(0, 0, 0, ${clamp(0.45 - zVal * 0.015, 0.14, 0.45)})`;
+    ctx.beginPath();
+    ctx.ellipse(
+      bx + zVal * 0.25,
+      byGround + ballR * 0.45 + zVal * 0.22,
+      ballR * 0.96,
+      ballR * 0.44,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fill();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(bx, drawBy);
+
+    // Optional focus halo around ball (e.g. goal-line, handball)
+    if (opts?.glowColor) {
+      ctx.save();
+      ctx.fillStyle = opts.glowColor;
+      ctx.globalAlpha = 0.28;
+      ctx.beginPath();
+      ctx.arc(0, 0, ballR * 1.72, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Clipped 3D spherical ball + spinning pentagon patches
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(0, 0, ballR, 0, Math.PI * 2);
+    ctx.clip();
+
+    const sphGrad = ctx.createRadialGradient(-ballR * 0.32, -ballR * 0.34, ballR * 0.1, 0, 0, ballR * 1.06);
+    sphGrad.addColorStop(0, '#ffffff');
+    sphGrad.addColorStop(0.55, '#f1f5f9');
+    sphGrad.addColorStop(1, '#94a3b8');
+    ctx.fillStyle = sphGrad;
+    ctx.fillRect(-ballR - 1, -ballR - 1, ballR * 2 + 2, ballR * 2 + 2);
+
+    const coreOffX = Math.cos(spinPhase * 0.65) * ballR * 0.14;
+    const coreOffY = Math.sin(spinPhase * 0.55) * ballR * 0.14;
+    const pentR = ballR * 0.37;
+
+    ctx.save();
+    ctx.translate(coreOffX, coreOffY);
+    ctx.rotate(spinPhase);
+
+    ctx.strokeStyle = 'rgba(30, 41, 59, 0.68)';
+    ctx.lineWidth = Math.max(0.75, ballR * 0.11);
+    for (let i = 0; i < 5; i++) {
+      const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+      const vx = Math.cos(a) * pentR;
+      const vy = Math.sin(a) * pentR;
+      const ox = Math.cos(a) * (ballR * 1.05);
+      const oy = Math.sin(a) * (ballR * 1.05);
+      ctx.beginPath();
+      ctx.moveTo(vx, vy);
+      ctx.lineTo(ox, oy);
+      ctx.stroke();
+
+      const pxOut = Math.cos(a) * (ballR * 0.96);
+      const pyOut = Math.sin(a) * (ballR * 0.96);
+      ctx.fillStyle = '#0f172a';
+      ctx.beginPath();
+      ctx.arc(pxOut, pyOut, ballR * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+      const pxV = Math.cos(a) * pentR;
+      const pyV = Math.sin(a) * pentR;
+      if (i === 0) ctx.moveTo(pxV, pyV);
+      else ctx.lineTo(pxV, pyV);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // Specular highlight
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.76)';
+    ctx.beginPath();
+    ctx.ellipse(-ballR * 0.34, -ballR * 0.36, ballR * 0.25, ballR * 0.14, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // Crisp outer rim
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = isStandalone ? 1.3 : 1.05;
+    ctx.beginPath();
+    ctx.arc(0, 0, ballR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  };
 
   const drawMiniAgent = (
     fx: number,
@@ -408,203 +605,567 @@ const renderVarMonitorPanel = (
     ctx.restore();
   };
 
+  const drawTopPillBadge = (label: string, fgColor: string, cx?: number, borderColor?: string) => {
+    ctx.save();
+    ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 6.8 : 7.6}px Sarabun, sans-serif`;
+    const bw = measureTextCached(ctx, label) + (isStandalone ? 14 : 8);
+    const bh = isStandalone ? 18 : 11.5;
+    const xPos = clamp(cx ?? scrX + scrW / 2, scrX + bw / 2 + 5, scrX + scrW - bw / 2 - 5);
+    ctx.fillStyle = 'rgba(8, 15, 28, 0.9)';
+    ctx.beginPath();
+    ctx.roundRect(xPos - bw / 2, scrY + 6, bw, bh, 4);
+    ctx.fill();
+    if (borderColor) {
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+    }
+    ctx.fillStyle = fgColor;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, xPos, scrY + 6 + bh / 2 + 0.3);
+    ctx.restore();
+  };
+
   const rawPlayT = clamp(pct / 0.48, 0, 1);
   const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
+  const postT = clamp((pct - 0.54) / 0.42, 0, 1);
 
   if (vr.kind === 'goal') {
-    const incX = rep?.incidentX ?? (attRight ? 86 : 14);
-    const incY = rep?.incidentY ?? 48;
-    const defLineX = rep?.defLineX ?? (attRight ? 84 : 16);
     const dirSign = attRight ? 1 : -1;
-    const attXNow = incX - dirSign * (1 - playT) * 5.8;
-    const attYNow = incY + (1 - playT) * 2.2;
-    const defXNow = defLineX + dirSign * (1 - playT) * 1.6;
-    const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
+    if (sc === 'goal_line_tech') {
+      // GOAL-LINE TECHNOLOGY SCENARIO
+      const goalLineX = attRight ? 100 : 0;
+      const incY = clamp(rep?.incidentY ?? 50, 44, 56);
+      const startX = rep?.passFromX ?? (attRight ? 91.5 : 8.5);
+      const startY = rep?.passFromY ?? clamp(incY + 3, 42, 58);
+      const apexX = vr.overturn
+        ? attRight ? 99.65 : 0.35
+        : attRight ? 100.75 : -0.75;
+      const clearX = attRight ? 98.2 : 1.8;
 
-    const gkX = attRight ? 97.2 : 2.8;
-    const gkY = clamp(50 + (incY - 50) * 0.28, 43, 57);
-    drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      const ballPhase = clamp(pct / 0.42, 0, 1);
+      const easeBall = 1 - Math.pow(1 - ballPhase, 2.1);
+      const bounceBackT = vr.overturn && pct > 0.62 ? clamp((pct - 0.62) / 0.32, 0, 1) : 0;
+      const bxNow =
+        pct <= 0.42
+          ? startX + (apexX - startX) * easeBall
+          : apexX + (clearX - apexX) * bounceBackT;
+      const byNow = startY + (incY - startY) * easeBall;
+      const bzNow = Math.sin(easeBall * Math.PI) * 5.2;
 
-    const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
-    const passStartY = rep?.passFromY ?? clamp(incY + 7, 22, 78);
-    const bxNow = passStartX + (attXNow - passStartX) * clamp(playT * 1.05, 0, 1);
-    const byNow = passStartY + (attYNow - passStartY) * clamp(playT * 1.05, 0, 1);
+      const gkX = attRight ? 98.8 - (1 - playT) * 1.4 : 1.2 + (1 - playT) * 1.4;
+      const gkY = incY + (1 - playT) * (incY < 50 ? 5.2 : -5.2);
+      const attXNow = clamp(startX - dirSign * (1 - playT) * 2.2, 6, 94);
+      const attYNow = startY + (1 - playT) * 1.4;
 
-    ctx.save();
-    ctx.strokeStyle = 'rgba(250, 204, 21, 0.48)';
-    ctx.lineWidth = isStandalone ? 1.6 : 1.1;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath();
-    ctx.moveTo(mx(passStartX), my(passStartY));
-    ctx.lineTo(mx(incX), my(incY));
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.restore();
-
-    if (pct >= 0.36) {
-      const lineAlpha = clamp((pct - 0.36) / 0.12, 0, 1);
-      const defScreenX = mx(defLineX);
-      const attScreenX = mx(incX);
-      const offsideClr = vr.overturn ? '#ef4444' : '#22c55e';
-
+      // Glowing Goal-Line Laser Plane
+      const glScreenX = mx(goalLineX);
       ctx.save();
-      ctx.globalAlpha = lineAlpha;
-      ctx.fillStyle = vr.overturn ? 'rgba(239, 68, 68, 0.22)' : 'rgba(34, 197, 94, 0.2)';
-      const bandX = Math.min(defScreenX, attScreenX);
-      const bandW = Math.max(2, Math.abs(attScreenX - defScreenX));
-      ctx.fillRect(bandX, scrY, bandW, scrH);
-
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = isStandalone ? 2.6 : 1.8;
+      ctx.strokeStyle = pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#38bdf8';
+      ctx.lineWidth = isStandalone ? 3.2 : 2.2;
       ctx.beginPath();
-      ctx.moveTo(defScreenX, scrY);
-      ctx.lineTo(defScreenX, scrY + scrH);
+      ctx.moveTo(glScreenX, scrY);
+      ctx.lineTo(glScreenX, scrY + scrH);
       ctx.stroke();
+      ctx.restore();
 
-      ctx.strokeStyle = offsideClr;
-      ctx.lineWidth = isStandalone ? 2.6 : 1.8;
-      ctx.setLineDash([5, 3]);
+      // Shot trail
+      const trailPts = Array.from({ length: 6 }, (_, i) => {
+        const t = Math.max(0, easeBall - (5 - i) * 0.06);
+        return {
+          x: startX + (apexX - startX) * t,
+          y: startY + (incY - startY) * t,
+          z: Math.sin(t * Math.PI) * 5.2
+        };
+      });
+
+      drawMiniAgent(
+        attXNow,
+        attYNow,
+        attKit,
+        attTrim,
+        rep?.attNo ?? 9,
+        rep?.attShort || vr.shooterShort || 'ผู้ยิง',
+        rep?.attVis,
+        '#facc15',
+        '#fde047'
+      );
+      drawMiniAgent(
+        gkX,
+        gkY,
+        defGkKit,
+        '#ffffff',
+        rep?.gkNo ?? 1,
+        'GK',
+        rep?.gkVis,
+        pct >= 0.36 ? '#38bdf8' : undefined,
+        '#bae6fd'
+      );
+
+      drawVarSoccerBall(bxNow, byNow, pct * 12, {
+        z: bzNow,
+        trailPts: pct < 0.62 ? trailPts : undefined,
+        trailColor: 'rgba(56, 189, 248, 0.55)',
+        glowColor: pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#38bdf8'
+      });
+
+      if (pct >= 0.36) {
+        const mm = rep?.goalLineMm ?? 24;
+        const badgeTxt = vr.overturn ? `โกล์ไลน์: ยังไม่เต็มใบ (-${mm} มม.)` : `โกล์ไลน์: ข้ามเต็มใบ (+${mm} มม.)`;
+        drawTopPillBadge(badgeTxt, vr.overturn ? '#fca5a5' : '#86efac', undefined, vr.overturn ? '#ef4444' : '#22c55e');
+
+        // Crisp Goal-Line Tech Sensor Inset Box
+        const boxW = isStandalone ? 86 : 56;
+        const boxH = isStandalone ? 42 : 28;
+        const boxX = attRight ? scrX + 8 : scrX + scrW - boxW - 8;
+        const boxY = scrY + (isStandalone ? 30 : 21);
+        ctx.save();
+        ctx.fillStyle = 'rgba(6, 14, 28, 0.92)';
+        ctx.strokeStyle = vr.overturn ? '#ef4444' : '#22c55e';
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxW, boxH, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        const lineX = boxX + boxW * 0.5;
+        ctx.fillStyle = 'rgba(255,255,255,0.88)';
+        ctx.fillRect(lineX - 1.5, boxY + 5, 3, boxH - 10);
+        const ballProjR = isStandalone ? 9 : 6;
+        const offsetPx = vr.overturn ? -dirSign * (ballProjR * 0.42) : dirSign * (ballProjR * 1.25);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = vr.overturn ? '#ef4444' : '#22c55e';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(lineX + offsetPx, boxY + boxH / 2, ballProjR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+      }
+    } else if (sc === 'foul_buildup') {
+      // BUILDUP FOUL / HANDBALL BEFORE GOAL SCENARIO
+      const incX = rep?.incidentX ?? (attRight ? 80 : 20);
+      const incY = rep?.incidentY ?? 48;
+      const goalX = attRight ? 99 : 1;
+      const goalY = 50;
+
+      const attXNow = incX - dirSign * (1 - playT) * 4.5 + postT * dirSign * 6.5;
+      const attYNow = incY + (1 - playT) * 2.0;
+      const defXNow = incX + dirSign * (1.2 - playT * 0.6);
+      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.4 : -4.4) + (incY < 50 ? 1.2 : -1.2);
+      const gkY = clamp(50 + (incY - 50) * 0.25, 43, 57);
+
+      // Shot path from buildup duel toward goal
+      ctx.save();
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+      ctx.lineWidth = isStandalone ? 1.7 : 1.1;
+      ctx.setLineDash([4, 3]);
       ctx.beginPath();
-      ctx.moveTo(attScreenX, scrY);
-      ctx.lineTo(attScreenX, scrY + scrH);
+      ctx.moveTo(mx(incX), my(incY));
+      ctx.lineTo(mx(goalX), my(goalY));
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.restore();
 
-      const cm = rep?.offsideMarginCm ?? 18;
-      const calText = vr.overturn ? `ล้ำหน้า +${cm} ซม.` : `ไม่ล้ำหน้า (${cm} ซม.)`;
-      ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 7 : 7.8}px Sarabun, sans-serif`;
-      const calW = measureTextCached(ctx, calText) + (isStandalone ? 14 : 8);
-      const calH = isStandalone ? 18 : 12;
-      const calX = clamp((defScreenX + attScreenX) / 2, scrX + calW / 2 + 6, scrX + scrW - calW / 2 - 6);
-      ctx.fillStyle = 'rgba(8, 15, 28, 0.92)';
-      ctx.strokeStyle = offsideClr;
-      ctx.lineWidth = 1.2;
+      if (pct >= 0.36) {
+        const ringClr = vr.overturn ? '#ef4444' : '#22c55e';
+        ctx.save();
+        ctx.fillStyle = vr.overturn ? 'rgba(239, 68, 68, 0.16)' : 'rgba(34, 197, 94, 0.14)';
+        ctx.strokeStyle = ringClr;
+        ctx.lineWidth = isStandalone ? 2.2 : 1.6;
+        ctx.beginPath();
+        ctx.arc(mx(incX), my(incY), (isStandalone ? 18 : 12) + Math.sin(pct * Math.PI * 10) * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+        drawTopPillBadge(
+          vr.overturn ? 'เช็กการปะทะก่อนยิง: ฟาวล์!' : 'เช็กการปะทะก่อนยิง: ปกติ',
+          vr.overturn ? '#fca5a5' : '#86efac',
+          undefined,
+          ringClr
+        );
+      }
+
+      drawMiniAgent(attRight ? 97.2 : 2.8, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      drawMiniAgent(
+        defXNow,
+        defYNow,
+        defKit,
+        defTrim,
+        rep?.defNo ?? 4,
+        rep?.defShort || 'กองหลัง',
+        rep?.defVis,
+        pct >= 0.36 ? '#f59e0b' : undefined,
+        '#fde68a'
+      );
+      drawMiniAgent(
+        attXNow,
+        attYNow,
+        attKit,
+        attTrim,
+        rep?.attNo ?? 9,
+        rep?.attShort || vr.shooterShort || 'ผู้ยิง',
+        rep?.attVis,
+        pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
+        pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
+      );
+
+      const shotProg = clamp((pct - 0.42) / 0.48, 0, 1);
+      const bxNow = pct <= 0.42 ? incX - dirSign * (1 - playT) * 3.0 : incX + (goalX - incX) * shotProg;
+      const byNow = pct <= 0.42 ? incY : incY + (goalY - incY) * shotProg;
+      const trailPts =
+        shotProg > 0.05
+          ? Array.from({ length: 6 }, (_, i) => {
+              const t = Math.max(0, shotProg - (5 - i) * 0.06);
+              return { x: incX + (goalX - incX) * t, y: incY + (goalY - incY) * t, z: Math.sin(t * Math.PI) * 3.8 };
+            })
+          : undefined;
+      drawVarSoccerBall(bxNow, byNow, pct * 14, {
+        z: Math.sin(shotProg * Math.PI) * 3.8,
+        trailPts,
+        trailColor: 'rgba(250, 204, 21, 0.55)'
+      });
+    } else {
+      // OFFSIDE CALIBRATION LINE SCENARIO (Upgraded with Passer + 3D Ball Pass & Finish)
+      const incX = rep?.incidentX ?? (attRight ? 86 : 14);
+      const incY = rep?.incidentY ?? 48;
+      const defLineX = rep?.defLineX ?? (attRight ? 84 : 16);
+      const attXNow = incX - dirSign * (1 - playT) * 5.8 + (pct > 0.72 && !vr.overturn ? postT * dirSign * 3.5 : 0);
+      const attYNow = incY + (1 - playT) * 2.2;
+      const defXNow = defLineX + dirSign * (1 - playT) * 1.6;
+      const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
+
+      const gkX = attRight ? 97.2 : 2.8;
+      const gkY = clamp(50 + (incY - 50) * 0.28, 43, 57);
+      drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+
+      const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
+      const passStartY = rep?.passFromY ?? clamp(incY + 7, 22, 78);
+
+      // Subtle teammate passer marker at origin
+      ctx.save();
+      ctx.fillStyle = attKit;
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.8)';
+      ctx.lineWidth = 1.4;
       ctx.beginPath();
-      ctx.roundRect(calX - calW / 2, scrY + 6, calW, calH, 4);
+      ctx.arc(mx(passStartX), my(passStartY), isStandalone ? 6 : 4, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = offsideClr;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(calText, calX, scrY + 6 + calH / 2 + 0.3);
       ctx.restore();
+
+      const passT = clamp(playT * 1.05, 0, 1);
+      const goalX = attRight ? 99 : 1;
+      const finishT = pct > 0.65 ? clamp((pct - 0.65) / 0.3, 0, 1) : 0;
+      const bxNow = finishT > 0 ? incX + (goalX - incX) * finishT : passStartX + (attXNow - passStartX) * passT;
+      const byNow = finishT > 0 ? incY + (50 - incY) * finishT : passStartY + (attYNow - passStartY) * passT;
+      const bzNow = finishT > 0 ? Math.sin(finishT * Math.PI) * 3.5 : Math.sin(passT * Math.PI) * 2.8;
+
+      ctx.save();
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.48)';
+      ctx.lineWidth = isStandalone ? 1.6 : 1.1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(mx(passStartX), my(passStartY));
+      ctx.lineTo(mx(incX), my(incY));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      if (pct >= 0.36) {
+        const lineAlpha = clamp((pct - 0.36) / 0.12, 0, 1);
+        const defScreenX = mx(defLineX);
+        const attScreenX = mx(incX);
+        const offsideClr = vr.overturn ? '#ef4444' : '#22c55e';
+
+        ctx.save();
+        ctx.globalAlpha = lineAlpha;
+        ctx.fillStyle = vr.overturn ? 'rgba(239, 68, 68, 0.22)' : 'rgba(34, 197, 94, 0.2)';
+        const bandX = Math.min(defScreenX, attScreenX);
+        const bandW = Math.max(2, Math.abs(attScreenX - defScreenX));
+        ctx.fillRect(bandX, scrY, bandW, scrH);
+
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = isStandalone ? 2.6 : 1.8;
+        ctx.beginPath();
+        ctx.moveTo(defScreenX, scrY);
+        ctx.lineTo(defScreenX, scrY + scrH);
+        ctx.stroke();
+
+        ctx.strokeStyle = offsideClr;
+        ctx.lineWidth = isStandalone ? 2.6 : 1.8;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.moveTo(attScreenX, scrY);
+        ctx.lineTo(attScreenX, scrY + scrH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const cm = rep?.offsideMarginCm ?? 18;
+        const calText = vr.overturn ? `ล้ำหน้า +${cm} ซม.` : `ไม่ล้ำหน้า (${cm} ซม.)`;
+        drawTopPillBadge(calText, offsideClr, (defScreenX + attScreenX) / 2, offsideClr);
+        ctx.restore();
+      }
+
+      drawMiniAgent(
+        defXNow,
+        defYNow,
+        defKit,
+        defTrim,
+        rep?.defNo ?? 4,
+        rep?.defShort || 'กองหลัง',
+        rep?.defVis,
+        pct >= 0.36 ? '#3b82f6' : undefined,
+        '#93c5fd'
+      );
+      drawMiniAgent(
+        attXNow,
+        attYNow,
+        attKit,
+        attTrim,
+        rep?.attNo ?? 9,
+        rep?.attShort || vr.shooterShort || 'ผู้ยิง',
+        rep?.attVis,
+        pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
+        pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
+      );
+
+      const trailPts = Array.from({ length: 6 }, (_, i) => {
+        const t = Math.max(0, passT - (5 - i) * 0.06);
+        return {
+          x: passStartX + (attXNow - passStartX) * t,
+          y: passStartY + (attYNow - passStartY) * t,
+          z: Math.sin(t * Math.PI) * 2.8
+        };
+      });
+      drawVarSoccerBall(bxNow, byNow, pct * 13, {
+        z: bzNow,
+        trailPts: finishT > 0 ? undefined : trailPts,
+        trailColor: 'rgba(250, 204, 21, 0.5)'
+      });
     }
-
-    drawMiniAgent(
-      defXNow,
-      defYNow,
-      defKit,
-      defTrim,
-      rep?.defNo ?? 4,
-      rep?.defShort || 'กองหลัง',
-      rep?.defVis,
-      pct >= 0.36 ? '#3b82f6' : undefined,
-      '#93c5fd'
-    );
-    drawMiniAgent(
-      attXNow,
-      attYNow,
-      attKit,
-      attTrim,
-      rep?.attNo ?? 9,
-      rep?.attShort || vr.shooterShort || 'ผู้ยิง',
-      rep?.attVis,
-      pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
-      pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
-    );
-
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(mx(bxNow), my(byNow), isStandalone ? 4.4 : 3.1, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
   } else if (vr.kind === 'penalty') {
     const incX = rep?.incidentX ?? (attRight ? 86 : 14);
     const incY = rep?.incidentY ?? 48;
     const boxLineX = rep?.defLineX ?? (attRight ? 83 : 17);
     const inBox = rep?.inBox ?? !vr.overturn;
     const dirSign = attRight ? 1 : -1;
-
-    const attXNow = incX - dirSign * (1 - playT) * 4.2;
-    const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
-    const defXNow = incX + dirSign * (1.2 - playT * 0.4);
-    const defYNow = incY + (1 - playT) * (incY < 50 ? 4.8 : -4.8) + (incY < 50 ? 1.0 : -1.0);
-
-    drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
-
-    ctx.save();
     const bxScreen = mx(boxLineX);
-    ctx.font = `700 ${isStandalone ? 10 : smallText ? 6.5 : 7.2}px Sarabun, sans-serif`;
-    const edgeLbl = 'เส้นเขตโทษ';
-    const elw = measureTextCached(ctx, edgeLbl) + (isStandalone ? 12 : 6);
-    const elh = isStandalone ? 17 : 11;
-    ctx.fillStyle = 'rgba(8, 15, 28, 0.86)';
-    ctx.beginPath();
-    ctx.roundRect(clamp(bxScreen - elw / 2, scrX + 4, scrX + scrW - elw - 4), scrY + 6, elw, elh, 3.5);
-    ctx.fill();
-    ctx.fillStyle = '#bae6fd';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(edgeLbl, clamp(bxScreen, scrX + elw / 2 + 4, scrX + scrW - elw / 2 - 4), scrY + 6 + elh / 2 + 0.3);
-    ctx.restore();
 
-    if (pct >= 0.36) {
-      const contactClr = inBox ? '#ef4444' : '#38bdf8';
-      const cX = mx(incX);
-      const cY = my(incY);
-      const ringR = (isStandalone ? 12 : 8) + Math.sin(pct * Math.PI * 10) * 1.8;
+    if (sc === 'handball_box') {
+      // HANDBALL IN THE PENALTY BOX SCENARIO
+      const crossFromX = rep?.passFromX ?? (incX - dirSign * 9.5);
+      const crossFromY = rep?.passFromY ?? clamp(incY + (incY < 50 ? 10 : -10), 14, 86);
+      const defXNow = incX;
+      const defYNow = incY;
+      const attXNow = crossFromX - dirSign * (1 - playT) * 2.2;
+      const attYNow = crossFromY;
+
+      // Ball travels from shooter/crosser -> hits defender's outstretched arm at incX, incY -> deflects
+      const hitT = clamp(pct / 0.44, 0, 1);
+      const deflectT = pct > 0.56 ? clamp((pct - 0.56) / 0.36, 0, 1) : 0;
+      const deflX = incX - dirSign * 3.8;
+      const deflY = incY + (incY < 50 ? 5.5 : -5.5);
+      const bxNow = deflectT > 0 ? incX + (deflX - incX) * deflectT : crossFromX + (incX - crossFromX) * hitT;
+      const byNow = deflectT > 0 ? incY + (deflY - incY) * deflectT : crossFromY + (incY - crossFromY) * hitT;
+      const bzNow = deflectT > 0 ? 4.2 * (1 - deflectT * 0.6) : 2.0 + hitT * 2.5;
+
+      drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      drawTopPillBadge('เช็กแฮนด์บอล & เส้นเขตโทษ', '#bae6fd', bxScreen);
+
+      // Dashed ball flight trajectory
       ctx.save();
-      ctx.strokeStyle = contactClr;
-      ctx.lineWidth = isStandalone ? 2.2 : 1.6;
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+      ctx.lineWidth = isStandalone ? 1.6 : 1.1;
+      ctx.setLineDash([4, 3]);
       ctx.beginPath();
-      ctx.arc(cX, cY, ringR, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([3, 2.5]);
-      ctx.beginPath();
-      ctx.moveTo(cX, cY);
-      ctx.lineTo(bxScreen, cY);
+      ctx.moveTo(mx(crossFromX), my(crossFromY));
+      ctx.lineTo(mx(incX), my(incY));
+      if (pct >= 0.44) {
+        ctx.lineTo(mx(deflX), my(deflY));
+      }
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = contactClr;
-      ctx.beginPath();
-      ctx.arc(cX, cY, isStandalone ? 3.5 : 2.5, 0, Math.PI * 2);
-      ctx.fill();
       ctx.restore();
+
+      if (pct >= 0.36) {
+        const contactClr = inBox ? '#ef4444' : '#38bdf8';
+        const cX = mx(incX);
+        const cY = my(incY);
+        ctx.save();
+        ctx.strokeStyle = contactClr;
+        ctx.lineWidth = isStandalone ? 2.4 : 1.7;
+        ctx.beginPath();
+        ctx.arc(cX, cY, (isStandalone ? 14 : 9.5) + Math.sin(pct * Math.PI * 10) * 1.6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([3, 2.5]);
+        ctx.beginPath();
+        ctx.moveTo(cX, cY);
+        ctx.lineTo(bxScreen, cY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+
+      drawMiniAgent(
+        attXNow,
+        attYNow,
+        attKit,
+        attTrim,
+        rep?.attNo ?? 10,
+        rep?.attShort || 'ผู้เปิด/ยิง',
+        rep?.attVis,
+        '#facc15',
+        '#fde047'
+      );
+      drawMiniAgent(
+        defXNow,
+        defYNow,
+        defKit,
+        defTrim,
+        rep?.defNo ?? 4,
+        rep?.defShort || vr.culpritShort || 'ตัวสกัด',
+        rep?.defVis,
+        pct >= 0.36 ? (inBox ? '#ef4444' : '#38bdf8') : undefined,
+        '#fca5a5'
+      );
+
+      const trailPts = Array.from({ length: 6 }, (_, i) => {
+        const t = Math.max(0, hitT - (5 - i) * 0.06);
+        return { x: crossFromX + (incX - crossFromX) * t, y: crossFromY + (incY - crossFromY) * t, z: 2.0 + t * 2.5 };
+      });
+      drawVarSoccerBall(bxNow, byNow, pct * 16, {
+        z: bzNow,
+        trailPts: deflectT > 0 ? undefined : trailPts,
+        trailColor: 'rgba(56, 189, 248, 0.55)',
+        glowColor: pct >= 0.36 ? (inBox ? '#ef4444' : '#38bdf8') : undefined
+      });
+    } else if (sc === 'gk_clash_box') {
+      // GOALKEEPER / 1V1 COLLISION IN THE BOX SCENARIO
+      const attXNow = incX - dirSign * (1 - playT) * 4.5;
+      const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
+      const gkStartX = attRight ? 97 : 3;
+      const gkXNow = gkStartX + (incX + dirSign * 0.8 - gkStartX) * clamp(playT * 0.95, 0, 1);
+      const gkYNow = 50 + (incY - 50) * clamp(playT * 0.95, 0, 1);
+
+      drawTopPillBadge('เช็กผู้รักษาประตูปะทะในกรอบ', '#bae6fd');
+
+      if (pct >= 0.36) {
+        const contactClr = inBox ? '#ef4444' : '#22c55e';
+        const cX = mx(incX);
+        const cY = my(incY);
+        ctx.save();
+        ctx.strokeStyle = contactClr;
+        ctx.lineWidth = isStandalone ? 2.4 : 1.7;
+        ctx.beginPath();
+        ctx.arc(cX, cY, (isStandalone ? 15 : 10) + Math.sin(pct * Math.PI * 10) * 1.8, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      drawMiniAgent(
+        attXNow,
+        attYNow,
+        attKit,
+        attTrim,
+        rep?.attNo ?? 9,
+        rep?.attShort || 'ตัวรุก',
+        rep?.attVis,
+        '#facc15',
+        '#fde047'
+      );
+      drawMiniAgent(
+        gkXNow,
+        gkYNow,
+        defGkKit,
+        '#ffffff',
+        rep?.gkNo ?? 1,
+        rep?.defShort || 'GK',
+        rep?.gkVis,
+        pct >= 0.36 ? (inBox ? '#ef4444' : '#22c55e') : undefined,
+        '#bae6fd'
+      );
+
+      // Ball tapped past GK rolling away
+      const ballRoll = clamp(pct * 1.1, 0, 1);
+      const bxNow = incX + dirSign * (1.2 + ballRoll * 3.8);
+      const byNow = incY + (incY < 50 ? 1.8 : -1.8) * ballRoll;
+      drawVarSoccerBall(bxNow, byNow, pct * 14, { z: 0.8 });
+    } else {
+      // BOX-EDGE FOUL CHECK SCENARIO (Upgraded)
+      const attXNow = incX - dirSign * (1 - playT) * 4.2;
+      const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
+      const defXNow = incX + dirSign * (1.2 - playT * 0.4);
+      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.8 : -4.8) + (incY < 50 ? 1.0 : -1.0);
+
+      drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      drawTopPillBadge('เส้นเขตโทษ', '#bae6fd', bxScreen);
+
+      if (playT > 0.22) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
+        ctx.lineWidth = isStandalone ? 3.2 : 2.2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(mx(incX + dirSign * 0.8), my(incY + (incY < 50 ? 5.2 : -5.2)));
+        ctx.lineTo(mx(defXNow), my(defYNow));
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (pct >= 0.36) {
+        const contactClr = inBox ? '#ef4444' : '#38bdf8';
+        const cX = mx(incX);
+        const cY = my(incY);
+        const ringR = (isStandalone ? 12 : 8) + Math.sin(pct * Math.PI * 10) * 1.8;
+        ctx.save();
+        ctx.strokeStyle = contactClr;
+        ctx.lineWidth = isStandalone ? 2.2 : 1.6;
+        ctx.beginPath();
+        ctx.arc(cX, cY, ringR, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([3, 2.5]);
+        ctx.beginPath();
+        ctx.moveTo(cX, cY);
+        ctx.lineTo(bxScreen, cY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = contactClr;
+        ctx.beginPath();
+        ctx.arc(cX, cY, isStandalone ? 3.5 : 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      drawMiniAgent(
+        attXNow,
+        attYNow,
+        attKit,
+        attTrim,
+        rep?.attNo ?? 10,
+        rep?.attShort || 'ตัวรุก',
+        rep?.attVis,
+        '#facc15',
+        '#fde047'
+      );
+      drawMiniAgent(
+        defXNow,
+        defYNow,
+        defKit,
+        defTrim,
+        rep?.defNo ?? 4,
+        rep?.defShort || vr.culpritShort || 'ตัวสกัด',
+        rep?.defVis,
+        pct >= 0.36 ? '#ef4444' : undefined,
+        '#fca5a5'
+      );
+
+      const bxNow = attXNow + dirSign * (1.3 + postT * 2.1);
+      const byNow = attYNow - 0.5 + postT * (incY < 50 ? 1.2 : -1.2);
+      drawVarSoccerBall(bxNow, byNow, pct * 13, { z: 0.6 });
     }
-
-    drawMiniAgent(
-      attXNow,
-      attYNow,
-      attKit,
-      attTrim,
-      rep?.attNo ?? 10,
-      rep?.attShort || 'ตัวรุก',
-      rep?.attVis,
-      '#facc15',
-      '#fde047'
-    );
-    drawMiniAgent(
-      defXNow,
-      defYNow,
-      defKit,
-      defTrim,
-      rep?.defNo ?? 4,
-      rep?.defShort || vr.culpritShort || 'ตัวสกัด',
-      rep?.defVis,
-      pct >= 0.36 ? '#ef4444' : undefined,
-      '#fca5a5'
-    );
-
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(mx(attXNow + dirSign * 1.3), my(attYNow - 0.5), isStandalone ? 4.2 : 2.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
   } else {
+    // FOUL / RED CARD VAR SCENARIOS
     const incX = rep?.incidentX ?? vr.x;
     const incY = rep?.incidentY ?? vr.y;
     const dirSign = attRight ? 1 : -1;
@@ -614,7 +1175,38 @@ const renderVarMonitorPanel = (
     const defXNow = incX + dirSign * (1.1 - playT * 0.25);
     const defYNow = incY + (1 - playT) * 5.2 + 0.9;
 
-    if (playT > 0.25) {
+    if (sc === 'dogso' || rep?.foulKind === 'dogso') {
+      // DOGSO: Draw open corridor cone toward goal
+      const gX = attRight ? 99 : 1;
+      ctx.save();
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
+      ctx.lineWidth = isStandalone ? 1.5 : 1.0;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(mx(incX), my(incY));
+      ctx.lineTo(mx(gX), my(42));
+      ctx.lineTo(mx(gX), my(58));
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    } else if (sc === 'reckless_duel') {
+      // RECKLESS AERIAL / DUEL: Draw impact shockwave & bouncing ball
+      if (playT > 0.28) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(251, 146, 60, 0.48)';
+        ctx.lineWidth = isStandalone ? 2.0 : 1.4;
+        ctx.setLineDash([3, 2.5]);
+        ctx.beginPath();
+        ctx.arc(mx((attXNow + defXNow) * 0.5), my((attYNow + defYNow) * 0.5), isStandalone ? 15 : 10, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    } else if (playT > 0.25) {
+      // LATE SLIDE: Turf skid marks
       ctx.save();
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
       ctx.lineWidth = isStandalone ? 3.4 : 2.4;
@@ -664,27 +1256,20 @@ const renderVarMonitorPanel = (
       '#fde047'
     );
 
-    ctx.fillStyle = '#ffffff';
-    ctx.strokeStyle = '#0f172a';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(mx(attXNow + dirSign * 1.4), my(attYNow - 0.6), isStandalone ? 4.2 : 2.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    const isAerial = sc === 'reckless_duel';
+    const bxNow = attXNow + dirSign * (1.4 + postT * 2.2);
+    const byNow = attYNow - 0.6 + (isAerial ? Math.sin(pct * Math.PI) * 1.2 : 0);
+    const bzNow = isAerial ? Math.abs(Math.sin(pct * Math.PI * 1.8)) * 5.5 : 0.7;
+    drawVarSoccerBall(bxNow, byNow, pct * 14, { z: bzNow });
 
     if (pct >= 0.36) {
-      const fTag = rep?.foulKind === 'dogso' ? 'เช็กตัวสุดท้าย (DOGSO)' : 'เช็กจังหวะเปิดปุ่ม / รุนแรง';
-      ctx.font = `700 ${isStandalone ? 10 : smallText ? 6.6 : 7.3}px Sarabun, sans-serif`;
-      const fw = measureTextCached(ctx, fTag) + (isStandalone ? 14 : 8);
-      const fh = isStandalone ? 17 : 11.5;
-      ctx.fillStyle = 'rgba(8, 15, 28, 0.88)';
-      ctx.beginPath();
-      ctx.roundRect(scrX + scrW / 2 - fw / 2, scrY + 6, fw, fh, 3.5);
-      ctx.fill();
-      ctx.fillStyle = '#fcd34d';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(fTag, scrX + scrW / 2, scrY + 6 + fh / 2 + 0.3);
+      const fTag =
+        sc === 'dogso' || rep?.foulKind === 'dogso'
+          ? 'เช็กตัวสุดท้าย (DOGSO)'
+          : sc === 'reckless_duel'
+            ? 'เช็กจังหวะปะทะรุนแรง / นอกเกม'
+            : 'เช็กจังหวะเปิดปุ่ม / เสียบช้า';
+      drawTopPillBadge(fTag, '#fcd34d');
     }
   }
 
@@ -719,13 +1304,29 @@ const renderVarMonitorPanel = (
   if (showVerdict) {
     const verdictBannerText =
       vr.kind === 'goal'
-        ? vr.overturn
-          ? '❌ ล้ำหน้า · ริบประตู!'
-          : '✅ ไม่ล้ำหน้า · ให้ประตู!'
-        : vr.kind === 'penalty'
+        ? sc === 'goal_line_tech'
           ? vr.overturn
-            ? 'นอกกรอบ · ได้ฟรีคิก'
-            : '🚨 ฟาวล์ในเขต · จุดโทษ!'
+            ? '❌ บอลยังไม่ข้ามเส้น · ริบประตู!'
+            : '✅ บอลข้ามเส้นเต็มใบ · ให้ประตู!'
+          : sc === 'foul_buildup'
+            ? vr.overturn
+              ? '❌ ฟาวล์จังหวะขึ้นเกม · ริบประตู!'
+              : '✅ ปะทะปกติ · ยืนยันให้ประตู!'
+            : vr.overturn
+              ? '❌ ล้ำหน้า · ริบประตู!'
+              : '✅ ไม่ล้ำหน้า · ให้ประตู!'
+        : vr.kind === 'penalty'
+          ? sc === 'handball_box'
+            ? vr.overturn
+              ? 'แขนแนบตัว/นอกเขต · ไม่จุดโทษ'
+              : '🚨 แฮนด์บอลในเขต · จุดโทษ!'
+            : sc === 'gk_clash_box'
+              ? vr.overturn
+                ? 'ผู้รักษาประตูถึงบอลก่อน · ไม่จุดโทษ'
+                : '🚨 รวบในเขตโทษ · จุดโทษ!'
+              : vr.overturn
+                ? 'นอกกรอบ · ได้ฟรีคิก'
+                : '🚨 ฟาวล์ในเขต · จุดโทษ!'
           : vr.pendingCardUpgrade === 'R'
             ? '🟥 ยกระดับเป็นใบแดง!'
             : '🟨 ให้แค่ใบเหลือง';

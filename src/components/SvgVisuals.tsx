@@ -1198,24 +1198,11 @@ export const FormationPitch: React.FC<{
             transform="translate(124.8, 164.8) scale(2.1)"
             dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcw`, true) }}
           />
-          <g transform="translate(11, 10.5)">
+          <g transform="translate(267, 10.5)">
             <g
-              transform="scale(0.84)"
+              transform="scale(0.92)"
               dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcb`, true) }}
             />
-            <text
-              x="24"
-              y="13"
-              fontSize="9"
-              fontWeight="800"
-              fontFamily="Sarabun"
-              fill="#ffffff"
-              stroke="rgba(6, 28, 16, 0.88)"
-              strokeWidth="2.4"
-              paintOrder="stroke"
-            >
-              {team.name} · {team.cf ? 'กำหนดเอง' : team.form}
-            </text>
           </g>
         </g>
       )}
