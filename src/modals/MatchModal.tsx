@@ -9167,12 +9167,12 @@ export const MatchModal: React.FC<{
           const sl = w.sideline;
           sl.warmupPhase += rawDt * 4.2;
           ([sl.coachH, sl.coachA] as LiveSidelineCoach[]).forEach((c) => {
-            const isOnLeftHalf = (c.side === 'H') !== w.secondHalf;
-            const baseX = isOnLeftHalf ? 43.2 : 56.8;
-            const minX = isOnLeftHalf ? 39.6 : 53.2;
-            const maxX = isOnLeftHalf ? 46.8 : 60.4;
+            const isLeftArea = c.side === 'H';
+            const baseX = isLeftArea ? 43.3 : 56.7;
+            const minX = isLeftArea ? 39.8 : 53.2;
+            const maxX = isLeftArea ? 46.8 : 60.2;
             c.tx = clamp(
-              baseX + (w.ball.x - 50) * 0.065 + Math.sin(now * 0.0011 + (c.side === 'H' ? 0 : 2.3)) * 1.15,
+              baseX + (w.ball.x - 50) * 0.055 + Math.sin(now * 0.0011 + (c.side === 'H' ? 0 : 2.3)) * 1.05,
               minX,
               maxX
             );
@@ -9847,11 +9847,10 @@ export const MatchModal: React.FC<{
         w.cardBanner = null;
         syncSidelineBenches(w);
         if (w.sideline) {
-          const homeLeft = !w.secondHalf;
-          w.sideline.coachH.x = homeLeft ? 43.2 : 56.8;
-          w.sideline.coachH.tx = w.sideline.coachH.x;
-          w.sideline.coachA.x = homeLeft ? 56.8 : 43.2;
-          w.sideline.coachA.tx = w.sideline.coachA.x;
+          w.sideline.coachH.x = 43.3;
+          w.sideline.coachH.tx = 43.3;
+          w.sideline.coachA.x = 56.7;
+          w.sideline.coachA.tx = 56.7;
         }
         setLiveFitMap({ ...simRef.current.liveFit });
         if (canvasRef.current) {
@@ -11373,72 +11372,74 @@ export const MatchModal: React.FC<{
                           {/* Halftime Stage: Full-Height Pitch + Compact Right-Side Tactical Panel */}
                           <div className={`grid ${state.mode === 'm' ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_240px] mland:grid-cols-[minmax(0,1fr)_190px]' : 'grid-cols-1'} bg-[#092818]`}>
                             <div className="flex flex-col min-w-0">
-                              {/* Full-Height SVG Formation Pitch Container with Inside Logo-Only Switcher */}
-                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex items-center justify-center">
-                                {/* Compact Logo-Only Team Switcher Inside Pitch */}
-                                <div className="absolute top-2 left-2 z-20 flex items-center gap-0.5 p-0.5 rounded-lg bg-[#05180e]/85 border border-white/20 shadow-lg">
+                              {/* Full-Height SVG Formation Pitch Container with Enlarged Logo Switcher & Pitch Crest */}
+                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex flex-col gap-1.5 mland:gap-1">
+                                {/* Top Stage Bar: Enlarged Logo Team Switcher (Top-Left) + Warmup Pill (Top-Right) */}
+                                <div className="shrink-0 flex items-center justify-between gap-2 z-20">
+                                  <div className="flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/90 border border-white/25 shadow-lg">
+                                    <button
+                                      type="button"
+                                      title="แสดงแผนทั้งสองทีม"
+                                      aria-label="แสดงแผนทั้งสองทีม"
+                                      onClick={() => setHtPitchMode('all')}
+                                      className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                                        htPitchMode === 'all'
+                                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
+                                        <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                        <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={homeOrig.name}
+                                      aria-label={homeOrig.name}
+                                      onClick={() => setHtPitchMode('H')}
+                                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                                        htPitchMode === 'H'
+                                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={awayOrig.name}
+                                      aria-label={awayOrig.name}
+                                      onClick={() => setHtPitchMode('A')}
+                                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                                        htPitchMode === 'A'
+                                          ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                                          : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                                      }`}
+                                    >
+                                      <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                    </button>
+                                  </div>
+
+                                  {/* Compact Halftime Warmup Pill Inside Pitch (Top-Right) */}
                                   <button
                                     type="button"
-                                    title="แสดงแผนทั้งสองทีม"
-                                    aria-label="แสดงแผนทั้งสองทีม"
-                                    onClick={() => setHtPitchMode('all')}
-                                    className={`h-6 px-1.5 mland:h-5 mland:px-1 rounded-md flex items-center justify-center cursor-pointer transition-colors ${
-                                      htPitchMode === 'all'
-                                        ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
-                                        : 'opacity-75 hover:opacity-100 hover:bg-white/10'
+                                    disabled={halftimeWarmupUsed}
+                                    onClick={handleHalftimeWarmup}
+                                    title={state.mode === 'p' ? 'วอร์มอัพพักครึ่งเติมฟิต +6% ทันที' : 'สั่งทีมวอร์มอัพพักครึ่งเติมฟิต +4% ทันที'}
+                                    className={`h-9 sm:h-10 mland:h-8 px-2.5 sm:px-3 mland:px-2 rounded-xl border text-[10.5px] sm:text-xs mland:text-[9px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap shadow-lg transition-colors shrink-0 ${
+                                      halftimeWarmupUsed
+                                        ? 'bg-[#05180e]/90 border-emerald-400/40 text-emerald-300 cursor-default'
+                                        : 'bg-[#05180e]/90 border-emerald-400/60 text-emerald-100 hover:bg-emerald-500/35 cursor-pointer'
                                     }`}
                                   >
-                                    <span className="inline-flex items-center -space-x-1.5">
-                                      <ClubCrest name={homeOrig.name} size={14} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                      <ClubCrest name={awayOrig.name} size={14} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                                    </span>
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title={homeOrig.name}
-                                    aria-label={homeOrig.name}
-                                    onClick={() => setHtPitchMode('H')}
-                                    className={`h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center cursor-pointer transition-colors mland:[&>svg]:w-4 mland:[&>svg]:h-4 ${
-                                      htPitchMode === 'H'
-                                        ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
-                                        : 'opacity-75 hover:opacity-100 hover:bg-white/10'
-                                    }`}
-                                  >
-                                    <ClubCrest name={homeOrig.name} size={18} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title={awayOrig.name}
-                                    aria-label={awayOrig.name}
-                                    onClick={() => setHtPitchMode('A')}
-                                    className={`h-6 w-6 mland:h-5 mland:w-5 rounded-md flex items-center justify-center cursor-pointer transition-colors mland:[&>svg]:w-4 mland:[&>svg]:h-4 ${
-                                      htPitchMode === 'A'
-                                        ? 'bg-emerald-500 shadow-xs ring-1 ring-white/40'
-                                        : 'opacity-75 hover:opacity-100 hover:bg-white/10'
-                                    }`}
-                                  >
-                                    <ClubCrest name={awayOrig.name} size={18} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                    {halftimeWarmupUsed
+                                      ? '✅ วอร์มแล้ว'
+                                      : state.mode === 'p'
+                                        ? '💪 วอร์ม (+6%)'
+                                        : '💪 วอร์มทีม (+4%)'}
                                   </button>
                                 </div>
-
-                                {/* Compact Halftime Warmup Pill Inside Pitch (Top-Right) */}
-                                <button
-                                  type="button"
-                                  disabled={halftimeWarmupUsed}
-                                  onClick={handleHalftimeWarmup}
-                                  title={state.mode === 'p' ? 'วอร์มอัพพักครึ่งเติมฟิต +6% ทันที' : 'สั่งทีมวอร์มอัพพักครึ่งเติมฟิต +4% ทันที'}
-                                  className={`absolute top-2 right-2 z-20 h-7 mland:h-6 px-2 rounded-lg border text-[10px] mland:text-[8.5px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap shadow-lg transition-colors ${
-                                    halftimeWarmupUsed
-                                      ? 'bg-[#05180e]/85 border-emerald-400/40 text-emerald-300 cursor-default'
-                                      : 'bg-[#05180e]/85 border-emerald-400/60 text-emerald-100 hover:bg-emerald-500/35 cursor-pointer'
-                                  }`}
-                                >
-                                  {halftimeWarmupUsed
-                                    ? '✅ วอร์มแล้ว'
-                                    : state.mode === 'p'
-                                      ? '💪 วอร์ม (+6%)'
-                                      : '💪 วอร์มทีม (+4%)'}
-                                </button>
 
                                 {htPickedInfo && (
                                   <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
@@ -11485,57 +11486,62 @@ export const MatchModal: React.FC<{
                                   </div>
                                 )}
 
-                                {htPitchMode === 'all' ? (
-                                  <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
-                                    <div className="min-h-0 w-full flex items-center justify-center">
-                                      <FormationPitch
-                                        team={liveHome}
-                                        state={state}
-                                        lineupNames={curHomeLu}
-                                        kitOverride={homeKit}
-                                        gkKitOverride={homeGkKit}
-                                        trimOverride={homeTrim}
-                                        matchMeta={hMeta}
-                                        statMode={htStatMode}
-                                        showFitBar={true}
-                                        subAlertFitTh={subAlertFitTh}
-                                        selectedPlayerName={htPickedPlayer}
-                                        onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                      />
+                                <div className="flex-1 min-h-0 w-full flex items-center justify-center overflow-hidden">
+                                  {htPitchMode === 'all' ? (
+                                    <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
+                                      <div className="h-full min-h-0 w-full flex items-center justify-center">
+                                        <FormationPitch
+                                          team={liveHome}
+                                          state={state}
+                                          lineupNames={curHomeLu}
+                                          kitOverride={homeKit}
+                                          gkKitOverride={homeGkKit}
+                                          trimOverride={homeTrim}
+                                          matchMeta={hMeta}
+                                          statMode={htStatMode}
+                                          showFitBar={true}
+                                          showPitchCrest={true}
+                                          subAlertFitTh={subAlertFitTh}
+                                          selectedPlayerName={htPickedPlayer}
+                                          onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                        />
+                                      </div>
+                                      <div className="h-full min-h-0 w-full flex items-center justify-center">
+                                        <FormationPitch
+                                          team={liveAway}
+                                          state={state}
+                                          lineupNames={curAwayLu}
+                                          kitOverride={awayKit}
+                                          gkKitOverride={awayGkKit}
+                                          trimOverride={awayTrim}
+                                          matchMeta={aMeta}
+                                          statMode={htStatMode}
+                                          showFitBar={true}
+                                          showPitchCrest={true}
+                                          subAlertFitTh={subAlertFitTh}
+                                          selectedPlayerName={htPickedPlayer}
+                                          onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                        />
+                                      </div>
                                     </div>
-                                    <div className="min-h-0 w-full flex items-center justify-center">
-                                      <FormationPitch
-                                        team={liveAway}
-                                        state={state}
-                                        lineupNames={curAwayLu}
-                                        kitOverride={awayKit}
-                                        gkKitOverride={awayGkKit}
-                                        trimOverride={awayTrim}
-                                        matchMeta={aMeta}
-                                        statMode={htStatMode}
-                                        showFitBar={true}
-                                        subAlertFitTh={subAlertFitTh}
-                                        selectedPlayerName={htPickedPlayer}
-                                        onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                      />
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <FormationPitch
-                                    team={htPitchMode === 'H' ? liveHome : liveAway}
-                                    state={state}
-                                    lineupNames={htPitchMode === 'H' ? curHomeLu : curAwayLu}
-                                    kitOverride={htPitchMode === 'H' ? homeKit : awayKit}
-                                    gkKitOverride={htPitchMode === 'H' ? homeGkKit : awayGkKit}
-                                    trimOverride={htPitchMode === 'H' ? homeTrim : awayTrim}
-                                    matchMeta={htPitchMode === 'H' ? hMeta : aMeta}
-                                    statMode={htStatMode}
-                                    showFitBar={true}
-                                    subAlertFitTh={subAlertFitTh}
-                                    selectedPlayerName={htPickedPlayer}
-                                    onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                  />
-                                )}
+                                  ) : (
+                                    <FormationPitch
+                                      team={htPitchMode === 'H' ? liveHome : liveAway}
+                                      state={state}
+                                      lineupNames={htPitchMode === 'H' ? curHomeLu : curAwayLu}
+                                      kitOverride={htPitchMode === 'H' ? homeKit : awayKit}
+                                      gkKitOverride={htPitchMode === 'H' ? homeGkKit : awayGkKit}
+                                      trimOverride={htPitchMode === 'H' ? homeTrim : awayTrim}
+                                      matchMeta={htPitchMode === 'H' ? hMeta : aMeta}
+                                      statMode={htStatMode}
+                                      showFitBar={true}
+                                      showPitchCrest={true}
+                                      subAlertFitTh={subAlertFitTh}
+                                      selectedPlayerName={htPickedPlayer}
+                                      onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                    />
+                                  )}
+                                </div>
                               </div>
 
                               {/* Compact 1st-Half Stats Summary Strip */}

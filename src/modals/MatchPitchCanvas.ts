@@ -174,8 +174,8 @@ export const drawLivePitchToCanvas = (
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
   const padX = Math.max(20, cssW * 0.042);
-  const padTop = Math.max(26, cssH * 0.092);
-  const padBottom = Math.max(40, cssH * 0.14);
+  const padTop = Math.max(22, cssH * 0.082);
+  const padBottom = Math.max(48, cssH * 0.165);
   const padY = padTop;
   const pw = cssW - padX * 2;
   const ph = cssH - padTop - padBottom;
@@ -745,75 +745,111 @@ export const drawLivePitchToCanvas = (
   drawGoal(true, world.goalNetRippleLeft);
   drawGoal(false, world.goalNetRippleRight);
 
-  // 2b. Sideline Dugouts (Substitutes Benches), Technical Areas, Warm-up Subs & Animated Coaches
+  // 2b. Sideline Dugouts (Substitutes Benches), Technical Areas, Warm-up Zones & Animated Coaches
   if (world.sideline) {
     const sl = world.sideline;
     const touchBot = padY + ph;
-    const apronH = cssH - touchBot;
-    const techY = touchBot + 3;
-    const techH = Math.min(18, Math.max(13, apronH * 0.48));
+    const apronH = Math.max(36, cssH - touchBot);
+    const zoneTop = touchBot + 4;
+    const zoneH = clamp(apronH - 7, 30, 52);
 
-    // Left & Right Technical Areas (dashed coach boxes flanking halfway line)
-    const drawTechArea = (xStartPct: number, xEndPct: number, activeKit: string) => {
+    // Left (Home) & Right (Away) Technical Areas (FIFA-style dashed coach boxes flanking halfway line)
+    const drawTechArea = (xStartPct: number, xEndPct: number, activeKit: string, trim: string) => {
       const tx0 = px(xStartPct);
       const tw = px(xEndPct) - tx0;
       ctx.save();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
-      ctx.fillRect(tx0, techY, tw, techH);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.fillStyle = 'rgba(6, 20, 13, 0.34)';
+      ctx.beginPath();
+      ctx.roundRect(tx0, zoneTop, tw, zoneH, 3);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.58)';
       ctx.lineWidth = 1;
-      ctx.setLineDash([3, 2.5]);
-      ctx.strokeRect(tx0, techY, tw, techH);
+      ctx.setLineDash([3.5, 2.5]);
+      ctx.strokeRect(tx0 + 0.5, zoneTop + 0.5, tw - 1, zoneH - 1);
       ctx.setLineDash([]);
-      // Subtle team accent line at back of technical box
+
+      // Subtle sideline team mat strip along the back edge of technical area
       ctx.fillStyle = activeKit;
-      ctx.fillRect(tx0 + 2, techY + techH - 2, tw - 4, 1.8);
+      ctx.beginPath();
+      ctx.roundRect(tx0 + 3, zoneTop + zoneH - 3.2, tw - 6, 2.2, 1);
+      ctx.fill();
+      ctx.fillStyle = trim;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(tx0 + 5, zoneTop + zoneH - 3.2, tw - 10, 0.8);
       ctx.restore();
     };
-    const leftTechKit = world.secondHalf ? awayKit : homeKit;
-    const rightTechKit = world.secondHalf ? homeKit : awayKit;
-    drawTechArea(39, 47.5, leftTechKit);
-    drawTechArea(52.5, 61, rightTechKit);
+    drawTechArea(39.0, 47.6, homeKit, homeTrim);
+    drawTechArea(52.4, 61.0, awayKit, awayTrim);
 
     // Team Dugouts / Substitutes Benches (Left = Home dugout, Right = Away dugout)
     const drawDugout = (xStartPct: number, xEndPct: number, kit: string, trim: string, seats: LiveBenchSeat[]) => {
       const bx = px(xStartPct);
       const bw = px(xEndPct) - bx;
-      const by = touchBot + 5;
-      const bh = Math.min(23, Math.max(17, apronH * 0.6));
+      const by = zoneTop;
+      const bh = zoneH;
       ctx.save();
-      // Canopy shadow & shelter housing
-      ctx.fillStyle = 'rgba(6, 20, 13, 0.88)';
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+
+      // Ground shadow under shelter
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+      ctx.beginPath();
+      ctx.roundRect(bx + 1, by + 2, bw, bh, 5);
+      ctx.fill();
+
+      // Dugout shelter housing with subtle glass sheen
+      const shellGrad = ctx.createLinearGradient(bx, by, bx, by + bh);
+      shellGrad.addColorStop(0, 'rgba(13, 35, 24, 0.96)');
+      shellGrad.addColorStop(1, 'rgba(5, 16, 10, 0.94)');
+      ctx.fillStyle = shellGrad;
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.roundRect(bx, by, bw, bh, 4);
+      ctx.roundRect(bx, by, bw, bh, 5);
       ctx.fill();
       ctx.stroke();
 
-      // Team color header bar on shelter roof
+      // Team-colored canopy roof bar + trim accent
       ctx.fillStyle = kit;
       ctx.beginPath();
-      ctx.roundRect(bx + 2, by + 1.5, bw - 4, 2.6, 1.5);
+      ctx.roundRect(bx + 2, by + 1.5, bw - 4, 3.2, 1.6);
       ctx.fill();
+      ctx.fillStyle = trim;
+      ctx.globalAlpha = 0.72;
+      ctx.fillRect(bx + 4, by + 4.3, bw - 8, 0.8);
+      ctx.globalAlpha = 1;
 
-      // Draw seated substitute players with faces neatly inside dugout
+      // Seated substitute players neatly inside 6 bucket seats
       const shown = seats.slice(0, 6);
-      const seatCount = Math.max(6, shown.length);
-      const slotW = (bw - 8) / seatCount;
-      const seatR = clamp(Math.min(slotW * 0.42, bh * 0.33), 4.4, 6.6);
-      const seatY = by + bh * 0.62;
+      const seatCount = 6;
+      const padInner = 5;
+      const slotW = (bw - padInner * 2) / seatCount;
+      const seatR = clamp(Math.min(slotW * 0.39, bh * 0.27), 4.4, 7.0);
+      const seatY = by + bh * 0.52;
+
       for (let idx = 0; idx < seatCount; idx++) {
-        const sx = bx + 4 + slotW * (idx + 0.5);
+        const sx = bx + padInner + slotW * (idx + 0.5);
         const seat = shown[idx];
-        // Empty seat backrest outline
+
+        // Bucket seat backrest & cushion base
         ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)';
+        ctx.lineWidth = 0.65;
         ctx.beginPath();
-        ctx.roundRect(sx - seatR * 0.9, seatY - seatR * 0.9, seatR * 1.8, seatR * 1.8, 2);
+        ctx.roundRect(sx - seatR * 0.92, seatY - seatR * 0.96, seatR * 1.84, seatR * 1.92, 2.4);
         ctx.fill();
+        ctx.stroke();
+
         if (!seat) continue;
+
         ctx.save();
-        ctx.globalAlpha = seat.subbedOut ? 0.6 : 1;
+        ctx.globalAlpha = seat.subbedOut ? 0.55 : 1;
+
+        // Subtle seat drop shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.36)';
+        ctx.beginPath();
+        ctx.ellipse(sx, seatY + seatR * 0.78, seatR * 0.82, seatR * 0.28, 0, 0, Math.PI * 2);
+        ctx.fill();
+
         // Seated jersey circle backdrop
         ctx.fillStyle = kit;
         ctx.beginPath();
@@ -826,33 +862,193 @@ export const drawLivePitchToCanvas = (
           ctx.beginPath();
           ctx.arc(sx, seatY, Math.max(1, seatR - 0.6), 0, Math.PI * 2);
           ctx.clip();
-          const fw = seatR * 2.1;
+          const fw = seatR * 2.08;
           const fh = (fw * 68) / 64;
           ctx.drawImage(seatFace, sx - fw / 2, seatY - fh * 0.46, fw, fh);
           ctx.restore();
         }
 
-        ctx.strokeStyle = seat.isMe ? '#facc15' : seat.subbedOut ? '#fb923c' : trim;
-        ctx.lineWidth = seat.isMe ? 1.5 : 1;
+        ctx.strokeStyle = seat.isMe ? '#facc15' : seat.subbedOut ? '#fb923c' : '#ffffff';
+        ctx.lineWidth = seat.isMe ? 1.6 : 1.05;
         ctx.beginPath();
         ctx.arc(sx, seatY, seatR, 0, Math.PI * 2);
         ctx.stroke();
 
         if (!seatFace) {
           ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
-          ctx.font = `800 ${Math.max(5.5, Math.round(seatR * 1.1))}px Sarabun, sans-serif`;
+          ctx.font = `800 ${Math.max(5.5, Math.round(seatR * 1.05))}px Sarabun, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(String(seat.no), sx, seatY + 0.3);
         } else {
           const noStr = String(seat.no);
-          const nW = Math.max(7.2, noStr.length * 3.6 + 2.4);
+          const nW = Math.max(7.8, noStr.length * 3.8 + 2.6);
           const nH = 6.8;
-          const nx0 = sx + seatR * 0.12;
-          const ny0 = seatY + seatR * 0.28;
-          ctx.fillStyle = 'rgba(11, 32, 24, 0.92)';
-          ctx.strokeStyle = kit;
-          ctx.lineWidth = 0.7;
+          const nx0 = clamp(sx + seatR * 0.08, sx - seatR, bx + bw - nW - 2);
+          const ny0 = Math.min(seatY + seatR * 0.34, by + bh - nH - 1.5);
+          ctx.fillStyle = 'rgba(9, 24, 17, 0.94)';
+          ctx.strokeStyle = seat.subbedOut ? '#fb923c' : kit;
+          ctx.lineWidth = 0.75;
+          ctx.beginPath();
+          ctx.roundRect(nx0, ny0, nW, nH, 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = seat.subbedOut ? '#fdba74' : '#ffd75e';
+          ctx.font = '800 5.5px Sarabun, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(noStr, nx0 + nW / 2, ny0 + nH / 2 + 0.2);
+        }
+        ctx.restore();
+      }
+
+      // Subtle bottom bench label strip
+      const benchTag = 'ตัวสำรอง';
+      ctx.font = `800 ${cssW < 480 ? 5.8 : 6.4}px Sarabun, sans-serif`;
+      const btw = measureTextCached(ctx, benchTag) + 7;
+      const bty = by + bh - 4.2;
+      ctx.fillStyle = 'rgba(8, 22, 15, 0.92)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.lineWidth = 0.7;
+      ctx.beginPath();
+      ctx.roundRect(bx + bw / 2 - btw / 2, bty - 4, btw, 8, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(benchTag, bx + bw / 2, bty + 0.2);
+
+      ctx.restore();
+    };
+
+    drawDugout(13.6, 37.2, homeKit, homeTrim, sl.benchH);
+    drawDugout(62.8, 86.4, awayKit, awayTrim, sl.benchA);
+
+    // Dedicated Sideline Warm-up Zones & Animated Warming-up Substitutes (Home = Left, Away = Right)
+    const drawWarmupZone = (
+      side: 'H' | 'A',
+      xStartPct: number,
+      xEndPct: number,
+      bench: LiveBenchSeat[],
+      kit: string,
+      trim: string
+    ) => {
+      const zx = px(xStartPct);
+      const zw = px(xEndPct) - zx;
+      const zy = zoneTop;
+      const zh = zoneH;
+      const bibColor =
+        side === 'H'
+          ? colDist(kit, '#a3e635') < 95
+            ? '#facc15'
+            : '#a3e635'
+          : colDist(kit, '#38bdf8') < 95
+            ? '#f472b6'
+            : '#38bdf8';
+
+      ctx.save();
+      // Artificial-turf warm-up mat
+      ctx.fillStyle = 'rgba(22, 163, 74, 0.2)';
+      ctx.beginPath();
+      ctx.roundRect(zx, zy, zw, zh, 4.5);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.lineWidth = 0.9;
+      ctx.setLineDash([3, 2.5]);
+      ctx.beginPath();
+      ctx.roundRect(zx + 0.5, zy + 0.5, zw - 1, zh - 1, 4.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Tiny orange training cones at both ends of the warm-up lane
+      const coneY = zy + zh * 0.45;
+      [zx + 4.5, zx + zw - 4.5].forEach((cxCone) => {
+        ctx.fillStyle = '#fb923c';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.6;
+        ctx.beginPath();
+        ctx.moveTo(cxCone, coneY - 2.6);
+        ctx.lineTo(cxCone + 2.3, coneY + 1.8);
+        ctx.lineTo(cxCone - 2.3, coneY + 1.8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      const activeSubs = bench.filter((b) => !b.subbedOut).slice(0, 2);
+      const wr = clamp(Math.min(zw * 0.145, zh * 0.25), 4.6, 6.8);
+      const laneW = Math.max(8, zw - 16);
+
+      activeSubs.forEach((cand, idx) => {
+        const slotCenter =
+          activeSubs.length === 1
+            ? zx + zw * 0.5
+            : zx + 8 + laneW * (idx === 0 ? 0.3 : 0.72);
+        const phase = sl.warmupPhase + (side === 'H' ? 0 : 1.9) + idx * 1.65;
+        const maxDrift = Math.max(2, laneW * (activeSubs.length === 1 ? 0.24 : 0.1));
+        const wx = slotCenter + Math.sin(phase) * maxDrift;
+        const bounce = Math.abs(Math.sin(phase * 2.1)) * 1.4;
+        const wy = zy + zh * 0.44 - bounce * 0.5;
+        const jogStep = Math.sin(phase * 2.4) * (wr * 0.34);
+
+        ctx.save();
+        // Ground shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+        ctx.beginPath();
+        ctx.ellipse(wx, wy + wr * 0.88 + bounce * 0.4, wr * 0.88, wr * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Animated jogging boots
+        ctx.fillStyle = '#0f172a';
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.arc(wx - wr * 0.32 + jogStep, wy + wr * 0.72, wr * 0.22, 0, Math.PI * 2);
+        ctx.arc(wx + wr * 0.32 - jogStep, wy + wr * 0.72, wr * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        // Training bib circle backdrop
+        ctx.fillStyle = bibColor;
+        ctx.beginPath();
+        ctx.arc(wx, wy, wr, 0, Math.PI * 2);
+        ctx.fill();
+
+        const warmFace = getPitchFaceCanvas(cand.vis, bibColor, kit);
+        if (warmFace) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(wx, wy, Math.max(1, wr - 0.75), 0, Math.PI * 2);
+          ctx.clip();
+          const fw = wr * 2.08;
+          const fh = (fw * 68) / 64;
+          ctx.drawImage(warmFace, wx - fw / 2, wy - fh * 0.46, fw, fh);
+          ctx.restore();
+        }
+
+        ctx.strokeStyle = cand.isMe ? '#facc15' : '#ffffff';
+        ctx.lineWidth = cand.isMe ? 1.6 : 1.15;
+        ctx.beginPath();
+        ctx.arc(wx, wy, wr, 0, Math.PI * 2);
+        ctx.stroke();
+
+        if (!warmFace) {
+          ctx.fillStyle = '#0f172a';
+          ctx.font = `800 ${Math.max(5.5, Math.round(wr * 1.0))}px Sarabun, sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(cand.no), wx, wy + 0.3);
+        } else {
+          const noStr = String(cand.no);
+          const nW = Math.max(7.6, noStr.length * 3.8 + 2.6);
+          const nH = 6.8;
+          const nx0 = wx + wr * 0.12;
+          const ny0 = Math.min(wy + wr * 0.25, zy + zh - nH - 3.5);
+          ctx.fillStyle = 'rgba(9, 24, 17, 0.94)';
+          ctx.strokeStyle = bibColor;
+          ctx.lineWidth = 0.75;
           ctx.beginPath();
           ctx.roundRect(nx0, ny0, nW, nH, 2);
           ctx.fill();
@@ -864,146 +1060,78 @@ export const drawLivePitchToCanvas = (
           ctx.fillText(noStr, nx0 + nW / 2, ny0 + nH / 2 + 0.2);
         }
         ctx.restore();
-      }
-      ctx.restore();
-    };
+      });
 
-    drawDugout(13.5, 36.8, homeKit, homeTrim, sl.benchH);
-    drawDugout(63.2, 86.5, awayKit, awayTrim, sl.benchA);
-
-    // Warming-up subs jogging along their team's active sideline flank
-    const drawWarmupSub = (side: 'H' | 'A', bench: LiveBenchSeat[], kit: string, trim: string) => {
-      const cand = bench.find((b) => !b.subbedOut);
-      if (!cand) return;
-      const isOnLeftHalf = (side === 'H') !== world.secondHalf;
-      const basePct = isOnLeftHalf ? 8.2 : 91.8;
-      const jogOffset = Math.sin(sl.warmupPhase + (side === 'H' ? 0 : 2.1)) * 2.6;
-      const wx = px(basePct + jogOffset);
-      const wy = touchBot + Math.min(16, apronH * 0.43);
-      const wr = clamp(cssW * 0.0105, 5.4, 7.4);
-      const jogStep = Math.sin(sl.warmupPhase * 2.2) * (wr * 0.32);
-      const bibColor = side === 'H' ? '#a3e635' : '#38bdf8';
-
-      ctx.save();
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.34)';
+      // Clean warm-up zone label pill anchored along bottom edge
+      const warmTag = 'วอร์ม';
+      ctx.font = `800 ${cssW < 480 ? 5.8 : 6.4}px Sarabun, sans-serif`;
+      const wtw = measureTextCached(ctx, warmTag) + 7;
+      const wty = zy + zh - 4.2;
+      ctx.fillStyle = 'rgba(8, 22, 15, 0.92)';
+      ctx.strokeStyle = bibColor;
+      ctx.lineWidth = 0.75;
       ctx.beginPath();
-      ctx.ellipse(wx, wy + wr * 0.88, wr * 0.92, wr * 0.36, 0, 0, Math.PI * 2);
+      ctx.roundRect(zx + zw / 2 - wtw / 2, wty - 4, wtw, 8, 3);
       ctx.fill();
-
-      // Animated jogging boots
-      ctx.fillStyle = '#0f172a';
-      ctx.beginPath();
-      ctx.arc(wx - wr * 0.32 + jogStep, wy + wr * 0.72, wr * 0.22, 0, Math.PI * 2);
-      ctx.arc(wx + wr * 0.32 - jogStep, wy + wr * 0.72, wr * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-
-      // Training bib circle backdrop
-      ctx.fillStyle = bibColor;
-      ctx.beginPath();
-      ctx.arc(wx, wy, wr, 0, Math.PI * 2);
-      ctx.fill();
-
-      const warmFace = getPitchFaceCanvas(cand.vis, bibColor, kit);
-      if (warmFace) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(wx, wy, Math.max(1, wr - 0.8), 0, Math.PI * 2);
-        ctx.clip();
-        const fw = wr * 2.1;
-        const fh = (fw * 68) / 64;
-        ctx.drawImage(warmFace, wx - fw / 2, wy - fh * 0.46, fw, fh);
-        ctx.restore();
-      }
-
-      ctx.strokeStyle = cand.isMe ? '#facc15' : bibColor;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(wx, wy, wr, 0, Math.PI * 2);
       ctx.stroke();
-
-      if (!warmFace) {
-        ctx.fillStyle = '#0f172a';
-        ctx.font = `800 ${Math.max(5.5, Math.round(wr * 1.0))}px Sarabun, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(cand.no), wx, wy + 0.3);
-      } else {
-        const noStr = String(cand.no);
-        const nW = Math.max(8, noStr.length * 4 + 2.8);
-        const nH = 7.4;
-        const nx0 = wx + wr * 0.15;
-        const ny0 = wy + wr * 0.25;
-        ctx.fillStyle = 'rgba(11, 32, 24, 0.92)';
-        ctx.strokeStyle = trim;
-        ctx.lineWidth = 0.7;
-        ctx.beginPath();
-        ctx.roundRect(nx0, ny0, nW, nH, 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = '#ffd75e';
-        ctx.font = '800 6px Sarabun, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(noStr, nx0 + nW / 2, ny0 + nH / 2 + 0.2);
-      }
-
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.78)';
-      ctx.font = '700 6.8px Sarabun, sans-serif';
+      ctx.fillStyle = '#ecfccb';
       ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      ctx.fillText('วอร์ม', wx, wy + wr + 1.8);
+      ctx.textBaseline = 'middle';
+      ctx.fillText(warmTag, zx + zw / 2, wty + 0.2);
+
       ctx.restore();
     };
-    drawWarmupSub('H', sl.benchH, homeKit, homeTrim);
-    drawWarmupSub('A', sl.benchA, awayKit, awayTrim);
+    drawWarmupZone('H', 1.8, 12.0, sl.benchH, homeKit, homeTrim);
+    drawWarmupZone('A', 88.0, 98.2, sl.benchA, awayKit, awayTrim);
 
-    // Animated Head Coaches standing in Technical Areas (cross sides cleanly in 2nd half)
+    // Animated Head Coaches standing cleanly inside their Technical Areas
     const drawCoach = (c: LiveSidelineCoach, kit: string, trim: string) => {
       const cx = px(c.x);
-      const cy = touchBot + Math.min(15.5, Math.max(11, apronH * 0.4));
-      const cr = clamp(cssW * 0.0122, 6.8, 9.2);
+      const cy = zoneTop + zoneH * 0.42;
+      const cr = clamp(Math.min(cssW * 0.012, zoneH * 0.27), 6.2, 9.0);
       const speed = Math.hypot(c.tx - c.x, c.ty - c.y);
-      const paceStep = speed > 0.4 ? Math.sin(c.pacePhase) * (cr * 0.35) : 0;
-      const coachVis = c.vis && c.vis.length >= 6
-        ? c.vis
-        : [c.side === 'H' ? 2 : 1, c.side === 'H' ? 0 : 5, c.side === 'H' ? 5 : 2, c.side === 'H' ? 1 : 0, 1, 0, c.side === 'H' ? 2 : 0, 0];
+      const paceStep = speed > 0.3 ? Math.sin(c.pacePhase) * (cr * 0.34) : 0;
+      const coachVis =
+        c.vis && c.vis.length >= 6
+          ? c.vis
+          : [c.side === 'H' ? 2 : 1, c.side === 'H' ? 0 : 5, c.side === 'H' ? 5 : 2, c.side === 'H' ? 1 : 0, 1, 0, c.side === 'H' ? 2 : 0, 0];
 
       ctx.save();
       ctx.translate(cx, cy);
 
-      // Shadow
+      // Ground shadow
       ctx.fillStyle = 'rgba(0, 0, 0, 0.38)';
       ctx.beginPath();
-      ctx.ellipse(0, cr * 0.85, cr * 0.95, cr * 0.38, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, cr * 0.85, cr * 0.95, cr * 0.36, 0, 0, Math.PI * 2);
       ctx.fill();
 
       // Pacing shoes
       ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.arc(-cr * 0.35 + paceStep, cr * 0.65, cr * 0.25, 0, Math.PI * 2);
-      ctx.arc(cr * 0.35 - paceStep, cr * 0.65, cr * 0.25, 0, Math.PI * 2);
+      ctx.arc(-cr * 0.34 + paceStep, cr * 0.66, cr * 0.24, 0, Math.PI * 2);
+      ctx.arc(cr * 0.34 - paceStep, cr * 0.66, cr * 0.24, 0, Math.PI * 2);
       ctx.fill();
+      ctx.stroke();
 
       const outfitCfg = COACH_OUTFITS.find((o) => o.id === (c.outfit || 'suit_navy')) || COACH_OUTFITS[0];
-      const sleeveCol =
-        outfitCfg.mode === 'tracksuit' || outfitCfg.mode === 'polo'
-          ? kit
-          : outfitCfg.coat;
+      const sleeveCol = outfitCfg.mode === 'tracksuit' || outfitCfg.mode === 'polo' ? kit : outfitCfg.coat;
 
       // Tactical coaching arm gesture (pointing / waving instructions)
       if (c.gestureTimer > 0 || (c.shoutTimer > 0 && c.shoutText)) {
-        const wave = Math.sin(sl.warmupPhase * 2.4) * 0.4;
+        const wave = Math.sin(sl.warmupPhase * 2.4) * 0.38;
         const armAng = c.facing + wave;
         ctx.strokeStyle = sleeveCol;
-        ctx.lineWidth = 2.4;
+        ctx.lineWidth = 2.3;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(armAng) * cr * 1.45, Math.sin(armAng) * cr * 1.45);
+        ctx.lineTo(Math.cos(armAng) * cr * 1.4, Math.sin(armAng) * cr * 1.4);
         ctx.stroke();
         ctx.fillStyle = '#f1c27d';
         ctx.beginPath();
-        ctx.arc(Math.cos(armAng) * cr * 1.45, Math.sin(armAng) * cr * 1.45, 1.8, 0, Math.PI * 2);
+        ctx.arc(Math.cos(armAng) * cr * 1.4, Math.sin(armAng) * cr * 1.4, 1.7, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -1019,7 +1147,7 @@ export const drawLivePitchToCanvas = (
       if (coachFace) {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(0, 0, Math.max(1, cr - 0.9), 0, Math.PI * 2);
+        ctx.arc(0, 0, Math.max(1, cr - 0.85), 0, Math.PI * 2);
         ctx.clip();
         ctx.fillStyle = '#3f5c4e';
         ctx.fillRect(-cr, -cr, cr * 2, cr * 2);
@@ -1028,7 +1156,6 @@ export const drawLivePitchToCanvas = (
         ctx.drawImage(coachFace, -fw / 2, -fh * 0.5, fw, fh);
         ctx.restore();
       } else {
-        // Fallback suit collar + tie + minimal head while decoding SVG
         ctx.fillStyle = '#f8fafc';
         ctx.beginPath();
         ctx.moveTo(-cr * 0.36, cr * 0.36);
@@ -1055,64 +1182,72 @@ export const drawLivePitchToCanvas = (
 
       // Crisp suit ring
       ctx.strokeStyle = c.isUserCoach ? '#facc15' : trim;
-      ctx.lineWidth = c.isUserCoach ? 1.8 : 1.4;
+      ctx.lineWidth = c.isUserCoach ? 1.8 : 1.35;
       ctx.beginPath();
       ctx.arc(0, 0, cr, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Crisp Coach role badge beneath coach
+      // Coach role pill aligned on the bottom rim of the technical area (matches warm-up & bench pills)
       const tag = c.isUserCoach ? '★ โค้ช' : 'โค้ช';
-      ctx.font = `800 ${cssW < 480 ? 6.5 : 7.5}px Sarabun, sans-serif`;
-      const tw = measureTextCached(ctx, tag) + 6;
-      const ty = cr + 2;
-      ctx.fillStyle = c.isUserCoach ? '#facc15' : 'rgba(15, 23, 42, 0.9)';
+      ctx.font = `800 ${cssW < 480 ? 5.8 : 6.5}px Sarabun, sans-serif`;
+      const tw = measureTextCached(ctx, tag) + 7;
+      const tyCenter = zoneTop + zoneH - 4.2 - cy;
+      ctx.fillStyle = c.isUserCoach ? '#facc15' : 'rgba(8, 22, 15, 0.94)';
       ctx.strokeStyle = c.isUserCoach ? '#1c1300' : kit;
       ctx.lineWidth = 0.85;
       ctx.beginPath();
-      ctx.roundRect(-tw / 2, ty, tw, 9.5, 3.5);
+      ctx.roundRect(-tw / 2, tyCenter - 4.3, tw, 8.6, 3.2);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = c.isUserCoach ? '#1c1300' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(tag, 0, ty + 5);
+      ctx.fillText(tag, 0, tyCenter + 0.2);
 
-      // Tactical shout callout bubble above coach, or occasional emotion emoji bubble
+      // Tactical shout callout bubble or emotion emoji bubble with clean pointer tail
       if (c.shoutText && c.shoutTimer > 0) {
         const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
         ctx.globalAlpha = sAlpha;
-        ctx.font = '800 8.5px Sarabun, sans-serif';
+        ctx.font = '800 8px Sarabun, sans-serif';
         const sw = measureTextCached(ctx, c.shoutText) + 10;
         const bx0 = clamp(-sw / 2, -cx + 6, cssW - cx - sw - 6);
         const by0 = -cr - 17;
-        ctx.fillStyle = 'rgba(9, 23, 16, 0.94)';
+        ctx.fillStyle = 'rgba(7, 19, 13, 0.95)';
         ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
-        ctx.lineWidth = 1.2;
+        ctx.lineWidth = 1.15;
         ctx.beginPath();
-        ctx.roundRect(bx0, by0, sw, 14, 5);
+        ctx.roundRect(bx0, by0, sw, 13.5, 5);
         ctx.fill();
         ctx.stroke();
+        // Bubble pointer tail
+        ctx.beginPath();
+        ctx.moveTo(-2.5, by0 + 13);
+        ctx.lineTo(0, by0 + 16.5);
+        ctx.lineTo(2.5, by0 + 13);
+        ctx.closePath();
+        ctx.fill();
+
         ctx.fillStyle = c.isUserCoach ? '#fde047' : '#ffffff';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(c.shoutText, bx0 + sw / 2, by0 + 7.2);
+        ctx.fillText(c.shoutText, bx0 + sw / 2, by0 + 7);
       } else if (c.moodEmoji && (c.moodTimer || 0) > 0) {
         const mTimer = c.moodTimer || 0;
         const mAlpha = Math.min(clamp(mTimer / 0.35, 0, 1), 1);
-        const bob = Math.sin(sl.warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.1;
+        const bob = Math.sin(sl.warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
         ctx.globalAlpha = mAlpha;
-        const bw = 18;
-        const bh = 15;
+        const bw = 17;
+        const bh = 14;
         const bx0 = clamp(-bw / 2, -cx + 6, cssW - cx - bw - 6);
-        const by0 = -cr - 18 + bob;
-        ctx.fillStyle = 'rgba(6, 14, 10, 0.92)';
-        ctx.strokeStyle = c.isUserCoach ? '#facc15' : 'rgba(255, 255, 255, 0.35)';
+        const by0 = -cr - 17 + bob;
+        ctx.fillStyle = 'rgba(7, 19, 13, 0.92)';
+        ctx.strokeStyle = c.isUserCoach ? '#facc15' : 'rgba(255, 255, 255, 0.36)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.roundRect(bx0, by0, bw, bh, 7.5);
+        ctx.roundRect(bx0, by0, bw, bh, 7);
         ctx.fill();
         ctx.stroke();
-        ctx.font = '10.5px Sarabun, sans-serif';
+        ctx.font = '10px Sarabun, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(c.moodEmoji, bx0 + bw / 2, by0 + bh / 2 + 0.4);
