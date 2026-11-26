@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
+  Check,
+  ClipboardList,
   CloudRain,
   FastForward,
+  Lock,
   MapPin,
   Moon,
   Play,
@@ -31,6 +34,7 @@ import {
 } from '../engine/simulation';
 import { getMatchBroadcastChannel } from '../engine/liveStreamChat';
 import { buildMatchEnvironment, getStadiumDisplayName, type MatchFixtureKind } from '../engine/matchEnv';
+import { buildAssistantCoachNotes } from '../engine/assistantNotes';
 import { ovColor } from '../engine/missions';
 import { ClubCrest, FormationPitch } from '../components/SvgVisuals';
 import { StaminaBar } from '../components/StaminaBar';
@@ -197,9 +201,61 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   }, [awayTeam.sq, awayXi]);
 
   const myTeam = meIsHome ? homeTeam : awayTeam;
+  const oppTeam = meIsHome ? awayTeam : homeTeam;
   const myXi = meIsHome ? homeXi : awayXi;
   const myAvgFit = Math.round(myXi.reduce((sum, q) => sum + (q.fit ?? 100), 0) / Math.max(1, myXi.length));
   const tiredStarterCount = myXi.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) < 72).length;
+
+  const assistantReport = useMemo(() => {
+    if (!isMgr) return null;
+    return buildAssistantCoachNotes({
+      state,
+      myTeam,
+      oppTeam,
+      meIsHome,
+      myRate: meIsHome ? homeRate : awayRate,
+      oppRate: meIsHome ? awayRate : homeRate,
+      matchEnv,
+      kind,
+      isDerby
+    });
+  }, [isMgr, state, myTeam, oppTeam, meIsHome, homeRate, awayRate, matchEnv, kind, isDerby]);
+
+  const isRecommendedApplied = useMemo(() => {
+    const rec = assistantReport?.recommendation;
+    if (!assistantReport?.canApplyTactics || !rec) return false;
+    return (
+      !myTeam.cf &&
+      myTeam.form === rec.form &&
+      myTeam.tac === rec.tac &&
+      (myTeam.pass ?? 1) === rec.pass &&
+      (myTeam.press ?? 1) === rec.press &&
+      (myTeam.tempo ?? 1) === rec.tempo &&
+      (myTeam.line ?? 1) === rec.line &&
+      (myTeam.wid ?? 1) === rec.wid
+    );
+  }, [assistantReport, myTeam]);
+
+  const handleApplyAssistantTactics = () => {
+    const rec = assistantReport?.recommendation;
+    if (!isMgr || !assistantReport?.canApplyTactics || !rec) return;
+    SFX.tap();
+    onUpdateState((d) => {
+      const t = d.teams[d.me];
+      t.cf = undefined;
+      t.form = rec.form;
+      t.lu = null;
+      t.tac = rec.tac;
+      t.pass = rec.pass;
+      t.press = rec.press;
+      t.tempo = rec.tempo;
+      t.line = rec.line;
+      t.wid = rec.wid;
+    });
+    setSwapPickName(null);
+    setViewMode(meIsHome ? 'H' : 'A');
+    onToast(`📋 ปรับใช้แผน ${rec.form} (${AR_T[rec.tac]}) ตามบันทึกผู้ช่วยโค้ชแล้ว`);
+  };
 
   const compLabel =
     kind === 'asia'
@@ -744,10 +800,129 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
             )}
           </div>
 
-          {/* RIGHT COLUMN: STADIUM, WEATHER & PITCH CONDITIONS */}
+          {/* RIGHT COLUMN: ASSISTANT COACH NOTES (MANAGER) + STADIUM, WEATHER & PITCH CONDITIONS */}
           <div className="flex flex-col min-h-0 overflow-y-auto p-3 sm:p-4 mland:p-2.5 space-y-3 mland:space-y-2 bg-[var(--surface)]">
+            {isMgr && assistantReport && (
+              <section
+                aria-label="บันทึกโน้ตจากผู้ช่วยโค้ช"
+                className="rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] p-2.5 sm:p-3 mland:p-2 space-y-2 mland:space-y-1.5"
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/80">
+                  <div className="min-w-0">
+                    <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold text-[var(--ink)] flex items-center gap-1.5">
+                      <ClipboardList className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
+                      <span className="truncate">บันทึกโน้ตจากผู้ช่วยโค้ช</span>
+                    </div>
+                    <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
+                      {assistantReport.rankTitle} · {assistantReport.tierLabel} · {assistantReport.confidenceLabel}
+                    </div>
+                  </div>
+                  {assistantReport.asstLv === 0 ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] shrink-0">
+                      <Lock className="w-3 h-3" />
+                      <span>ยังไม่ปลดล็อก</span>
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Weaknesses & Key Observations */}
+                <div className="divide-y divide-[var(--line)]/65">
+                  {assistantReport.weaknesses.map((item, idx) => (
+                    <div key={idx} className="py-1.5 first:pt-0 last:pb-0 space-y-0.5">
+                      <div className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
+                        {assistantReport.asstLv > 0 ? `${idx + 1}. ` : ''}{item.title}
+                      </div>
+                      <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">
+                        {item.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Danger Threat & Specific Target (Lv.2+ / Lv.5+) */}
+                {(assistantReport.dangerThreat || assistantReport.targetPlayerNote) && (
+                  <div className="pt-1.5 border-t border-[var(--line)]/70 space-y-1.5 text-[10.5px] mland:text-[9px]">
+                    {assistantReport.dangerThreat && (
+                      <div className="rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2.5 py-1.5 space-y-0.5">
+                        <div className="font-extrabold text-[var(--red)]">{assistantReport.dangerThreat.title}</div>
+                        <div className="text-[var(--mut)] leading-snug">{assistantReport.dangerThreat.detail}</div>
+                      </div>
+                    )}
+                    {assistantReport.targetPlayerNote && (
+                      <div className="rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2.5 py-1.5 space-y-0.5">
+                        <div className="font-extrabold text-[var(--g)] tabular">
+                          เป้าหมายเจาะจุดอ่อน: {assistantReport.targetPlayerNote.name} ({assistantReport.targetPlayerNote.role} · OV {assistantReport.targetPlayerNote.ov} · ฟิต {assistantReport.targetPlayerNote.fit}%)
+                        </div>
+                        <div className="text-[var(--mut)] leading-snug">
+                          สาเหตุ: {assistantReport.targetPlayerNote.reason} — เน้นขึ้นเกมบุกเข้าพื้นที่รับผิดชอบของรายนี้
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tactical Recommendation + 1-Click Apply */}
+                {assistantReport.recommendation && (
+                  <div className="pt-2 border-t border-[var(--line)]/80 space-y-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--g)]">
+                        คำแนะนำการจัดแผน
+                      </span>
+                      {assistantReport.canApplyTactics && (
+                        <button
+                          type="button"
+                          onClick={handleApplyAssistantTactics}
+                          disabled={isRecommendedApplied}
+                          className={`btn btn-xs ${isRecommendedApplied ? 'btn-surface text-[var(--g)] border-[var(--g)]/50' : 'btn-primary'}`}
+                        >
+                          {isRecommendedApplied ? (
+                            <>
+                              <Check className="w-3 h-3" />
+                              <span>ใช้อยู่แล้ว</span>
+                            </>
+                          ) : (
+                            <span>ใช้แผนที่ผู้ช่วยแนะนำ</span>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] tabular">
+                      {assistantReport.recommendation.summaryLine}
+                    </div>
+                    <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">
+                      {assistantReport.recommendation.rationale}
+                    </p>
+                  </div>
+                )}
+
+                {/* Squad Fit / Pitch Condition Note */}
+                {(assistantReport.squadFitNote || assistantReport.envNote) && (
+                  <div className="pt-1.5 border-t border-[var(--line)]/65 space-y-1 text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
+                    {assistantReport.squadFitNote && (
+                      <div>
+                        <b className="text-[var(--ink)]">ความพร้อมทีมเรา:</b> {assistantReport.squadFitNote}
+                      </div>
+                    )}
+                    {assistantReport.envNote && (
+                      <div>
+                        <b className="text-[var(--ink)]">สภาพสนาม &amp; จังหวะเกม:</b> {assistantReport.envNote}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Upgrade Hint */}
+                {assistantReport.unlockHint && (
+                  <div className="pt-1.5 border-t border-[var(--line)]/60 text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
+                    💡 {assistantReport.unlockHint}
+                  </div>
+                )}
+              </section>
+            )}
+
             {/* Stadium & Attendance */}
-            <div className="space-y-2 mland:space-y-1">
+            <div className={`space-y-2 mland:space-y-1 ${isMgr ? 'pt-2.5 mland:pt-2 border-t border-[var(--line)]' : ''}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] flex items-center gap-1">
