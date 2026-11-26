@@ -2168,10 +2168,10 @@ export const FinanceClubView: React.FC<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      {/* Sleek Single-Row Club Identity Strip (zero duplication with Top HUD Board% & Fans) */}
+      {/* Unified Single-Row Club Identity Strip (consistent height across Club & Crest/Kit Studio) */}
       <div
-        className={`relative px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 overflow-hidden ${
-          clubTab === 'identity' ? 'border-[var(--g)]/40 shadow-sm' : 'border-[var(--line)]'
+        className={`relative px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border shadow-2xs shrink-0 overflow-hidden ${
+          clubTab === 'identity' ? 'border-[var(--g)]/45' : 'border-[var(--line)]'
         }`}
         style={{
           background: `linear-gradient(135deg, color-mix(in srgb, ${dk.c1} 13%, var(--surface)), var(--surface) 56%, color-mix(in srgb, ${dk.c2} 7%, var(--surface)))`
@@ -2183,63 +2183,79 @@ export const FinanceClubView: React.FC<{
           style={{ background: `linear-gradient(90deg, ${dk.c1}, ${dk.c2})` }}
         />
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 text-left min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
-            <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
-              <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-13 sm:[&>svg]:h-13 mland:[&>svg]:w-10 mland:[&>svg]:h-10 flex items-center justify-center">
-                <ClubCrest name={me.name} size={52} team={me} club={dk} isMyClub />
-              </div>
+          <div className="flex items-stretch gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 py-1 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setIdentityMobilePane('crest');
+                  if (clubTab !== 'identity') setClubTab('identity');
+                }}
+                title={clubTab === 'identity' ? 'แก้ไขตราสโมสร' : 'แตะเพื่อแต่งตราสโมสร'}
+                className={`shrink-0 p-0.5 rounded-lg cursor-pointer transition-colors [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-10 mland:[&>svg]:h-10 flex items-center justify-center ${
+                  clubTab === 'identity' && identityMobilePane === 'crest'
+                    ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/45 md:bg-transparent md:ring-0 mland:bg-transparent mland:ring-0'
+                    : 'hover:bg-[var(--surface-2)]/60'
+                }`}
+              >
+                <ClubCrest name={me.name} size={48} team={me} club={dk} isMyClub />
+              </button>
               <div className="w-px h-9 sm:h-10 mland:h-8 bg-[var(--line)]/75" aria-hidden="true" />
-              {clubTab === 'identity' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIdentityMobilePane('kit');
-                      setKitPatternTarget('home');
-                      setKitColorTarget('c1');
-                    }}
-                    title="คลิกเพื่อแก้ไขชุดเหย้า"
-                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
-                      kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
-                    }`}
-                  >
-                    <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                      <KitJersey club={dk} away={false} size={44} />
-                    </div>
-                    <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                      เหย้า
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIdentityMobilePane('kit');
-                      setKitPatternTarget('away');
-                      setKitColorTarget('c2');
-                    }}
-                    title="คลิกเพื่อแก้ไขชุดเยือน"
-                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
-                      kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
-                    }`}
-                  >
-                    <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                      <KitJersey club={dk} away={true} size={44} />
-                    </div>
-                    <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                      เยือน
-                    </span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                    <KitJersey club={dk} away={false} size={48} />
-                  </div>
-                  <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                    <KitJersey club={dk} away={true} size={48} />
-                  </div>
-                </>
-              )}
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setIdentityMobilePane('kit');
+                  setKitPatternTarget('home');
+                  setKitColorTarget('c1');
+                  if (clubTab !== 'identity') setClubTab('identity');
+                }}
+                title={clubTab === 'identity' ? 'คลิกเพื่อแก้ไขชุดเหย้า' : 'แตะเพื่อแต่งชุดเหย้า'}
+                className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                  clubTab === 'identity' && kitPatternTarget === 'home'
+                    ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60'
+                    : 'hover:bg-[var(--surface-2)]/60'
+                }`}
+              >
+                <div className="[&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-10 sm:[&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-center justify-center">
+                  <KitJersey club={dk} away={false} size={40} />
+                </div>
+                <span
+                  className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${
+                    clubTab === 'identity' && kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'
+                  }`}
+                >
+                  เหย้า
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setIdentityMobilePane('kit');
+                  setKitPatternTarget('away');
+                  setKitColorTarget('c2');
+                  if (clubTab !== 'identity') setClubTab('identity');
+                }}
+                title={clubTab === 'identity' ? 'คลิกเพื่อแก้ไขชุดเยือน' : 'แตะเพื่อแต่งชุดเยือน'}
+                className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                  clubTab === 'identity' && kitPatternTarget === 'away'
+                    ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60'
+                    : 'hover:bg-[var(--surface-2)]/60'
+                }`}
+              >
+                <div className="[&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-10 sm:[&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-center justify-center">
+                  <KitJersey club={dk} away={true} size={40} />
+                </div>
+                <span
+                  className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${
+                    clubTab === 'identity' && kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'
+                  }`}
+                >
+                  เยือน
+                </span>
+              </button>
             </div>
 
             <button
@@ -2250,9 +2266,9 @@ export const FinanceClubView: React.FC<{
               }}
               aria-pressed={clubTab === 'identity'}
               title={clubTab === 'identity' ? 'กลับไปหน้าข้อมูลสโมสร' : 'ออกแบบตรา & ชุดแข่งสโมสร'}
-              className={`shrink-0 flex flex-col items-center justify-center gap-1 mland:gap-0.5 px-2.5 py-2 sm:px-3 sm:py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border text-[10px] sm:text-[11px] mland:text-[8.5px] font-bold leading-none cursor-pointer transition-all whitespace-nowrap ${
+              className={`shrink-0 self-stretch min-w-[66px] sm:min-w-[74px] mland:min-w-[58px] flex flex-col items-center justify-center gap-1 mland:gap-0.5 px-2.5 py-1.5 sm:px-3 mland:px-2 rounded-xl mland:rounded-lg border text-[10px] sm:text-[11px] mland:text-[8.5px] font-bold leading-none cursor-pointer transition-colors whitespace-nowrap ${
                 clubTab === 'identity'
-                  ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-sm ring-2 ring-[var(--g)]/25'
+                  ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-sm ring-1 ring-[var(--g)]/35'
                   : 'bg-[var(--surface)]/85 border-[var(--line)]/85 text-[var(--ink)] hover:border-[var(--g)]/60 hover:bg-[var(--g-soft)]/55 hover:text-[var(--g)] shadow-2xs'
               }`}
             >
@@ -2262,9 +2278,9 @@ export const FinanceClubView: React.FC<{
           </div>
 
           <div className="space-y-0.5 min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10px] mland:text-[8.5px] font-bold leading-tight">
+            <div className="flex items-center gap-x-1.5 min-w-0 text-[10px] mland:text-[8.5px] font-bold leading-tight whitespace-nowrap overflow-hidden">
               {clubTab === 'identity' ? (
-                <span className={hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}>
+                <span className={`truncate ${hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
                   {hasIdentityChanges
                     ? 'ตัวอย่างตรา & ชุดแข่ง (มีรายการแก้ไขที่ยังไม่บันทึก)'
                     : 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์'}
@@ -2281,10 +2297,12 @@ export const FinanceClubView: React.FC<{
               )}
             </div>
 
-            <h2 className="font-bold text-sm sm:text-lg mland:text-sm font-display leading-snug text-[var(--ink)] truncate">
-              {me.name}
+            <h2 className="font-bold text-sm sm:text-lg mland:text-sm font-display leading-snug text-[var(--ink)] flex items-baseline gap-1.5 min-w-0">
+              <span className="truncate">{me.name}</span>
               {k.nick ? (
-                <span className="ml-1.5 text-[11px] sm:text-xs mland:text-[10px] font-semibold text-[var(--mut)] whitespace-nowrap">«{k.nick}»</span>
+                <span className="text-[11px] sm:text-xs mland:text-[10px] font-semibold text-[var(--mut)] whitespace-nowrap shrink-0">
+                  «{k.nick}»
+                </span>
               ) : null}
             </h2>
 
@@ -2296,10 +2314,10 @@ export const FinanceClubView: React.FC<{
                 <b className="text-[var(--ink)]">{KIT_PATTERNS[(dk.awayKit ?? dk.kit) || 0]}</b>
               </p>
             ) : (
-              <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-tight truncate">
-                <span>🏟️ {k.std} (จุ {cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
-                <span aria-hidden="true" className="opacity-45">·</span>
-                <span className="font-semibold text-[var(--ink)]">
+              <p className="flex items-center gap-x-1.5 min-w-0 text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-tight whitespace-nowrap overflow-hidden">
+                <span className="truncate">🏟️ {k.std} (จุ {cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
+                <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
+                <span className="font-semibold text-[var(--ink)] truncate shrink-0 max-w-[42%]">
                   👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
                 </span>
               </p>
@@ -2307,7 +2325,7 @@ export const FinanceClubView: React.FC<{
           </div>
 
           {clubTab === 'identity' ? (
-            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 ml-auto">
+            <div className="flex items-center justify-end gap-1.5 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[38px] mland:min-h-[30px] ml-auto">
               <button
                 type="button"
                 onClick={() => {
@@ -2355,22 +2373,22 @@ export const FinanceClubView: React.FC<{
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto text-center">
+            <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[38px] mland:min-h-[30px] text-center items-center">
               <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
-                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</div>
-                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)]">
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">พลัง XI/ทีม</div>
+                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
                   {ts.ovXi}/{ts.ovSq}
                 </div>
               </div>
               <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
-                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap">มูลค่าทีม</div>
-                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)]">
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">มูลค่าทีม</div>
+                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
                   {fmtMoneyNum(totV)}
                 </div>
               </div>
               <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
-                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap">อันดับ / เป้า</div>
-                <div className={`text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular ${curRank <= targetRank ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">อันดับ / เป้า</div>
+                <div className={`text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${curRank <= targetRank ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                   #{curRank}<span className="text-[9.5px] font-semibold text-[var(--mut)]">/{targetRank}+</span>
                 </div>
               </div>
@@ -2392,7 +2410,10 @@ export const FinanceClubView: React.FC<{
           <button
             key={id}
             type="button"
-            onClick={() => setClubTab(id)}
+            onClick={() => {
+              SFX.tap();
+              setClubTab(id);
+            }}
             className={`seg-btn truncate ${
               clubTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
             }`}
@@ -2668,8 +2689,8 @@ export const FinanceClubView: React.FC<{
 
                 {/* Section 2: Head Coach & Tactical Style */}
                 <section className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/65 space-y-2.5 mland:space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <button
                         type="button"
                         onClick={() => {
@@ -3946,7 +3967,7 @@ export const FinanceClubView: React.FC<{
           <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
             {/* Left Column: 8 Unique Facilities Lv.10 + Compact Readiness Strip */}
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 h-full overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60 min-h-[42px] mland:min-h-[34px]">
                 <div className="min-w-0">
                   <h3 className="font-bold text-xs sm:text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวก ({infraFacilityDefs.length} แห่ง · Lv.{MAX_FACILITY_LV})</h3>
                   <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
@@ -4220,7 +4241,7 @@ export const FinanceClubView: React.FC<{
 
             {/* Right Column: 6 Unique Staff Roles Lv.6 */}
             <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 h-full overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60 min-h-[42px] mland:min-h-[34px]">
                 <div>
                   <h3 className="font-bold text-xs sm:text-sm mland:text-xs">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช ({staffDefs.length} ตำแหน่ง · Lv.{MAX_STAFF_LV})</h3>
                   <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ทีมงานเฉพาะทางแต่ละสายช่วยยกระดับทีมอย่างต่อเนื่อง</div>
@@ -4327,7 +4348,7 @@ export const FinanceClubView: React.FC<{
                 identityMobilePane === 'crest' ? 'flex' : 'hidden md:flex mland:flex'
               } rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex-col min-h-0 overflow-hidden`}
             >
-              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 shrink-0">
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 min-h-[42px] mland:min-h-[34px] shrink-0">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <h3 className="font-bold text-xs sm:text-[13px] mland:text-xs text-[var(--ink)] whitespace-nowrap">🛡️ ตราสโมสร</h3>
                   <span className="hidden sm:inline text-[10px] mland:text-[9px] font-medium text-[var(--mut)] truncate">
@@ -4572,7 +4593,7 @@ export const FinanceClubView: React.FC<{
                 identityMobilePane === 'kit' ? 'flex' : 'hidden md:flex mland:flex'
               } rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex-col min-h-0 overflow-hidden`}
             >
-              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 shrink-0">
+              <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)]/65 bg-[var(--surface-2)]/30 flex items-center justify-between gap-2 min-h-[42px] mland:min-h-[34px] shrink-0">
                 <h3 className="font-bold text-xs sm:text-[13px] mland:text-xs text-[var(--ink)] whitespace-nowrap">🎽 ชุดแข่ง &amp; โทนสี</h3>
                 <span className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] truncate">
                   {KIT_PATTERNS[dk.kit || 0]} · {KIT_COLLARS[(dk.collar ?? 0) % 4]}
