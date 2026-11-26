@@ -195,6 +195,8 @@ export const PlayerInspectorModal: React.FC<{
                 talent={playerTalent}
                 roleLabel={livePlayer.ro}
                 shirtNo={currentNo}
+                onShirtClick={canEditShirtNo ? () => { SFX.tap(); setShowLockerPicker(true); } : undefined}
+                shirtButtonTitle="เปิดล็อกเกอร์เปลี่ยน/สลับเบอร์เสื้อ"
                 kit1={kit1}
                 kit2={kit2}
                 faceProps={{
@@ -438,49 +440,24 @@ export const PlayerInspectorModal: React.FC<{
                   </span>
                 </div>
 
-                {canEditShirtNo && (
+                {canEditShirtNo && state.mode === 'm' && (
                   <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--line)]/60">
                     <button
                       type="button"
                       onClick={() => {
-                        SFX.tap();
-                        setShowLockerPicker(true);
+                        onUpdateState((d) => {
+                          d.teams[d.me].cap = livePlayer.n;
+                        });
+                        onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
                       }}
-                      className="btn btn-xs btn-secondary flex-1 justify-between gap-1"
+                      className={`btn btn-xs w-full ${
+                        isCap
+                          ? 'btn-gold'
+                          : 'btn-secondary'
+                      }`}
                     >
-                      <span>👕 เบอร์ #{currentNo}</span>
-                      <span className="text-[var(--g)] font-extrabold">ล็อกเกอร์ ▾</span>
+                      {isCap ? '© กัปตันทีม' : 'แต่งตั้งกัปตันทีม'}
                     </button>
-                    {isMePlayer && state.mode === 'p' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setShowAppearanceModal(true);
-                        }}
-                        className="btn btn-xs btn-secondary shrink-0"
-                      >
-                        ✂️ ทรงผม
-                      </button>
-                    )}
-                    {state.mode === 'm' && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onUpdateState((d) => {
-                            d.teams[d.me].cap = livePlayer.n;
-                          });
-                          onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
-                        }}
-                        className={`btn btn-xs shrink-0 ${
-                          isCap
-                            ? 'btn-gold'
-                            : 'btn-secondary'
-                        }`}
-                      >
-                        {isCap ? '© กัปตัน' : 'ตั้งกัปตัน'}
-                      </button>
-                    )}
                   </div>
                 )}
                 </div>

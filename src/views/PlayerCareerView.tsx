@@ -163,31 +163,6 @@ export const PlayerCareerView: React.FC<{
         {/* Personal Info Box below Portrait Card */}
         <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
 
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                setShowAppearanceModal(true);
-              }}
-              className="btn btn-xs btn-secondary justify-center gap-1 px-1.5"
-            >
-              <span>✂️</span>
-              <span className="truncate">ทรงผม/โฉม</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                setShowLockerPicker(true);
-              }}
-              className="btn btn-xs btn-secondary justify-center gap-1 px-1.5"
-            >
-              <span>👕</span>
-              <span className="tabular truncate">เบอร์ #{myShirtNo}</span>
-            </button>
-          </div>
-
           <StaminaBar value={p.en} variant="card" />
 
           <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-0.5 ${injCount > 0 || susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
