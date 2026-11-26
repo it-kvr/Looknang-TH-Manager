@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
+import { Pencil, Check, X, Dices, Palette, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import {
@@ -2182,62 +2182,82 @@ export const FinanceClubView: React.FC<{
           style={{ background: `linear-gradient(90deg, ${dk.c1}, ${dk.c2})` }}
         />
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 text-left min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
-            <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-13 sm:[&>svg]:h-13 mland:[&>svg]:w-10 mland:[&>svg]:h-10 flex items-center justify-center">
-              <ClubCrest name={me.name} size={52} team={me} club={dk} isMyClub />
+          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
+              <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-13 sm:[&>svg]:h-13 mland:[&>svg]:w-10 mland:[&>svg]:h-10 flex items-center justify-center">
+                <ClubCrest name={me.name} size={52} team={me} club={dk} isMyClub />
+              </div>
+              <div className="w-px h-9 sm:h-10 mland:h-8 bg-[var(--line)]/75" aria-hidden="true" />
+              {clubTab === 'identity' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentityMobilePane('kit');
+                      setKitPatternTarget('home');
+                      setKitColorTarget('c1');
+                    }}
+                    title="คลิกเพื่อแก้ไขชุดเหย้า"
+                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                      kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
+                    }`}
+                  >
+                    <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                      <KitJersey club={dk} away={false} size={44} />
+                    </div>
+                    <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                      เหย้า
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIdentityMobilePane('kit');
+                      setKitPatternTarget('away');
+                      setKitColorTarget('c2');
+                    }}
+                    title="คลิกเพื่อแก้ไขชุดเยือน"
+                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                      kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
+                    }`}
+                  >
+                    <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                      <KitJersey club={dk} away={true} size={44} />
+                    </div>
+                    <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                      เยือน
+                    </span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                    <KitJersey club={dk} away={false} size={48} />
+                  </div>
+                  <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                    <KitJersey club={dk} away={true} size={48} />
+                  </div>
+                </>
+              )}
             </div>
-            <div className="w-px h-9 sm:h-10 mland:h-8 bg-[var(--line)]/75" aria-hidden="true" />
-            {clubTab === 'identity' ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentityMobilePane('kit');
-                    setKitPatternTarget('home');
-                    setKitColorTarget('c1');
-                  }}
-                  title="คลิกเพื่อแก้ไขชุดเหย้า"
-                  className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
-                    kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
-                  }`}
-                >
-                  <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                    <KitJersey club={dk} away={false} size={44} />
-                  </div>
-                  <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                    เหย้า
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIdentityMobilePane('kit');
-                    setKitPatternTarget('away');
-                    setKitColorTarget('c2');
-                  }}
-                  title="คลิกเพื่อแก้ไขชุดเยือน"
-                  className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
-                    kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
-                  }`}
-                >
-                  <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                    <KitJersey club={dk} away={true} size={44} />
-                  </div>
-                  <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                    เยือน
-                  </span>
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                  <KitJersey club={dk} away={false} size={48} />
-                </div>
-                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
-                  <KitJersey club={dk} away={true} size={48} />
-                </div>
-              </>
-            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setClubTab(clubTab === 'identity' ? 'info' : 'identity');
+              }}
+              aria-pressed={clubTab === 'identity'}
+              title={clubTab === 'identity' ? 'กลับไปหน้าข้อมูลสโมสร' : 'ออกแบบตรา & ชุดแข่งสโมสร'}
+              className={`shrink-0 flex flex-col items-center justify-center gap-1 mland:gap-0.5 px-2.5 py-2 sm:px-3 sm:py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border text-[10px] sm:text-[11px] mland:text-[8.5px] font-bold leading-none cursor-pointer transition-all whitespace-nowrap ${
+                clubTab === 'identity'
+                  ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-sm ring-2 ring-[var(--g)]/25'
+                  : 'bg-[var(--surface)]/85 border-[var(--line)]/85 text-[var(--ink)] hover:border-[var(--g)]/60 hover:bg-[var(--g-soft)]/55 hover:text-[var(--g)] shadow-2xs'
+              }`}
+            >
+              <Palette className="w-4 h-4 sm:w-4.5 sm:h-4.5 mland:w-3.5 mland:h-3.5 shrink-0" />
+              <span>ตรา &amp; ชุดแข่ง</span>
+            </button>
           </div>
 
           <div className="space-y-0.5 min-w-0 flex-1">
@@ -2358,13 +2378,12 @@ export const FinanceClubView: React.FC<{
         </div>
       </div>
 
-      {/* Club HQ Sub-navigation (5 Tabs) */}
-      <div className="seg-bar grid grid-cols-5 w-full bg-[var(--surface)] shrink-0">
+      {/* Club HQ Sub-navigation (4 Tabs — Crest & Kit sits beside the top Logo & Jerseys) */}
+      <div className="seg-bar grid grid-cols-4 w-full bg-[var(--surface)] shrink-0">
         {(
           [
             ['info', '🏛️ ข้อมูล & บอร์ด'],
             ['infra', '🏗️ สนาม & ทีมงาน'],
-            ['identity', '🎨 ตรา & ชุดแข่ง'],
             ['activities', '🤝 กิจกรรม'],
             ['legacy', '🏆 ประวัติ & ถ้วย']
           ] as const
@@ -2579,17 +2598,6 @@ export const FinanceClubView: React.FC<{
                       <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">ข้อมูลสโมสร</h3>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          SFX.tap();
-                          setClubTab('identity');
-                        }}
-                        className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
-                      >
-                        <span>ตรา &amp; ชุดแข่ง</span>
-                        <ArrowUpRight className="w-3 h-3" />
-                      </button>
                       <button type="button" onClick={() => openClubEdit('name')} className="btn btn-xs btn-primary whitespace-nowrap shrink-0">
                         <Pencil className="w-3 h-3" />
                         <span>แก้ไข</span>

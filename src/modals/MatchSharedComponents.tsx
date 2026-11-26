@@ -1238,39 +1238,74 @@ export const MatchBroadcastHeader: React.FC<{
               )}
             </div>
             <div
-              className={`relative overflow-hidden px-3.5 sm:px-5 md:px-6 mland:px-3 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[78px] sm:min-w-[98px] md:min-w-[110px] mland:min-w-[70px] transition-colors duration-200 shadow-xs ${
+              className={`relative overflow-hidden px-2.5 sm:px-3.5 md:px-4 mland:px-2 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[84px] sm:min-w-[106px] md:min-w-[118px] mland:min-w-[74px] transition-colors duration-200 shadow-xs ${
                 goalFlashInfo
                   ? goalFlashInfo.isOwnGoal
-                    ? 'bg-rose-500/12 border-rose-400 ring-2 ring-rose-400/70'
-                    : 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)]/80'
+                    ? 'bg-gradient-to-b from-rose-50 to-rose-100/80 dark:from-[#2c0d17] dark:to-[#1b080e] border-rose-400 ring-2 ring-rose-400/55'
+                    : 'bg-gradient-to-b from-amber-50 to-amber-100/80 dark:from-[#261d06] dark:to-[#181204] border-amber-400 dark:border-[var(--lamp)] ring-2 ring-amber-400/55 dark:ring-[var(--lamp)]/60'
                   : 'bg-[var(--surface)] border-[var(--line)]'
               }`}
             >
               {goalFlashInfo && (
                 <div
-                  className="absolute inset-y-0 w-1.5"
+                  key={`sheen-${gh}-${ga}-${goalFlashInfo.minute}`}
+                  className="pointer-events-none absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/50 dark:via-white/20 to-transparent goal-sheen-sweep"
+                />
+              )}
+              {goalFlashInfo && (
+                <div
+                  className="absolute top-1.5 bottom-1.5 w-[3px] rounded-full"
                   style={{
                     backgroundColor: goalFlashInfo.kit || 'var(--lamp)',
-                    left: goalFlashInfo.side === 'H' ? 0 : undefined,
-                    right: goalFlashInfo.side === 'A' ? 0 : undefined
+                    left: goalFlashInfo.side === 'H' ? 4 : undefined,
+                    right: goalFlashInfo.side === 'A' ? 4 : undefined
                   }}
                 />
               )}
-              <div className="text-2xl sm:text-3xl md:text-[34px] mland:text-xl font-extrabold font-display tabular leading-none tracking-tight flex items-center justify-center">
-                <span className={`transition-transform duration-200 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 scale-110' : 'text-[#8a5b00] dark:text-[var(--lamp)] scale-110') : ''}`}>
+              <div className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 mland:gap-0.5 px-1">
+                <span
+                  key={goalFlashInfo?.side === 'H' ? `h-${gh}-${goalFlashInfo.minute}` : 'h-static'}
+                  className={`inline-flex items-center justify-center min-w-[1.65rem] sm:min-w-[2.1rem] md:min-w-[2.3rem] mland:min-w-[1.35rem] px-1 py-0.5 mland:py-0 rounded-lg mland:rounded-md font-display font-bold tabular text-[24px] sm:text-[29px] md:text-[32px] mland:text-[19px] leading-none transition-colors duration-200 ${
+                    goalFlashInfo?.side === 'H'
+                      ? goalFlashInfo.isOwnGoal
+                        ? 'bg-rose-500 text-white shadow-xs goal-score-pop'
+                        : 'bg-amber-400 text-[#1d1400] shadow-xs ring-1 ring-amber-500/35 goal-score-pop'
+                      : goalFlashInfo
+                        ? 'text-[var(--ink)]/75'
+                        : 'text-[var(--ink)]'
+                  }`}
+                >
                   {gh}
                 </span>
-                <span className="text-[var(--mut)]/45 mx-1.5">:</span>
-                <span className={`transition-transform duration-200 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 scale-110' : 'text-[#8a5b00] dark:text-[var(--lamp)] scale-110') : ''}`}>
+                <span className="inline-flex items-center justify-center -translate-y-[0.06em] font-display font-bold text-base sm:text-lg mland:text-xs text-[var(--mut)]/55 select-none">
+                  :
+                </span>
+                <span
+                  key={goalFlashInfo?.side === 'A' ? `a-${ga}-${goalFlashInfo.minute}` : 'a-static'}
+                  className={`inline-flex items-center justify-center min-w-[1.65rem] sm:min-w-[2.1rem] md:min-w-[2.3rem] mland:min-w-[1.35rem] px-1 py-0.5 mland:py-0 rounded-lg mland:rounded-md font-display font-bold tabular text-[24px] sm:text-[29px] md:text-[32px] mland:text-[19px] leading-none transition-colors duration-200 ${
+                    goalFlashInfo?.side === 'A'
+                      ? goalFlashInfo.isOwnGoal
+                        ? 'bg-rose-500 text-white shadow-xs goal-score-pop'
+                        : 'bg-amber-400 text-[#1d1400] shadow-xs ring-1 ring-amber-500/35 goal-score-pop'
+                      : goalFlashInfo
+                        ? 'text-[var(--ink)]/75'
+                        : 'text-[var(--ink)]'
+                  }`}
+                >
                   {ga}
                 </span>
               </div>
-              {penText && <div className="text-[9.5px] sm:text-[10px] mland:text-[8.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5 truncate">{penText}</div>}
+              {penText && (
+                <div className="relative z-10 text-[9.5px] sm:text-[10px] mland:text-[8.5px] font-bold text-amber-700 dark:text-[var(--lamp)] mt-0.5 truncate">
+                  {penText}
+                </div>
+              )}
             </div>
 
             {goalFlashInfo && (
               <div
-                className={`pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 mland:py-0.5 rounded-full border shadow-lg whitespace-nowrap ${
+                key={`ribbon-${gh}-${ga}-${goalFlashInfo.minute}`}
+                className={`goal-ribbon-in pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 mland:py-0.5 rounded-full border shadow-lg whitespace-nowrap ${
                   goalFlashInfo.isOwnGoal
                     ? 'bg-[#2b0e16] border-rose-400/80 text-rose-100'
                     : goalFlashInfo.isMeScorer

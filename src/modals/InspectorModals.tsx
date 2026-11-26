@@ -21,7 +21,8 @@ import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 import { PlayerAppearanceModal } from './PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { TalentBadge } from '../components/TalentBadge';
-import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { getStaminaMeta } from '../components/StaminaBar';
+import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
@@ -742,11 +743,10 @@ export const TeamInspectorModal: React.FC<{
                       const slotRole = isStarter ? starterSlotByName.get(q.n) || q.ro : q.ro;
                       const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
                       const f = Math.round(q.fit ?? 100);
+                      const unavailable = (q.sus || 0) > 0 || q.inj > 0;
                       const hasCardOrStat =
                         (q.sg || 0) > 0 ||
                         (q.sa || 0) > 0 ||
-                        (q.sus || 0) > 0 ||
-                        q.inj > 0 ||
                         (q.yc || 0) > 0;
 
                       return (
@@ -754,8 +754,12 @@ export const TeamInspectorModal: React.FC<{
                           key={q.n}
                           type="button"
                           onClick={() => onInspectPlayer(q, team)}
-                          className={`w-full text-left grid grid-cols-[22px_34px_26px_minmax(0,1fr)_58px_52px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_46px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
-                            isMe ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70' : 'hover:bg-[var(--surface-2)]/65'
+                          className={`w-full text-left grid grid-cols-[22px_34px_26px_minmax(0,1fr)_52px_62px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_54px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
+                            unavailable
+                              ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09] opacity-85'
+                              : isMe
+                                ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                                : 'hover:bg-[var(--surface-2)]/65'
                           }`}
                         >
                           <div className="flex items-center justify-start">
@@ -802,21 +806,15 @@ export const TeamInspectorModal: React.FC<{
                               <>
                                 {(q.sg || 0) > 0 && <StatIconBadge kind="goal" count={q.sg} size="xs" />}
                                 {(q.sa || 0) > 0 && <StatIconBadge kind="assist" count={q.sa} size="xs" />}
-                                {(q.sus || 0) > 0 ? (
-                                  <StatIconBadge kind="red" count={q.sus} size="xs" title="ติดโทษแบน" />
-                                ) : q.inj > 0 ? (
-                                  <StatIconBadge kind="injury" size="xs" title={`เจ็บ ${q.inj} นัด`} />
-                                ) : (q.yc || 0) > 0 ? (
-                                  <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />
-                                ) : null}
+                                {(q.yc || 0) > 0 && <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />}
                               </>
                             ) : (
                               <span className="text-[var(--mut)]/55">—</span>
                             )}
                           </div>
 
-                          <div className="flex items-center justify-start">
-                            <StaminaBar value={f} variant="compact" className="w-full" />
+                          <div className="flex items-center justify-start min-w-0">
+                            <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
                           </div>
 
                           <div className="flex items-center justify-start">

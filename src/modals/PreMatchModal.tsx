@@ -38,8 +38,8 @@ import { buildAssistantCoachNotes, recommendMatchPlanAndLineup, type AssistantAp
 import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
 import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
-import { StatIconBadge } from '../components/StatIconBadge';
-import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { getStaminaMeta } from '../components/StaminaBar';
+import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
@@ -513,8 +513,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
     const showSwapCol = canEditRow && !compact;
     const gridColsCls = showSwapCol
-      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_26px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_23px_auto]'
-      : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_24px]';
+      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_62px_26px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_54px_23px_auto]'
+      : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_62px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_54px_24px]';
 
     return (
       <div
@@ -531,10 +531,12 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         className={`w-full grid ${gridColsCls} items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
           isPicked
             ? 'bg-[var(--g-soft)] ring-1 ring-inset ring-[var(--g)]'
-            : isMePlayer
-              ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
-              : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
-        } ${unavailable ? 'opacity-72' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
+            : unavailable
+              ? 'bg-rose-500/[0.06] hover:bg-rose-500/[0.1]'
+              : isMePlayer
+                ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
+        } ${unavailable ? 'opacity-82' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
       >
         <div className="flex items-center justify-start">
           <MatchPlayerThumb
@@ -576,24 +578,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         </div>
 
         <div className="flex items-center justify-start min-w-0">
-          {(pl.sus || 0) > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
-              <StatIconBadge kind="red" count={pl.sus} size="xs" />
-              {(pl.sus || 0) <= 1 && <span>แบน</span>}
-            </span>
-          ) : pl.inj > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
-              <StatIconBadge kind="injury" size="xs" />
-              <span>พัก {pl.inj}น</span>
-            </span>
-          ) : (
-            <StaminaBar
-              value={fit}
-              variant="compact"
-              showStatusLabel
-              className="w-full"
-            />
-          )}
+          <PlayerStatusBadge sus={pl.sus} inj={pl.inj} fit={fit} variant="cell" />
         </div>
 
         <div className="flex items-center justify-start">

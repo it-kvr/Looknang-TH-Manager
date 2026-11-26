@@ -11,6 +11,7 @@ import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { TalentBadge } from '../components/TalentBadge';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -438,8 +439,10 @@ export const TeamTrainingView: React.FC<{
               const isFocus = state.focusPlayer === q.n;
               const isStarter = starters.some((s) => s.n === q.n);
 
+              const unavailable = q.inj > 0 || (q.sus || 0) > 0;
+
               return (
-                <div key={q.n} className={`px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 ${isRest ? 'bg-emerald-500/8' : isFocus ? 'bg-[var(--lamp-soft)]/35' : ''}`}>
+                <div key={q.n} className={`px-2.5 py-2 mland:py-1 flex items-center justify-between gap-2 ${isRest ? 'bg-emerald-500/8' : unavailable ? 'bg-rose-500/[0.05]' : isFocus ? 'bg-[var(--lamp-soft)]/35' : ''}`}>
                   <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex items-center gap-2 min-w-0 flex-1 text-left cursor-pointer">
                     <PlayerFace player={q} team={me} state={state} size={26} />
                     <div className="min-w-0 flex-1">
@@ -448,24 +451,16 @@ export const TeamTrainingView: React.FC<{
                         <span className="truncate">{q.n}</span>
                         {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="shrink-0" />}
                         {isStarter && <span className="text-[9px] shrink-0" title="ตัวจริง">⭐</span>}
+                        <PlayerStatusBadge sus={q.sus} inj={q.inj} variant="pill" />
                       </div>
-                      <div className="flex items-center gap-2 mt-0.5">
+                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                         <StaminaBar value={f} variant="inline" barWidthClass="w-14 sm:w-16 mland:w-12" />
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular inline-flex items-center gap-1 flex-wrap">
-                          {q.inj > 0 ? (
-                            <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
-                              <StatIconBadge kind="injury" size="xs" />
-                              <span>{q.inj}นัด</span>
-                            </span>
-                          ) : (
-                            <>
-                              <OvrBadge ov={q.ov} variant="inline" size="xs" prefix="OVR" />
-                              <span aria-hidden="true">·</span>
-                              <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
-                              <span aria-hidden="true">·</span>
-                              <TalentBadge talent={getPlayerTalent(q, null)} variant="inline" size="xs" />
-                            </>
-                          )}
+                          <OvrBadge ov={q.ov} variant="inline" size="xs" prefix="OVR" />
+                          <span aria-hidden="true">·</span>
+                          <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
+                          <span aria-hidden="true">·</span>
+                          <TalentBadge talent={getPlayerTalent(q, null)} variant="inline" size="xs" />
                         </span>
                       </div>
                     </div>

@@ -172,6 +172,17 @@ export const MatchModal: React.FC<{
   const lastCoachSfxTsRef = useRef<number>(0);
   const lastBannerSigRef = useRef<string>('');
   const lastRawBannerKeyRef = useRef<string>('');
+  const isSkippingRef = useRef(false);
+  const skipLogsRef = useRef<MatchLogItem[] | null>(null);
+  const skipCommentsRef = useRef<LiveCommentItem[] | null>(null);
+  const skipRateCacheRef = useRef<Map<string, ReturnType<typeof rate>>>(new Map());
+  const baseTeamRates = useMemo(() => ({ home: rate(homeOrig, state), away: rate(awayOrig, state) }), [homeOrig, awayOrig, state]);
+  const playerByNameMap = useMemo(() => {
+    const m = new Map<string, Player>();
+    for (const q of homeOrig.sq) m.set(q.n, q);
+    for (const q of awayOrig.sq) m.set(q.n, q);
+    return m;
+  }, [homeOrig.sq, awayOrig.sq]);
   useEffect(() => () => {
     if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
   }, []);
@@ -533,14 +544,14 @@ export const MatchModal: React.FC<{
   };
 
   const syncSidelineBenches = (w: LiveMatchWorld | null | undefined) => {
-    if (!w?.sideline) return;
+    if (isSkippingRef.current || !w?.sideline) return;
     const sr = simRef.current;
     w.sideline.benchH = buildBenchSeatsForTeam(homeOrig, sr.homeLu);
     w.sideline.benchA = buildBenchSeatsForTeam(awayOrig, sr.awayLu);
   };
 
   const triggerCoachShout = (w: LiveMatchWorld | null | undefined, side: 'H' | 'A', text: string, dur = 2.6) => {
-    if (!w?.sideline) return;
+    if (isSkippingRef.current || !w?.sideline) return;
     const c = side === 'H' ? w.sideline.coachH : w.sideline.coachA;
     c.shoutText = text;
     c.shoutTimer = dur;
@@ -555,7 +566,7 @@ export const MatchModal: React.FC<{
   };
 
   const triggerCoachMood = (w: LiveMatchWorld | null | undefined, side: 'H' | 'A', emoji: string, dur = 2.2) => {
-    if (!w?.sideline) return;
+    if (isSkippingRef.current || !w?.sideline) return;
     const c = side === 'H' ? w.sideline.coachH : w.sideline.coachA;
     c.moodEmoji = emoji;
     c.moodTimer = Math.max(c.moodTimer || 0, dur);
@@ -599,6 +610,20 @@ export const MatchModal: React.FC<{
       lu: simRef.current.awayLu
     };
   }
+
+  const getCachedSideRate = (side: 'H' | 'A', curMin: number) => {
+    const sr = simRef.current;
+    const team = side === 'H' ? getLiveHomeTeam() : getLiveAwayTeam();
+    if (!isSkippingRef.current) {
+      return rate(team, state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, side === 'H');
+    }
+    const key = `${side}|${Math.floor(curMin / 5)}|${team.form}|${team.tac}|${team.press ?? 1}|${team.tempo ?? 1}|${team.line ?? 1}|${team.wid ?? 1}|${team.pass ?? 1}|${(team.lu || []).join(',')}|${sr.sentOff.length}`;
+    const hit = skipRateCacheRef.current.get(key);
+    if (hit) return hit;
+    const computed = rate(team, state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, side === 'H');
+    skipRateCacheRef.current.set(key, computed);
+    return computed;
+  };
 
   function buildTeamAgents(team: Team, side: 'H' | 'A', luNames: string[], secondHalf = false) {
     const sr = simRef.current;
@@ -658,7 +683,9 @@ export const MatchModal: React.FC<{
         if (a.side === side) a.isCaptain = a.id === nextCap;
       });
     }
-    setLiveCaptains({ H: sr.captainH, A: sr.captainA });
+    if (!isSkippingRef.current) {
+      setLiveCaptains({ H: sr.captainH, A: sr.captainA });
+    }
     if (!silentLog && curCap && nextCap !== curCap) {
       const reasonTxt = reason === 'red' ? 'โดนใบแดง' : reason === 'inj' ? 'บาดเจ็บ' : 'ถูกเปลี่ยนออก';
       const isMeCap = isPlayerMode && nextCap === myPlayerName;
@@ -1012,15 +1039,17 @@ export const MatchModal: React.FC<{
       }
     });
 
-    if (side === 'H') {
-      if (meIsHome) setLiveLu(sr.homeLu.slice());
-      else setLiveOppLu(sr.homeLu.slice());
-    } else {
-      if (!meIsHome) setLiveLu(sr.awayLu.slice());
-      else setLiveOppLu(sr.awayLu.slice());
-    }
+    if (!isSkippingRef.current) {
+      if (side === 'H') {
+        if (meIsHome) setLiveLu(sr.homeLu.slice());
+        else setLiveOppLu(sr.homeLu.slice());
+      } else {
+        if (!meIsHome) setLiveLu(sr.awayLu.slice());
+        else setLiveOppLu(sr.awayLu.slice());
+      }
 
-    setAiFormDisplay((prev) => ({ ...prev, [side]: bestPh.form }));
+      setAiFormDisplay((prev) => ({ ...prev, [side]: bestPh.form }));
+    }
 
     if (!isInstant) {
       triggerCoachShout(w, side, `📋 ปรับระบบ ${bestPh.form}!`, 2.8);
@@ -1649,8 +1678,7 @@ export const MatchModal: React.FC<{
 
   const findMatchPlayerMeta = (name?: string | null) => {
     if (!name) return undefined;
-    const clean = name.trim();
-    const pObj = homeOrig.sq.find((q) => q.n === clean) || awayOrig.sq.find((q) => q.n === clean);
+    const pObj = playerByNameMap.get(name.trim());
     return pObj ? { pos: pObj.pos, role: pObj.ro } : undefined;
   };
 
@@ -1663,14 +1691,17 @@ export const MatchModal: React.FC<{
     if (opts?.viewerBoost) {
       nextV = Math.max(250, Math.round(nextV + opts.viewerBoost));
       liveViewersRef.current = nextV;
-      setLiveViewers(nextV);
+      if (!isSkippingRef.current) setLiveViewers(nextV);
       if (nextV > peakViewersRef.current) {
         peakViewersRef.current = nextV;
-        setPeakViewers(nextV);
+        if (!isSkippingRef.current) setPeakViewers(nextV);
       }
     }
+    if (isSkippingRef.current && cKind !== 'goal' && cKind !== 'concede' && cKind !== 'card' && cKind !== 'var' && cKind !== 'fulltime') {
+      return;
+    }
     const actorMeta = findMatchPlayerMeta(opts?.actor);
-    const count = opts?.burst ?? (getStreamViewerTier(nextV) === 'viral' ? 2 : 1);
+    const count = isSkippingRef.current ? 1 : opts?.burst ?? (getStreamViewerTier(nextV) === 'viral' ? 2 : 1);
     const created: LiveCommentItem[] = [];
     for (let i = 0; i < count; i++) {
       const nextItem = generateLiveStreamComment({
@@ -1698,7 +1729,12 @@ export const MatchModal: React.FC<{
       if (nextItem) created.push(nextItem);
     }
     if (created.length > 0) {
-      setLiveComments((prev) => [...created, ...prev].slice(0, 50));
+      if (isSkippingRef.current && skipCommentsRef.current) {
+        skipCommentsRef.current.unshift(...created);
+        if (skipCommentsRef.current.length > 50) skipCommentsRef.current.length = 50;
+      } else {
+        setLiveComments((prev) => [...created, ...prev].slice(0, 50));
+      }
     }
   };
 
@@ -1711,7 +1747,30 @@ export const MatchModal: React.FC<{
     const varReplayId = typeof opts === 'string' ? opts : opts?.varReplayId;
     const subInfo = typeof opts === 'object' ? opts?.subInfo : undefined;
     const logId = logSeqRef.current++;
-    setLogs((prev) => [{ id: logId, m, text, tone, varReplayId, subInfo }, ...prev].slice(0, 65));
+    const logEntry: MatchLogItem = { id: logId, m, text, tone, varReplayId, subInfo };
+    if (isSkippingRef.current && skipLogsRef.current) {
+      skipLogsRef.current.unshift(logEntry);
+      if (skipLogsRef.current.length > 65) skipLogsRef.current.length = 65;
+      const baseSurge = Math.max(40, Math.round(streamProj.baseViewers * 0.05));
+      if (tone === 'goal') {
+        const isMyGoal = text.includes(meTeamOrig.name);
+        const actorMatch = text.match(/([ก-ฮA-Za-z0-9._-]+)\s*(?:\(|!|ซัด|โหม่ง|ยิง|ปั่น)/);
+        pushStreamComment(m, isMyGoal ? 'goal' : 'concede', {
+          actor: actorMatch?.[1],
+          viewerBoost: baseSurge * 1.6,
+          burst: 1
+        });
+      } else if (tone === 'card') {
+        if (text.includes('VAR')) {
+          pushStreamComment(m, 'var', { viewerBoost: baseSurge });
+        } else {
+          const cardMatch = text.match(/!\s*([^\s(]+)/);
+          pushStreamComment(m, 'card', { actor: cardMatch?.[1], viewerBoost: Math.round(baseSurge * 0.6) });
+        }
+      }
+      return;
+    }
+    setLogs((prev) => [logEntry, ...prev].slice(0, 65));
     const vTier = getStreamViewerTier(liveViewersRef.current);
     const baseSurge = Math.max(40, Math.round(streamProj.baseViewers * 0.05));
     const findNamedInLog = (exclude?: string) =>
@@ -1737,7 +1796,7 @@ export const MatchModal: React.FC<{
       const inMatch = text.match(/(?:🔼\s*เข้า|🔼|🟢)\s*([^\s(·]+)/);
       const subActorName = subInfo?.inName || inMatch?.[1];
       const subObj = subActorName
-        ? [...homeOrig.sq, ...awayOrig.sq].find((q) => q.n === subActorName || text.includes(q.n))
+        ? playerByNameMap.get(subActorName) || [...homeOrig.sq, ...awayOrig.sq].find((q) => text.includes(q.n))
         : undefined;
       if (vTier !== 'low' || Math.random() < 0.6) {
         pushStreamComment(m, 'sub', { actor: subObj?.n || subActorName });
@@ -1767,6 +1826,7 @@ export const MatchModal: React.FC<{
   };
 
   const addWorldFx = (w: LiveMatchWorld, fx: Omit<LivePitchFx, 'id'>) => {
+    if (isSkippingRef.current) return;
     w.fx.push({ ...fx, id: w.nextFxId++ });
     if (w.fx.length > 8) w.fx.shift();
   };
@@ -1828,10 +1888,11 @@ export const MatchModal: React.FC<{
       varReplayId: varReplayId ?? inheritedVarId
     };
     tl.push(item);
-    setTimelineEvents(tl.slice());
+    if (!isSkippingRef.current) setTimelineEvents(tl.slice());
   };
 
   const triggerDramaSlow = (w: LiveMatchWorld, sec: number, label: string) => {
+    if (isSkippingRef.current) return;
     w.dramaSlowSec = Math.max(w.dramaSlowSec, sec);
     w.dramaLabel = label;
   };
@@ -1871,14 +1932,14 @@ export const MatchModal: React.FC<{
       sr.sentOff.push(culprit.id);
       adjustLiveForm(culprit.id, -0.7);
       sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'R' });
-      setMatchCards(sr.cards.slice());
+      if (!isSkippingRef.current) setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
         pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) ${cardReason} โดนไล่ออก (แบน 2 นัด)`, 'card');
       }
       pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel || 'ใบแดงโดยตรง', varReplayId);
-      setSentOff(sr.sentOff.slice());
-      if (w) {
+      if (!isSkippingRef.current) setSentOff(sr.sentOff.slice());
+      if (w && !isSkippingRef.current) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'R', kit, ttl: 3.4, maxTtl: 3.4 };
         triggerDramaSlow(w, 2.5, `🟥 ใบแดง!! ${culprit.shortName}`);
         triggerCoachMood(w, culprit.side, '🤬', 2.8);
@@ -1889,20 +1950,20 @@ export const MatchModal: React.FC<{
     }
     sr.yellows[culprit.id] = (sr.yellows[culprit.id] || 0) + 1;
     culprit.hasYellow = true;
-    setMatchYellows({ ...sr.yellows });
+    if (!isSkippingRef.current) setMatchYellows({ ...sr.yellows });
     if (sr.yellows[culprit.id] >= 2) {
       culprit.sentOff = true;
       sr.sentOff.push(culprit.id);
       adjustLiveForm(culprit.id, -0.65);
       sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y2R' });
-      setMatchCards(sr.cards.slice());
+      if (!isSkippingRef.current) setMatchCards(sr.cards.slice());
       if (isPlayerMode && culprit.id === myPlayerName) sr.userSentOffMin = curMin;
       if (!silentLog) {
         pushLog(curMin, `🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) ${cardReason} · โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
       }
       pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง', varReplayId);
-      setSentOff(sr.sentOff.slice());
-      if (w) {
+      if (!isSkippingRef.current) setSentOff(sr.sentOff.slice());
+      if (w && !isSkippingRef.current) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
         triggerDramaSlow(w, 2.5, `🟨➡🟥 เหลืองที่สอง!! ${culprit.shortName}`);
         triggerCoachMood(w, culprit.side, '🤦', 2.7);
@@ -1912,10 +1973,10 @@ export const MatchModal: React.FC<{
       return 'Y2R' as const;
     }
     adjustLiveForm(culprit.id, -0.35);
-    const origPl = team.sq.find((q) => q.n === culprit.id);
+    const origPl = playerByNameMap.get(culprit.id) || team.sq.find((q) => q.n === culprit.id);
     const totalSeasonY = (origPl?.yc || 0) + 1;
     sr.cards.push({ m: curMin, t: team.id, who: culprit.id, type: 'Y' });
-    setMatchCards(sr.cards.slice());
+    if (!isSkippingRef.current) setMatchCards(sr.cards.slice());
     if (!silentLog) {
       pushLog(
         curMin,
@@ -1924,7 +1985,7 @@ export const MatchModal: React.FC<{
       );
     }
     pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : reasonLabel, varReplayId);
-    if (w) {
+    if (w && !isSkippingRef.current) {
       w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y', kit, ttl: 2.6, maxTtl: 2.6 };
       triggerDramaSlow(w, 1.5, `🟨 ใบเหลือง · ${culprit.shortName}`);
       triggerCoachMood(w, culprit.side, '😬', 2.1);
@@ -1970,7 +2031,7 @@ export const MatchModal: React.FC<{
     w.inMatchInjuryCount++;
     sr.injuredNames.push(victim.id);
     sr.injuries.push({ teamId: sideOrig.id, name: victim.id, games });
-    setInjuredNamesUi(sr.injuredNames.slice());
+    if (!isSkippingRef.current) setInjuredNamesUi(sr.injuredNames.slice());
     victim.injuredOut = true;
 
     addWorldFx(w, {
@@ -2041,7 +2102,7 @@ export const MatchModal: React.FC<{
           sr.sentOff.push(victim.id);
           if (w.ball.carrierId === victim.id) w.ball.carrierId = null;
           if (w.ball.targetId === victim.id) w.ball.targetId = null;
-          setSentOff(sr.sentOff.slice());
+          if (!isSkippingRef.current) setSentOff(sr.sentOff.slice());
           const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
           pushLog(curMin, `⚠️ ไม่มีตัวสำรองพร้อมเปลี่ยน! ${sideOrig.name} จำใจเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
           ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
@@ -2051,7 +2112,7 @@ export const MatchModal: React.FC<{
         sr.sentOff.push(victim.id);
         if (w.ball.carrierId === victim.id) w.ball.carrierId = null;
         if (w.ball.targetId === victim.id) w.ball.targetId = null;
-        setSentOff(sr.sentOff.slice());
+        if (!isSkippingRef.current) setSentOff(sr.sentOff.slice());
         const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
         pushLog(curMin, `⚠️ เปลี่ยนตัวครบโควต้าแล้ว! ${sideOrig.name} จำใจเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
         ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
@@ -2081,13 +2142,15 @@ export const MatchModal: React.FC<{
         if (w.ball.carrierId === victim.id) w.ball.carrierId = subIn.n;
         if (w.ball.targetId === victim.id) w.ball.targetId = subIn.n;
       }
-      if (isMySide) {
-        setLiveLu(curLu.slice());
-        setSubsUsed(sr.subs.filter((s) => s.t === sideOrig.id).map((s) => s.inPlayer));
-      } else {
-        setLiveOppLu(curLu.slice());
+      if (!isSkippingRef.current) {
+        if (isMySide) {
+          setLiveLu(curLu.slice());
+          setSubsUsed(sr.subs.filter((s) => s.t === sideOrig.id).map((s) => s.inPlayer));
+        } else {
+          setLiveOppLu(curLu.slice());
+        }
+        setSubLog(sr.subs.slice());
       }
-      setSubLog(sr.subs.slice());
       syncSidelineBenches(w);
       triggerCoachShout(w, isHomeSide ? 'H' : 'A', '🔄 เปลี่ยนแทนคนเจ็บ!', 2.3);
       pushTimeline(curMin, victim.side, 'sub', subIn.n, victim.id);
@@ -2100,7 +2163,7 @@ export const MatchModal: React.FC<{
       sr.sentOff.push(victim.id);
       if (w.ball.carrierId === victim.id) w.ball.carrierId = null;
       if (w.ball.targetId === victim.id) w.ball.targetId = null;
-      setSentOff(sr.sentOff.slice());
+      if (!isSkippingRef.current) setSentOff(sr.sentOff.slice());
       const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
       pushLog(curMin, `⚠️ ${sideOrig.name} เปลี่ยนตัวไม่ได้แล้ว ต้องฝืนเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
       ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
@@ -3690,8 +3753,8 @@ export const MatchModal: React.FC<{
 
     // 3. On-Target: Goal vs GK Save!
     const onTargetY = isPanenka ? 50 + (Math.random() - 0.5) * 3 : 42.8 + Math.random() * 14.4;
-    const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, true);
-    const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, false);
+    const hR = getCachedSideRate('H', curMin);
+    const aR = getCachedSideRate('A', curMin);
     const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
     const gkSaveScore = gk
       ? (gk.d.sv + (gk.sig === 'sv' ? 7 : 0) + (agentHasTrait(gk, 'reflex_cat') ? 8 : 0) + (flightType === 'penalty' && agentHasTrait(gk, 'penalty_saver') ? 12 : 0)) * 0.34 +
@@ -6039,10 +6102,10 @@ export const MatchModal: React.FC<{
 
     if (side === 'H') {
       sr.gh++;
-      setGh(sr.gh);
+      if (!isSkippingRef.current) setGh(sr.gh);
     } else {
       sr.ga++;
-      setGa(sr.ga);
+      if (!isSkippingRef.current) setGa(sr.ga);
     }
     if (goalX > 50) w.goalNetRippleRight = 1.0;
     else w.goalNetRippleLeft = 1.0;
@@ -6085,7 +6148,7 @@ export const MatchModal: React.FC<{
       ? { m: curMin, t: attTeam.id, who: ogCulpritName, as: '', style: 'own_goal', og: true }
       : { m: curMin, t: attTeam.id, who: scorerName, as: assisterName, ...(inferredStyle ? { style: inferredStyle } : {}) };
     sr.evs.push(newEv);
-    setEvs(sr.evs.slice());
+    if (!isSkippingRef.current) setEvs(sr.evs.slice());
 
     if (isOwnGoal) {
       adjustLiveForm(ogCulpritName, -1.05);
@@ -6172,52 +6235,56 @@ export const MatchModal: React.FC<{
       });
     }
     const isMyTeamGoal = (side === 'H') === meIsHome;
-    const nowSoundMs = Date.now();
-    if (nowSoundMs - lastGoalSoundMsRef.current > 250) {
-      lastGoalSoundMsRef.current = nowSoundMs;
-      SFX.goal(!isOwnGoal && isMyTeamGoal);
-      vibrate([50, 40, 80]);
+    if (!isSkippingRef.current) {
+      const nowSoundMs = Date.now();
+      if (nowSoundMs - lastGoalSoundMsRef.current > 250) {
+        lastGoalSoundMsRef.current = nowSoundMs;
+        SFX.goal(!isOwnGoal && isMyTeamGoal);
+        vibrate([50, 40, 80]);
+      }
     }
     const isMeScorer = !isOwnGoal && isPlayerMode && scorerName === myPlayerName;
     const scoringKit = side === 'H' ? homeKit : awayKit;
-    const sparkCols = isOwnGoal ? [scoringKit, '#fb7185', '#fde047', '#ffffff'] : [scoringKit, '#facc15', '#ffffff', '#4ade80'];
-    for (let i = 0; i < 22; i++) {
-      const ang = (Math.PI * 2 * i) / 22 + (Math.random() - 0.5) * 0.4;
-      const spd = 8 + Math.random() * 18;
-      w.sparkles.push({
-        x: goalX,
-        y: goalY,
-        vx: Math.cos(ang) * spd,
-        vy: Math.sin(ang) * spd,
-        color: sparkCols[i % sparkCols.length],
-        size: 1.8 + Math.random() * 2.2,
-        ttl: 1.8 + Math.random() * 0.6,
-        maxTtl: 2.4
+    if (!isSkippingRef.current) {
+      const sparkCols = isOwnGoal ? [scoringKit, '#fb7185', '#fde047', '#ffffff'] : [scoringKit, '#facc15', '#ffffff', '#4ade80'];
+      for (let i = 0; i < 22; i++) {
+        const ang = (Math.PI * 2 * i) / 22 + (Math.random() - 0.5) * 0.4;
+        const spd = 8 + Math.random() * 18;
+        w.sparkles.push({
+          x: goalX,
+          y: goalY,
+          vx: Math.cos(ang) * spd,
+          vy: Math.sin(ang) * spd,
+          color: sparkCols[i % sparkCols.length],
+          size: 1.8 + Math.random() * 2.2,
+          ttl: 1.8 + Math.random() * 0.6,
+          maxTtl: 2.4
+        });
+      }
+      w.goalBanner = {
+        scorer: isOwnGoal ? ogCulpritShort : scorerShort,
+        teamName: attTeam.name,
+        assister: isOwnGoal ? undefined : assisterName || undefined,
+        side,
+        kit: scoringKit,
+        isMyGoal: isMyTeamGoal,
+        isMeScorer,
+        isOwnGoal,
+        ttl: 4.2,
+        maxTtl: 4.2
+      };
+      setGoalFlashInfo({
+        side,
+        scorer: isOwnGoal ? ogCulpritShort : scorerShort,
+        assister: isOwnGoal ? undefined : assisterName || undefined,
+        minute: curMin,
+        isOwnGoal,
+        isMyGoal: isMyTeamGoal,
+        isMeScorer,
+        kit: scoringKit,
+        teamName: attTeam.name
       });
     }
-    w.goalBanner = {
-      scorer: isOwnGoal ? ogCulpritShort : scorerShort,
-      teamName: attTeam.name,
-      assister: isOwnGoal ? undefined : assisterName || undefined,
-      side,
-      kit: scoringKit,
-      isMyGoal: isMyTeamGoal,
-      isMeScorer,
-      isOwnGoal,
-      ttl: 4.2,
-      maxTtl: 4.2
-    };
-    setGoalFlashInfo({
-      side,
-      scorer: isOwnGoal ? ogCulpritShort : scorerShort,
-      assister: isOwnGoal ? undefined : assisterName || undefined,
-      minute: curMin,
-      isOwnGoal,
-      isMyGoal: isMyTeamGoal,
-      isMeScorer,
-      kit: scoringKit,
-      teamName: attTeam.name
-    });
 
     // Check Miracle Comeback progress & completion!
     const sideMaxDef = side === 'H' ? sr.maxDeficitH : sr.maxDeficitA;
@@ -6233,85 +6300,95 @@ export const MatchModal: React.FC<{
       if (sideLeadNow === 0) {
         pushLog(curMin, `🔥⚡ เหลือเชื่อ!! ${attTeam.name} ไล่ตีเสมอได้สำเร็จหลังเคยตามหลังถึง ${sideMaxDef} ประตู!!`, 'goal');
         triggerDramaSlow(w, 1.8, `🔥 ตีเสมอปาฏิหาริย์!! ${attTeam.name}`);
-        SFX.cheer(0.95);
+        if (!isSkippingRef.current) SFX.cheer(0.95);
       } else if (sideLeadNow > 0 && !sr.miracleCelebrated) {
         sr.miracleCelebrated = true;
         pushLog(curMin, `🏆🌋 ปาฏิหาริย์พลิกนรกสำเร็จ!! ${attTeam.name} โดนนำห่าง ${sideMaxDef} ลูก แต่กลับมาพลิกแซงขึ้นนำอย่างเหลือเชื่อ!!`, 'goal');
         pushTimeline(curMin, side, 'miracle', attTeam.name, `พลิกแซงจากตาม ${sideMaxDef} ลูก!`);
         triggerDramaSlow(w, 2.2, `🏆 ปาฏิหาริย์พลิกนรก!! ${attTeam.name}`);
-        SFX.cheer(1.0);
-        if (isMyTeamGoal) triggerConfetti();
+        if (!isSkippingRef.current) {
+          SFX.cheer(1.0);
+          if (isMyTeamGoal) triggerConfetti();
+        }
       }
     }
-    if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
-    goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashInfo(null), 3400);
-    if (isMeScorer) {
-      triggerConfetti();
+    if (!isSkippingRef.current) {
+      if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
+      goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashInfo(null), 3400);
+      if (isMeScorer) {
+        triggerConfetti();
+      }
     }
     const attRight = isAttackRight(w, side);
     const scorerAg = !isOwnGoal ? w.agents.find((a) => !a.sentOff && a.side === side && a.id === scorerName) : undefined;
     const assisterAg = !isOwnGoal && assisterName ? w.agents.find((a) => !a.sentOff && a.side === side && a.id === assisterName) : undefined;
-    const pickedCeleb = pickGoalCelebrationStyle(
-      w,
-      side,
-      scorerAg,
-      isOwnGoal,
-      isMyTeamGoal,
-      isMeScorer,
-      curMin,
-      sr.gh,
-      sr.ga,
-      Boolean(assisterAg),
-      finishVerb
-    );
-    const celebDuration = isOwnGoal ? 1.45 : pickedCeleb.style === 'group_huddle' ? 2.55 : 2.35;
-    const anchorX = clamp(
-      pickedCeleb.style === 'calm_shush'
-        ? attRight ? 83 : 17
-        : pickedCeleb.style === 'bow_crowd'
-          ? clamp((scorerAg?.x ?? goalX) * 0.4 + (attRight ? 82 : 18) * 0.6, 16, 84)
-          : attRight ? 90.5 : 9.5,
-      8,
-      92
-    );
-    const preferTop = (scorerAg?.y ?? goalY) < 50;
-    const anchorY = clamp(
-      pickedCeleb.style === 'bow_crowd'
-        ? preferTop ? 10.5 : 89.5
-        : pickedCeleb.style === 'calm_shush'
-          ? clamp(goalY, 26, 74)
-          : pickedCeleb.style === 'group_huddle'
-            ? preferTop ? 22 : 78
-            : preferTop ? 12.5 : 87.5,
-      8.5,
-      91.5
-    );
-    w.lastCelebrationStyle = pickedCeleb.style;
-    w.kickoffReturnElapsed = 0;
-    w.celebrateTimer = celebDuration;
-    w.celebration = {
-      style: pickedCeleb.style,
-      side,
-      scorerId: isOwnGoal ? ogCulpritName : scorerName,
-      assisterId: assisterAg?.id,
-      anchorX,
-      anchorY,
-      duration: celebDuration,
-      elapsed: 0,
-      isOwnGoal,
-      label: pickedCeleb.label
-    };
-    triggerCoachShout(w, side, '🔥 เยี่ยมมาก!', 2.8);
-    triggerCoachShout(w, side === 'H' ? 'A' : 'H', '📣 ตั้งสติ! คุมเกม!', 2.6);
+    const pickedCeleb = isSkippingRef.current
+      ? { style: 'knee_slide' as GoalCelebrationStyle, label: '⚽ ทำประตู!' }
+      : pickGoalCelebrationStyle(
+          w,
+          side,
+          scorerAg,
+          isOwnGoal,
+          isMyTeamGoal,
+          isMeScorer,
+          curMin,
+          sr.gh,
+          sr.ga,
+          Boolean(assisterAg),
+          finishVerb
+        );
+    if (!isSkippingRef.current) {
+      const celebDuration = isOwnGoal ? 1.45 : pickedCeleb.style === 'group_huddle' ? 2.55 : 2.35;
+      const anchorX = clamp(
+        pickedCeleb.style === 'calm_shush'
+          ? attRight ? 83 : 17
+          : pickedCeleb.style === 'bow_crowd'
+            ? clamp((scorerAg?.x ?? goalX) * 0.4 + (attRight ? 82 : 18) * 0.6, 16, 84)
+            : attRight ? 90.5 : 9.5,
+        8,
+        92
+      );
+      const preferTop = (scorerAg?.y ?? goalY) < 50;
+      const anchorY = clamp(
+        pickedCeleb.style === 'bow_crowd'
+          ? preferTop ? 10.5 : 89.5
+          : pickedCeleb.style === 'calm_shush'
+            ? clamp(goalY, 26, 74)
+            : pickedCeleb.style === 'group_huddle'
+              ? preferTop ? 22 : 78
+              : preferTop ? 12.5 : 87.5,
+        8.5,
+        91.5
+      );
+      w.lastCelebrationStyle = pickedCeleb.style;
+      w.kickoffReturnElapsed = 0;
+      w.celebrateTimer = celebDuration;
+      w.celebration = {
+        style: pickedCeleb.style,
+        side,
+        scorerId: isOwnGoal ? ogCulpritName : scorerName,
+        assisterId: assisterAg?.id,
+        anchorX,
+        anchorY,
+        duration: celebDuration,
+        elapsed: 0,
+        isOwnGoal,
+        label: pickedCeleb.label
+      };
+      triggerCoachShout(w, side, '🔥 เยี่ยมมาก!', 2.8);
+      triggerCoachShout(w, side === 'H' ? 'A' : 'H', '📣 ตั้งสติ! คุมเกม!', 2.6);
+    }
     w.ball.carrierId = null;
     w.ball.targetId = null;
     w.ball.lastPasserId = null;
     w.ball.trail = [];
-    triggerDramaSlow(
-      w,
-      Math.min(2.1, celebDuration * 0.85),
-      isOwnGoal ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritShort}` : `⚽ GOAL!! ${scorerShort} · ${pickedCeleb.label}`
-    );
+    if (!isSkippingRef.current) {
+      triggerDramaSlow(
+        w,
+        Math.min(2.1, 2.35 * 0.85),
+        isOwnGoal ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritShort}` : `⚽ GOAL!! ${scorerShort} · ${pickedCeleb.label}`
+      );
+    }
     w.pendingSetPiece = { type: 'kickoff', side: defSide, x: 50, y: 50, waitSec: 0.42 };
     w.phaseLabel = isOwnGoal
       ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritName} (${ogCulpritTeam.name})!`
@@ -6407,7 +6484,7 @@ export const MatchModal: React.FC<{
     w.varReview = null;
     if (lastLiveVarActiveRef.current) {
       lastLiveVarActiveRef.current = false;
-      setLiveVarActive(false);
+      if (!isSkippingRef.current) setLiveVarActive(false);
     }
     const sr = simRef.current;
     sr.varSeq += 1;
@@ -6419,7 +6496,7 @@ export const MatchModal: React.FC<{
     ) => {
       const rec = buildVarRecord(vr, curMin, varId, verdictShort, verdictLabel, verdictTone);
       sr.varHistory.push(rec);
-      setVarHistory(sr.varHistory.slice());
+      if (!isSkippingRef.current) setVarHistory(sr.varHistory.slice());
     };
 
     const attTeam = vr.side === 'H' ? homeOrig : awayOrig;
@@ -7241,8 +7318,8 @@ export const MatchModal: React.FC<{
 
       let isGoal = plan?.outcome === 'goal';
       if (!plan) {
-        const hR = rate(getLiveHomeTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, true);
-        const aR = rate(getLiveAwayTeam(), state, kind !== 'league' || isDerby, curMin, sr.subs.map((s) => s.inPlayer), sr.sentOff, false);
+        const hR = getCachedSideRate('H', curMin);
+        const aR = getCachedSideRate('A', curMin);
         const edge = side === 'H' ? hR.at - aR.df : aR.at - hR.df;
         const gkSaveScore = gk
           ? (gk.d.sv + (gk.sig === 'sv' ? 9 : 0)) * 0.36 +
@@ -8424,8 +8501,8 @@ export const MatchModal: React.FC<{
     if (curMin >= 5 && blessedNowCount < 2) {
       const blessRollChance = blessedNowCount === 0 && curMin >= 16 ? 0.12 : 0.07;
       if (Math.random() < blessRollChance) {
-        const hPowRate = rate(homeOrig, state);
-        const aPowRate = rate(awayOrig, state);
+        const hPowRate = baseTeamRates.home;
+        const aPowRate = baseTeamRates.away;
         const powGap = aPowRate.at + aPowRate.df - (hPowRate.at + hPowRate.df);
         const redH = w.agents.filter((a) => a.sentOff && a.side === 'H').length;
         const redA = w.agents.filter((a) => a.sentOff && a.side === 'A').length;
@@ -8482,38 +8559,44 @@ export const MatchModal: React.FC<{
     // Drain stamina & update live match form (scaled by tactical pressing & tempo)
     const hCfgMin = getEffectiveTeamCfg('H', curMin);
     const aCfgMin = getEffectiveTeamCfg('A', curMin);
-    [...sr.homeLu, ...sr.awayLu].forEach((n) => {
-      if (sr.sentOff.includes(n)) return;
-      const isH = sr.homeLu.includes(n);
+    const sentOffSet = new Set(sr.sentOff);
+    const homeLuSet = new Set(sr.homeLu);
+    const processFitForSide = (lu: string[], isH: boolean) => {
       const sideCfg = isH ? hCfgMin : aCfgMin;
-      const pl = homeOrig.sq.find((q) => q.n === n) || awayOrig.sq.find((q) => q.n === n);
-      if (!pl) return;
-      const D = DT(pl, state.p);
-      const plTraits = pl.traits || [];
-      const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
-      const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
       const sideFacMods = getSideFacMods(isH ? 'H' : 'A');
-      const drain =
-        (0.34 - (D.d.sta - 65) * 0.0022) *
-        staBonus *
-        pressLoad *
-        turfMatchMods.fatigueMult *
-        sideFacMods.fatigueDrainMult *
-        (pl.pos === 'GK' ? 0.25 : 1);
-      sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
-      const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
-      let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
-      if (plTraits.includes('clutch_player') && curMin >= 70) formDelta += 0.015;
-      if (curFit < 48) formDelta -= plTraits.includes('consistency_pro') ? 0.03 : 0.055;
-      else if (curFit < 58) formDelta -= plTraits.includes('consistency_pro') ? 0.012 : 0.025;
-      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (plTraits.includes('consistency_pro') ? 0.07 : 0.12);
-      if (formDelta !== 0) adjustLiveForm(n, formDelta);
-      if (curFit < 56 && pl.pos !== 'GK' && Math.random() < 0.08) {
-        const ag = w.agents.find((a) => a.id === n);
-        if (ag) tryTriggerInMatchInjury(w, ag, curMin, 'fatigue', true);
+      for (const n of lu) {
+        if (sentOffSet.has(n)) continue;
+        const pl = playerByNameMap.get(n);
+        if (!pl) continue;
+        const D = DT(pl, state.p);
+        const plTraits = pl.traits || [];
+        const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
+        const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
+        const drain =
+          (0.34 - (D.d.sta - 65) * 0.0022) *
+          staBonus *
+          pressLoad *
+          turfMatchMods.fatigueMult *
+          sideFacMods.fatigueDrainMult *
+          (pl.pos === 'GK' ? 0.25 : 1);
+        sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
+        const curFit = sr.liveFit[n];
+        let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
+        if (plTraits.includes('clutch_player') && curMin >= 70) formDelta += 0.015;
+        if (curFit < 48) formDelta -= plTraits.includes('consistency_pro') ? 0.03 : 0.055;
+        else if (curFit < 58) formDelta -= plTraits.includes('consistency_pro') ? 0.012 : 0.025;
+        if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (plTraits.includes('consistency_pro') ? 0.07 : 0.12);
+        if (formDelta !== 0) adjustLiveForm(n, formDelta);
+        if (curFit < 56 && pl.pos !== 'GK' && Math.random() < 0.08) {
+          const ag = w.agents.find((a) => a.id === n);
+          if (ag) tryTriggerInMatchInjury(w, ag, curMin, 'fatigue', true);
+        }
       }
-    });
+    };
+    void homeLuSet;
+    processFitForSide(sr.homeLu, true);
+    processFitForSide(sr.awayLu, false);
 
     const runAiSubForSide = (isHomeSide: boolean) => {
       const sideOrig = isHomeSide ? homeOrig : awayOrig;
@@ -8622,7 +8705,8 @@ export const MatchModal: React.FC<{
         if (condMet) {
           triggeredRulesRef.current.push(idx);
           if (curTac !== rule.tac) {
-            setLiveTac(rule.tac);
+            liveTacticsRef.current.tac = rule.tac;
+            if (!isSkippingRef.current) setLiveTac(rule.tac);
             pushLog(curMin, `⚙️ แผนอัตโนมัติทำงาน: ปรับแท็กติกเป็น "${AR_T[rule.tac]}"`, 'sys');
           }
         }
@@ -8632,14 +8716,21 @@ export const MatchModal: React.FC<{
     // Fast-forward 4 tactical plays for this minute inside world
     clearWorldCelebration(w, 'SUPPORT');
     w.pendingSetPiece = null;
+    updateAgentTargets(w, curMin);
+    w.agents.forEach((a) => {
+      if (!a.sentOff) {
+        a.x = a.x * 0.4 + a.tx * 0.6;
+        a.y = a.y * 0.4 + a.ty * 0.6;
+      }
+    });
     for (let k = 0; k < 4; k++) {
-      updateAgentTargets(w, curMin);
-      w.agents.forEach((a) => {
-        if (!a.sentOff) {
-          a.x = a.x * 0.4 + a.tx * 0.6;
-          a.y = a.y * 0.4 + a.ty * 0.6;
-        }
-      });
+      const curSp = (w as LiveMatchWorld).pendingSetPiece;
+      if (curSp && curSp.waitSec > 0) {
+        const rem = 4 - k;
+        w.possTicksTotal += rem;
+        if (w.ball.possessionSide === 'H') w.possTicksH += rem;
+        break;
+      }
       scheduleNextPlay(w, curMin);
       if (w.varReview) resolveVarReview(w, curMin);
       w.ball.x = w.ball.toX;
@@ -9229,7 +9320,7 @@ export const MatchModal: React.FC<{
       }
     });
 
-    setLiveLu(myLu.slice());
+    if (!isSkippingRef.current) setLiveLu(myLu.slice());
     triggerCoachShout(w, mySide, '🔀 ปรับตำแหน่ง!', 2.1);
     const sA = slots[bestI]?.sp || '';
     const sB = slots[bestJ]?.sp || '';
@@ -9354,9 +9445,11 @@ export const MatchModal: React.FC<{
         if (w.ball.targetId === outPl.n) w.ball.targetId = cand.n;
       }
 
-      setLiveLu(myLu.slice());
-      setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
-      setSubLog(sr.subs.slice());
+      if (!isSkippingRef.current) {
+        setLiveLu(myLu.slice());
+        setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
+        setSubLog(sr.subs.slice());
+      }
       syncSidelineBenches(w);
       triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 เปลี่ยนตัว!', 2.3);
       const isInjOut = sr.injuredNames.includes(outPl.n);
@@ -9521,16 +9614,34 @@ export const MatchModal: React.FC<{
       setLiveVarActive(false);
     }
     w.pendingSetPiece = null;
+    const wasSkipping = isSkippingRef.current;
+    isSkippingRef.current = false;
     syncUiStatsFromWorld(w, 90);
     setDone(true);
     setMatchPhaseUi('ft');
     setMlandMatchTab('players');
     setClockLabel('FT');
     setStoppageBadge(0);
+    setLiveViewers(liveViewersRef.current);
+    setPeakViewers(peakViewersRef.current);
+    if (wasSkipping && skipCommentsRef.current) {
+      if (skipCommentsRef.current.length > 0) {
+        setLiveComments(skipCommentsRef.current.slice(0, 50));
+      }
+      skipCommentsRef.current = null;
+    }
     pushStreamComment(90, 'fulltime');
     SFX.fullWhistle();
     setCrowdAudio(false);
 
+    setGh(sr.gh);
+    setGa(sr.ga);
+    setEvs(sr.evs.slice());
+    setGoalFlashInfo(null);
+    setLiveCaptains({ H: sr.captainH, A: sr.captainA });
+    setAiFormDisplay({ H: aiCoachRef.current.H.form, A: aiCoachRef.current.A.form });
+    setLiveTac(liveTacticsRef.current.tac);
+    setVarHistory(sr.varHistory.slice());
     setLiveLu((meIsHome ? sr.homeLu : sr.awayLu).slice());
     setLiveOppLu((meIsHome ? sr.awayLu : sr.homeLu).slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
@@ -9553,12 +9664,28 @@ export const MatchModal: React.FC<{
         const pen = computePenWinnerInstant();
         finalPenText = pen.text;
         setPenResult(pen);
-        pushLog(90, `🎯 ${pen.text}`, 'sys');
+        if (wasSkipping && skipLogsRef.current) {
+          skipLogsRef.current.unshift({ id: logSeqRef.current++, m: 90, text: `🎯 ${pen.text}`, tone: 'sys' });
+          if (skipLogsRef.current.length > 65) skipLogsRef.current.length = 65;
+        } else {
+          pushLog(90, `🎯 ${pen.text}`, 'sys');
+        }
       }
     } else {
-      pushLog(90, `🏁 จบเกม! ${homeOrig.name} ${finalGh}-${finalGa} ${awayOrig.name}`, 'sys');
+      const ftText = `🏁 จบเกม! ${homeOrig.name} ${finalGh}-${finalGa} ${awayOrig.name}`;
+      if (wasSkipping && skipLogsRef.current) {
+        skipLogsRef.current.unshift({ id: logSeqRef.current++, m: 90, text: ftText, tone: 'sys' });
+        if (skipLogsRef.current.length > 65) skipLogsRef.current.length = 65;
+      } else {
+        pushLog(90, ftText, 'sys');
+      }
     }
     pushTimeline(90, 'N', 'full_time', 'จบเกม', finalPenText || `${finalGh} - ${finalGa}`);
+    setTimelineEvents(sr.timeline.slice());
+    if (wasSkipping && skipLogsRef.current) {
+      setLogs(skipLogsRef.current.slice(0, 65));
+      skipLogsRef.current = null;
+    }
     setActionBanner({ label: `🏁 จบเกม ${finalGh} - ${finalGa}`, tone: 'normal', actors: [] });
   };
 
@@ -10303,6 +10430,10 @@ export const MatchModal: React.FC<{
     w.cardBanner = null;
     let penOutcome: { winnerHome: boolean; text: string } | null = null;
     setSfxSuppressed(true);
+    isSkippingRef.current = true;
+    skipLogsRef.current = logs.slice(0, 65);
+    skipCommentsRef.current = liveComments.slice(0, 50);
+    skipRateCacheRef.current.clear();
     try {
       if (w.varReview) {
         resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
@@ -10359,26 +10490,29 @@ export const MatchModal: React.FC<{
         w.dramaLabel = null;
         clearWorldCelebration(w, 'SUPPORT');
         w.cardBanner = null;
-        syncSidelineBenches(w);
         if (w.sideline) {
           w.sideline.coachH.x = 43.3;
           w.sideline.coachH.tx = 43.3;
           w.sideline.coachA.x = 56.7;
           w.sideline.coachA.tx = 56.7;
         }
-        setLiveFitMap({ ...simRef.current.liveFit });
         if (canvasRef.current) {
           drawLivePitchToCanvas(canvasRef.current, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, showRatings, simRef.current.liveForm);
         }
       }
+      if (penOutcome) {
+        finalizeMatch(penOutcome.winnerHome, penOutcome.text);
+      } else {
+        finalizeMatch();
+      }
+      syncSidelineBenches(w);
     } finally {
+      isSkippingRef.current = false;
+      skipLogsRef.current = null;
+      skipCommentsRef.current = null;
+      skipRateCacheRef.current.clear();
       setSfxSuppressed(false);
     }
-    if (penOutcome) {
-      finalizeMatch(penOutcome.winnerHome, penOutcome.text);
-      return;
-    }
-    finalizeMatch();
   };
 
   const performSubstitution = (outName: string, benchPlayer: Player) => {
@@ -11557,10 +11691,6 @@ export const MatchModal: React.FC<{
               onAutoSubstitute={handleAutoSubstitute}
               onSwapStarters={performOnPitchSwap}
               findBestSubFor={findBestSubFor}
-              onCloseAndResume={() => {
-                setMlandMatchTab('stats');
-                if (matchPhaseUi !== 'halftime') setPaused(false);
-              }}
               onCloseToStats={() => {
                 setMlandMatchTab('stats');
               }}

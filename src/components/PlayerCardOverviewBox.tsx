@@ -41,13 +41,14 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
   const injCount = player.inj ?? careerProfile?.inj ?? 0;
   const susCount = player.sus ?? careerProfile?.sus ?? 0;
 
+  const isSuspendedStatus = !isRetired && susCount > 0;
   const isInjuredStatus = !isRetired && susCount === 0 && injCount > 0;
   const statusText = isRetired
     ? player.retiredSeason
       ? `👋 แขวนสตั๊ดแล้ว (จบ S${player.retiredSeason})`
       : '👋 แขวนสตั๊ดแล้ว'
     : susCount > 0
-      ? `🟥 แบน ${susCount} นัด`
+      ? `ติดโทษแบน ${susCount} นัด`
       : injCount > 0
         ? `เจ็บพัก ${injCount} นัด`
         : fitVal < 65
@@ -154,6 +155,7 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
       <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${statusToneCls}`}>
         <div className="flex items-center justify-between font-bold gap-1">
           <span className="truncate tabular inline-flex items-center gap-1" style={{ color: fitCol }}>
+            {isSuspendedStatus && <StatIconBadge kind="red" count={1} size="xs" />}
             {isInjuredStatus && <StatIconBadge kind="injury" size="xs" />}
             <span className="truncate">{statusText}</span>
           </span>

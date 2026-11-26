@@ -24,7 +24,7 @@ export const getStaminaMeta = (fitRaw: number | undefined, restThreshold = 65): 
     return {
       f,
       label: 'ควรพัก',
-      shortLabel: 'ควรพัก',
+      shortLabel: 'ล้า!',
       barColor: '#ef4444',
       barGradient: 'linear-gradient(90deg, #dc2626 0%, #ef4444 100%)',
       txtCls: 'text-rose-600 dark:text-rose-400',
@@ -166,12 +166,12 @@ export const StaminaBar: React.FC<StaminaBarProps> = ({
 
   return (
     <div
-      className={`flex flex-col items-stretch justify-center gap-0.5 shrink-0 ${className}`}
+      className={`flex flex-col items-stretch justify-center gap-[3px] mland:gap-[2px] shrink-0 ${className}`}
       title={`ความฟิต ${f}% (${meta.label})`}
     >
       <div className="flex items-center justify-between gap-1 leading-none tabular">
         {showStatusLabel ? (
-          <span className={`text-[8.5px] mland:text-[7.5px] font-extrabold truncate ${textColor}`}>
+          <span className={`text-[8.5px] mland:text-[7.5px] font-extrabold whitespace-nowrap ${textColor}`}>
             {meta.shortLabel}
           </span>
         ) : (
@@ -179,7 +179,7 @@ export const StaminaBar: React.FC<StaminaBarProps> = ({
             ⚡
           </span>
         )}
-        <span className={`text-[9.5px] mland:text-[8px] font-extrabold ${textColor}`}>
+        <span className={`font-display text-[9.5px] mland:text-[8px] font-extrabold ${textColor}`}>
           {f}%
         </span>
       </div>

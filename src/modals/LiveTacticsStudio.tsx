@@ -18,7 +18,7 @@ import { fmtFansShort } from '../engine/simulation';
 import { Check } from 'lucide-react';
 import { FormationPitch, PlayerFace, ClubCrest, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { MatchPlayerThumb } from './MatchSharedComponents';
-import { StaminaBar } from '../components/StaminaBar';
+import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -90,7 +90,6 @@ interface LiveTacticsStudioProps {
   onAutoSubstitute: (outName: string) => Player | null;
   onSwapStarters: (nameA: string, nameB: string) => void;
   findBestSubFor: (outName: string) => Player | null;
-  onCloseAndResume: () => void;
   onCloseToStats: () => void;
   onCloseToChat?: () => void;
   liveViewers?: number;
@@ -184,7 +183,6 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   onAutoSubstitute,
   onSwapStarters,
   findBestSubFor,
-  onCloseAndResume,
   onCloseToStats,
   onCloseToChat,
   liveViewers,
@@ -915,23 +913,6 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           </button>
         </div>
 
-        {/* Sub Quota & Resume Match Action Bar */}
-        <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] flex items-center justify-between gap-1.5">
-          <div className="min-w-0 flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-bold">
-            <span className="px-1.5 py-0.2 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0">
-              {5 - subsUsed.length}/5
-            </span>
-            <span className="truncate">📋 แก้เกม &amp; 🔄 เปลี่ยนตัว</span>
-          </div>
-          <button
-            type="button"
-            onClick={onCloseAndResume}
-            className="px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer shadow-xs hover:brightness-110 whitespace-nowrap shrink-0"
-          >
-            {matchPhaseUi === 'halftime' ? '✅ บันทึก & กลับพักครึ่ง' : '✅ ใช้แผน & เล่นต่อ ▶'}
-          </button>
-        </div>
-
         {/* Scrollable Halftime Talk (at Halftime) + Bench + Tactical Orders */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2 mland:space-y-1.5">
           {matchPhaseUi === 'halftime' && onSetHalftimeTalk && (() => {
@@ -1202,9 +1183,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         )}
                       </div>
 
-                      {/* 5. ความฟิต */}
+                      {/* 5. ความฟิต / สถานะ */}
                       <div className="flex items-center justify-start min-w-0">
-                        <StaminaBar value={f} variant="compact" showStatusLabel restThreshold={subAlertFitTh} className="w-full" />
+                        <PlayerStatusBadge sus={pl.sus} inj={pl.inj} fit={f} restThreshold={subAlertFitTh} variant="cell" />
                       </div>
 
                       {/* 6. พลัง */}

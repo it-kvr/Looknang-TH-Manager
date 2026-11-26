@@ -1025,14 +1025,15 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
             )}
             {(() => {
               const posPal = getPositionCanvasPalette(z.sp);
-              const bw = isMe ? 32 : z.sp.length >= 3 ? 28 : 24;
+              const bw = isMe ? (z.sp.length >= 3 ? 34 : 30) : z.sp.length >= 3 ? 28 : 25;
+              const bh = 12.5;
               return (
                 <>
                   <rect
                     x={cx - bw / 2}
-                    y={cy + 10}
+                    y={cy + 9.5}
                     width={bw}
-                    height="11.5"
+                    height={bh}
                     rx="3.8"
                     fill={posPal.bg}
                     stroke={isMe ? '#f5c242' : 'rgba(6, 20, 13, 0.88)'}
@@ -1040,8 +1041,9 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
                   />
                   <text
                     x={cx}
-                    y={cy + 18.4}
+                    y={cy + 9.5 + bh / 2 + 0.3}
                     textAnchor="middle"
+                    dominantBaseline="central"
                     fontSize="8"
                     fontWeight="800"
                     fontFamily="Sarabun"
@@ -1365,10 +1367,11 @@ export const FormationPitch: React.FC<{
             )}
             <ellipse cx={cx} cy={cy + 16} rx="13" ry="3.8" fill="#0005" />
 
-            {/* Top Center: Role Badge (matches roster PositionBadge colors) */}
+            {/* Top Center: Role Badge (matches roster PositionBadge height/ratio, lowered to clear upper names) */}
             {(() => {
               const posPal = getPositionCanvasPalette(z.sp);
-              const badgeW = isMe ? (z.sp.length >= 3 ? 38 : 34) : z.sp.length >= 3 ? 28 : 24;
+              const badgeW = isMe ? (z.sp.length >= 3 ? 34 : 30) : z.sp.length >= 3 ? 28 : 25;
+              const badgeH = 12.5;
               const badgeStroke = isMe
                 ? '#f5c242'
                 : pn >= 2
@@ -1377,12 +1380,12 @@ export const FormationPitch: React.FC<{
                     ? '#f59e0b'
                     : 'rgba(6, 20, 13, 0.88)';
               return (
-                <g transform={`translate(${cx},${cy - (isTarget ? 23 : 20.5)})`}>
+                <g transform={`translate(${cx},${cy - (isTarget ? 16.5 : 13.8)})`}>
                   <rect
                     x={-badgeW / 2}
-                    y="-8.8"
+                    y="-8.5"
                     width={badgeW}
-                    height="11.5"
+                    height={badgeH}
                     rx="3.8"
                     fill={posPal.bg}
                     stroke={badgeStroke}
@@ -1390,8 +1393,9 @@ export const FormationPitch: React.FC<{
                   />
                   <text
                     x="0"
-                    y="-0.3"
+                    y={-8.5 + badgeH / 2 + 0.3}
                     textAnchor="middle"
+                    dominantBaseline="central"
                     fontSize="8"
                     fontWeight="800"
                     fontFamily="Sarabun"
@@ -1437,7 +1441,7 @@ export const FormationPitch: React.FC<{
 
             {/* Top-Left: MOTM Crown and/or Captain Badge */}
             {meta?.isMotm && (
-              <g transform={`translate(${cx - 13.5},${cy - 14})`}>
+              <g transform={`translate(${cx - 15.5},${cy - 10})`}>
                 <circle r="6" fill="#111418" stroke="#facc15" strokeWidth="1.15" />
                 <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#fde047" />
               </g>
@@ -1448,8 +1452,8 @@ export const FormationPitch: React.FC<{
                 trCol,
                 state.mode === 'm' && team.id === state.me ? state.club?.c3 || '' : ''
               );
-              const capX = meta?.isMotm ? cx - 21 : cx - 12.5;
-              const capY = meta?.isMotm ? cy - 5.5 : cy - 14.5;
+              const capX = meta?.isMotm ? cx - 21 : cx - 15;
+              const capY = meta?.isMotm ? cy - 2 : cy - 10;
               return (
                 <g transform={`translate(${capX},${capY})`}>
                   <circle r="5.5" fill={capPal.bg} stroke={capPal.border} strokeWidth="1.05" />
@@ -1460,14 +1464,14 @@ export const FormationPitch: React.FC<{
               );
             })()}
 
-            {/* Top-Right: Cards & Injury (non-overlapping) */}
+            {/* Top-Right: Cards & Injury (non-overlapping with lowered role badge) */}
             {(isRed || isSus) ? (
-              <rect x={cx + 9.5} y={cy - 19} width="7" height="10" rx="1.5" fill="#e5484d" stroke="#fff" strokeWidth="1.1" />
+              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#e5484d" stroke="#fff" strokeWidth="1.1" />
             ) : (meta?.yellowCards || 0) > 0 ? (
-              <rect x={cx + 9.5} y={cy - 19} width="7" height="10" rx="1.5" fill="#facc15" stroke="#111" strokeWidth="0.9" />
+              <rect x={cx + 12} y={cy - 16} width="7" height="10" rx="1.5" fill="#facc15" stroke="#111" strokeWidth="0.9" />
             ) : null}
             {isInj && (
-              <g transform={`translate(${hasCard ? cx + 20 : cx + 12.5},${hasCard ? cy - 9 : cy - 14.5})`}>
+              <g transform={`translate(${hasCard ? cx + 21 : cx + 14.5},${hasCard ? cy - 6.5 : cy - 11.5})`}>
                 <circle r="5.8" fill="#fff" stroke="#e5484d" strokeWidth="1.2" />
                 <path d="M-2.8 0h5.6M0-2.8v5.6" stroke="#e5484d" strokeWidth="1.9" strokeLinecap="round" />
               </g>

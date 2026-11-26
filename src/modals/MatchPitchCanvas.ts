@@ -4852,15 +4852,15 @@ export const drawLivePitchToCanvas = (
       ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
     }
 
-    // Crisp position role micro-badge above each player during live play
+    // Crisp position role micro-badge snug on top rim of each player during live play
     if (showPositions && ag.role) {
       const roleStr = String(ag.role);
       const posPal = getPositionCanvasPalette(ag.role || ag.pos);
       const roleFont = Math.max(6.5, Math.round(playerRadius * 0.58));
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
-      const rw = Math.max(15, measureTextCached(ctx, roleStr) + 5.5);
-      const rh = Math.max(8.5, roleFont + 2.5);
-      const ry = -playerRadius - rh - 1.5;
+      const rw = Math.max(19, measureTextCached(ctx, roleStr) + 6);
+      const rh = Math.max(10, rw * 0.48);
+      const ry = -playerRadius - rh * 0.72;
       ctx.fillStyle = posPal.bg;
       ctx.strokeStyle = ag.isMe ? '#facc15' : 'rgba(6, 20, 13, 0.88)';
       ctx.lineWidth = ag.isMe ? 1.25 : 0.9;

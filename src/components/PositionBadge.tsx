@@ -35,20 +35,20 @@ export const PositionBadge: React.FC<{
 }> = ({ role, size = 'xs', fixedWidth = true, className = '', title }) => {
   const sizeCls = fixedWidth
     ? size === '2xs'
-      ? 'w-[28px] mland:w-[24px] px-0.5 py-[0.5px] rounded text-[8.5px] mland:text-[7.5px]'
+      ? 'w-[28px] mland:w-[24px] h-[14px] mland:h-[12px] px-0.5 rounded text-[8.5px] mland:text-[7.5px]'
       : size === 'sm'
-        ? 'w-[36px] mland:w-[30px] px-0.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px]'
-        : 'w-[32px] mland:w-[27px] px-0.5 py-[1px] rounded text-[9px] mland:text-[8px]'
+        ? 'w-[36px] mland:w-[30px] h-[18px] mland:h-[15px] px-0.5 rounded-md text-[10px] mland:text-[8.5px]'
+        : 'w-[32px] mland:w-[27px] h-[16px] mland:h-[14px] px-0.5 rounded text-[9px] mland:text-[8px]'
     : size === '2xs'
-      ? 'px-1 py-[0.5px] rounded text-[8.5px] mland:text-[7.5px]'
+      ? 'h-[14px] mland:h-[12px] px-1 rounded text-[8.5px] mland:text-[7.5px]'
       : size === 'sm'
-        ? 'px-1.5 mland:px-1 py-0.5 rounded-md text-[10px] mland:text-[8.5px]'
-        : 'px-1 py-[1px] rounded text-[9px] mland:text-[8px]';
+        ? 'h-[18px] mland:h-[15px] px-1.5 mland:px-1 rounded-md text-[10px] mland:text-[8.5px]'
+        : 'h-[16px] mland:h-[14px] px-1 rounded text-[9px] mland:text-[8px]';
 
   return (
     <span
       title={title}
-      className={`inline-flex items-center justify-center font-extrabold leading-tight shrink-0 tabular whitespace-nowrap ${sizeCls} ${getPositionBadgeClass(role)} ${className}`}
+      className={`inline-flex items-center justify-center font-extrabold leading-none shrink-0 tabular whitespace-nowrap ${sizeCls} ${getPositionBadgeClass(role)} ${className}`}
     >
       {role}
     </span>

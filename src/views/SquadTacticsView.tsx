@@ -13,6 +13,7 @@ import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
@@ -583,10 +584,12 @@ export const SquadTacticsView: React.FC<{
             ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
             : isSource
               ? 'opacity-45 bg-[var(--surface-2)]'
-              : isMe
-                ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
-                : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
-        } ${unavailable ? 'opacity-72' : ''} ${dragUi ? 'cursor-grabbing' : 'cursor-pointer'}`}
+              : unavailable
+                ? 'bg-rose-500/[0.06] hover:bg-rose-500/[0.1]'
+                : isMe
+                  ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                  : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
+        } ${unavailable ? 'opacity-82' : ''} ${dragUi ? 'cursor-grabbing' : 'cursor-pointer'}`}
       >
         <div
           data-drag-grip={isMgr ? '1' : undefined}
@@ -648,24 +651,7 @@ export const SquadTacticsView: React.FC<{
         </div>
 
         <div className="flex items-center justify-start min-w-0">
-          {(q.sus || 0) > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
-              <StatIconBadge kind="red" count={q.sus} size="xs" />
-              {(q.sus || 0) <= 1 && <span>แบน</span>}
-            </span>
-          ) : q.inj > 0 ? (
-            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
-              <StatIconBadge kind="injury" size="xs" />
-              <span>พัก {q.inj}น</span>
-            </span>
-          ) : (
-            <StaminaBar
-              value={f}
-              variant="compact"
-              showStatusLabel
-              className="w-full"
-            />
-          )}
+          <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
         </div>
 
         <div className="flex items-center justify-start">
@@ -1898,22 +1884,9 @@ export const SquadTacticsView: React.FC<{
                                 ) : null}
                                 {offerCount > 0 ? <span className="px-1 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">{offerCount} บิด</span> : null}
                               </div>
-                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular">
-                                {(q.sus || 0) > 0 ? (
-                                  <span className="inline-flex items-center gap-1 text-[var(--red)] font-bold">
-                                    <StatIconBadge kind="red" count={q.sus} size="xs" />
-                                    <span>แบน {q.sus} นัด</span>
-                                  </span>
-                                ) : q.inj > 0 ? (
-                                  <span className="inline-flex items-center gap-1 text-[var(--red)] font-bold">
-                                    <StatIconBadge kind="injury" size="xs" />
-                                    <span>เจ็บ {q.inj} นัด</span>
-                                  </span>
-                                ) : (q.yc || 0) > 0 ? (
-                                  <span className="inline-flex items-center gap-1">
-                                    <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />
-                                    <span>เหลือง {q.yc}/3</span>
-                                  </span>
+                              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
+                                {(q.sus || 0) > 0 || q.inj > 0 || (q.yc || 0) > 0 ? (
+                                  <PlayerStatusBadge sus={q.sus} inj={q.inj} yc={q.yc} variant="pill" showYellow />
                                 ) : isStarter ? (
                                   'ตัวจริง'
                                 ) : (
@@ -1931,10 +1904,8 @@ export const SquadTacticsView: React.FC<{
                                   <span className="text-[var(--ink)]/85">{bio.heightCm}/{bio.weightKg}</span>
                                   <FootPairIcon foot={bio.foot} size="xs" />
                                 </span>
-                                {f < 75 && q.inj === 0 && (q.sus || 0) === 0 && (
-                                  <span className={`sm:hidden mland:hidden px-1 rounded text-[9px] font-bold ${stMeta.pillCls}`}>
-                                    {stMeta.label} {f}%
-                                  </span>
+                                {isMgr && q.inj === 0 && (q.sus || 0) === 0 && (
+                                  <StaminaBar value={f} variant="inline" barWidthClass="w-8" className="sm:hidden mland:hidden" />
                                 )}
                               </div>
                             </button>
@@ -1957,7 +1928,7 @@ export const SquadTacticsView: React.FC<{
                             value={f}
                             variant="compact"
                             showStatusLabel
-                            className={isMgr ? 'hidden sm:flex mland:flex' : 'flex'}
+                            className={`${isMgr ? 'hidden sm:flex mland:flex' : 'flex'} ${q.inj > 0 || (q.sus || 0) > 0 ? 'opacity-65' : ''}`}
                           />
 
                           <div className={`text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] items-center justify-center gap-1 ${isMgr ? 'hidden lg:flex mland:hidden' : 'flex'}`}>
