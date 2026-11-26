@@ -17,6 +17,14 @@ export const getStaffTierLabel = (lv: number): string => {
   return 'ยังไม่จ้าง';
 };
 
+export const getTravelTierLabel = (lv: number): string => {
+  if (lv <= 0) return 'เดินทางตามมีตามเกิด';
+  if (lv >= 9) return 'เครื่องบินเหมาลำ & ทีมทวีป';
+  if (lv >= 6) return 'โค้ช VIP + โรงแรมแคมป์';
+  if (lv >= 3) return 'รถบัสปรับอากาศสโมสร';
+  return 'รถตู้ / มินิบัสทีม';
+};
+
 export const FacilityUpgradeSvg: React.FC<{
   kind: FacilityKey;
   level: number;
@@ -132,7 +140,7 @@ export const FacilityUpgradeSvg: React.FC<{
       )}
 
       {/* Dry dirt patches on pitch/lawn when damaged */}
-      {needsRepair && kind !== 'turfLv' && kind !== 'analyticsLv' && (
+      {needsRepair && kind !== 'turfLv' && kind !== 'analyticsLv' && kind !== 'travelLv' && (
         <g opacity="0.72">
           <ellipse cx="28" cy="64" rx="13" ry="3.5" fill="#78350f" />
           <ellipse cx="89" cy="67" rx="15" ry="4" fill="#713f12" />
@@ -747,6 +755,132 @@ export const FacilityUpgradeSvg: React.FC<{
             </g>
           )}
           <rect x="22" y="48" width="76" height="6" rx="2" fill="#334155" />
+        </g>
+      )}
+
+      {/* 8. AWAY TRAVEL & ROAD LOGISTICS (travelLv) */}
+      {!destroyed && kind === 'travelLv' && (
+        <g>
+          {/* Asphalt Highway / Airport Tarmac */}
+          <rect y="50" width="120" height="26" fill={needsRepair ? '#3f3f46' : '#1e293b'} />
+          <line x1="0" y1="50" x2="120" y2="50" stroke={tier >= 4 ? '#38bdf8' : '#64748b'} strokeWidth="1" opacity="0.7" />
+          <line
+            x1="4"
+            y1="62"
+            x2="116"
+            y2="62"
+            stroke={needsRepair ? '#9ca3af' : '#facc15'}
+            strokeWidth="1.4"
+            strokeDasharray="7 5"
+            opacity={tier >= 4 ? 0.55 : 0.85}
+          />
+
+          {/* Tier 3+: Away Recovery Camp Hotel / Executive Lounge Backdrop */}
+          {tier >= 3 && (
+            <g opacity={needsRepair ? 0.72 : 1}>
+              <rect x="72" y="21" width="38" height="29" rx="2.5" fill="#0f172a" stroke="#64748b" strokeWidth="0.9" />
+              <rect x="72" y="21" width="38" height="4.5" rx="1.5" fill={c1} />
+              <rect x="76" y="28" width="7" height="5" rx="0.8" fill={needsRepair ? '#475569' : '#fde047'} opacity="0.85" />
+              <rect x="86" y="28" width="7" height="5" rx="0.8" fill={needsRepair ? '#334155' : '#7dd3fc'} opacity="0.85" />
+              <rect x="96" y="28" width="7" height="5" rx="0.8" fill={needsRepair ? '#475569' : '#fde047'} opacity="0.85" />
+              <rect x="76" y="36" width="7" height="5" rx="0.8" fill={needsRepair ? '#334155' : '#7dd3fc'} opacity="0.85" />
+              <rect x="86" y="36" width="7" height="5" rx="0.8" fill={needsRepair ? '#475569' : '#fde047'} opacity="0.85" />
+              <rect x="96" y="36" width="7" height="5" rx="0.8" fill={needsRepair ? '#334155' : '#38bdf8'} opacity="0.85" />
+              <rect x="86" y="44" width="10" height="6" rx="1" fill="#334155" />
+            </g>
+          )}
+
+          {/* Tier 4 (Lv.9-10): Club-liveried Charter Jet */}
+          {tier >= 4 && (
+            <g opacity={needsRepair ? 0.65 : 1}>
+              {/* Jet tail fin */}
+              <polygon points="18,29 12,15 24,15 30,29" fill={c1} stroke={c2} strokeWidth="0.9" />
+              {/* Jet fuselage */}
+              <path d="M16 28 L66 28 Q78 28 82 32.5 Q77 36 66 36 L18 36 Z" fill="#f8fafc" stroke="#94a3b8" strokeWidth="0.9" />
+              {/* Club stripe along fuselage */}
+              <path d="M19 32 L76 32" stroke={c1} strokeWidth="2.2" />
+              <path d="M22 33.8 L72 33.8" stroke={c2} strokeWidth="1.1" />
+              {/* Cockpit & cabin windows */}
+              <polygon points="69,29.3 76,30.5 74,31.8 69,31.5" fill="#0f172a" />
+              <g fill="#0f172a" opacity="0.8">
+                <circle cx="32" cy="30.3" r="1" />
+                <circle cx="38" cy="30.3" r="1" />
+                <circle cx="44" cy="30.3" r="1" />
+                <circle cx="50" cy="30.3" r="1" />
+                <circle cx="56" cy="30.3" r="1" />
+                <circle cx="62" cy="30.3" r="1" />
+              </g>
+              {/* Swept wing & turbine */}
+              <polygon points="40,34 54,34 45,42 35,42" fill="#cbd5e1" stroke="#64748b" strokeWidth="0.7" />
+              <rect x="42" y="37" width="7" height="3.2" rx="1.5" fill="#334155" />
+            </g>
+          )}
+
+          {/* Tier 1 (Lv.1-2): Compact Team Minibus / Van */}
+          {tier === 1 && (
+            <g transform={needsRepair ? 'rotate(-2 60 48)' : undefined}>
+              <path d="M30 49 L34 34 Q36 31 41 31 L77 31 Q84 31 87 38 L89 49 Z" fill="#f8fafc" stroke="#475569" strokeWidth="1.1" />
+              <rect x="31" y="42" width="57" height="4.5" fill={c1} opacity={needsRepair ? 0.55 : 1} />
+              <rect x="33" y="46" width="54" height="1.5" fill={c2} opacity={needsRepair ? 0.5 : 0.95} />
+              <rect x="37" y="34" width="11" height="6.5" rx="1" fill="#0f172a" />
+              <rect x="51" y="34" width="12" height="6.5" rx="1" fill="#0f172a" />
+              <polygon points="66,34 80,34 84,40.5 66,40.5" fill="#38bdf8" opacity="0.82" />
+              {/* Headlight */}
+              <rect x="86" y="43" width="3" height="3" rx="0.8" fill={needsRepair ? '#94a3b8' : '#fef08a'} />
+              {/* Wheels */}
+              <circle cx="43" cy="51.5" r="5" fill="#0f172a" stroke="#94a3b8" strokeWidth="1.2" />
+              <circle cx="43" cy="51.5" r="2" fill="#cbd5e1" />
+              <circle cx="75" cy="51.5" r="5" fill="#0f172a" stroke="#94a3b8" strokeWidth="1.2" />
+              <circle cx="75" cy="51.5" r="2" fill="#cbd5e1" />
+            </g>
+          )}
+
+          {/* Tier 2-4 (Lv.3-10): Sleek Club Team Coach Bus */}
+          {tier >= 2 && (
+            <g transform={tier >= 4 ? 'translate(-8, 4) scale(0.84)' : undefined}>
+              {/* Bus Body */}
+              <path
+                d="M16 50 L18 30 Q19 27 24 27 L88 27 Q96 27 99 35 L100 50 Z"
+                fill="#0f172a"
+                stroke={needsRepair ? '#64748b' : c2}
+                strokeWidth="1.2"
+              />
+              {/* Club Livery Band */}
+              <path d="M17 40 L99 40 L99 47 L17 47 Z" fill={c1} opacity={needsRepair ? 0.52 : 0.96} />
+              <path d="M17 38.5 L98 38.5" stroke={c2} strokeWidth="1.4" />
+              {/* Panoramic Tinted Windows */}
+              <rect x="22" y="30" width="13" height="7" rx="1.2" fill={needsRepair ? '#334155' : '#38bdf8'} opacity="0.82" />
+              <rect x="37" y="30" width="14" height="7" rx="1.2" fill={needsRepair ? '#334155' : '#7dd3fc'} opacity="0.82" />
+              <rect x="53" y="30" width="14" height="7" rx="1.2" fill={needsRepair ? '#334155' : '#38bdf8'} opacity="0.82" />
+              <rect x="69" y="30" width="12" height="7" rx="1.2" fill={needsRepair ? '#334155' : '#7dd3fc'} opacity="0.82" />
+              <polygon points="83,30 94,30 97,37 83,37" fill={needsRepair ? '#475569' : '#bae6fd'} opacity="0.9" />
+              {/* Crest emblem & luggage bays */}
+              <circle cx="29" cy="43.5" r="2.6" fill={c2} stroke="#0f172a" strokeWidth="0.6" />
+              <rect x="39" y="42" width="16" height="6" rx="0.8" fill="rgba(15,23,42,0.45)" stroke={c2} strokeWidth="0.6" />
+              <rect x="58" y="42" width="16" height="6" rx="0.8" fill="rgba(15,23,42,0.45)" stroke={c2} strokeWidth="0.6" />
+              {/* Headlight glow */}
+              {!needsRepair && (
+                <>
+                  <polygon points="99,45 112,41 112,50 99,47.5" fill="#fef08a" opacity="0.24" />
+                  <rect x="97.5" y="44.5" width="2.8" height="3" rx="0.8" fill="#fef08a" />
+                </>
+              )}
+              {/* Wheels */}
+              <circle cx="33" cy="52" r="5.2" fill="#020617" stroke="#cbd5e1" strokeWidth="1.2" />
+              <circle cx="33" cy="52" r="2.2" fill={c2} />
+              <circle cx="81" cy="52" r="5.2" fill="#020617" stroke="#cbd5e1" strokeWidth="1.2" />
+              <circle cx="81" cy="52" r="2.2" fill={c2} />
+            </g>
+          )}
+
+          {/* Damage / Breakdown markers when condition < 75 */}
+          {needsRepair && (
+            <g>
+              <path d="M56 32 L61 36 L58 39" fill="none" stroke="#f8fafc" strokeWidth="1.2" />
+              <polygon points="103,56 106.5,47 110,56" fill="#f97316" stroke="#0f172a" strokeWidth="0.7" />
+              <rect x="102" y="55" width="9" height="2" rx="0.8" fill="#ea580c" />
+            </g>
+          )}
         </g>
       )}
 

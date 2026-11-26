@@ -862,6 +862,7 @@ export interface GameState {
   merchLv?: number;
   turfLv?: number;
   analyticsLv?: number;
+  travelLv?: number;
   facCond?: Partial<Record<FacilityKey, number>>;
   staff?: { asst: number; fit: number; scout: number; physio: number; gkCoach?: number; setPieceCoach?: number };
   sponsorDeal?: ActivePartnerDeal | null;
@@ -884,7 +885,7 @@ export interface LiveStreamStatsSummary {
   matches: number;
 }
 
-export type FacilityKey = 'st' | 'tr' | 'ya' | 'med' | 'merchLv' | 'turfLv' | 'analyticsLv';
+export type FacilityKey = 'st' | 'tr' | 'ya' | 'med' | 'merchLv' | 'turfLv' | 'analyticsLv' | 'travelLv';
 export type StaffRoleKey = 'asst' | 'fit' | 'scout' | 'physio' | 'gkCoach' | 'setPieceCoach';
 
 export interface AppSettings {
@@ -1309,6 +1310,7 @@ export interface TeamFacilityMatchModifiers {
     turfLv: number;
     analyticsLv: number;
     merchLv: number;
+    travelLv: number;
   };
   conditions: {
     st: number;
@@ -1317,6 +1319,7 @@ export interface TeamFacilityMatchModifiers {
     turfLv: number;
     analyticsLv: number;
     merchLv: number;
+    travelLv: number;
   };
   statDeltas: Record<string, number>;
   fatigueDrainMult: number;
@@ -1328,6 +1331,10 @@ export interface TeamFacilityMatchModifiers {
   slipResistMult: number;
   ratingAtDelta: number;
   ratingDfDelta: number;
+  crowdDelta?: number;
+  homeTurfFamDelta?: number;
+  travelDelta?: number;
+  travelFatigueMult?: number;
   breakdown: {
     key: string;
     label: string;

@@ -73,7 +73,7 @@ import {
   type ClubFinanceChartPoint
 } from '../engine/simulation';
 import { renderCrestPattern, ClubCrest, KitJersey, KitPatternThumb, PlayerFace } from '../components/SvgVisuals';
-import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel } from '../components/FacilityUpgradeSvg';
+import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 
 interface FinTooltipProps {
@@ -3734,19 +3734,67 @@ export const FinanceClubView: React.FC<{
 
       {/* Club Tab 2: Facilities & Backroom Staff (Unique evolving illustrations, Lv.10/Lv.6 progression & Renovations) */}
       {clubTab === 'infra' && (() => {
-        const infraFacilityDefs: readonly { key: FacilityKey; title: string; desc: string; baseCost: number }[] = [
-          { key: 'st', title: 'สนามเหย้า & อัฒจันทร์', desc: `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มสเตตัสความนิ่ง/มุ่งมั่นนัดเหย้า + ค่าตั๋ว & เพดานค่าจ้าง`, baseCost: 110 },
-          { key: 'tr', title: 'ศูนย์ฝึกซ้อมครบวงจร', desc: 'เพิ่มสเตตัสสปีด/ความคม/พละกำลังในสนาม & ลดเสียแรงแข่ง + อัปค่าพลังซ้อม', baseCost: 90 },
-          { key: 'ya', title: 'อะคาเดมี่เยาวชน', desc: 'ปั้นดาวรุ่ง OVR สูงขึ้นทุกซีซั่น & เพิ่มคุณภาพงานแมวมอง', baseCost: 85 },
-          { key: 'med', title: 'ศูนย์การแพทย์ & กายภาพ', desc: 'เพิ่มความอึด/ทรงตัว/ฟื้นตัวในเกม ลดความเร็วตกเมื่อล้า & ลดเจ็บหนักในสนาม', baseCost: 80 },
+        const travelLvCur = clamp(state.travelLv ?? 1, 0, MAX_FACILITY_LV);
+        const travelCondCur = travelLvCur <= 0 ? 40 : getFacilityCondition(state, 'travelLv');
+        const travelReadyBonus = travelLvCur <= 0 ? -2 : Math.round(((travelLvCur - 1) / (MAX_FACILITY_LV - 1)) * 4 * (travelCondCur >= 75 ? 0.8 + (travelCondCur - 75) * 0.008 : 0.45 + ((travelCondCur - 40) / 35) * 0.35));
+        const travelFatigueSavePct = travelLvCur <= 0 ? 0 : Math.round((1 - clamp(1.04 - (travelLvCur / MAX_FACILITY_LV) * (travelCondCur / 100) * 0.11, 0.92, 1.05)) * 100);
+        const infraFacilityDefs: readonly { key: FacilityKey; title: string; desc: string; perkLine: string; baseCost: number }[] = [
+          {
+            key: 'st',
+            title: 'สนามเหย้า & อัฒจันทร์',
+            desc: `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · เพิ่มสเตตัสความนิ่ง/มุ่งมั่นนัดเหย้า + ค่าตั๋ว & เพดานค่าจ้าง`,
+            perkLine: `ความจุ ${est.cap.toLocaleString()} ที่นั่ง · ตั๋ว ~${fmtMoneyNum(est.estTicket)}/นัดเหย้า`,
+            baseCost: 110
+          },
+          {
+            key: 'tr',
+            title: 'ศูนย์ฝึกซ้อมครบวงจร',
+            desc: 'เพิ่มสเตตัสสปีด/ความคม/พละกำลังในสนาม & ลดเสียแรงแข่ง + อัปค่าพลังซ้อม',
+            perkLine: `ซ้อมพัฒนา +${Math.round((state.tr ?? 1) * 1.4)}% ฟิต · ลดล้าในสนาม`,
+            baseCost: 90
+          },
+          {
+            key: 'travelLv',
+            title: 'การเดินทาง & ความพร้อมเกมเยือน',
+            desc: `${getTravelTierLabel(travelLvCur)} · จัดระบบเดินทาง ที่พัก และฟื้นฟูร่างกายเมื่อออกไปแข่งนอกบ้าน`,
+            perkLine: `เกมเยือน นิ่ง/พร้อม ${travelReadyBonus >= 0 ? `+${travelReadyBonus}` : travelReadyBonus} · ลดล้าเดินทาง ${travelFatigueSavePct > 0 ? `-${travelFatigueSavePct}%` : '0%'} · ฟื้นหลังแข่ง +${Math.floor(Math.max(0, travelLvCur - 1) * 0.45)}%`,
+            baseCost: 80
+          },
+          {
+            key: 'ya',
+            title: 'อะคาเดมี่เยาวชน',
+            desc: 'ปั้นดาวรุ่ง OVR สูงขึ้นทุกซีซั่น & เพิ่มคุณภาพงานแมวมอง',
+            perkLine: `ฐานปั้นเยาวชน Lv.${state.ya ?? 1}/${MAX_FACILITY_LV}`,
+            baseCost: 85
+          },
+          {
+            key: 'med',
+            title: 'ศูนย์การแพทย์ & กายภาพ',
+            desc: 'เพิ่มความอึด/ทรงตัว/ฟื้นตัวในเกม ลดความเร็วตกเมื่อล้า & ลดเจ็บหนักในสนาม',
+            perkLine: `ลดเสี่ยงเจ็บ & เร่งฟื้นอาการบาดเจ็บ (Lv.${state.med ?? 1}/${MAX_FACILITY_LV})`,
+            baseCost: 80
+          },
           {
             key: 'turfLv',
             title: 'พื้นสนามหญ้า & ระบายน้ำ',
             desc: `${getTurfGradeForLevel(state.turfLv ?? 1, getFacilityCondition(state, 'turfLv')).name} · เร่งบอลบนพื้น คุมบอล/จ่ายบอลดีขึ้น ลดลื่น/เสียแรง/เจ็บ`,
+            perkLine: `ระดับหญ้า: ${getTurfGradeForLevel(state.turfLv ?? 1, getFacilityCondition(state, 'turfLv')).name}`,
             baseCost: 75
           },
-          { key: 'analyticsLv', title: 'ห้องวิเคราะห์เกม & วีดิทัศน์', desc: 'เพิ่มสเตตัสอ่านเกม/จ่ายบอล/จับจังหวะล้ำหน้าในสนาม + เร่งความคุ้นเคยแท็กติก', baseCost: 85 },
-          { key: 'merchLv', title: 'เมกะสโตร์ & แฟนโซน', desc: `เสริมบรรยากาศกองเชียร์นัดเหย้า รายได้วันแข่ง (+${fmtMoneyNum(est.estMerch)}) & เพดานค่าจ้าง`, baseCost: 75 }
+          {
+            key: 'analyticsLv',
+            title: 'ห้องวิเคราะห์เกม & วีดิทัศน์',
+            desc: 'เพิ่มสเตตัสอ่านเกม/จ่ายบอล/จับจังหวะล้ำหน้าในสนาม + เร่งความคุ้นเคยแท็กติก',
+            perkLine: `อ่านเกม/ล้ำหน้า + คุ้นเคยแผน +${Math.floor(Math.max(0, (state.analyticsLv ?? 1) - 1) / 2)}/นัด`,
+            baseCost: 85
+          },
+          {
+            key: 'merchLv',
+            title: 'เมกะสโตร์ & แฟนโซน',
+            desc: `เสริมบรรยากาศกองเชียร์นัดเหย้า รายได้วันแข่ง (+${fmtMoneyNum(est.estMerch)}) & เพดานค่าจ้าง`,
+            perkLine: `ยอดขายเหย้า ~+${fmtMoneyNum(est.estMerch)} · พาร์ทเนอร์สูงสุด ${(state.merchLv ?? 1) >= 5 ? 3 : 2} ช่อง`,
+            baseCost: 75
+          }
         ];
         const staffDefs: readonly { role: StaffRoleKey; title: string; desc: string }[] = [
           { role: 'asst', title: 'ผู้ช่วยผู้จัดการทีม', desc: 'ปลดล็อกโน้ตจุดอ่อนคู่แข่ง & แนะนำจัดแผนก่อนแข่ง (ลึกขึ้นตาม Lv) + เร่งคุ้นเคยแท็กติก & อัป OVR ตอนซ้อม' },
@@ -3758,24 +3806,33 @@ export const FinanceClubView: React.FC<{
         ];
         let totalRenovateAll = 0;
         let wornCount = 0;
+        let lvSum = 0;
+        let condSum = 0;
+        let activeFacCount = 0;
         infraFacilityDefs.forEach((f) => {
-          const curLv = state[f.key] ?? 1;
+          const curLv = clamp(state[f.key] ?? 1, f.key === 'st' ? 1 : 0, MAX_FACILITY_LV);
+          lvSum += curLv;
           if (curLv <= 0) return;
+          activeFacCount++;
           const cond = getFacilityCondition(state, f.key);
+          condSum += cond;
           if (cond < 100) {
             wornCount++;
             totalRenovateAll += getFacilityRenovateCost(f.baseCost, curLv, cond);
           }
         });
+        const avgFacLv = (lvSum / infraFacilityDefs.length).toFixed(1);
+        const avgFacCond = activeFacCount > 0 ? Math.round(condSum / activeFacCount) : 0;
+        const homeReadinessLv = Math.round(((clamp(state.st ?? 1, 1, 10) + clamp(state.turfLv ?? 1, 0, 10)) / 2) * 10) / 10;
 
         return (
           <div className="grid grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            {/* Left Column: 7 Unique Facilities Lv.10 + Renovation + Demolition */}
+            {/* Left Column: 8 Unique Facilities Lv.10 + Readiness Summary + Renovation + Demolition */}
             <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[var(--line)]/60">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60">
                 <div>
-                  <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวกสโมสร ({infraFacilityDefs.length} แห่ง · สูงสุด Lv.{MAX_FACILITY_LV})</h3>
-                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">อัปเกรด ปรับปรุงซ่อมแซม หรือรื้อถอนคืนค่าวัสดุ (สนามหลักต่ำสุด Lv.1)</div>
+                  <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวก &amp; ความพร้อมสโมสร ({infraFacilityDefs.length} แห่ง · Lv.{MAX_FACILITY_LV})</h3>
+                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">อัปเกรดความพร้อมทั้งเหย้า-เยือนได้สูงสุด Lv.{MAX_FACILITY_LV} พร้อมบำรุงรักษาหรือรื้อถอน</div>
                 </div>
                 {wornCount > 0 && (
                   <button
@@ -3789,14 +3846,39 @@ export const FinanceClubView: React.FC<{
                 )}
               </div>
 
+              {/* Clean 4-Card Club Readiness Summary Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mland:gap-1">
+                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
+                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">ความพร้อมเฉลี่ย</div>
+                  <div className="text-xs font-extrabold text-[var(--g)] tabular">Lv.{avgFacLv}/{MAX_FACILITY_LV}</div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
+                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">สภาพอาคารรวม</div>
+                  <div className={`text-xs font-extrabold tabular ${avgFacCond < 75 ? 'text-[var(--red)]' : avgFacCond < 90 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}`}>
+                    {avgFacCond}%
+                  </div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
+                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">🏠 พร้อมเกมเหย้า</div>
+                  <div className="text-xs font-extrabold text-[var(--ink)] tabular">Lv.{homeReadinessLv}/{MAX_FACILITY_LV}</div>
+                </div>
+                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
+                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">🚌 พร้อมเกมเยือน</div>
+                  <div className={`text-xs font-extrabold tabular ${travelLvCur <= 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                    Lv.{travelLvCur}/{MAX_FACILITY_LV}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2.5">
-                {infraFacilityDefs.map(({ key, title, desc, baseCost }) => {
+                {infraFacilityDefs.map(({ key, title, desc, perkLine, baseCost }) => {
                   const minLv = key === 'st' ? 1 : 0;
                   const lv = clamp(state[key] ?? 1, minLv, MAX_FACILITY_LV);
                   const cond = getFacilityCondition(state, key);
                   const upgCost = getFacilityUpgradeCost(baseCost, lv);
                   const renCost = getFacilityRenovateCost(baseCost, lv, cond);
                   const canDemolish = lv > minLv;
+                  const isMaxLv = lv >= MAX_FACILITY_LV;
                   const condBadgeCls =
                     lv <= 0
                       ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/40'
@@ -3809,12 +3891,14 @@ export const FinanceClubView: React.FC<{
                   return (
                     <div
                       key={key}
-                      className={`p-2.5 mland:p-2 rounded-2xl border space-y-2 ${
+                      className={`p-2.5 mland:p-2 rounded-2xl border space-y-2 transition-colors ${
                         lv <= 0
                           ? 'bg-[var(--red-soft)]/20 border-[var(--red)]/35'
-                          : cond < 75
-                            ? 'bg-[var(--surface-2)]/70 border-[var(--red)]/35'
-                            : 'bg-[var(--surface-2)]/55 border-[var(--line)]/80'
+                          : isMaxLv
+                            ? 'bg-gradient-to-br from-[var(--g-soft)]/55 to-[var(--surface-2)]/50 border-[var(--g)]/45'
+                            : cond < 75
+                              ? 'bg-[var(--surface-2)]/70 border-[var(--red)]/35'
+                              : 'bg-[var(--surface-2)]/55 border-[var(--line)]/80'
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
@@ -3832,15 +3916,19 @@ export const FinanceClubView: React.FC<{
                             <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
                             <span
                               className={`px-1.5 py-0.5 rounded-md font-extrabold text-[10.5px] tabular shrink-0 ${
-                                lv <= 0 ? 'bg-[var(--red-soft)] text-[var(--red)]' : 'bg-[var(--g-soft)] text-[var(--g)]'
+                                lv <= 0
+                                  ? 'bg-[var(--red-soft)] text-[var(--red)]'
+                                  : isMaxLv
+                                    ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] border border-[var(--lamp)]/45'
+                                    : 'bg-[var(--g-soft)] text-[var(--g)]'
                               }`}
                             >
-                              Lv.{lv}/{MAX_FACILITY_LV}
+                              {isMaxLv ? `★ Lv.${lv}/${MAX_FACILITY_LV}` : `Lv.${lv}/${MAX_FACILITY_LV}`}
                             </span>
                           </div>
                           <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                             <span className={`font-semibold ${lv <= 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]/85'}`}>
-                              {getFacilityTierLabel(lv)}
+                              {key === 'travelLv' ? getTravelTierLabel(lv) : getFacilityTierLabel(lv)}
                             </span>
                             <span className={`px-1.5 py-0.5 rounded-md border font-bold tabular text-[9.5px] ${condBadgeCls}`}>
                               {lv <= 0
@@ -3853,6 +3941,9 @@ export const FinanceClubView: React.FC<{
                             </span>
                           </div>
                           <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
+                          <div className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--g)] tabular truncate">
+                            ✦ {perkLine}
+                          </div>
                           {key === 'st' && (
                             <div className="pt-0.5 flex flex-wrap items-center justify-between gap-1.5">
                               <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] truncate">
@@ -3877,7 +3968,13 @@ export const FinanceClubView: React.FC<{
                         {Array.from({ length: MAX_FACILITY_LV }, (_, idx) => idx + 1).map((step) => (
                           <span
                             key={step}
-                            className={`h-1.5 rounded-full transition-colors ${step <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface)] border border-[var(--line)]/60'}`}
+                            className={`h-1.5 rounded-full transition-colors ${
+                              step <= lv
+                                ? isMaxLv
+                                  ? 'bg-[var(--lamp)]'
+                                  : 'bg-[var(--g)]'
+                                : 'bg-[var(--surface)] border border-[var(--line)]/60'
+                            }`}
                           />
                         ))}
                       </div>
@@ -3924,10 +4021,10 @@ export const FinanceClubView: React.FC<{
                             className="btn btn-xs btn-primary"
                           >
                             {lv >= MAX_FACILITY_LV
-                              ? `Lv.${MAX_FACILITY_LV} เต็ม`
+                              ? `★ Lv.${MAX_FACILITY_LV} สูงสุด`
                               : lv <= 0
                                 ? `🏗️ สร้างใหม่ ${fmtMoneyNum(upgCost)}`
-                                : `⬆️ อัป ${fmtMoneyNum(upgCost)}`}
+                                : `⬆️ อัป Lv.${lv + 1} · ${fmtMoneyNum(upgCost)}`}
                           </button>
                         </div>
                       </div>

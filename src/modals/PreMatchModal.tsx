@@ -37,7 +37,7 @@ import { buildMatchEnvironment, getStadiumDisplayName, type MatchFixtureKind } f
 import { buildAssistantCoachNotes, recommendMatchPlanAndLineup, type AssistantAppliedPlanResult } from '../engine/assistantNotes';
 import { ovColor } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals';
-import { FacilityUpgradeSvg } from '../components/FacilityUpgradeSvg';
+import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
@@ -439,13 +439,13 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
   const renderFormDots = (fm?: string) => {
     const chars = (fm || '').slice(-5).split('');
-    if (!chars.length) return <span className="text-[10px] text-[var(--mut)]">ยังไม่แข่ง</span>;
+    if (!chars.length) return <span className="text-[9px] text-[var(--mut)]">ยังไม่แข่ง</span>;
     return (
-      <span className="inline-flex items-center gap-1">
+      <span className="inline-flex items-center gap-0.5">
         {chars.map((c, idx) => (
           <span
             key={idx}
-            className={`w-4 h-4 mland:w-3.5 mland:h-3.5 rounded text-[9px] mland:text-[8px] font-black inline-flex items-center justify-center ${
+            className={`w-3.5 h-3.5 mland:w-3 mland:h-3 rounded text-[8px] mland:text-[7px] font-black inline-flex items-center justify-center ${
               c === 'W'
                 ? 'bg-[var(--g)] text-white'
                 : c === 'D'
@@ -633,16 +633,16 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/82 flex items-center justify-center p-2 sm:p-3.5 mland:p-1.5 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden">
         {/* TOP MATCHUP HEADER */}
-        <div className="shrink-0 px-3.5 py-2.5 sm:px-5 sm:py-3 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex items-center justify-between gap-2 mb-2 mland:mb-1">
-            <div className="flex items-center gap-2 min-w-0 text-[11px] mland:text-[9.5px]">
+        <div className="shrink-0 px-3 py-2 sm:px-4 sm:py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
+          <div className="flex items-center justify-between gap-2 mb-1.5 mland:mb-1">
+            <div className="flex items-center gap-1.5 min-w-0 text-[10.5px] mland:text-[9px]">
               <span className="font-extrabold text-[var(--g)] truncate">{compLabel}</span>
               <span className="text-[var(--mut)] hidden sm:inline">·</span>
               <span className="text-[var(--mut)] hidden sm:inline truncate">ฤดูกาลที่ {state.season}</span>
               {isDerby && (
                 <>
                   <span className="text-[var(--mut)]">·</span>
-                  <span className="font-extrabold text-[var(--red)] shrink-0">🔥 ดาร์บี้แมตช์</span>
+                  <span className="font-extrabold text-[var(--red)] shrink-0">🔥 ดาร์บี้</span>
                 </>
               )}
             </div>
@@ -653,63 +653,98 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 onClose();
               }}
               aria-label="ปิดหน้าก่อนแข่ง"
-              className="btn-icon w-7 h-7 mland:w-6 mland:h-6"
+              className="btn-icon w-6 h-6 mland:w-5 mland:h-5"
             >
-              <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
+              <X className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
             </button>
           </div>
 
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4 mland:gap-2">
-            {/* Home Club */}
-            <div className="flex items-center justify-end gap-2.5 mland:gap-2 min-w-0">
-              <div className="text-right min-w-0">
-                <div className={`font-extrabold text-sm sm:text-base mland:text-xs truncate font-display ${meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                  {homeTeam.name}
+          <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-1.5 sm:gap-2.5 mland:gap-1.5">
+            {/* Home Club Card */}
+            <div
+              className={`flex items-center justify-end gap-2 mland:gap-1.5 min-w-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl border ${
+                meIsHome
+                  ? 'bg-[var(--g-soft)]/45 border-[var(--g)]/45'
+                  : 'bg-[var(--surface)]/85 border-[var(--line)]'
+              }`}
+            >
+              <div className="text-right min-w-0 flex-1">
+                <div className="flex items-center justify-end gap-1 min-w-0">
+                  {meIsHome && (
+                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7.5px] font-black shrink-0">
+                      คุณ
+                    </span>
+                  )}
+                  <span
+                    className={`font-extrabold text-xs sm:text-sm mland:text-[11px] truncate font-display ${
+                      meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'
+                    }`}
+                  >
+                    {homeTeam.name}
+                  </span>
                 </div>
-                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center justify-end gap-1.5 flex-wrap tabular">
-                  {meIsHome && <span className="font-extrabold text-[var(--g)]">★ ทีมคุณ</span>}
-                  <span>เหย้า</span>
+                <div className="mt-0.5 text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center justify-end gap-1.5 tabular">
+                  <span className="hidden md:inline-flex mland:hidden items-center">
+                    {renderFormDots(homeTeam.fm)}
+                  </span>
+                  <span>{isNeutralVenue ? 'กลาง' : 'เหย้า'}</span>
                   <span>·</span>
-                  <span>อันดับ #{ranks.get(homeTeam.id) ?? '-'}</span>
+                  <span>#{ranks.get(homeTeam.id) ?? '-'}</span>
                   <span>·</span>
                   <span className="font-bold text-[var(--ink)]">XI {homeXiOv}</span>
                 </div>
-                <div className="mt-1 hidden sm:flex mland:hidden justify-end">{renderFormDots(homeTeam.fm)}</div>
               </div>
-              <div className="shrink-0 p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] mland:[&>svg]:w-8 mland:[&>svg]:h-8">
-                <ClubCrest name={homeTeam.name} size={40} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+              <div className="shrink-0 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+                <ClubCrest name={homeTeam.name} size={34} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
               </div>
             </div>
 
             {/* Center VS */}
-            <div className="flex flex-col items-center justify-center px-2.5 sm:px-4 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-              <span className="text-[10px] mland:text-[8px] font-bold text-[var(--mut)]">PRE-MATCH</span>
-              <span className="text-base sm:text-lg mland:text-sm font-black font-display tracking-wider text-[var(--ink)] leading-tight">
+            <div className="flex flex-col items-center justify-center px-2 sm:px-3 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+              <span className="text-sm sm:text-base mland:text-xs font-black font-display tracking-wider text-[var(--ink)] leading-none">
                 VS
               </span>
-              <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular">
-                แผน {homeTeam.cf ? 'กำหนดเอง' : homeTeam.form} · {awayTeam.cf ? 'กำหนดเอง' : awayTeam.form}
+              <span className="mt-0.5 text-[9px] mland:text-[7.5px] text-[var(--mut)] tabular whitespace-nowrap">
+                {homeTeam.cf ? 'กำหนดเอง' : homeTeam.form} · {awayTeam.cf ? 'กำหนดเอง' : awayTeam.form}
               </span>
             </div>
 
-            {/* Away Club */}
-            <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
-              <div className="shrink-0 p-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] mland:[&>svg]:w-8 mland:[&>svg]:h-8">
-                <ClubCrest name={awayTeam.name} size={40} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+            {/* Away Club Card */}
+            <div
+              className={`flex items-center gap-2 mland:gap-1.5 min-w-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl border ${
+                !meIsHome
+                  ? 'bg-[var(--g-soft)]/45 border-[var(--g)]/45'
+                  : 'bg-[var(--surface)]/85 border-[var(--line)]'
+              }`}
+            >
+              <div className="shrink-0 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
+                <ClubCrest name={awayTeam.name} size={34} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
               </div>
-              <div className="min-w-0">
-                <div className={`font-extrabold text-sm sm:text-base mland:text-xs truncate font-display ${!meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                  {awayTeam.name}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1 min-w-0">
+                  <span
+                    className={`font-extrabold text-xs sm:text-sm mland:text-[11px] truncate font-display ${
+                      !meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'
+                    }`}
+                  >
+                    {awayTeam.name}
+                  </span>
+                  {!meIsHome && (
+                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7.5px] font-black shrink-0">
+                      คุณ
+                    </span>
+                  )}
                 </div>
-                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-1.5 flex-wrap tabular">
+                <div className="mt-0.5 text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center gap-1.5 tabular">
                   <span className="font-bold text-[var(--ink)]">XI {awayXiOv}</span>
                   <span>·</span>
-                  <span>อันดับ #{ranks.get(awayTeam.id) ?? '-'}</span>
+                  <span>#{ranks.get(awayTeam.id) ?? '-'}</span>
                   <span>·</span>
-                  <span>เยือน</span>
-                  {!meIsHome && <span className="font-extrabold text-[var(--g)]">★ ทีมคุณ</span>}
+                  <span>{isNeutralVenue ? 'กลาง' : 'เยือน'}</span>
+                  <span className="hidden md:inline-flex mland:hidden items-center">
+                    {renderFormDots(awayTeam.fm)}
+                  </span>
                 </div>
-                <div className="mt-1 hidden sm:flex mland:hidden">{renderFormDots(awayTeam.fm)}</div>
               </div>
             </div>
           </div>
@@ -1347,61 +1382,163 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               </div>
             </div>
 
-            {/* Facility & Venue Match Modifiers */}
-            <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)] space-y-1.5 mland:space-y-1">
-              <div className="space-y-0.5">
-                <div className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] flex items-center gap-1">
-                  <Sparkles className="w-3.5 h-3.5 text-[var(--lamp)] shrink-0" />
-                  <span>
-                    {isNeutralVenue
-                      ? 'ความพร้อมสโมสร (สนามกลาง · ไม่มีโบนัสเจ้าบ้าน)'
-                      : 'ความได้เปรียบเจ้าบ้าน & ความพร้อมสโมสร'}
-                  </span>
-                </div>
-                <p className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
-                  {isNeutralVenue
-                    ? 'เตะสนามกลางราชมังฯ ทั้งสองทีมไม่ได้โบนัสเจ้าบ้าน — ผลต่างมาจากความพร้อมศูนย์ฝึก วิเคราะห์เกม และทีมแพทย์ของแต่ละสโมสร'
-                    : 'เฉพาะเจ้าบ้านที่ได้โบนัสเสียงเชียร์และชินพื้นสนาม — ส่วนทีมเยือนนำความพร้อมจากศูนย์ฝึก ห้องวิเคราะห์ และศูนย์แพทย์ของสโมสรติดตัวมาแข่ง'}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
-                {[
-                  {
-                    title: isNeutralVenue ? `${homeTeam.name} (สนามกลาง)` : `${homeTeam.name} (เหย้า)`,
-                    list: homeFacMods.breakdown
-                  },
-                  {
-                    title: isNeutralVenue ? `${awayTeam.name} (สนามกลาง)` : `${awayTeam.name} (เยือน)`,
-                    list: awayFacMods.breakdown
-                  }
-                ].map((box) => (
-                  <div
-                    key={box.title}
-                    className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)]/65 space-y-1"
-                  >
-                    <div className="text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] truncate">{box.title}</div>
-                    <div className="space-y-0.5 text-[10px] mland:text-[8.5px]">
-                      {box.list.map((b) => (
-                        <div key={b.key} className="flex items-center justify-between gap-1">
-                          <span className="text-[var(--mut)] truncate">{b.label}</span>
-                          <span
-                            className={`font-bold tabular shrink-0 ${
-                              b.tone === 'pos'
-                                ? 'text-[var(--g)]'
-                                : b.tone === 'neg'
-                                  ? 'text-[var(--red)]'
-                                  : 'text-[var(--mut)]'
-                            }`}
-                          >
-                            {b.deltaText}
+            {/* Home Advantage & Away Travel Readiness (Compact Cards) */}
+            {(() => {
+              const fmtSign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+              const toneCls = (n: number) =>
+                n > 0 ? 'text-[var(--g)]' : n < 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]';
+
+              const homeCrowdDelta = homeFacMods.crowdDelta ?? 0;
+              const homeTurfDelta = homeFacMods.homeTurfFamDelta ?? 0;
+              const homeSlipSavePct = Math.round((1 - (homeFacMods.slipResistMult ?? 1)) * 100);
+              const homeTravelLv = homeFacMods.levels.travelLv ?? 1;
+              const homeTravelCond = homeFacMods.conditions.travelLv ?? 100;
+              const homeTravelDelta = homeFacMods.travelDelta ?? 0;
+              const homeTravelFatPct = Math.round(((homeFacMods.travelFatigueMult ?? 1) - 1) * 100);
+
+              const awayTravelLv = awayFacMods.levels.travelLv ?? 1;
+              const awayTravelCond = awayFacMods.conditions.travelLv ?? 100;
+              const awayTravelDelta = awayFacMods.travelDelta ?? 0;
+              const awayTravelFatPct = Math.round(((awayFacMods.travelFatigueMult ?? 1) - 1) * 100);
+
+              return (
+                <div className="pt-2 mland:pt-1.5 border-t border-[var(--line)] space-y-1.5 mland:space-y-1">
+                  <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
+                    <div className="font-extrabold text-[var(--ink)] flex items-center gap-1 min-w-0 truncate">
+                      <Sparkles className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--lamp)] shrink-0" />
+                      <span className="truncate">
+                        {isNeutralVenue ? 'ความพร้อมเดินทางสนามกลาง' : 'เจ้าบ้าน vs ความพร้อมทีมเยือน'}
+                      </span>
+                    </div>
+                    <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
+                      {isNeutralVenue ? 'ไม่มีโบนัสเจ้าถิ่น' : 'แรงเชียร์เหย้า · ระบบเดินทางเยือน'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
+                    {/* Left Card: Home Advantage (or Neutral Travel) */}
+                    <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]/75 space-y-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FacilityUpgradeSvg
+                          kind={isNeutralVenue ? 'travelLv' : 'st'}
+                          stadiumStyle={isNeutralVenue ? undefined : matchEnv.stadiumStyle}
+                          level={isNeutralVenue ? homeTravelLv : homeFacMods.levels.st}
+                          condition={isNeutralVenue ? homeTravelCond : homeFacMods.conditions.st}
+                          c1={homeKit}
+                          c2={homeTrim}
+                          className="w-[34px] h-[22px] mland:w-[28px] mland:h-[18px] shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate">
+                              {homeTeam.name}
+                            </span>
+                            <span className="px-1.5 py-[1px] rounded bg-[var(--g-soft)] text-[var(--g)] text-[8.5px] mland:text-[7.5px] font-bold shrink-0 tabular">
+                              {isNeutralVenue ? `Lv.${homeTravelLv}` : 'เจ้าบ้าน'}
+                            </span>
+                          </div>
+                          <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] truncate">
+                            {isNeutralVenue
+                              ? getTravelTierLabel(homeTravelLv)
+                              : `${stadiumStyleSpec.shortName} · สภาพสนาม ${matchEnv.turfCond}%`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {!isNeutralVenue ? (
+                        <div className="pt-1 border-t border-[var(--line)]/50 space-y-0.5 text-[9.5px] mland:text-[8px]">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[var(--mut)] truncate">🏟️ เชียร์ Lv.{homeFacMods.levels.st} · หญ้า Lv.{homeFacMods.levels.turfLv}</span>
+                            <span className="font-bold tabular shrink-0">
+                              <span className={toneCls(homeCrowdDelta)}>นิ่ง {fmtSign(homeCrowdDelta)}</span>
+                              <span className="text-[var(--mut)] mx-1">·</span>
+                              <span className={toneCls(homeTurfDelta)}>คุม {fmtSign(homeTurfDelta)}</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[var(--mut)] truncate">🛡️ ยึดเกาะพื้นสนาม</span>
+                            <span className={`font-bold tabular shrink-0 ${homeSlipSavePct > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                              {homeSlipSavePct > 0 ? `ลดลื่น -${homeSlipSavePct}%` : 'มาตรฐาน'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="pt-1 border-t border-[var(--line)]/50 space-y-0.5 text-[9.5px] mland:text-[8px]">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[var(--mut)] truncate">🚌 ระบบเดินทาง</span>
+                            <span className={`font-bold tabular shrink-0 ${homeTravelCond < 75 ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--ink)]'}`}>
+                              {homeTravelLv > 0 ? `Lv.${homeTravelLv}/10 · ${homeTravelCond}%` : 'ไม่มีระบบ'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[var(--mut)] truncate">⚡ พร้อม / ความล้า</span>
+                            <span className="font-bold tabular shrink-0">
+                              <span className={toneCls(homeTravelDelta)}>{fmtSign(homeTravelDelta)}</span>
+                              <span className="text-[var(--mut)] mx-1">·</span>
+                              <span className={homeTravelFatPct < 0 ? 'text-[var(--g)]' : homeTravelFatPct > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>
+                                {homeTravelFatPct < 0 ? `ล้า ${homeTravelFatPct}%` : homeTravelFatPct > 0 ? `ล้า +${homeTravelFatPct}%` : '0%'}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Right Card: Away Team Travel Upgrade Readiness */}
+                    <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]/75 space-y-1">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FacilityUpgradeSvg
+                          kind="travelLv"
+                          level={awayTravelLv}
+                          condition={awayTravelCond}
+                          c1={awayKit}
+                          c2={awayTrim}
+                          className="w-[34px] h-[22px] mland:w-[28px] mland:h-[18px] shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate">
+                              {awayTeam.name}
+                            </span>
+                            <span
+                              className={`px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-bold shrink-0 tabular ${
+                                awayTravelLv <= 0
+                                  ? 'bg-[var(--red-soft)] text-[var(--red)]'
+                                  : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
+                              }`}
+                            >
+                              {isNeutralVenue ? `Lv.${awayTravelLv}` : `เยือน · Lv.${awayTravelLv}`}
+                            </span>
+                          </div>
+                          <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] truncate">
+                            {getTravelTierLabel(awayTravelLv)}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 border-t border-[var(--line)]/50 space-y-0.5 text-[9.5px] mland:text-[8px]">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[var(--mut)] truncate">🚌 ระบบเดินทาง</span>
+                          <span className={`font-bold tabular shrink-0 ${awayTravelLv <= 0 ? 'text-[var(--red)]' : awayTravelCond < 75 ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--ink)]'}`}>
+                            {awayTravelLv > 0 ? `Lv.${awayTravelLv}/10 · ${awayTravelCond}%` : 'ไม่มีระบบ'}
                           </span>
                         </div>
-                      ))}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-[var(--mut)] truncate">⚡ พร้อม / ความล้า</span>
+                          <span className="font-bold tabular shrink-0">
+                            <span className={toneCls(awayTravelDelta)}>นิ่ง {fmtSign(awayTravelDelta)}</span>
+                            <span className="text-[var(--mut)] mx-1">·</span>
+                            <span className={awayTravelFatPct < 0 ? 'text-[var(--g)]' : awayTravelFatPct > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>
+                              {awayTravelFatPct < 0 ? `ล้า ${awayTravelFatPct}%` : awayTravelFatPct > 0 ? `ล้า +${awayTravelFatPct}%` : 'ปกติ'}
+                            </span>
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
