@@ -856,26 +856,138 @@ export function applyClubPhilosophy(team: Team, ph: ClubPhilosophyDef) {
 
 export function ensureAiTeamPhilosophies(s: GameState, allowSeasonRefresh = false) {
   s.teams.forEach((t) => {
-    if (s.mode === 'm' && t.id === s.me) return;
-    const isLegacyUniform =
-      !t.philosophy &&
-      t.form === '4-4-2' &&
-      t.tac === 'B' &&
-      (t.press ?? 1) === 1 &&
-      (t.tempo ?? 1) === 1 &&
-      (t.wid ?? 1) === 1 &&
-      (t.line ?? 1) === 1 &&
-      (t.pass ?? 1) === 1;
-    if (isLegacyUniform || (allowSeasonRefresh && Math.random() < 0.55)) {
-      const avgOv = t.sq.length ? t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length : BASE[t.tier] || 55;
-      const relDiff = Math.round(avgOv - (BASE[Math.min(t.tier, BASE.length - 1)] || 55));
-      const ph = pickClubPhilosophy(t.id, t.tier, relDiff, true);
-      applyClubPhilosophy(t, ph);
-    } else if (!t.philosophy) {
-      const matched = CLUB_PHILOSOPHIES.find((p) => p.form === t.form && p.tac === t.tac) || CLUB_PHILOSOPHIES.find((p) => p.form === t.form);
-      if (matched) t.philosophy = matched.name;
+    const isUserMgr = s.mode === 'm' && t.id === s.me;
+    if (!isUserMgr) {
+      const isLegacyUniform =
+        !t.philosophy &&
+        t.form === '4-4-2' &&
+        t.tac === 'B' &&
+        (t.press ?? 1) === 1 &&
+        (t.tempo ?? 1) === 1 &&
+        (t.wid ?? 1) === 1 &&
+        (t.line ?? 1) === 1 &&
+        (t.pass ?? 1) === 1;
+      if (isLegacyUniform || (allowSeasonRefresh && Math.random() < 0.55)) {
+        const avgOv = t.sq.length ? t.sq.reduce((sum, q) => sum + q.ov, 0) / t.sq.length : BASE[t.tier] || 55;
+        const relDiff = Math.round(avgOv - (BASE[Math.min(t.tier, BASE.length - 1)] || 55));
+        const ph = pickClubPhilosophy(t.id, t.tier, relDiff, true);
+        applyClubPhilosophy(t, ph);
+      } else if (!t.philosophy) {
+        const matched = CLUB_PHILOSOPHIES.find((p) => p.form === t.form && p.tac === t.tac) || CLUB_PHILOSOPHIES.find((p) => p.form === t.form);
+        if (matched) t.philosophy = matched.name;
+      }
     }
+    autoAssignTeamRoles(t, {
+      careerP: t.id === s.me ? s.p : null,
+      forceAll: !isUserMgr && allowSeasonRefresh
+    });
   });
+}
+
+export function scoreCaptainCandidate(q: Player, careerP?: PlayerCareerProfile | null): number {
+  const D = DT(q, careerP);
+  const ageScore = q.age >= 24 ? (q.age <= 32 ? 9 : 6) : q.age >= 21 ? 1 : -6;
+  const traitBonus =
+    (hasTrait(q, 'calm_leader', careerP) ? 16 : 0) +
+    (hasTrait(q, 'tireless_mentor', careerP) ? 14 : 0) +
+    (hasTrait(q, 'clutch_player', careerP) ? 6 : 0) +
+    (hasTrait(q, 'team_first', careerP) ? 5 : 0) +
+    (hasTrait(q, 'hot_headed', careerP) ? -14 : 0);
+  const persBonus = D.tr === 6 || D.tr === 17 || D.tr === 23 ? 5 : D.tr === 1 || D.tr === 7 || D.tr === 15 ? -6 : 0;
+  const posBias = q.pos === 'GK' ? -4 : q.pos === 'DF' || q.pos === 'MF' ? 2 : 0;
+  return q.ov * 1.15 + ageScore + (D.d.comp + D.d.det) * 0.14 + traitBonus + persBonus + posBias;
+}
+
+export function pickBestCaptain(
+  team: Team,
+  eligibleNames?: string[],
+  excludeNames?: string[],
+  careerP?: PlayerCareerProfile | null
+): string | undefined {
+  const excl = new Set(excludeNames || []);
+  const eligSet = eligibleNames && eligibleNames.length ? new Set(eligibleNames) : null;
+  let pool = team.sq.filter((q) => !excl.has(q.n) && (!eligSet || eligSet.has(q.n)) && q.inj === 0 && (q.sus || 0) === 0);
+  if (!pool.length) {
+    pool = team.sq.filter((q) => !excl.has(q.n) && (!eligSet || eligSet.has(q.n)));
+  }
+  if (!pool.length) {
+    pool = team.sq.filter((q) => !excl.has(q.n));
+  }
+  if (!pool.length) return undefined;
+  return pool.slice().sort((a, b) => scoreCaptainCandidate(b, careerP) - scoreCaptainCandidate(a, careerP))[0]?.n;
+}
+
+export function scoreSetPieceCandidate(
+  q: Player,
+  kind: 'corner' | 'freekick' | 'penalty',
+  careerP?: PlayerCareerProfile | null
+): number {
+  if (q.pos === 'GK') return -500 + q.ov * 0.1;
+  const D = DT(q, careerP);
+  const specBonus = hasTrait(q, 'setpiece_specialist', careerP) ? 22 : 0;
+  if (kind === 'corner') {
+    return (
+      D.d.crs * 1.15 +
+      D.d.cur * 0.95 +
+      (D.sig === 'crs' ? 12 : 0) +
+      specBonus +
+      (hasTrait(q, 'early_crosser', careerP) || hasTrait(q, 'trivela_cross', careerP) ? 10 : 0) +
+      q.ov * 0.25
+    );
+  }
+  if (kind === 'freekick') {
+    return (
+      D.d.cur * 1.1 +
+      D.d.pw * 0.85 +
+      D.d.fin * 0.35 +
+      (D.sig === 'cur' ? 12 : 0) +
+      specBonus +
+      (hasTrait(q, 'outside_curler', careerP) || hasTrait(q, 'long_shot_lover', careerP) ? 9 : 0) +
+      q.ov * 0.25
+    );
+  }
+  return (
+    D.d.fin * 1.15 +
+    (D.d.comp || 60) * 0.95 +
+    D.d.pw * 0.25 +
+    (D.sig === 'fin' ? 10 : 0) +
+    (hasTrait(q, 'clutch_player', careerP) ? 16 : 0) +
+    (hasTrait(q, 'setpiece_specialist', careerP) ? 12 : 0) +
+    q.ov * 0.25
+  );
+}
+
+export function autoAssignTeamRoles(
+  team: Team,
+  opts?: { careerP?: PlayerCareerProfile | null; forceAll?: boolean }
+) {
+  if (!team.sq.length) return;
+  const careerP = opts?.careerP;
+  const forceAll = Boolean(opts?.forceAll);
+  const starters = xi(team);
+  const starterNames = starters.map((q) => q.n);
+  const outfieldStarters = starters.filter((q) => q.pos !== 'GK');
+  const outfieldPool = outfieldStarters.length ? outfieldStarters : team.sq.filter((q) => q.pos !== 'GK');
+  const fallbackPool = outfieldPool.length ? outfieldPool : team.sq;
+
+  const hasCap = Boolean(team.cap && team.sq.some((q) => q.n === team.cap));
+  if (forceAll || !hasCap) {
+    const capPick = pickBestCaptain(team, starterNames, undefined, careerP) || pickBestCaptain(team, undefined, undefined, careerP);
+    if (capPick) team.cap = capPick;
+  }
+
+  const sp = team.setPieces || {};
+  const validInSq = (name?: string) => Boolean(name && team.sq.some((q) => q.n === name && q.pos !== 'GK'));
+  const pickSp = (kind: 'corner' | 'freekick' | 'penalty') =>
+    fallbackPool
+      .slice()
+      .sort((a, b) => scoreSetPieceCandidate(b, kind, careerP) - scoreSetPieceCandidate(a, kind, careerP))[0]?.n;
+
+  team.setPieces = {
+    corner: forceAll || !validInSq(sp.corner) ? pickSp('corner') : sp.corner,
+    freekick: forceAll || !validInSq(sp.freekick) ? pickSp('freekick') : sp.freekick,
+    penalty: forceAll || !validInSq(sp.penalty) ? pickSp('penalty') : sp.penalty
+  };
 }
 
 export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)): Team {
@@ -939,6 +1051,7 @@ export function mkTeam(name: string, tier: number, id: number, diff = R(-7, 7)):
     )
   };
   assignTeamShirtNumbers(team);
+  autoAssignTeamRoles(team, { forceAll: true });
   return team;
 }
 

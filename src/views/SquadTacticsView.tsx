@@ -3,7 +3,7 @@ import type { MainTab, Position, SubRole, Mentality, Player, CustomSlot, Team, A
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { POS, FSD, LINE, AR_C, AR_T, PRE } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
-import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio } from '../engine/playerCore';
+import { getShirtNo, getFormationSlots, getFormationCounts, playerPen, xi, vlu, ensureCon, tc, getPlayerBio, autoAssignTeamRoles, scoreCaptainCandidate, scoreSetPieceCandidate } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { rate, getLeagueTransferContext, getIncomingOffers, validateBatchSquadRemoval } from '../engine/simulation';
 import { PlayerFace, TacticsMiniPitch, getPitchZoneAt, FormationPitch } from '../components/SvgVisuals';
@@ -1109,25 +1109,136 @@ export const SquadTacticsView: React.FC<{
                   </div>
                 </div>
 
-                <div className="pt-1">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <label className="text-xs font-bold">👑 กัปตันทีม</label>
-                    <span className="text-[10.5px] text-[var(--mut)]">ช่วยประคองขวัญทีมในเกมสำคัญ</span>
+                <div className="pt-2 border-t border-[var(--line)] space-y-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-xs font-bold">👑 กัปตันทีม &amp; 🎯 มือสังหารลูกนิ่ง</div>
+                      <div className="text-[10.5px] text-[var(--mut)]">เปลี่ยนกัปตันชั่วคราวให้อัตโนมัติหากโดนเปลี่ยนออก/ใบแดง</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        onUpdateState((d) => {
+                          autoAssignTeamRoles(d.teams[d.me], { careerP: d.p, forceAll: true });
+                        });
+                        onToast('🤖 AI คัดเลือกกัปตันและมือสังหารลูกนิ่งให้เหมาะสมที่สุดแล้ว');
+                      }}
+                      className="btn btn-xs btn-secondary whitespace-nowrap"
+                    >
+                      🤖 AI ตั้งให้อัตโนมัติ
+                    </button>
                   </div>
-                  <select
-                    value={me.cap || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      onUpdateState((d) => { d.teams[d.me].cap = val; });
-                      onToast('อัปเดตกัปตันทีมแล้ว');
-                    }}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
-                  >
-                    <option value="">ไม่ระบุ</option>
-                    {me.sq.slice().sort((a, b) => b.ov - a.ov).slice(0, 10).map((q) => (
-                      <option key={q.n} value={q.n}>{q.n} (OVR {q.ov})</option>
-                    ))}
-                  </select>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[11px] font-bold text-[var(--mut)] block mb-1">👑 กัปตันทีม</label>
+                      <select
+                        value={me.cap || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateState((d) => { d.teams[d.me].cap = val; });
+                          onToast('อัปเดตกัปตันทีมแล้ว');
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                      >
+                        <option value="">ไม่ระบุ (ให้ AI เลือกหน้างาน)</option>
+                        {me.sq
+                          .slice()
+                          .sort((a, b) => scoreCaptainCandidate(b, state.p) - scoreCaptainCandidate(a, state.p))
+                          .slice(0, 14)
+                          .map((q) => (
+                            <option key={q.n} value={q.n}>
+                              {q.n} ({q.ro} · OVR {q.ov})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-[var(--mut)] block mb-1">🚩 คนเตะมุม</label>
+                      <select
+                        value={me.setPieces?.corner || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateState((d) => {
+                            const tm = d.teams[d.me];
+                            tm.setPieces = { ...(tm.setPieces || {}), corner: val || undefined };
+                          });
+                          onToast('อัปเดตคนเตะมุมแล้ว');
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                      >
+                        <option value="">อัตโนมัติ (ตามค่าพลังในสนาม)</option>
+                        {me.sq
+                          .filter((q) => q.pos !== 'GK')
+                          .slice()
+                          .sort((a, b) => scoreSetPieceCandidate(b, 'corner', state.p) - scoreSetPieceCandidate(a, 'corner', state.p))
+                          .slice(0, 14)
+                          .map((q) => (
+                            <option key={q.n} value={q.n}>
+                              {q.n} ({q.ro} · OVR {q.ov})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-[var(--mut)] block mb-1">🎯 คนยิงฟรีคิก</label>
+                      <select
+                        value={me.setPieces?.freekick || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateState((d) => {
+                            const tm = d.teams[d.me];
+                            tm.setPieces = { ...(tm.setPieces || {}), freekick: val || undefined };
+                          });
+                          onToast('อัปเดตคนยิงฟรีคิกแล้ว');
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                      >
+                        <option value="">อัตโนมัติ (ตามค่าพลังในสนาม)</option>
+                        {me.sq
+                          .filter((q) => q.pos !== 'GK')
+                          .slice()
+                          .sort((a, b) => scoreSetPieceCandidate(b, 'freekick', state.p) - scoreSetPieceCandidate(a, 'freekick', state.p))
+                          .slice(0, 14)
+                          .map((q) => (
+                            <option key={q.n} value={q.n}>
+                              {q.n} ({q.ro} · OVR {q.ov})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-bold text-[var(--mut)] block mb-1">🥅 เพชฌฆาตจุดโทษ</label>
+                      <select
+                        value={me.setPieces?.penalty || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          onUpdateState((d) => {
+                            const tm = d.teams[d.me];
+                            tm.setPieces = { ...(tm.setPieces || {}), penalty: val || undefined };
+                          });
+                          onToast('อัปเดตคนยิงจุดโทษแล้ว');
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-xl border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold"
+                      >
+                        <option value="">อัตโนมัติ (ตามค่าพลังในสนาม)</option>
+                        {me.sq
+                          .filter((q) => q.pos !== 'GK')
+                          .slice()
+                          .sort((a, b) => scoreSetPieceCandidate(b, 'penalty', state.p) - scoreSetPieceCandidate(a, 'penalty', state.p))
+                          .slice(0, 14)
+                          .map((q) => (
+                            <option key={q.n} value={q.n}>
+                              {q.n} ({q.ro} · OVR {q.ov})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-2 border-t border-[var(--line)]">
@@ -1205,8 +1316,25 @@ export const SquadTacticsView: React.FC<{
                   <div className="font-bold mt-0.5">{['ลึก', 'กลาง', 'สูง'][me.line ?? 1]} · {['แคบ', 'กลาง', 'กว้าง'][me.wid ?? 1]}</div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[var(--surface-2)]">
-                  <div className="text-[11px] text-[var(--mut)]">กัปตันทีม</div>
-                  <div className="font-bold mt-0.5 truncate">{me.cap || '-'}</div>
+                  <div className="text-[11px] text-[var(--mut)]">👑 กัปตันทีม</div>
+                  <div className="font-bold mt-0.5 truncate">
+                    {me.cap || 'AI เลือกอัตโนมัติ'}
+                    {me.cap && me.cap === state.p?.name ? ' (คุณ)' : ''}
+                  </div>
+                </div>
+                <div className="col-span-2 p-2.5 rounded-xl bg-[var(--surface-2)] grid grid-cols-3 gap-2">
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-[var(--mut)]">🚩 เตะมุม</div>
+                    <div className="font-bold truncate">{me.setPieces?.corner || 'อัตโนมัติ'}{me.setPieces?.corner && me.setPieces.corner === state.p?.name ? ' (คุณ)' : ''}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-[var(--mut)]">🎯 ฟรีคิก</div>
+                    <div className="font-bold truncate">{me.setPieces?.freekick || 'อัตโนมัติ'}{me.setPieces?.freekick && me.setPieces.freekick === state.p?.name ? ' (คุณ)' : ''}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-[var(--mut)]">🥅 จุดโทษ</div>
+                    <div className="font-bold truncate">{me.setPieces?.penalty || 'อัตโนมัติ'}{me.setPieces?.penalty && me.setPieces.penalty === state.p?.name ? ' (คุณ)' : ''}</div>
+                  </div>
                 </div>
               </div>
             </div>

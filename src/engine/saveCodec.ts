@@ -291,6 +291,7 @@ export const packSaveTeam = (t: Team): unknown[] => {
   if (t.cf !== undefined) tex.cf = t.cf;
   if (t.lu !== undefined) tex.lu = t.lu;
   if (t.cap !== undefined) tex.cap = t.cap;
+  if (t.setPieces !== undefined) tex.sp = t.setPieces;
   if (t.press !== undefined) tex.pr = t.press;
   if (t.tempo !== undefined) tex.tp = t.tempo;
   if (t.wid !== undefined) tex.wd = t.wid;
@@ -358,6 +359,7 @@ export const unpackSaveTeam = (raw: unknown): Team => {
   if (tex.cf !== undefined) tm.cf = tex.cf as CustomSlot[];
   if (tex.lu !== undefined) tm.lu = tex.lu as string[] | null;
   if (tex.cap !== undefined) tm.cap = String(tex.cap);
+  if (tex.sp && typeof tex.sp === 'object') tm.setPieces = tex.sp as Team['setPieces'];
   if (tex.pr !== undefined) tm.press = Number(tex.pr);
   if (tex.tp !== undefined) tm.tempo = Number(tex.tp);
   if (tex.wd !== undefined) tm.wid = Number(tex.wd);

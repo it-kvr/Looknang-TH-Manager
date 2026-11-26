@@ -37,7 +37,7 @@ type TimelineKind =
   | 'miracle'
   | 'blessed';
 
-type HalftimeTalkTone = 'attack' | 'press' | 'balanced' | 'counter' | 'defend' | 'fit';
+type HalftimeTalkTone = 'attack' | 'press' | 'balanced' | 'counter' | 'defend' | 'fit' | 'follow_coach' | 'ask_attack' | 'ask_defend';
 
 interface MatchTimelineItem {
   id: string;
@@ -48,7 +48,7 @@ interface MatchTimelineItem {
   who: string;
   detail?: string;
 }
-import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen } from '../engine/playerCore';
+import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen, pickBestCaptain, scoreSetPieceCandidate } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, getFacilityCondition, computeTeamFacilityMatchModifiers, combineMatchStatDeltas } from '../engine/simulation';
 import { generateLiveStreamComment, getMatchBroadcastChannel, getStreamViewerTier, getViewerTierMeta, type LiveCommentItem, type LiveCommentKind } from '../engine/liveStreamChat';
 import { getPlayerTalent } from '../engine/missions';
@@ -461,6 +461,20 @@ export const MatchModal: React.FC<{
 
   const initialHomeXi = useMemo(() => xi(homeOrig).map((q) => q.n), [homeOrig]);
   const initialAwayXi = useMemo(() => xi(awayOrig).map((q) => q.n), [awayOrig]);
+  const initialHomeCap = useMemo(
+    () =>
+      homeOrig.cap && initialHomeXi.includes(homeOrig.cap)
+        ? homeOrig.cap
+        : pickBestCaptain(homeOrig, initialHomeXi, undefined, state.p) || initialHomeXi[0] || '',
+    [homeOrig, initialHomeXi, state.p]
+  );
+  const initialAwayCap = useMemo(
+    () =>
+      awayOrig.cap && initialAwayXi.includes(awayOrig.cap)
+        ? awayOrig.cap
+        : pickBestCaptain(awayOrig, initialAwayXi, undefined, state.p) || initialAwayXi[0] || '',
+    [awayOrig, initialAwayXi, state.p]
+  );
   const initialMeXi = meIsHome ? initialHomeXi : initialAwayXi;
   const myInitialStarted = isPlayerMode && !myInitialBanned && initialMeXi.includes(myPlayerName);
 
@@ -520,7 +534,7 @@ export const MatchModal: React.FC<{
   const [stoppageBadge, setStoppageBadge] = useState<number>(0);
   const [matchPhaseUi, setMatchPhaseUi] = useState<LiveMatchWorld['phase']>('play1');
   const [selectedHalftimeTalk, setSelectedHalftimeTalk] = useState<HalftimeTalkTone>(() =>
-    state.mode === 'm' ? 'balanced' : 'balanced'
+    state.mode === 'p' ? 'follow_coach' : 'balanced'
   );
   const [halftimeWarmupUsed, setHalftimeWarmupUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
@@ -571,6 +585,12 @@ export const MatchModal: React.FC<{
       { id: 3, m: 0, text: envDesc, tone: 'sys' }
     ];
     if (isPlayerMode) {
+      base.push({
+        id: 5,
+        m: 0,
+        text: `©️ กัปตันสนามวันนี้: ${homeOrig.name} (${initialHomeCap || '-'}) · ${awayOrig.name} (${initialAwayCap || '-'})`,
+        tone: 'sys'
+      });
       if (myInitialBanned) {
         base.unshift({ id: 4, m: 0, text: `🟥 คุณติดโทษแบนนัดนี้ (เหลือ ${myPlayerSquadObj?.sus || state.p?.sus} นัด) — ชมการแข่งขันจากอัฒจันทร์`, tone: 'card' });
       } else if (myInitialStarted) {
@@ -637,6 +657,29 @@ export const MatchModal: React.FC<{
   const [livePlayerStatsUi, setLivePlayerStatsUi] = useState<Record<string, LivePlayerMatchStats>>({});
   const [subPickOut, setSubPickOut] = useState<string | null>(null);
   const [mlandMatchTab, setMlandMatchTab] = useState<'stats' | 'chat' | 'tactics'>('stats');
+  const [liveCaptains, setLiveCaptains] = useState<{ H: string; A: string }>(() => ({
+    H: initialHomeCap,
+    A: initialAwayCap
+  }));
+  const [liveSetPiecesUi, setLiveSetPiecesUi] = useState<{ corner?: string; freekick?: string; penalty?: string }>(() => ({
+    corner: meTeamOrig.setPieces?.corner,
+    freekick: meTeamOrig.setPieces?.freekick,
+    penalty: meTeamOrig.setPieces?.penalty
+  }));
+  const liveSetPiecesRef = useRef<{ corner?: string; freekick?: string; penalty?: string }>({
+    corner: meTeamOrig.setPieces?.corner,
+    freekick: meTeamOrig.setPieces?.freekick,
+    penalty: meTeamOrig.setPieces?.penalty
+  });
+  const [coachChatCooldownMin, setCoachChatCooldownMin] = useState<number>(-20);
+  const [coachChatReplies, setCoachChatReplies] = useState<{ id: number; m: number; userMsg: string; coachMsg: string; accepted: boolean }[]>([]);
+  const [halftimeCoachOrder, setHalftimeCoachOrder] = useState<{
+    headline: string;
+    detail: string;
+    playerNote: string;
+    form: string;
+    tacLabel: string;
+  } | null>(null);
   const streamProj = useMemo(
     () => computeMatchStreamProjection(homeOrig, awayOrig, state, { kind, derby: isDerby }),
     [homeOrig, awayOrig, state, kind, isDerby]
@@ -711,6 +754,8 @@ export const MatchModal: React.FC<{
     awayLu: initialAwayXi.slice(),
     homePlayed: initialHomeXi.slice(),
     awayPlayed: initialAwayXi.slice(),
+    captainH: initialHomeCap,
+    captainA: initialAwayCap,
     homeSubsCount: 0,
     awaySubsCount: 0,
     yellows: {} as Record<string, number>,
@@ -763,6 +808,8 @@ export const MatchModal: React.FC<{
   const aiCoachRef = useRef<{
     H: { form: string; cf?: Team['cf']; tac: Mentality; press: number; tempo: number; line: number; wid: number; pass: number };
     A: { form: string; cf?: Team['cf']; tac: Mentality; press: number; tempo: number; line: number; wid: number; pass: number };
+    earlyDoneH: boolean;
+    earlyDoneA: boolean;
     htDoneH: boolean;
     htDoneA: boolean;
     lateDoneH: boolean;
@@ -788,6 +835,8 @@ export const MatchModal: React.FC<{
       wid: awayOrig.wid ?? 1,
       pass: awayOrig.pass ?? 1
     },
+    earlyDoneH: false,
+    earlyDoneA: false,
     htDoneH: false,
     htDoneA: false,
     lateDoneH: false,
@@ -864,6 +913,8 @@ export const MatchModal: React.FC<{
     const aiH = aiCoachRef.current.H;
     return {
       ...homeOrig,
+      cap: simRef.current.captainH || homeOrig.cap,
+      setPieces: meIsHome ? liveSetPiecesRef.current : homeOrig.setPieces,
       form: isUserMgr ? homeOrig.form : aiH.form,
       cf: isUserMgr ? homeOrig.cf : aiH.cf,
       tac: isUserMgr ? liveTacticsRef.current.tac : aiH.tac,
@@ -881,6 +932,8 @@ export const MatchModal: React.FC<{
     const aiA = aiCoachRef.current.A;
     return {
       ...awayOrig,
+      cap: simRef.current.captainA || awayOrig.cap,
+      setPieces: !meIsHome ? liveSetPiecesRef.current : awayOrig.setPieces,
       form: isUserMgr ? awayOrig.form : aiA.form,
       cf: isUserMgr ? awayOrig.cf : aiA.cf,
       tac: isUserMgr ? liveTacticsRef.current.tac : aiA.tac,
@@ -895,6 +948,7 @@ export const MatchModal: React.FC<{
 
   function buildTeamAgents(team: Team, side: 'H' | 'A', luNames: string[], secondHalf = false) {
     const sr = simRef.current;
+    const activeCap = side === 'H' ? sr.captainH : sr.captainA;
     return buildAgentsForTeam(
       team,
       side,
@@ -905,9 +959,103 @@ export const MatchModal: React.FC<{
       state.p,
       myPlayerName,
       secondHalf,
-      side === 'H' ? homeStatDeltas : awayStatDeltas
+      side === 'H' ? homeStatDeltas : awayStatDeltas,
+      activeCap
     );
   }
+
+  const ensureOnPitchCaptain = (
+    w: LiveMatchWorld | null | undefined,
+    side: 'H' | 'A',
+    curMin: number,
+    reason: 'sub' | 'red' | 'inj',
+    silentLog = false
+  ) => {
+    const sr = simRef.current;
+    const orig = side === 'H' ? homeOrig : awayOrig;
+    const curLu = side === 'H' ? sr.homeLu : sr.awayLu;
+    const curCap = side === 'H' ? sr.captainH : sr.captainA;
+    const activeNames = curLu.filter((n) => {
+      if (sr.sentOff.includes(n)) return false;
+      const ag = w?.agents.find((a) => a.side === side && a.id === n);
+      if (ag?.injuredOut && ag?.sentOff) return false;
+      return true;
+    });
+    if (!activeNames.length) return;
+    if (curCap && activeNames.includes(curCap)) {
+      if (w) {
+        w.agents.forEach((a) => {
+          if (a.side === side) a.isCaptain = a.id === curCap;
+        });
+      }
+      return;
+    }
+    const nextCap =
+      pickBestCaptain(orig, activeNames, sr.sentOff, state.p) ||
+      activeNames.find((n) => orig.sq.find((q) => q.n === n)?.pos !== 'GK') ||
+      activeNames[0];
+    if (!nextCap) return;
+    if (side === 'H') sr.captainH = nextCap;
+    else sr.captainA = nextCap;
+    if (w) {
+      w.agents.forEach((a) => {
+        if (a.side === side) a.isCaptain = a.id === nextCap;
+      });
+    }
+    setLiveCaptains({ H: sr.captainH, A: sr.captainA });
+    if (!silentLog && curCap && nextCap !== curCap) {
+      const reasonTxt = reason === 'red' ? 'โดนใบแดง' : reason === 'inj' ? 'บาดเจ็บ' : 'ถูกเปลี่ยนออก';
+      const isMeCap = isPlayerMode && nextCap === myPlayerName;
+      pushLog(
+        curMin,
+        `©️ กัปตันชั่วคราว (${orig.name}): มอบปลอกแขนให้ ${nextCap}${isMeCap ? ' (คุณ!)' : ''} แทน ${curCap} (${reasonTxt})`,
+        'sys'
+      );
+    }
+  };
+
+  const resolveSetPieceTaker = (
+    w: LiveMatchWorld,
+    side: 'H' | 'A',
+    kind: 'corner' | 'freekick' | 'penalty'
+  ): LivePitchAgent | undefined => {
+    const activePool = w.agents.filter((a) => a.side === side && !a.sentOff && a.pos !== 'GK');
+    if (!activePool.length) {
+      return w.agents.find((a) => a.side === side && !a.sentOff);
+    }
+    const team = side === 'H' ? homeOrig : awayOrig;
+    const isMySide = (side === 'H' && meIsHome) || (side === 'A' && !meIsHome);
+    const assignedName = isMySide ? liveSetPiecesRef.current[kind] : team.setPieces?.[kind];
+    if (assignedName) {
+      const assignedAg = activePool.find((a) => a.id === assignedName);
+      if (assignedAg) return assignedAg;
+    }
+    if (kind === 'corner') {
+      return activePool
+        .slice()
+        .sort(
+          (u, v) =>
+            v.d.crs + v.d.cur + (v.sig === 'crs' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0) -
+            (u.d.crs + u.d.cur + (u.sig === 'crs' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0))
+        )[0];
+    }
+    if (kind === 'freekick') {
+      return activePool
+        .slice()
+        .sort(
+          (u, v) =>
+            v.d.cur + v.d.pw + (v.sig === 'cur' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0) -
+            (u.d.cur + u.d.pw + (u.sig === 'cur' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0))
+        )[0];
+    }
+    return activePool
+      .slice()
+      .sort(
+        (u, v) =>
+          v.d.fin + (v.d.comp || 60) + (agentHasTrait(v, 'clutch_player') ? 14 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 10 : 0) -
+          (u.d.fin + (u.d.comp || 60) + (agentHasTrait(u, 'clutch_player') ? 14 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 10 : 0))
+      )[0];
+  };
 
   function buildInitialWorld(): LiveMatchWorld {
     const sr = simRef.current;
@@ -1105,138 +1253,39 @@ export const MatchModal: React.FC<{
     };
   };
 
-  const maybeAiLiveCoachAdjust = (
+  const curMeOnPitch = (w: LiveMatchWorld | null | undefined): boolean => {
+    if (!isPlayerMode || !myPlayerName) return false;
+    const sr = simRef.current;
+    const myLu = meIsHome ? sr.homeLu : sr.awayLu;
+    if (!myLu.includes(myPlayerName) || sr.sentOff.includes(myPlayerName)) return false;
+    const ag = w?.agents.find((a) => a.id === myPlayerName);
+    if (ag?.injuredOut && ag?.sentOff) return false;
+    return true;
+  };
+
+  const applyAiFormationSwitchForSide = (
     w: LiveMatchWorld,
     side: 'H' | 'A',
+    bestPh: (typeof CLUB_PHILOSOPHIES)[number],
+    nextCfg: {
+      form: string;
+      cf?: Team['cf'];
+      tac: Mentality;
+      press: number;
+      tempo: number;
+      line: number;
+      wid: number;
+      pass: number;
+    },
     curMin: number,
-    phase: 'ht' | 'late',
-    isInstant: boolean
+    isInstant: boolean,
+    reasonTxt: string
   ) => {
-    const isUserMgrSide = state.mode === 'm' && ((side === 'H' && meIsHome) || (side === 'A' && !meIsHome));
-    if (isUserMgrSide) return;
-    const ac = aiCoachRef.current;
-    if (phase === 'ht') {
-      if (side === 'H' ? ac.htDoneH : ac.htDoneA) return;
-      if (side === 'H') ac.htDoneH = true;
-      else ac.htDoneA = true;
-    } else {
-      if (curMin < 62 || curMin > 74) return;
-      if (side === 'H' ? ac.lateDoneH : ac.lateDoneA) return;
-    }
-
     const sr = simRef.current;
-    const curCfg = side === 'H' ? ac.H : ac.A;
+    const ac = aiCoachRef.current;
     const orig = side === 'H' ? homeOrig : awayOrig;
     const curLu = side === 'H' ? sr.homeLu : sr.awayLu;
-    const myScore = side === 'H' ? sr.gh : sr.ga;
-    const oppScore = side === 'H' ? sr.ga : sr.gh;
-    const scoreDiff = myScore - oppScore;
-    const myXg = side === 'H' ? w.xgH : w.xgA;
-    const oppXg = side === 'H' ? w.xgA : w.xgH;
-    const myShots = side === 'H' ? w.shotsH : w.shotsA;
-    const oppShots = side === 'H' ? w.shotsA : w.shotsH;
-    const myReds = w.agents.filter((a) => a.side === side && a.sentOff).length;
 
-    const behindXg = oppXg - myXg >= 0.45 || oppShots - myShots >= 4;
-    const urgentTrigger = scoreDiff < 0 || myReds > 0 || behindXg || (scoreDiff >= 2 && phase === 'late');
-
-    if (phase === 'late' && !urgentTrigger && curMin < 70) return;
-    if (phase === 'late') {
-      if (side === 'H') ac.lateDoneH = true;
-      else ac.lateDoneA = true;
-    }
-
-    const adjustChance =
-      scoreDiff <= -2 ? 0.88
-      : scoreDiff === -1 ? 0.78
-      : myReds > 0 ? 0.82
-      : behindXg ? 0.68
-      : scoreDiff >= 2 ? (phase === 'late' ? 0.72 : 0.45)
-      : scoreDiff === 1 && phase === 'late' ? 0.62
-      : 0.42;
-    if (Math.random() > adjustChance) return;
-
-    const activePlayers = curLu
-      .map((n) => orig.sq.find((q) => q.n === n))
-      .filter((q): q is Player => Boolean(q))
-      .filter((q) => q.pos !== 'GK' && !sr.sentOff.includes(q.n));
-    const avDF = activePlayers.filter((p) => p.pos === 'DF').length;
-    const avMF = activePlayers.filter((p) => p.pos === 'MF').length;
-    const avFW = activePlayers.filter((p) => p.pos === 'FW').length;
-
-    const candidates = CLUB_PHILOSOPHIES.filter((ph) => ph.form !== curCfg.form);
-    if (!candidates.length) return;
-
-    let bestPh = candidates[0];
-    let bestScore = -1e9;
-    for (const ph of candidates) {
-      const slots = FSD[ph.form] || FSD['4-4-2'];
-      const needDF = slots.filter(([sp]) => LINE[sp] === 'DF').length;
-      const needMF = slots.filter(([sp]) => LINE[sp] === 'MF').length;
-      const needFW = slots.filter(([sp]) => LINE[sp] === 'FW').length;
-
-      let score = 0;
-      score -= Math.abs(needDF - avDF) * 2.2 + Math.abs(needMF - avMF) * 1.4 + Math.abs(needFW - avFW) * 2.1;
-
-      if (scoreDiff < 0 || (scoreDiff === 0 && behindXg)) {
-        if (ph.styleGroup === 'attack') score += 4.5;
-        else if (ph.styleGroup === 'control') score += 2.6;
-        else if (ph.styleGroup === 'counter') score -= 2.4;
-        score += needFW * 1.6 - needDF * 0.9;
-      } else if (scoreDiff >= 1 && (phase === 'late' || scoreDiff >= 2)) {
-        if (ph.styleGroup === 'counter') score += 4.5;
-        else if (ph.styleGroup === 'balanced') score += 2.4;
-        else if (ph.styleGroup === 'attack') score -= 2.2;
-        score += needDF * 1.5;
-      } else {
-        if (ph.styleGroup === 'control' || ph.styleGroup === 'balanced') score += 2.0;
-      }
-
-      if (myReds > 0) {
-        if (needDF >= 4) score += 2.2;
-        if (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced') score += 2.4;
-      }
-
-      score += (Math.random() - 0.5) * 3.0;
-      if (score > bestScore) {
-        bestScore = score;
-        bestPh = ph;
-      }
-    }
-
-    let nextTac: Mentality = bestPh.tac;
-    let nextPress = bestPh.press;
-    let nextTempo = bestPh.tempo;
-    let nextLine = bestPh.line;
-    let nextPass = bestPh.pass;
-    if (scoreDiff <= -2) {
-      nextTac = 'X';
-      nextPress = 2;
-      nextTempo = 2;
-      nextLine = 2;
-    } else if (scoreDiff === -1 && phase === 'late') {
-      nextTac = bestPh.tac === 'D' || bestPh.tac === 'Z' ? 'A' : bestPh.tac === 'B' ? 'A' : bestPh.tac;
-      nextPress = Math.max(nextPress, 1);
-      nextLine = Math.max(nextLine, 1);
-    } else if (scoreDiff >= 2 && phase === 'late') {
-      nextTac = 'D';
-      nextPress = 0;
-      nextLine = 0;
-      nextPass = Math.max(nextPass, 2);
-    } else if (scoreDiff === 1 && phase === 'late') {
-      nextTac = nextTac === 'X' || nextTac === 'A' ? 'B' : nextTac;
-    }
-
-    const nextCfg = {
-      form: bestPh.form,
-      cf: undefined,
-      tac: nextTac,
-      press: nextPress,
-      tempo: nextTempo,
-      line: nextLine,
-      wid: bestPh.wid,
-      pass: nextPass
-    };
     if (side === 'H') ac.H = nextCfg;
     else ac.A = nextCfg;
 
@@ -1322,15 +1371,439 @@ export const MatchModal: React.FC<{
         c.moodTimer = Math.max(c.moodTimer || 0, 2.5);
       }
     }
-    const reasonTxt =
-      scoreDiff < 0
-        ? 'เปิดเกมรุกไล่ทวงประตูคืน'
-        : myReds > 0
-          ? 'จัดทรงใหม่หลังเหลือตัวผู้เล่นน้อยกว่า'
-          : scoreDiff >= 1 && phase === 'late'
-            ? 'เน้นรัดกุมรักษาสกอร์นำ'
-            : 'ปรับสมดุลแก้เกมสู้แท็กติก';
     pushLog(curMin, `🧠 โค้ช ${orig.name} เปลี่ยนแผนกลางเกมเป็นระบบ ${bestPh.form} (${bestPh.name}) — ${reasonTxt}`, 'sys');
+  };
+
+  const buildPlayerHtCoachOrder = (
+    w: LiveMatchWorld,
+    side: 'H' | 'A',
+    scoreDiff: number,
+    myReds: number,
+    behindXg: boolean,
+    switchedForm: boolean
+  ) => {
+    const sr = simRef.current;
+    const cfg = side === 'H' ? aiCoachRef.current.H : aiCoachRef.current.A;
+    const orig = side === 'H' ? homeOrig : awayOrig;
+    const myRt = sr.liveForm[myPlayerName] ?? 6.5;
+    const myFit = Math.round(sr.liveFit[myPlayerName] ?? 100);
+    const myYc = sr.yellows[myPlayerName] || 0;
+    const onPitch = curMeOnPitch(w);
+
+    const headline =
+      scoreDiff < 0
+        ? `เราตามหลังอยู่ ${Math.abs(scoreDiff)} ประตู — ครึ่งหลังต้องเดินเครื่องเอาคืน!`
+        : scoreDiff > 0
+          ? `นำอยู่ ${scoreDiff} ประตู แต่ห้ามประมาท รักษาวินัยเกมของเราให้แน่น`
+          : myReds > 0
+            ? 'เราตัวผู้เล่นน้อยกว่า ต้องช่วยกันบีบโซนและเล่นฉลาดทุกจังหวะ'
+            : behindXg
+              ? 'ครึ่งแรกเราโดนกดดันพอสมควร ครึ่งหลังต้องคุมจังหวะและเข้าบอลแม่นกว่านี้'
+              : 'เกมยังสูสี รักษาความสม่ำเสมอแล้วหาช่องจบสกอร์ให้เด็ดขาด';
+
+    const detail = switchedForm
+      ? `โค้ช ${orig.name} ปรับระบบเป็น ${cfg.form} (${AR_T[cfg.tac]}) เพื่อแก้ทางคู่แข่งครึ่งหลัง`
+      : `ยืนแผน ${cfg.form} · สั่งเล่นสไตล์ "${AR_T[cfg.tac]}" (${cfg.press >= 2 ? 'เพรสสูง' : cfg.press === 0 ? 'รับคุมโซน' : 'คุมจังหวะ'})`;
+
+    let playerNote = '';
+    if (!onPitch) {
+      playerNote = myInitialBanned
+        ? 'คุณติดโทษแบนนัดนี้ คอยส่งแรงใจให้เพื่อนร่วมทีม'
+        : 'เตรียมร่างกายที่ม้านั่งสำรองไว้ให้พร้อม โค้ชอาจเรียกใช้คุณในครึ่งหลัง';
+    } else if (myYc >= 1) {
+      playerNote = `คุณมีใบเหลืองติดตัวแล้ว (เรตติ้ง ${myRt.toFixed(1)}) — เข้าบอลให้ระวัง อย่าเสียฟาวล์เสี่ยงใบแดง`;
+    } else if (myFit < 62) {
+      playerNote = `ความฟิตคุณเหลือ ${myFit}% — บริหารแรงในสนามดีๆ หรือเลือกวอร์มเติมฟิตก่อนลุยต่อ`;
+    } else if (myRt >= 7.2) {
+      playerNote = `ครึ่งแรกคุณเล่นได้ยอดเยี่ยมมาก (⭐ ${myRt.toFixed(1)})! รักษาความมั่นใจและนำจังหวะทีมต่อ`;
+    } else if (myRt < 6.1) {
+      playerNote = `ครึ่งแรกฟอร์มยังไม่เข้าฝัก (⭐ ${myRt.toFixed(1)}) — ขยับหาช่องและช่วยเชื่อมบอลมากขึ้นในครึ่งหลัง`;
+    } else {
+      playerNote = `ฟอร์มครึ่งแรกอยู่ในเกณฑ์ดี (⭐ ${myRt.toFixed(1)} · ฟิต ${myFit}%) — วิ่งประคองโซนและรอจังหวะสำคัญ`;
+    }
+
+    return {
+      headline,
+      detail,
+      playerNote,
+      form: cfg.form,
+      tacLabel: AR_T[cfg.tac]
+    };
+  };
+
+  const maybeAiLiveCoachAdjust = (
+    w: LiveMatchWorld,
+    side: 'H' | 'A',
+    curMin: number,
+    phase: 'early' | 'ht' | 'late',
+    isInstant: boolean
+  ) => {
+    const isUserMgrSide = state.mode === 'm' && ((side === 'H' && meIsHome) || (side === 'A' && !meIsHome));
+    if (isUserMgrSide) return;
+    const ac = aiCoachRef.current;
+    if (phase === 'early') {
+      if (curMin < 25 || curMin > 38) return;
+      if (side === 'H' ? ac.earlyDoneH : ac.earlyDoneA) return;
+    } else if (phase === 'ht') {
+      if (side === 'H' ? ac.htDoneH : ac.htDoneA) return;
+      if (side === 'H') ac.htDoneH = true;
+      else ac.htDoneA = true;
+    } else {
+      if (curMin < 62 || curMin > 78) return;
+      if (side === 'H' ? ac.lateDoneH : ac.lateDoneA) return;
+    }
+
+    const sr = simRef.current;
+    const curCfg = side === 'H' ? ac.H : ac.A;
+    const oppCfg = side === 'H' ? ac.A : ac.H;
+    const orig = side === 'H' ? homeOrig : awayOrig;
+    const curLu = side === 'H' ? sr.homeLu : sr.awayLu;
+    const myScore = side === 'H' ? sr.gh : sr.ga;
+    const oppScore = side === 'H' ? sr.ga : sr.gh;
+    const scoreDiff = myScore - oppScore;
+    const myXg = side === 'H' ? w.xgH : w.xgA;
+    const oppXg = side === 'H' ? w.xgA : w.xgH;
+    const myShots = side === 'H' ? w.shotsH : w.shotsA;
+    const oppShots = side === 'H' ? w.shotsA : w.shotsH;
+    const myReds = w.agents.filter((a) => a.side === side && a.sentOff).length;
+    const isMyPlayerTeam = isPlayerMode && ((side === 'H' && meIsHome) || (side === 'A' && !meIsHome));
+
+    const behindXg = oppXg - myXg >= 0.42 || oppShots - myShots >= 4;
+    const urgentTrigger = scoreDiff < 0 || myReds > 0 || behindXg || (scoreDiff >= 2 && phase === 'late');
+
+    if (phase === 'early') {
+      const earlyTriggered = scoreDiff <= -2 || (scoreDiff === -1 && curMin >= 30) || myReds > 0 || (behindXg && curMin >= 28);
+      if (!earlyTriggered && curMin < 35) return;
+      if (side === 'H') ac.earlyDoneH = true;
+      else ac.earlyDoneA = true;
+    } else if (phase === 'late') {
+      if (!urgentTrigger && curMin < 70) return;
+      if (side === 'H') ac.lateDoneH = true;
+      else ac.lateDoneA = true;
+    }
+
+    const adjustChance =
+      phase === 'early'
+        ? scoreDiff <= -2 ? 0.72 : myReds > 0 ? 0.75 : scoreDiff === -1 ? 0.56 : behindXg ? 0.54 : 0.25
+        : scoreDiff <= -2 ? 0.88
+        : scoreDiff === -1 ? 0.78
+        : myReds > 0 ? 0.82
+        : behindXg ? 0.68
+        : scoreDiff >= 2 ? (phase === 'late' ? 0.72 : 0.45)
+        : scoreDiff === 1 && phase === 'late' ? 0.62
+        : 0.42;
+
+    const shouldSwitch = Math.random() <= adjustChance;
+    let didSwitch = false;
+
+    if (shouldSwitch) {
+      const activePlayers = curLu
+        .map((n) => orig.sq.find((q) => q.n === n))
+        .filter((q): q is Player => Boolean(q))
+        .filter((q) => q.pos !== 'GK' && !sr.sentOff.includes(q.n));
+      const avDF = activePlayers.filter((p) => p.pos === 'DF').length;
+      const avMF = activePlayers.filter((p) => p.pos === 'MF').length;
+      const avFW = activePlayers.filter((p) => p.pos === 'FW').length;
+
+      const oppSlots = FSD[oppCfg.form] || FSD['4-4-2'];
+      const oppDF = oppSlots.filter(([sp]) => LINE[sp] === 'DF').length;
+      const oppMF = oppSlots.filter(([sp]) => LINE[sp] === 'MF').length;
+      const oppFW = oppSlots.filter(([sp]) => LINE[sp] === 'FW').length;
+
+      const candidates = CLUB_PHILOSOPHIES.filter((ph) => ph.form !== curCfg.form);
+      if (candidates.length) {
+        let bestPh = candidates[0];
+        let bestScore = -1e9;
+        for (const ph of candidates) {
+          const slots = FSD[ph.form] || FSD['4-4-2'];
+          const needDF = slots.filter(([sp]) => LINE[sp] === 'DF').length;
+          const needMF = slots.filter(([sp]) => LINE[sp] === 'MF').length;
+          const needFW = slots.filter(([sp]) => LINE[sp] === 'FW').length;
+
+          let score = 0;
+          score -= Math.abs(needDF - avDF) * 2.2 + Math.abs(needMF - avMF) * 1.4 + Math.abs(needFW - avFW) * 2.1;
+
+          // Match-up awareness vs opponent shape (e.g., pack midfield vs 3-MF/4-MF, wing width vs narrow back-3, anchor back-4/5 vs 2-3 FW)
+          if (oppMF >= 4 && needMF >= 4) score += 1.6;
+          if (oppFW >= 3 && needDF >= 4) score += 1.8;
+          if (oppDF <= 3 && ph.wid >= 2) score += 1.5;
+
+          if (scoreDiff < 0 || (scoreDiff === 0 && behindXg)) {
+            if (ph.styleGroup === 'attack') score += 4.5;
+            else if (ph.styleGroup === 'control') score += 2.6;
+            else if (ph.styleGroup === 'counter') score -= 2.4;
+            score += needFW * 1.6 - needDF * 0.9;
+          } else if (scoreDiff >= 1 && (phase === 'late' || scoreDiff >= 2)) {
+            if (ph.styleGroup === 'counter') score += 4.5;
+            else if (ph.styleGroup === 'balanced') score += 2.4;
+            else if (ph.styleGroup === 'attack') score -= 2.2;
+            score += needDF * 1.5;
+          } else {
+            if (ph.styleGroup === 'control' || ph.styleGroup === 'balanced') score += 2.0;
+          }
+
+          if (myReds > 0) {
+            if (needDF >= 4) score += 2.2;
+            if (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced') score += 2.4;
+          }
+
+          score += (Math.random() - 0.5) * 3.0;
+          if (score > bestScore) {
+            bestScore = score;
+            bestPh = ph;
+          }
+        }
+
+        let nextTac: Mentality = bestPh.tac;
+        let nextPress = bestPh.press;
+        let nextTempo = bestPh.tempo;
+        let nextLine = bestPh.line;
+        let nextPass = bestPh.pass;
+        if (scoreDiff <= -2) {
+          nextTac = 'X';
+          nextPress = 2;
+          nextTempo = 2;
+          nextLine = 2;
+        } else if (scoreDiff === -1 && phase !== 'early') {
+          nextTac = bestPh.tac === 'D' || bestPh.tac === 'Z' ? 'A' : bestPh.tac === 'B' ? 'A' : bestPh.tac;
+          nextPress = Math.max(nextPress, 1);
+          nextLine = Math.max(nextLine, 1);
+        } else if (scoreDiff >= 2 && phase === 'late') {
+          nextTac = 'D';
+          nextPress = 0;
+          nextLine = 0;
+          nextPass = Math.max(nextPass, 2);
+        } else if (scoreDiff === 1 && phase === 'late') {
+          nextTac = nextTac === 'X' || nextTac === 'A' ? 'B' : nextTac;
+        }
+
+        const nextCfg = {
+          form: bestPh.form,
+          cf: undefined,
+          tac: nextTac,
+          press: nextPress,
+          tempo: nextTempo,
+          line: nextLine,
+          wid: bestPh.wid,
+          pass: nextPass
+        };
+        const reasonTxt =
+          scoreDiff < 0
+            ? 'เปิดเกมรุกไล่ทวงประตูคืน'
+            : myReds > 0
+              ? 'จัดทรงใหม่หลังเหลือตัวผู้เล่นน้อยกว่า'
+              : scoreDiff >= 1 && phase === 'late'
+                ? 'เน้นรัดกุมรักษาสกอร์นำ'
+                : behindXg
+                  ? `ปรับทรงแก้เกมรับมือระบบ ${oppCfg.form}`
+                  : 'ปรับสมดุลแก้เกมสู้แท็กติก';
+        applyAiFormationSwitchForSide(w, side, bestPh, nextCfg, curMin, isInstant, reasonTxt);
+        didSwitch = true;
+      }
+    }
+
+    // Even without changing formation at halftime, tweak mentality if needed & send Player Mode HT coach order
+    if (phase === 'ht' && !didSwitch) {
+      if (scoreDiff <= -1) {
+        curCfg.tac = curCfg.tac === 'D' || curCfg.tac === 'Z' ? 'B' : 'A';
+        curCfg.press = Math.min(2, curCfg.press + 1);
+        curCfg.line = Math.min(2, curCfg.line + 1);
+      } else if (scoreDiff >= 2) {
+        curCfg.tac = 'B';
+        curCfg.press = Math.max(0, curCfg.press - 1);
+      }
+    }
+
+    if (phase === 'ht' && isMyPlayerTeam && !isInstant) {
+      const order = buildPlayerHtCoachOrder(w, side, scoreDiff, myReds, behindXg, didSwitch);
+      setHalftimeCoachOrder(order);
+      pushLog(45, `👔 คำสั่งโค้ชพักครึ่ง (${orig.name}): ${order.headline}`, 'sys');
+    }
+  };
+
+  const handlePlayerVoiceToCoach = (topic: 'attack' | 'defend' | 'formation' | 'setpiece' | 'fitness') => {
+    if (!isPlayerMode || done) return;
+    const w = worldRef.current;
+    if (!w) return;
+    const curMin = Math.max(1, minute);
+    if (minute - coachChatCooldownMin < 8) return;
+
+    const sr = simRef.current;
+    const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
+    const oppSide: 'H' | 'A' = mySide === 'H' ? 'A' : 'H';
+    const curCfg = aiCoachRef.current[mySide];
+    const oppCfg = aiCoachRef.current[oppSide];
+    const myScore = mySide === 'H' ? sr.gh : sr.ga;
+    const oppScore = mySide === 'H' ? sr.ga : sr.gh;
+    const scoreDiff = myScore - oppScore;
+    const myXg = mySide === 'H' ? w.xgH : w.xgA;
+    const oppXg = mySide === 'H' ? w.xgA : w.xgH;
+    const myReds = w.agents.filter((a) => a.side === mySide && a.sentOff).length;
+    const curLu = mySide === 'H' ? sr.homeLu : sr.awayLu;
+    const meOnPitch = curMeOnPitch(w);
+    const meAg = w.agents.find((a) => a.id === myPlayerName && a.side === mySide);
+    const myFit = Math.round(sr.liveFit[myPlayerName] ?? 100);
+    const myRt = sr.liveForm[myPlayerName] ?? 6.5;
+    const myYc = sr.yellows[myPlayerName] || 0;
+
+    SFX.tap();
+    setCoachChatCooldownMin(minute);
+
+    let userMsg = '';
+    let coachMsg = '';
+    let accepted = false;
+
+    if (topic === 'attack') {
+      userMsg = '🔥 เสนอโค้ชเปิดเกมรุกกดดันเพิ่ม';
+      const allowAtk =
+        myReds > 0 && scoreDiff > 0
+          ? false
+          : scoreDiff <= 0 || curMin < 70 || myRt >= 7.0 || Math.random() < 0.55;
+      if (allowAtk) {
+        accepted = true;
+        curCfg.tac = curCfg.tac === 'Z' || curCfg.tac === 'D' ? 'B' : curCfg.tac === 'B' ? 'A' : 'X';
+        curCfg.press = Math.min(2, curCfg.press + 1);
+        curCfg.tempo = Math.min(2, curCfg.tempo + 1);
+        curCfg.line = Math.min(2, curCfg.line + 1);
+        if (meAg && !meAg.sentOff) adjustLiveForm(meAg.id, 0.12);
+        coachMsg = `รับทราบ! ปรับทีมบุกเป็น "${AR_T[curCfg.tac]}" ดันไลน์กดดันคู่แข่งทันที!`;
+        triggerCoachShout(w, mySide, '🔥 ดันเกมรุกขึ้น!', 2.6);
+        pushLog(curMin, `🗣️ คุณเสนอโค้ชเปิดเกมรุก — โค้ชปรับแท็กติกเป็น "${AR_T[curCfg.tac]}"`, 'sys');
+      } else {
+        coachMsg = scoreDiff >= 2
+          ? 'เรานำห่างแล้ว รักษาวินัยเกมรับและรอจังหวะสวนกลับดีกว่า'
+          : 'ตัวเราไม่ครบ รักษาทรงไว้ก่อน อย่าเปิดหลังมากเกินไป';
+        pushLog(curMin, `🗣️ คุณคุยกับโค้ชขอเปิดเกมรุก — โค้ชให้คุมทรงตามแผนเดิม`, 'sys');
+      }
+    } else if (topic === 'defend') {
+      userMsg = '🛡️ เสนอโค้ชเน้นรับคุมโซนรอโต้กลับ';
+      const allowDef =
+        scoreDiff >= 0 || myReds > 0 || oppXg - myXg >= 0.35 || curMin < 75 || Math.random() < 0.5;
+      if (allowDef) {
+        accepted = true;
+        curCfg.tac = curCfg.tac === 'X' || curCfg.tac === 'A' ? 'B' : 'D';
+        curCfg.press = Math.max(0, curCfg.press - 1);
+        curCfg.line = Math.max(0, curCfg.line - 1);
+        curCfg.pass = 3;
+        if (meAg && !meAg.sentOff) adjustLiveForm(meAg.id, 0.10);
+        coachMsg = `เห็นด้วย! ถอยไลน์ลงมารับเป็น "${AR_T[curCfg.tac]}" แล้วรอจังหวะสวนกลับเร็ว!`;
+        triggerCoachShout(w, mySide, '🛡️ คุมโซนแน่นๆ!', 2.6);
+        pushLog(curMin, `🗣️ คุณเสนอโค้ชเล่นรัดกุม — โค้ชปรับแท็กติกเป็น "${AR_T[curCfg.tac]}"`, 'sys');
+      } else {
+        coachMsg = 'เวลาเหลือน้อยแล้ว เราตามหลังอยู่ ต้องบุกทวงประตูคืน จะถอยรับไม่ได้!';
+        pushLog(curMin, `🗣️ คุณคุยกับโค้ชขอเล่นรับ — โค้ชสั่งเดินหน้าลุยต่อ`, 'sys');
+      }
+    } else if (topic === 'formation') {
+      userMsg = `🔀 เสนอโค้ชเปลี่ยนระบบแก้ทาง ${oppCfg.form}`;
+      const activePlayers = curLu
+        .map((n) => meTeamOrig.sq.find((q) => q.n === n))
+        .filter((q): q is Player => Boolean(q))
+        .filter((q) => q.pos !== 'GK' && !sr.sentOff.includes(q.n));
+      const avDF = activePlayers.filter((p) => p.pos === 'DF').length;
+      const avMF = activePlayers.filter((p) => p.pos === 'MF').length;
+      const avFW = activePlayers.filter((p) => p.pos === 'FW').length;
+      const cands = CLUB_PHILOSOPHIES.filter((ph) => ph.form !== curCfg.form);
+      if (cands.length && (scoreDiff <= 0 || oppXg - myXg >= 0.25 || curMin >= 20 || Math.random() < 0.65)) {
+        let bestPh = cands[0];
+        let bestSc = -1e9;
+        for (const ph of cands) {
+          const slots = FSD[ph.form] || FSD['4-4-2'];
+          const nDF = slots.filter(([sp]) => LINE[sp] === 'DF').length;
+          const nMF = slots.filter(([sp]) => LINE[sp] === 'MF').length;
+          const nFW = slots.filter(([sp]) => LINE[sp] === 'FW').length;
+          let sc = -(Math.abs(nDF - avDF) * 2.2 + Math.abs(nMF - avMF) * 1.4 + Math.abs(nFW - avFW) * 2.1);
+          if (scoreDiff < 0) sc += nFW * 1.6 + (ph.styleGroup === 'attack' ? 3.5 : 0);
+          else if (scoreDiff > 0) sc += nDF * 1.4 + (ph.styleGroup === 'counter' || ph.styleGroup === 'balanced' ? 2.5 : 0);
+          else sc += (ph.styleGroup === 'control' || ph.styleGroup === 'balanced' ? 2.2 : 1.0);
+          sc += (Math.random() - 0.5) * 2.0;
+          if (sc > bestSc) {
+            bestSc = sc;
+            bestPh = ph;
+          }
+        }
+        accepted = true;
+        const nextCfg = {
+          form: bestPh.form,
+          cf: undefined,
+          tac: scoreDiff < 0 ? ('A' as Mentality) : scoreDiff > 0 && curMin >= 65 ? ('D' as Mentality) : bestPh.tac,
+          press: bestPh.press,
+          tempo: bestPh.tempo,
+          line: bestPh.line,
+          wid: bestPh.wid,
+          pass: bestPh.pass
+        };
+        applyAiFormationSwitchForSide(w, mySide, bestPh, nextCfg, curMin, false, `ปรับแก้ทางแผน ${oppCfg.form} ตามคำแนะนำผู้เล่น`);
+        if (meAg && !meAg.sentOff) adjustLiveForm(meAg.id, 0.14);
+        coachMsg = `ดีเลย! ปรับเปลี่ยนระบบเป็น ${bestPh.form} (${bestPh.name}) รับมือ ${oppCfg.form} ทันที!`;
+      } else {
+        coachMsg = `ตอนนี้รูปเกม ${curCfg.form} ยังไหลลื่นดีอยู่ เล่นตามแผนนี้ต่อไปก่อนนะ`;
+        pushLog(curMin, `🗣️ คุณเสนอโค้ชปรับระบบ — โค้ชให้ยึดระบบ ${curCfg.form} ต่อ`, 'sys');
+      }
+    } else if (topic === 'setpiece') {
+      userMsg = '🎯 อาสายิงฟรีคิก / เตะมุม / จุดโทษ';
+      if (!meOnPitch || !myPlayerSquadObj || myPlayerSquadObj.pos === 'GK') {
+        coachMsg = meOnPitch ? 'นายต้องเฝ้าเสา หน้าที่ลูกนิ่งให้เพื่อนข้างหน้าจัดการ' : 'รอลงสนามให้ได้ก่อนนะ แล้วค่อยอาสารับหน้าที่ลูกนิ่ง';
+      } else {
+        const spKinds: ('freekick' | 'corner' | 'penalty')[] = ['freekick', 'corner', 'penalty'];
+        const granted: ('freekick' | 'corner' | 'penalty')[] = [];
+        const onPitchObjs = curLu
+          .filter((n) => !sr.sentOff.includes(n))
+          .map((n) => meTeamOrig.sq.find((q) => q.n === n))
+          .filter((q): q is Player => Boolean(q))
+          .filter((q) => q.pos !== 'GK');
+        spKinds.forEach((k) => {
+          const mySpScore = scoreSetPieceCandidate(myPlayerSquadObj, k, state.p);
+          const curName = liveSetPiecesRef.current[k];
+          const curHolder = curName ? onPitchObjs.find((q) => q.n === curName) : undefined;
+          const bestOtherScore = onPitchObjs
+            .filter((q) => q.n !== myPlayerName)
+            .reduce((mx, q) => Math.max(mx, scoreSetPieceCandidate(q, k, state.p)), 0);
+          const curScore = curHolder ? scoreSetPieceCandidate(curHolder, k, state.p) : bestOtherScore;
+          const formBonus = myRt >= 7.2 ? 12 : myRt >= 6.8 ? 5 : 0;
+          const capBonus = (mySide === 'H' ? sr.captainH : sr.captainA) === myPlayerName ? 6 : 0;
+          if (curName === myPlayerName || mySpScore + formBonus + capBonus >= curScore * 0.90) {
+            liveSetPiecesRef.current = { ...liveSetPiecesRef.current, [k]: myPlayerName };
+            granted.push(k);
+          }
+        });
+        if (granted.length > 0) {
+          accepted = true;
+          setLiveSetPiecesUi({ ...liveSetPiecesRef.current });
+          const thLabels = granted.map((k) => (k === 'corner' ? 'เตะมุม' : k === 'freekick' ? 'ฟรีคิก' : 'จุดโทษ')).join(', ');
+          coachMsg = `ได้เลย! ตั้งแต่ตอนนี้มอบหมายให้คุณเป็นคนยิง ${thLabels} ของทีม!`;
+          triggerCoachShout(w, mySide, '🎯 ลูกนิ่งให้นายเลย!', 2.4);
+          pushLog(curMin, `🎯 โค้ช ${meTeamOrig.name} มอบหน้าที่ลูกนิ่ง (${thLabels}) ให้ ${myPlayerName}!`, 'sys');
+        } else {
+          coachMsg = 'วันนี้เพื่อนในสนามยังยิงลูกนิ่งได้แม่นกว่า ฝึกเพิ่มค่าพลังและฟอร์มให้เข้าฝักแล้วลองขอใหม่นะ!';
+          pushLog(curMin, `🗣️ คุณอาสายิงลูกนิ่ง — โค้ชยังให้มือสังหารเดิมรับหน้าที่ต่อ`, 'sys');
+        }
+      }
+    } else {
+      userMsg = '💬 รายงานสภาพฟิต / จังหวะเกมกับโค้ช';
+      accepted = true;
+      if (!meOnPitch) {
+        coachMsg = myInitialBanned
+          ? 'อดใจรอพ้นโทษแบน นัดหน้ากลับมาช่วยทีมเต็มที่!'
+          : 'วอร์มข้างสนามเตรียมพร้อมไว้เลย ถ้าเกมต้องการจุดเปลี่ยนจะส่งลงทันที';
+      } else if (myYc >= 1) {
+        if (meAg) adjustLiveForm(meAg.id, 0.1);
+        coachMsg = `ใจเย็นไว้ นายมีใบเหลืองติดตัว (⭐ ${myRt.toFixed(1)}) อย่าเข้าบอลเสี่ยงใบที่สอง ประคองเกมช่วยเพื่อนให้ดี`;
+      } else if (myFit < 60) {
+        if (meAg) {
+          meAg.fit = clamp(meAg.fit + 3, 25, 100);
+          sr.liveFit[meAg.id] = meAg.fit;
+          setLiveFitMap({ ...sr.liveFit });
+        }
+        coachMsg = `เห็นแล้วว่าแรงเริ่มตก (${myFit}%) ผ่อนจังหวะรอรับบอลเน้นชัวร์ไว้ก่อน (ฟิตฟื้นเล็กน้อย +3%)`;
+      } else {
+        if (meAg) adjustLiveForm(meAg.id, 0.12);
+        coachMsg = `เยี่ยมมาก! ฟิตยังเหลือเฟือ (${myFit}%) เร่งความมั่นใจแล้วช่วยทีมเจาะเกมรับคู่แข่งได้เลย!`;
+      }
+    }
+
+    setCoachChatReplies((prev) =>
+      [{ id: Date.now() + Math.floor(Math.random() * 1000), m: curMin, userMsg, coachMsg, accepted }, ...prev].slice(0, 12)
+    );
   };
 
   const liveHome = useMemo<Team>(
@@ -1339,6 +1812,8 @@ export const MatchModal: React.FC<{
       const aiH = aiCoachRef.current.H;
       return {
         ...homeOrig,
+        cap: liveCaptains.H || homeOrig.cap,
+        setPieces: meIsHome ? liveSetPiecesUi : homeOrig.setPieces,
         form: isUserMgr ? homeOrig.form : aiFormDisplay.H,
         cf: isUserMgr ? homeOrig.cf : aiH.cf,
         tac: isUserMgr ? liveTac : aiH.tac,
@@ -1351,7 +1826,7 @@ export const MatchModal: React.FC<{
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [homeOrig, meIsHome, state.mode, liveTac, livePress, liveTempo, liveLine, liveWid, livePass, liveLu, subLog.length, aiFormDisplay.H]
+    [homeOrig, meIsHome, state.mode, liveTac, livePress, liveTempo, liveLine, liveWid, livePass, liveLu, subLog.length, aiFormDisplay.H, liveCaptains.H, liveSetPiecesUi]
   );
 
   const liveAway = useMemo<Team>(
@@ -1360,6 +1835,8 @@ export const MatchModal: React.FC<{
       const aiA = aiCoachRef.current.A;
       return {
         ...awayOrig,
+        cap: liveCaptains.A || awayOrig.cap,
+        setPieces: !meIsHome ? liveSetPiecesUi : awayOrig.setPieces,
         form: isUserMgr ? awayOrig.form : aiFormDisplay.A,
         cf: isUserMgr ? awayOrig.cf : aiA.cf,
         tac: isUserMgr ? liveTac : aiA.tac,
@@ -1372,7 +1849,7 @@ export const MatchModal: React.FC<{
       };
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [awayOrig, meIsHome, state.mode, liveTac, livePress, liveTempo, liveLine, liveWid, livePass, liveLu, subLog.length, aiFormDisplay.A]
+    [awayOrig, meIsHome, state.mode, liveTac, livePress, liveTempo, liveLine, liveWid, livePass, liveLu, subLog.length, aiFormDisplay.A, liveCaptains.A, liveSetPiecesUi]
   );
 
   useEffect(() => {
@@ -1602,6 +2079,7 @@ export const MatchModal: React.FC<{
         triggerCoachMood(w, culprit.side, '🤬', 2.8);
         triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😮', 2.4);
       }
+      ensureOnPitchCaptain(w, culprit.side, curMin, 'red', silentLog);
       return 'R' as const;
     }
     sr.yellows[culprit.id] = (sr.yellows[culprit.id] || 0) + 1;
@@ -1625,6 +2103,7 @@ export const MatchModal: React.FC<{
         triggerCoachMood(w, culprit.side, '🤦', 2.7);
         triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😤', 2.3);
       }
+      ensureOnPitchCaptain(w, culprit.side, curMin, 'red', silentLog);
       return 'Y2R' as const;
     }
     adjustLiveForm(culprit.id, -0.35);
@@ -1748,6 +2227,7 @@ export const MatchModal: React.FC<{
             if (w.ball.targetId === victim.id) w.ball.targetId = subIn.n;
           }
           pushLog(curMin, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ: 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+          ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
         } else {
           victim.sentOff = true;
           sr.sentOff.push(victim.id);
@@ -1756,6 +2236,7 @@ export const MatchModal: React.FC<{
           setSentOff(sr.sentOff.slice());
           const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
           pushLog(curMin, `⚠️ ไม่มีตัวสำรองพร้อมเปลี่ยน! ${sideOrig.name} จำใจเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
+          ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
         }
       } else {
         victim.sentOff = true;
@@ -1765,6 +2246,7 @@ export const MatchModal: React.FC<{
         setSentOff(sr.sentOff.slice());
         const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
         pushLog(curMin, `⚠️ เปลี่ยนตัวครบโควต้าแล้ว! ${sideOrig.name} จำใจเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
+        ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
       }
       return true;
     }
@@ -1801,6 +2283,7 @@ export const MatchModal: React.FC<{
       syncSidelineBenches(w);
       triggerCoachShout(w, isHomeSide ? 'H' : 'A', '🔄 แทนคนเจ็บด่วน!', 2.3);
       pushLog(curMin, `🔄 เปลี่ยนตัวฉุกเฉิน (${sideOrig.name}): 🟢 ${subIn.n} เข้าแทน 🩹 ${victim.id}`, 'sub');
+      ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
     } else {
       victim.sentOff = true;
       sr.sentOff.push(victim.id);
@@ -1809,6 +2292,7 @@ export const MatchModal: React.FC<{
       setSentOff(sr.sentOff.slice());
       const sideSentOffCount = w.agents.filter((a) => a.side === victim.side && a.sentOff).length;
       pushLog(curMin, `⚠️ ${sideOrig.name} เปลี่ยนตัวไม่ได้แล้ว ต้องฝืนเล่นต่อด้วยผู้เล่น ${Math.max(1, 11 - sideSentOffCount)} คน`, 'card');
+      ensureOnPitchCaptain(w, victim.side, curMin, 'inj', isInstantStep);
     }
     return true;
   };
@@ -1864,13 +2348,7 @@ export const MatchModal: React.FC<{
     // Track corner role assignment indices so top aerial targets fill box zones and corner taker stays at flag
     const cornerTaker =
       setPiece && setPiece.type === 'corner'
-        ? activeAgents
-            .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
-            .sort(
-              (u, v) =>
-                v.d.crs + v.d.cur + (v.sig === 'crs' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0) -
-                (u.d.crs + u.d.cur + (u.sig === 'crs' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0))
-            )[0]
+        ? resolveSetPieceTaker(w, setPiece.side, 'corner')
         : undefined;
     const cornerAttList =
       setPiece && setPiece.type === 'corner'
@@ -3278,10 +3756,7 @@ export const MatchModal: React.FC<{
       if (sp.type === 'freekick') {
         const goalX = attRight ? 100 : 0;
         const distToGoal = Math.hypot(goalX - sp.x, 50 - sp.y);
-        const taker =
-          attPool
-            .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.cur + v.d.pw + (v.sig === 'cur' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0)) - (u.d.cur + u.d.pw + (u.sig === 'cur' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0)))[0] || attPool[0];
+        const taker = resolveSetPieceTaker(w, sp.side, 'freekick') || attPool[0];
         if (!taker) return;
         taker.x = clamp(sp.x - dir * 1.5, 4, 96);
         taker.y = sp.y;
@@ -3344,10 +3819,7 @@ export const MatchModal: React.FC<{
       }
 
       if (sp.type === 'corner') {
-        const taker =
-          attPool
-            .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.crs + v.d.cur + (v.sig === 'crs' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0)) - (u.d.crs + u.d.cur + (u.sig === 'crs' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0)))[0] || attPool[0];
+        const taker = resolveSetPieceTaker(w, sp.side, 'corner') || attPool[0];
         const headerTarget =
           attPool
             .filter((a) => a.id !== taker?.id && a.pos !== 'GK')
@@ -3387,10 +3859,7 @@ export const MatchModal: React.FC<{
       }
 
       if (sp.type === 'penalty') {
-        const taker =
-          attPool
-            .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => (v.d.fin + (v.d.comp || 60) + (agentHasTrait(v, 'clutch_player') ? 14 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 10 : 0)) - (u.d.fin + (u.d.comp || 60) + (agentHasTrait(u, 'clutch_player') ? 14 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 10 : 0)))[0] || attPool[0];
+        const taker = resolveSetPieceTaker(w, sp.side, 'penalty') || attPool[0];
         if (!taker) return;
         const spotX = attRight ? 88.5 : 11.5;
         const isPanenka = (agentHasTrait(taker, 'chip_artist') || agentHasTrait(taker, 'clutch_player') || (taker.d.comp || 60) >= 74) && Math.random() < (agentHasTrait(taker, 'chip_artist') ? 0.32 : 0.18);
@@ -7063,11 +7532,16 @@ export const MatchModal: React.FC<{
       const isMeOut = isPlayerMode && outPlayer.n === myPlayerName;
       syncSidelineBenches(w);
       pushLog(curMin, `🔄 เปลี่ยนตัว (${sideOrig.name}): 🟢 ${inPlayer.n}${isMeIn ? ' (คุณ!)' : ''} เข้าแทน 🔴 ${outPlayer.n}${isMeOut ? ' (คุณ)' : ''}`, 'sub');
+      ensureOnPitchCaptain(w, isHomeSide ? 'H' : 'A', curMin, 'sub', true);
     };
 
     runAiSubForSide(true);
     runAiSubForSide(false);
-    if (curMin >= 62 && curMin <= 74) {
+    if (curMin >= 25 && curMin <= 38) {
+      maybeAiLiveCoachAdjust(w, 'H', curMin, 'early', true);
+      maybeAiLiveCoachAdjust(w, 'A', curMin, 'early', true);
+    }
+    if (curMin >= 62 && curMin <= 78) {
       maybeAiLiveCoachAdjust(w, 'H', curMin, 'late', true);
       maybeAiLiveCoachAdjust(w, 'A', curMin, 'late', true);
     }
@@ -7247,11 +7721,16 @@ export const MatchModal: React.FC<{
       setSubLog(sr.subs.slice());
       syncSidelineBenches(w);
       triggerCoachShout(w, isHomeSide ? 'H' : 'A', '🔄 เปลี่ยนตัว!', 2.3);
+      ensureOnPitchCaptain(w, isHomeSide ? 'H' : 'A', curMin, 'sub', false);
     };
 
     runAiSubForSide(true);
     runAiSubForSide(false);
-    if (curMin >= 62 && curMin <= 74) {
+    if (curMin >= 25 && curMin <= 38) {
+      maybeAiLiveCoachAdjust(w, 'H', curMin, 'early', false);
+      maybeAiLiveCoachAdjust(w, 'A', curMin, 'early', false);
+    }
+    if (curMin >= 62 && curMin <= 78) {
       maybeAiLiveCoachAdjust(w, 'H', curMin, 'late', false);
       maybeAiLiveCoachAdjust(w, 'A', curMin, 'late', false);
     }
@@ -7555,7 +8034,7 @@ export const MatchModal: React.FC<{
 
   const startLiveShootout = (w: LiveMatchWorld) => {
     const active = w.agents.filter((a) => !a.sentOff);
-    const firstKicker = active.filter((a) => a.side === 'H' && a.pos !== 'GK').sort((u, v) => v.d.fin - u.d.fin)[0];
+    const firstKicker = resolveSetPieceTaker(w, 'H', 'penalty') || active.filter((a) => a.side === 'H' && a.pos !== 'GK')[0];
     const firstGk = active.find((a) => a.side === 'A' && a.pos === 'GK');
     w.phase = 'shootout';
     w.varReview = null;
@@ -7800,6 +8279,7 @@ export const MatchModal: React.FC<{
           ? `ปั้นดาวรุ่งเก็บประสบการณ์ · อายุ ${cand.age} พรสวรรค์ ${tl}`
           : `ตัวพร้อมลง · ฟิต ${Math.round(fitCand)}%`;
       pushLog(curMin, `🤖 ออโต้เปลี่ยนตัว (${reasonTag}): 🟢 ${cand.n} (${cand.ro}) แทน 🔴 ${outPl.n}`, 'sub');
+      ensureOnPitchCaptain(w, meIsHome ? 'H' : 'A', curMin, 'sub', false);
       if (injuryAlert && injuryAlert.name === outPl.n) setInjuryAlert(null);
     }
   };
@@ -7892,18 +8372,28 @@ export const MatchModal: React.FC<{
       }
     } else if (state.mode === 'p' && myPlayerName) {
       const meAg = w.agents.find((a) => a.id === myPlayerName);
+      const mySideCfg = aiCoachRef.current[mySide];
       if (talkTone === 'fit' && !halftimeWarmupUsed) {
         if (meAg) {
           meAg.fit = clamp(meAg.fit + 6, 25, 100);
           sr.liveFit[meAg.id] = meAg.fit;
         }
-        pushLog(45, `💪 คุณวอร์มอัพเรียกความฟิตช่วงพักครึ่ง (+6%) พร้อมลุย 45 นาทีหลัง!`, 'sys');
-      } else if (talkTone === 'attack') {
-        if (meAg) adjustLiveForm(meAg.id, 0.2);
-        pushLog(45, `🔥 คุณตั้งเป้าลุยล่าตาข่ายเต็มตัวในครึ่งหลัง!`, 'sys');
+        pushLog(45, `💪 คุณทำตามแผนโค้ชพร้อมวอร์มอัพเรียกความฟิต (+6%) ลุยครึ่งหลัง!`, 'sys');
+      } else if (talkTone === 'ask_attack' || talkTone === 'attack') {
+        mySideCfg.tac = mySideCfg.tac === 'Z' || mySideCfg.tac === 'D' ? 'B' : mySideCfg.tac === 'B' ? 'A' : 'X';
+        mySideCfg.press = Math.min(2, mySideCfg.press + 1);
+        mySideCfg.line = Math.min(2, mySideCfg.line + 1);
+        if (meAg) adjustLiveForm(meAg.id, 0.18);
+        pushLog(45, `🔥 คุณเสนอโค้ชเปิดเกมรุกเพิ่มในครึ่งหลัง — โค้ชปรับสไตล์ทีมเป็น ${AR_T[mySideCfg.tac]}!`, 'sys');
+      } else if (talkTone === 'ask_defend') {
+        mySideCfg.tac = mySideCfg.tac === 'X' || mySideCfg.tac === 'A' ? 'B' : 'D';
+        mySideCfg.line = Math.max(0, mySideCfg.line - 1);
+        mySideCfg.pass = 3;
+        if (meAg) adjustLiveForm(meAg.id, 0.14);
+        pushLog(45, `🛡️ คุณเสนอโค้ชเล่นรัดกุมรอสวนกลับ — โค้ชปรับสไตล์ทีมเป็น ${AR_T[mySideCfg.tac]}!`, 'sys');
       } else {
-        if (meAg) adjustLiveForm(meAg.id, 0.12);
-        pushLog(45, `⚖️ คุณตั้งสมาธิคุมจังหวะและช่วยประสานงานทีมในครึ่งหลัง`, 'sys');
+        if (meAg) adjustLiveForm(meAg.id, 0.16);
+        pushLog(45, `🤝 คุณรับคำสั่งโค้ช ${meTeamOrig.name} เต็มร้อย (${mySideCfg.form} · ${AR_T[mySideCfg.tac]}) ลุยครึ่งหลัง!`, 'sys');
       }
     }
     w.phase = 'play2';
@@ -8679,6 +9169,7 @@ export const MatchModal: React.FC<{
     syncSidelineBenches(w);
     triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 ลงไปช่วยทีม!', 2.4);
     pushLog(minute, `🔄 เปลี่ยนตัว (${meTeamOrig.name}): 🟢 ${benchPlayer.n} เข้าแทน 🔴 ${outName}`, 'sub');
+    ensureOnPitchCaptain(w, meIsHome ? 'H' : 'A', minute, 'sub', false);
     if (injuryAlert && injuryAlert.name === outName) {
       setInjuryAlert(null);
     }
@@ -8764,6 +9255,7 @@ export const MatchModal: React.FC<{
     syncSidelineBenches(w);
     triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 แทนคนเจ็บด่วน!', 2.4);
     pushLog(minute, `🔄 เปลี่ยนตัวด่วนแทนผู้เจ็บ (${meTeamOrig.name}): 🟢 ${bestSub.n} เข้าแทน 🩹 ${injuryAlert.name}`, 'sub');
+    ensureOnPitchCaptain(w, meIsHome ? 'H' : 'A', minute, 'inj', false);
     setInjuryAlert(null);
     setSubPickOut(null);
     setPaused(false);
@@ -8835,6 +9327,7 @@ export const MatchModal: React.FC<{
     syncSidelineBenches(w);
     triggerCoachShout(w, meIsHome ? 'H' : 'A', '🔄 เปลี่ยนตัว!', 2.2);
     pushLog(minute, `🔄 เปลี่ยนตัวด่วน (${meTeamOrig.name}): 🟢 ${bestSub.n} เข้าแทน 🔴 ${outName}`, 'sub');
+    ensureOnPitchCaptain(w, meIsHome ? 'H' : 'A', minute, 'sub', false);
     if (injuryAlert && injuryAlert.name === outName) {
       setInjuryAlert(null);
     }
@@ -9454,7 +9947,7 @@ export const MatchModal: React.FC<{
         <div className="shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
           <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2.5 gap-y-1.5">
             {/* Left: Unified Match Info Capsule (Full Competition Name · Weather · Attendance · Live) */}
-            <div className="order-1 inline-flex flex-col items-start justify-center xl:flex-row xl:items-center gap-0.5 xl:gap-1.5 px-2 mland:px-1.5 py-1 xl:py-0 min-h-8 sm:min-h-9 mland:min-h-7 xl:h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 shrink-0 max-w-[calc(100%-150px)] sm:max-w-[195px] md:max-w-[235px] lg:max-w-[285px] xl:max-w-none">
+            <div className="order-1 inline-flex flex-col items-start justify-center xl:flex-row xl:items-center gap-0.5 xl:gap-1.5 px-2 mland:px-1.5 py-1 xl:py-0 min-h-8 sm:min-h-9 mland:min-h-7 xl:h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 shrink-0 max-w-[calc(100%-205px)] sm:max-w-[195px] md:max-w-[235px] lg:max-w-[285px] xl:max-w-none">
               <span
                 className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight whitespace-normal xl:whitespace-nowrap"
                 title={compTitle}
@@ -9662,7 +10155,7 @@ export const MatchModal: React.FC<{
               </div>
             </div>
 
-            {/* Right: Sleek Uniform-Height Playback Control Dock (Auto before Pause) */}
+            {/* Right: Tall, Prominent Uniform-Height Playback Control Dock (Live, Halftime & Post-Match) */}
             <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
               {!done ? (
                 <>
@@ -9693,13 +10186,13 @@ export const MatchModal: React.FC<{
                           return next;
                         });
                       }}
-                      className={`btn h-8 sm:h-9 mland:h-7 px-2 sm:px-2.5 mland:px-1.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] shrink-0 ${
+                      className={`btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 ${
                         autoSubEnabled
                           ? 'btn-primary'
                           : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] shadow-2xs'
                       }`}
                     >
-                      <Bot className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                      <Bot className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
                       <span className="hidden sm:inline mland:inline">ออโต้</span>
                     </button>
                   )}
@@ -9710,9 +10203,9 @@ export const MatchModal: React.FC<{
                       title="เริ่มครึ่งหลัง"
                       aria-label="เริ่มครึ่งหลัง"
                       onClick={() => handleStartSecondHalf()}
-                      className="btn btn-gold h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2 rounded-lg text-[11px] sm:text-xs mland:text-[10px]"
+                      className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] px-3 sm:px-4 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px]"
                     >
-                      <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                      <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
                       <span>เริ่มครึ่งหลัง</span>
                     </button>
                     <button
@@ -9720,38 +10213,38 @@ export const MatchModal: React.FC<{
                       title="ข้ามครึ่งหลังไปจบเกม"
                       aria-label="ข้ามครึ่งหลังไปจบเกม"
                       onClick={skipToEnd}
-                      className="btn btn-surface h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2 rounded-lg text-[11px] sm:text-xs mland:text-[10px]"
+                      className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px]"
                     >
-                      <FastForward className="w-3.5 h-3.5 shrink-0" />
+                      <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
                       <span className="hidden sm:inline mland:inline">ข้าม</span>
                     </button>
                   </>
                 ) : (
                   <>
-                    <div className="inline-flex items-center h-8 sm:h-9 mland:h-7 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs shrink-0">
+                    <div className="inline-flex items-center h-10 sm:h-11 md:h-12 mland:h-[38px] p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs shrink-0">
                       <button
                         type="button"
                         title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         onClick={() => setPaused((p) => !p)}
-                        className={`h-full w-8 sm:w-9 lg:w-[86px] mland:w-7 px-0 lg:px-2 mland:px-0 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                        className={`h-full w-9 sm:w-10 lg:w-[92px] mland:w-[34px] px-0 lg:px-2.5 mland:px-0 rounded-lg mland:rounded-md inline-flex items-center justify-center gap-1.5 text-xs sm:text-[13px] mland:text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                           paused
                             ? 'bg-[var(--g)] text-white shadow-2xs'
                             : 'text-[var(--ink)] hover:bg-[var(--surface-2)]'
                         }`}
                       >
-                        {paused ? <Play className="w-3.5 h-3.5 fill-current shrink-0" /> : <Pause className="w-3.5 h-3.5 shrink-0" />}
+                        {paused ? <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" /> : <Pause className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />}
                         <span className="hidden lg:inline mland:hidden">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
                       </button>
-                      <span className="w-px h-4 bg-[var(--line)] mx-0.5 shrink-0" />
+                      <span className="w-px h-5 sm:h-6 mland:h-5 bg-[var(--line)] mx-0.5 shrink-0" />
                       <button
                         type="button"
                         title="ปรับความเร็วการแข่งขัน"
                         aria-label="ปรับความเร็วการแข่งขัน"
                         onClick={cycleMatchSpeed}
-                        className="h-full w-[58px] sm:w-[62px] lg:w-[68px] mland:w-[50px] px-1 rounded-md inline-flex items-center justify-center gap-1 text-[11px] sm:text-xs mland:text-[10px] font-bold text-[var(--ink)] hover:bg-[var(--surface-2)] tabular transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                        className="h-full w-[60px] sm:w-[66px] lg:w-[72px] mland:w-[54px] px-1 rounded-lg mland:rounded-md inline-flex items-center justify-center gap-1 text-xs sm:text-[13px] mland:text-[11px] font-bold text-[var(--ink)] hover:bg-[var(--surface-2)] tabular transition-colors cursor-pointer whitespace-nowrap shrink-0"
                       >
-                        <Gauge className="w-3.5 h-3.5 opacity-80 shrink-0" />
+                        <Gauge className="w-4 h-4 mland:w-3.5 mland:h-3.5 opacity-80 shrink-0" />
                         <span className="w-[4.6ch] text-center">{speed}x</span>
                       </button>
                     </div>
@@ -9761,9 +10254,9 @@ export const MatchModal: React.FC<{
                       title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       onClick={skipToEnd}
-                      className="btn btn-gold h-8 sm:h-9 mland:h-7 px-2.5 sm:px-3 mland:px-2 rounded-lg text-[11px] sm:text-xs mland:text-[10px] shrink-0"
+                      className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
                     >
-                      <FastForward className="w-3.5 h-3.5 shrink-0" />
+                      <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
                       <span className="hidden sm:inline mland:inline">ข้าม</span>
                     </button>
                   </>
@@ -9775,9 +10268,9 @@ export const MatchModal: React.FC<{
                   title="จบเกมและดำเนินการต่อ"
                   aria-label="จบเกมและดำเนินการต่อ"
                   onClick={handleConfirmFinish}
-                  className="btn h-8 sm:h-9 mland:h-7 px-3.5 sm:px-4 mland:px-2.5 rounded-lg text-[11px] sm:text-xs mland:text-[10px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
+                  className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-4 sm:px-5 mland:px-3.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
                 >
-                  <Flag className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <Flag className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
                   <span>จบเกม</span>
                 </button>
               )}
@@ -10256,12 +10749,28 @@ export const MatchModal: React.FC<{
                               <div className="space-y-2 mland:space-y-1 flex-1 min-h-0 flex flex-col">
                                 <div>
                                   <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[#fde047] flex items-center gap-1.5">
-                                    <span>🗣️ สั่งการครึ่งหลัง</span>
+                                    <span>{state.mode === 'm' ? '🗣️ สั่งการครึ่งหลัง' : '👔 คำสั่งโค้ชพักครึ่ง'}</span>
                                   </div>
                                   <p className="text-[10px] mland:text-[8px] text-white/70 leading-snug mt-0.5">
-                                    เลือกแผนสั่งการ แล้วกดเริ่มครึ่งหลัง
+                                    {state.mode === 'm'
+                                      ? 'เลือกแผนสั่งการ แล้วกดเริ่มครึ่งหลัง'
+                                      : 'รับฟังคำสั่งโค้ช หรือเสนอความเห็นของคุณ'}
                                   </p>
                                 </div>
+
+                                {state.mode === 'p' && halftimeCoachOrder && (
+                                  <div className="rounded-xl mland:rounded-lg bg-white/10 border border-amber-300/35 px-2.5 py-2 mland:px-2 mland:py-1 space-y-1 mland:space-y-0.5 shrink-0">
+                                    <div className="font-extrabold text-[10.5px] mland:text-[8.5px] text-amber-200 leading-snug">
+                                      {halftimeCoachOrder.headline}
+                                    </div>
+                                    <div className="text-[9.5px] mland:text-[7.5px] text-white/85 leading-snug">
+                                      📋 {halftimeCoachOrder.detail}
+                                    </div>
+                                    <div className="text-[9.5px] mland:text-[7.5px] text-emerald-200 leading-snug">
+                                      💬 {halftimeCoachOrder.playerNote}
+                                    </div>
+                                  </div>
+                                )}
 
                                 <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 mland:gap-1 pr-0.5">
                                   {(state.mode === 'm'
@@ -10273,8 +10782,9 @@ export const MatchModal: React.FC<{
                                         { id: 'defend' as const, icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
                                       ]
                                     : [
-                                        { id: 'attack' as const, icon: '🔥', title: 'ลุยล่าประตูครึ่งหลัง', desc: 'เพิ่มความเฉียบคมและความดุดันในกรอบ' },
-                                        { id: 'balanced' as const, icon: '⚖️', title: 'คุมจังหวะประสานทีม', desc: 'เชื่อมเกมให้ลื่นไหลและลดความผิดพลาด' },
+                                        { id: 'follow_coach' as const, icon: '🤝', title: 'ทำตามคำสั่งโค้ชเต็มที่', desc: 'คุมระเบียบตามแท็กติกทีม (+ฟอร์ม)' },
+                                        { id: 'ask_attack' as const, icon: '🔥', title: 'เสนอโค้ช: เปิดเกมรุกเพิ่ม', desc: 'ชวนทีมดันไลน์สูงล่าประตูครึ่งหลัง' },
+                                        { id: 'ask_defend' as const, icon: '🛡️', title: 'เสนอโค้ช: เน้นรับคุมโซน', desc: 'แพ็กหลังแน่นแล้วรอสวนกลับเร็ว' },
                                         { id: 'fit' as const, icon: '💪', title: 'วอร์มเติมความฟิต (+6%)', desc: 'เตรียมพละกำลังให้พร้อมลุย 45 นาทีหลัง' }
                                       ]
                                   ).map((opt) => {
@@ -10949,7 +11459,7 @@ export const MatchModal: React.FC<{
 
             {/* Right Stage: Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
-              <div className={`seg-bar grid w-full shrink-0 ${state.mode === 'm' && !done ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <div className={`seg-bar grid w-full shrink-0 ${!done ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <button
                   type="button"
                   onClick={() => setMlandMatchTab('stats')}
@@ -10968,22 +11478,116 @@ export const MatchModal: React.FC<{
                     {fmtFansShort(liveViewers)}
                   </span>
                 </button>
-                {state.mode === 'm' && !done && (
-                  <button
-                    type="button"
-                    onClick={() => openTacticsStudio()}
-                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
-                  >
-                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-                      {5 - subsUsed.length}
-                    </span>
-                    <span>📋 แผน</span>
-                  </button>
+                {!done && (
+                  state.mode === 'm' ? (
+                    <button
+                      type="button"
+                      onClick={() => openTacticsStudio()}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+                        {5 - subsUsed.length}
+                      </span>
+                      <span>📋 แผน</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setMlandMatchTab('tactics');
+                      }}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span>🗣️ คุยโค้ช</span>
+                    </button>
+                  )
                 )}
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-1.5">
-                {mlandMatchTab === 'chat' ? (
+                {mlandMatchTab === 'tactics' && state.mode === 'p' && !done ? (
+                  (() => {
+                    const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
+                    const myTeamLive = meIsHome ? liveHome : liveAway;
+                    const oppTeamLive = meIsHome ? liveAway : liveHome;
+                    const canSpeak = minute - coachChatCooldownMin >= 8;
+                    const waitSpeakMins = Math.max(1, 8 - (minute - coachChatCooldownMin));
+                    const curCap = mySide === 'H' ? liveCaptains.H : liveCaptains.A;
+                    return (
+                      <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+                        <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/80 border-b border-[var(--line)] space-y-1 shrink-0">
+                          <div className="flex items-center justify-between gap-2 text-xs mland:text-[10px] font-extrabold">
+                            <span>🧠 แผนโค้ช &amp; กัปตันในสนาม</span>
+                            <span className="px-1.5 py-0.5 rounded bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold">
+                              {myTeamLive.form} · {AR_T[myTeamLive.tac]}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                            <div className="truncate">
+                              👑 กัปตัน: <b className="text-[var(--ink)]">{curCap || '-'}</b>
+                            </div>
+                            <div className="truncate text-right">
+                              คู่แข่ง: <b className="text-[var(--ink)]">{oppTeamLive.form} · {AR_T[oppTeamLive.tac]}</b>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1 pt-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)]">
+                            <div className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] truncate">
+                              🚩 <b className="text-[var(--ink)]">{(liveSetPiecesUi.corner || 'AI').split(' ')[0]}</b>
+                            </div>
+                            <div className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] truncate">
+                              🎯 <b className="text-[var(--ink)]">{(liveSetPiecesUi.freekick || 'AI').split(' ')[0]}</b>
+                            </div>
+                            <div className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] truncate">
+                              🥅 <b className="text-[var(--ink)]">{(liveSetPiecesUi.penalty || 'AI').split(' ')[0]}</b>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
+                          <div className="flex items-center justify-between text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)]">
+                            <span>🗣️ ออกความเห็นกับโค้ช</span>
+                            <span>{canSpeak ? 'พร้อมคุย' : `รออีก ${waitSpeakMins} น.`}</span>
+                          </div>
+                          <div className="grid grid-cols-1 gap-1.5 mland:gap-1">
+                            {[
+                              { id: 'attack' as const, icon: '🔥', label: 'เสนอโค้ชเปิดเกมรุกกดดันเพิ่ม' },
+                              { id: 'defend' as const, icon: '🛡️', label: 'เสนอโค้ชเน้นรับคุมโซนรอโต้กลับ' },
+                              { id: 'formation' as const, icon: '🔀', label: 'เสนอโค้ชปรับแผน/เปลี่ยนระบบเล่น' },
+                              { id: 'setpiece' as const, icon: '🎯', label: 'อาสารับหน้าที่ยิงฟรีคิก / เตะมุม / จุดโทษ' },
+                              { id: 'fitness' as const, icon: '💬', label: 'รายงานสภาพฟิต / จังหวะเกมกับโค้ช' }
+                            ].map((btn) => (
+                              <button
+                                key={btn.id}
+                                type="button"
+                                disabled={!canSpeak}
+                                onClick={() => handlePlayerVoiceToCoach(btn.id)}
+                                className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g-soft)] border border-[var(--line)] hover:border-[var(--g)]/50 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] mland:text-[9.5px] font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                              >
+                                <span>{btn.icon}</span>
+                                <span className="truncate">{btn.label}</span>
+                              </button>
+                            ))}
+                          </div>
+
+                          {coachChatReplies.length > 0 && (
+                            <div className="pt-1 border-t border-[var(--line)] space-y-1.5">
+                              <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">💬 บันทึกการพูดคุย</div>
+                              {coachChatReplies.map((rp) => (
+                                <div key={rp.id} className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-0.5 text-[10px] mland:text-[8.5px]">
+                                  <div className="font-bold text-[var(--ink)]">{rp.m}&apos; {rp.userMsg}</div>
+                                  <div className={rp.accepted ? 'text-[var(--g)] font-semibold' : 'text-[var(--mut)] font-medium'}>
+                                    👔 โค้ช: {rp.coachMsg}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()
+                ) : mlandMatchTab === 'chat' ? (
                   (() => {
                     const vTier = getStreamViewerTier(liveViewers);
                     const tierMeta = getViewerTierMeta(vTier);

@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus } from './playerCore';
+import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
 
@@ -291,10 +291,12 @@ export function rate(
   at += wd * 1.5 + ln * 1.5 + (pa === 0 ? (av('MF') - 60) / 10 : pa === 2 ? (av('FW') - 60) / 10 : pa === 3 ? 1 : 0);
   df += -wd - ln * 2.5 + (pa === 3 ? 1 : 0);
 
-  const cp = t.cap && x.find((q) => q.n === t.cap);
+  const activeCapName = (t.cap && x.some((q) => q.n === t.cap)) ? t.cap : pickBestCaptain(t, x.map((q) => q.n), sentOffNames, s?.p);
+  const cp = activeCapName && x.find((q) => q.n === activeCapName);
   if (cp) {
-    at += (cp.ov - 60) / 30;
-    df += (cp.ov - 60) / 30;
+    const capMul = cp.n === t.cap ? 1 : 0.72;
+    at += ((cp.ov - 60) / 30) * capMul;
+    df += ((cp.ov - 60) / 30) * capMul;
   }
   const famBonus = (((t.tacFam ?? 65) - 50) / 50) * 2;
   at += famBonus;
@@ -377,6 +379,8 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
       if (hasTrait(q, 'selfish_shooter', careerP)) traitBoost += 0.24;
       if (hasTrait(q, 'acrobatic_finisher', careerP)) traitBoost += 0.2;
       if (hasTrait(q, 'comeback_king', careerP)) traitBoost += 0.14;
+      if (t.setPieces?.penalty === q.n) traitBoost += 0.16;
+      if (t.setPieces?.freekick === q.n) traitBoost += 0.1;
       const wVal = Math.max(1, Math.round(b * traitBoost * Math.pow(sc / 70, 2)));
       goalWeights[i] = wVal;
       goalTotal += wVal;
@@ -396,6 +400,8 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
       if (hasTrait(q, 'one_two_lover', careerP)) assistBoost += 0.22;
       if (hasTrait(q, 'setpiece_specialist', careerP)) assistBoost += 0.24;
       if (hasTrait(q, 'team_first', careerP)) assistBoost += 0.26;
+      if (t.setPieces?.corner === q.n) assistBoost += 0.18;
+      if (t.setPieces?.freekick === q.n) assistBoost += 0.1;
       if (hasTrait(q, 'selfish_shooter', careerP)) assistBoost *= 0.68;
       const aSc = D.d.crs * 0.28 + D.d.spass * 0.18 + D.d.lpass * 0.16 + D.a.ps * 0.20 + D.d.cur * 0.08 + D.a.dr * 0.05 + D.d.rd * 0.05;
       const aVal = Math.max(1, Math.round((q.pos === 'MF' ? 4 : q.pos === 'FW' ? 3 : 1) * assistBoost * Math.pow(aSc / 70, 2)));
@@ -2885,6 +2891,7 @@ export function createNewGame(
       vis: [ki >= 0 ? ki : 2, hi >= 0 ? hi : 0, p.hs ?? 0, p.fh ?? 0, p.ey ?? 0, chosenNo, p.fs ?? 0, p.acc ?? 0]
     });
     assignTeamShirtNumbers(t);
+    autoAssignTeamRoles(t, { careerP: s.p, forceAll: true });
   }
 
   startSeason(s);
@@ -4417,6 +4424,12 @@ export function acceptTransferOffer(d: GameState, off: TransferOffer): { ok: boo
   const sold = me.sq.splice(idx, 1)[0];
   me.lu = null;
   if (me.cap === sold.n) me.cap = '';
+  if (me.setPieces) {
+    if (me.setPieces.corner === sold.n) me.setPieces.corner = '';
+    if (me.setPieces.freekick === sold.n) me.setPieces.freekick = '';
+    if (me.setPieces.penalty === sold.n) me.setPieces.penalty = '';
+  }
+  autoAssignTeamRoles(me, { careerP: d.p });
   if (d.focusPlayer === sold.n) d.focusPlayer = null;
   delete sold.listed;
   delete sold.askPrice;
@@ -4432,6 +4445,7 @@ export function acceptTransferOffer(d: GameState, off: TransferOffer): { ok: boo
     buyer.sq.push(sold);
     buyer.lu = null;
     assignTeamShirtNumbers(buyer);
+    autoAssignTeamRoles(buyer);
   }
 
   const buyerName = buyer?.name || off.t;
@@ -4714,6 +4728,12 @@ export function releaseSquadPlayers(
 
   me.lu = null;
   if (me.cap && targetNames.has(me.cap)) me.cap = '';
+  if (me.setPieces) {
+    if (me.setPieces.corner && targetNames.has(me.setPieces.corner)) me.setPieces.corner = '';
+    if (me.setPieces.freekick && targetNames.has(me.setPieces.freekick)) me.setPieces.freekick = '';
+    if (me.setPieces.penalty && targetNames.has(me.setPieces.penalty)) me.setPieces.penalty = '';
+  }
+  autoAssignTeamRoles(me, { careerP: d.p });
   if (d.focusPlayer && targetNames.has(d.focusPlayer)) d.focusPlayer = null;
 
   let loanReturnedCount = 0;
@@ -4807,6 +4827,12 @@ export function quickSellSquadPlayers(
 
   me.lu = null;
   if (me.cap && targetNames.has(me.cap)) me.cap = '';
+  if (me.setPieces) {
+    if (me.setPieces.corner && targetNames.has(me.setPieces.corner)) me.setPieces.corner = '';
+    if (me.setPieces.freekick && targetNames.has(me.setPieces.freekick)) me.setPieces.freekick = '';
+    if (me.setPieces.penalty && targetNames.has(me.setPieces.penalty)) me.setPieces.penalty = '';
+  }
+  autoAssignTeamRoles(me, { careerP: d.p });
   if (d.focusPlayer && targetNames.has(d.focusPlayer)) d.focusPlayer = null;
 
   let totalGain = 0;

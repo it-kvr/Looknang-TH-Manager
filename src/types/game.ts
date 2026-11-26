@@ -208,6 +208,12 @@ export interface PlayerMissionsState {
 
 export type CustomSlot = [SubRole, number, number];
 
+export interface TeamSetPieceTakers {
+  corner?: string;
+  freekick?: string;
+  penalty?: string;
+}
+
 export interface Team {
   id: number;
   name: string;
@@ -218,6 +224,7 @@ export interface Team {
   cf?: CustomSlot[];
   lu?: string[] | null;
   cap?: string;
+  setPieces?: TeamSetPieceTakers;
   tac: Mentality;
   press?: number;
   tempo?: number;
@@ -1044,6 +1051,7 @@ export interface LivePitchAgent {
   slotX: number; // 0..100 wing
   slotY: number; // 0..100 depth (92=GK, 15=ST)
   isMe: boolean;
+  isCaptain?: boolean;
   x: number;
   y: number;
   vx: number;

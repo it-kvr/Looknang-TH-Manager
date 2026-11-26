@@ -15,10 +15,12 @@ export const buildAgentsForTeam = (
   careerP?: PlayerCareerProfile | null,
   myPlayerName?: string,
   secondHalf = false,
-  statDeltas?: Record<string, number> | null
+  statDeltas?: Record<string, number> | null,
+  captainName?: string
 ): LivePitchAgent[] => {
   const slots = getFormationSlots(team);
   const attRight = (side === 'H') !== secondHalf;
+  const activeCap = captainName || team.cap;
   return luNames.map((name, i) => {
     const pl = team.sq.find((q) => q.n === name) || team.sq[i] || team.sq[0];
     const slot = slots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
@@ -48,6 +50,7 @@ export const buildAgentsForTeam = (
       slotX: slot.x,
       slotY: slot.y,
       isMe: Boolean(pl?.me || (myPlayerName && name === myPlayerName)),
+      isCaptain: Boolean(activeCap && name === activeCap),
       x: kickoffX,
       y: baseY,
       vx: 0,
@@ -1871,6 +1874,24 @@ export const drawLivePitchToCanvas = (
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(pillStr, rx0 + pillW / 2, ry0 + pillH / 2 + 0.3);
+    }
+
+    // Captain armband 'C' badge on left shoulder (clear of top position badge & right yellow card)
+    if (ag.isCaptain) {
+      const capX = -playerRadius * 0.92;
+      const capY = -playerRadius * 0.56;
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#78350f';
+      ctx.lineWidth = 1.05;
+      ctx.beginPath();
+      ctx.arc(capX, capY, 4.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#1c1917';
+      ctx.font = '900 5.8px Sarabun, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('C', capX, capY + 0.35);
     }
 
     // Yellow card mini indicator on right shoulder (clear of top position badge)
