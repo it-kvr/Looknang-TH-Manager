@@ -857,8 +857,8 @@ export interface GameState {
   boardDirectiveCd?: number;
   boardEffects?: BoardTempEffect[];
   boardFeedbackLog?: BoardFeedbackEntry[];
-  schedRes?: Record<number, { h: number; a: number; gh: number; ga: number }>;
-  cupLog?: { md: number; comp: 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; r: number; h: number; a: number; gh: number; ga: number; penText?: string }[];
+  schedRes?: Record<number, { h: number; a: number; gh: number; ga: number; varReplays?: VarReplayRecord[] }>;
+  cupLog?: { md: number; comp: 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; r: number; h: number; a: number; gh: number; ga: number; penText?: string; varReplays?: VarReplayRecord[] }[];
   med?: number;
   merchLv?: number;
   turfLv?: number;
@@ -1019,6 +1019,7 @@ export interface FinishedMatchPayload {
   cap?: number;
   streamViewers?: number;
   streamPeakViewers?: number;
+  varReplays?: VarReplayRecord[];
 }
 
 export type PitchIntent =
@@ -1283,6 +1284,19 @@ export interface VarReviewState {
   distToGoal?: number;
   reasonText: string;
   replay?: VarReplaySnapshot;
+}
+
+export interface VarReplayRecord {
+  id: string;
+  minute: number;
+  kind: 'goal' | 'penalty' | 'foul_card';
+  side: 'H' | 'A';
+  attackTeamName: string;
+  defendTeamName: string;
+  verdictShort: string;
+  verdictLabel: string;
+  verdictTone: 'goal' | 'no_goal' | 'penalty' | 'freekick' | 'red' | 'yellow';
+  varState: VarReviewState;
 }
 
 export interface ShootoutState {

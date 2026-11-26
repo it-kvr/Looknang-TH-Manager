@@ -3036,7 +3036,7 @@ export const drawLivePitchToCanvas = (
     // Crisp position role micro-badge above each player during live play
     if (showPositions && ag.role) {
       const roleStr = String(ag.role);
-      const posPal = getPositionCanvasPalette(ag.pos || ag.role);
+      const posPal = getPositionCanvasPalette(ag.role || ag.pos);
       const roleFont = Math.max(6.5, Math.round(playerRadius * 0.58));
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
       const rw = Math.max(15, measureTextCached(ctx, roleStr) + 5.5);

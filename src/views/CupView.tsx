@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronRight, Coins, Trophy } from 'lucide-react';
-import type { Player, Team, GameState } from '../types/game';
+import type { Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { RN, TN } from '../data/thaiFootballData';
 import { EXTRA_CUP_META, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
@@ -55,8 +55,9 @@ export const CupView: React.FC<{
   state: GameState;
   onInspectTeam: (id: number) => void;
   onInspectPlayer?: (p: Player, t: Team) => void;
+  onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
   initialRightPane?: 'results' | 'stats';
-}> = ({ state, onInspectTeam, onInspectPlayer, initialRightPane = 'results' }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, initialRightPane = 'results' }) => {
   const initialTab: CupTabId = state.pc
     ? 'fa'
     : state.plc
@@ -608,6 +609,20 @@ export const CupView: React.FC<{
                     const involvesMe = (ht && ht.id === state.me) || (at && at.id === state.me);
                     const homeWon = p.gh > p.ga;
                     const awayWon = p.ga > p.gh;
+                    const compKey = activeComp.id === 'fa' ? 'cup' : activeComp.id;
+                    const matchedCupLog =
+                      ht && at && onOpenVarReplay
+                        ? (state.cupLog || []).find(
+                            (cl) =>
+                              cl.comp === compKey &&
+                              cl.h === ht.id &&
+                              cl.a === at.id &&
+                              cl.gh === p.gh &&
+                              cl.ga === p.ga &&
+                              (compKey === 'sc' || (RN[cl.r] || `รอบ ${cl.r + 1}`) === p.roundLabel) &&
+                              Boolean(cl.varReplays?.length)
+                          )
+                        : undefined;
 
                     return (
                       <div
@@ -620,11 +635,23 @@ export const CupView: React.FC<{
                       >
                         <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8px] text-[var(--mut)]">
                           <span className="font-semibold">{p.roundLabel}</span>
-                          {p.penText && (
-                            <span className="font-semibold text-[#8a5b00] dark:text-[var(--lamp)] tabular">
-                              {p.penText}
-                            </span>
-                          )}
+                          <div className="flex items-center gap-1.5">
+                            {p.penText && (
+                              <span className="font-semibold text-[#8a5b00] dark:text-[var(--lamp)] tabular">
+                                {p.penText}
+                              </span>
+                            )}
+                            {matchedCupLog?.varReplays?.length && onOpenVarReplay && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenVarReplay(matchedCupLog.h, matchedCupLog.a, matchedCupLog.varReplays!)}
+                                className="px-1.5 py-[1px] rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                                title="ดูภาพช้า VAR ย้อนหลัง"
+                              >
+                                🖥 VAR ({matchedCupLog.varReplays.length})
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <button

@@ -7,12 +7,12 @@ import {
   enterLandscapeFullscreen,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
-import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment } from './types/game';
+import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
-import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
+import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
@@ -37,6 +37,7 @@ import { SeasonStatsModal } from './modals/SeasonStatsModal';
 import { DilemmaModal } from './modals/DilemmaModal';
 import { SecretBoostModal } from './modals/SecretBoostModal';
 import { SettingsModal } from './modals/SettingsModal';
+import { VarReplayModal } from './modals/VarReplayModal';
 
 export default function App() {
   const [enteredGame, setEnteredGame] = useState(false);
@@ -52,6 +53,12 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
+  const [historyVarModal, setHistoryVarModal] = useState<{
+    homeId: number;
+    awayId: number;
+    records: VarReplayRecord[];
+    activeId: string;
+  } | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     restoreAutoFullscreenMigration();
     return getSettings();
@@ -414,7 +421,17 @@ export default function App() {
           }
         }
         d.cupLog = d.cupLog || [];
-        d.cupLog.push({ md: d.md, comp: 'cup', r: roundBefore, h: homeId, a: awayId, gh: payload.gh, ga: payload.ga, penText: payload.penText });
+        d.cupLog.push({
+          md: d.md,
+          comp: 'cup',
+          r: roundBefore,
+          h: homeId,
+          a: awayId,
+          gh: payload.gh,
+          ga: payload.ga,
+          penText: payload.penText,
+          ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+        });
         c.ids = nx;
         c.r++;
         d.pc = false;
@@ -512,7 +529,17 @@ export default function App() {
           }
         }
         d.cupLog = d.cupLog || [];
-        d.cupLog.push({ md: d.md, comp: kind, r: roundBefore, h: homeId, a: awayId, gh: payload.gh, ga: payload.ga, penText: payload.penText });
+        d.cupLog.push({
+          md: d.md,
+          comp: kind,
+          r: roundBefore,
+          h: homeId,
+          a: awayId,
+          gh: payload.gh,
+          ga: payload.ga,
+          penText: payload.penText,
+          ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+        });
         c.ids = nx;
         c.r++;
         if (kind === 'lc') d.plc = false;
@@ -605,7 +632,17 @@ export default function App() {
           }
         }
         d.cupLog = d.cupLog || [];
-        d.cupLog.push({ md: d.md, comp: 'asia', r: roundBefore, h: homeId, a: awayId, gh: payload.gh, ga: payload.ga, penText: payload.penText });
+        d.cupLog.push({
+          md: d.md,
+          comp: 'asia',
+          r: roundBefore,
+          h: homeId,
+          a: awayId,
+          gh: payload.gh,
+          ga: payload.ga,
+          penText: payload.penText,
+          ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+        });
         c.ids = nx;
         c.r++;
         d.pa = false;
@@ -817,6 +854,14 @@ export default function App() {
         d.fan = clamp((d.fan ?? 55) + (diff > 0 ? 3 : diff < 0 ? -3 : 0) + ticketFanAdj, 5, 100);
         d.mor = clamp((d.mor ?? 55) + (diff > 0 ? 5 : diff < 0 ? -5 : 1), 0, 100);
       }
+      d.schedRes = d.schedRes || {};
+      d.schedRes[d.md] = {
+        h: homeId,
+        a: awayId,
+        gh: payload.gh,
+        ga: payload.ga,
+        ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+      };
       d.md++;
       if (d.mode !== 'm' && payload.pf) {
         creditPlayerPerf(d, payload.pf);
@@ -1331,6 +1376,11 @@ export default function App() {
               onOpenSeasonStats={(seasonNum) =>
                 setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
               }
+              onOpenVarReplay={(homeId, awayId, records) => {
+                if (!records.length) return;
+                SFX.tap();
+                setHistoryVarModal({ homeId, awayId, records, activeId: records[0].id });
+              }}
               onToast={showToast}
             />
           )}
@@ -1566,6 +1616,7 @@ export default function App() {
             flushPendingSave();
             setPreMatch(null);
             setActiveMatch(null);
+            setHistoryVarModal(null);
             setShowSettings(false);
             setSeasonStatsTarget(null);
             setState(null);
@@ -1604,6 +1655,37 @@ export default function App() {
           onToast={showToast}
         />
       )}
+
+      {historyVarModal && (() => {
+        const hTeam = state.teams[historyVarModal.homeId];
+        const aTeam = state.teams[historyVarModal.awayId];
+        const activeRec =
+          historyVarModal.records.find((r) => r.id === historyVarModal.activeId) || historyVarModal.records[0];
+        if (!hTeam || !aTeam || !activeRec) return null;
+        const [homeKit, awayKit, homeTrim, awayTrim] = matchKits(hTeam, aTeam, state);
+        const homeGkKit = pickGK(homeKit, awayKit, homeTrim);
+        const awayGkKit = pickGK(awayKit, homeKit, homeGkKit);
+        return (
+          <VarReplayModal
+            records={historyVarModal.records}
+            activeRecord={activeRec}
+            liveMode={false}
+            onSelectRecord={(id) =>
+              setHistoryVarModal((prev) => (prev ? { ...prev, activeId: id } : null))
+            }
+            onClose={() => setHistoryVarModal(null)}
+            homeOrig={hTeam}
+            awayOrig={aTeam}
+            state={state}
+            homeKit={homeKit}
+            awayKit={awayKit}
+            homeGkKit={homeGkKit}
+            awayGkKit={awayGkKit}
+            homeTrim={homeTrim}
+            awayTrim={awayTrim}
+          />
+        );
+      })()}
 
       {toast && (
         <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">

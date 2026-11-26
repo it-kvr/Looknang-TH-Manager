@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, Coins, X } from 'lucide-react';
-import type { MainTab, Player, Team, GameState } from '../types/game';
+import type { MainTab, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
@@ -20,8 +20,9 @@ export const LeagueView: React.FC<{
   onShallowPatch?: (patcher: (prev: GameState) => Partial<GameState>) => void;
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
+  onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
   onToast?: (msg: string) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onToast }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -715,9 +716,22 @@ export const LeagueView: React.FC<{
                   : isDraw
                     ? 'bg-amber-400/12 border-amber-500/25'
                     : 'bg-rose-500/10 border-rose-500/25';
+                const mdMatch = r.match(/^นัด\s+(\d+):/);
+                const rec = mdMatch ? state.schedRes?.[Number(mdMatch[1]) - 1] : undefined;
+                const vars = rec?.varReplays;
                 return (
-                  <div key={i} className={`text-[11px] mland:text-[10px] px-2.5 py-1 mland:py-0.5 rounded-lg border leading-snug tabular ${toneCls}`}>
-                    {r}
+                  <div key={i} className={`flex items-center justify-between gap-1.5 text-[11px] mland:text-[10px] px-2.5 py-1 mland:py-0.5 rounded-lg border leading-snug tabular ${toneCls}`}>
+                    <span className="min-w-0 truncate">{r}</span>
+                    {vars && vars.length > 0 && rec && onOpenVarReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenVarReplay(rec.h, rec.a, vars)}
+                        className="shrink-0 px-1.5 py-[1px] rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8.5px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                        title="ดูภาพช้า VAR ย้อนหลัง"
+                      >
+                        🖥 VAR ({vars.length})
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -1324,13 +1338,14 @@ export const LeagueView: React.FC<{
       {sub === 0 && renderStandings()}
       {sub === 1 && renderPowerComparison()}
       {sub === 2 && renderStatsAndAwards()}
-      {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} />}
+      {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} onOpenVarReplay={onOpenVarReplay} />}
       {sub === 4 && (
         <CupView
           key={cupInitialStats ? 'cup-stats' : 'cup-results'}
           state={state}
           onInspectTeam={onInspectTeam}
           onInspectPlayer={onInspectPlayer}
+          onOpenVarReplay={onOpenVarReplay}
           initialRightPane={cupInitialStats ? 'stats' : 'results'}
         />
       )}
@@ -1427,7 +1442,8 @@ export const ScheduleCalendarView: React.FC<{
   onInspectTeam: (teamId: number) => void;
   onPlayNext?: () => void;
   onOpenMarket?: () => void;
-}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket }) => {
+  onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
+}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay }) => {
   const me = state.teams[state.me];
   const totalMd = state.fx.length || 30;
   const defaultMonth = state.md >= totalMd ? 4 : Math.min(4, Math.floor(state.md / 6));
@@ -1691,9 +1707,24 @@ export const ScheduleCalendarView: React.FC<{
                     </div>
                   </div>
                   {isPast ? (
-                    <span className={`px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 ${resCls}`}>
-                      {resLabel}
-                    </span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      {rec?.varReplays?.length && onOpenVarReplay ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenVarReplay(rec.h, rec.a, rec.varReplays!);
+                          }}
+                          title="ดูภาพช้า VAR ย้อนหลัง"
+                          className="px-1.5 py-1 rounded-lg bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                        >
+                          🖥 VAR ({rec.varReplays.length})
+                        </button>
+                      ) : null}
+                      <span className={`px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 ${resCls}`}>
+                        {resLabel}
+                      </span>
+                    </div>
                   ) : isNext ? (
                     <span className="px-2 py-1 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[10px] font-bold shrink-0">
                       ถัดไป
@@ -1751,6 +1782,16 @@ export const ScheduleCalendarView: React.FC<{
                   <span className="px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] text-[11px] font-bold tabular shrink-0">
                     {rec ? `${rec.gh}-${rec.ga}` : 'vs'}
                   </span>
+                  {rec?.varReplays?.length && onOpenVarReplay && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenVarReplay(rec.h, rec.a, rec.varReplays!)}
+                      className="px-1.5 py-0.5 rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer shrink-0"
+                      title="ดูภาพช้า VAR ย้อนหลัง"
+                    >
+                      🖥 VAR
+                    </button>
+                  )}
                   <button type="button" onClick={() => onInspectTeam(aid)} className="flex-1 text-left whitespace-normal break-words leading-tight hover:text-[var(--g)] cursor-pointer">
                     {at.name}
                   </button>
@@ -1786,6 +1827,16 @@ export const ScheduleCalendarView: React.FC<{
                       {ht?.name} <b>{cl.gh}-{cl.ga}</b> {at?.name}
                     </span>
                     {cl.penText && <span className="text-[10px] text-[var(--mut)] shrink-0">({cl.penText})</span>}
+                    {cl.varReplays?.length && onOpenVarReplay && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenVarReplay(cl.h, cl.a, cl.varReplays!)}
+                        className="px-1.5 py-0.5 rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer shrink-0 whitespace-nowrap"
+                        title="ดูภาพช้า VAR ย้อนหลัง"
+                      >
+                        🖥 VAR ({cl.varReplays.length})
+                      </button>
+                    )}
                   </div>
                 );
               })}

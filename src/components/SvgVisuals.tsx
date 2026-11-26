@@ -5,6 +5,7 @@ import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/cr
 import { PCOL, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_OUTFITS } from '../data/thaiFootballData';
 import { getShirtNo, visOf, getFormationSlots, playerPen, xi, colLum, colDist, tc, pickGK } from '../engine/playerCore';
 import { getClubCaptainPalette } from './CaptainBadge';
+import { getPositionCanvasPalette } from './PositionBadge';
 
 export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
   <>
@@ -1021,18 +1022,36 @@ export const TacticsMiniPitch: React.FC<{ team: Team; state?: GameState | null }
                 }}
               />
             )}
-            <rect x={cx - 14} y={cy + 10} width="28" height="11" rx="4" fill="#0b2018" stroke={isMe ? '#f5c242' : '#fff8'} strokeWidth="0.9" />
-            <text
-              x={cx}
-              y={cy + 18.2}
-              textAnchor="middle"
-              fontSize="8.2"
-              fontWeight="700"
-              fontFamily="Sarabun"
-              fill={isMe ? '#fde047' : '#fff'}
-            >
-              {z.sp}
-            </text>
+            {(() => {
+              const posPal = getPositionCanvasPalette(z.sp);
+              const bw = isMe ? 32 : z.sp.length >= 3 ? 28 : 24;
+              return (
+                <>
+                  <rect
+                    x={cx - bw / 2}
+                    y={cy + 10}
+                    width={bw}
+                    height="11.5"
+                    rx="3.8"
+                    fill={posPal.bg}
+                    stroke={isMe ? '#f5c242' : 'rgba(6, 20, 13, 0.88)'}
+                    strokeWidth={isMe ? '1.15' : '0.85'}
+                  />
+                  <text
+                    x={cx}
+                    y={cy + 18.4}
+                    textAnchor="middle"
+                    fontSize="8"
+                    fontWeight="800"
+                    fontFamily="Sarabun"
+                    fill={posPal.text}
+                  >
+                    {isMe && <tspan fill="#fde047">★ </tspan>}
+                    {z.sp}
+                  </text>
+                </>
+              );
+            })()}
           </g>
         );
       })}
@@ -1152,10 +1171,10 @@ export const FormationPitch: React.FC<{
     ? resolveCrestSpec(team.name, team, state.club, state.mode === 'm' && team.id === state.me)
     : null;
   const zoneLineColors: Record<Position, { stroke: string; fill: string; text: string }> = {
-    FW: { stroke: 'rgba(110, 231, 183, 0.55)', fill: 'rgba(16, 185, 129, 0.08)', text: 'rgba(209, 250, 229, 0.85)' },
-    MF: { stroke: 'rgba(252, 211, 77, 0.55)', fill: 'rgba(245, 158, 11, 0.08)', text: 'rgba(254, 243, 199, 0.85)' },
-    DF: { stroke: 'rgba(125, 211, 252, 0.55)', fill: 'rgba(56, 189, 248, 0.08)', text: 'rgba(224, 242, 254, 0.85)' },
-    GK: { stroke: 'rgba(216, 180, 254, 0.55)', fill: 'rgba(168, 85, 247, 0.09)', text: 'rgba(243, 232, 255, 0.85)' }
+    FW: { stroke: 'rgba(239, 68, 68, 0.58)', fill: 'rgba(220, 38, 38, 0.1)', text: 'rgba(254, 202, 202, 0.92)' },
+    MF: { stroke: 'rgba(59, 130, 246, 0.58)', fill: 'rgba(37, 99, 235, 0.1)', text: 'rgba(191, 219, 254, 0.92)' },
+    DF: { stroke: 'rgba(168, 85, 247, 0.58)', fill: 'rgba(147, 51, 234, 0.1)', text: 'rgba(233, 213, 255, 0.92)' },
+    GK: { stroke: 'rgba(34, 197, 94, 0.58)', fill: 'rgba(22, 163, 74, 0.1)', text: 'rgba(187, 247, 208, 0.92)' }
   };
 
   return (
@@ -1362,30 +1381,44 @@ export const FormationPitch: React.FC<{
             )}
             <ellipse cx={cx} cy={cy + 16} rx="13" ry="3.8" fill="#0005" />
 
-            {/* Top Center: Role Tag */}
-            {isMe ? (
-              <g transform={`translate(${cx},${cy - (isTarget ? 23 : 20.5)})`}>
-                <rect x="-17" y="-8.5" width="34" height="11.5" rx="5.5" fill="#f5c242" stroke="#111" strokeWidth="0.9" />
-                <text x="0" y="-0.3" textAnchor="middle" fontSize="8" fontWeight="800" fontFamily="Sarabun" fill="#1a1200">
-                  ★ {z.sp}
-                </text>
-              </g>
-            ) : (
-              <text
-                x={cx}
-                y={cy - (isTarget ? 21.5 : 18.5)}
-                textAnchor="middle"
-                fontSize="9"
-                fontWeight="700"
-                fontFamily="Sarabun"
-                fill={PCOL[pn]}
-                stroke="#0b2018"
-                strokeWidth="2.5"
-                paintOrder="stroke"
-              >
-                {z.sp}
-              </text>
-            )}
+            {/* Top Center: Role Badge (matches roster PositionBadge colors) */}
+            {(() => {
+              const posPal = getPositionCanvasPalette(z.sp);
+              const badgeW = isMe ? (z.sp.length >= 3 ? 38 : 34) : z.sp.length >= 3 ? 28 : 24;
+              const badgeStroke = isMe
+                ? '#f5c242'
+                : pn >= 2
+                  ? '#ef4444'
+                  : pn === 1
+                    ? '#f59e0b'
+                    : 'rgba(6, 20, 13, 0.88)';
+              return (
+                <g transform={`translate(${cx},${cy - (isTarget ? 23 : 20.5)})`}>
+                  <rect
+                    x={-badgeW / 2}
+                    y="-8.8"
+                    width={badgeW}
+                    height="11.5"
+                    rx="3.8"
+                    fill={posPal.bg}
+                    stroke={badgeStroke}
+                    strokeWidth={isMe || pn > 0 ? '1.15' : '0.85'}
+                  />
+                  <text
+                    x="0"
+                    y="-0.3"
+                    textAnchor="middle"
+                    fontSize="8"
+                    fontWeight="800"
+                    fontFamily="Sarabun"
+                    fill={posPal.text}
+                  >
+                    {isMe && <tspan fill="#fde047">★ </tspan>}
+                    {z.sp}
+                  </text>
+                </g>
+              );
+            })()}
 
             {/* Player Avatar Circle */}
             <circle cx={cx} cy={cy} r={rad} fill={kc} stroke={ed} strokeWidth="2.8" />

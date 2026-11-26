@@ -13,7 +13,7 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
@@ -47,6 +47,7 @@ interface MatchTimelineItem {
   kind: TimelineKind;
   who: string;
   detail?: string;
+  varReplayId?: string;
 }
 import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen, pickBestCaptain, scoreSetPieceCandidate } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, computeTeamFacilityMatchModifiers, combineMatchStatDeltas } from '../engine/simulation';
@@ -60,12 +61,14 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
+import { VarReplayModal, type VarReplayRecord } from './VarReplayModal';
 
 interface MatchLogItem {
   id: number;
   m: number;
   text: string;
   tone?: 'goal' | 'card' | 'sys' | 'sub';
+  varReplayId?: string;
 }
 
 interface MatchVisualEntry {
@@ -209,6 +212,7 @@ const MatchLogRow = React.memo<{
   state: GameState;
   isPlayerMode: boolean;
   myPlayerSquadObj: Player | undefined;
+  onOpenVarReplay?: (varId: string) => void;
 }>(({
   l,
   matchVisualIndex,
@@ -225,7 +229,8 @@ const MatchLogRow = React.memo<{
   awayTrim,
   state,
   isPlayerMode,
-  myPlayerSquadObj
+  myPlayerSquadObj,
+  onOpenVarReplay
 }) => {
   const vis = resolveLogVisual(l.text, matchVisualIndex, isPlayerMode, myPlayerSquadObj, meTeamOrig);
   const vTeam = vis.team;
@@ -393,6 +398,20 @@ const MatchLogRow = React.memo<{
       )}
 
       <span className="min-w-0 flex-1">{renderInlineEventText()}</span>
+      {l.varReplayId && onOpenVarReplay && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenVarReplay(l.varReplayId!);
+          }}
+          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/28 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer transition-colors whitespace-nowrap"
+          title="เปิดจอดูภาพช้า VAR ย้อนหลัง"
+        >
+          <span>🖥</span>
+          <span>ดูภาพช้า</span>
+        </button>
+      )}
     </div>
   );
 });
@@ -742,6 +761,12 @@ export const MatchModal: React.FC<{
   const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>('all');
   const [ftPickedPlayer, setFtPickedPlayer] = useState<string | null>(null);
 
+  const [varHistory, setVarHistory] = useState<VarReplayRecord[]>([]);
+  const [liveVarActive, setLiveVarActive] = useState(false);
+  const [varReplayModalState, setVarReplayModalState] = useState<{ record: VarReplayRecord; liveMode: boolean } | null>(null);
+  const wasPausedBeforeVarRef = useRef(false);
+  const lastLiveVarActiveRef = useRef(false);
+
   const [penResult, setPenResult] = useState<{ winnerHome: boolean; text: string } | null>(null);
   const [done, setDone] = useState(false);
 
@@ -781,6 +806,8 @@ export const MatchModal: React.FC<{
       { id: 'phase-kickoff-0', seq: 1, m: 0, side: 'N' as const, kind: 'kickoff' as const, who: 'เริ่มเกม', detail: 'เขี่ยบอลครึ่งแรก' }
     ] as MatchTimelineItem[],
     timelineSeq: 1,
+    varHistory: [] as VarReplayRecord[],
+    varSeq: 0,
     miracleUsedH: false,
     miracleUsedA: false,
     maxDeficitH: 0,
@@ -2044,9 +2071,9 @@ export const MatchModal: React.FC<{
     }
   };
 
-  const pushLog = (m: number, text: string, tone?: 'goal' | 'card' | 'sys' | 'sub') => {
+  const pushLog = (m: number, text: string, tone?: 'goal' | 'card' | 'sys' | 'sub', varReplayId?: string) => {
     const logId = logSeqRef.current++;
-    setLogs((prev) => [{ id: logId, m, text, tone }, ...prev].slice(0, 65));
+    setLogs((prev) => [{ id: logId, m, text, tone, varReplayId }, ...prev].slice(0, 65));
     const vTier = getStreamViewerTier(liveViewersRef.current);
     const baseSurge = Math.max(40, Math.round(streamProj.baseViewers * 0.05));
     const findNamedInLog = (exclude?: string) =>
@@ -2124,7 +2151,14 @@ export const MatchModal: React.FC<{
     ps[playerName] = cur;
   };
 
-  const pushTimeline = (m: number, side: 'H' | 'A' | 'N', kind: TimelineKind, who: string, detail?: string) => {
+  const pushTimeline = (
+    m: number,
+    side: 'H' | 'A' | 'N',
+    kind: TimelineKind,
+    who: string,
+    detail?: string,
+    varReplayId?: string
+  ) => {
     const sr = simRef.current;
     const tl = sr.timeline;
     if (
@@ -2133,9 +2167,11 @@ export const MatchModal: React.FC<{
     ) {
       return;
     }
+    let inheritedVarId: string | undefined;
     if ((kind === 'pen_goal' || kind === 'pen_miss') && tl.length > 0) {
       for (let i = tl.length - 1; i >= 0; i--) {
         if (tl[i].side === side && tl[i].kind === 'pen_awarded' && Math.abs(m - tl[i].m) <= 2) {
+          inheritedVarId = tl[i].varReplayId;
           tl.splice(i, 1);
           break;
         }
@@ -2149,7 +2185,8 @@ export const MatchModal: React.FC<{
       side,
       kind,
       who,
-      detail
+      detail,
+      varReplayId: varReplayId ?? inheritedVarId
     };
     tl.push(item);
     setTimelineEvents(tl.slice());
@@ -2168,7 +2205,8 @@ export const MatchModal: React.FC<{
     directRedBias = 0.015,
     forceType?: 'Y' | 'R',
     silentLog = false,
-    reasonLabel?: string
+    reasonLabel?: string,
+    varReplayId?: string
   ) => {
     const sr = simRef.current;
     const w = worldRef.current;
@@ -2199,7 +2237,7 @@ export const MatchModal: React.FC<{
       if (!silentLog) {
         pushLog(curMin, `🟥 ใบแดงโดยตรง!! ${culprit.id} (${team.name}) ${cardReason} โดนไล่ออก (แบน 2 นัด)`, 'card');
       }
-      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel || 'ใบแดงโดยตรง');
+      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel || 'ใบแดงโดยตรง', varReplayId);
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -2223,7 +2261,7 @@ export const MatchModal: React.FC<{
       if (!silentLog) {
         pushLog(curMin, `🟨➡🟥 ใบแดง! ${culprit.id} (${team.name}) ${cardReason} · โดนเหลืองที่สองไล่ออก (แบน 1 นัด)`, 'card');
       }
-      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง');
+      pushTimeline(curMin, culprit.side, 'red', culprit.id, reasonLabel ? `เหลืองสอง (${reasonLabel})` : 'เหลืองที่สอง', varReplayId);
       setSentOff(sr.sentOff.slice());
       if (w) {
         w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y2R', kit, ttl: 3.4, maxTtl: 3.4 };
@@ -2246,7 +2284,7 @@ export const MatchModal: React.FC<{
         'card'
       );
     }
-    pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : reasonLabel);
+    pushTimeline(curMin, culprit.side, 'yellow', culprit.id, totalSeasonY >= 3 ? 'ครบ 3 ใบแบน' : reasonLabel, varReplayId);
     if (w) {
       w.cardBanner = { who: culprit.id, shortName: culprit.shortName, teamName: team.name, type: 'Y', kit, ttl: 2.6, maxTtl: 2.6 };
       triggerDramaSlow(w, 1.5, `🟨 ใบเหลือง · ${culprit.shortName}`);
@@ -4983,8 +5021,8 @@ export const MatchModal: React.FC<{
           w.varReview = {
             kind: 'penalty',
             side,
-            waitSec: 3.8,
-            totalSec: 3.8,
+            waitSec: 6.0,
+            totalSec: 6.0,
             x: willAwardPen ? spotX : carrier.x,
             y: willAwardPen ? 50 : carrier.y,
             culpritId: nearestDef.id,
@@ -5020,10 +5058,10 @@ export const MatchModal: React.FC<{
             y: carrier.y,
             label: '🖥 VAR เช็กจุดโทษ!',
             color: '#38bdf8',
-            ttl: 3.8,
-            maxTtl: 3.8
+            ttl: 6.0,
+            maxTtl: 6.0
           });
-          triggerDramaSlow(w, 3.8, '🖥 VAR เช็กจุดโทษ');
+          triggerDramaSlow(w, 6.0, '🖥 VAR เช็กจุดโทษ');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
@@ -5044,8 +5082,8 @@ export const MatchModal: React.FC<{
           w.varReview = {
             kind: 'foul_card',
             side,
-            waitSec: 3.6,
-            totalSec: 3.6,
+            waitSec: 5.8,
+            totalSec: 5.8,
             x: carrier.x,
             y: carrier.y,
             culpritId: nearestDef.id,
@@ -5082,10 +5120,10 @@ export const MatchModal: React.FC<{
             y: carrier.y,
             label: '🖥 VAR เช็กฟาวล์/ใบแดง!',
             color: '#f59e0b',
-            ttl: 3.6,
-            maxTtl: 3.6
+            ttl: 5.8,
+            maxTtl: 5.8
           });
-          triggerDramaSlow(w, 3.6, '🖥 VAR เช็กใบแดง');
+          triggerDramaSlow(w, 5.8, '🖥 VAR เช็กใบแดง');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
@@ -6111,7 +6149,8 @@ export const MatchModal: React.FC<{
     finishVerb: string,
     goalX: number,
     goalY: number,
-    ogOpts?: { isOwnGoal?: boolean; culpritName?: string; culpritShort?: string; culpritTeam?: Team }
+    ogOpts?: { isOwnGoal?: boolean; culpritName?: string; culpritShort?: string; culpritTeam?: Team },
+    varReplayId?: string
   ) => {
     const sr = simRef.current;
     const defSide = side === 'H' ? 'A' : 'H';
@@ -6157,14 +6196,16 @@ export const MatchModal: React.FC<{
       pushLog(
         curMin,
         `🤦 เข้าประตูตัวเอง!! ${ogCulpritName} (${ogCulpritTeam.name}) ${finishVerb} · ${attTeam.name} ได้ประตูส้มหล่น!`,
-        'goal'
+        'goal',
+        varReplayId
       );
       pushTimeline(
         curMin,
         side,
         'own_goal',
         ogCulpritName,
-        `เข้าประตูตัวเอง (${ogCulpritTeam.name})`
+        `เข้าประตูตัวเอง (${ogCulpritTeam.name})`,
+        varReplayId
       );
       addWorldFx(w, {
         type: 'goal',
@@ -6180,14 +6221,16 @@ export const MatchModal: React.FC<{
       pushLog(
         curMin,
         `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · แอสซิสต์ ${assisterName}` : ''}`,
-        'goal'
+        'goal',
+        varReplayId
       );
       pushTimeline(
         curMin,
         side,
         isPenaltyGoal ? 'pen_goal' : 'goal',
         scorerName,
-        isPenaltyGoal ? 'จุดโทษ' : assisterName ? `แอสซิสต์ ${assisterName.split(' ')[0]}` : undefined
+        isPenaltyGoal ? 'จุดโทษ' : assisterName ? `แอสซิสต์ ${assisterName.split(' ')[0]}` : undefined,
+        varReplayId
       );
       addWorldFx(w, {
         type: 'goal',
@@ -6348,16 +6391,116 @@ export const MatchModal: React.FC<{
     w.phaseTone = 'goal';
   };
 
+  const buildVarRecord = (
+    vr: VarReviewState,
+    curMin: number,
+    id: string,
+    verdictShort: string,
+    verdictLabel: string,
+    verdictTone: VarReplayRecord['verdictTone']
+  ): VarReplayRecord => {
+    const attTeam = vr.side === 'H' ? homeOrig : awayOrig;
+    const defTeam = vr.side === 'H' ? awayOrig : homeOrig;
+    return {
+      id,
+      minute: curMin,
+      kind: vr.kind,
+      side: vr.side,
+      attackTeamName: attTeam.name,
+      defendTeamName: defTeam.name,
+      verdictShort,
+      verdictLabel,
+      verdictTone,
+      varState: {
+        ...vr,
+        waitSec: 0,
+        replay: vr.replay ? { ...vr.replay } : undefined
+      }
+    };
+  };
+
+  const openVarReplayById = (varId: string) => {
+    const found = simRef.current.varHistory.find((r) => r.id === varId) || varHistory.find((r) => r.id === varId);
+    if (!found) return;
+    SFX.tap();
+    wasPausedBeforeVarRef.current = paused;
+    if (!done && matchPhaseUi !== 'halftime') setPaused(true);
+    setVarReplayModalState({ record: found, liveMode: false });
+  };
+
+  const openLiveVarReplay = () => {
+    const vr = worldRef.current?.varReview;
+    if (!vr) return;
+    SFX.tap();
+    const curMin = Math.max(1, Math.floor(worldRef.current?.minuteFloat ?? minute));
+    const previewRec = buildVarRecord(
+      vr,
+      curMin,
+      `live-var-${curMin}-${Date.now()}`,
+      vr.kind === 'goal'
+        ? vr.overturn
+          ? '❌ ริบประตู'
+          : '✅ ให้ประตู'
+        : vr.kind === 'penalty'
+          ? vr.overturn
+            ? '🟡 นอกเขต'
+            : '🚨 จุดโทษ!'
+          : vr.pendingCardUpgrade === 'R'
+            ? '🟥 ใบแดง!'
+            : '🟨 ใบเหลือง',
+      'กำลังตรวจ VAR',
+      vr.kind === 'goal'
+        ? vr.overturn
+          ? 'no_goal'
+          : 'goal'
+        : vr.kind === 'penalty'
+          ? vr.overturn
+            ? 'freekick'
+            : 'penalty'
+          : vr.pendingCardUpgrade === 'R'
+            ? 'red'
+            : 'yellow'
+    );
+    wasPausedBeforeVarRef.current = paused;
+    if (!done && matchPhaseUi !== 'halftime') setPaused(true);
+    setVarReplayModalState({ record: previewRec, liveMode: true });
+  };
+
+  const closeVarReplayModal = () => {
+    setVarReplayModalState(null);
+    if (!done && matchPhaseUi !== 'halftime' && !wasPausedBeforeVarRef.current) {
+      setPaused(false);
+    }
+  };
+
   const resolveVarReview = (w: LiveMatchWorld, curMin: number) => {
     const vr = w.varReview;
     if (!vr) return;
     w.varReview = null;
+    if (lastLiveVarActiveRef.current) {
+      lastLiveVarActiveRef.current = false;
+      setLiveVarActive(false);
+    }
+    const sr = simRef.current;
+    sr.varSeq += 1;
+    const varId = `var-${sr.varSeq}-${curMin}`;
+    const recordVar = (
+      verdictShort: string,
+      verdictLabel: string,
+      verdictTone: VarReplayRecord['verdictTone']
+    ) => {
+      const rec = buildVarRecord(vr, curMin, varId, verdictShort, verdictLabel, verdictTone);
+      sr.varHistory.push(rec);
+      setVarHistory(sr.varHistory.slice());
+    };
+
     const attTeam = vr.side === 'H' ? homeOrig : awayOrig;
     const defSide = vr.side === 'H' ? 'A' : 'H';
 
     if (vr.kind === 'goal') {
       if (vr.overturn) {
         // Disallowed by VAR!
+        recordVar('❌ ริบประตู', '❌ VAR ริบประตู (ล้ำหน้า)', 'no_goal');
         SFX.foul();
         SFX.boo(0.92);
         if (vr.side === 'H') w.offsidesH++;
@@ -6377,10 +6520,11 @@ export const MatchModal: React.FC<{
         w.pendingSetPiece = { type: 'offside', side: defSide, x: offX, y: 50, waitSec: 2.1 };
         w.phaseLabel = `🖥❌ VAR ริบประตูของ ${vr.shooterShort || attTeam.name}!`;
         w.phaseTone = 'offside';
-        pushLog(curMin, `🖥❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card');
-        pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, 'VAR ริบประตู (ล้ำหน้า)');
+        pushLog(curMin, `🖥❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`, 'card', varId);
+        pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, 'VAR ริบประตู (ล้ำหน้า)', varId);
       } else {
         // Goal stands!
+        recordVar('✅ ให้ประตู', '✅ VAR ยืนยันให้ประตู', 'goal');
         addWorldFx(w, {
           type: 'var',
           x: 50,
@@ -6390,7 +6534,7 @@ export const MatchModal: React.FC<{
           ttl: 3.0,
           maxTtl: 3.0
         });
-        pushLog(curMin, `🖥✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`, 'goal');
+        pushLog(curMin, `🖥✅ VAR ยืนยัน: ไม่มีการล้ำหน้า — ให้เป็นประตูของ ${attTeam.name}!`, 'goal', varId);
         awardGoalToTeam(
           w,
           vr.side,
@@ -6400,7 +6544,9 @@ export const MatchModal: React.FC<{
           vr.assisterName || '',
           vr.finishVerb || 'ส่งบอลตุงตาข่าย!',
           vr.x,
-          vr.y
+          vr.y,
+          undefined,
+          varId
         );
       }
       return;
@@ -6426,9 +6572,10 @@ export const MatchModal: React.FC<{
         }
       }
       if (vr.pendingCardUpgrade === 'R' && culprit) {
+        recordVar('🟥 ใบแดง!', `🟥 VAR ยกระดับเป็นใบแดง (${vr.culpritShort || ''})`, 'red');
         SFX.whistle();
         SFX.boo(0.9);
-        issueCard(culprit, curMin, 1, 'R', true);
+        issueCard(culprit, curMin, 1, 'R', true, undefined, varId);
         addWorldFx(w, {
           type: 'foul',
           x: vr.x,
@@ -6442,12 +6589,17 @@ export const MatchModal: React.FC<{
         triggerDramaSlow(w, 2.5, `🖥🟥 VAR ใบแดง!! ${vr.culpritShort || ''}`);
         w.phaseLabel = `🖥🟥 VAR ยกระดับเป็นใบแดง! ${vr.culpritShort || ''} โดนไล่ออก`;
         w.phaseTone = 'danger';
-        pushLog(curMin, `🖥🟥 VAR ยกระดับเป็นใบแดงโดยตรง!! ${culprit.id} (${defTeam.name}) เสียบสกัดอันตราย โดนไล่ออก!`, 'card');
+        pushLog(curMin, `🖥🟥 VAR ยกระดับเป็นใบแดงโดยตรง!! ${culprit.id} (${defTeam.name}) เสียบสกัดอันตราย โดนไล่ออก!`, 'card', varId);
       } else {
         SFX.foul();
         SFX.boo(0.75);
-        const issued = culprit ? issueCard(culprit, curMin, 0, 'Y', true) : 'Y';
+        const issued = culprit ? issueCard(culprit, curMin, 0, 'Y', true, undefined, varId) : 'Y';
         const isSecondRed = issued === 'Y2R' || issued === 'R';
+        recordVar(
+          isSecondRed ? '🟨➡🟥 เหลืองแดง' : '🟨 ใบเหลือง',
+          isSecondRed ? `🟨➡🟥 VAR เหลืองที่สองไล่ออก (${vr.culpritShort || ''})` : `🟨 VAR ให้ใบเหลือง (${vr.culpritShort || ''})`,
+          isSecondRed ? 'red' : 'yellow'
+        );
         addWorldFx(w, {
           type: 'foul',
           x: vr.x,
@@ -6468,7 +6620,8 @@ export const MatchModal: React.FC<{
           isSecondRed
             ? `🖥🟨➡🟥 VAR ให้ใบเหลืองที่สองไล่ออก ${vr.culpritId || ''} (${defTeam.name})!`
             : `🖥🟨 VAR ให้ใบเหลืองแก่ ${vr.culpritId || ''} (${defTeam.name}) รอดพ้นใบแดงหวุดหวิด`,
-          'card'
+          'card',
+          varId
         );
       }
       w.pendingSetPiece = {
@@ -6492,9 +6645,10 @@ export const MatchModal: React.FC<{
       const edgeX = penRightVar ? 80.5 : 19.5;
       let fkCardTxt = '';
       if (culprit && Math.random() < 0.28 && simRef.current.cards.length < 5) {
-        const res = issueCard(culprit, curMin, 0, 'Y', true);
+        const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId);
         fkCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 ใบแดง';
       }
+      recordVar('🟡 นอกเขต', `🖥 VAR ชี้ฟาวล์นอกเขต${fkCardTxt}`, 'freekick');
       addWorldFx(w, {
         type: 'var',
         x: edgeX,
@@ -6508,7 +6662,7 @@ export const MatchModal: React.FC<{
       w.pendingSetPiece = { type: 'freekick', side: vr.side, x: edgeX, y: vr.y, waitSec: 1.65 };
       w.phaseLabel = `🖥 VAR ชี้ฟาวล์นอกเขต${fkCardTxt} (${attTeam.name})`;
       w.phaseTone = 'setpiece';
-      pushLog(curMin, `🖥 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys');
+      pushLog(curMin, `🖥 VAR ยืนยัน: จุดปะทะอยู่นอกกรอบเขตโทษ — ${attTeam.name} ได้ฟรีคิก${fkCardTxt}`, fkCardTxt ? 'card' : 'sys', varId);
     } else {
       SFX.foul();
       SFX.boo(0.85);
@@ -6518,13 +6672,14 @@ export const MatchModal: React.FC<{
         const roll = Math.random();
         const culpritVolatile = culprit.tr === 1 || culprit.tr === 7 || culprit.tr === 15 || culprit.tr === 22;
         if (roll < (culpritVolatile ? 0.08 : 0.04)) {
-          issueCard(culprit, curMin, 1, 'R', true);
+          issueCard(culprit, curMin, 1, 'R', true, undefined, varId);
           penCardTxt = ' + 🟥 ใบแดง!';
         } else if (roll < 0.36) {
-          const res = issueCard(culprit, curMin, 0, 'Y', true);
+          const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId);
           penCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 เหลืองแดง!';
         }
       }
+      recordVar('🚨 จุดโทษ!', `🚨 VAR ชี้จุดโทษ!${penCardTxt}`, 'penalty');
       addWorldFx(w, {
         type: 'penalty',
         x: spotX,
@@ -6538,8 +6693,8 @@ export const MatchModal: React.FC<{
       w.pendingSetPiece = { type: 'penalty', side: vr.side, x: spotX, y: 50, waitSec: 2.0 };
       w.phaseLabel = `🖥🚨 VAR ให้จุดโทษ${penCardTxt} (${attTeam.name})!`;
       w.phaseTone = 'danger';
-      pushLog(curMin, `🖥🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card');
-      pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, 'VAR ชี้จุดโทษ');
+      pushLog(curMin, `🖥🚨 VAR ชี้จุดโทษ!! ${attTeam.name} ได้ลูกจุดโทษหลังเช็กภาพช้า${penCardTxt}!`, 'card', varId);
+      pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, 'VAR ชี้จุดโทษ', varId);
     }
   };
 
@@ -7170,8 +7325,8 @@ export const MatchModal: React.FC<{
           w.varReview = {
             kind: 'goal',
             side,
-            waitSec: 3.9,
-            totalSec: 3.9,
+            waitSec: 6.2,
+            totalSec: 6.2,
             shooterId: scorerName,
             shooterShort: scorerShort,
             assisterName,
@@ -7206,10 +7361,10 @@ export const MatchModal: React.FC<{
             y: b.toY,
             label: '🖥 VAR เช็กประตู!',
             color: '#38bdf8',
-            ttl: 3.9,
-            maxTtl: 3.9
+            ttl: 6.2,
+            maxTtl: 6.2
           });
-          triggerDramaSlow(w, 3.9, `🖥 VAR เช็กประตู · ${scorerShort}`);
+          triggerDramaSlow(w, 6.2, `🖥 VAR เช็กประตู · ${scorerShort}`);
           SFX.var();
           b.shotStyle = undefined;
           w.phaseLabel = `🖥 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;
@@ -7994,7 +8149,7 @@ export const MatchModal: React.FC<{
             .slice(0, blessCount);
           blessedPool.forEach((ag) => {
             ag.blessedMins = Math.max(ag.blessedMins || 0, blessDur);
-            ag.blessedTag = ag.pos === 'FW' ? (isHellFlip ? 'เพชฌฆาตพลิกนรก' : 'พรดาวยิง') : ag.pos === 'MF' ? 'เทพเจ้าแดนกลาง' : 'พลังใจนักสู้';
+            ag.blessedTag = ag.pos === 'FW' ? (isHellFlip ? 'พลิกนรก' : 'ยิงคม') : ag.pos === 'MF' ? 'กลางเทพ' : ag.pos === 'GK' ? 'เซฟเทพ' : 'ใจสู้';
             adjustLiveForm(ag.id, isHellFlip ? 0.5 : 0.38);
           });
           mPool.forEach((ag) => {
@@ -8069,12 +8224,12 @@ export const MatchModal: React.FC<{
           const minsDur = R(7, 12);
           const tagByPos =
             picked.pos === 'GK'
-              ? 'มือเทวดา'
+              ? 'เซฟเทพ'
               : picked.pos === 'DF'
-                ? 'กำแพงทองคำ'
+                ? 'รับแกร่ง'
                 : picked.pos === 'MF'
-                  ? 'เทพเจ้าแดนกลาง'
-                  : 'พรดาวยิงเข้าฝัก';
+                  ? 'กลางเทพ'
+                  : 'ยิงคม';
           picked.blessedMins = minsDur;
           picked.blessedTag = tagByPos;
           adjustLiveForm(picked.id, 0.35);
@@ -8084,7 +8239,7 @@ export const MatchModal: React.FC<{
               type: 'skill',
               x: picked.x,
               y: picked.y,
-              label: `✨ ${picked.shortName} [${tagByPos}]`,
+              label: `✨ ${picked.shortName} · ${tagByPos}`,
               color: '#fde047',
               ttl: 2.3,
               maxTtl: 2.3
@@ -8093,7 +8248,7 @@ export const MatchModal: React.FC<{
           }
           pushLog(
             curMin,
-            `✨ พรสิ่งศักดิ์สิทธิ์!! ${picked.id} (${bTeam.name}) [${tagByPos}] เข้าสู่ฟอร์มเทพ ทำอะไรก็ดีไปหมดนาน ${minsDur} นาที!`,
+            `✨ พร: ${picked.id} (${bTeam.name}) [${tagByPos}] ${minsDur}'`,
             'sys'
           );
           if (picked.isMe || blessedNowCount === 0) {
@@ -8740,6 +8895,10 @@ export const MatchModal: React.FC<{
     w.phase = 'shootout';
     clearWorldCelebration(w, 'SUPPORT');
     w.varReview = null;
+    if (lastLiveVarActiveRef.current) {
+      lastLiveVarActiveRef.current = false;
+      setLiveVarActive(false);
+    }
     w.pendingSetPiece = null;
     w.ball.carrierId = null;
     w.ball.targetId = null;
@@ -9157,6 +9316,10 @@ export const MatchModal: React.FC<{
     w.phase = 'ft';
     clearWorldCelebration(w, 'SUPPORT');
     w.varReview = null;
+    if (lastLiveVarActiveRef.current) {
+      lastLiveVarActiveRef.current = false;
+      setLiveVarActive(false);
+    }
     w.pendingSetPiece = null;
     syncUiStatsFromWorld(w, 90);
     setDone(true);
@@ -9662,9 +9825,9 @@ export const MatchModal: React.FC<{
           }
         }
 
-        // VAR Review countdown, Set-piece wait countdown, or Ball physics progression
+        // VAR Review countdown (steady 1x real-time so slow-mo & verdict are easy to follow), Set-piece wait countdown, or Ball physics
         if (w.varReview) {
-          w.varReview.waitSec = Math.max(0, w.varReview.waitSec - rawDt * (speedMul > 2.6 ? 1.25 : speedMul > 2 ? 1.1 : 1));
+          w.varReview.waitSec = Math.max(0, w.varReview.waitSec - rawDt);
           if (w.varReview.waitSec <= 0) {
             resolveVarReview(w, Math.max(1, curIntMin));
           }
@@ -9868,6 +10031,12 @@ export const MatchModal: React.FC<{
               teamSide: liveBanner.teamSide
             });
           }
+        }
+
+        const hasLiveVar = Boolean(w.varReview);
+        if (lastLiveVarActiveRef.current !== hasLiveVar) {
+          lastLiveVarActiveRef.current = hasLiveVar;
+          setLiveVarActive(hasLiveVar);
         }
 
         uiSyncAccum += rawDt;
@@ -10330,7 +10499,8 @@ export const MatchModal: React.FC<{
       subs: fullTimeAnalysis.subs,
       playedNames: fullTimeAnalysis.playedNames,
       injuries: srDone.injuries.slice(),
-      playerActions
+      playerActions,
+      ...(srDone.varHistory.length ? { varReplays: srDone.varHistory.slice() } : {})
     });
   };
 
@@ -10485,7 +10655,7 @@ export const MatchModal: React.FC<{
         case 'miracle':
           return 'โหมดปาฏิหาริย์';
         case 'blessed':
-          return 'พรสิ่งศักดิ์สิทธิ์';
+          return 'พรเทพ';
         case 'miss':
           return 'ยิงพลาด';
       }
@@ -10596,7 +10766,20 @@ export const MatchModal: React.FC<{
                             )}
                             <span className="truncate">{shortWho}</span>
                           </div>
-                          <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
+                          <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center justify-end gap-1">
+                            {item.varReplayId && (
+                              <button
+                                type="button"
+                                onClick={() => openVarReplayById(item.varReplayId!)}
+                                className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded bg-sky-500/15 hover:bg-sky-500/28 border border-sky-400/45 text-sky-700 dark:text-sky-300 font-extrabold cursor-pointer shrink-0"
+                                title="ดูภาพช้า VAR ย้อนหลัง"
+                              >
+                                <span>🖥</span>
+                                <span>ดูซ้ำ</span>
+                              </button>
+                            )}
+                            <span className="truncate">{subText}</span>
+                          </div>
                         </div>
                         {iconForKind(item.kind)}
                       </>
@@ -10649,7 +10832,20 @@ export const MatchModal: React.FC<{
                             )}
                             <span className="truncate">{shortWho}</span>
                           </div>
-                          <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate">{subText}</div>
+                          <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
+                            <span className="truncate">{subText}</span>
+                            {item.varReplayId && (
+                              <button
+                                type="button"
+                                onClick={() => openVarReplayById(item.varReplayId!)}
+                                className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded bg-sky-500/15 hover:bg-sky-500/28 border border-sky-400/45 text-sky-700 dark:text-sky-300 font-extrabold cursor-pointer shrink-0"
+                                title="ดูภาพช้า VAR ย้อนหลัง"
+                              >
+                                <span>🖥</span>
+                                <span>ดูซ้ำ</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </>
                     )}
@@ -11364,11 +11560,11 @@ export const MatchModal: React.FC<{
                                 <span
                                   key={bl.id}
                                   className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[#112419]/88 border border-yellow-300/50 text-yellow-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-bold truncate max-w-full shadow-xs"
-                                  title={`${bl.id} (${homeOrig.name}) ได้รับพร: ${bl.tag}`}
+                                  title={`${bl.id} (${homeOrig.name}) · พร: ${bl.tag}`}
                                 >
                                   <span>✨</span>
                                   <span className="truncate">{bl.shortName}</span>
-                                  <span className="opacity-80 shrink-0">[{bl.tag}·{bl.minsLeft}&apos;]</span>
+                                  <span className="opacity-85 shrink-0">{bl.tag} {bl.minsLeft}&apos;</span>
                                 </span>
                               ))}
                             </div>
@@ -11392,11 +11588,11 @@ export const MatchModal: React.FC<{
                                 <span
                                   key={bl.id}
                                   className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded-md bg-[#112419]/88 border border-yellow-300/50 text-yellow-200 text-[8.5px] sm:text-[9.5px] mland:text-[8px] font-bold truncate max-w-full shadow-xs"
-                                  title={`${bl.id} (${awayOrig.name}) ได้รับพร: ${bl.tag}`}
+                                  title={`${bl.id} (${awayOrig.name}) · พร: ${bl.tag}`}
                                 >
                                   <span>✨</span>
                                   <span className="truncate">{bl.shortName}</span>
-                                  <span className="opacity-80 shrink-0">[{bl.tag}·{bl.minsLeft}&apos;]</span>
+                                  <span className="opacity-85 shrink-0">{bl.tag} {bl.minsLeft}&apos;</span>
                                 </span>
                               ))}
                             </div>
@@ -11420,6 +11616,33 @@ export const MatchModal: React.FC<{
                       className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-100px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-86px)] object-contain mx-auto block select-none`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
+
+                    {/* Live VAR Interactive Overlay Controls */}
+                    {liveVarActive && !done && matchPhaseUi !== 'halftime' && (
+                      <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 z-25 flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-950/92 border border-sky-400/65 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={openLiveVarReplay}
+                          className="px-2.5 py-1 rounded-full bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10.5px] sm:text-xs mland:text-[9.5px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap"
+                        >
+                          <span>🖥</span>
+                          <span>ขยายจอ VAR / หยุดภาพ</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const w = worldRef.current;
+                            if (w?.varReview) {
+                              SFX.tap();
+                              resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
+                            }
+                          }}
+                          className="px-2 py-1 rounded-full bg-white/12 hover:bg-white/22 text-white/90 text-[10px] sm:text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                        >
+                          ⏭ ข้าม
+                        </button>
+                      </div>
+                    )}
 
                     {/* Halftime Tactical Pitch Stage: Unified SVG Formation Pitch */}
                     {matchPhaseUi === 'halftime' && !done && (() => {
@@ -12260,6 +12483,37 @@ export const MatchModal: React.FC<{
                 </div>
 
                 <div className="p-2.5 sm:p-3 mland:p-2 space-y-1.5 mland:space-y-1">
+                  {varHistory.length > 0 && (eventFilter === 'all' || eventFilter === 'card') && (
+                    <div className="p-2 mland:p-1.5 rounded-xl bg-sky-500/8 border border-sky-400/35 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] font-extrabold text-sky-700 dark:text-sky-300">
+                        <span className="inline-flex items-center gap-1">
+                          <span>🖥</span>
+                          <span>ภาพช้า VAR ในเกมนี้ ({varHistory.length})</span>
+                        </span>
+                        <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">
+                          กดเพื่อดูย้อนหลังได้
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {varHistory.map((rec) => (
+                          <button
+                            key={rec.id}
+                            type="button"
+                            onClick={() => openVarReplayById(rec.id)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-sky-500/15 border border-sky-400/45 text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] shadow-2xs cursor-pointer transition-colors"
+                            title={rec.varState.reasonText}
+                          >
+                            <span className="tabular font-extrabold text-sky-600 dark:text-sky-300">{rec.minute}&apos;</span>
+                            <span>{rec.verdictShort}</span>
+                            <span className="px-1 py-[1px] rounded bg-sky-500/18 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold">
+                              ▶ ดูซ้ำ
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {eventFilter === 'sub' ? (
                     subLog.length === 0 ? (
                       <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>
@@ -12353,6 +12607,7 @@ export const MatchModal: React.FC<{
                         state={state}
                         isPlayerMode={isPlayerMode}
                         myPlayerSquadObj={myPlayerSquadObj}
+                        onOpenVarReplay={openVarReplayById}
                       />
                     ));
                   })()}
@@ -12861,6 +13116,42 @@ export const MatchModal: React.FC<{
           )}
         </div>
       </div>
+
+      {varReplayModalState && (
+        <VarReplayModal
+          records={varReplayModalState.liveMode ? [varReplayModalState.record] : varHistory}
+          activeRecord={varReplayModalState.record}
+          liveMode={varReplayModalState.liveMode}
+          onSelectRecord={(id) => {
+            const found = varHistory.find((r) => r.id === id);
+            if (found) setVarReplayModalState({ record: found, liveMode: false });
+          }}
+          onSkipLiveVar={
+            varReplayModalState.liveMode
+              ? () => {
+                  const w = worldRef.current;
+                  setVarReplayModalState(null);
+                  if (w?.varReview) {
+                    resolveVarReview(w, Math.max(1, Math.floor(w.minuteFloat)));
+                  }
+                  if (!done && matchPhaseUi !== 'halftime' && !wasPausedBeforeVarRef.current) {
+                    setPaused(false);
+                  }
+                }
+              : undefined
+          }
+          onClose={closeVarReplayModal}
+          homeOrig={homeOrig}
+          awayOrig={awayOrig}
+          state={state}
+          homeKit={homeKit}
+          awayKit={awayKit}
+          homeGkKit={homeGkKit}
+          awayGkKit={awayGkKit}
+          homeTrim={homeTrim}
+          awayTrim={awayTrim}
+        />
+      )}
     </div>
   );
 };
