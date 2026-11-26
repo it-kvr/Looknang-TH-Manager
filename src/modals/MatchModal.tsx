@@ -740,8 +740,8 @@ export const MatchModal: React.FC<{
       .slice()
       .sort(
         (u, v) =>
-          v.d.fin + (v.d.comp || 60) + (agentHasTrait(v, 'clutch_player') ? 14 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 10 : 0) -
-          (u.d.fin + (u.d.comp || 60) + (agentHasTrait(u, 'clutch_player') ? 14 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 10 : 0))
+          v.d.fin + (v.d.comp || 60) + (v.tr === 4 || v.tr === 17 ? 14 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 10 : 0) -
+          (u.d.fin + (u.d.comp || 60) + (u.tr === 4 || u.tr === 17 ? 14 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 10 : 0))
       )[0];
   };
 
@@ -1917,12 +1917,12 @@ export const MatchModal: React.FC<{
     const w = worldRef.current;
     const team = culprit.side === 'H' ? homeOrig : awayOrig;
     const kit = culprit.side === 'H' ? homeKit : awayKit;
-    const hotHeadBias = (agentHasTrait(culprit, 'hot_headed') ? 0.025 : agentHasTrait(culprit, 'calm_leader') ? -0.012 : 0) + (agentHasTrait(culprit, 'risk_taker') ? 0.012 : 0);
     const isVolatilePers = culprit.tr === 1 || culprit.tr === 7 || culprit.tr === 15 || culprit.tr === 22;
+    const persCardBias = isVolatilePers ? 0.025 : culprit.tr === 0 || culprit.tr === 6 || culprit.tr === 21 || culprit.tr === 23 ? -0.01 : 0;
     const teamRedCount = sr.cards.filter((c) => c.t === team.id && (c.type === 'R' || c.type === 'Y2R')).length;
     const effectiveRedProb = directRedBias <= 0
       ? 0
-      : clamp(directRedBias + (isVolatilePers ? 0.015 : 0) + hotHeadBias, 0.004, 0.95);
+      : clamp(directRedBias + persCardBias, 0.004, 0.95);
     const directRed =
       forceType === 'R'
         ? true
@@ -2027,9 +2027,9 @@ export const MatchModal: React.FC<{
     );
     const tolMult = clamp((132 - (D.d.tol || 65)) / 65, 0.55, 1.45);
     const fitMult = curFit < 54 ? 1.8 : curFit < 65 ? 1.25 : 0.85;
-    const traitInjMult = agentHasTrait(victim, 'glass_cannon') ? 1.45 : agentHasTrait(victim, 'iron_lungs') ? 0.78 : 1;
+    const persInjMult = victim.tr === 19 ? 1.38 : victim.tr === 18 || victim.tr === 23 ? 0.8 : 1;
     const baseProb = severity === 'foul' ? 0.055 : severity === 'slide' ? 0.038 : severity === 'clash' ? 0.028 : 0.0055;
-    if (Math.random() >= baseProb * medMult * tolMult * fitMult * traitInjMult) return false;
+    if (Math.random() >= baseProb * medMult * tolMult * fitMult * persInjMult) return false;
 
     const rawGames = severity === 'foul' ? R(2, 4) : R(1, 3);
     const games = injD(pl, rawGames, state.p);
@@ -2221,7 +2221,7 @@ export const MatchModal: React.FC<{
     const isAcrobaticFinish = finishVerb.includes('จักรยานอากาศ') || finishVerb.includes('วอลเลย์') || finishVerb.includes('ไกล') || finishVerb.includes('โค้ง');
     const agi = scorerAg?.d.agi ?? 65;
     const spd = scorerAg?.d.spd ?? 65;
-    const isFlair = Boolean(scorerAg && (scorerAg.sig === 'cur' || scorerAg.sig === 'fin' || agentHasTrait(scorerAg, 'flair_dribbler') || agentHasTrait(scorerAg, 'clutch_player')));
+    const isFlair = Boolean(scorerAg && (scorerAg.sig === 'cur' || scorerAg.sig === 'fin' || agentHasTrait(scorerAg, 'flair_dribbler') || scorerAg.tr === 5 || scorerAg.tr === 16));
     const isWinger = Boolean(scorerAg && (scorerAg.role === 'LW' || scorerAg.role === 'RW' || scorerAg.role === 'LM' || scorerAg.role === 'RM' || spd >= 75));
 
     const candidates: { style: GoalCelebrationStyle; label: string; weight: number }[] = [
@@ -3374,7 +3374,7 @@ export const MatchModal: React.FC<{
     if (nearestDefDist < 5.5) p += 0.015;
     p -= (finComp - 60) * 0.0006;
     if ((shooter.blessedMins ?? 0) > 0) p *= 0.22;
-    if (agentHasTrait(shooter, 'poacher_instinct') || agentHasTrait(shooter, 'consistency_pro')) p *= 0.72;
+    if (agentHasTrait(shooter, 'poacher_instinct') || shooter.tr === 23) p *= 0.72;
     p *= turfMatchMods.whiffMult;
     return Math.random() < clamp(p, 0.01, 0.15);
   };
@@ -3719,18 +3719,19 @@ export const MatchModal: React.FC<{
     const miracleDef = w.miracle?.side === defSide && w.miracle.minsLeft > 0;
     const sigFinBoost = shooter?.sig === 'fin' ? 0.05 : shooter?.sig === 'comp' && (curMin >= 70 || isDerby || kind !== 'league') ? 0.04 : 0;
     const isShooterSub = Boolean(shooter && sr.subs.some((s) => s.inPlayer === shooter.id));
+    const isClutchShooter = Boolean(shooter && (shooter.tr === 4 || shooter.tr === 17));
     const traitAccBoost =
       (agentHasTrait(shooter, 'poacher_instinct') && dist < 17 ? 0.07 : 0) +
-      (agentHasTrait(shooter, 'clutch_player') && (curMin >= 70 || isDerby || kind !== 'league') ? 0.06 : 0) +
+      (isClutchShooter && (curMin >= 70 || isDerby || kind !== 'league') ? 0.06 : 0) +
       (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 0.07 : 0) +
       (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 0.07 : 0) +
-      (agentHasTrait(shooter, 'consistency_pro') ? 0.03 : 0) +
+      (shooter?.tr === 23 ? 0.03 : 0) +
       (agentHasTrait(shooter, 'setpiece_specialist') && flightType === 'freekick' ? 0.08 : 0);
     const miracleAttScale = miracleAtt && (w.miracle?.maxDeficit ?? 2) >= 3 ? 0.19 : miracleAtt ? 0.15 : 0;
     const luckAccBoost = (attBlessed ? 0.17 : 0) + miracleAttScale - (gkBlessed ? 0.04 : 0);
     const accuracy =
       flightType === 'penalty'
-        ? clamp((isPanenka ? 0.89 : 0.92) + (agentHasTrait(shooter, 'clutch_player') ? 0.03 : 0) + (attBlessed ? 0.05 : 0), 0.85, 0.98)
+        ? clamp((isPanenka ? 0.89 : 0.92) + (isClutchShooter ? 0.03 : 0) + (attBlessed ? 0.05 : 0), 0.85, 0.98)
         : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost + traitAccBoost + luckAccBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.93);
 
     if (Math.random() > accuracy) {
@@ -3773,7 +3774,7 @@ export const MatchModal: React.FC<{
       ? (shooter.d.fin + (shooter.sig === 'fin' ? 6 : 0) + (agentHasTrait(shooter, 'poacher_instinct') && dist < 17 ? 8 : 0) + (agentHasTrait(shooter, 'acrobatic_finisher') && (shotStyle === 'bicycle' || shotStyle === 'volley' || shotStyle === 'diving_header') ? 9 : 0)) * 0.5 +
         (shooter.d.cur + (shooter.sig === 'cur' ? 6 : 0) + (agentHasTrait(shooter, 'outside_curler') && (shotStyle === 'trivela' || shotStyle === 'curler') ? 8 : 0)) * 0.25 +
         (shooter.d.pw + (shooter.sig === 'pw' ? 6 : 0) + (agentHasTrait(shooter, 'long_shot_lover') && dist >= 20 ? 8 : 0)) * 0.25 +
-        (agentHasTrait(shooter, 'clutch_player') && (curMin >= 70 || isDerby || kind !== 'league') ? 6 : 0) +
+        (isClutchShooter && (curMin >= 70 || isDerby || kind !== 'league') ? 6 : 0) +
         (agentHasTrait(shooter, 'super_sub') && isShooterSub ? 7 : 0) +
         (attBlessed ? 16 : 0)
       : 60;
@@ -4314,7 +4315,7 @@ export const MatchModal: React.FC<{
         if (!taker) return;
         const spotX = attRight ? 88.5 : 11.5;
         const goalX = attRight ? 100 : 0;
-        const isPanenka = (agentHasTrait(taker, 'chip_artist') || agentHasTrait(taker, 'clutch_player') || (taker.d.comp || 60) >= 74) && Math.random() < (agentHasTrait(taker, 'chip_artist') ? 0.32 : 0.18);
+        const isPanenka = (agentHasTrait(taker, 'chip_artist') || taker.tr === 17 || (taker.d.comp || 60) >= 74) && Math.random() < (agentHasTrait(taker, 'chip_artist') ? 0.32 : 0.18);
         taker.facing = Math.atan2(50 - taker.y, goalX - taker.x);
         taker.acrobatType = 'kick';
         taker.acrobatMax = 0.45;
@@ -4823,13 +4824,8 @@ export const MatchModal: React.FC<{
       const foulProb = clamp(
         0.048 +
           (defCfg.press === 2 ? 0.028 : defCfg.press === 0 ? -0.014 : 0) +
-          (defVolatile ? 0.022 : nearestDef.tr === 6 || nearestDef.tr === 23 ? -0.008 : 0) +
-          (agentHasTrait(nearestDef, 'hot_headed')
-            ? 0.028
-            : agentHasTrait(nearestDef, 'calm_leader') || agentHasTrait(nearestDef, 'tireless_mentor')
-              ? -0.015
-              : 0) +
-          (agentHasTrait(nearestDef, 'slide_tackler') || agentHasTrait(nearestDef, 'risk_taker') ? 0.012 : 0) +
+          (defVolatile ? 0.034 : nearestDef.tr === 0 || nearestDef.tr === 6 || nearestDef.tr === 21 || nearestDef.tr === 23 ? -0.014 : 0) +
+          (agentHasTrait(nearestDef, 'slide_tackler') ? 0.012 : 0) +
           (defHasDisciplinePerk ? -0.012 : 0) +
           (nearestDef.fit < 58 ? 0.018 : nearestDef.fit < 68 ? 0.008 : 0) +
           (turfMatchMods.slipMult > 1.08 || defOnPuddle ? 0.012 : 0) +
@@ -4892,7 +4888,7 @@ export const MatchModal: React.FC<{
         const isSevereFoul =
           foulKind === 'dogso' ||
           ((foulKind === 'late_slide' || foulKind === 'hard_tackle') &&
-            (defVolatile || agentHasTrait(nearestDef, 'hot_headed') || agentHasTrait(nearestDef, 'slide_tackler')));
+            (defVolatile || agentHasTrait(nearestDef, 'slide_tackler')));
         const shouldVarFoulCard =
           !shouldVarPen &&
           w.varChecks < 2 &&
@@ -5082,8 +5078,7 @@ export const MatchModal: React.FC<{
 
         const minuteLeniency = curMin <= 12 ? -0.10 : curMin >= 68 ? 0.08 : 0;
         const traitCardMod =
-          (defVolatile ? 0.08 : 0) +
-          (agentHasTrait(nearestDef, 'hot_headed') ? 0.10 : agentHasTrait(nearestDef, 'calm_leader') ? -0.05 : 0) +
+          (defVolatile ? 0.10 : nearestDef.tr === 0 || nearestDef.tr === 6 || nearestDef.tr === 21 || nearestDef.tr === 23 ? -0.04 : 0) +
           (isDerby ? 0.05 : 0) +
           (defHasDisciplinePerk ? -0.04 : 0);
 
@@ -5284,7 +5279,7 @@ export const MatchModal: React.FC<{
           });
 
           if (carPhys > defPhys + R(-8, 10)) {
-            if (curMin >= 2 && (defVolatile || agentHasTrait(nearestDef, 'hot_headed') || defCfg.press === 2) && Math.random() < 0.14) {
+            if (curMin >= 2 && (defVolatile || defCfg.press === 2) && Math.random() < 0.14) {
               resolveCommittedFoul('push');
               return;
             }
@@ -5318,7 +5313,7 @@ export const MatchModal: React.FC<{
               0.14 +
                 (nearestDef.fit < 58 ? 0.06 : 0) +
                 (w.env?.season === 'rainy' || defOnPuddle ? 0.045 : 0) +
-                (defVolatile || agentHasTrait(nearestDef, 'hot_headed') ? 0.05 : 0) -
+                (defVolatile ? 0.05 : 0) -
                 ((nearestDef.d.tkl ?? nearestDef.d.pos) - 60) * 0.0025 -
                 (agentHasTrait(nearestDef, 'slide_tackler') ? 0.05 : 0),
               0.06,
@@ -8412,7 +8407,7 @@ export const MatchModal: React.FC<{
         const deficit = mSide === 'H' ? sr.ga - sr.gh : sr.gh - sr.ga;
         if (deficit < 2) return;
         const mPool = w.agents.filter((a) => !a.sentOff && a.side === mSide);
-        const hasClutch = mPool.some((a) => agentHasTrait(a, 'clutch_player'));
+        const hasClutch = mPool.some((a) => a.tr === 4 || a.tr === 9 || a.tr === 17);
         const isHellFlip = deficit >= 3;
         const baseMirProb =
           deficit >= 4
@@ -8576,7 +8571,7 @@ export const MatchModal: React.FC<{
         if (!pl) continue;
         const D = DT(pl, state.p);
         const plTraits = pl.traits || [];
-        const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
+        const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (D.tr === 2 || D.tr === 18 ? 0.72 : D.tr === 19 ? 1.18 : 1) * (plTraits.includes('box_to_box_engine') ? 0.86 : 1);
         const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
         const drain =
           (0.34 - (D.d.sta - 65) * 0.0022) *
@@ -8588,10 +8583,10 @@ export const MatchModal: React.FC<{
         sr.liveFit[n] = clamp((sr.liveFit[n] ?? 100) - Math.max(0.1, drain), 18, 100);
         const curFit = sr.liveFit[n];
         let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
-        if (plTraits.includes('clutch_player') && curMin >= 70) formDelta += 0.015;
-        if (curFit < 48) formDelta -= plTraits.includes('consistency_pro') ? 0.03 : 0.055;
-        else if (curFit < 58) formDelta -= plTraits.includes('consistency_pro') ? 0.012 : 0.025;
-        if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (plTraits.includes('consistency_pro') ? 0.07 : 0.12);
+        if ((D.tr === 4 || D.tr === 9 || D.tr === 17) && curMin >= 70) formDelta += 0.015;
+        if (curFit < 48) formDelta -= D.tr === 23 ? 0.03 : 0.055;
+        else if (curFit < 58) formDelta -= D.tr === 23 ? 0.012 : 0.025;
+        if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (D.tr === 23 ? 0.07 : 0.12);
         if (formDelta !== 0) adjustLiveForm(n, formDelta);
         if (curFit < 56 && pl.pos !== 'GK' && Math.random() < 0.08) {
           const ag = w.agents.find((a) => a.id === n);
@@ -8772,7 +8767,7 @@ export const MatchModal: React.FC<{
       if (!pl) return;
       const D = DT(pl, state.p);
       const plTraits = pl.traits || [];
-      const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (plTraits.includes('iron_lungs') ? 0.72 : plTraits.includes('glass_cannon') ? 1.18 : 1);
+      const staBonus = (D.sig === 'sta' ? 0.82 : 1) * (D.tr === 2 || D.tr === 18 ? 0.72 : D.tr === 19 ? 1.18 : 1) * (plTraits.includes('box_to_box_engine') ? 0.86 : 1);
       const pressLoad = pl.pos === 'GK' ? 1 : 0.82 + (sideCfg.press + sideCfg.tempo) * 0.11 + (sideCfg.tac === 'X' ? 0.14 : sideCfg.tac === 'Z' ? -0.07 : 0);
       const sideFacMods = getSideFacMods(isH ? 'H' : 'A');
       const drain =
@@ -8786,10 +8781,10 @@ export const MatchModal: React.FC<{
       const curFit = sr.liveFit[n];
       const gd = isH ? sr.gh - sr.ga : sr.ga - sr.gh;
       let formDelta = gd > 0 ? 0.01 : gd < 0 ? -0.015 : 0;
-      if (plTraits.includes('clutch_player') && curMin >= 70) formDelta += 0.015;
-      if (curFit < 48) formDelta -= plTraits.includes('consistency_pro') ? 0.03 : 0.055;
-      else if (curFit < 58) formDelta -= plTraits.includes('consistency_pro') ? 0.012 : 0.025;
-      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (plTraits.includes('consistency_pro') ? 0.07 : 0.12);
+      if ((D.tr === 4 || D.tr === 9 || D.tr === 17) && curMin >= 70) formDelta += 0.015;
+      if (curFit < 48) formDelta -= D.tr === 23 ? 0.03 : 0.055;
+      else if (curFit < 58) formDelta -= D.tr === 23 ? 0.012 : 0.025;
+      if (Math.random() < 0.22) formDelta += (Math.random() - 0.52) * (D.tr === 23 ? 0.07 : 0.12);
       if (formDelta !== 0) adjustLiveForm(n, formDelta);
       const ag = w.agents.find((a) => a.id === n);
       if (ag) ag.fit = sr.liveFit[n];
@@ -9896,8 +9891,8 @@ export const MatchModal: React.FC<{
               const kickScore = kicker
                 ? kicker.d.fin * 0.5 +
                   (kicker.d.comp || 62) * 0.5 +
-                  (agentHasTrait(kicker, 'clutch_player') ? 8 : 0) +
-                  (agentHasTrait(kicker, 'consistency_pro') ? 5 : 0) +
+                  (kicker.tr === 4 || kicker.tr === 17 ? 8 : 0) +
+                  (kicker.tr === 23 ? 5 : 0) +
                   (agentHasTrait(kicker, 'setpiece_specialist') ? 6 : 0)
                 : 64;
               const gkScore = gk

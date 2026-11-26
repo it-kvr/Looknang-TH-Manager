@@ -147,16 +147,15 @@ export function AnimatedMoney({
 
   const popCls = delta
     ? delta.amount > 0
-      ? 'money-val-pop-gain text-[#158049] dark:text-[#4ade80]'
-      : 'money-val-pop-loss text-[#dc2626] dark:text-[#f87171]'
+      ? 'text-[#158049] dark:text-[#4ade80]'
+      : 'text-[#dc2626] dark:text-[#f87171]'
     : '';
 
   return (
     <span className={`relative inline-flex items-center tabular ${className}`}>
       <span
-        key={delta ? `v-${delta.key}` : 'v-idle'}
         ref={textRef}
-        className={`inline-block will-change-transform ${popCls}`}
+        className={`inline-block whitespace-nowrap transition-colors duration-200 ${popCls}`}
       >
         {fmtMoney(value)}
       </span>

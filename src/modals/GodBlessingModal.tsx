@@ -48,8 +48,8 @@ export const GodBlessingModal: React.FC<{
         <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-1.5 bg-gradient-to-r from-[#2e2000] via-[#17281e] to-[#0c1c14] text-white border-b border-[var(--lamp)]/35 flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h3 className="font-bold text-base mland:text-xs font-display flex items-center gap-1.5 truncate">
-              <span>✨</span>
-              <span>พรของพระเจ้า · ปรับแต่งค่าพลังนักเตะแต่ละคน</span>
+              <span>🛠️</span>
+              <span>ปรับแต่งนักเตะรายบุคคล (VIP Editor)</span>
             </h3>
             <p className="text-[11px] mland:text-[9px] text-amber-200/85">
               เลือกนักเตะคนใดก็ได้เพื่อปรับ OVR เพดานพรสวรรค์ ตำแหน่งถนัดเพิ่ม นิสัยประจำตัว สไตล์การเล่น สกิลติดตัว หน้าตา และค่าพลังย่อยทั้งหมด
@@ -140,7 +140,7 @@ export const GodBlessingModal: React.FC<{
                         <div className="text-xs mland:text-[10.5px] font-bold flex items-center gap-1 min-w-0">
                           <PositionBadge role={pl.ro} size="2xs" />
                           <span className="truncate">{pl.n}</span>
-                          {pl.blessed && <span className="shrink-0" title="ได้รับพรของพระเจ้า">✨</span>}
+                          {pl.blessed && <span className="shrink-0" title="ปรับแต่งพิเศษ VIP">⭐</span>}
                         </div>
                         <div className="text-[10px] mland:text-[9px] text-[var(--mut)]">
                           {pl.altRoles?.length ? `+${pl.altRoles.slice(0, 2).join(',')} · ` : ''}อายุ {pl.age}
@@ -168,7 +168,7 @@ export const GodBlessingModal: React.FC<{
                   />
                   <div className="flex-1 min-w-0 space-y-0.5">
                     <div className="font-bold text-sm mland:text-xs truncate flex items-center gap-1.5">
-                      {activeItem.pl.blessed && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] font-extrabold shrink-0">✨ พรของพระเจ้า</span>}
+                      {activeItem.pl.blessed && <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] font-extrabold shrink-0">⭐ ปรับแต่ง VIP</span>}
                       <span className="truncate">{activeItem.pl.n}</span>
                     </div>
                     <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">

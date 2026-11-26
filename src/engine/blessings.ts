@@ -1,5 +1,5 @@
 import type { StatKey, Player, Team, GameState, GodBlessingPatch } from '../types/game';
-import { clamp, fmtMoney } from '../utils/math';
+import { clamp, fmtMoney, MAX_CLUB_MONEY, capMoney } from '../utils/math';
 import { LINE, CAREER_PERKS, PLAYER_PERSONALITIES, SKIN_P, HAIR_P } from '../data/thaiFootballData';
 import { ovMe, syncMe, logFin, recordPlayerSeasonProgress } from './playerCore';
 
@@ -126,24 +126,36 @@ export function applySecretMoneyAdjust(
   amountK: number
 ): string {
   const cleanAmt = Math.max(0, Math.round(Number.isFinite(amountK) ? amountK : 0));
+  const prev = Math.round(d.money || 0);
   if (mode === 'set') {
-    const prev = Math.round(d.money || 0);
-    const diff = cleanAmt - prev;
-    d.money = cleanAmt;
+    const target = capMoney(cleanAmt);
+    const diff = target - prev;
+    d.money = target;
     if (diff !== 0) {
       logFin(d, diff > 0 ? 'ปรับงบเป็นยอดกำหนด (VIP)' : 'ปรับลดงบเป็นยอดกำหนด (VIP)', diff);
+    }
+    if (cleanAmt > MAX_CLUB_MONEY) {
+      return `💳 ตั้งงบสโมสรเป็น ${fmtMoney(d.money)} แล้ว (เพดานสูงสุด ${fmtMoney(MAX_CLUB_MONEY)})`;
     }
     return `💳 ตั้งงบสโมสรเป็น ${fmtMoney(d.money)} แล้ว`;
   }
   if (cleanAmt <= 0) return 'กรุณาระบุจำนวนเงินมากกว่า 0';
   if (mode === 'sub') {
-    d.money = Math.round((d.money || 0) - cleanAmt);
+    d.money = capMoney(Math.round((d.money || 0) - cleanAmt));
     logFin(d, 'ปรับลดงบพิเศษ (VIP)', -cleanAmt);
     return `💸 ลดงบสโมสร -${fmtMoney(cleanAmt)} (คงเหลือ ${fmtMoney(d.money)})`;
   }
-  d.money = Math.round((d.money || 0) + cleanAmt);
-  logFin(d, 'งบสนับสนุนพิเศษ (VIP)', cleanAmt);
-  return `🎁 เติมเงินทุน +${fmtMoney(cleanAmt)} สำเร็จ!`;
+  const next = capMoney(Math.round((d.money || 0) + cleanAmt));
+  const actualAdded = Math.max(0, next - prev);
+  d.money = next;
+  if (actualAdded <= 0) {
+    return `💰 งบสโมสรถึงเพดานสูงสุด ${fmtMoney(MAX_CLUB_MONEY)} แล้ว`;
+  }
+  logFin(d, 'งบสนับสนุนพิเศษ (VIP)', actualAdded);
+  if (actualAdded < cleanAmt) {
+    return `🎁 เติมเงินทุน +${fmtMoney(actualAdded)} (ถึงเพดานสูงสุด ${fmtMoney(MAX_CLUB_MONEY)})`;
+  }
+  return `🎁 เติมเงินทุน +${fmtMoney(actualAdded)} สำเร็จ!`;
 }
 
 export function applySecretBoost(
@@ -152,14 +164,25 @@ export function applySecretBoost(
 ): string {
   if (kind === 'money500' || kind === 'money2500' || kind === 'money10000') {
     const amt = kind === 'money500' ? 500 : kind === 'money2500' ? 2500 : 10000;
-    d.money += amt;
-    logFin(d, 'งบสนับสนุนพิเศษ (VIP)', amt);
+    const prev = d.money || 0;
+    const next = capMoney(prev + amt);
+    const actualAdded = Math.max(0, next - prev);
+    d.money = next;
+    if (actualAdded > 0) {
+      logFin(d, 'งบสนับสนุนพิเศษ (VIP)', actualAdded);
+    }
     if (d.mode === 'p' && d.p) {
       d.p.rep = clamp((d.p.rep ?? 20) + (kind === 'money500' ? 8 : 20), 0, 99);
       d.p.en = 100;
       syncMe(d);
     }
-    return `🎁 เติมเงินทุน +${fmtMoney(amt)} สำเร็จ!`;
+    if (actualAdded <= 0) {
+      return `💰 งบสโมสรถึงเพดานสูงสุด ${fmtMoney(MAX_CLUB_MONEY)} แล้ว`;
+    }
+    if (actualAdded < amt) {
+      return `🎁 เติมเงินทุน +${fmtMoney(actualAdded)} (ถึงเพดานสูงสุด ${fmtMoney(MAX_CLUB_MONEY)})`;
+    }
+    return `🎁 เติมเงินทุน +${fmtMoney(actualAdded)} สำเร็จ!`;
   }
   if (kind === 'sub500' || kind === 'sub2500' || kind === 'sub10000') {
     const amt = kind === 'sub500' ? 500 : kind === 'sub2500' ? 2500 : 10000;

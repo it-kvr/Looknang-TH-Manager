@@ -1,6 +1,6 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, PlayerSeasonHistoryRecord, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate, PreferredFoot } from '../types/game';
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
-import { R, P, clamp } from '../utils/math';
+import { R, P, clamp, capMoney } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
 import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
 
@@ -170,6 +170,14 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
     d.teams.forEach((tm) => {
       tm.sq?.forEach((q) => {
         if ((q.ro as string) === 'SS') q.ro = 'CF';
+        if (Array.isArray(q.traits) && q.traits.length > 0) {
+          const valid = q.traits.filter((id) => Boolean(TRAIT_BY_ID[id]));
+          if (valid.length !== q.traits.length) {
+            q.traits = valid.length > 0
+              ? valid
+              : rollPlayerTraits(q.pos || 'MF', q.ro || 'CM', q.ov || 60, q.talent || 60, `${q.n}:${q.pos}:${q.ro}`);
+          }
+        }
       });
       if (Array.isArray(tm.cf)) {
         tm.cf = tm.cf.map(([sp, x, y]) => [((sp as string) === 'SS' ? 'CF' : sp) as SubRole, x, y]);
@@ -179,9 +187,18 @@ export function loadGameFromSlot(m: GameMode, slot: number): GameState | null {
     if (d.mode === 'p' && d.p) {
       if ((d.p.sp as string) === 'SS') d.p.sp = 'CF';
       const mePl = d.teams[d.me]?.sq.find((q) => q.me);
+      if (Array.isArray(d.p.traits) && d.p.traits.length > 0) {
+        const validP = d.p.traits.filter((id) => Boolean(TRAIT_BY_ID[id]));
+        if (validP.length !== d.p.traits.length) {
+          d.p.traits = validP.length > 0
+            ? validP
+            : rollPlayerTraits(d.p.pos || 'MF', d.p.sp || 'CM', mePl?.ov || 60, d.p.talent || 60, `${d.p.name}:${d.p.pos}:${d.p.sp}`);
+        }
+      }
       if (mePl?.no) d.p.no = mePl.no;
     }
     ensureAiTeamPhilosophies(d, false);
+    d.money = capMoney(d.money);
     return d;
   } catch {
     return null;
@@ -674,11 +691,16 @@ export function getPlayerTraits(
   careerP?: PlayerCareerProfile | null
 ): FootballTraitDef[] {
   const raw = q.me && careerP?.traits?.length ? careerP.traits : q.traits;
-  const ids =
-    raw && raw.length > 0
-      ? raw
-      : rollPlayerTraits(q.pos || 'MF', q.ro || 'CM', q.ov || 60, q.talent || 60, `${q.n || 'นักเตะ'}:${q.pos || 'MF'}:${q.ro || 'CM'}`);
-  return ids.map((id) => TRAIT_BY_ID[id]).filter((t): t is FootballTraitDef => Boolean(t));
+  const validRaw = raw ? raw.map((id) => TRAIT_BY_ID[id]).filter((t): t is FootballTraitDef => Boolean(t)) : [];
+  if (validRaw.length > 0) return validRaw;
+  const fallbackIds = rollPlayerTraits(
+    q.pos || 'MF',
+    q.ro || 'CM',
+    q.ov || 60,
+    q.talent || 60,
+    `${q.n || 'นักเตะ'}:${q.pos || 'MF'}:${q.ro || 'CM'}`
+  );
+  return fallbackIds.map((id) => TRAIT_BY_ID[id]).filter((t): t is FootballTraitDef => Boolean(t));
 }
 
 export function hasTrait(
@@ -887,13 +909,14 @@ export function ensureAiTeamPhilosophies(s: GameState, allowSeasonRefresh = fals
 export function scoreCaptainCandidate(q: Player, careerP?: PlayerCareerProfile | null): number {
   const D = DT(q, careerP);
   const ageScore = q.age >= 24 ? (q.age <= 32 ? 9 : 6) : q.age >= 21 ? 1 : -6;
-  const traitBonus =
-    (hasTrait(q, 'calm_leader', careerP) ? 16 : 0) +
-    (hasTrait(q, 'tireless_mentor', careerP) ? 14 : 0) +
-    (hasTrait(q, 'clutch_player', careerP) ? 6 : 0) +
-    (hasTrait(q, 'team_first', careerP) ? 5 : 0) +
-    (hasTrait(q, 'hot_headed', careerP) ? -14 : 0);
-  const persBonus = D.tr === 6 || D.tr === 17 || D.tr === 23 ? 5 : D.tr === 1 || D.tr === 7 || D.tr === 15 ? -6 : 0;
+  const traitBonus = hasTrait(q, 'team_first', careerP) ? 5 : 0;
+  const persBonus =
+    (D.tr === 0 ? 18 : 0) +
+    (D.tr === 21 ? 16 : 0) +
+    (D.tr === 6 || D.tr === 23 ? 10 : 0) +
+    (D.tr === 4 || D.tr === 17 ? 8 : 0) +
+    (D.tr === 14 ? 5 : 0) +
+    (D.tr === 1 || D.tr === 7 || D.tr === 15 ? -14 : 0);
   const posBias = q.pos === 'GK' ? -4 : q.pos === 'DF' || q.pos === 'MF' ? 2 : 0;
   return q.ov * 1.15 + ageScore + (D.d.comp + D.d.det) * 0.14 + traitBonus + persBonus + posBias;
 }
@@ -951,7 +974,7 @@ export function scoreSetPieceCandidate(
     (D.d.comp || 60) * 0.95 +
     D.d.pw * 0.25 +
     (D.sig === 'fin' ? 10 : 0) +
-    (hasTrait(q, 'clutch_player', careerP) ? 16 : 0) +
+    (D.tr === 17 || D.tr === 4 ? 14 : D.tr === 6 || D.tr === 23 ? 8 : D.tr === 7 || D.tr === 22 ? -6 : 0) +
     (hasTrait(q, 'setpiece_specialist', careerP) ? 12 : 0) +
     q.ov * 0.25
   );

@@ -609,33 +609,6 @@ button:not(:disabled):active {
   }
 }
 
-@keyframes money-val-pop-gain {
-  0% {
-    transform: scale(1);
-  }
-  32% {
-    transform: scale(1.08);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes money-val-pop-loss {
-  0% {
-    transform: scale(1);
-  }
-  28% {
-    transform: scale(0.95);
-  }
-  60% {
-    transform: scale(1.02);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
 .money-delta-gain {
   will-change: transform, opacity;
   animation: money-delta-gain 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -644,14 +617,6 @@ button:not(:disabled):active {
 .money-delta-loss {
   will-change: transform, opacity;
   animation: money-delta-loss 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.money-val-pop-gain {
-  animation: money-val-pop-gain 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.money-val-pop-loss {
-  animation: money-val-pop-loss 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .cv-row {
@@ -671,9 +636,7 @@ button:not(:disabled):active {
   .goal-ribbon-in,
   .goal-sheen-sweep,
   .money-delta-gain,
-  .money-delta-loss,
-  .money-val-pop-gain,
-  .money-val-pop-loss {
+  .money-delta-loss {
     animation: none !important;
   }
   .confetti-piece {

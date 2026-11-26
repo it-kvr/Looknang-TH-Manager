@@ -577,101 +577,159 @@ export const FinanceClubView: React.FC<{
     };
     const topEarners = me.sq.slice().sort((a, b) => wagOf(b) - wagOf(a)).slice(0, 3);
 
+    const clubK = ensureClubIdentity(state);
+
     return (
       <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-        {/* Top 4 Financial KPIs */}
-        <div className="grid grid-cols-4 gap-2 mland:gap-1.5 shrink-0">
-          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
-              <AnimatedMoney value={state.money} deltaPlacement="above" />
+        {/* Unified Single-Row Finance Header (mirrors Club HQ banner + switches cleanly to Save/Reset buttons when editing) */}
+        <div
+          className={`relative px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border shadow-2xs shrink-0 overflow-hidden ${
+            hasFinanceChanges ? 'border-[var(--g)]/45' : 'border-[var(--line)]'
+          }`}
+          style={{
+            background: `linear-gradient(135deg, color-mix(in srgb, ${clubK.c1} 13%, var(--surface)), var(--surface) 56%, color-mix(in srgb, ${clubK.c2} 7%, var(--surface)))`
+          }}
+        >
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
+            style={{ background: `linear-gradient(90deg, ${clubK.c1}, ${clubK.c2})` }}
+          />
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 text-left min-w-0">
+            <div className="flex items-center px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+              <ClubCrest name={me.name} size={44} team={me} club={clubK} isMyClub />
             </div>
-            <div className={`text-[11px] mland:text-[8.5px] mt-0.5 mland:mt-0 truncate ${state.money < 0 ? 'text-[var(--red)] font-bold' : 'text-[var(--mut)]'}`}>
-              {state.money < 0 ? '⚠️ ติดลบ (ล็อก FFP ซื้อตัว)' : 'สถานะการเงินพร้อมดำเนินการ'}
-            </div>
-          </div>
 
-          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] flex items-center justify-between gap-1">
-              <span className="truncate">คาดการณ์สุทธิ / นัดเหย้า</span>
-              {hasFinanceChanges && <span className="text-[9.5px] mland:text-[8px] text-[#b47b00] dark:text-[var(--lamp)] shrink-0">จำลอง</span>}
-            </div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-              {est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}
-            </div>
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
-              เกมเยือน: <b className={est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>{est.awayNet >= 0 ? `+${fmtMoneyNum(est.awayNet)}` : fmtMoneyNum(est.awayNet)}</b>
-            </div>
-          </div>
+            <div className="space-y-0.5 min-w-0 flex-1">
+              <div className="flex items-center gap-x-1.5 min-w-0 text-[10px] mland:text-[8.5px] font-bold leading-tight whitespace-nowrap overflow-hidden">
+                {hasFinanceChanges ? (
+                  <span className="truncate text-[#b47b00] dark:text-[var(--lamp)]">
+                    การเงิน &amp; งบประมาณ · แก้ไข {changedFinCount} รายการ (รอการบันทึก)
+                  </span>
+                ) : state.money < 0 ? (
+                  <span className="truncate text-[var(--red)]">
+                    ⚠️ งบสโมสรติดลบ (ล็อก FFP ซื้อนักเตะ) · {me.name}
+                  </span>
+                ) : (
+                  <span className="truncate text-[var(--g)]">
+                    การเงิน &amp; งบประมาณ · {me.name}
+                  </span>
+                )}
+              </div>
 
-          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ค่าเหนื่อยนักเตะ / เพดาน</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${tx.wagePct >= 95 ? 'text-[var(--red)]' : ''}`}>
-              {fmtMoneyNum(tx.curWage)} <span className="text-xs mland:text-[9.5px] font-semibold text-[var(--mut)]">/ {fmtMoneyNum(tx.wageCap)}</span>
-            </div>
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
-              ใช้ไป {tx.wagePct}% · สตาฟฟ์ -{fmtMoneyNum(est.staffCost)}/นัด
-            </div>
-          </div>
+              <h2 className="font-bold text-sm sm:text-lg mland:text-sm font-display leading-snug text-[var(--ink)] flex items-baseline gap-1.5 min-w-0">
+                <span className="text-xs sm:text-sm mland:text-xs font-semibold text-[var(--mut)] shrink-0">งบสโมสร</span>
+                <span className={`tabular whitespace-nowrap ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                  <AnimatedMoney value={state.money} deltaPlacement="inline" />
+                </span>
+              </h2>
 
-          <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">ภาระหนี้คงค้างรวม</div>
-            <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${totalDebt > 0 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
-              {fmtMoney(totalDebt)}
+              {hasFinanceChanges ? (
+                <p className="flex items-center gap-x-1.5 min-w-0 text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-tight whitespace-nowrap overflow-hidden tabular">
+                  <span className="shrink-0">
+                    จำลองเหย้า{' '}
+                    <b className={est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                      {est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}
+                    </b>
+                  </span>
+                  <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
+                  <span className="shrink-0">
+                    เยือน{' '}
+                    <b className={est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                      {est.awayNet >= 0 ? `+${fmtMoneyNum(est.awayNet)}` : fmtMoneyNum(est.awayNet)}
+                    </b>
+                  </span>
+                  <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
+                  <span className="truncate">
+                    เพดานค่าเหนื่อย {tx.wagePct}% · หนี้ {fmtMoneyNum(totalDebt)}
+                  </span>
+                </p>
+              ) : (
+                <p className="flex items-center gap-x-1.5 min-w-0 text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-tight whitespace-nowrap overflow-hidden tabular">
+                  <span className="shrink-0">
+                    เยือน{' '}
+                    <b className={est.awayNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}>
+                      {est.awayNet >= 0 ? `+${fmtMoneyNum(est.awayNet)}` : fmtMoneyNum(est.awayNet)}
+                    </b>
+                  </span>
+                  <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
+                  <span className="shrink-0">สตาฟฟ์ -{fmtMoneyNum(est.staffCost)}/นัด</span>
+                  <span aria-hidden="true" className="opacity-45 shrink-0">·</span>
+                  <span className="truncate">
+                    ธนาคาร {fmtMoneyNum(bankRemain)} · ผ่อนปลายปี {fmtMoneyNum(state.payDue || 0)}
+                  </span>
+                </p>
+              )}
             </div>
-            <div className="text-[11px] mland:text-[8.5px] text-[var(--mut)] tabular mt-0.5 mland:mt-0 truncate">
-              ธนาคาร {fmtMoneyNum(bankRemain)} · ค่าตัวปลายปี {fmtMoneyNum(state.payDue || 0)}
-            </div>
+
+            {hasFinanceChanges ? (
+              <div className="flex items-center justify-end gap-2 mland:gap-1.5 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[40px] mland:min-h-[32px] ml-auto">
+                <button
+                  type="button"
+                  onClick={resetFinanceDraft}
+                  className="btn h-9 sm:h-10 mland:h-8 px-3 sm:px-3.5 mland:px-2.5 text-xs mland:text-[10.5px] rounded-xl mland:rounded-lg btn-secondary whitespace-nowrap shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <span>คืนค่าเดิม</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={saveFinanceDraft}
+                  className="btn h-9 sm:h-10 mland:h-8 px-3 sm:px-3.5 mland:px-2.5 text-xs mland:text-[10.5px] rounded-xl mland:rounded-lg btn-primary whitespace-nowrap shrink-0"
+                >
+                  <Check className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <span>บันทึก ({changedFinCount})</span>
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[40px] mland:min-h-[32px] text-center items-center">
+                <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
+                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">สุทธิ / นัดเหย้า</div>
+                  <div className={`text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                    {est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}
+                  </div>
+                </div>
+                <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
+                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">ค่าเหนื่อย / เพดาน</div>
+                  <div className={`text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${tx.wagePct >= 95 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
+                    {fmtMoneyNum(tx.curWage)}<span className="text-[9.5px] font-semibold text-[var(--mut)]">/{fmtMoneyNum(tx.wageCap)}</span>
+                  </div>
+                </div>
+                <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
+                  <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">หนี้คงค้างรวม</div>
+                  <div className={`text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${totalDebt > 0 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+                    {fmtMoneyNum(totalDebt)}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Finance Sub-navigation + Save / Reset Controls */}
-        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mland:gap-1.5 shrink-0">
-          <div className="seg-bar grid grid-cols-4 flex-1 min-w-0 bg-[var(--surface)]">
-            {(
-              [
-                ['overview', '📊 กระแสเงิน & แคมเปญ'],
-                ['commercial', '💼 สปอนเซอร์ & ลิขสิทธิ์ถ่ายทอด'],
-                ['megastore', '🛍️ เมกะสโตร์ & ยอดขาย'],
-                ['ledger', '📒 ธนาคาร & บัญชี']
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setFinTab(id)}
-                className={`seg-btn truncate whitespace-nowrap ${
-                  finTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-            {hasFinanceChanges && (
-              <button
-                type="button"
-                onClick={resetFinanceDraft}
-                className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>คืนค่าเดิม</span>
-              </button>
-            )}
+        {/* Finance Sub-navigation (4 Full-Width Tabs matching Club HQ) */}
+        <div className="seg-bar grid grid-cols-4 w-full bg-[var(--surface)] shrink-0">
+          {(
+            [
+              ['overview', '📊 กระแสเงิน & แคมเปญ'],
+              ['commercial', '💼 สปอนเซอร์ & ลิขสิทธิ์ถ่ายทอด'],
+              ['megastore', '🛍️ เมกะสโตร์ & ยอดขาย'],
+              ['ledger', '📒 ธนาคาร & บัญชี']
+            ] as const
+          ).map(([id, label]) => (
             <button
+              key={id}
               type="button"
-              disabled={!hasFinanceChanges}
-              onClick={saveFinanceDraft}
-              className={`btn btn-xs sm:btn-sm whitespace-nowrap shrink-0 ${
-                hasFinanceChanges ? 'btn-primary' : 'btn-surface'
+              onClick={() => {
+                SFX.tap();
+                setFinTab(id);
+              }}
+              className={`seg-btn truncate whitespace-nowrap ${
+                finTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
               }`}
             >
-              <Check className="w-3.5 h-3.5" />
-              <span>{hasFinanceChanges ? `บันทึก (${changedFinCount})` : 'บันทึกแล้ว'}</span>
+              {label}
             </button>
-          </div>
+          ))}
         </div>
 
         {/* Sub-tab 1: Cashflow & Matchday Boosters */}
@@ -2325,7 +2383,17 @@ export const FinanceClubView: React.FC<{
           </div>
 
           {clubTab === 'identity' ? (
-            <div className="flex items-center justify-end gap-1.5 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[38px] mland:min-h-[30px] ml-auto">
+            <div className="flex items-center justify-end gap-2 mland:gap-1.5 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[40px] mland:min-h-[32px] ml-auto">
+              {hasIdentityChanges && (
+                <button
+                  type="button"
+                  onClick={resetIdentityDraft}
+                  className="btn h-9 sm:h-10 mland:h-8 px-3 sm:px-3.5 mland:px-2.5 text-xs mland:text-[10.5px] rounded-xl mland:rounded-lg btn-secondary whitespace-nowrap shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                  <span>คืนค่าเดิม</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -2347,33 +2415,25 @@ export const FinanceClubView: React.FC<{
                     cl.iconColor = '';
                   });
                 }}
-                className="btn btn-xs sm:btn-sm btn-gold whitespace-nowrap shrink-0"
+                className="btn h-9 sm:h-10 mland:h-8 px-3 sm:px-3.5 mland:px-2.5 text-xs mland:text-[10.5px] rounded-xl mland:rounded-lg btn-gold whitespace-nowrap shrink-0"
               >
-                <Dices className="w-3.5 h-3.5" />
+                <Dices className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
                 <span>สุ่มดีไซน์</span>
               </button>
-              {hasIdentityChanges && (
-                <button
-                  type="button"
-                  onClick={resetIdentityDraft}
-                  className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>คืนค่าเดิม</span>
-                </button>
-              )}
               <button
                 type="button"
                 disabled={!hasIdentityChanges}
                 onClick={saveIdentityDraft}
-                className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
+                className={`btn h-9 sm:h-10 mland:h-8 px-3 sm:px-3.5 mland:px-2.5 text-xs mland:text-[10.5px] rounded-xl mland:rounded-lg whitespace-nowrap shrink-0 ${
+                  hasIdentityChanges ? 'btn-primary' : 'btn-surface'
+                }`}
               >
-                <Check className="w-3.5 h-3.5" />
+                <Check className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
                 <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[38px] mland:min-h-[30px] text-center items-center">
+            <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto min-h-[36px] sm:min-h-[40px] mland:min-h-[32px] text-center items-center">
               <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
                 <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap leading-none">พลัง XI/ทีม</div>
                 <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">

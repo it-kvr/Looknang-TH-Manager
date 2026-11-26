@@ -1,5 +1,5 @@
 import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
-import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
+import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
@@ -127,21 +127,9 @@ export function rate(
       traitDf += 0.25;
     }
 
-    if (hasTrait(q, 'clutch_player', cpForTrait) && isClutchMoment) {
-      traitAt += 0.55;
-      traitDf += 0.45;
-    }
     if (hasTrait(q, 'super_sub', cpForTrait) && subsEntered?.includes(q.n)) {
       traitAt += 0.9;
       traitDf += 0.4;
-    }
-    if (hasTrait(q, 'consistency_pro', cpForTrait)) {
-      traitAt += 0.28;
-      traitDf += 0.28;
-    }
-    if (hasTrait(q, 'calm_leader', cpForTrait)) {
-      traitAt += 0.22;
-      traitDf += 0.35;
     }
     if (hasTrait(q, 'tempo_controller', cpForTrait) && (q.pos === 'MF' || q.pos === 'DF')) {
       traitAt += 0.42;
@@ -201,14 +189,9 @@ export function rate(
     if (hasTrait(q, 'one_on_one_wall', cpForTrait) && q.pos === 'GK') {
       traitDf += 0.64;
     }
-    if (hasTrait(q, 'comeback_king', cpForTrait) && isClutchMoment) {
-      traitAt += 0.48;
+    if (Dq.tr === 10 && slotSp && pen(q.ro, slotSp) > 0) {
+      traitAt += 0.32;
       traitDf += 0.32;
-    }
-    if (hasTrait(q, 'versatile_utility', cpForTrait)) {
-      const hasRawPen = slotSp ? pen(q.ro, slotSp) > 0 : false;
-      traitAt += hasRawPen ? 0.38 : 0.2;
-      traitDf += hasRawPen ? 0.38 : 0.2;
     }
     // New 45..64 traits
     if (hasTrait(q, 'fox_in_box', cpForTrait) && q.pos === 'FW') traitAt += 0.56;
@@ -244,14 +227,6 @@ export function rate(
       traitAt += 0.44;
       traitDf += 0.16;
     }
-    if (hasTrait(q, 'tireless_mentor', cpForTrait)) {
-      traitAt += 0.26;
-      traitDf += 0.3;
-    }
-    if (hasTrait(q, 'risk_taker', cpForTrait)) {
-      traitAt += 0.46;
-      traitDf -= 0.22;
-    }
     if (q.me && cpForTrait?.perks?.includes('adaptable') && slotSp && playerPen(q, slotSp) > 0) {
       traitAt += 0.55;
       traitDf += 0.55;
@@ -261,15 +236,6 @@ export function rate(
       const flexBonus = Math.min(0.45, qAltRoles.length * 0.2);
       traitAt += flexBonus;
       traitDf += flexBonus;
-    }
-    if (hasTrait(q, 'glass_cannon', cpForTrait)) {
-      if ((q.fit ?? 100) > 75) {
-        traitAt += 0.42;
-        traitDf += 0.18;
-      } else {
-        traitAt -= 0.3;
-        traitDf -= 0.3;
-      }
     }
   });
   at += clamp(traitAt, -3.5, 6.2);
@@ -379,7 +345,7 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
       if (hasTrait(q, 'long_shot_lover', careerP)) traitBoost += 0.16;
       if (hasTrait(q, 'selfish_shooter', careerP)) traitBoost += 0.24;
       if (hasTrait(q, 'acrobatic_finisher', careerP)) traitBoost += 0.2;
-      if (hasTrait(q, 'comeback_king', careerP)) traitBoost += 0.14;
+      if (DT(q, careerP).tr === 9) traitBoost += 0.14;
       if (t.setPieces?.penalty === q.n) traitBoost += 0.16;
       if (t.setPieces?.freekick === q.n) traitBoost += 0.1;
       const wVal = Math.max(1, Math.round(b * traitBoost * Math.pow(sc / 70, 2)));
@@ -527,12 +493,10 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
           const D = DT(q, s?.p);
           const role = slotMap[q.n] || q.ro;
           let w = q.pos === 'DF' || role === 'CDM' ? 2.4 : q.pos === 'MF' ? 1.6 : 0.9;
-          if (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22) w += 2.6;
+          if (D.tr === 1 || D.tr === 7 || D.tr === 15 || D.tr === 22) w += 3.2;
           if (D.d.pos < 58) w += 0.8;
-          if (D.tr === 6 || D.tr === 17 || D.tr === 23) w = Math.max(0.6, w - 0.8);
-          if (hasTrait(q, 'hot_headed', s?.p)) w += 3.0;
-          if (hasTrait(q, 'slide_tackler', s?.p) || hasTrait(q, 'risk_taker', s?.p)) w += 1.8;
-          if (hasTrait(q, 'calm_leader', s?.p) || hasTrait(q, 'tireless_mentor', s?.p)) w = Math.max(0.6, w - 0.8);
+          if (D.tr === 0 || D.tr === 6 || D.tr === 17 || D.tr === 21 || D.tr === 23) w = Math.max(0.6, w - 1.0);
+          if (hasTrait(q, 'slide_tackler', s?.p)) w += 1.8;
           if (q.me && s?.p?.perks?.includes('discipline_pro')) w = Math.max(0.6, w - 0.8);
           return w;
         })
@@ -557,7 +521,6 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
       if (!culprit) break;
       if ((matchY[culprit.n] || 0) >= 1) {
         const isReckless =
-          hasTrait(culprit, 'hot_headed', s?.p) ||
           hasTrait(culprit, 'slide_tackler', s?.p) ||
           [1, 7, 15, 22].includes(DT(culprit, s?.p).tr);
         const y2rChance = teamReds < 2 ? (isReckless ? 0.48 : 0.28) : 0;
@@ -582,7 +545,7 @@ export function simMatchCardsAndSubs(h: Team, a: Team, s?: GameState | null): {
     if (pool.length && teamReds < 2 && Math.random() < (big ? 0.036 : pressLvl === 2 ? 0.026 : 0.016)) {
       const rough = pool.filter((q) => {
         const tr = DT(q, s?.p).tr;
-        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || hasTrait(q, 'hot_headed', s?.p) || hasTrait(q, 'slide_tackler', s?.p);
+        return tr === 1 || tr === 7 || tr === 15 || tr === 22 || hasTrait(q, 'slide_tackler', s?.p);
       });
       const culprit = rough.length ? P(rough) : P(pool.filter((q) => q.pos === 'DF' || q.pos === 'MF').length ? pool.filter((q) => q.pos === 'DF' || q.pos === 'MF') : pool);
       if (!cards.some((c) => c.t === tm.id && c.who === culprit.n && (c.type === 'R' || c.type === 'Y2R'))) {
@@ -3287,9 +3250,8 @@ export function applyPositionAdaptation(
       const age = q.age || 24;
       const tl = q.talent ?? 55;
       const persTr = DT(q, isMePlayer ? s?.p : null).tr;
-      const hasAdaptTrait = hasTrait(q, 'versatile_utility', isMePlayer ? s?.p : null);
       const hasAdaptPerk = isMePlayer && Boolean(s?.p?.perks?.includes('adaptable'));
-      const fastAdapt = persTr === 10 || persTr === 12 || persTr === 23 || hasAdaptTrait || hasAdaptPerk;
+      const fastAdapt = persTr === 10 || persTr === 12 || persTr === 23 || hasAdaptPerk;
       let bonusExp = (age <= 22 || tl >= 76) && Math.random() < 0.35 ? 2 : 1;
       if (hasAdaptPerk) bonusExp += 1;
       else if (fastAdapt && Math.random() < 0.65) bonusExp += 1;
@@ -3833,7 +3795,7 @@ export function runPlayerWeek(s: GameState) {
     const targetRole = p.roleTrain;
     const rawPen = pen(p.sp, targetRole);
     const threshold = rawPen === 1 ? ROLE_ADAPT_THRESHOLD_ADJ : ROLE_ADAPT_THRESHOLD_CROSS;
-    const fastRole = perks.includes('adaptable') || hasTrait(mePlayer, 'versatile_utility', p);
+    const fastRole = perks.includes('adaptable') || [10, 12, 23].includes(DT(mePlayer, p).tr);
     const stepExp = fastRole && Math.random() < 0.45 ? 2 : 1;
     p.roleExp = { ...(p.roleExp || {}), [targetRole]: (p.roleExp?.[targetRole] || 0) + stepExp };
     if (meSq) meSq.roleExp = { ...p.roleExp };
@@ -4562,7 +4524,7 @@ export function acceptTransferOffer(d: GameState, off: TransferOffer): { ok: boo
   }
 
   const buyerName = buyer?.name || off.t;
-  d.money += off.p;
+  d.money = capMoney(d.money + off.p);
   logFin(d, `ขาย ${off.n} ให้ ${buyerName}`, off.p);
   pushFeed(d, 'ตลาดซื้อขาย', `✅ ขาย ${off.n} ให้ ${buyerName} รับค่าตัว +${fmtMoney(off.p)}`, 'ok');
   removeIncomingOffer(d, off.n);
@@ -4997,7 +4959,7 @@ export function quickSellSquadPlayers(
     soldDetails.push({ name: sold.n, buyerName, price: salePrice });
   });
 
-  d.money += totalGain;
+  d.money = capMoney(d.money + totalGain);
   if (soldDetails.length === 1) {
     const one = soldDetails[0];
     logFin(d, `ขาย ${one.name} ให้ ${one.buyerName}`, one.price);
@@ -5172,13 +5134,13 @@ export function afterMatchDay(
           (plan.restStarters && pi ? 5 : 0) +
           (isIndivRest ? 10 : 0)
         : (pi ? Math.round(aiFacilityBonus * 0.72) : aiFacilityBonus + (prevFit < 78 ? 5 : prevFit < 88 ? 2 : 0)) + aiRecoveryWeek;
-      const ironLungsMult = hasTrait(q, 'iron_lungs', s.p) || hasTrait(q, 'box_to_box_engine', s.p) ? 0.72 : hasTrait(q, 'glass_cannon', s.p) ? 1.18 : 1;
-      const consRec = (hasTrait(q, 'consistency_pro', s.p) || hasTrait(q, 'tireless_mentor', s.p) ? 2 : 0) + (Dq.tr === 6 || Dq.tr === 18 || Dq.tr === 21 || Dq.tr === 23 ? 2 : 0);
-      const persStamMult = Dq.tr === 2 || Dq.tr === 18 ? 0.78 : Dq.tr === 7 || Dq.tr === 19 ? 1.15 : 1;
+      const boxToBoxStamMult = hasTrait(q, 'box_to_box_engine', s.p) ? 0.8 : 1;
+      const consRec = Dq.tr === 6 || Dq.tr === 18 || Dq.tr === 21 || Dq.tr === 23 ? 3 : 0;
+      const persStamMult = Dq.tr === 2 || Dq.tr === 18 ? 0.72 : Dq.tr === 7 || Dq.tr === 19 ? 1.18 : 1;
       const matchOrRestDelta = pi
-        ? -Math.round(R(7, 12) * persStamMult * ironLungsMult) - ps * (mine && mg ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
+        ? -Math.round(R(7, 12) * persStamMult * boxToBoxStamMult) - ps * (mine && mg ? 3 : 2) + Math.round((Dq.d.sta - 68) / 8) + earlySubRest
         : R(10, 17) + Math.round((Dq.d.rec - 68) / 7) + consRec;
-      q.fit = clamp(prevFit + matchOrRestDelta + trainFitBonus, hasTrait(q, 'consistency_pro', s.p) ? 55 : 35, 100);
+      q.fit = clamp(prevFit + matchOrRestDelta + trainFitBonus, Dq.tr === 23 ? 52 : 35, 100);
       if (mine) {
         myFitBeforeSum += prevFit;
         myFitAfterSum += q.fit;
@@ -5203,7 +5165,7 @@ export function afterMatchDay(
           (q.fit < 60 ? 0.068 : 0.022) *
             (mine ? progMeta.injMult * (mg ? intMeta.injMult : 1) * (isIndivRest ? 0.5 : 1) : 1) *
             (mine ? Math.max(0.4, 1 - Math.max(0, medLv - 1) * 0.045 * medCondFactor - stf.physio * 0.05 - Math.max(0, turfLv - 1) * 0.02 * turfCondFactor) : Math.max(0.65, 1 - t.tier * 0.12)) *
-            (hasTrait(q, 'glass_cannon', s.p) ? 1.38 : hasTrait(q, 'iron_lungs', s.p) ? 0.8 : 1) *
+            (Dq.tr === 19 ? 1.32 : Dq.tr === 18 || Dq.tr === 23 ? 0.82 : 1) *
             ((130 - Dq.d.tol) / 60)
       ) {
         q.inj = injD(q, R(1, 5), s.p);
@@ -5577,6 +5539,7 @@ export function afterMatchDay(
 
   maybeTriggerDilemma(s);
   if (mg) evaluateAndIssueBoardDirectives(s);
+  s.money = capMoney(s.money);
 }
 
 export function getActiveBoardEffects(s: Pick<GameState, 'boardEffects' | 'season' | 'md'>): BoardTempEffect[] {
@@ -6684,6 +6647,7 @@ export function finishSeasonComputation(s: GameState) {
       logFin(s, 'ชำระค่าตัวผ่อนงวดปลายปี', -s.payDue);
       s.payDue = 0;
     }
+    s.money = capMoney(s.money);
     if (s.esd !== s.season) {
       s.esd = s.season;
       if (s.obj != null) {

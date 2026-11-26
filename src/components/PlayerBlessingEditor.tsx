@@ -28,7 +28,7 @@ import { TalentBadge } from './TalentBadge';
 import { PotentialBadge } from './PotentialBadge';
 import { OvrBadge } from './OvrBadge';
 
-const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
+const RISKY_TRAIT_IDS = new Set(['selfish_shooter', 'slide_tackler']);
 const GK_SIG_KEYS = ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp'];
 
 export const PlayerBlessingEditor: React.FC<{
@@ -377,7 +377,7 @@ export const PlayerBlessingEditor: React.FC<{
         subD
       });
     });
-    onToast(`✨ มอบพรของพระเจ้าให้ ${player.n} (OVR ${ov}) สำเร็จ!`);
+    onToast(`✅ บันทึกการปรับแต่ง ${player.n} (OVR ${ov}) สำเร็จ!`);
     onSaved?.();
   };
 
@@ -424,7 +424,7 @@ export const PlayerBlessingEditor: React.FC<{
       <div className="p-2.5 mland:p-2 rounded-2xl mland:rounded-xl bg-gradient-to-r from-[var(--lamp-soft)]/70 via-[var(--surface-2)] to-[var(--g-soft)] border border-[var(--lamp)]/45 space-y-2 mland:space-y-1.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs mland:text-[10.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] flex items-center gap-1.5">
-            <span>✨ พรของพระเจ้า · ปรับแต่งค่าพลังเฉพาะตัว</span>
+            <span>🛠️ ปรับแต่งค่าพลัง &amp; ข้อมูลเฉพาะตัว</span>
             <OvrBadge ov={ov} size="sm" prefix="OVR" />
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
@@ -1111,7 +1111,7 @@ export const PlayerBlessingEditor: React.FC<{
           onClick={handleSave}
           className="btn btn-md btn-gold ml-auto px-5 font-extrabold"
         >
-          ✨ บันทึกพรของพระเจ้า ({player.n.split(' ')[0]})
+          💾 บันทึกการปรับแต่ง ({player.n.split(' ')[0]})
         </button>
       </div>
     </div>

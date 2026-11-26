@@ -18,7 +18,7 @@ interface GuideEntry {
   meta?: string;
 }
 
-const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
+const RISKY_TRAIT_IDS = new Set(['selfish_shooter', 'slide_tackler']);
 
 const TALENT_TIERS: Array<{
   id: string;

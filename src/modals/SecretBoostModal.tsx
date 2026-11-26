@@ -15,7 +15,7 @@ import {
 export const SecretBoostModal: React.FC<{
   state: GameState;
   onClose: () => void;
-  onOpenGodBlessing?: () => void;
+  onOpenGodBlessing: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
 }> = ({ state, onClose, onOpenGodBlessing, onUpdateState, onToast }) => {
@@ -409,19 +409,27 @@ export const SecretBoostModal: React.FC<{
             </>
           )}
 
-          {onOpenGodBlessing && (
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                onClose();
-                onOpenGodBlessing();
-              }}
-              className="w-full p-2.5 mland:p-1.5 rounded-xl bg-gradient-to-r from-[#fad05a] to-[#eab308] text-[#261900] border border-[#ca8a04]/40 text-xs mland:text-[10.5px] font-extrabold text-center cursor-pointer shadow-sm hover:brightness-105"
-            >
-              ✨ พรของพระเจ้า · ปรับแต่งค่าพลังนักเตะแต่ละคนได้เอง
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              SFX.tap();
+              onClose();
+              onOpenGodBlessing();
+            }}
+            className="w-full p-2.5 mland:p-1.5 rounded-xl bg-gradient-to-r from-[var(--lamp-soft)] via-[var(--surface-2)] to-[var(--g-soft)] border border-[var(--lamp)]/50 hover:brightness-105 text-left flex items-center justify-between gap-2 cursor-pointer"
+          >
+            <div className="min-w-0">
+              <div className="font-bold text-xs mland:text-[10.5px] text-[#8a5b00] dark:text-[var(--lamp)] flex items-center gap-1.5">
+                <span>🛠️ ปรับแต่งนักเตะรายบุคคล (VIP Editor)</span>
+              </div>
+              <div className="text-[10px] mland:text-[9px] text-[var(--mut)] truncate">
+                แก้ไข OVR ค่าพลังย่อย เพดานพรสวรรค์ ตำแหน่งถนัด นิสัย สไตล์ และหน้าตาได้ทุกสโมสร
+              </div>
+            </div>
+            <span className="px-2.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp)] text-[#261900] text-[10.5px] mland:text-[9.5px] font-extrabold shrink-0">
+              เปิดปรับแต่ง →
+            </span>
+          </button>
         </div>
       </div>
     </div>

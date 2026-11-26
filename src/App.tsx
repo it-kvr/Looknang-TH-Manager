@@ -8,7 +8,7 @@ import {
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport } from './types/game';
-import { P, clamp, fmtMoney } from './utils/math';
+import { P, clamp, fmtMoney, capMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
@@ -32,13 +32,13 @@ import { PlayerCareerView } from './views/PlayerCareerView';
 import { PlayerClubTransferView } from './views/PlayerClubTransferView';
 import { MatchModal } from './modals/MatchModal';
 import { PreMatchModal } from './modals/PreMatchModal';
-import { GodBlessingModal } from './modals/GodBlessingModal';
 import { PlayerInspectorModal, TeamInspectorModal } from './modals/InspectorModals';
 import type { SeasonSummaryData } from './modals/SeasonEndModal';
 import { SeasonEndModal } from './modals/SeasonEndModal';
 import { SeasonStatsModal } from './modals/SeasonStatsModal';
 import { DilemmaModal } from './modals/DilemmaModal';
 import { SecretBoostModal } from './modals/SecretBoostModal';
+import { GodBlessingModal } from './modals/GodBlessingModal';
 import { SettingsModal } from './modals/SettingsModal';
 import { VarReplayModal } from './modals/VarReplayModal';
 import { PostMatchReportModal } from './modals/PostMatchReportModal';
@@ -84,7 +84,6 @@ export default function App() {
   }, []);
 
   const mainRef = useRef<HTMLElement | null>(null);
-  const crestTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
   const toastTimerRef = useRef<number | null>(null);
   const showToast = (msg: string) => {
     setToast(msg);
@@ -202,6 +201,7 @@ export default function App() {
       if (!prev) return prev;
       const clone = cloneGameState(prev);
       updater(clone);
+      clone.money = capMoney(clone.money);
       return clone;
     });
   };
@@ -252,7 +252,7 @@ export default function App() {
     enterAutoMobileFullscreen().catch(() => undefined);
     flushPendingSave();
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
-    const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier };
+    const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier, money: capMoney(loaded.money) };
     ensureSeasonExtraCups(normalized);
     setPreMatch(null);
     setActiveMatch(null);
@@ -920,6 +920,7 @@ export default function App() {
       afterMatchDay(d, { teamIds: liveInjTeamIds, playerNames: liveInjNames, subbedOutByTeam });
       roundCards.forEach((rc) => applyMatchCards(d, rc.h, rc.a, rc.cards));
       recordMatchMissions();
+      d.money = capMoney(d.money);
       recordFinanceSnapshot(d);
       return { shouldConfetti, missionToast };
   };
@@ -989,6 +990,7 @@ export default function App() {
     if (state.md >= state.fx.length) {
       const clone = cloneGameState(state);
       const summary = finishSeasonComputation(clone);
+      clone.money = capMoney(clone.money);
       setState(clone);
       setSeasonSummary(summary);
     }
@@ -1190,23 +1192,11 @@ export default function App() {
             <button
               type="button"
               onClick={() => {
-                const now = Date.now();
-                const ref = crestTapRef.current;
-                ref.count = now - ref.lastTs > 1800 ? 1 : ref.count + 1;
-                ref.lastTs = now;
-                if (ref.count >= 5) {
-                  ref.count = 0;
-                  SFX.win();
-                  try {
-                    sessionStorage.setItem('lk_vip_unlocked', '1');
-                  } catch {
-                    // ignore
-                  }
-                  setShowSecretBoost(true);
-                  showToast('🔓 ปลดล็อกโหมดลับผู้สนับสนุนแล้ว!');
-                }
+                SFX.tap();
+                navigateToTab(state.mode === 'm' ? 'u' : 'k');
               }}
-              aria-label="ตราสโมสร"
+              aria-label="สโมสร"
+              title="ข้อมูลสโมสร"
               className="shrink-0 w-10 h-10 mland:w-8 mland:h-8 p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 flex items-center justify-center [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform shadow-2xs"
             >
               <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
@@ -1231,7 +1221,7 @@ export default function App() {
                   {state.mode === 'p' && state.p ? state.p.name : me.name}
                 </span>
                 {state.mode === 'm' ? (
-                  <span className={`sm:hidden text-[11px] font-extrabold tabular shrink-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                  <span className={`sm:hidden inline-flex items-center w-[76px] shrink-0 whitespace-nowrap text-[11px] font-extrabold tabular ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
                     <AnimatedMoney value={state.money} resetKey={saveEpoch} deltaPlacement="below" />
                   </span>
                 ) : (
@@ -1263,10 +1253,10 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('f'); }}
                     title="ไปหน้าการเงิน"
-                    className="flex flex-col justify-center px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="w-[104px] mland:w-[86px] shrink-0 overflow-hidden flex flex-col justify-center px-2.5 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">งบสโมสร</div>
-                    <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none whitespace-nowrap">งบสโมสร</div>
+                    <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 whitespace-nowrap ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
                       <AnimatedMoney
                         value={state.money}
                         resetKey={saveEpoch}
@@ -1365,7 +1355,7 @@ export default function App() {
               <MoneyDeltaPill
                 delta={hudMoneyDelta}
                 placement="below"
-                className="!left-2 !translate-x-0"
+                className="!left-[52px] mland:!left-[43px] !-translate-x-1/2"
               />
             )}
           </div>

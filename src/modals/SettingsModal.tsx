@@ -109,11 +109,8 @@ export const SettingsModal: React.FC<{
       } catch {
         // ignore
       }
-      onToast('🔓 ปลดล็อกโหมดลับผู้สนับสนุน (VIP) แล้ว!');
+      onToast('🔓 ปลดล็อกโหมดลับผู้สนับสนุนแล้ว!');
       onOpenSecretBoost();
-    } else if (ref.count >= 3) {
-      SFX.tap();
-      onToast(`แตะอีก ${5 - ref.count} ครั้ง...`);
     }
   };
 
@@ -139,18 +136,12 @@ export const SettingsModal: React.FC<{
         <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <h3 className="font-bold text-sm sm:text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
-            <button
-              type="button"
+            <span
               onClick={handleSecretVersionTap}
-              title="เวอร์ชันแอปพลิเคชัน"
-              className={`px-2 py-0.5 rounded-md text-[10px] mland:text-[9px] font-bold transition-colors cursor-pointer select-none ${
-                vipUnlocked
-                  ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] border border-[var(--lamp)]/45 hover:brightness-105'
-                  : 'text-[var(--mut)]/65 hover:text-[var(--mut)]'
-              }`}
+              className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]/65 select-none"
             >
-              {vipUnlocked ? 'v1.2 · 👑 VIP' : 'v1.2'}
-            </button>
+              v1.2
+            </span>
           </div>
           <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="btn-icon rounded-full!">✕</button>
         </div>
