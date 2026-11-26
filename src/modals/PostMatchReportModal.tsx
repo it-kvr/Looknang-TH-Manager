@@ -10,11 +10,12 @@ import type {
 } from '../types/game';
 import { clamp } from '../utils/math';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, matchKits, visOf, xi } from '../engine/playerCore';
+import { getShirtNo, matchKits, xi } from '../engine/playerCore';
 import { computePlayerRatings } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { CaptainBadge } from '../components/CaptainBadge';
 import { useScrollTopOnChange } from '../utils/scrollReset';
 
 interface PostMatchReportModalProps {
@@ -24,6 +25,7 @@ interface PostMatchReportModalProps {
   onClose: () => void;
   onOpenVarReplay: (homeId: number, awayId: number, records: VarReplayRecord[], activeId?: string) => void;
   onInspectTeam?: (teamId: number) => void;
+  onInspectPlayer?: (player: Player, team: Team) => void;
 }
 
 const PlayerReportAvatar: React.FC<{
@@ -35,7 +37,6 @@ const PlayerReportAvatar: React.FC<{
   isMotm?: boolean;
 }> = ({ player, team, state, kitColor, trimColor, isMotm }) => {
   const isUser = Boolean(player.me || (state.mode === 'p' && state.p?.name === player.n));
-  const vis = useMemo(() => visOf(player, state.p), [player, state.p]);
   return (
     <span
       className={`inline-flex items-center justify-center rounded-full overflow-hidden shrink-0 w-7 h-7 border border-black/20 ${
@@ -44,12 +45,14 @@ const PlayerReportAvatar: React.FC<{
       style={{ backgroundColor: kitColor }}
     >
       <PlayerFace
-        vis={vis}
+        player={player}
+        team={team}
+        state={state}
         size={28}
         kitColor={kitColor}
         trimColor={trimColor}
-        isGk={player.pos === 'GK'}
-        noBg
+        isGK={player.pos === 'GK'}
+        bare
       />
     </span>
   );
@@ -61,7 +64,8 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
   state,
   onClose,
   onOpenVarReplay,
-  onInspectTeam
+  onInspectTeam,
+  onInspectPlayer
 }) => {
   const [tab, setTab] = useState<'players' | 'stats' | 'events'>('players');
   const [rosterTeam, setRosterTeam] = useState<'all' | 'H' | 'A'>('all');
@@ -127,56 +131,88 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
     return { ratings, motm: report.motm || motm };
   }, [hTeam, aTeam, report, evs, cards, subs, state.p]);
 
-  const playerEntries = useMemo(() => {
-    if (!hTeam || !aTeam) return [];
+  const { starterRows, subRows } = useMemo(() => {
+    if (!hTeam || !aTeam) return { starterRows: [], subRows: [] };
+    const posRank: Record<string, number> = { GK: 0, DF: 1, MF: 2, FW: 3 };
     const sides: { side: 'H' | 'A'; team: Team; oppGoals: number; kit: string; trim: string }[] = [
       { side: 'H', team: hTeam, oppGoals: report.ga, kit: homeKit, trim: homeTrim },
       { side: 'A', team: aTeam, oppGoals: report.gh, kit: awayKit, trim: awayTrim }
     ];
 
-    return sides
+    type ReportPlayerRow = {
+      key: string;
+      side: 'H' | 'A';
+      team: Team;
+      pl: Player | null;
+      name: string;
+      no: number | null;
+      rt: number | null;
+      didPlay: boolean;
+      xiIndex: number;
+      goals: number;
+      ownGoals: number;
+      assists: number;
+      cleanSheet: boolean;
+      yellowCards: number;
+      redCards: number;
+      subIn?: (typeof subs)[number];
+      subOut?: (typeof subs)[number];
+      isMotm: boolean;
+      isCaptain: boolean;
+      isMe: boolean;
+      kit: string;
+      trim: string;
+    };
+
+    const startersOut: ReportPlayerRow[] = [];
+    const subsOut: ReportPlayerRow[] = [];
+
+    sides
       .filter((s) => rosterTeam === 'all' || rosterTeam === s.side)
-      .flatMap(({ side, team, oppGoals, kit, trim }) => {
-        const storedNames = report.playedNames?.[team.id];
-        const namesSet = new Set<string>(storedNames && storedNames.length ? storedNames : xi(team).map((q) => q.n));
-        // Ensure scorers, assisters, card recipients, and subs appear even if legacy record omitted playedNames
+      .forEach(({ side, team, oppGoals, kit, trim }) => {
+        const subInNames = new Set(subs.filter((sb) => sb.t === team.id).map((sb) => sb.inPlayer));
+        const storedXi = report.xiNames?.[team.id];
+        const storedPlayed = report.playedNames?.[team.id];
+
+        const starterList: string[] =
+          storedXi && storedXi.length
+            ? storedXi
+            : storedPlayed && storedPlayed.length
+              ? storedPlayed.filter((n) => !subInNames.has(n))
+              : xi(team).map((q) => q.n);
+        const starterSet = new Set(starterList);
+
+        const playedSet = new Set<string>(storedPlayed && storedPlayed.length ? storedPlayed : starterList);
         evs.forEach((e) => {
-          if (e.t === team.id && !e.og && e.who) namesSet.add(e.who);
-          if (e.t === team.id && !e.og && e.as) namesSet.add(e.as);
-          if (e.t !== team.id && e.og && e.who) namesSet.add(e.who);
+          if (e.t === team.id && !e.og && e.who) playedSet.add(e.who);
+          if (e.t === team.id && !e.og && e.as) playedSet.add(e.as);
+          if (e.t !== team.id && e.og && e.who) playedSet.add(e.who);
         });
         cards.forEach((c) => {
-          if (c.t === team.id && c.who) namesSet.add(c.who);
+          if (c.t === team.id && c.who) playedSet.add(c.who);
         });
         subs.forEach((sb) => {
           if (sb.t === team.id) {
-            if (sb.inPlayer) namesSet.add(sb.inPlayer);
-            if (sb.outPlayer) namesSet.add(sb.outPlayer);
+            if (sb.inPlayer) playedSet.add(sb.inPlayer);
+            if (sb.outPlayer) playedSet.add(sb.outPlayer);
           }
         });
 
-        return Array.from(namesSet).map((name) => {
-          const pl = team.sq.find((q) => q.n === name) || null;
+        const buildRow = (name: string, pl: Player | null, didPlay: boolean, xiIndex: number): ReportPlayerRow => {
           const no = pl ? getShirtNo(team, pl) : null;
-          const rt = resolvedRatingsAndMotm.ratings[name] ?? 6.5;
-          const goals = evs.filter((e) => !e.og && e.t === team.id && e.who === name).length;
-          const ownGoals = evs.filter((e) => e.og && e.t !== team.id && e.who === name).length;
-          const assists = evs.filter((e) => !e.og && e.t === team.id && e.as === name).length;
-          const cleanSheet = oppGoals === 0 && Boolean(pl && (pl.pos === 'GK' || pl.pos === 'DF'));
-          const pCards = cards.filter((c) => c.t === team.id && c.who === name);
+          const rt = didPlay ? (resolvedRatingsAndMotm.ratings[name] ?? 6.5) : null;
+          const goals = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.who === name).length : 0;
+          const ownGoals = didPlay ? evs.filter((e) => e.og && e.t !== team.id && e.who === name).length : 0;
+          const assists = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.as === name).length : 0;
+          const cleanSheet = didPlay && oppGoals === 0 && Boolean(pl && (pl.pos === 'GK' || pl.pos === 'DF'));
+          const pCards = didPlay ? cards.filter((c) => c.t === team.id && c.who === name) : [];
           const yellowCards = pCards.filter((c) => c.type === 'Y').length;
           const redCards = pCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
           const subIn = subs.find((s) => s.t === team.id && s.inPlayer === name);
           const subOut = subs.find((s) => s.t === team.id && s.outPlayer === name);
-          const isMotm = resolvedRatingsAndMotm.motm === name;
-          const impactScore =
-            (isMotm ? 10000 : 0) +
-            goals * 500 +
-            assists * 350 +
-            (cleanSheet ? 180 : 0) +
-            (yellowCards + redCards * 2) * 14 +
-            (subIn ? 10 : 0) +
-            rt * 10;
+          const isMotm = didPlay && resolvedRatingsAndMotm.motm === name;
+          const isCaptain = team.cap === name;
+          const isMe = Boolean(pl?.me || (state.mode === 'p' && state.p?.name === name));
 
           return {
             key: `${team.id}-${name}`,
@@ -186,6 +222,8 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
             name,
             no,
             rt,
+            didPlay,
+            xiIndex,
             goals,
             ownGoals,
             assists,
@@ -195,14 +233,51 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
             subIn,
             subOut,
             isMotm,
+            isCaptain,
+            isMe,
             kit,
-            trim,
-            impactScore
+            trim
           };
+        };
+
+        starterList.forEach((name, idx) => {
+          const pl = team.sq.find((q) => q.n === name) || null;
+          startersOut.push(buildRow(name, pl, true, idx));
         });
-      })
-      .sort((u, v) => v.impactScore - u.impactScore || v.rt - u.rt);
-  }, [hTeam, aTeam, rosterTeam, report, homeKit, awayKit, homeTrim, awayTrim, evs, cards, subs, resolvedRatingsAndMotm]);
+
+        Array.from(playedSet)
+          .filter((name) => !starterSet.has(name))
+          .forEach((name) => {
+            const pl = team.sq.find((q) => q.n === name) || null;
+            subsOut.push(buildRow(name, pl, true, 99));
+          });
+
+        team.sq
+          .filter((q) => !starterSet.has(q.n) && !playedSet.has(q.n) && q.inj === 0 && (q.sus || 0) === 0)
+          .slice()
+          .sort((a, b) => (posRank[a.pos] ?? 4) - (posRank[b.pos] ?? 4) || b.ov - a.ov)
+          .forEach((q) => {
+            subsOut.push(buildRow(q.n, q, false, 199));
+          });
+      });
+
+    startersOut.sort((a, b) => {
+      if (rosterTeam === 'all' && a.side !== b.side) return a.side === 'H' ? -1 : 1;
+      return a.xiIndex - b.xiIndex;
+    });
+
+    subsOut.sort((a, b) => {
+      if (a.didPlay !== b.didPlay) return a.didPlay ? -1 : 1;
+      if (rosterTeam === 'all' && a.side !== b.side) return a.side === 'H' ? -1 : 1;
+      if (a.didPlay && b.didPlay) {
+        return (a.subIn?.m ?? 99) - (b.subIn?.m ?? 99) || (b.rt ?? 0) - (a.rt ?? 0);
+      }
+      const posDiff = (posRank[a.pl?.pos || 'MF'] ?? 4) - (posRank[b.pl?.pos || 'MF'] ?? 4);
+      return posDiff || (b.pl?.ov ?? 0) - (a.pl?.ov ?? 0);
+    });
+
+    return { starterRows: startersOut, subRows: subsOut };
+  }, [hTeam, aTeam, rosterTeam, report, homeKit, awayKit, homeTrim, awayTrim, evs, cards, subs, resolvedRatingsAndMotm, state.mode, state.p?.name]);
 
   // Build unified event feed (prefer archived live logs; fallback to synthesized chronological events)
   const resolvedLogs: ArchivedMatchLog[] = useMemo(() => {
@@ -215,6 +290,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
     const matchedVarIds = new Set<string>();
 
     items.push({
+      id: 'rep-ft',
       m: 90,
       text: report.penText
         ? `🏁 จบเกม! ${hTeam.name} ${report.gh}-${report.ga} ${aTeam.name} (${report.penText})`
@@ -222,7 +298,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
       tone: 'sys'
     });
 
-    evs.forEach((ev) => {
+    evs.forEach((ev, idx) => {
       const scTeam = ev.t === hTeam.id ? hTeam.name : aTeam.name;
       const linkedVar = varReplays.find(
         (v) =>
@@ -238,6 +314,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
           ? `⚽ นาที ${ev.m}': โกล!! ${ev.who} (${scTeam}) ซัดประตู (👟 ${ev.as})`
           : `⚽ นาที ${ev.m}': โกล!! ${ev.who} (${scTeam}) ยิงประตู!`;
       items.push({
+        id: `rep-g-${idx}-${ev.m}`,
         m: ev.m,
         text: txt,
         tone: 'goal',
@@ -245,7 +322,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
       });
     });
 
-    cards.forEach((c) => {
+    cards.forEach((c, idx) => {
       const tmName = c.t === hTeam.id ? hTeam.name : aTeam.name;
       const linkedVar = varReplays.find(
         (v) =>
@@ -256,6 +333,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
       if (linkedVar) matchedVarIds.add(linkedVar.id);
       const cardLbl = c.type === 'Y' ? '🟨 ใบเหลือง' : c.type === 'Y2R' ? '🟨➡🟥 เหลืองแดง' : '🟥 ใบแดง';
       items.push({
+        id: `rep-c-${idx}-${c.m}`,
         m: c.m,
         text: `${cardLbl} นาที ${c.m}': ${c.who} (${tmName})${c.reason ? ` — ${c.reason}` : ''}`,
         tone: 'card',
@@ -264,9 +342,10 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
     });
 
     // Any remaining VAR events (e.g., overturned goals / overturned penalties)
-    varReplays.forEach((vr) => {
+    varReplays.forEach((vr, idx) => {
       if (matchedVarIds.has(vr.id)) return;
       items.push({
+        id: `rep-v-${idx}-${vr.id}`,
         m: vr.minute,
         text: `🖥 ${vr.verdictLabel} — ${vr.varState.reasonText}`,
         tone: vr.verdictTone === 'goal' ? 'goal' : 'card',
@@ -274,9 +353,10 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
       });
     });
 
-    subs.forEach((sb) => {
+    subs.forEach((sb, idx) => {
       const tmName = sb.t === hTeam.id ? hTeam.name : aTeam.name;
       items.push({
+        id: `rep-s-${idx}-${sb.m}`,
         m: sb.m,
         text: `🔄 นาที ${sb.m}' เปลี่ยนตัว (${tmName}): 🔼 เข้า ${sb.inPlayer} · 🔽 ออก ${sb.outPlayer}`,
         tone: 'sub',
@@ -289,6 +369,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
     });
 
     items.push({
+      id: 'rep-ko',
       m: 0,
       text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${hTeam.name} พบ ${aTeam.name}`,
       tone: 'sys'
@@ -577,11 +658,11 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
                 )}
               </div>
 
-              {/* Roster & Player Performance */}
+              {/* Roster & Player Performance (Starters / Substitutes Table like ทีม) */}
               <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden">
                 <div className="px-3 py-2 bg-[var(--surface-2)]/75 border-b border-[var(--line)] flex items-center justify-between gap-2">
-                  <span className="text-xs font-extrabold text-[var(--ink)] truncate">
-                    👥 รายชื่อ &amp; ผลงานนักเตะ ({playerEntries.length})
+                  <span className="text-xs font-extrabold text-[var(--ink)] truncate tabular">
+                    ตัวจริง {starterRows.length} · ตัวสำรอง {subRows.length}
                   </span>
                   <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
                     <button
@@ -608,7 +689,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
                       title={hTeam.name}
                     >
                       <ClubCrest name={hTeam.name} size={14} team={hTeam} club={state.club} isMyClub={hTeam.id === state.me && state.mode === 'm'} />
-                      <span className="hidden sm:inline max-w-[80px] truncate">{hTeam.name}</span>
+                      <span className="hidden sm:inline max-w-[90px] truncate">{hTeam.name}</span>
                     </button>
                     <button
                       type="button"
@@ -622,96 +703,183 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
                       title={aTeam.name}
                     >
                       <ClubCrest name={aTeam.name} size={14} team={aTeam} club={state.club} isMyClub={aTeam.id === state.me && state.mode === 'm'} />
-                      <span className="hidden sm:inline max-w-[80px] truncate">{aTeam.name}</span>
+                      <span className="hidden sm:inline max-w-[90px] truncate">{aTeam.name}</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="divide-y divide-[var(--line)]/55">
-                  {playerEntries.map((item) => {
+                <div className="grid grid-cols-[28px_minmax(0,1fr)_40px_76px_50px] sm:grid-cols-[32px_minmax(0,1fr)_46px_96px_56px] items-center gap-1.5 px-3 py-1.5 text-[10.5px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/55 border-b border-[var(--line)]">
+                  <div>#</div>
+                  <div>นักเตะ</div>
+                  <div className="text-center">ตำแหน่ง</div>
+                  <div className="text-center">ผลงาน</div>
+                  <div className="text-right">เรต</div>
+                </div>
+
+                {(() => {
+                  const renderRow = (item: (typeof starterRows)[number]) => {
+                    const rt = item.rt;
                     const rtTone =
-                      item.isMotm || item.rt >= 8.0
-                        ? 'bg-amber-400 text-[#1c1300]'
-                        : item.rt >= 7.0
-                          ? 'bg-emerald-500/18 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35'
-                          : item.rt < 6.0
-                            ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
-                            : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]';
+                      rt == null
+                        ? 'bg-[var(--surface-2)]/70 text-[var(--mut)] border border-[var(--line)]/70'
+                        : item.isMotm || rt >= 8.0
+                          ? 'bg-amber-400 text-[#1c1300]'
+                          : rt >= 7.0
+                            ? 'bg-emerald-500/18 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35'
+                            : rt < 6.0
+                              ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
+                              : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]';
+                    const hasAnyStat =
+                      item.goals > 0 ||
+                      item.assists > 0 ||
+                      item.cleanSheet ||
+                      item.ownGoals > 0 ||
+                      item.yellowCards > 0 ||
+                      item.redCards > 0;
+                    const canClickPlayer = Boolean(onInspectPlayer && item.pl);
+                    const RowTag = canClickPlayer ? 'button' : 'div';
                     return (
-                      <div
+                      <RowTag
                         key={item.key}
-                        className={`px-3 py-2 flex items-center justify-between gap-2 ${
-                          item.isMotm ? 'bg-amber-400/10' : ''
+                        {...(canClickPlayer
+                          ? {
+                              type: 'button' as const,
+                              onClick: () => {
+                                if (item.pl) {
+                                  SFX.tap();
+                                  onInspectPlayer?.(item.pl, item.team);
+                                }
+                              }
+                            }
+                          : {})}
+                        className={`w-full text-left grid grid-cols-[28px_minmax(0,1fr)_40px_76px_50px] sm:grid-cols-[32px_minmax(0,1fr)_46px_96px_56px] items-center gap-1.5 px-3 py-1.5 transition-colors ${
+                          canClickPlayer ? 'cursor-pointer' : ''
+                        } ${
+                          item.isMotm
+                            ? 'bg-amber-400/12 hover:bg-amber-400/18'
+                            : item.isMe
+                              ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+                              : !item.didPlay
+                                ? 'opacity-72 hover:opacity-95 hover:bg-[var(--surface-2)]/50'
+                                : 'hover:bg-[var(--surface-2)]/65'
                         }`}
                       >
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {item.pl && (
-                              <PlayerReportAvatar
-                                player={item.pl}
-                                team={item.team}
-                                state={state}
-                                kitColor={item.kit}
-                                trimColor={item.trim}
-                                isMotm={item.isMotm}
-                              />
-                            )}
-                            <ClubCrest name={item.team.name} size={13} team={item.team} club={state.club} isMyClub={item.team.id === state.me && state.mode === 'm'} />
-                            {item.pl?.ro && <PositionBadge role={item.pl.ro} size="2xs" />}
-                            <span className="text-xs font-bold text-[var(--ink)] truncate">{item.name}</span>
-                            {item.no != null && (
-                              <span className="text-[10px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
-                                #{item.no}
-                              </span>
-                            )}
-                            {item.isMotm && (
-                              <span className="px-1 py-[0.5px] rounded bg-amber-400 text-[#1c1300] text-[8.5px] font-black shrink-0">
-                                👑 MOTM
-                              </span>
-                            )}
-                          </div>
-                          {(item.goals > 0 ||
-                            item.assists > 0 ||
-                            item.cleanSheet ||
-                            item.ownGoals > 0 ||
-                            item.yellowCards > 0 ||
-                            item.redCards > 0 ||
-                            item.subIn ||
-                            item.subOut) && (
-                            <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] tabular pl-1">
-                              {item.goals > 0 && <StatIconBadge kind="goal" count={item.goals} size="xs" />}
-                              {item.assists > 0 && <StatIconBadge kind="assist" count={item.assists} size="xs" />}
-                              {item.cleanSheet && (
-                                <span className="inline-flex items-center gap-0.5 font-extrabold text-emerald-700 dark:text-emerald-300">
-                                  <span>{item.pl?.pos === 'GK' ? '🧤' : '🛡️'}</span>
-                                  <span>คลีนชีต</span>
+                        <div className="text-xs font-bold text-[var(--mut)] tabular">
+                          {item.no != null ? `#${item.no}` : '—'}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          {item.pl && (
+                            <PlayerReportAvatar
+                              player={item.pl}
+                              team={item.team}
+                              state={state}
+                              kitColor={item.kit}
+                              trimColor={item.trim}
+                              isMotm={item.isMotm}
+                            />
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="text-xs font-bold text-[var(--ink)] truncate">{item.name}</span>
+                              {item.isCaptain && <CaptainBadge team={item.team} state={state} size="xs" className="shrink-0" />}
+                              {item.isMe && (
+                                <span
+                                  title="ตัวคุณ"
+                                  aria-label="ตัวคุณ"
+                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                                >
+                                  ★
                                 </span>
                               )}
-                              {item.ownGoals > 0 && <span className="font-extrabold text-[var(--red)]">🤦 OG {item.ownGoals}</span>}
-                              {item.yellowCards > 0 && <StatIconBadge kind="yellow" count={item.yellowCards} size="xs" />}
-                              {item.redCards > 0 && <StatIconBadge kind="red" count={item.redCards} size="xs" />}
-                              {item.subIn && (
-                                <span className="inline-flex items-center gap-0.5 font-bold text-emerald-700 dark:text-emerald-300">
-                                  <StatIconBadge kind="subIn" size="xs" />
-                                  <span>เข้า {item.subIn.m}&apos;</span>
-                                </span>
-                              )}
-                              {item.subOut && (
-                                <span className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-300">
-                                  <StatIconBadge kind="subOut" size="xs" />
-                                  <span>ออก {item.subOut.m}&apos;</span>
+                              {item.isMotm && (
+                                <span title="Man of the Match" className="text-[11px] leading-none shrink-0">
+                                  👑
                                 </span>
                               )}
                             </div>
+                            <div className="text-[10px] text-[var(--mut)] truncate flex items-center gap-1 tabular">
+                              {rosterTeam === 'all' && (
+                                <span className="inline-flex items-center gap-1 min-w-0">
+                                  <ClubCrest name={item.team.name} size={11} team={item.team} club={state.club} isMyClub={item.team.id === state.me && state.mode === 'm'} />
+                                  <span className="truncate max-w-[90px]">{item.team.name}</span>
+                                </span>
+                              )}
+                              {item.subIn && (
+                                <span className="inline-flex items-center gap-0.5 font-bold text-emerald-700 dark:text-emerald-300 shrink-0">
+                                  <StatIconBadge kind="subIn" size="xs" />
+                                  <span>{item.subIn.m}&apos;</span>
+                                </span>
+                              )}
+                              {item.subOut && (
+                                <span className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-300 shrink-0">
+                                  <StatIconBadge kind="subOut" size="xs" />
+                                  <span>{item.subOut.m}&apos;</span>
+                                </span>
+                              )}
+                              {!item.didPlay && <span className="shrink-0">ไม่ได้ลง</span>}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-center">
+                          {item.pl?.ro ? <PositionBadge role={item.pl.ro} size="xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
+                        </div>
+
+                        <div className="flex items-center justify-center flex-wrap gap-1 text-[10.5px] tabular">
+                          {hasAnyStat ? (
+                            <>
+                              {item.goals > 0 && <StatIconBadge kind="goal" count={item.goals} size="xs" />}
+                              {item.assists > 0 && <StatIconBadge kind="assist" count={item.assists} size="xs" />}
+                              {item.cleanSheet && <StatIconBadge kind="save" count={1} size="xs" title="คลีนชีต" />}
+                              {item.ownGoals > 0 && (
+                                <span className="font-black text-[var(--red)] text-[10px]" title={`ทำเข้าประตูตัวเอง ${item.ownGoals} ลูก`}>
+                                  OG{item.ownGoals > 1 ? item.ownGoals : ''}
+                                </span>
+                              )}
+                              {item.yellowCards > 0 && <StatIconBadge kind="yellow" count={item.yellowCards} size="xs" />}
+                              {item.redCards > 0 && <StatIconBadge kind="red" count={item.redCards} size="xs" />}
+                            </>
+                          ) : (
+                            <span className="text-[var(--mut)]/65">—</span>
                           )}
                         </div>
-                        <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-extrabold tabular shrink-0 ${rtTone}`}>
-                          ⭐ {item.rt.toFixed(1)}
-                        </span>
-                      </div>
+
+                        <div className="flex items-center justify-end">
+                          <span className={`px-1.5 py-0.5 rounded-md text-[10.5px] font-extrabold tabular shrink-0 ${rtTone}`}>
+                            {rt != null ? `⭐ ${rt.toFixed(1)}` : '—'}
+                          </span>
+                        </div>
+                      </RowTag>
                     );
-                  })}
-                </div>
+                  };
+
+                  return (
+                    <>
+                      <div className="px-3 py-1 bg-[var(--g-soft)] border-b border-[var(--line)] flex items-center justify-between text-[11px] font-extrabold text-[var(--g)]">
+                        <span>ตัวจริง</span>
+                        <span className="tabular">{starterRows.length} คน</span>
+                      </div>
+                      <div className="divide-y divide-[var(--line)]/55">
+                        {starterRows.map(renderRow)}
+                      </div>
+
+                      {subRows.length > 0 && (
+                        <>
+                          <div className="px-3 py-1 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[11px] font-extrabold text-[var(--ink)]">
+                            <span>ตัวสำรอง</span>
+                            <span className="tabular text-[var(--mut)]">
+                              ลงสนาม {subRows.filter((r) => r.didPlay).length} · ทั้งหมด {subRows.length}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-[var(--line)]/55">
+                            {subRows.map(renderRow)}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </>
           )}

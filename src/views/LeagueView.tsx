@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { ChevronDown, Coins, X } from 'lucide-react';
-import type { MainTab, Player, Team, GameState, VarReplayRecord } from '../types/game';
+import type { ArchivedMatchReport, MainTab, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { fmtMoney, fmtMoneyNum } from '../utils/math';
@@ -21,8 +21,9 @@ export const LeagueView: React.FC<{
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
+  onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
   onToast?: (msg: string) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onToast }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenMatchReport, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -717,21 +718,45 @@ export const LeagueView: React.FC<{
                     ? 'bg-amber-400/12 border-amber-500/25'
                     : 'bg-rose-500/10 border-rose-500/25';
                 const mdMatch = r.match(/^นัด\s+(\d+):/);
-                const rec = mdMatch ? state.schedRes?.[Number(mdMatch[1]) - 1] : undefined;
+                const mdNumVal = mdMatch ? Number(mdMatch[1]) : 0;
+                const rec = mdMatch ? state.schedRes?.[mdNumVal - 1] : undefined;
                 const vars = rec?.varReplays;
                 return (
                   <div key={i} className={`flex items-center justify-between gap-1.5 text-[11px] mland:text-[10px] px-2.5 py-1 mland:py-0.5 rounded-lg border leading-snug tabular ${toneCls}`}>
-                    <span className="min-w-0 truncate">{r}</span>
-                    {vars && vars.length > 0 && rec && onOpenVarReplay && (
+                    {rec && onOpenMatchReport ? (
                       <button
                         type="button"
-                        onClick={() => onOpenVarReplay(rec.h, rec.a, vars)}
-                        className="shrink-0 px-1.5 py-[1px] rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8.5px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
-                        title="ดูภาพช้า VAR ย้อนหลัง"
+                        onClick={() => onOpenMatchReport(rec, `${TN[vt]} · นัดที่ ${mdNumVal}`)}
+                        className="min-w-0 flex-1 text-left truncate hover:underline cursor-pointer"
+                        title="ดูสรุปหลังเกม"
                       >
-                        🖥 VAR ({vars.length})
+                        {r}
                       </button>
+                    ) : (
+                      <span className="min-w-0 truncate">{r}</span>
                     )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {vars && vars.length > 0 && rec && onOpenVarReplay && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenVarReplay(rec.h, rec.a, vars)}
+                          className="px-1.5 py-[1px] rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8.5px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                          title="ดูภาพช้า VAR ย้อนหลัง"
+                        >
+                          🖥 VAR ({vars.length})
+                        </button>
+                      )}
+                      {rec && onOpenMatchReport && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenMatchReport(rec, `${TN[vt]} · นัดที่ ${mdNumVal}`)}
+                          className="px-1.5 py-[1px] rounded bg-[var(--surface)]/85 border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[9.5px] mland:text-[8.5px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                          title="ดูหน้าจบเกม"
+                        >
+                          📊 สรุป
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -1338,7 +1363,14 @@ export const LeagueView: React.FC<{
       {sub === 0 && renderStandings()}
       {sub === 1 && renderPowerComparison()}
       {sub === 2 && renderStatsAndAwards()}
-      {sub === 3 && <ScheduleCalendarView state={state} onInspectTeam={onInspectTeam} onOpenVarReplay={onOpenVarReplay} />}
+      {sub === 3 && (
+        <ScheduleCalendarView
+          state={state}
+          onInspectTeam={onInspectTeam}
+          onOpenVarReplay={onOpenVarReplay}
+          onOpenMatchReport={onOpenMatchReport}
+        />
+      )}
       {sub === 4 && (
         <CupView
           key={cupInitialStats ? 'cup-stats' : 'cup-results'}
@@ -1346,6 +1378,7 @@ export const LeagueView: React.FC<{
           onInspectTeam={onInspectTeam}
           onInspectPlayer={onInspectPlayer}
           onOpenVarReplay={onOpenVarReplay}
+          onOpenMatchReport={onOpenMatchReport}
           initialRightPane={cupInitialStats ? 'stats' : 'results'}
         />
       )}
@@ -1443,7 +1476,8 @@ export const ScheduleCalendarView: React.FC<{
   onPlayNext?: () => void;
   onOpenMarket?: () => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
-}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay }) => {
+  onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
+}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenMatchReport }) => {
   const me = state.teams[state.me];
   const totalMd = state.fx.length || 30;
   const defaultMonth = state.md >= totalMd ? 4 : Math.min(4, Math.floor(state.md / 6));
@@ -1692,47 +1726,65 @@ export const ScheduleCalendarView: React.FC<{
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => onInspectTeam(opp.id)}
-                  className="flex items-center gap-2.5 text-left cursor-pointer group"
-                >
-                  <ClubCrest name={opp.name} size={30} team={opp} />
-                  <div className="flex-1 min-w-0">
-                    <div className="font-bold text-xs sm:text-sm truncate group-hover:text-[var(--g)] transition-colors">
-                      {opp.name}
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onInspectTeam(opp.id)}
+                    className="flex items-center gap-2.5 text-left cursor-pointer group min-w-0 flex-1"
+                  >
+                    <ClubCrest name={opp.name} size={30} team={opp} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-xs sm:text-sm truncate group-hover:text-[var(--g)] transition-colors">
+                        {opp.name}
+                      </div>
+                      <div className="text-[11px] text-[var(--mut)]">
+                        เฉลี่ย {ost.ovSq} · ตัวจริง {ost.ovXi}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-[var(--mut)]">
-                      เฉลี่ย {ost.ovSq} · ตัวจริง {ost.ovXi}
-                    </div>
-                  </div>
+                  </button>
+
                   {isPast ? (
                     <div className="flex items-center gap-1 shrink-0">
                       {rec?.varReplays?.length && onOpenVarReplay ? (
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onOpenVarReplay(rec.h, rec.a, rec.varReplays!);
-                          }}
+                          onClick={() => onOpenVarReplay(rec.h, rec.a, rec.varReplays!)}
                           title="ดูภาพช้า VAR ย้อนหลัง"
                           className="px-1.5 py-1 rounded-lg bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
                         >
                           🖥 VAR ({rec.varReplays.length})
                         </button>
                       ) : null}
-                      <span className={`px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 ${resCls}`}>
-                        {resLabel}
-                      </span>
+                      {rec && onOpenMatchReport ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNum}`)}
+                          title="ดูหน้าสรุปหลังเกม"
+                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 cursor-pointer hover:brightness-110 transition-all shadow-2xs ${resCls}`}
+                        >
+                          <span>{resLabel}</span>
+                          <span className="text-[10px] opacity-90">📊</span>
+                        </button>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 ${resCls}`}>
+                          {resLabel}
+                        </span>
+                      )}
                     </div>
                   ) : isNext ? (
                     <span className="px-2 py-1 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[10px] font-bold shrink-0">
                       ถัดไป
                     </span>
                   ) : (
-                    <span className="text-[11px] text-[var(--g)] font-semibold shrink-0">ส่องทีม ›</span>
+                    <button
+                      type="button"
+                      onClick={() => onInspectTeam(opp.id)}
+                      className="text-[11px] text-[var(--g)] font-semibold shrink-0 hover:underline cursor-pointer"
+                    >
+                      ส่องทีม ›
+                    </button>
                   )}
-                </button>
+                </div>
               </div>
             );
           })}
@@ -1779,9 +1831,21 @@ export const ScheduleCalendarView: React.FC<{
                   <button type="button" onClick={() => onInspectTeam(hid)} className="flex-1 text-right whitespace-normal break-words leading-tight hover:text-[var(--g)] cursor-pointer">
                     {ht.name}
                   </button>
-                  <span className="px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] text-[11px] font-bold tabular shrink-0">
-                    {rec ? `${rec.gh}-${rec.ga}` : 'vs'}
-                  </span>
+                  {rec && onOpenMatchReport ? (
+                    <button
+                      type="button"
+                      onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${roundPreview + 1}`)}
+                      title="ดูหน้าสรุปหลังเกม"
+                      className="px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] font-bold tabular shrink-0 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <span>{rec.gh}-{rec.ga}</span>
+                      <span className="text-[9.5px]">📊</span>
+                    </button>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] text-[11px] font-bold tabular shrink-0">
+                      {rec ? `${rec.gh}-${rec.ga}` : 'vs'}
+                    </span>
+                  )}
                   {rec?.varReplays?.length && onOpenVarReplay && (
                     <button
                       type="button"
@@ -1818,6 +1882,12 @@ export const ScheduleCalendarView: React.FC<{
                         : cl.comp === 'dc'
                           ? `${EXTRA_CUP_META.dc.icon} ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
                           : `🏆 ${RN[cl.r] || `รอบ ${cl.r + 1}`}`;
+                const cupTitle =
+                  cl.comp === 'asia'
+                    ? `บอลถ้วยทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                    : cl.comp === 'cup'
+                      ? `ถ้วยประชาชน · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                      : `${EXTRA_CUP_META[cl.comp].name} · ${cl.comp === 'sc' ? 'ชิงชนะเลิศ' : RN[cl.r] || `รอบ ${cl.r + 1}`}`;
                 return (
                   <div key={idx} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs">
                     <span className="font-bold shrink-0">
@@ -1827,16 +1897,28 @@ export const ScheduleCalendarView: React.FC<{
                       {ht?.name} <b>{cl.gh}-{cl.ga}</b> {at?.name}
                     </span>
                     {cl.penText && <span className="text-[10px] text-[var(--mut)] shrink-0">({cl.penText})</span>}
-                    {cl.varReplays?.length && onOpenVarReplay && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenVarReplay(cl.h, cl.a, cl.varReplays!)}
-                        className="px-1.5 py-0.5 rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer shrink-0 whitespace-nowrap"
-                        title="ดูภาพช้า VAR ย้อนหลัง"
-                      >
-                        🖥 VAR ({cl.varReplays.length})
-                      </button>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {cl.varReplays?.length && onOpenVarReplay && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenVarReplay(cl.h, cl.a, cl.varReplays!)}
+                          className="px-1.5 py-0.5 rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer whitespace-nowrap"
+                          title="ดูภาพช้า VAR ย้อนหลัง"
+                        >
+                          🖥 VAR ({cl.varReplays.length})
+                        </button>
+                      )}
+                      {onOpenMatchReport && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenMatchReport(cl, cupTitle)}
+                          className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                          title="ดูหน้าสรุปหลังเกม"
+                        >
+                          📊 สรุป
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })}

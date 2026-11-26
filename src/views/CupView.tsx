@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronRight, Coins, Trophy } from 'lucide-react';
-import type { Player, Team, GameState, VarReplayRecord } from '../types/game';
+import type { ArchivedMatchReport, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { RN, TN } from '../data/thaiFootballData';
 import { EXTRA_CUP_META, getPlayerCupTotals, normalizeCupCompKey } from '../engine/simulation';
@@ -56,8 +56,9 @@ export const CupView: React.FC<{
   onInspectTeam: (id: number) => void;
   onInspectPlayer?: (p: Player, t: Team) => void;
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
+  onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
   initialRightPane?: 'results' | 'stats';
-}> = ({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, initialRightPane = 'results' }) => {
+}> = ({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, onOpenMatchReport, initialRightPane = 'results' }) => {
   const initialTab: CupTabId = state.pc
     ? 'fa'
     : state.plc
@@ -611,7 +612,7 @@ export const CupView: React.FC<{
                     const awayWon = p.ga > p.gh;
                     const compKey = activeComp.id === 'fa' ? 'cup' : activeComp.id;
                     const matchedCupLog =
-                      ht && at && onOpenVarReplay
+                      ht && at
                         ? (state.cupLog || []).find(
                             (cl) =>
                               cl.comp === compKey &&
@@ -619,8 +620,7 @@ export const CupView: React.FC<{
                               cl.a === at.id &&
                               cl.gh === p.gh &&
                               cl.ga === p.ga &&
-                              (compKey === 'sc' || (RN[cl.r] || `รอบ ${cl.r + 1}`) === p.roundLabel) &&
-                              Boolean(cl.varReplays?.length)
+                              (compKey === 'sc' || (RN[cl.r] || `รอบ ${cl.r + 1}`) === p.roundLabel)
                           )
                         : undefined;
 
@@ -651,6 +651,16 @@ export const CupView: React.FC<{
                                 🖥 VAR ({matchedCupLog.varReplays.length})
                               </button>
                             )}
+                            {matchedCupLog && onOpenMatchReport && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenMatchReport(matchedCupLog, `${activeComp.title} · ${p.roundLabel}`)}
+                                className="px-1.5 py-[1px] rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[9.5px] mland:text-[8px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                                title="ดูหน้าสรุปหลังเกม"
+                              >
+                                📊 สรุป
+                              </button>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center justify-between gap-2">
@@ -670,11 +680,24 @@ export const CupView: React.FC<{
                             </span>
                           </button>
 
-                          <span className={`px-2 py-0.5 rounded-md text-xs mland:text-[10px] font-extrabold tabular shrink-0 ${
-                            involvesMe ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
-                          }`}>
-                            {p.gh} - {p.ga}
-                          </span>
+                          {matchedCupLog && onOpenMatchReport ? (
+                            <button
+                              type="button"
+                              onClick={() => onOpenMatchReport(matchedCupLog, `${activeComp.title} · ${p.roundLabel}`)}
+                              title="ดูหน้าสรุปหลังเกม"
+                              className={`px-2 py-0.5 rounded-md text-xs mland:text-[10px] font-extrabold tabular shrink-0 cursor-pointer hover:brightness-105 transition-all ${
+                                involvesMe ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
+                              }`}
+                            >
+                              {p.gh} - {p.ga}
+                            </button>
+                          ) : (
+                            <span className={`px-2 py-0.5 rounded-md text-xs mland:text-[10px] font-extrabold tabular shrink-0 ${
+                              involvesMe ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
+                            }`}>
+                              {p.gh} - {p.ga}
+                            </span>
+                          )}
 
                           <button
                             type="button"

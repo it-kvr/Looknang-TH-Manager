@@ -421,7 +421,7 @@ export const TeamInspectorModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
+      className="fixed inset-0 z-[55] bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
       onClick={onClose}
     >
       <div

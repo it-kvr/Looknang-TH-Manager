@@ -375,6 +375,7 @@ export interface MatchCardEvent {
   t: number;
   who: string;
   type: 'Y' | 'Y2R' | 'R';
+  reason?: string;
 }
 
 export interface MatchSubEvent {
@@ -819,6 +820,7 @@ export interface ArchivedMatchReport {
   cards?: MatchCardEvent[];
   subs?: MatchSubEvent[];
   playedNames?: Record<number, string[]>;
+  xiNames?: Record<number, string[]>;
   playedSlots?: Record<number, Record<string, SubRole>>;
   logs?: ArchivedMatchLog[];
   varReplays?: VarReplayRecord[];
@@ -1059,6 +1061,7 @@ export interface FinishedMatchPayload {
   cards: MatchCardEvent[];
   subs: MatchSubEvent[];
   playedNames: Record<number, string[]>;
+  xiNames?: Record<number, string[]>;
   playedSlots?: Record<number, Record<string, SubRole>>;
   injuries?: { teamId: number; name: string; games: number }[];
   playerActions?: Record<string, Partial<Record<PersonalMissionMetric, number>>>;
@@ -1317,6 +1320,19 @@ export type VarScenario =
   | 'dogso'
   | 'reckless_duel';
 
+export interface VarNearbyAgent {
+  side: 'H' | 'A';
+  no: number;
+  shortName: string;
+  role: SubRole;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  isGk?: boolean;
+  vis?: number[];
+}
+
 export interface VarReplaySnapshot {
   scenario?: VarScenario;
   attRight: boolean;
@@ -1344,6 +1360,7 @@ export interface VarReplaySnapshot {
   incidentX: number;
   incidentY: number;
   defLineX: number;
+  defX?: number;
   defY?: number;
   gkX?: number;
   gkY?: number;
@@ -1352,6 +1369,7 @@ export interface VarReplaySnapshot {
   goalLineMm?: number;
   foulKind?: string;
   inBox?: boolean;
+  nearbyAgents?: VarNearbyAgent[];
 }
 
 export interface VarReviewState {

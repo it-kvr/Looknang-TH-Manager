@@ -7185,27 +7185,28 @@ export function simulateInstantMatchPayload(
   const passesH = Math.round(possH * R(6, 8));
   const passesA = Math.round((100 - possH) * R(6, 8));
   const simLogs: ArchivedMatchLog[] = [
-    { m: 90, text: penText ? `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name} (${penText})` : `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name}`, tone: 'sys' },
+    { id: 'sim-ft', m: 90, text: penText ? `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name} (${penText})` : `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name}`, tone: 'sys' },
     ...[
-      ...r.evs.map((e) => {
+      ...r.evs.map((e, idx) => {
         const scTeam = e.t === H.id ? H.name : A.name;
         const txt = e.og
           ? `🤦 นาที ${e.m}': ${e.who} สกัดเข้าประตูตัวเอง (${scTeam} ได้ประตู)`
           : e.as
             ? `⚽ นาที ${e.m}': โกล!! ${e.who} (${scTeam}) ซัดประตู (👟 ${e.as})`
             : `⚽ นาที ${e.m}': โกล!! ${e.who} (${scTeam}) ยิงประตู!`;
-        return { m: e.m, item: { m: e.m, text: txt, tone: 'goal' as const } };
+        return { m: e.m, item: { id: `sim-g-${idx}-${e.m}`, m: e.m, text: txt, tone: 'goal' as const } };
       }),
-      ...(r.cards || []).map((c) => {
+      ...(r.cards || []).map((c, idx) => {
         const tmName = c.t === H.id ? H.name : A.name;
         const cardEmoji = c.type === 'Y' ? '🟨 ใบเหลือง' : c.type === 'Y2R' ? '🟨➡🟥 เหลืองแดง' : '🟥 ใบแดง';
-        return { m: c.m, item: { m: c.m, text: `${cardEmoji} นาที ${c.m}': ${c.who} (${tmName})${c.reason ? ` — ${c.reason}` : ''}`, tone: 'card' as const } };
+        return { m: c.m, item: { id: `sim-c-${idx}-${c.m}`, m: c.m, text: `${cardEmoji} นาที ${c.m}': ${c.who} (${tmName})${c.reason ? ` — ${c.reason}` : ''}`, tone: 'card' as const } };
       }),
-      ...(r.subs || []).map((sb) => {
+      ...(r.subs || []).map((sb, idx) => {
         const tmName = sb.t === H.id ? H.name : A.name;
         return {
           m: sb.m,
           item: {
+            id: `sim-s-${idx}-${sb.m}`,
             m: sb.m,
             text: `🔄 นาที ${sb.m}' เปลี่ยนตัว (${tmName}): 🔼 เข้า ${sb.inPlayer} · 🔽 ออก ${sb.outPlayer}`,
             tone: 'sub' as const,
@@ -7216,7 +7217,7 @@ export function simulateInstantMatchPayload(
     ]
       .sort((u, v) => v.m - u.m)
       .map((x) => x.item),
-    { m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${H.name} พบ ${A.name}`, tone: 'sys' }
+    { id: 'sim-ko', m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${H.name} พบ ${A.name}`, tone: 'sys' }
   ];
 
   return {
@@ -7246,6 +7247,10 @@ export function simulateInstantMatchPayload(
     cards: r.cards || [],
     subs: r.subs || [],
     playedNames: r.playedNames || {},
+    xiNames: {
+      [H.id]: xi(H).map((q) => q.n),
+      [A.id]: xi(A).map((q) => q.n)
+    },
     playedSlots: r.playedSlots || {},
     playerActions,
     logs: simLogs

@@ -7,7 +7,7 @@ import {
   enterLandscapeFullscreen,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
-import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord } from './types/game';
+import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
@@ -38,6 +38,7 @@ import { DilemmaModal } from './modals/DilemmaModal';
 import { SecretBoostModal } from './modals/SecretBoostModal';
 import { SettingsModal } from './modals/SettingsModal';
 import { VarReplayModal } from './modals/VarReplayModal';
+import { PostMatchReportModal } from './modals/PostMatchReportModal';
 
 export default function App() {
   const [enteredGame, setEnteredGame] = useState(false);
@@ -58,6 +59,10 @@ export default function App() {
     awayId: number;
     records: VarReplayRecord[];
     activeId: string;
+  } | null>(null);
+  const [matchReportModal, setMatchReportModal] = useState<{
+    report: ArchivedMatchReport;
+    title?: string;
   } | null>(null);
   const [appSettings, setAppSettings] = useState<AppSettings>(() => {
     restoreAutoFullscreenMigration();
@@ -396,6 +401,41 @@ export default function App() {
       };
       recordHomeAttendance();
 
+      const buildArchivedReport = (
+        reportKind: ArchivedMatchReport['kind'],
+        roundLabel?: string
+      ): ArchivedMatchReport => ({
+        kind: reportKind,
+        ...(roundLabel ? { roundLabel } : {}),
+        h: homeId,
+        a: awayId,
+        gh: payload.gh,
+        ga: payload.ga,
+        ...(payload.pen !== undefined ? { pen: payload.pen } : {}),
+        ...(payload.penText ? { penText: payload.penText } : {}),
+        xgH: payload.xgH,
+        xgA: payload.xgA,
+        ...(payload.possH !== undefined ? { possH: payload.possH } : {}),
+        ...(payload.shotsH !== undefined ? { shotsH: payload.shotsH } : {}),
+        ...(payload.shotsA !== undefined ? { shotsA: payload.shotsA } : {}),
+        ...(payload.onTargetH !== undefined ? { onTargetH: payload.onTargetH } : {}),
+        ...(payload.onTargetA !== undefined ? { onTargetA: payload.onTargetA } : {}),
+        ...(payload.passesH !== undefined ? { passesH: payload.passesH } : {}),
+        ...(payload.passesA !== undefined ? { passesA: payload.passesA } : {}),
+        ...(payload.att !== undefined ? { att: payload.att } : {}),
+        ...(payload.cap !== undefined ? { cap: payload.cap } : {}),
+        motm: payload.motm,
+        ratings: resObj.ratings || payload.ratings,
+        evs: payload.evs,
+        cards: payload.cards,
+        subs: payload.subs,
+        playedNames: payload.playedNames,
+        ...(payload.xiNames ? { xiNames: payload.xiNames } : {}),
+        ...(payload.playedSlots ? { playedSlots: payload.playedSlots } : {}),
+        ...(payload.logs?.length ? { logs: payload.logs } : {}),
+        ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+      });
+
       if (kind === 'cup') {
         const c = d.cup;
         const roundBefore = c.r;
@@ -425,12 +465,7 @@ export default function App() {
           md: d.md,
           comp: 'cup',
           r: roundBefore,
-          h: homeId,
-          a: awayId,
-          gh: payload.gh,
-          ga: payload.ga,
-          penText: payload.penText,
-          ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+          ...buildArchivedReport('cup', RN[roundBefore] || `รอบ ${roundBefore + 1}`)
         });
         c.ids = nx;
         c.r++;
@@ -533,12 +568,7 @@ export default function App() {
           md: d.md,
           comp: kind,
           r: roundBefore,
-          h: homeId,
-          a: awayId,
-          gh: payload.gh,
-          ga: payload.ga,
-          penText: payload.penText,
-          ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+          ...buildArchivedReport(kind, roundLabel)
         });
         c.ids = nx;
         c.r++;
@@ -636,12 +666,7 @@ export default function App() {
           md: d.md,
           comp: 'asia',
           r: roundBefore,
-          h: homeId,
-          a: awayId,
-          gh: payload.gh,
-          ga: payload.ga,
-          penText: payload.penText,
-          ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
+          ...buildArchivedReport('asia', RN[roundBefore] || `รอบ ${roundBefore + 1}`)
         });
         c.ids = nx;
         c.r++;
@@ -855,13 +880,7 @@ export default function App() {
         d.mor = clamp((d.mor ?? 55) + (diff > 0 ? 5 : diff < 0 ? -5 : 1), 0, 100);
       }
       d.schedRes = d.schedRes || {};
-      d.schedRes[d.md] = {
-        h: homeId,
-        a: awayId,
-        gh: payload.gh,
-        ga: payload.ga,
-        ...(payload.varReplays?.length ? { varReplays: payload.varReplays } : {})
-      };
+      d.schedRes[d.md] = buildArchivedReport('league', `นัดที่ ${d.md + 1}`);
       d.md++;
       if (d.mode !== 'm' && payload.pf) {
         creditPlayerPerf(d, payload.pf);
@@ -1381,6 +1400,10 @@ export default function App() {
                 SFX.tap();
                 setHistoryVarModal({ homeId, awayId, records, activeId: records[0].id });
               }}
+              onOpenMatchReport={(report, title) => {
+                SFX.tap();
+                setMatchReportModal({ report, title });
+              }}
               onToast={showToast}
             />
           )}
@@ -1542,6 +1565,26 @@ export default function App() {
         />
       )}
 
+      {matchReportModal && (
+        <PostMatchReportModal
+          report={matchReportModal.report}
+          title={matchReportModal.title}
+          state={state}
+          onClose={() => setMatchReportModal(null)}
+          onOpenVarReplay={(homeId, awayId, records, activeId) => {
+            if (!records.length) return;
+            setHistoryVarModal({
+              homeId,
+              awayId,
+              records,
+              activeId: activeId || records[0].id
+            });
+          }}
+          onInspectTeam={(tid) => setInspectTeamId(tid)}
+          onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+        />
+      )}
+
       {inspectTeamId !== null && state.teams[inspectTeamId] && (
         <TeamInspectorModal
           team={state.teams[inspectTeamId]}
@@ -1617,6 +1660,7 @@ export default function App() {
             setPreMatch(null);
             setActiveMatch(null);
             setHistoryVarModal(null);
+            setMatchReportModal(null);
             setShowSettings(false);
             setSeasonStatsTarget(null);
             setState(null);
