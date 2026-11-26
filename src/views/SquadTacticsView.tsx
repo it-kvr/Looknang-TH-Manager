@@ -13,6 +13,7 @@ import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { CaptainBadge } from '../components/CaptainBadge';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
@@ -603,7 +604,7 @@ export const SquadTacticsView: React.FC<{
               ★
             </span>
           )}
-          {me.cap === q.n && <span className="inline-block px-1 mr-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-bold">C</span>}
+          {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" className="mr-1" />}
           {(q.hg || q.customCreated) ? <span title="เด็กปั้นสโมสร" className="mr-0.5">🌱</span> : null}
           {q.n}
           {slotSp && slotSp !== q.ro && (
@@ -1265,7 +1266,10 @@ export const SquadTacticsView: React.FC<{
                 <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/70 space-y-2 mland:space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">👑 กัปตันทีม &amp; 🎯 มือสังหารลูกนิ่ง</div>
+                      <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)] flex items-center gap-1.5">
+                        <CaptainBadge team={me} state={state} size="sm" />
+                        <span>กัปตันทีม &amp; 🎯 มือสังหารลูกนิ่ง</span>
+                      </div>
                       <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">สลับกัปตันชั่วคราวให้อัตโนมัติหากโดนเปลี่ยนออกหรือใบแดง</div>
                     </div>
                     <button
@@ -1285,7 +1289,10 @@ export const SquadTacticsView: React.FC<{
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
                     <div>
-                      <label className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] block mb-1 mland:mb-0.5">👑 กัปตันทีม</label>
+                      <label className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1 mb-1 mland:mb-0.5">
+                        <CaptainBadge team={me} state={state} size="xs" />
+                        <span>กัปตันทีม</span>
+                      </label>
                       <select
                         value={me.cap || ''}
                         onChange={(e) => {
@@ -1499,7 +1506,10 @@ export const SquadTacticsView: React.FC<{
                     <div className="font-bold mt-0.5">{['แคบ', 'กลาง', 'กว้าง'][me.wid ?? 1]} · {['ลึก', 'กลาง', 'สูง'][me.line ?? 1]}</div>
                   </div>
                   <div className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/70">
-                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">👑 กัปตันทีม</div>
+                    <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-1">
+                      <CaptainBadge team={me} state={state} size="xs" />
+                      <span>กัปตันทีม</span>
+                    </div>
                     <div className="font-bold mt-0.5 truncate">
                       {me.cap || 'AI เลือกอัตโนมัติ'}
                       {me.cap && me.cap === state.p?.name ? ' (คุณ)' : ''}
@@ -1821,7 +1831,7 @@ export const SquadTacticsView: React.FC<{
                                   </span>
                                 )}
                                 {isStarter && <span title="ตัวจริง" className="shrink-0">⭐</span>}
-                                {me.cap === q.n && <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">[C]</span>}
+                                {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" />}
                                 <span className="truncate">{q.n}</span>
                                 {(q.hg || q.customCreated) ? (
                                   <span className="px-1 rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0" title="เด็กปั้นสโมสร">

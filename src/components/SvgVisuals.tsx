@@ -4,6 +4,7 @@ import { clamp } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
 import { PCOL, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_OUTFITS } from '../data/thaiFootballData';
 import { getShirtNo, visOf, getFormationSlots, playerPen, xi, colLum, colDist, tc, pickGK } from '../engine/playerCore';
+import { getClubCaptainPalette } from './CaptainBadge';
 
 export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
   <>
@@ -1424,14 +1425,24 @@ export const FormationPitch: React.FC<{
                 <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#1c1300" />
               </g>
             )}
-            {isCaptain && (
-              <g transform={`translate(${meta?.isMotm ? cx - 21 : cx - 12.5},${meta?.isMotm ? cy - 5.5 : cy - 14.5})`}>
-                <circle r="5.5" fill="#f4c63d" stroke="#111" strokeWidth="1" />
-                <text y="2.8" textAnchor="middle" fontSize="7.8" fontWeight="800" fontFamily="Sarabun" fill="#111">
-                  C
-                </text>
-              </g>
-            )}
+            {isCaptain && (() => {
+              const capPal = getClubCaptainPalette(
+                col,
+                trCol,
+                state.mode === 'm' && team.id === state.me ? state.club?.c3 || '' : ''
+              );
+              const capX = meta?.isMotm ? cx - 22 : cx - 14.5;
+              const capY = meta?.isMotm ? cy - 6 : cy - 15;
+              return (
+                <g transform={`translate(${capX - 7},${capY - 5.5})`}>
+                  <rect width="14" height="11" rx="2.6" fill={capPal.bg} stroke={capPal.border} strokeWidth="0.95" />
+                  <path d="M2.6 0.45 H3.4 V10.55 H2.6 Q0.45 10.55 0.45 8.4 V2.6 Q0.45 0.45 2.6 0.45 Z" fill={capPal.stripe} />
+                  <text x="8.6" y="8.2" textAnchor="middle" fontSize="7.4" fontWeight="900" fontFamily="Sarabun" fill={capPal.text}>
+                    C
+                  </text>
+                </g>
+              );
+            })()}
 
             {/* Top-Right: Cards & Injury (non-overlapping) */}
             {(isRed || isSus) ? (

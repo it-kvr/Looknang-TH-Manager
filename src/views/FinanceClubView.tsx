@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
+import { CaptainBadge } from '../components/CaptainBadge';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -2981,12 +2982,7 @@ export const FinanceClubView: React.FC<{
                                 </div>
                                 <div className="flex items-center gap-1 min-w-0 leading-tight mt-0.5">
                                   {row.isCaptain && (
-                                    <span
-                                      title="กัปตันทีม"
-                                      className="text-[10px] mland:text-[9px] font-extrabold text-[#9a6700] dark:text-[var(--lamp)] shrink-0"
-                                    >
-                                      ©
-                                    </span>
+                                    <CaptainBadge team={me} state={state} size="xs" />
                                   )}
                                   <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] group-hover:text-[var(--g)] truncate">
                                     {pl.n}

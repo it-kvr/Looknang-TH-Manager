@@ -20,6 +20,7 @@ import { PlayerAppearanceModal } from './PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { TalentBadge } from '../components/TalentBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { CaptainBadge } from '../components/CaptainBadge';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -263,12 +264,7 @@ export const PlayerInspectorModal: React.FC<{
                         </span>
                       )}
                       {isCap && (
-                        <span
-                          title="กัปตันทีม"
-                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none shrink-0 ${palette.capBadge}`}
-                        >
-                          ©
-                        </span>
+                        <CaptainBadge team={liveTeam} state={state} size="sm" />
                       )}
                     </div>
                   ) : null
@@ -895,7 +891,7 @@ export const TeamInspectorModal: React.FC<{
                               )}
                               <span className="text-[var(--mut)] tabular shrink-0">#{getShirtNo(team, q)}</span>
                               {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
-                              {team.cap === q.n && <span className="text-[var(--lamp)] font-bold shrink-0">©</span>}
+                              {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" />}
                               <span className="truncate">{q.n}</span>
                             </div>
                             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 flex-wrap">

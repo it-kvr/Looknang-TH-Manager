@@ -11,6 +11,7 @@ import {
   xi
 } from '../engine/playerCore';
 import { ClubCrest, KitJersey, PlayerFace } from './SvgVisuals';
+import { CaptainBadge } from './CaptainBadge';
 
 type LockerFilter = 'ALL' | 'XI' | Position;
 
@@ -268,7 +269,7 @@ export const LockerRoomPanel: React.FC<{
                   <div className="flex items-center justify-between gap-1.5 min-w-0">
                     <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
                       {isMe ? <span className="text-[#9a6700] dark:text-[var(--lamp)] mr-1">★</span> : null}
-                      {isCap ? <span title="กัปตันทีม" className="text-[#9a6700] dark:text-[var(--lamp)] font-extrabold mr-1">©</span> : null}
+                      {isCap ? <CaptainBadge team={team} state={state} size="xs" className="mr-1" /> : null}
                       {q.n}
                     </span>
                     <span className="text-xs mland:text-[10px] font-extrabold font-display tabular text-[var(--g)] shrink-0">
@@ -304,11 +305,11 @@ export const LockerRoomPanel: React.FC<{
                 </div>
                 <div className="min-w-0 flex-1 space-y-0.5">
                 <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate">
+                  <span className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate flex items-center gap-1">
                     {team.cap === selectedPlayer.n ? (
-                      <span title="กัปตันทีม" className="text-[#9a6700] dark:text-[var(--lamp)] font-extrabold mr-1">©</span>
+                      <CaptainBadge team={team} state={state} size="sm" />
                     ) : null}
-                    {selectedPlayer.n}
+                    <span className="truncate">{selectedPlayer.n}</span>
                   </span>
                   <span className="text-base mland:text-xs font-extrabold font-display tabular text-[var(--g)] shrink-0">
                     #{selectedNo}

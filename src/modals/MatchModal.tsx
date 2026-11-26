@@ -56,6 +56,7 @@ import { getPlayerTalent } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar } from '../components/StaminaBar';
+import { CaptainBadge } from '../components/CaptainBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 
@@ -12377,8 +12378,10 @@ export const MatchModal: React.FC<{
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                            <div className="truncate">
-                              👑 กัปตัน: <b className="text-[var(--ink)]">{curCap || '-'}</b>
+                            <div className="truncate flex items-center gap-1 min-w-0">
+                              <CaptainBadge team={myTeamLive} state={state} size="xs" />
+                              <span>กัปตัน:</span>
+                              <b className="text-[var(--ink)] truncate">{curCap || '-'}</b>
                             </div>
                             <div className="truncate text-right">
                               คู่แข่ง: <b className="text-[var(--ink)]">{oppTeamLive.form} · {AR_T[oppTeamLive.tac]}</b>

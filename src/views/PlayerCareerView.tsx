@@ -34,6 +34,7 @@ import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 import { PlayerAppearanceModal } from '../modals/PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
 import { StaminaBar } from '../components/StaminaBar';
+import { CaptainBadge } from '../components/CaptainBadge';
 
 export const PlayerCareerView: React.FC<{
   state: GameState;
@@ -139,12 +140,7 @@ export const PlayerCareerView: React.FC<{
                 ★ {p.rep ?? 10}
               </span>
               {meTeam.cap === p.name && (
-                <span
-                  title="กัปตันทีม"
-                  className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none ${palette.capBadge}`}
-                >
-                  ©
-                </span>
+                <CaptainBadge team={meTeam} state={state} size="sm" />
               )}
             </div>
           )}

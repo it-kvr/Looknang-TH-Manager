@@ -40,6 +40,7 @@ import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals'
 import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { CaptainBadge } from '../components/CaptainBadge';
 
 interface PreMatchModalProps {
   state: GameState;
@@ -547,7 +548,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               ★
             </span>
           )}
-          {isCap && <span className="inline-block px-1 mr-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-bold">C</span>}
+          {isCap && <CaptainBadge team={team} state={state} size="xs" className="mr-1" />}
           {(pl.hg || pl.customCreated) ? <span title="เด็กปั้นสโมสร" className="mr-0.5">🌱</span> : null}
           {pl.n}
           {isStarter && slotLabel !== pl.ro && (
