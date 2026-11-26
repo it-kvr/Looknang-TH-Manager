@@ -1193,14 +1193,9 @@ export const FormationPitch: React.FC<{
       <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
       {pitchCrestSpec && (
         <g className="pointer-events-none">
-          <g
-            opacity="0.32"
-            transform="translate(124.8, 164.8) scale(2.1)"
-            dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcw`, true) }}
-          />
-          <g transform="translate(267, 10.5)">
+          <g transform="translate(256, 10)" style={{ filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.42))' }}>
             <g
-              transform="scale(0.92)"
+              transform="scale(1.42)"
               dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcb`, true) }}
             />
           </g>

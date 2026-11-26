@@ -885,7 +885,7 @@ export function extractMatchHighlights(
 
     const tName = teamName(ev.t);
     const verb = styleDesc(ev.style);
-    const asTxt = !ev.og && ev.as ? ` · แอสซิสต์ ${ev.as}` : '';
+    const asTxt = !ev.og && ev.as ? ` · 👟 แอสซิสต์ ${ev.as}` : '';
     const tagTxt = tags.length ? ` [${tags.join(' · ')}]` : '';
     lines.push({
       m: ev.m,

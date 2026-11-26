@@ -6649,7 +6649,7 @@ export const MatchModal: React.FC<{
     } else {
       pushLog(
         curMin,
-        `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · แอสซิสต์ ${assisterName}` : ''}`,
+        `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · 👟 แอสซิสต์ ${assisterName}` : ''}`,
         'goal',
         varReplayId
       );
@@ -6669,7 +6669,7 @@ export const MatchModal: React.FC<{
                     : '';
       const goalTlSub = isPenaltyGoal
         ? 'จุดโทษ'
-        : [goalStyleTag, assisterName ? `แอสซิสต์ ${assisterName.split(' ')[0]}` : ''].filter(Boolean).join(' · ') || undefined;
+        : [goalStyleTag, assisterName ? `👟 ${assisterName.split(' ')[0]}` : ''].filter(Boolean).join(' · ') || undefined;
       pushTimeline(
         curMin,
         side,
@@ -11980,7 +11980,7 @@ export const MatchModal: React.FC<{
                     </span>
                     {goalFlashInfo.assister && !goalFlashInfo.isOwnGoal && (
                       <span className="hidden sm:inline mland:hidden text-[10px] text-white/70 font-semibold max-w-[115px] truncate">
-                        (🅰️ {goalFlashInfo.assister.split(' ')[0]})
+                        (👟 {goalFlashInfo.assister.split(' ')[0]})
                       </span>
                     )}
                     {goalFlashInfo.isMeScorer && (
@@ -12927,10 +12927,10 @@ export const MatchModal: React.FC<{
                       </div>
                     </div>
 
-                    {/* Bottom Substitutes Strip (Single compact horizontal row) */}
+                    {/* Bottom Substitutes Strip (Neat 2-row cards with Position before Name) */}
                     {visibleFtSubs.length > 0 && (
-                      <div className="bg-[#082414] border-t border-white/10 px-2.5 py-1.5 mland:px-2 mland:py-1 text-white">
-                        <div className="flex flex-nowrap items-center gap-1.5 mland:gap-1 overflow-x-auto pb-0.5">
+                      <div className="bg-[#05180e] border-t border-white/12 px-2.5 py-2 mland:px-2 mland:py-1 text-white">
+                        <div className="flex flex-nowrap items-stretch gap-2 mland:gap-1.5 overflow-x-auto pb-0.5">
                           {visibleFtSubs.map((sb, idx) => {
                             const subTeam = sb.t === homeOrig.id ? homeOrig : awayOrig;
                             const subPl = subTeam.sq.find((q) => q.n === sb.inPlayer);
@@ -12940,22 +12940,32 @@ export const MatchModal: React.FC<{
                             const isPicked = ftPickedPlayer === sb.inPlayer;
                             const subGl = evs.filter((e) => !e.og && e.t === subTeam.id && e.who === sb.inPlayer).length;
                             const subAs = evs.filter((e) => !e.og && e.t === subTeam.id && e.as === sb.inPlayer).length;
+                            const subCards = fullTimeAnalysis.cards.filter((c) => c.t === subTeam.id && c.who === sb.inPlayer);
+                            const subTeamKit = subTeam.id === homeId ? homeKit : awayKit;
+                            const rtPillCls = isSubMotm
+                              ? 'bg-[#1c1300] text-[#facc15]'
+                              : subRt >= 7.5
+                                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/35'
+                                : subRt >= 6.8
+                                  ? 'bg-black/45 text-emerald-300 border border-white/10'
+                                  : 'bg-black/45 text-amber-200 border border-white/10';
                             return (
                               <button
                                 key={idx}
                                 type="button"
                                 onClick={() => setFtPickedPlayer((prev) => (prev === sb.inPlayer ? null : sb.inPlayer))}
-                                className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg border text-[10px] mland:text-[8.5px] tabular cursor-pointer transition-colors whitespace-nowrap ${
+                                className={`shrink-0 inline-flex items-center gap-2 mland:gap-1.5 pl-1.5 pr-2 py-1.5 mland:pl-1 mland:pr-1.5 mland:py-1 rounded-xl border text-left tabular cursor-pointer transition-all whitespace-nowrap ${
                                   isSubMotm
-                                    ? 'bg-[#facc15] text-[#1c1300] border-white font-extrabold'
+                                    ? 'bg-gradient-to-r from-[#facc15] to-[#eab308] text-[#1c1300] border-white shadow-md font-extrabold'
                                     : isPicked
-                                      ? 'bg-sky-500/25 border-sky-400 text-white'
-                                      : 'bg-white/10 border-white/15 hover:bg-white/20 text-white/95'
+                                      ? 'bg-sky-500/24 border-sky-400 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.35)]'
+                                      : 'bg-white/7 border-white/14 hover:bg-white/13 hover:border-white/25 text-white/95'
                                 }`}
                               >
-                                <span className="shrink-0 inline-flex">
-                                  <ClubCrest name={subTeam.name} size={12} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
-                                </span>
+                                <span
+                                  className="w-1 self-stretch rounded-full shrink-0"
+                                  style={{ backgroundColor: isSubMotm ? '#1c1300' : subTeamKit }}
+                                />
                                 {subPl && (
                                   <MatchPlayerThumb
                                     player={subPl}
@@ -12963,30 +12973,51 @@ export const MatchModal: React.FC<{
                                     state={state}
                                     kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
                                     trimColor={subPl.pos === 'GK' ? undefined : (subTeam.id === homeId ? homeTrim : awayTrim)}
-                                    size="xs"
+                                    size="sm"
                                     dark={!isSubMotm}
-                                    ringClassName={isSubMotm ? 'ring-[#1c1300]/50' : undefined}
+                                    ringClassName={isSubMotm ? 'ring-[#1c1300]/50' : 'ring-white/25'}
                                   />
                                 )}
-                                <span className="opacity-75 text-[9px] mland:text-[7.5px]">#{subNo}</span>
-                                <span className="font-bold max-w-[84px] truncate">{sb.inPlayer.split(' ')[0]}</span>
-                                {subPl?.ro && <PositionBadge role={subPl.ro} size="2xs" />}
-                                <span className={`inline-flex items-center gap-0.5 text-[9px] mland:text-[7.5px] font-bold ${isSubMotm ? 'text-emerald-900' : 'text-emerald-300'}`}>
-                                  <StatIconBadge kind="subIn" size="xs" />
-                                  <span>{sb.m}&apos;</span>
-                                </span>
-                                <span className={`inline-flex items-center gap-0.5 text-[8.5px] mland:text-[7px] font-semibold ${isSubMotm ? 'text-rose-900/80' : 'text-rose-300/85'}`} title={`เปลี่ยนออก: ${sb.outPlayer}`}>
-                                  <StatIconBadge kind="subOut" size="xs" />
-                                  <span className="max-w-[54px] truncate">{sb.outPlayer.split(' ')[0]}</span>
-                                </span>
-                                {(subGl > 0 || subAs > 0 || isSubMotm) && (
-                                  <span className="inline-flex items-center gap-0.5 shrink-0">
-                                    {subGl > 0 && <StatIconBadge kind="goal" count={subGl} size="xs" />}
-                                    {subAs > 0 && <StatIconBadge kind="assist" count={subAs} size="xs" />}
-                                    {isSubMotm && <span>👑</span>}
-                                  </span>
-                                )}
-                                <span className={`px-1 py-0.2 rounded text-[9.5px] mland:text-[8px] font-black shrink-0 ${isSubMotm ? 'bg-[#1c1300] text-[#facc15]' : 'bg-black/45 text-emerald-300'}`}>
+                                <div className="min-w-0 flex flex-col justify-center gap-1 mland:gap-0.5">
+                                  <div className="flex items-center gap-1 leading-none">
+                                    {ftPitchMode === 'all' && (
+                                      <span className="shrink-0 inline-flex">
+                                        <ClubCrest name={subTeam.name} size={11} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
+                                      </span>
+                                    )}
+                                    {subPl?.ro && <PositionBadge role={subPl.ro} size="2xs" />}
+                                    <span className="font-extrabold text-[11px] mland:text-[9px] max-w-[90px] truncate">
+                                      {sb.inPlayer.split(' ')[0]}
+                                    </span>
+                                    <span className={`text-[9px] mland:text-[7.5px] font-semibold shrink-0 ${isSubMotm ? 'text-[#1c1300]/75' : 'text-white/55'}`}>
+                                      #{subNo}
+                                    </span>
+                                    {isSubMotm && <span className="text-[10px] leading-none shrink-0" title="Man of the Match">👑</span>}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[9px] mland:text-[7.5px] leading-none">
+                                    <span className={`inline-flex items-center gap-0.5 font-bold ${isSubMotm ? 'text-emerald-950' : 'text-emerald-300'}`}>
+                                      <StatIconBadge kind="subIn" size="xs" />
+                                      <span>{sb.m}&apos;</span>
+                                    </span>
+                                    <span
+                                      className={`inline-flex items-center gap-0.5 font-medium ${isSubMotm ? 'text-rose-950/85' : 'text-rose-300/85'}`}
+                                      title={`เปลี่ยนออก: ${sb.outPlayer}`}
+                                    >
+                                      <StatIconBadge kind="subOut" size="xs" />
+                                      <span className="max-w-[56px] truncate">{sb.outPlayer.split(' ')[0]}</span>
+                                    </span>
+                                    {(subGl > 0 || subAs > 0 || subCards.length > 0) && (
+                                      <span className="inline-flex items-center gap-0.5 shrink-0">
+                                        {subGl > 0 && <StatIconBadge kind="goal" count={subGl} size="xs" />}
+                                        {subAs > 0 && <StatIconBadge kind="assist" count={subAs} size="xs" />}
+                                        {subCards.map((c, cIdx) => (
+                                          <StatIconBadge key={cIdx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
+                                        ))}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <span className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8px] font-black shrink-0 ${rtPillCls}`}>
                                   {subRt.toFixed(1)}
                                 </span>
                               </button>
@@ -13279,6 +13310,108 @@ export const MatchModal: React.FC<{
                           </span>
                         </div>
                       </button>
+                    );
+                  })()}
+                  {done && (eventFilter === 'all' || eventFilter === 'goal') && (() => {
+                    const sortedGoals = evs.slice().sort((a, b) => a.m - b.m);
+                    return (
+                      <div className="rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
+                        <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
+                            <span>⚽</span>
+                            <span>สรุปผู้ทำประตู</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)]">
+                            <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+                            <span>{gh} - {ga}</span>
+                            <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+                          </span>
+                        </div>
+                        {sortedGoals.length === 0 ? (
+                          <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] text-center">
+                            ไม่มีประตูในเวลาปกติ ({gh} - {ga})
+                          </div>
+                        ) : (
+                          <div className="divide-y divide-[var(--line)]/55">
+                            {sortedGoals.map((ev, gIdx) => {
+                              const isHomeScore = ev.t === homeOrig.id;
+                              const scoringTeam = isHomeScore ? homeOrig : awayOrig;
+                              const culpritTeam = ev.og ? (isHomeScore ? awayOrig : homeOrig) : scoringTeam;
+                              const scorerPl = culpritTeam.sq.find((q) => q.n === ev.who) || null;
+                              const scorerNo = scorerPl ? getShirtNo(culpritTeam, scorerPl) : null;
+                              const assisterPl = !ev.og && ev.as ? scoringTeam.sq.find((q) => q.n === ev.as) || null : null;
+                              const isPenGoal = !ev.og && (ev.style === 'penalty' || ev.style === 'panenka');
+                              return (
+                                <button
+                                  key={`${ev.m}-${ev.t}-${ev.who}-${gIdx}`}
+                                  type="button"
+                                  onClick={() => {
+                                    setFtPickedPlayer((prev) => (prev === ev.who ? null : ev.who));
+                                    if (ftPitchMode !== 'all') {
+                                      setFtPitchMode(culpritTeam.id === homeOrig.id ? 'H' : 'A');
+                                    }
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 hover:bg-[var(--surface)]/80 transition-colors flex flex-wrap items-center justify-between gap-x-2 gap-y-1 cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <span
+                                      className={`min-w-[26px] h-4.5 px-1 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
+                                        ev.og
+                                          ? 'bg-rose-500/18 text-rose-600 dark:text-rose-300'
+                                          : isHomeScore
+                                            ? 'bg-[var(--g)] text-white'
+                                            : 'bg-amber-500 text-white'
+                                      }`}
+                                    >
+                                      {ev.m}&apos;
+                                    </span>
+                                    <span className="shrink-0 inline-flex">
+                                      <ClubCrest name={scoringTeam.name} size={13} team={scoringTeam} club={state.club} isMyClub={scoringTeam.id === state.me && state.mode === 'm'} />
+                                    </span>
+                                    {scorerPl && (
+                                      <MatchPlayerThumb
+                                        player={scorerPl}
+                                        team={culpritTeam}
+                                        state={state}
+                                        kitColor={culpritTeam.id === homeId ? (scorerPl.pos === 'GK' ? homeGkKit : homeKit) : (scorerPl.pos === 'GK' ? awayGkKit : awayKit)}
+                                        trimColor={scorerPl.pos === 'GK' ? undefined : (culpritTeam.id === homeId ? homeTrim : awayTrim)}
+                                        size="xs"
+                                      />
+                                    )}
+                                    {scorerPl?.ro && <PositionBadge role={scorerPl.ro} size="2xs" />}
+                                    <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate max-w-[140px]">
+                                      {ev.who}
+                                    </span>
+                                    {scorerNo != null && (
+                                      <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+                                        #{scorerNo}
+                                      </span>
+                                    )}
+                                    {ev.og && (
+                                      <span className="px-1 py-[1px] rounded bg-rose-500/18 text-rose-600 dark:text-rose-300 text-[9px] mland:text-[7.5px] font-black shrink-0">
+                                        OG
+                                      </span>
+                                    )}
+                                    {isPenGoal && (
+                                      <span className="px-1 py-[1px] rounded bg-amber-500/18 text-amber-700 dark:text-amber-300 text-[9px] mland:text-[7.5px] font-extrabold shrink-0">
+                                        🎯 จุดโทษ
+                                      </span>
+                                    )}
+                                  </div>
+                                  {!ev.og && ev.as && (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] text-[var(--mut)] shrink-0 max-w-full ml-auto">
+                                      <span className="leading-none">👟</span>
+                                      <span>แอสซิสต์โดย</span>
+                                      {assisterPl?.ro && <PositionBadge role={assisterPl.ro} size="2xs" />}
+                                      <span className="font-bold text-[var(--ink)] truncate max-w-[115px]">{ev.as}</span>
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
                     );
                   })()}
                   {varHistory.length > 0 && (eventFilter === 'all' || eventFilter === 'card') && (
