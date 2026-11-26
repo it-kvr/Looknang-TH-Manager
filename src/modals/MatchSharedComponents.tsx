@@ -177,7 +177,8 @@ export const MatchPlayerThumb: React.FC<{
   size?: 'xs' | 'sm' | 'md';
   dark?: boolean;
   ringClassName?: string;
-}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName }) => {
+  isMotm?: boolean;
+}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName, isMotm = false }) => {
   const isMeClub = team.id === state.me && state.mode === 'm';
   const effKit = kitColor || '#15803d';
   const effTrim = player.pos === 'GK' ? undefined : trimColor;
@@ -186,7 +187,7 @@ export const MatchPlayerThumb: React.FC<{
     : `linear-gradient(155deg, color-mix(in srgb, ${effKit} 28%, var(--surface-2)), color-mix(in srgb, ${effTrim || '#fad05a'} 14%, var(--surface)))`;
   const ringCls = ringClassName || (dark ? 'ring-white/30' : 'ring-black/14 dark:ring-white/22');
 
-  return (
+  const faceBox = (
     <span
       className={`shrink-0 ${MATCH_THUMB_SIZE_CLS[size]} rounded-lg overflow-hidden ring-1 ${ringCls} inline-flex items-end justify-center shadow-2xs [&>svg]:w-full [&>svg]:h-full [&>svg]:block`}
       style={{ background: bgStyle }}
@@ -203,6 +204,23 @@ export const MatchPlayerThumb: React.FC<{
         size={MATCH_THUMB_PX[size]}
         bare
       />
+    </span>
+  );
+
+  if (!isMotm) return faceBox;
+
+  return (
+    <span className="relative inline-flex shrink-0">
+      {faceBox}
+      <span
+        title="Man of the Match"
+        aria-label="Man of the Match"
+        className="pointer-events-none absolute -top-1 -left-1 z-10 inline-flex items-center justify-center w-[13px] h-[13px] mland:w-[11px] mland:h-[11px] rounded-full bg-[#111418] border border-[#facc15] shadow-xs"
+      >
+        <svg viewBox="-5 -5 10 10" className="w-[8.5px] h-[8.5px] mland:w-[7px] mland:h-[7px]" aria-hidden="true">
+          <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#fde047" />
+        </svg>
+      </span>
     </span>
   );
 };
@@ -1791,6 +1809,7 @@ export const FullTimeMatchStage: React.FC<{
                 trimColor={item.pl.pos === 'GK' ? undefined : item.trim}
                 size="xs"
                 ringClassName={item.isMotm ? 'ring-2 ring-amber-400' : undefined}
+                isMotm={item.isMotm}
               />
             ) : (
               <span className="w-[20px] h-[21px] rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/60 inline-block" />
@@ -1820,15 +1839,6 @@ export const FullTimeMatchStage: React.FC<{
                 className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8px] font-black shrink-0"
               >
                 ★
-              </span>
-            )}
-            {item.isMotm && (
-              <span
-                title="Man of the Match"
-                className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded bg-[#111418] border border-amber-400/60 text-[#fde047] text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 shadow-2xs"
-              >
-                <span>👑</span>
-                <span>MOTM</span>
               </span>
             )}
             {item.subOut && (
@@ -2051,16 +2061,13 @@ export const FullTimeMatchStage: React.FC<{
                             trimColor={pkPl.pos === 'GK' ? undefined : (pkIsHome ? homeTrim : awayTrim)}
                             size="md"
                             dark
+                            ringClassName={pickedInfo.isMotm ? 'ring-2 ring-amber-400' : undefined}
+                            isMotm={pickedInfo.isMotm}
                           />
                         )}
                         <span className="text-[#facc15] tabular">#{pickedInfo.no}</span>
                         <PositionBadge role={pickedInfo.role} size="2xs" />
                         <span className="truncate">{pickedInfo.name}</span>
-                        {pickedInfo.isMotm && (
-                          <span className="px-1.5 py-[1px] rounded bg-[#111418] border border-amber-400/60 text-[#fde047] text-[9px] font-black shrink-0">
-                            👑 MOTM
-                          </span>
-                        )}
                       </div>
                       <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular mt-0.5">
                         <span>{pickedInfo.team.name}</span>
@@ -2199,6 +2206,7 @@ export const FullTimeMatchStage: React.FC<{
                           size="sm"
                           dark={true}
                           ringClassName={isSubMotm ? 'ring-amber-400' : 'ring-white/25'}
+                          isMotm={isSubMotm}
                         />
                       )}
                       <div className="min-w-0 flex flex-col justify-center gap-1 mland:gap-0.5">
@@ -2215,15 +2223,6 @@ export const FullTimeMatchStage: React.FC<{
                           <span className="text-[9px] mland:text-[7.5px] font-semibold shrink-0 text-white/55">
                             #{subNo}
                           </span>
-                          {isSubMotm && (
-                            <span
-                              title="Man of the Match"
-                              className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded bg-[#111418] border border-amber-400/60 text-[#fde047] text-[8px] font-black leading-none shrink-0"
-                            >
-                              <span>👑</span>
-                              <span>MOTM</span>
-                            </span>
-                          )}
                         </div>
                         <div className="flex items-center gap-1.5 text-[9px] mland:text-[7.5px] leading-none">
                           <span className="inline-flex items-center gap-0.5 font-bold text-emerald-300">

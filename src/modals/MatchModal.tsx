@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Bot,
   FastForward,
   Film,
   Flag,
@@ -169,6 +168,15 @@ export const MatchModal: React.FC<{
     teamName: string;
   } | null>(null);
   const goalFlashTimerRef = useRef<number | null>(null);
+  const [subFlashInfo, setSubFlashInfo] = useState<{
+    side: 'H' | 'A';
+    teamName: string;
+    inName: string;
+    outName: string;
+    minute: number;
+    key: number;
+  } | null>(null);
+  const subFlashTimerRef = useRef<number | null>(null);
   const lastCoachSfxTsRef = useRef<number>(0);
   const lastBannerSigRef = useRef<string>('');
   const lastRawBannerKeyRef = useRef<string>('');
@@ -185,6 +193,7 @@ export const MatchModal: React.FC<{
   }, [homeOrig.sq, awayOrig.sq]);
   useEffect(() => () => {
     if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
+    if (subFlashTimerRef.current) window.clearTimeout(subFlashTimerRef.current);
   }, []);
   const [evs, setEvs] = useState<MatchEvent[]>([]);
   const [actionBanner, setActionBanner] = useState<{
@@ -1573,6 +1582,7 @@ export const MatchModal: React.FC<{
             const subEv: MatchSubEvent = { m: curMin, t: meTeamOrig.id, inPlayer: subReplace.n, outPlayer: myPlayerName };
             sr.subs.push(subEv);
             const agIdx = w.agents.findIndex((a) => a.id === myPlayerName);
+            let subbedAg: LivePitchAgent | undefined;
             if (agIdx >= 0) {
               const effSideTeam = isHomeSide ? getLiveHomeTeam() : getLiveAwayTeam();
               const rep = buildTeamAgents(effSideTeam, mySide, curLu, w.secondHalf);
@@ -1581,10 +1591,12 @@ export const MatchModal: React.FC<{
                 rep[outIdx].y = w.agents[agIdx].y;
                 rep[outIdx].facing = w.agents[agIdx].facing;
                 w.agents[agIdx] = rep[outIdx];
+                subbedAg = rep[outIdx];
               }
             }
             if (w.ball.carrierId === myPlayerName) w.ball.carrierId = subReplace.n;
             if (w.ball.targetId === myPlayerName) w.ball.targetId = subReplace.n;
+            triggerSubPitchAnim(w, subbedAg, mySide, meTeamOrig.name, subReplace.n, myPlayerName, curMin);
             setLiveLu((meIsHome ? sr.homeLu : sr.awayLu).slice());
             setLiveOppLu((meIsHome ? sr.awayLu : sr.homeLu).slice());
             setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
@@ -1834,6 +1846,43 @@ export const MatchModal: React.FC<{
     if (isSkippingRef.current) return;
     w.fx.push({ ...fx, id: w.nextFxId++ });
     if (w.fx.length > 8) w.fx.shift();
+  };
+
+  const triggerSubPitchAnim = (
+    w: LiveMatchWorld,
+    ag: LivePitchAgent | undefined,
+    side: 'H' | 'A',
+    teamName: string,
+    inName: string,
+    outName: string,
+    curMin: number
+  ) => {
+    if (isSkippingRef.current) return;
+    if (ag) {
+      ag.subEnterTimer = 2.4;
+      ag.subEnterMax = 2.4;
+      addWorldFx(w, {
+        type: 'sub',
+        x: ag.x,
+        y: ag.y,
+        label: `🔄 ${inName.split(' ')[0]} ⇄ ${outName.split(' ')[0]}`,
+        color: '#10b981',
+        ttl: 2.3,
+        maxTtl: 2.3
+      });
+    }
+    if (subFlashTimerRef.current) window.clearTimeout(subFlashTimerRef.current);
+    setSubFlashInfo({
+      side,
+      teamName,
+      inName,
+      outName,
+      minute: curMin,
+      key: Date.now() + Math.random()
+    });
+    subFlashTimerRef.current = window.setTimeout(() => {
+      setSubFlashInfo(null);
+    }, 2600);
   };
 
   const adjustLiveForm = (playerName: string | null | undefined, delta: number) => {
@@ -2140,12 +2189,17 @@ export const MatchModal: React.FC<{
       const effSubTeam = victim.side === 'H' ? getLiveHomeTeam() : getLiveAwayTeam();
       const rep = buildTeamAgents(effSubTeam, victim.side, curLu, w.secondHalf);
       const agIdx = w.agents.findIndex((a) => a.id === victim.id);
+      let subbedAg: LivePitchAgent | undefined;
       if (agIdx >= 0 && rep[idx]) {
         rep[idx].x = w.agents[agIdx].x;
         rep[idx].y = w.agents[agIdx].y;
         w.agents[agIdx] = rep[idx];
+        subbedAg = rep[idx];
         if (w.ball.carrierId === victim.id) w.ball.carrierId = subIn.n;
         if (w.ball.targetId === victim.id) w.ball.targetId = subIn.n;
+      }
+      if (!isSkippingRef.current && !isInstantStep) {
+        triggerSubPitchAnim(w, subbedAg, victim.side, sideOrig.name, subIn.n, victim.id, curMin);
       }
       if (!isSkippingRef.current) {
         if (isMySide) {
@@ -8852,6 +8906,7 @@ export const MatchModal: React.FC<{
       sr.subs.push(subEv);
 
       const agIdx = w.agents.findIndex((a) => a.id === outPlayer!.n);
+      let subbedAg: LivePitchAgent | undefined;
       if (agIdx >= 0) {
         const effSideTeam = isHomeSide ? getLiveHomeTeam() : getLiveAwayTeam();
         const rep = buildTeamAgents(effSideTeam, isHomeSide ? 'H' : 'A', curLu, w.secondHalf);
@@ -8860,8 +8915,10 @@ export const MatchModal: React.FC<{
           rep[idx].y = w.agents[agIdx].y;
           rep[idx].facing = w.agents[agIdx].facing;
           w.agents[agIdx] = rep[idx];
+          subbedAg = rep[idx];
         }
       }
+      triggerSubPitchAnim(w, subbedAg, isHomeSide ? 'H' : 'A', sideOrig.name, inPlayer.n, outPlayer.n, curMin);
       const isMeIn = isPlayerMode && inPlayer.n === myPlayerName;
       const isMeOut = isPlayerMode && outPlayer.n === myPlayerName;
       pushTimeline(curMin, isHomeSide ? 'H' : 'A', 'sub', inPlayer.n, outPlayer.n);
@@ -9433,6 +9490,7 @@ export const MatchModal: React.FC<{
       sr.subs.push(subEv);
 
       const agIdx = w.agents.findIndex((a) => a.id === outPl.n);
+      let subbedAg: LivePitchAgent | undefined;
       if (agIdx >= 0) {
         const rep = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
         if (rep[outPick.idx]) {
@@ -9440,12 +9498,14 @@ export const MatchModal: React.FC<{
           rep[outPick.idx].y = w.agents[agIdx].y;
           rep[outPick.idx].facing = w.agents[agIdx].facing;
           w.agents[agIdx] = rep[outPick.idx];
+          subbedAg = rep[outPick.idx];
         }
         if (w.ball.carrierId === outPl.n) w.ball.carrierId = cand.n;
         if (w.ball.targetId === outPl.n) w.ball.targetId = cand.n;
       }
 
       if (!isSkippingRef.current) {
+        triggerSubPitchAnim(w, subbedAg, meIsHome ? 'H' : 'A', meTeamOrig.name, cand.n, outPl.n, curMin);
         setLiveLu(myLu.slice());
         setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
         setSubLog(sr.subs.slice());
@@ -9638,6 +9698,7 @@ export const MatchModal: React.FC<{
     setGa(sr.ga);
     setEvs(sr.evs.slice());
     setGoalFlashInfo(null);
+    setSubFlashInfo(null);
     setLiveCaptains({ H: sr.captainH, A: sr.captainA });
     setAiFormDisplay({ H: aiCoachRef.current.H.form, A: aiCoachRef.current.A.form });
     setLiveTac(liveTacticsRef.current.tac);
@@ -9740,7 +9801,7 @@ export const MatchModal: React.FC<{
           (w.ball.flightType === 'bounce' && Boolean(w.ball.bounceNext?.goalPayload));
         const slowActive = cineSlowMo && (w.dramaSlowSec > 0 || isSlowShot);
         const isBigFx = (t: LivePitchFx['type']) =>
-          t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside';
+          t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside' || t === 'sub';
 
         w.fx.forEach((f) => {
           f.ttl -= rawDt * (isBigFx(f.type) ? 1 : speedMul > 2 ? 1.4 : 1);
@@ -10041,6 +10102,9 @@ export const MatchModal: React.FC<{
         const aFrameCfg = getEffectiveTeamCfg('A', Math.max(1, curIntMin));
         w.agents.forEach((ag) => {
           if (ag.sentOff) return;
+          if (ag.subEnterTimer && ag.subEnterTimer > 0) {
+            ag.subEnterTimer = Math.max(0, ag.subEnterTimer - rawDt);
+          }
           if (ag.acrobatTimer && ag.acrobatTimer > 0) {
             ag.acrobatTimer = Math.max(0, ag.acrobatTimer - rawDt * (slowActive ? 0.55 : speedMul < 0.25 ? 0.5 : 1));
           }
@@ -10390,7 +10454,12 @@ export const MatchModal: React.FC<{
           pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
           w.phaseLabel = `☕ พักครึ่งเวลา (${simRef.current.gh} - ${simRef.current.ga})`;
           w.phaseTone = 'normal';
-          if (isPlayerMode) setMlandMatchTab('tactics');
+          if (mlandMatchTab === 'stats' || mlandMatchTab === 'chat') {
+            prevMatchTabBeforeTacticsRef.current = mlandMatchTab;
+          }
+          setLivePlayerStatsUi({ ...simRef.current.playerStats });
+          setInjuredNamesUi(simRef.current.injuredNames.slice());
+          setMlandMatchTab('tactics');
           syncUiStatsFromWorld(w, 45);
         } else if (w.phase === 'play2' && w.minuteFloat >= 90) {
           w.phase = 'stop2';
@@ -10564,6 +10633,7 @@ export const MatchModal: React.FC<{
 
     // Swap live pitch agent immediately so the sub enters right on the pitch!
     const agIdx = w.agents.findIndex((a) => a.id === outName);
+    let subbedAg: LivePitchAgent | undefined;
     if (agIdx >= 0) {
       const updated = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
       if (updated[idx]) {
@@ -10571,11 +10641,13 @@ export const MatchModal: React.FC<{
         updated[idx].y = w.agents[agIdx].y;
         updated[idx].facing = w.agents[agIdx].facing;
         w.agents[agIdx] = updated[idx];
+        subbedAg = updated[idx];
       }
       if (w.ball.carrierId === outName) w.ball.carrierId = benchPlayer.n;
       if (w.ball.targetId === outName) w.ball.targetId = benchPlayer.n;
     }
 
+    triggerSubPitchAnim(w, subbedAg, meIsHome ? 'H' : 'A', meTeamOrig.name, benchPlayer.n, outName, minute);
     setLiveLu(myLu.slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
     setSubLog(sr.subs.slice());
@@ -10657,6 +10729,7 @@ export const MatchModal: React.FC<{
     sr.subs.push({ m: minute, t: meTeamOrig.id, inPlayer: bestSub.n, outPlayer: injuryAlert.name });
 
     const agIdx = w.agents.findIndex((a) => a.id === injuryAlert.name);
+    let subbedAg: LivePitchAgent | undefined;
     if (agIdx >= 0) {
       const updated = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
       if (updated[idx]) {
@@ -10664,11 +10737,13 @@ export const MatchModal: React.FC<{
         updated[idx].y = w.agents[agIdx].y;
         updated[idx].facing = w.agents[agIdx].facing;
         w.agents[agIdx] = updated[idx];
+        subbedAg = updated[idx];
       }
       if (w.ball.carrierId === injuryAlert.name) w.ball.carrierId = bestSub.n;
       if (w.ball.targetId === injuryAlert.name) w.ball.targetId = bestSub.n;
     }
 
+    triggerSubPitchAnim(w, subbedAg, meIsHome ? 'H' : 'A', meTeamOrig.name, bestSub.n, injuryAlert.name, minute);
     setLiveLu(myLu.slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
     setSubLog(sr.subs.slice());
@@ -10736,6 +10811,7 @@ export const MatchModal: React.FC<{
     sr.subs.push(subEv);
 
     const agIdx = w.agents.findIndex((a) => a.id === outName);
+    let subbedAg: LivePitchAgent | undefined;
     if (agIdx >= 0) {
       const updated = buildTeamAgents(meTeamOrig, meIsHome ? 'H' : 'A', myLu, w.secondHalf);
       if (updated[idx]) {
@@ -10743,11 +10819,13 @@ export const MatchModal: React.FC<{
         updated[idx].y = w.agents[agIdx].y;
         updated[idx].facing = w.agents[agIdx].facing;
         w.agents[agIdx] = updated[idx];
+        subbedAg = updated[idx];
       }
       if (w.ball.carrierId === outName) w.ball.carrierId = bestSub.n;
       if (w.ball.targetId === outName) w.ball.targetId = bestSub.n;
     }
 
+    triggerSubPitchAnim(w, subbedAg, meIsHome ? 'H' : 'A', meTeamOrig.name, bestSub.n, outName, minute);
     setLiveLu(myLu.slice());
     setSubsUsed(sr.subs.filter((s) => s.t === meTeamOrig.id).map((s) => s.inPlayer));
     setSubLog(sr.subs.slice());
@@ -11515,43 +11593,6 @@ export const MatchModal: React.FC<{
           rightControls={
             !done ? (
               <>
-                {state.mode === 'm' && (
-                  <button
-                    type="button"
-                    title={
-                      autoSubEnabled
-                        ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
-                        : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
-                    }
-                    aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
-                    onClick={() => {
-                      SFX.tap();
-                      setAutoSubEnabled((v) => {
-                        const next = !v;
-                        saveSettings({ ...getSettings(), autoSubMatch: next });
-                        if (next && worldRef.current && !simRef.current.done) {
-                          runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
-                        }
-                        pushLog(
-                          minute,
-                          next
-                            ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
-                            : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
-                          'sys'
-                        );
-                        return next;
-                      });
-                    }}
-                    className={`btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 ${
-                      autoSubEnabled
-                        ? 'btn-primary'
-                        : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] shadow-2xs'
-                    }`}
-                  >
-                    <Bot className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-                    <span className="hidden sm:inline mland:inline">ออโต้</span>
-                  </button>
-                )}
                 {matchPhaseUi === 'halftime' ? (
                   <>
                     <button
@@ -11922,6 +11963,30 @@ export const MatchModal: React.FC<{
                       className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-100px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-86px)] object-contain mx-auto block select-none`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
+
+                    {/* Live Substitution Animated Broadcast Pill */}
+                    {subFlashInfo && !liveVarActive && !done && matchPhaseUi !== 'halftime' && (
+                      <div
+                        key={subFlashInfo.key}
+                        className="sub-banner-in pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 z-20 max-w-[92%] px-3 py-1 mland:px-2.5 mland:py-0.5 rounded-full bg-[#071f13]/95 border border-emerald-400/75 text-white shadow-xl flex items-center gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px] font-bold whitespace-nowrap"
+                      >
+                        <span className="px-1.5 py-[1px] rounded-full bg-emerald-500/25 text-emerald-300 font-black tabular">
+                          🔄 {subFlashInfo.minute}&apos;
+                        </span>
+                        <span className="hidden sm:inline text-white/75 truncate max-w-[110px]">
+                          {subFlashInfo.teamName}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-emerald-300 font-extrabold">
+                          <StatIconBadge kind="subIn" size="xs" />
+                          <span className="truncate max-w-[95px]">{subFlashInfo.inName.split(' ')[0]}</span>
+                        </span>
+                        <span className="text-white/50">⇄</span>
+                        <span className="inline-flex items-center gap-1 text-rose-300 font-bold">
+                          <StatIconBadge kind="subOut" size="xs" />
+                          <span className="truncate max-w-[95px]">{subFlashInfo.outName.split(' ')[0]}</span>
+                        </span>
+                      </div>
+                    )}
 
                     {/* Live VAR Interactive Overlay Controls */}
                     {liveVarActive && !done && matchPhaseUi !== 'halftime' && (
@@ -12531,7 +12596,7 @@ export const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={() => openTacticsStudio()}
-                    className={`seg-btn w-full whitespace-nowrap ${
+                    className={`seg-btn w-full whitespace-nowrap px-1.5 mland:px-1 ${
                       mlandMatchTab === 'tactics'
                         ? 'seg-btn-active'
                         : matchPhaseUi === 'halftime'
@@ -12543,6 +12608,16 @@ export const MatchModal: React.FC<{
                       {5 - subsUsed.length}
                     </span>
                     <span>📋 แผน</span>
+                    <span
+                      title={autoSubEnabled ? 'ระบบออโต้เปิดอยู่' : 'ระบบออโต้ปิดอยู่'}
+                      className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-black leading-none shrink-0 ${
+                        autoSubEnabled
+                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
+                          : 'bg-black/8 dark:bg-white/10 text-[var(--mut)] border border-[var(--line)]/60'
+                      }`}
+                    >
+                      {autoSubEnabled ? '🤖เปิด' : '🤖ปิด'}
+                    </span>
                     {matchPhaseUi === 'halftime' && (
                       <span className="px-1 py-[1px] rounded bg-amber-500 text-white text-[8.5px] mland:text-[7.5px] font-black shrink-0">
                         พักครึ่ง

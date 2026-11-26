@@ -43,6 +43,7 @@ import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
 import { OvrBadge } from '../components/OvrBadge';
 
 interface PreMatchModalProps {
@@ -1057,91 +1058,29 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     )}
                   </div>
 
-                  {/* Squad Panel (matching Post-Match Lineup Style) */}
+                  {/* Squad Panel (matching SquadTacticsView Lineup Header) */}
                   <div className="flex-1 min-h-[240px] sm:min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
-                    <div className="shrink-0 px-2.5 pt-2 pb-1.5 mland:px-2 mland:pt-1.5 mland:pb-1 bg-[var(--surface-2)]/55 border-b border-[var(--line)] space-y-1">
-                      <div className="flex items-center justify-between gap-1.5 mland:gap-1 min-w-0">
-                        <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0 flex items-center gap-1">
-                          <span>👥 รายชื่อทีม</span>
-                          {activeTeam.id === state.me && <MyTeamBadge size="2xs" />}
-                        </span>
-
-                        <div className="flex items-center justify-end gap-1 min-w-0 overflow-x-auto no-scrollbar">
-                          <div className="seg-bar shrink-0 !p-[2px]">
-                            {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${activeBench.length}`, 2]] as const).map(([l, k]) => (
-                              <button
-                                key={k}
-                                type="button"
-                                onClick={() => {
-                                  SFX.tap();
-                                  setLuTab(k);
-                                }}
-                                className={`seg-btn !px-1.5 !py-0.5 mland:!px-1 mland:!py-[1px] !text-[10px] mland:!text-[8.5px] whitespace-nowrap ${
-                                  luTab === k ? 'seg-btn-active' : ''
-                                }`}
-                              >
-                                {l}
-                              </button>
-                            ))}
-                          </div>
-
-                          {canEditActiveTeam && (
-                            <div className="flex items-center gap-1 shrink-0">
-                              {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
-                                <button
-                                  type="button"
-                                  onClick={handleRestTiredStarters}
-                                  title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
-                                  className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                                    restNeededStarters.length > 0
-                                      ? 'bg-[var(--red)] border-[var(--red)] text-white hover:brightness-110'
-                                      : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
-                                  }`}
-                                >
-                                  🛌 พักล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                title={activeTeam.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
-                                onClick={() => {
-                                  SFX.tap();
-                                  setSwapPickName(null);
-                                  onUpdateState((d) => {
-                                    d.teams[d.me].lu = null;
-                                  });
-                                  onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
-                                }}
-                                className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                                  !activeTeam.lu
-                                    ? 'bg-[var(--g-soft)] border-[var(--g)]/45 text-[var(--g)]'
-                                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
-                                }`}
-                              >
-                                {activeTeam.lu ? '⚡ อัตโนมัติ' : '✓ อัตโนมัติ'}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {canEditActiveTeam && (
-                        <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 rounded-md bg-[var(--surface)]/80 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px]">
-                          <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
-                          <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
-                            <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
-                              <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold">
-                              <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
-                            </span>
-                            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
-                              <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> ≥75% พร้อม
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <SquadListHeaderBar
+                      luTab={luTab}
+                      onChangeTab={setLuTab}
+                      totalCount={activeXi.length + activeBench.length}
+                      startersCount={activeXi.length}
+                      benchCount={activeBench.length}
+                      showMyTeamBadge={activeTeam.id === state.me}
+                      canEdit={canEditActiveTeam}
+                      tiredCount={restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length}
+                      isRestCritical={restNeededStarters.length > 0}
+                      onRestTired={handleRestTiredStarters}
+                      isAutoLineup={!activeTeam.lu}
+                      onAutoLineup={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        onUpdateState((d) => {
+                          d.teams[d.me].lu = null;
+                        });
+                        onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                      }}
+                    />
 
                     {/* Player Rows */}
                     <div className="flex-1 min-h-0 overflow-y-auto">

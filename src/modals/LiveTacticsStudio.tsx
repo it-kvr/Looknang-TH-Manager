@@ -203,6 +203,39 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     else setLocalPitchMode(mode);
   };
   const effectiveStatMode = statMode ?? 'rating';
+  const mySubsCountNow = subLog.filter((s) => s.t === meTeamOrig.id).length;
+  const prevMySubsCountRef = useRef<number>(mySubsCountNow);
+  const [recentSubAnim, setRecentSubAnim] = useState<{
+    inName: string;
+    outName: string;
+    minute: number;
+    key: number;
+  } | null>(null);
+  const subAnimTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const mySubs = subLog.filter((s) => s.t === meTeamOrig.id);
+    if (mySubs.length > prevMySubsCountRef.current) {
+      const latest = mySubs[mySubs.length - 1];
+      if (latest) {
+        if (subAnimTimerRef.current) window.clearTimeout(subAnimTimerRef.current);
+        setRecentSubAnim({
+          inName: latest.inPlayer,
+          outName: latest.outPlayer,
+          minute: latest.m,
+          key: Date.now()
+        });
+        subAnimTimerRef.current = window.setTimeout(() => {
+          setRecentSubAnim(null);
+        }, 2500);
+      }
+    }
+    prevMySubsCountRef.current = mySubs.length;
+  }, [subLog, meTeamOrig.id]);
+
+  useEffect(() => () => {
+    if (subAnimTimerRef.current) window.clearTimeout(subAnimTimerRef.current);
+  }, []);
 
   const [dragUi, setDragUi] = useState<{
     source: 'bench' | 'pitch';
@@ -743,6 +776,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         validDropHighlight={isMySide && dragUi?.source === 'bench' && subsUsed.length < 5}
         disableRedPlayers={isMySide}
         dropAttrPrefix={isMySide ? 'tactics' : 'default'}
+        recentSubInNames={isMySide && recentSubAnim ? [recentSubAnim.inName] : undefined}
         onPlayerPointerDown={
           isMySide
             ? (e, player, slotSp, slotIdx) => {
@@ -877,6 +911,27 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
               </div>
             )}
 
+            {/* Substitution Animated Toast Banner on Pitch */}
+            {!dragCompatibilityBanner && recentSubAnim && (
+              <div
+                key={recentSubAnim.key}
+                className="sub-banner-in pointer-events-none absolute top-2 left-1/2 -translate-x-1/2 z-30 max-w-[92%] px-3 py-1 mland:px-2.5 mland:py-0.5 rounded-full bg-[#071f13]/95 border border-emerald-400/75 text-white shadow-xl flex items-center gap-1.5 text-[10.5px] mland:text-[9px] font-bold whitespace-nowrap"
+              >
+                <span className="px-1.5 py-[1px] rounded-full bg-emerald-500/25 text-emerald-300 font-black tabular">
+                  🔄 {recentSubAnim.minute}&apos;
+                </span>
+                <span className="inline-flex items-center gap-1 text-emerald-300 font-extrabold">
+                  <StatIconBadge kind="subIn" size="xs" />
+                  <span className="truncate max-w-[95px]">{recentSubAnim.inName.split(' ')[0]}</span>
+                </span>
+                <span className="text-white/50">⇄</span>
+                <span className="inline-flex items-center gap-1 text-rose-300 font-bold">
+                  <StatIconBadge kind="subOut" size="xs" />
+                  <span className="truncate max-w-[95px]">{recentSubAnim.outName.split(' ')[0]}</span>
+                </span>
+              </div>
+            )}
+
             <div className="h-full min-h-0 w-full flex items-center justify-center overflow-hidden">
               {effectivePitchMode === 'all' ? (
                 <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
@@ -948,12 +1003,24 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           </button>
           <button
             type="button"
-            className="seg-btn seg-btn-active w-full whitespace-nowrap"
+            className="seg-btn seg-btn-active w-full whitespace-nowrap px-1.5 mland:px-1"
           >
-            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-white/20 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
               {5 - subsUsed.length}
             </span>
             <span>📋 แผน</span>
+            {autoSubEnabled !== undefined && (
+              <span
+                title={autoSubEnabled ? 'ระบบออโต้เปิดอยู่' : 'ระบบออโต้ปิดอยู่'}
+                className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-black leading-none shrink-0 ${
+                  autoSubEnabled
+                    ? 'bg-white text-[var(--g)] shadow-2xs'
+                    : 'bg-black/25 text-white/80'
+                }`}
+              >
+                {autoSubEnabled ? '🤖เปิด' : '🤖ปิด'}
+              </span>
+            )}
           </button>
         </div>
 
@@ -1267,25 +1334,36 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   <span className="tabular font-extrabold">{mySubsList.length}/5</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
-                  {mySubsList.map((sb, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] tabular"
-                    >
-                      <span className="px-1 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-extrabold text-[9px] mland:text-[8px]">
-                        {sb.m}&apos;
+                  {mySubsList.map((sb, i) => {
+                    const isNewestSub =
+                      recentSubAnim &&
+                      i === mySubsList.length - 1 &&
+                      sb.inPlayer === recentSubAnim.inName &&
+                      sb.outPlayer === recentSubAnim.outName;
+                    return (
+                      <span
+                        key={`${sb.m}-${sb.inPlayer}-${sb.outPlayer}-${i}`}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-[var(--surface)] border tabular ${
+                          isNewestSub
+                            ? 'sub-chip-in border-emerald-500/75 bg-emerald-500/10'
+                            : 'border-[var(--line)]'
+                        }`}
+                      >
+                        <span className="px-1 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-extrabold text-[9px] mland:text-[8px]">
+                          {sb.m}&apos;
+                        </span>
+                        <span className="inline-flex items-center gap-0.5 text-[var(--g)] font-bold">
+                          <StatIconBadge kind="subIn" size="xs" />
+                          <span>{sb.inPlayer.split(' ')[0]}</span>
+                        </span>
+                        <span className="text-[var(--mut)]/50">/</span>
+                        <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-semibold">
+                          <StatIconBadge kind="subOut" size="xs" />
+                          <span>{sb.outPlayer.split(' ')[0]}</span>
+                        </span>
                       </span>
-                      <span className="inline-flex items-center gap-0.5 text-[var(--g)] font-bold">
-                        <StatIconBadge kind="subIn" size="xs" />
-                        <span>{sb.inPlayer.split(' ')[0]}</span>
-                      </span>
-                      <span className="text-[var(--mut)]/50">/</span>
-                      <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-semibold">
-                        <StatIconBadge kind="subOut" size="xs" />
-                        <span>{sb.outPlayer.split(' ')[0]}</span>
-                      </span>
-                    </span>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}

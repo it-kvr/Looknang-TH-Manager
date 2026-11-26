@@ -1132,6 +1132,7 @@ export const FormationPitch: React.FC<{
   disableRedPlayers?: boolean;
   dropAttrPrefix?: 'default' | 'tactics';
   showPitchCrest?: boolean;
+  recentSubInNames?: string[];
   className?: string;
 }> = React.memo(({
   team,
@@ -1157,6 +1158,7 @@ export const FormationPitch: React.FC<{
   disableRedPlayers = false,
   dropAttrPrefix = 'default',
   showPitchCrest = false,
+  recentSubInNames,
   className
 }) => {
   const uid = React.useId().replace(/:/g, '');
@@ -1310,6 +1312,7 @@ export const FormationPitch: React.FC<{
         const assistsCount = meta?.assists || 0;
         const hasSubIn = meta?.subInMin != null;
         const hasSubOut = !hasSubIn && meta?.subOutMin != null;
+        const isRecentSubIn = Boolean(recentSubInNames?.includes(q.n));
         const isCaptain = team.cap === q.n;
         const nodeOpacity = isDisabled || meta?.dim ? 0.44 : isMovingSelf ? 0.24 : dragSourceName === q.n ? 0.45 : 1;
 
@@ -1347,9 +1350,32 @@ export const FormationPitch: React.FC<{
               userSelect: 'none',
               opacity: nodeOpacity
             }}
-            className={isDisabled ? 'cursor-default' : dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}
+            className={`${isDisabled ? 'cursor-default' : dragSourceName ? 'cursor-grabbing' : 'cursor-pointer'}${isRecentSubIn ? ' sub-node-pop' : ''}`}
           >
             <circle cx={cx} cy={cy} r={24} fill="transparent" />
+            {isRecentSubIn && (
+              <>
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={22}
+                  fill="rgba(16, 185, 129, 0.22)"
+                  stroke="#34d399"
+                  strokeWidth="2.2"
+                  className="sub-ring-pulse pointer-events-none"
+                />
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={18.5}
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="1.6"
+                  strokeDasharray="3 2"
+                  className="pointer-events-none"
+                />
+              </>
+            )}
             {isMe && !isTarget && !isSelected && (
               <circle cx={cx} cy={cy} r={22.5} fill="#f5c2422e" stroke="#fde047" strokeWidth="2.2" />
             )}

@@ -3871,6 +3871,52 @@ export const drawLivePitchToCanvas = (
         ctx.stroke();
       }
       ctx.restore();
+    } else if (fx.type === 'sub') {
+      const sx = px(fx.x);
+      const sy = py(fx.y);
+      const prog = 1 - alpha;
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.92;
+      ctx.strokeStyle = '#10b981';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 8 + prog * 24, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(sx, sy, 5 + prog * 15, -prog * 3, Math.PI * 2 - prog * 3);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Upward emerald arrow (IN) + downward rose arrow (OUT)
+      const shift = prog * 10;
+      ctx.fillStyle = '#34d399';
+      ctx.beginPath();
+      ctx.moveTo(sx - 10, sy - 6 - shift);
+      ctx.lineTo(sx - 5.5, sy - 0.5 - shift);
+      ctx.lineTo(sx - 8, sy - 0.5 - shift);
+      ctx.lineTo(sx - 8, sy + 5 - shift);
+      ctx.lineTo(sx - 12, sy + 5 - shift);
+      ctx.lineTo(sx - 12, sy - 0.5 - shift);
+      ctx.lineTo(sx - 14.5, sy - 0.5 - shift);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = '#fb7185';
+      ctx.beginPath();
+      ctx.moveTo(sx + 10, sy + 6 + shift);
+      ctx.lineTo(sx + 5.5, sy + 0.5 + shift);
+      ctx.lineTo(sx + 8, sy + 0.5 + shift);
+      ctx.lineTo(sx + 8, sy - 5 + shift);
+      ctx.lineTo(sx + 12, sy - 5 + shift);
+      ctx.lineTo(sx + 12, sy + 0.5 + shift);
+      ctx.lineTo(sx + 14.5, sy + 0.5 + shift);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     } else if (
       fx.type === 'foul' ||
       fx.type === 'save' ||
@@ -4107,6 +4153,24 @@ export const drawLivePitchToCanvas = (
       ctx.arc(0, 0, playerRadius + 5.8, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+    if (ag.subEnterTimer && ag.subEnterTimer > 0) {
+      const subMax = Math.max(0.4, ag.subEnterMax || 2.4);
+      const subAlpha = clamp(ag.subEnterTimer / subMax, 0, 1);
+      const subProg = 1 - subAlpha;
+      const enterPop = subProg < 0.22 ? 0.72 + Math.sin((subProg / 0.22) * (Math.PI * 0.65)) * 0.42 : 1 + Math.sin(subProg * Math.PI * 3) * 0.06 * subAlpha;
+      ctx.scale(enterPop, enterPop);
+      const pulseRad = playerRadius + 4 + ((subProg * 2.2) % 1) * 11;
+      ctx.strokeStyle = `rgba(16, 185, 129, ${(subAlpha * 0.92).toFixed(2)})`;
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, pulseRad, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.strokeStyle = `rgba(56, 189, 248, ${(subAlpha * 0.75).toFixed(2)})`;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 3.2, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     // Ground shadow (scales smaller & softens slightly during aerial leaps & goal celebration jumps)

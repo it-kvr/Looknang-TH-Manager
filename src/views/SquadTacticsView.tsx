@@ -17,6 +17,7 @@ import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
+import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
@@ -32,7 +33,6 @@ export const SquadTacticsView: React.FC<{
   const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
-  const [showStaminaGuide, setShowStaminaGuide] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
   const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
   const [selectedSquadNames, setSelectedSquadNames] = useState<string[]>([]);
@@ -41,23 +41,18 @@ export const SquadTacticsView: React.FC<{
   const [releaseModalNames, setReleaseModalNames] = useState<string[] | null>(null);
   const pitchSvgRef = useRef<SVGSVGElement | null>(null);
   const formationPopoverRef = useRef<HTMLDivElement | null>(null);
-  const staminaGuideRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!showFormationSheet && !showStaminaGuide) return;
+    if (!showFormationSheet) return;
     const handleOutsidePointer = (e: PointerEvent) => {
       const target = e.target as Node;
-      if (showFormationSheet && !formationPopoverRef.current?.contains(target)) {
+      if (!formationPopoverRef.current?.contains(target)) {
         setShowFormationSheet(false);
-      }
-      if (showStaminaGuide && !staminaGuideRef.current?.contains(target)) {
-        setShowStaminaGuide(false);
       }
     };
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setShowFormationSheet(false);
-        setShowStaminaGuide(false);
       }
     };
     document.addEventListener('pointerdown', handleOutsidePointer);
@@ -66,7 +61,7 @@ export const SquadTacticsView: React.FC<{
       document.removeEventListener('pointerdown', handleOutsidePointer);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [showFormationSheet, showStaminaGuide]);
+  }, [showFormationSheet]);
 
   const starters = useMemo(() => xi(me), [me]);
   const slots = useMemo(() => getFormationSlots(me), [me]);
@@ -925,131 +920,23 @@ export const SquadTacticsView: React.FC<{
 
                 {/* Squad Panel */}
                 <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
-                  {/* Compact Single-Row Control Bar + Fitness Explanation Popover */}
-                  <div className="relative z-20 shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/60 border-b border-[var(--line)]">
-                    <div className="flex items-center justify-between gap-1.5 mland:gap-1 min-w-0">
-                      <div className="flex items-center gap-1 min-w-0 shrink-0">
-                        <span className="font-bold text-[11.5px] mland:text-[10px] text-[var(--ink)] whitespace-nowrap">
-                          👥 รายชื่อทีม
-                        </span>
-                        <div ref={staminaGuideRef} className="relative shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              setShowStaminaGuide((v) => !v);
-                            }}
-                            aria-expanded={showStaminaGuide}
-                            aria-label="คำอธิบายเกณฑ์ความฟิต"
-                            title="คำอธิบายเกณฑ์ความฟิต"
-                            className={`h-[22px] mland:h-[18px] px-1.5 mland:px-1 rounded-md border text-[10px] mland:text-[8px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap cursor-pointer transition-colors ${
-                              showStaminaGuide
-                                ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-2xs'
-                                : 'bg-[var(--surface)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:border-[var(--g)]/55'
-                            }`}
-                          >
-                            <span>ⓘ</span>
-                            <span className="hidden xl:inline">ความฟิต</span>
-                          </button>
-
-                          {showStaminaGuide && (
-                            <div className="absolute left-0 top-full mt-1.5 z-30 w-[236px] sm:w-[252px] mland:w-[218px] p-2.5 mland:p-2 rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xl space-y-1.5 text-[10.5px] mland:text-[9px]">
-                              <div className="flex items-center justify-between gap-2 pb-1 border-b border-[var(--line)]/70">
-                                <span className="font-extrabold text-[var(--ink)]">⚡ เกณฑ์ความฟิตนักเตะ</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setShowStaminaGuide(false)}
-                                  className="w-5 h-5 inline-flex items-center justify-center rounded-md text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] cursor-pointer"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                              <div className="space-y-1 tabular-nums">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="inline-flex items-center gap-1.5 font-bold text-rose-600 dark:text-rose-400">
-                                    <span className="w-2 h-2 rounded-full bg-[#ef4444] shrink-0" /> &lt;65% ควรพัก
-                                  </span>
-                                  <span className="text-[var(--mut)] text-[9.5px] mland:text-[8px]">เสี่ยงล้าสะสม/เจ็บ</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="inline-flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-300">
-                                    <span className="w-2 h-2 rounded-full bg-[#f59e0b] shrink-0" /> 65–74% เริ่มล้า
-                                  </span>
-                                  <span className="text-[var(--mut)] text-[9.5px] mland:text-[8px]">ฟอร์มลดช่วงท้ายเกม</span>
-                                </div>
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="inline-flex items-center gap-1.5 font-bold text-emerald-700 dark:text-emerald-400">
-                                    <span className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0" /> ≥75% พร้อม
-                                  </span>
-                                  <span className="text-[var(--mut)] text-[9.5px] mland:text-[8px]">ลงสนามเต็มร้อย</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-1 min-w-0 overflow-x-auto no-scrollbar">
-                        <div className="inline-flex items-center h-[26px] mland:h-[21px] p-[2px] rounded-lg mland:rounded-md bg-[var(--surface)] border border-[var(--line)] shrink-0">
-                          {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${bench.length}`, 2]] as const).map(([l, k]) => (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                setLuTab(k);
-                              }}
-                              className={`h-full px-1.5 sm:px-2 mland:px-1.5 rounded-[6px] mland:rounded-[4px] text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold tabular-nums whitespace-nowrap inline-flex items-center justify-center cursor-pointer transition-colors ${
-                                luTab === k
-                                  ? 'bg-[var(--g)] text-white shadow-2xs'
-                                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                              }`}
-                            >
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-
-                        {isMgr && (
-                          <>
-                            <span className="h-3.5 mland:h-3 w-px bg-[var(--line)] shrink-0" aria-hidden="true" />
-                            <div className="flex items-center gap-1 shrink-0">
-                              {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
-                                <button
-                                  type="button"
-                                  onClick={restTiredStarters}
-                                  title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
-                                  className={`h-[26px] mland:h-[21px] px-2 mland:px-1.5 rounded-lg mland:rounded-md border text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold tabular-nums inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                                    restNeededStarters.length > 0
-                                      ? 'bg-[var(--red)] border-[var(--red)] text-white hover:brightness-110'
-                                      : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
-                                  }`}
-                                >
-                                  🛌 พักล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                title={me.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
-                                onClick={() => {
-                                  SFX.tap();
-                                  onUpdateState((d) => { d.teams[d.me].lu = null; });
-                                  onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
-                                }}
-                                className={`h-[26px] mland:h-[21px] px-2 mland:px-1.5 rounded-lg mland:rounded-md border text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                                  !me.lu
-                                    ? 'bg-[var(--g-soft)] border-[var(--g)]/45 text-[var(--g)]'
-                                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
-                                }`}
-                              >
-                                {me.lu ? '⚡ อัตโนมัติ' : '✓ อัตโนมัติ'}
-                              </button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <SquadListHeaderBar
+                    luTab={luTab}
+                    onChangeTab={setLuTab}
+                    totalCount={starters.length + bench.length}
+                    startersCount={starters.length}
+                    benchCount={bench.length}
+                    canEdit={isMgr}
+                    tiredCount={restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length}
+                    isRestCritical={restNeededStarters.length > 0}
+                    onRestTired={restTiredStarters}
+                    isAutoLineup={!me.lu}
+                    onAutoLineup={() => {
+                      SFX.tap();
+                      onUpdateState((d) => { d.teams[d.me].lu = null; });
+                      onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                    }}
+                  />
 
                   {/* Player Rows (Matching Post-Match Lineup Style) */}
                   <div className="flex-1 min-h-0 overflow-y-auto">

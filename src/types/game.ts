@@ -1264,6 +1264,8 @@ export interface LivePitchAgent {
   hasYellow: boolean;
   sentOff: boolean;
   subbedIn?: boolean;
+  subEnterTimer?: number;
+  subEnterMax?: number;
   d: Record<string, number>;
   sig: string;
   traits?: string[];
@@ -1366,7 +1368,8 @@ export interface LivePitchFx {
     | 'throwin'
     | 'slip'
     | 'whiff'
-    | 'kick_burst';
+    | 'kick_burst'
+    | 'sub';
   x: number;
   y: number;
   toX?: number;

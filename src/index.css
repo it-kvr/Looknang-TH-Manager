@@ -619,6 +619,99 @@ button:not(:disabled):active {
   animation: money-delta-loss 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+@keyframes sub-banner-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.9);
+  }
+  18% {
+    opacity: 1;
+    transform: translateY(0) scale(1.04);
+  }
+  30%, 84% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.96);
+  }
+}
+
+@keyframes sub-node-pop {
+  0% {
+    transform: scale(0.62);
+    opacity: 0.4;
+  }
+  32% {
+    transform: scale(1.22);
+    opacity: 1;
+  }
+  58% {
+    transform: scale(0.94);
+  }
+  80% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sub-ring-pulse {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.95;
+  }
+  70% {
+    transform: scale(1.55);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(1.85);
+    opacity: 0;
+  }
+}
+
+@keyframes sub-chip-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.88);
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.7);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(0) scale(1.05);
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+.sub-banner-in {
+  animation: sub-banner-in 2.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sub-node-pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sub-node-pop 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.sub-ring-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: sub-ring-pulse 1.15s cubic-bezier(0.16, 1, 0.3, 1) 2 both;
+}
+
+.sub-chip-in {
+  animation: sub-chip-in 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .cv-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 46px;
@@ -636,7 +729,11 @@ button:not(:disabled):active {
   .goal-ribbon-in,
   .goal-sheen-sweep,
   .money-delta-gain,
-  .money-delta-loss {
+  .money-delta-loss,
+  .sub-banner-in,
+  .sub-node-pop,
+  .sub-ring-pulse,
+  .sub-chip-in {
     animation: none !important;
   }
   .confetti-piece {
