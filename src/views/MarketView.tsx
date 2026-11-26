@@ -21,6 +21,7 @@ import {
 } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
+import { PotentialBadge } from '../components/PotentialBadge';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -1094,8 +1095,10 @@ export const MarketView: React.FC<{
                               <span className="ml-1.5 text-[11px] mland:text-[9.5px] text-[#9a6700] dark:text-[var(--lamp)] font-bold">· ดาวรุ่ง</span>
                             ) : null}
                           </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                            {SPN[q.ro] || q.pos} · อายุ {q.age} ปี · ศักยภาพ {q.pot || q.ov} · ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5 flex items-center gap-1">
+                            <span>{SPN[q.ro] || q.pos} · อายุ {q.age} ปี ·</span>
+                            <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
+                            <span>· ค่าเหนื่อย ~{fmtMoneyNum(q.askWg || wagOf(q))}/นัด</span>
                           </div>
                           <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         </button>
@@ -1292,10 +1295,13 @@ export const MarketView: React.FC<{
                             🌱 เด็กปั้น
                           </span>
                         </div>
-                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
-                          {cand.sourceLabel}
-                          {cand.sourceType === 'career_save' && cand.clubName ? ` · ${cand.clubName}` : ''}
-                          {cand.archName ? ` · ${cand.archName}` : ''} · อายุ {q.age} ปี · ศักยภาพ {cand.pot}
+                        <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular leading-tight mt-0.5 flex items-center gap-1">
+                          <span className="truncate">
+                            {cand.sourceLabel}
+                            {cand.sourceType === 'career_save' && cand.clubName ? ` · ${cand.clubName}` : ''}
+                            {cand.archName ? ` · ${cand.archName}` : ''} · อายุ {q.age} ปี ·
+                          </span>
+                          <PotentialBadge pot={cand.pot} variant="inline" size="xs" className="shrink-0" />
                         </div>
                         <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] mland:text-[8.5px] tabular">
@@ -1878,8 +1884,10 @@ export const MarketView: React.FC<{
                           <span className="text-[var(--g)] mr-1">{q.ro}</span>
                           {q.n}
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                          {SPN[q.ro] || q.pos} · อายุ {q.age} ปี · ศักยภาพ {q.pot} · {q.free ? 'ฟรีเอเยนต์' : fmtMoneyNum(q.price || 0)}
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1">
+                          <span>{SPN[q.ro] || q.pos} · อายุ {q.age} ปี ·</span>
+                          <PotentialBadge pot={q.pot} variant="inline" size="xs" />
+                          <span>· {q.free ? 'ฟรีเอเยนต์' : fmtMoneyNum(q.price || 0)}</span>
                         </div>
                         <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                       </button>
@@ -2069,8 +2077,10 @@ export const MarketView: React.FC<{
                           <span className="text-[var(--g)] mr-1">{q.ro}</span>
                           {q.n}
                         </div>
-                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5">
-                          อายุ {q.age} ปี · ศักยภาพ {q.pot} · ค่าเหนื่อย ~{fmtMoneyNum(wagOf(q))}
+                        <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1">
+                          <span>อายุ {q.age} ปี ·</span>
+                          <PotentialBadge pot={q.pot} variant="inline" size="xs" />
+                          <span>· ค่าเหนื่อย ~{fmtMoneyNum(wagOf(q))}</span>
                         </div>
                         <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" className="mt-0.5" />
                       </button>

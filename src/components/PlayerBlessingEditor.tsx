@@ -25,6 +25,7 @@ import { applyGodBlessingToPlayer, resetGodBlessingOnPlayer } from '../engine/bl
 import { PlayerFace } from './SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
 import { TalentBadge } from './TalentBadge';
+import { PotentialBadge } from './PotentialBadge';
 
 const RISKY_TRAIT_IDS = new Set(['hot_headed', 'selfish_shooter', 'glass_cannon', 'slide_tackler', 'risk_taker']);
 const GK_SIG_KEYS = ['sv', 'rfx', 'hnd', 'cl', 'pos', 'dist', 'sta', 'comp'];
@@ -653,7 +654,7 @@ export const PlayerBlessingEditor: React.FC<{
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mland:gap-1.5">
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-1 text-[10px]">
-              <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์ (TL)</span>
+              <span className="text-[var(--mut)] font-semibold">เพดานพรสวรรค์</span>
               <TalentBadge talent={talent} variant="inline" showLabel size="xs" />
             </div>
             <div className="flex items-center gap-1">
@@ -677,8 +678,8 @@ export const PlayerBlessingEditor: React.FC<{
 
           <div className="p-1.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] space-y-1">
             <div className="flex items-center justify-between text-[10px]">
-              <span className="text-[var(--mut)] font-semibold">ศักยภาพ (POT)</span>
-              <b className={`tabular text-xs ${statTierMeta(pot).textClass}`}>{pot}</b>
+              <span className="text-[var(--mut)] font-semibold">ศักยภาพสูงสุด</span>
+              <PotentialBadge pot={pot} variant="inline" size="xs" />
             </div>
             <div className="flex items-center gap-1">
               <button type="button" onClick={() => setPot((v) => clamp(v - 1, 1, 99))} className="w-5 h-5 rounded bg-[var(--surface-2)] text-xs font-bold cursor-pointer">-</button>

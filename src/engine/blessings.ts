@@ -251,7 +251,7 @@ export function applySecretPlayerBoost(
       meSq.pot = Math.max(meSq.pot ?? nextTl, nextTl);
     }
     syncMe(d);
-    return `🌟 อัปเกรดพรสวรรค์เป็น TL ${nextTl}/99 สำเร็จ!`;
+    return `🌟 อัปเกรดพรสวรรค์เป็น ${nextTl}/99 สำเร็จ!`;
   }
   if (kind === 'ageSub2') {
     const nextAge = clamp((d.p.age ?? 18) - 2, 16, 40);

@@ -4,6 +4,7 @@ import { clamp } from '../utils/math';
 import { statBarColor, statTierMeta } from '../engine/missions';
 import { PlayerFace, resolveGkKitPalette } from './SvgVisuals';
 import { TalentBadge } from './TalentBadge';
+import { PotentialBadge } from './PotentialBadge';
 import { PlayerBioStrip } from './PlayerBioStrip';
 import {
   CardStudioToggleButton,
@@ -85,7 +86,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
         style={{ background: `linear-gradient(90deg, ${kit1}, #fad05a 52%, ${kit2})` }}
       />
 
-      {/* Balanced Single-Row Top Header: OVR | Role · #NO  <->  POT · TL */}
+      {/* Balanced Single-Row Top Header: OVR | Role · #NO  <->  Potential · Talent */}
       <div className="px-2.5 pt-1.5 pb-1 mland:px-2 mland:pt-1 mland:pb-0.5 flex items-center justify-between gap-1.5 shrink-0 min-w-0">
         <div className="flex items-center gap-1.5 mland:gap-1 leading-none min-w-0">
           <span
@@ -128,15 +129,9 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-1.5 mland:gap-1 shrink-0">
+        <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
           {pot !== undefined && (
-            <span
-              className={`text-[9.5px] mland:text-[7.5px] font-bold tabular whitespace-nowrap shrink-0 ${
-                isLight ? statTierMeta(pot).textClass : statTierMeta(pot).darkTextClass
-              }`}
-            >
-              POT {pot}
-            </span>
+            <PotentialBadge pot={pot} variant="card" tone={cardTone} size="xs" />
           )}
           <TalentBadge talent={talent} variant="card" tone={cardTone} size="xs" />
           {actionNode}

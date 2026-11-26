@@ -99,7 +99,7 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
   size = 'sm',
   showLabel = false,
   compactLabel = false,
-  prefix = 'TL',
+  prefix = '',
   title,
   tone = 'dark',
   className = ''
@@ -123,7 +123,8 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
       >
         <TalentTierIcon tierKey={meta.tierKey} size={size} />
         <span className="whitespace-normal break-words">
-          {prefix} {tl}
+          {prefix ? `${prefix} ` : ''}
+          {tl}
           {showLabel ? ` · ${tierText}` : ''}
         </span>
       </span>
@@ -154,7 +155,7 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
         } ${sizeCls} ${className}`}
       >
         <TalentTierIcon tierKey={meta.tierKey} size={size} onDarkCard={!isLight} />
-        <span className="opacity-80 font-bold text-[0.84em] tracking-wider">{prefix}</span>
+        {prefix && <span className="opacity-80 font-bold text-[0.84em] tracking-wider">{prefix}</span>}
         <span>{tl}</span>
         {showLabel && <span className="opacity-90 font-semibold">· {tierText}</span>}
       </span>
@@ -174,7 +175,7 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
           className={`inline-flex flex-wrap items-center gap-1 rounded-lg border font-bold leading-tight tabular select-none max-w-full ${meta.badgeCls} ${sizeCls}`}
         >
           <TalentTierIcon tierKey={meta.tierKey} size={size} />
-          <span className="text-[0.86em] opacity-75 font-extrabold tracking-wide">{prefix}</span>
+          {prefix && <span className="text-[0.86em] opacity-75 font-extrabold tracking-wide">{prefix}</span>}
           <span className="font-extrabold">{tl}</span>
           {showLabel && <span className="font-semibold opacity-95 whitespace-normal">· {tierText}</span>}
         </span>
@@ -201,7 +202,7 @@ export const TalentBadge: React.FC<TalentBadgeProps> = ({
       className={`inline-flex flex-wrap items-center gap-1 rounded-lg border font-bold leading-tight tabular select-none max-w-full ${meta.badgeCls} ${sizeCls} ${className}`}
     >
       <TalentTierIcon tierKey={meta.tierKey} size={size} />
-      <span className="text-[0.86em] opacity-75 font-extrabold tracking-wide">{prefix}</span>
+      {prefix && <span className="text-[0.86em] opacity-75 font-extrabold tracking-wide">{prefix}</span>}
       <span className="font-extrabold">{tl}</span>
       {showLabel && <span className="font-semibold opacity-95 whitespace-normal">· {tierText}</span>}
     </span>

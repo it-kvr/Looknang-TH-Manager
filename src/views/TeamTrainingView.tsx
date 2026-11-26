@@ -9,6 +9,7 @@ import { getStaffState } from '../engine/simulation';
 import { PlayerFace } from '../components/SvgVisuals';
 import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { TalentBadge } from '../components/TalentBadge';
+import { PotentialBadge } from '../components/PotentialBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
 export const TeamTrainingView: React.FC<{
@@ -442,7 +443,9 @@ export const TeamTrainingView: React.FC<{
                             `🩹${q.inj}นัด`
                           ) : (
                             <>
-                              <span>OVR {q.ov}/{q.pot}</span>
+                              <span>OVR {q.ov}</span>
+                              <span aria-hidden="true">·</span>
+                              <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
                               <span aria-hidden="true">·</span>
                               <TalentBadge talent={getPlayerTalent(q, null)} variant="inline" size="xs" />
                             </>

@@ -12,7 +12,8 @@ import { SaveFolderModal } from '../modals/SaveFolderModal';
 import { ovColor, statBarColor, getPlayerTalent } from '../engine/missions';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
-import { TalentBadge } from '../components/TalentBadge';
+import { TalentBadge, TalentTierIcon } from '../components/TalentBadge';
+import { PotentialBadge } from '../components/PotentialBadge';
 import { AthleteCard } from '../components/AthleteCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
@@ -1918,8 +1919,15 @@ export const MainMenu: React.FC<{
                           <span className="text-[10.5px] mland:text-[8.5px] font-bold leading-snug whitespace-normal break-words">
                             {tr.label}
                           </span>
-                          <span className="text-[10px] mland:text-[8px] font-extrabold tabular opacity-85">
-                            TL {tr.rangeLabel}
+                          <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-extrabold tabular opacity-85">
+                            {tr.id === 'any' ? (
+                              <span>ช่วง {tr.rangeLabel}</span>
+                            ) : (
+                              <>
+                                <TalentTierIcon tierKey={tr.id} size="xs" />
+                                <span>{tr.rangeLabel}</span>
+                              </>
+                            )}
                           </span>
                         </button>
                       );
@@ -1957,8 +1965,12 @@ export const MainMenu: React.FC<{
                         {cTalent}/99
                       </span>
                     </div>
-                    <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal">
-                      <b className="text-[var(--ink)]">{activeTalentInfo.label} (TL {activeTalentInfo.rangeLabel}):</b> {activeTalentInfo.desc}
+                    <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug whitespace-normal flex items-center gap-1 flex-wrap">
+                      <b className="text-[var(--ink)] inline-flex items-center gap-1">
+                        <TalentTierIcon tierKey={activeTalentInfo.id} size="xs" />
+                        <span>{activeTalentInfo.label} ({activeTalentInfo.rangeLabel}):</span>
+                      </b>
+                      <span>{activeTalentInfo.desc}</span>
                     </p>
                   </div>
                 </div>
@@ -2157,9 +2169,9 @@ export const MainMenu: React.FC<{
               <span aria-hidden="true">·</span>
               <span className="font-bold text-[var(--g)] shrink-0">OVR {ov}</span>
               <span aria-hidden="true">·</span>
-              <span className="shrink-0">POT {estPot}</span>
+              <PotentialBadge pot={estPot} variant="inline" size="xs" className="shrink-0" />
               <span aria-hidden="true">·</span>
-              <span className="shrink-0">TL {cTalent}</span>
+              <TalentBadge talent={cTalent} variant="inline" size="xs" className="shrink-0" />
             </div>
             <div className="grid grid-cols-2 sm:flex mland:flex items-center gap-2 mland:gap-1.5 shrink-0">
               <button

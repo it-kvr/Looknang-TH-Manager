@@ -160,10 +160,10 @@ export const PlayerTraitsStrip: React.FC<{
         id: tier.id,
         section: 'insight',
         subGroup: 'ระดับพรสวรรค์ (Talent)',
-        title: `${tier.emoji} ${tier.label} (TL ${tier.range})`,
+        title: `${tier.emoji} ${tier.label} (${tier.range})`,
         desc: tier.desc,
         owned,
-        badgeText: owned ? `มี (TL ${talent})` : undefined,
+        badgeText: owned ? `มี (${talent}/99)` : undefined,
         tone: tier.tone
       });
     });
@@ -471,7 +471,7 @@ export const PlayerTraitsStrip: React.FC<{
           <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"
-              title={`${matchedTalentTier.label} (TL ${talent}/99) — กดเพื่อดูคำอธิบาย`}
+              title={`${matchedTalentTier.label} (${talent}/99) — กดเพื่อดูคำอธิบาย`}
               onClick={() => openDetailModal('insight', matchedTalentTier.id)}
               className="inline-flex cursor-pointer hover:brightness-95 active:scale-[0.98] transition-all max-w-full text-left"
             >
