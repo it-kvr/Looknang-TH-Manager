@@ -855,7 +855,7 @@ export const MatchModal: React.FC<{
         if (aOut !== bOut) return aOut - bOut;
         return b.ov - a.ov;
       })
-      .slice(0, 6)
+      .slice(0, 5)
       .map((q) => ({
         id: q.n,
         shortName: q.n.split(' ')[0] || q.n,
