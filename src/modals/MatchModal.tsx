@@ -825,7 +825,7 @@ export const MatchModal: React.FC<{
   const [injuredNamesUi, setInjuredNamesUi] = useState<string[]>([]);
   const [livePlayerStatsUi, setLivePlayerStatsUi] = useState<Record<string, LivePlayerMatchStats>>({});
   const [subPickOut, setSubPickOut] = useState<string | null>(null);
-  const [mlandMatchTab, setMlandMatchTab] = useState<'stats' | 'timeline' | 'chat' | 'tactics'>('stats');
+  const [mlandMatchTab, setMlandMatchTab] = useState<'players' | 'stats' | 'chat' | 'tactics'>('stats');
   const [liveCaptains, setLiveCaptains] = useState<{ H: string; A: string }>(() => ({
     H: initialHomeCap,
     A: initialAwayCap
@@ -927,6 +927,7 @@ export const MatchModal: React.FC<{
   const [htPickedPlayer, setHtPickedPlayer] = useState<string | null>(null);
   const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>('all');
   const [ftPickedPlayer, setFtPickedPlayer] = useState<string | null>(null);
+  const [ftRosterTeam, setFtRosterTeam] = useState<'all' | 'H' | 'A'>('all');
 
   const [varHistory, setVarHistory] = useState<VarReplayRecord[]>([]);
   const [liveVarActive, setLiveVarActive] = useState(false);
@@ -10042,7 +10043,7 @@ export const MatchModal: React.FC<{
     syncUiStatsFromWorld(w, 90);
     setDone(true);
     setMatchPhaseUi('ft');
-    setMlandMatchTab((prev) => (prev === 'tactics' ? 'stats' : prev));
+    setMlandMatchTab('players');
     setClockLabel('FT');
     setStoppageBadge(0);
     pushStreamComment(90, 'fulltime');
@@ -11643,6 +11644,292 @@ export const MatchModal: React.FC<{
               );
             })}
           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderFullTimePlayersPanel = () => {
+    if (!fullTimeAnalysis) return null;
+    const sidesToBuild: { side: 'H' | 'A'; team: Team; oppGoals: number; kit: string; gkKit: string; trim: string }[] = [
+      { side: 'H', team: homeOrig, oppGoals: ga, kit: homeKit, gkKit: homeGkKit, trim: homeTrim },
+      { side: 'A', team: awayOrig, oppGoals: gh, kit: awayKit, gkKit: awayGkKit, trim: awayTrim }
+    ];
+
+    const entries = sidesToBuild
+      .filter((s) => ftRosterTeam === 'all' || ftRosterTeam === s.side)
+      .flatMap(({ side, team, oppGoals, kit, gkKit, trim }) => {
+        const played = fullTimeAnalysis.playedNames[team.id] || [];
+        return played.map((name) => {
+          const pl = team.sq.find((q) => q.n === name) || null;
+          const no = pl ? getShirtNo(team, pl) : null;
+          const rt = fullTimeAnalysis.ratings[name] ?? 6.5;
+          const goals = evs.filter((e) => !e.og && e.t === team.id && e.who === name).length;
+          const ownGoals = evs.filter((e) => e.og && e.t !== team.id && e.who === name).length;
+          const assists = evs.filter((e) => !e.og && e.t === team.id && e.as === name).length;
+          const cleanSheet = oppGoals === 0 && Boolean(pl && (pl.pos === 'GK' || pl.pos === 'DF'));
+          const st = livePlayerStatsUi[name] || { shots: 0, onTarget: 0, passes: 0, tackles: 0, saves: 0, blocks: 0 };
+          const saves = st.saves || 0;
+          const blocks = st.blocks || 0;
+          const tackles = st.tackles || 0;
+          const keyPasses = st.keyPasses || 0;
+          const interceptions = st.interceptions || 0;
+          const shots = st.shots || 0;
+          const onTarget = st.onTarget || 0;
+          const pCards = fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name);
+          const yellowCards = pCards.filter((c) => c.type === 'Y').length;
+          const redCards = pCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
+          const subIn = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.inPlayer === name);
+          const subOut = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name);
+          const isMotm = fullTimeAnalysis.motm === name;
+          const isInjured = injuredNamesUi.includes(name);
+          const impactScore =
+            (isMotm ? 10000 : 0) +
+            goals * 500 +
+            assists * 350 +
+            (cleanSheet ? 180 : 0) +
+            saves * 65 +
+            keyPasses * 35 +
+            (blocks + tackles + interceptions) * 18 +
+            (yellowCards + redCards * 2) * 14 +
+            (subIn ? 10 : 0) +
+            rt * 10;
+          return {
+            key: `${team.id}-${name}`,
+            side,
+            team,
+            pl,
+            name,
+            no,
+            rt,
+            goals,
+            ownGoals,
+            assists,
+            cleanSheet,
+            saves,
+            blocks,
+            tackles,
+            keyPasses,
+            interceptions,
+            shots,
+            onTarget,
+            yellowCards,
+            redCards,
+            subIn,
+            subOut,
+            isMotm,
+            isInjured,
+            kit,
+            gkKit,
+            trim,
+            impactScore
+          };
+        });
+      })
+      .sort((a, b) => b.impactScore - a.impactScore || b.rt - a.rt);
+
+    return (
+      <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+        <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/75 border-b border-[var(--line)] flex items-center justify-between gap-2">
+          <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] truncate">
+            👥 รายชื่อ &amp; ผลงานนักเตะ ({entries.length})
+          </span>
+          <div className="inline-flex items-center gap-1 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setFtRosterTeam('all');
+              }}
+              className={`px-2 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors ${
+                ftRosterTeam === 'all'
+                  ? 'bg-[var(--g)] text-white shadow-2xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              ทั้งหมด
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setFtRosterTeam('H');
+              }}
+              title={homeOrig.name}
+              aria-label={homeOrig.name}
+              className={`px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors ${
+                ftRosterTeam === 'H'
+                  ? 'bg-[var(--g)] text-white shadow-2xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <ClubCrest name={homeOrig.name} size={14} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
+              <span className="hidden xl:inline max-w-[64px] truncate">{homeOrig.name}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setFtRosterTeam('A');
+              }}
+              title={awayOrig.name}
+              aria-label={awayOrig.name}
+              className={`px-1.5 py-0.5 rounded-md inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors ${
+                ftRosterTeam === 'A'
+                  ? 'bg-[var(--g)] text-white shadow-2xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              <ClubCrest name={awayOrig.name} size={14} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
+              <span className="hidden xl:inline max-w-[64px] truncate">{awayOrig.name}</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/55">
+          {entries.map((item) => {
+            const isPicked = ftPickedPlayer === item.name;
+            const hasHighlight = item.goals > 0 || item.assists > 0 || item.cleanSheet || item.isMotm || item.saves > 0;
+            const rtTone =
+              item.isMotm || item.rt >= 8.0
+                ? 'bg-amber-400 text-[#1c1300]'
+                : item.rt >= 7.0
+                  ? 'bg-emerald-500/18 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35'
+                  : item.rt < 6.0
+                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
+                    : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]';
+            const defActions = item.tackles + item.blocks + item.interceptions;
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setFtPickedPlayer((prev) => (prev === item.name ? null : item.name));
+                  if (ftPitchMode !== 'all') {
+                    setFtPitchMode(item.side);
+                  }
+                }}
+                className={`w-full text-left px-2.5 py-2 mland:px-2 mland:py-1.5 transition-colors cursor-pointer space-y-1 ${
+                  isPicked
+                    ? 'bg-[var(--g-soft)]/75'
+                    : item.isMotm
+                      ? 'bg-amber-400/10 hover:bg-amber-400/16'
+                      : hasHighlight
+                        ? 'hover:bg-[var(--surface-2)]/90'
+                        : 'hover:bg-[var(--surface-2)]/70'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                    {item.pl && (
+                      <MatchPlayerThumb
+                        player={item.pl}
+                        team={item.team}
+                        state={state}
+                        kitColor={item.pl.pos === 'GK' ? item.gkKit : item.kit}
+                        trimColor={item.pl.pos === 'GK' ? undefined : item.trim}
+                        size="sm"
+                        ringClassName={item.isMotm ? 'ring-2 ring-amber-400' : undefined}
+                      />
+                    )}
+                    <span className="shrink-0 inline-flex">
+                      <ClubCrest name={item.team.name} size={13} team={item.team} club={state.club} isMyClub={item.team.id === state.me && state.mode === 'm'} />
+                    </span>
+                    {item.pl?.ro && <PositionBadge role={item.pl.ro} size="2xs" />}
+                    <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
+                      {item.name}
+                    </span>
+                    {item.no != null && (
+                      <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+                        #{item.no}
+                      </span>
+                    )}
+                    {item.isMotm && (
+                      <span className="px-1 py-[0.5px] rounded bg-amber-400 text-[#1c1300] text-[8.5px] mland:text-[7.5px] font-black shrink-0">
+                        👑 MOTM
+                      </span>
+                    )}
+                    {item.pl?.me && (
+                      <span className="text-[9.5px] font-extrabold text-[var(--g)] shrink-0">★</span>
+                    )}
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${rtTone}`}>
+                    ⭐ {item.rt.toFixed(1)}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular pl-0.5">
+                  {item.goals > 0 && (
+                    <span className="inline-flex items-center font-extrabold text-[var(--g)]">
+                      <StatIconBadge kind="goal" count={item.goals} size="xs" />
+                    </span>
+                  )}
+                  {item.assists > 0 && (
+                    <span className="inline-flex items-center font-extrabold text-sky-700 dark:text-sky-300">
+                      <StatIconBadge kind="assist" count={item.assists} size="xs" />
+                    </span>
+                  )}
+                  {item.cleanSheet && (
+                    <span className="inline-flex items-center gap-0.5 font-extrabold text-emerald-700 dark:text-emerald-300">
+                      <span>{item.pl?.pos === 'GK' ? '🧤' : '🛡️'}</span>
+                      <span>คลีนชีต</span>
+                    </span>
+                  )}
+                  {item.saves > 0 && (
+                    <span className="inline-flex items-center gap-0.5 font-bold text-cyan-700 dark:text-cyan-300">
+                      <StatIconBadge kind="save" count={item.saves} size="xs" />
+                      <span>เซฟ {item.saves}</span>
+                    </span>
+                  )}
+                  {item.keyPasses > 0 && (
+                    <span className="font-semibold text-[var(--ink)]/85">
+                      🎯 จ่ายคม {item.keyPasses}
+                    </span>
+                  )}
+                  {item.shots > 0 && (
+                    <span className="font-semibold text-[var(--ink)]/80">
+                      ยิง {item.shots}{item.onTarget > 0 ? `(${item.onTarget})` : ''}
+                    </span>
+                  )}
+                  {defActions > 0 && (
+                    <span className="font-semibold text-[var(--ink)]/80">
+                      สกัด/บล็อก {defActions}
+                    </span>
+                  )}
+                  {item.ownGoals > 0 && (
+                    <span className="font-extrabold text-[var(--red)]">🤦 OG {item.ownGoals}</span>
+                  )}
+                  {item.yellowCards > 0 && <StatIconBadge kind="yellow" count={item.yellowCards} size="xs" />}
+                  {item.redCards > 0 && <StatIconBadge kind="red" count={item.redCards} size="xs" />}
+                  {item.isInjured && <StatIconBadge kind="injury" size="xs" />}
+                  {item.subIn && (
+                    <span className="inline-flex items-center gap-0.5 font-bold text-emerald-700 dark:text-emerald-300">
+                      <StatIconBadge kind="subIn" size="xs" />
+                      <span>เข้า {item.subIn.m}&apos;</span>
+                    </span>
+                  )}
+                  {item.subOut && (
+                    <span className="inline-flex items-center gap-0.5 font-bold text-rose-600 dark:text-rose-300">
+                      <StatIconBadge kind="subOut" size="xs" />
+                      <span>ออก {item.subOut.m}&apos;</span>
+                    </span>
+                  )}
+                  {!hasHighlight &&
+                    item.keyPasses === 0 &&
+                    item.shots === 0 &&
+                    defActions === 0 &&
+                    item.ownGoals === 0 &&
+                    item.yellowCards === 0 &&
+                    item.redCards === 0 &&
+                    !item.isInjured &&
+                    !item.subIn &&
+                    !item.subOut && <span>ลงสนามครบเกม</span>}
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -13578,120 +13865,135 @@ export const MatchModal: React.FC<{
             {/* Right Stage: Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
               <div className="seg-bar grid w-full shrink-0 grid-cols-3">
-                <button
-                  type="button"
-                  onClick={() => setMlandMatchTab('stats')}
-                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
-                >
-                  <span>📊 สถิติ</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMlandMatchTab('chat')}
-                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
-                >
-                  <span>🔴</span>
-                  <span>ไลฟ์สด</span>
-                  <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
-                    {fmtFansShort(liveViewers)}
-                  </span>
-                </button>
                 {done ? (
-                  <button
-                    type="button"
-                    onClick={() => setMlandMatchTab('timeline')}
-                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'timeline' ? 'seg-btn-active' : ''}`}
-                  >
-                    <span>⏱️ ไทม์ไลน์</span>
-                    {timelineEvents.filter((t) => t.side !== 'N').length > 0 && (
-                      <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
-                        {timelineEvents.filter((t) => t.side !== 'N').length}
-                      </span>
-                    )}
-                  </button>
-                ) : (
-                  state.mode === 'm' ? (
+                  <>
                     <button
                       type="button"
-                      onClick={() => openTacticsStudio()}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                      onClick={() => setMlandMatchTab('players')}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'players' ? 'seg-btn-active' : ''}`}
                     >
-                      <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-                        {5 - subsUsed.length}
-                      </span>
-                      <span>📋 แผน</span>
+                      <span>👥 รายชื่อ</span>
                     </button>
-                  ) : (
-                    (() => {
-                      const canSpeakTab =
-                        userPitchStatus === 'on' &&
-                        coachChatCount < 2 &&
-                        minute >= 10 &&
-                        minute - coachChatCooldownMin >= 20;
-                      const waitTabMins =
-                        minute < 10
-                          ? Math.max(1, 10 - minute)
-                          : Math.max(1, 20 - (minute - coachChatCooldownMin));
-                      const activeTab = mlandMatchTab === 'tactics';
-                      return (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setMlandMatchTab('tactics');
-                          }}
-                          className={`seg-btn w-full whitespace-nowrap ${
-                            activeTab
-                              ? 'seg-btn-active'
-                              : canSpeakTab
-                                ? 'border border-[var(--g)]/55 text-[var(--g)] font-extrabold'
-                                : ''
-                          }`}
-                        >
-                          <span>🧠 แผนโค้ช</span>
-                          {matchPhaseUi === 'halftime' ? (
-                            <span
-                              className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
-                                activeTab
-                                  ? 'bg-amber-400/25 text-amber-200'
-                                  : 'bg-amber-500 text-white'
-                              }`}
-                            >
-                              พักครึ่ง
-                            </span>
-                          ) : userPitchStatus === 'subbed_out' ? (
-                            <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ออกแล้ว</span>
-                          ) : userPitchStatus === 'sent_off' ? (
-                            <span className="text-[9px] mland:text-[8px] text-[var(--red)] shrink-0">ใบแดง</span>
-                          ) : userPitchStatus === 'bench' ? (
-                            <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">สำรอง</span>
-                          ) : coachChatCount >= 2 ? null : canSpeakTab ? (
-                            <span
-                              className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
-                                activeTab
-                                  ? 'bg-white/20 text-white'
-                                  : 'bg-[var(--g)] text-white'
-                              }`}
-                            >
-                              พร้อม
-                            </span>
-                          ) : (
-                            <span className="tabular text-[9.5px] mland:text-[8px] opacity-75 shrink-0">
-                              {waitTabMins}น.
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })()
-                  )
+                    <button
+                      type="button"
+                      onClick={() => setMlandMatchTab('stats')}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span>📊 สถิติ</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMlandMatchTab('chat')}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span>🔴</span>
+                      <span>ไลฟ์สด</span>
+                      <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                        {fmtFansShort(liveViewers)}
+                      </span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setMlandMatchTab('stats')}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span>📊 สถิติ</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMlandMatchTab('chat')}
+                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
+                    >
+                      <span>🔴</span>
+                      <span>ไลฟ์สด</span>
+                      <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                        {fmtFansShort(liveViewers)}
+                      </span>
+                    </button>
+                    {state.mode === 'm' ? (
+                      <button
+                        type="button"
+                        onClick={() => openTacticsStudio()}
+                        className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                      >
+                        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+                          {5 - subsUsed.length}
+                        </span>
+                        <span>📋 แผน</span>
+                      </button>
+                    ) : (
+                      (() => {
+                        const canSpeakTab =
+                          userPitchStatus === 'on' &&
+                          coachChatCount < 2 &&
+                          minute >= 10 &&
+                          minute - coachChatCooldownMin >= 20;
+                        const waitTabMins =
+                          minute < 10
+                            ? Math.max(1, 10 - minute)
+                            : Math.max(1, 20 - (minute - coachChatCooldownMin));
+                        const activeTab = mlandMatchTab === 'tactics';
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              setMlandMatchTab('tactics');
+                            }}
+                            className={`seg-btn w-full whitespace-nowrap ${
+                              activeTab
+                                ? 'seg-btn-active'
+                                : canSpeakTab
+                                  ? 'border border-[var(--g)]/55 text-[var(--g)] font-extrabold'
+                                  : ''
+                            }`}
+                          >
+                            <span>🧠 แผนโค้ช</span>
+                            {matchPhaseUi === 'halftime' ? (
+                              <span
+                                className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
+                                  activeTab
+                                    ? 'bg-amber-400/25 text-amber-200'
+                                    : 'bg-amber-500 text-white'
+                                }`}
+                              >
+                                พักครึ่ง
+                              </span>
+                            ) : userPitchStatus === 'subbed_out' ? (
+                              <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ออกแล้ว</span>
+                            ) : userPitchStatus === 'sent_off' ? (
+                              <span className="text-[9px] mland:text-[8px] text-[var(--red)] shrink-0">ใบแดง</span>
+                            ) : userPitchStatus === 'bench' ? (
+                              <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">สำรอง</span>
+                            ) : coachChatCount >= 2 ? null : canSpeakTab ? (
+                              <span
+                                className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
+                                  activeTab
+                                    ? 'bg-white/20 text-white'
+                                    : 'bg-[var(--g)] text-white'
+                                }`}
+                              >
+                                พร้อม
+                              </span>
+                            ) : (
+                              <span className="tabular text-[9.5px] mland:text-[8px] opacity-75 shrink-0">
+                                {waitTabMins}น.
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })()
+                    )}
+                  </>
                 )}
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-1.5">
-                {mlandMatchTab === 'timeline' && done ? (
-                  <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-y-auto">
-                    {renderMatchTimelinePanel(true)}
-                  </div>
+                {mlandMatchTab === 'players' && done ? (
+                  renderFullTimePlayersPanel()
                 ) : mlandMatchTab === 'tactics' && state.mode === 'p' && !done ? (
                   (() => {
                     const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
