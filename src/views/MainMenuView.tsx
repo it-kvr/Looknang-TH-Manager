@@ -1394,12 +1394,12 @@ export const MainMenu: React.FC<{
               subtitle={`อายุ ${cAge} ปี · ${curArch.icon} ${curArch.name}`}
               bio={previewBio}
               categories={summarizeStatGroups(subStats)}
-              renderBadges={(palette) => (
+              renderStageTopLeft={(palette) => (
                 <span
                   title={cTraits.length > 0 ? `🧬 ${cTraits.length} สไตล์การเล่น` : 'นักเตะใหม่'}
-                  className={`text-[8px] mland:text-[6.5px] font-bold truncate max-w-[52px] mland:max-w-[38px] ${palette.clubText}`}
+                  className={`text-[9px] mland:text-[7.5px] font-bold truncate ${palette.clubText}`}
                 >
-                  {cTraits.length > 0 ? `🧬 ${cTraits.length}` : 'ใหม่'}
+                  {cTraits.length > 0 ? `🧬 ${cTraits.length} สไตล์` : 'นักเตะใหม่'}
                 </span>
               )}
             />
@@ -2286,23 +2286,30 @@ export const MainMenu: React.FC<{
               bio={activeStar.bio}
               categories={activeStar.categories}
               className="shadow-[0_18px_42px_rgba(0,0,0,0.65)]"
-              renderBadges={(palette) => (
-                <div title={activeStar.clubName} className="flex items-center gap-0.5 max-w-[56px] sm:max-w-[68px] mland:max-w-[44px]">
-                  <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
-                    <ClubCrest name={activeStar.clubName} size={14} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
+              renderStageTopLeft={(palette) => (
+                <div title={activeStar.clubName} className="flex items-center gap-1 min-w-0">
+                  <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                    <ClubCrest name={activeStar.clubName} size={16} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
                   </div>
-                  <span className={`hidden sm:inline mland:hidden text-[8.5px] font-semibold truncate ${palette.clubText}`}>
+                  <span className={`text-[9.5px] mland:text-[7.5px] font-bold truncate ${palette.clubText}`}>
                     {activeStar.clubName}
                   </span>
                 </div>
               )}
-              renderHeaderAction={(palette) => (
+              renderStageTopRight={(_palette, tone) => (
                 <button
                   type="button"
-                  onClick={cycleStarPoster}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    cycleStarPoster();
+                  }}
                   title="สลับนักเตะแนะนำ"
                   aria-label="สลับนักเตะแนะนำ"
-                  className={`w-6 h-6 mland:w-5 mland:h-5 rounded-lg flex items-center justify-center cursor-pointer transition-colors shrink-0 ${palette.iconBtn}`}
+                  className={`w-6 h-6 mland:w-5 mland:h-5 rounded-lg border flex items-center justify-center cursor-pointer transition-colors shrink-0 ${
+                    tone === 'light'
+                      ? 'bg-white/85 hover:bg-white border-slate-300/85 text-slate-700 hover:text-[var(--g)] shadow-2xs'
+                      : 'bg-black/35 hover:bg-black/55 border-white/18 text-white/85 hover:text-[#f5c242]'
+                  }`}
                 >
                   <RefreshCw className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
                 </button>

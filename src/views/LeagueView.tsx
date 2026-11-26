@@ -130,16 +130,16 @@ export const LeagueView: React.FC<{
     const isHome = homeId === state.me;
     const compLabel =
       kind === 'asia'
-        ? `🌏 ถ้วยทวีป · ${state.ac ? RN[state.ac.r] || `รอบ ${state.ac.r + 1}` : ''}`
+        ? `🌏 นัดหน้า · ถ้วยทวีป ${state.ac ? RN[state.ac.r] || `รอบ ${state.ac.r + 1}` : ''}`
         : kind === 'sc'
-          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · นัดชิงชนะเลิศ`
+          ? `${EXTRA_CUP_META.sc.icon} นัดหน้า · ${EXTRA_CUP_META.sc.name} (นัดชิง)`
           : kind === 'lc'
-            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${state.lc ? RN[state.lc.r] || `รอบ ${state.lc.r + 1}` : ''}`
+            ? `${EXTRA_CUP_META.lc.icon} นัดหน้า · ${EXTRA_CUP_META.lc.name} ${state.lc ? RN[state.lc.r] || `รอบ ${state.lc.r + 1}` : ''}`
             : kind === 'dc'
-              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${state.dc ? RN[state.dc.r] || `รอบ ${state.dc.r + 1}` : ''}`
+              ? `${EXTRA_CUP_META.dc.icon} นัดหน้า · ${EXTRA_CUP_META.dc.name} ${state.dc ? RN[state.dc.r] || `รอบ ${state.dc.r + 1}` : ''}`
               : kind === 'cup'
-                ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-                : `⚽ นัดที่ ${state.md + 1}/${state.fx.length} · ${isHome ? 'เกมเหย้า' : 'เกมเยือน'}`;
+                ? `🏆 นัดหน้า · ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
+                : `⚽ นัดหน้า · นัดที่ ${state.md + 1}/${state.fx.length} (${isHome ? 'เกมเหย้า' : 'เกมเยือน'})`;
 
     return (
       <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2.5 mland:space-y-1.5">
@@ -196,7 +196,7 @@ export const LeagueView: React.FC<{
             onClick={() => { SFX.tap(); onNavigate?.('q'); }}
             className="btn btn-sm btn-primary w-full"
           >
-            ⚽ จัดทัพ 11 ตัวจริง
+            {state.mode === 'm' ? '⚽ จัดทัพ 11 ตัวจริง' : '⚽ ดูแผน & รายชื่อทีม'}
           </button>
         </div>
       </div>

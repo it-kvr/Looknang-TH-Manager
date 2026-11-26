@@ -110,12 +110,15 @@ export const PlayerInspectorModal: React.FC<{
                   {livePlayer.altRoles?.length ? ` (+${livePlayer.altRoles.join(', ')})` : ''}
                 </span>
                 <span aria-hidden="true">·</span>
-                <span className="font-semibold" style={{ color: fitCol }}>{statusBadgeText}</span>
+                <span className="font-semibold tabular" style={{ color: fitCol }}>
+                  {statusBadgeText}
+                  {!isRetired && ` · ⚡${fitVal}%`}
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 shrink-0">
             <div className="seg-bar">
               <button
                 type="button"
@@ -194,6 +197,7 @@ export const PlayerInspectorModal: React.FC<{
                 pot={livePlayer.pot}
                 talent={playerTalent}
                 roleLabel={livePlayer.ro}
+                altRolesCount={livePlayer.altRoles?.length || 0}
                 shirtNo={currentNo}
                 onShirtClick={canEditShirtNo ? () => { SFX.tap(); setShowLockerPicker(true); } : undefined}
                 shirtButtonTitle="เปิดล็อกเกอร์เปลี่ยน/สลับเบอร์เสื้อ"
@@ -220,7 +224,56 @@ export const PlayerInspectorModal: React.FC<{
                 } · อายุ ${livePlayer.age} ปี`}
                 bio={info.bio}
                 categories={summarizeStatGroups(info.G)}
-                renderStageTopLeft={
+                renderStageTopLeft={(palette) =>
+                  liveTeam || isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
+                    <div className="flex items-center gap-1 min-w-0">
+                      {liveTeam && (
+                        <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                          <ClubCrest
+                            name={liveTeam.name}
+                            size={16}
+                            team={liveTeam}
+                            club={state.club}
+                            isMyClub={isMyTeam && state.mode === 'm'}
+                          />
+                        </div>
+                      )}
+                      {isMePlayer && (
+                        <span
+                          title="ตัวคุณ"
+                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+                        >
+                          ★
+                        </span>
+                      )}
+                      {livePlayer.blessed && (
+                        <span
+                          title="ผู้เล่นได้รับพร"
+                          className="px-1 py-[1px] rounded bg-amber-300 text-[#261900] text-[8px] mland:text-[6.5px] font-extrabold leading-none shrink-0"
+                        >
+                          ✨
+                        </span>
+                      )}
+                      {(livePlayer.hg || livePlayer.customCreated) && (
+                        <span
+                          title="เด็กปั้นสโมสร"
+                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-extrabold leading-none shrink-0 ${palette.hgBadge}`}
+                        >
+                          🌱
+                        </span>
+                      )}
+                      {isCap && (
+                        <span
+                          title="กัปตันทีม"
+                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none shrink-0 ${palette.capBadge}`}
+                        >
+                          ©
+                        </span>
+                      )}
+                    </div>
+                  ) : null
+                }
+                renderStageTopRight={
                   isMePlayer && state.mode === 'p' && !isRetired
                     ? (_palette, tone) => (
                         <button
@@ -243,50 +296,10 @@ export const PlayerInspectorModal: React.FC<{
                       )
                     : undefined
                 }
-                renderBadges={(palette) =>
-                  isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
-                    <>
-                      {isMePlayer && (
-                        <span
-                          title="ตัวคุณ"
-                          className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black"
-                        >
-                          ★
-                        </span>
-                      )}
-                      {livePlayer.blessed && (
-                        <span
-                          title="ผู้เล่นได้รับพร"
-                          className="px-1 py-[1px] rounded bg-amber-300 text-[#261900] text-[8px] mland:text-[6.5px] font-extrabold leading-none"
-                        >
-                          ✨
-                        </span>
-                      )}
-                      {(livePlayer.hg || livePlayer.customCreated) && (
-                        <span
-                          title="เด็กปั้นสโมสร"
-                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-extrabold leading-none ${palette.hgBadge}`}
-                        >
-                          🌱
-                        </span>
-                      )}
-                      {isCap && (
-                        <span
-                          title="กัปตันทีม"
-                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none ${palette.capBadge}`}
-                        >
-                          ©
-                        </span>
-                      )}
-                    </>
-                  ) : null
-                }
               />
 
               {/* Personal Info Box below Portrait Card (Unified with Career Mode) */}
               <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
-
-                <StaminaBar value={fitVal} variant="card" />
 
                 {(() => {
                   const curTurn = state.season * 40 + state.md;
@@ -297,8 +310,8 @@ export const PlayerInspectorModal: React.FC<{
                   return (
                     <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${isRetired ? 'bg-amber-500/10 border-amber-500/35' : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 65 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
                       <div className="flex items-center justify-between font-bold gap-1">
-                        <span className="truncate" style={{ color: fitCol }}>
-                          {isRetired ? `👋 ${statusBadgeText}` : statusBadgeText}
+                        <span className="truncate tabular" style={{ color: fitCol }}>
+                          {isRetired ? `👋 ${statusBadgeText}` : `${statusBadgeText} · ⚡${fitVal}%`}
                         </span>
                         <span className="tabular text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
                           🟨{livePlayer.yc || 0}/3 · 🟥{livePlayer.rc || 0}
@@ -444,27 +457,6 @@ export const PlayerInspectorModal: React.FC<{
                     <b className="text-[var(--ink)]">{fmtMoneyNum(con ? con.wg : wagOf(livePlayer))}</b>/นัด
                   </span>
                 </div>
-
-                {canEditShirtNo && state.mode === 'm' && (
-                  <div className="flex items-center gap-1.5 pt-1 border-t border-[var(--line)]/60">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onUpdateState((d) => {
-                          d.teams[d.me].cap = livePlayer.n;
-                        });
-                        onToast(`แต่งตั้ง ${livePlayer.n} เป็นกัปตันทีม`);
-                      }}
-                      className={`btn btn-xs w-full ${
-                        isCap
-                          ? 'btn-gold'
-                          : 'btn-secondary'
-                      }`}
-                    >
-                      {isCap ? '© กัปตันทีม' : 'แต่งตั้งกัปตันทีม'}
-                    </button>
-                  </div>
-                )}
                 </div>
 
               {/* Personality, Style & Insights Strip below Athlete Card */}

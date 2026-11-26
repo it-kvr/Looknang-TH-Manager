@@ -18,12 +18,14 @@ export interface AthleteCardProps {
   pot?: number;
   talent: number;
   roleLabel: string;
+  altRolesCount?: number;
   shirtNo: number | string;
   onShirtClick?: () => void;
   shirtButtonTitle?: string;
   renderBadges?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
   renderHeaderAction?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
   renderStageTopLeft?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
+  renderStageTopRight?: (palette: AthleteCardPalette, tone: CardStudioTone) => React.ReactNode;
   kit1: string;
   kit2: string;
   faceProps: Omit<React.ComponentProps<typeof PlayerFace>, 'size' | 'bare'>;
@@ -40,12 +42,14 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   pot,
   talent,
   roleLabel,
+  altRolesCount = 0,
   shirtNo,
   onShirtClick,
   shirtButtonTitle,
   renderBadges,
   renderHeaderAction,
   renderStageTopLeft,
+  renderStageTopRight,
   kit1,
   kit2,
   faceProps,
@@ -62,6 +66,8 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   const badgeNodes = renderBadges?.(cardPalette, cardTone);
   const actionNode = renderHeaderAction?.(cardPalette, cardTone);
   const stageTopLeftNode = renderStageTopLeft?.(cardPalette, cardTone);
+  const stageTopRightNode = renderStageTopRight?.(cardPalette, cardTone);
+  const resolvedStageTopLeft = stageTopLeftNode ?? badgeNodes;
   const isCardGK =
     faceProps.isGK ?? (faceProps.player?.pos === 'GK' || faceProps.player?.ro === 'GK');
   const gkPalette = isCardGK ? resolveGkKitPalette(kit1, kit2, faceProps.kitColor) : null;
@@ -79,44 +85,53 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
         style={{ background: `linear-gradient(90deg, ${kit1}, #fad05a 52%, ${kit2})` }}
       />
 
-      {/* Single-Row Top Header: OVR · Role · #NO | POT · TL · Badges · Action */}
-      <div className="px-2.5 pt-1.5 pb-0.5 mland:px-2 mland:pt-1 mland:pb-0 flex items-center justify-between gap-1 shrink-0 min-w-0">
-        <div className="flex items-center gap-1 mland:gap-0.5 leading-none min-w-0">
+      {/* Balanced Single-Row Top Header: OVR | Role · #NO  <->  POT · TL */}
+      <div className="px-2.5 pt-1.5 pb-1 mland:px-2 mland:pt-1 mland:pb-0.5 flex items-center justify-between gap-1.5 shrink-0 min-w-0">
+        <div className="flex items-center gap-1.5 mland:gap-1 leading-none min-w-0">
           <span
-            className={`text-[17px] sm:text-[18px] mland:text-[13px] font-extrabold font-display tabular leading-none shrink-0 ${
+            className={`text-[18px] sm:text-[19px] mland:text-[14px] font-extrabold font-display tabular leading-none shrink-0 ${
               isLight ? statTierMeta(ov).textClass : statTierMeta(ov).darkTextClass
             }`}
           >
             {ov}
           </span>
           <span
+            aria-hidden="true"
+            className={`w-px h-3 mland:h-2.5 shrink-0 ${isLight ? 'bg-slate-300' : 'bg-white/20'}`}
+          />
+          <span
             title={roleLabel}
-            className={`text-[9.5px] mland:text-[7.5px] font-bold tracking-tight truncate max-w-[54px] sm:max-w-[66px] mland:max-w-[44px] ${cardPalette.subText}`}
+            className={`inline-flex items-baseline gap-0.5 text-[10px] mland:text-[8px] font-extrabold tracking-tight whitespace-nowrap shrink-0 ${cardPalette.subText}`}
           >
-            {roleLabel}
+            <span>{roleLabel}</span>
+            {altRolesCount > 0 && (
+              <span className={`text-[8px] mland:text-[6.5px] font-bold opacity-75`}>
+                +{altRolesCount}
+              </span>
+            )}
           </span>
           {onShirtClick ? (
             <button
               type="button"
               onClick={onShirtClick}
               title={shirtButtonTitle || 'สลับเบอร์เสื้อ'}
-              className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular cursor-pointer transition-colors shrink-0 ${cardPalette.lockerBtn}`}
+              className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular cursor-pointer transition-colors shrink-0 whitespace-nowrap ${cardPalette.lockerBtn}`}
             >
               #{shirtNo} ▾
             </button>
           ) : (
             <span
-              className={`text-[9px] mland:text-[7px] font-bold tabular shrink-0 ${cardPalette.subText}`}
+              className={`text-[9.5px] mland:text-[7.5px] font-bold tabular shrink-0 whitespace-nowrap ${cardPalette.mutedText}`}
             >
               #{shirtNo}
             </span>
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-1 mland:gap-0.5 min-w-0 shrink-0">
+        <div className="flex items-center justify-end gap-1.5 mland:gap-1 shrink-0">
           {pot !== undefined && (
             <span
-              className={`text-[9px] mland:text-[7px] font-bold tabular whitespace-nowrap shrink-0 ${
+              className={`text-[9.5px] mland:text-[7.5px] font-bold tabular whitespace-nowrap shrink-0 ${
                 isLight ? statTierMeta(pot).textClass : statTierMeta(pot).darkTextClass
               }`}
             >
@@ -124,29 +139,25 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
             </span>
           )}
           <TalentBadge talent={talent} variant="card" tone={cardTone} size="xs" />
-          {badgeNodes && (
-            <div className="flex items-center justify-end gap-0.5 min-w-0 shrink-0">
-              {badgeNodes}
-            </div>
-          )}
           {actionNode}
         </div>
       </div>
 
       {/* Neutral Studio Spotlight Portrait Stage */}
       <div
-        className={`relative mx-2.5 my-1 mland:mx-1.5 mland:my-0.5 rounded-xl mland:rounded-lg border pt-1.5 mland:pt-1 flex items-end justify-center overflow-hidden ${
-          stretchStage ? 'flex-1 min-h-[76px] mland:min-h-[50px]' : 'min-h-[82px] mland:min-h-[54px]'
+        className={`relative mx-2.5 mb-1 mland:mx-1.5 mland:mb-0.5 rounded-xl mland:rounded-lg border pt-3.5 mland:pt-2.5 flex items-end justify-center overflow-hidden ${
+          stretchStage ? 'flex-1 min-h-[84px] mland:min-h-[56px]' : 'min-h-[88px] mland:min-h-[58px]'
         } ${cardPalette.stageBox}`}
       >
-        {stageTopLeftNode && (
-          <div className="absolute top-1 left-1 z-20">{stageTopLeftNode}</div>
+        {resolvedStageTopLeft && (
+          <div className="absolute top-1.5 left-1.5 mland:top-1 mland:left-1 z-20 flex items-center gap-1 max-w-[calc(100%-64px)] min-w-0">
+            {resolvedStageTopLeft}
+          </div>
         )}
-        <CardStudioToggleButton
-          tone={cardTone}
-          onToggle={toggleCardTone}
-          className="absolute top-1 right-1 z-20"
-        />
+        <div className="absolute top-1.5 right-1.5 mland:top-1 mland:right-1 z-20 flex items-center gap-1">
+          {stageTopRightNode}
+          <CardStudioToggleButton tone={cardTone} onToggle={toggleCardTone} />
+        </div>
         <div
           className={`relative z-10 [&>svg]:block ${
             stretchStage

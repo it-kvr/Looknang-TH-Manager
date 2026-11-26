@@ -13,7 +13,7 @@ import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
@@ -287,6 +287,14 @@ export default function App() {
       }
     }
     return null;
+  }, [state]);
+
+  const myLeagueRank = useMemo(() => {
+    if (!state) return 1;
+    const myTier = state.teams[state.me]?.tier ?? 0;
+    const sorted = sortTable(state.teams.filter((t) => t.tier === myTier));
+    const idx = sorted.findIndex((t) => t.id === state.me);
+    return idx >= 0 ? idx + 1 : 1;
   }, [state]);
 
   const applyFinishedMatchToDraft = (
@@ -1064,12 +1072,27 @@ export default function App() {
   const resolvedView: MainTab = state.v === 'c' ? 't' : state.v;
   const curTab: MainTab = tabs.some(([k]) => k === resolvedView) ? resolvedView : tabs[0][0];
 
+  const myFansCount = ensureTeamFans(me);
+  const nextOppTeam = nextMatchInfo
+    ? state.teams[nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId]
+    : null;
+  const nextIsHome = nextMatchInfo ? nextMatchInfo.homeId === state.me : false;
+  const boardVal = state.bd ?? 55;
+  const boardToneCls =
+    boardVal >= 65
+      ? 'text-[var(--g)]'
+      : boardVal >= 40
+        ? 'text-[#b47b00] dark:text-[var(--lamp)]'
+        : 'text-[var(--red)]';
+  const myStaminaVal = Math.round(state.p?.en ?? 100);
+
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)] safe-all">
-        {/* Pinned Single-Row Horizontal Top HUD Bar */}
-        <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-b border-[var(--line)] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-          <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 mland:gap-1.5">
-          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 min-w-0 shrink max-w-[40%]">
+        {/* Pinned Single-Row 3-Zone Top HUD Bar */}
+        <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-t-2 border-t-[var(--g)] border-b border-[var(--line)] shadow-[0_1px_6px_rgba(12,31,21,0.05)] dark:shadow-[0_1px_8px_rgba(0,0,0,0.28)]">
+          <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 sm:py-2 mland:py-1 flex items-center justify-between gap-2 sm:gap-4 mland:gap-2">
+          {/* Zone 1: Club / Player Identity */}
+          <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1 lg:flex-none lg:max-w-[34%]">
             <button
               type="button"
               onClick={() => {
@@ -1090,7 +1113,7 @@ export default function App() {
                 }
               }}
               aria-label="ตราสโมสร"
-              className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform"
+              className="shrink-0 p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform shadow-2xs"
             >
               <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
             </button>
@@ -1101,118 +1124,155 @@ export default function App() {
                   SFX.tap();
                   navigateToTab('p');
                 }}
-                aria-label="รูปนักเตะ"
+                aria-label="ข้อมูลนักเตะ"
                 title={state.p.name}
-                className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/80 [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform overflow-hidden"
+                className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 [&>svg]:w-[32px] [&>svg]:h-[32px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform overflow-hidden shadow-2xs"
               >
-                <PlayerFace player={mePlayer} team={me} state={state} careerProfile={state.p} size={30} bare />
+                <PlayerFace player={mePlayer} team={me} state={state} careerProfile={state.p} size={32} bare />
               </button>
             )}
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="font-bold text-xs sm:text-sm mland:text-[11.5px] truncate font-display leading-tight tracking-tight">
-                  {state.mode === 'p' && state.p ? `${state.p.name} · ` : ''}
-                  {me.name}
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-bold text-xs sm:text-[15px] mland:text-xs truncate font-display leading-tight tracking-tight text-[var(--ink)]">
+                  {state.mode === 'p' && state.p ? state.p.name : me.name}
                 </span>
-                <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--g)] tabular shrink-0">
+                <span className={`sm:hidden text-[11px] font-extrabold tabular shrink-0 ${state.mode === 'm' && state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
                   {state.mode === 'm' ? fmtMoney(state.money) : `OVR ${state.p ? ovMe(state.p) : 60}`}
                 </span>
               </div>
-              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1 truncate tabular leading-tight">
-                <span className="truncate font-medium">{TN[me.tier]}</span>
-                <span className="opacity-40 shrink-0">·</span>
-                <span className="shrink-0">ซ.{state.season}</span>
-                <span className="opacity-40 shrink-0">·</span>
-                <span className="shrink-0">นัด {Math.min(state.md, state.fx.length)}/{state.fx.length}</span>
-                {state.mode === 'm' ? (
+              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1.5 truncate tabular leading-tight mt-0.5 mland:mt-0">
+                {state.mode === 'p' && (
                   <>
-                    <span className="opacity-40 shrink-0">·</span>
-                    <span className="shrink-0" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
-                      แฟน {fmtFansShort(ensureTeamFans(me))}
-                    </span>
-                    <span className="opacity-40 shrink-0">·</span>
-                    <span className="shrink-0">บอร์ด {state.bd ?? 55}%</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="opacity-40 shrink-0">·</span>
-                    <StaminaBar
-                      value={state.p?.en ?? 100}
-                      variant="inline"
-                      label="ฟิต"
-                      barWidthClass="w-8 sm:w-10 mland:w-7"
-                    />
-                    <span className="opacity-40 shrink-0">·</span>
-                    <span className="shrink-0" title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}>
-                      แฟน {fmtFansShort(ensureTeamFans(me))}
-                    </span>
+                    <span className="truncate font-semibold text-[var(--ink)]/80">{me.name}</span>
+                    <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
                   </>
                 )}
+                <span className="truncate font-medium">{TN[me.tier]}</span>
+                <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
+                <span className="shrink-0">ซีซั่น {state.season}</span>
+                <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
+                <span className="shrink-0">นัด {Math.min(state.md, state.fx.length)}/{state.fx.length}</span>
               </div>
             </div>
           </div>
 
-          {/* Center Next Match Broadcast Strip */}
-          <div className="flex items-center justify-center min-w-0 flex-1 max-w-[440px] mland:max-w-[340px]">
-            {nextMatchInfo ? (
-              <div className="w-full flex items-center justify-between gap-1.5 mland:gap-1 px-2.5 mland:px-1.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)] min-w-0">
-                <div className="flex items-center gap-1.5 mland:gap-1 min-w-0 flex-1">
-                  <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0 whitespace-nowrap">
-                    {nextMatchInfo.kind === 'asia'
-                      ? '🌏 ทวีป'
-                      : nextMatchInfo.kind === 'sc'
-                        ? '🏅 แชมเปี้ยนส์คัพ'
-                        : nextMatchInfo.kind === 'lc'
-                          ? '🥇 ลีกคัพ'
-                          : nextMatchInfo.kind === 'dc'
-                            ? '🛡️ ถ้วยดิวิชั่น'
-                            : nextMatchInfo.kind === 'cup'
-                              ? '🏆 ถ้วยปชช.'
-                              : '⚽ นัดหน้า'}
-                    {nextMatchInfo.isDerby && <span className="ml-0.5 text-[var(--red)]">🔥</span>}
-                  </span>
-                  <div className="shrink-0 [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-                    <ClubCrest
-                      name={state.teams[nextMatchInfo.homeId].name}
-                      size={18}
-                      team={state.teams[nextMatchInfo.homeId]}
-                      club={state.club}
-                      isMyClub={nextMatchInfo.homeId === state.me && state.mode === 'm'}
-                    />
-                  </div>
-                  <div className="font-bold text-[11px] mland:text-[9.5px] truncate leading-tight min-w-0 flex-1 text-center">
-                    {state.teams[nextMatchInfo.homeId].name} <span className="text-[var(--mut)] font-normal">vs</span> {state.teams[nextMatchInfo.awayId].name}
-                  </div>
-                  <div className="shrink-0 [&>svg]:w-[18px] [&>svg]:h-[18px] mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-                    <ClubCrest
-                      name={state.teams[nextMatchInfo.awayId].name}
-                      size={18}
-                      team={state.teams[nextMatchInfo.awayId]}
-                      club={state.club}
-                      isMyClub={nextMatchInfo.awayId === state.me && state.mode === 'm'}
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setInspectTeamId(nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId)}
-                  className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)] shrink-0"
-                >
-                  ส่อง
-                </button>
-              </div>
-            ) : (
-              <div className="w-full px-2.5 py-1 mland:py-0.5 rounded-xl mland:rounded-lg bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[11px] mland:text-[9.5px] font-bold truncate text-center text-[var(--ink)]">
-                🏁 ครบโปรแกรมลีกแล้ว · กดสรุปจบฤดูกาล
-              </div>
-            )}
+          {/* Zone 2: Center Club / Player Telemetry Strip */}
+          <div className="hidden sm:flex items-center justify-center shrink-0">
+            <div className="flex items-center rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)]/85 divide-x divide-[var(--line)]/80 overflow-hidden">
+              {state.mode === 'm' ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('f'); }}
+                    title="ไปหน้าการเงิน"
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">งบสโมสร</div>
+                    <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
+                      {fmtMoney(state.money)}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('t'); }}
+                    title="ดูตารางคะแนน"
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">อันดับ</div>
+                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
+                      #{myLeagueRank}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('u'); }}
+                    title="ความเชื่อมั่นบอร์ดบริหาร"
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">บอร์ด</div>
+                    <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${boardToneCls}`}>
+                      {boardVal}%
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('u'); }}
+                    title={`แฟนบอลสโมสร ${fmtFans(myFansCount)} คน`}
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">แฟนบอล</div>
+                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
+                      {fmtFansShort(myFansCount)}
+                    </div>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('p'); }}
+                    title="ข้อมูลนักเตะ"
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">OVR</div>
+                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--g)] leading-tight mt-0.5">
+                      {state.p ? ovMe(state.p) : 60}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('t'); }}
+                    title="ดูตารางคะแนนทีม"
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">อันดับทีม</div>
+                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
+                      #{myLeagueRank}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('p'); }}
+                    title={`พลังกาย ${myStaminaVal}%`}
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">พลังกาย</div>
+                    <div className="mt-0.5">
+                      <StaminaBar
+                        value={myStaminaVal}
+                        variant="inline"
+                        label=""
+                        barWidthClass="w-8 sm:w-10 mland:w-7"
+                      />
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { SFX.tap(); navigateToTab('p'); }}
+                    title={`แฟนบอลสโมสร ${fmtFans(myFansCount)} คน`}
+                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                  >
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ชื่อเสียง</div>
+                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[#b47b00] dark:text-[var(--lamp)] leading-tight mt-0.5">
+                      ★ {state.p?.rep ?? 0}
+                    </div>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1 shrink-0">
+          {/* Zone 3: Matchday CTA & Settings */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 mland:gap-1 shrink-0 lg:flex-1">
             <PWAInstallButton variant="compact" onToast={showToast} />
             <button
               type="button"
               onClick={handleTriggerNextStep}
+              title={
+                nextMatchInfo && nextOppTeam
+                  ? `นัดถัดไป: พบ ${nextOppTeam.name} (${nextIsHome ? 'เหย้า' : 'เยือน'})`
+                  : 'สรุปผลฤดูกาล'
+              }
               className="btn btn-md btn-gold sm:px-4 text-xs sm:text-sm mland:text-[10.5px]"
             >
               {nextMatchInfo

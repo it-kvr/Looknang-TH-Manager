@@ -109,7 +109,8 @@ export const PlayerCareerView: React.FC<{
           ov={ov}
           pot={myPot}
           talent={myTalent}
-          roleLabel={`${p.sp}${p.altRoles?.length ? `/${p.altRoles.slice(0, 2).join('/')}` : ''}`}
+          roleLabel={p.sp}
+          altRolesCount={p.altRoles?.length || 0}
           shirtNo={myShirtNo}
           onShirtClick={() => {
             SFX.tap();
@@ -129,7 +130,25 @@ export const PlayerCareerView: React.FC<{
           subtitle={`${meTeam.name} · อายุ ${p.age} ปี`}
           bio={details.bio}
           categories={summarizeStatGroups(details.G)}
-          renderStageTopLeft={(_palette, tone) => (
+          renderStageTopLeft={(palette) => (
+            <div className="flex items-center gap-1 min-w-0">
+              <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
+                <ClubCrest name={meTeam.name} size={16} team={meTeam} club={state.club} isMyClub={false} />
+              </div>
+              <span className={`text-[9.5px] mland:text-[7.5px] font-bold tabular whitespace-nowrap ${palette.repText}`}>
+                ★ {p.rep ?? 10}
+              </span>
+              {meTeam.cap === p.name && (
+                <span
+                  title="กัปตันทีม"
+                  className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none ${palette.capBadge}`}
+                >
+                  ©
+                </span>
+              )}
+            </div>
+          )}
+          renderStageTopRight={(_palette, tone) => (
             <button
               type="button"
               onClick={(e) => {
@@ -148,22 +167,10 @@ export const PlayerCareerView: React.FC<{
               <Scissors className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
             </button>
           )}
-          renderBadges={(palette) => (
-            <>
-              <span className={`text-[9px] mland:text-[7px] font-bold tabular ${palette.repText}`}>
-                ★ {p.rep ?? 10}
-              </span>
-              <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
-                <ClubCrest name={meTeam.name} size={14} team={meTeam} club={state.club} isMyClub={false} />
-              </div>
-            </>
-          )}
         />
 
         {/* Personal Info Box below Portrait Card */}
         <div className="p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 flex flex-col gap-1.5 mland:gap-1">
-
-          <StaminaBar value={p.en} variant="card" />
 
           <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-0.5 ${injCount > 0 || susCount > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : mySlot ? 'bg-[var(--g-soft)] border-[var(--g)]/35' : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'}`}>
             <div className="flex items-center justify-between font-bold gap-1">
@@ -175,6 +182,8 @@ export const PlayerCareerView: React.FC<{
                     : mySlot
                       ? `⭐ ตัวจริง (${mySlot})`
                       : '🪑 ตัวสำรอง'}
+                {' · '}
+                <span className="tabular">⚡{Math.round(p.en ?? 100)}%</span>
               </span>
               <span className="tabular text-[9.5px] mland:text-[8px] shrink-0">🟨{ycCount}/3 · 🟥{rcCount}</span>
             </div>
