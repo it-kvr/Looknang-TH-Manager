@@ -436,10 +436,70 @@ button:not(:disabled):active {
   animation: celebrate-burst 2.6s cubic-bezier(0.16, 1, 0.3, 1) infinite;
 }
 
+@keyframes goal-score-pop {
+  0% {
+    transform: scale(0.92);
+  }
+  38% {
+    transform: scale(1.12);
+  }
+  70% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes goal-ribbon-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.94);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes goal-sheen-sweep {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.45;
+  }
+  100% {
+    transform: translateX(220%) skewX(-18deg);
+    opacity: 0;
+  }
+}
+
+.goal-score-pop {
+  animation: goal-score-pop 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.goal-ribbon-in {
+  animation: goal-ribbon-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.goal-sheen-sweep {
+  animation: goal-sheen-sweep 1.35s ease-out both;
+}
+
+.cv-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 46px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .confetti-piece,
   .celebrate-sparkle,
-  .celebrate-burst {
+  .celebrate-burst,
+  .goal-score-pop,
+  .goal-ribbon-in,
+  .goal-sheen-sweep {
     animation: none !important;
   }
   .confetti-piece {
@@ -449,3 +509,4 @@ button:not(:disabled):active {
     transform: none;
   }
 }
+

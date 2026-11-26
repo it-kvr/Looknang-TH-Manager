@@ -78,6 +78,15 @@ export const buildAgentsForTeam = (
 };
 
 export const PITCH_FACE_CACHE = new Map<string, HTMLCanvasElement | 'loading'>();
+const MAX_PITCH_FACE_CACHE = 220;
+
+const setBoundedPitchFaceCache = (key: string, val: HTMLCanvasElement | 'loading') => {
+  if (!PITCH_FACE_CACHE.has(key) && PITCH_FACE_CACHE.size >= MAX_PITCH_FACE_CACHE) {
+    const oldestKey = PITCH_FACE_CACHE.keys().next().value;
+    if (oldestKey !== undefined) PITCH_FACE_CACHE.delete(oldestKey);
+  }
+  PITCH_FACE_CACHE.set(key, val);
+};
 
 export const getPitchFaceCanvas = (
   vis: number[],
@@ -92,7 +101,7 @@ export const getPitchFaceCanvas = (
   if (existing && existing !== 'loading') return existing;
   if (existing === 'loading' || typeof Image === 'undefined' || typeof document === 'undefined') return null;
 
-  PITCH_FACE_CACHE.set(key, 'loading');
+  setBoundedPitchFaceCache(key, 'loading');
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="64" viewBox="0 0 60 64">${faceBodySvg(vis, kit, trim, 32, '#10281d', true, !isCoach, undefined, isCoach, coachOutfit, coachClubKit)}</svg>`;
   const img = new Image();
   img.onload = () => {
@@ -102,7 +111,7 @@ export const getPitchFaceCanvas = (
     const octx = off.getContext('2d');
     if (octx) {
       octx.drawImage(img, 0, 0, 64, 68);
-      PITCH_FACE_CACHE.set(key, off);
+      setBoundedPitchFaceCache(key, off);
     } else {
       PITCH_FACE_CACHE.delete(key);
     }
@@ -115,6 +124,23 @@ export const getPitchFaceCanvas = (
 };
 
 let pitchBgCache: { key: string; canvas: HTMLCanvasElement } | null = null;
+const puddleSigCache = new WeakMap<object, string>();
+const TEXT_WIDTH_CACHE = new Map<string, number>();
+const MAX_TEXT_WIDTH_CACHE = 600;
+const sortedAgentsBuf: LivePitchAgent[] = [];
+
+const measureTextCached = (ctx: CanvasRenderingContext2D, text: string): number => {
+  const key = `${ctx.font}|${text}`;
+  const hit = TEXT_WIDTH_CACHE.get(key);
+  if (hit !== undefined) return hit;
+  const w = ctx.measureText(text).width;
+  if (TEXT_WIDTH_CACHE.size >= MAX_TEXT_WIDTH_CACHE) {
+    const oldest = TEXT_WIDTH_CACHE.keys().next().value;
+    if (oldest !== undefined) TEXT_WIDTH_CACHE.delete(oldest);
+  }
+  TEXT_WIDTH_CACHE.set(key, w);
+  return w;
+};
 
 export const drawLivePitchToCanvas = (
   canvas: HTMLCanvasElement,
@@ -167,12 +193,18 @@ export const drawLivePitchToCanvas = (
     0.92
   );
   const pitchSeed = env?.pitchSeed ?? 137;
-  const puddleSig =
-    isRainy && env?.puddles?.length
-      ? env.puddles
-          .map((pd) => `${pd.x.toFixed(1)},${pd.y.toFixed(1)},${pd.rx.toFixed(1)},${pd.ry.toFixed(1)},${pd.rot.toFixed(2)},${pd.alpha.toFixed(2)}`)
-          .join(';')
-      : '';
+  let puddleSig = '';
+  if (isRainy && env?.puddles?.length) {
+    const cachedSig = puddleSigCache.get(env.puddles);
+    if (cachedSig !== undefined) {
+      puddleSig = cachedSig;
+    } else {
+      puddleSig = env.puddles
+        .map((pd) => `${pd.x.toFixed(1)},${pd.y.toFixed(1)},${pd.rx.toFixed(1)},${pd.ry.toFixed(1)},${pd.rot.toFixed(2)},${pd.alpha.toFixed(2)}`)
+        .join(';');
+      puddleSigCache.set(env.puddles, puddleSig);
+    }
+  }
   const stadiumStyle = env?.stadiumStyle || 'modern_bowl';
   const bgKey = `${cssW}x${cssH}@${dpr}|${stadiumStyle}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
 
@@ -1030,7 +1062,7 @@ export const drawLivePitchToCanvas = (
       // Crisp Coach role badge beneath coach
       const tag = c.isUserCoach ? '★ โค้ช' : 'โค้ช';
       ctx.font = `800 ${cssW < 480 ? 6.5 : 7.5}px Sarabun, sans-serif`;
-      const tw = ctx.measureText(tag).width + 6;
+      const tw = measureTextCached(ctx, tag) + 6;
       const ty = cr + 2;
       ctx.fillStyle = c.isUserCoach ? '#facc15' : 'rgba(15, 23, 42, 0.9)';
       ctx.strokeStyle = c.isUserCoach ? '#1c1300' : kit;
@@ -1049,7 +1081,7 @@ export const drawLivePitchToCanvas = (
         const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
         ctx.globalAlpha = sAlpha;
         ctx.font = '800 8.5px Sarabun, sans-serif';
-        const sw = ctx.measureText(c.shoutText).width + 10;
+        const sw = measureTextCached(ctx, c.shoutText) + 10;
         const bx0 = clamp(-sw / 2, -cx + 6, cssW - cx - sw - 6);
         const by0 = -cr - 17;
         ctx.fillStyle = 'rgba(9, 23, 16, 0.94)';
@@ -1478,10 +1510,13 @@ export const drawLivePitchToCanvas = (
 
   // 5. Render 22 Players with natural running strides, orientation, GK dives, stamina, portraits & labels
   const playerRadius = clamp(cssW * 0.018, 9, 13.5);
-  const sortedAgents = world.agents.slice().sort((a, b2) => a.y - b2.y);
+  sortedAgentsBuf.length = 0;
+  for (let i = 0; i < world.agents.length; i++) {
+    if (!world.agents[i].sentOff) sortedAgentsBuf.push(world.agents[i]);
+  }
+  sortedAgentsBuf.sort((a, b2) => a.y - b2.y);
 
-  sortedAgents.forEach((ag) => {
-    if (ag.sentOff) return;
+  sortedAgentsBuf.forEach((ag) => {
     const cx = px(ag.x);
     const cy = py(ag.y);
     const speed = Math.hypot(ag.vx, ag.vy);
@@ -1981,7 +2016,7 @@ export const drawLivePitchToCanvas = (
       const roleStr = String(ag.role);
       const roleFont = Math.max(6.5, Math.round(playerRadius * 0.58));
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
-      const rw = Math.max(15, ctx.measureText(roleStr).width + 5.5);
+      const rw = Math.max(15, measureTextCached(ctx, roleStr) + 5.5);
       const rh = Math.max(8.5, roleFont + 2.5);
       const ry = -playerRadius - rh - 1.5;
       ctx.fillStyle = 'rgba(6, 20, 13, 0.9)';
@@ -2027,7 +2062,7 @@ export const drawLivePitchToCanvas = (
       const prefix = isBlessed ? '✨ ' : '';
       const label = ag.isMe ? `${prefix}★ ${ag.shortName} ${Math.round(ag.fit)}%` : `${prefix}${ag.shortName}`;
       ctx.font = `700 ${Math.max(9, Math.round(playerRadius * 0.86))}px Sarabun, sans-serif`;
-      const tw = ctx.measureText(label).width;
+      const tw = measureTextCached(ctx, label);
       const bw = tw + 8;
       const by = playerRadius + 11.5;
       ctx.fillStyle = isBlessed
@@ -2196,7 +2231,7 @@ export const drawLivePitchToCanvas = (
     const fxX = clamp(px(fx.x), 58, cssW - 58);
     const fxY = clamp(py(fx.y) - 22 - (1 - alpha) * 10, 18, cssH - 18);
     ctx.font = '800 11px Sarabun, sans-serif';
-    const tw = ctx.measureText(fx.label).width;
+    const tw = measureTextCached(ctx, fx.label);
     const bw = tw + 14;
     ctx.fillStyle = 'rgba(10, 24, 17, 0.9)';
     ctx.strokeStyle = fx.color;
@@ -2249,9 +2284,9 @@ export const drawLivePitchToCanvas = (
           ? '🎉 เฮลั่นสนาม!'
           : '🔥 ตุงตาข่าย!';
     ctx.font = '800 13px Sarabun, sans-serif';
-    const w1 = ctx.measureText(title).width;
+    const w1 = measureTextCached(ctx, title);
     ctx.font = '600 10px Sarabun, sans-serif';
-    const w2 = ctx.measureText(sub).width;
+    const w2 = measureTextCached(ctx, sub);
     const cardW = clamp(Math.max(w1, w2) + 38, 180, cssW - 24);
     const cardH = 40;
     const targetY = Math.round(padTop + 6);
@@ -2305,9 +2340,9 @@ export const drawLivePitchToCanvas = (
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.font = '800 12px Sarabun, sans-serif';
-    const w1 = ctx.measureText(title).width;
+    const w1 = measureTextCached(ctx, title);
     ctx.font = '600 10px Sarabun, sans-serif';
-    const w2 = ctx.measureText(sub).width;
+    const w2 = measureTextCached(ctx, sub);
     const cardW = clamp(Math.max(w1, w2) + 46, 178, cssW - 24);
     const cardH = 38;
     const cx = cssW / 2;
