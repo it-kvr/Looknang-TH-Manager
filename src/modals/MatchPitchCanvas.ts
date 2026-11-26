@@ -1593,12 +1593,29 @@ export const drawLivePitchToCanvas = (
       ctx.setLineDash([]);
     }
 
-    // Ground shadow (scales smaller & softens slightly during aerial leaps for crisp 3D depth)
+    // Ground shadow (scales smaller & softens slightly during aerial leaps & goal celebration jumps)
     const isJumpAcrobat =
       (ag.acrobatTimer ?? 0) > 0 &&
       (ag.acrobatType === 'header' || ag.acrobatType === 'bicycle' || ag.acrobatType === 'diving_header' || ag.acrobatType === 'volley');
     const jumpProg = isJumpAcrobat ? clamp(1 - (ag.acrobatTimer ?? 0) / Math.max(0.2, ag.acrobatMax || 0.72), 0, 1) : 0;
-    const jumpArc = isJumpAcrobat ? Math.sin(jumpProg * Math.PI) : 0;
+    const celebPhase = clamp(ag.celebratePhase ?? 0, 0, 1);
+    const isScorerAerialCeleb =
+      ag.intent === 'CELEBRATE' &&
+      ag.celebrateRole === 'scorer' &&
+      ((ag.celebratePose === 'siu_jump' && celebPhase >= 0.34 && celebPhase <= 0.76) ||
+        (ag.celebratePose === 'backflip' && celebPhase >= 0.28 && celebPhase <= 0.84));
+    const celebAirProg = isScorerAerialCeleb
+      ? ag.celebratePose === 'siu_jump'
+        ? clamp((celebPhase - 0.34) / 0.42, 0, 1)
+        : clamp((celebPhase - 0.28) / 0.56, 0, 1)
+      : 0;
+    const celebHopArc =
+      ag.intent === 'CELEBRATE' &&
+      (ag.celebrateRole === 'teammate' || ag.celebrateRole === 'assister' || ag.celebrateRole === 'gk') &&
+      ag.celebratePose !== 'calm_shush'
+        ? Math.abs(Math.sin((world.celebration?.elapsed ?? world.minuteFloat) * 10 + ag.slotIndex * 1.1)) * 0.38
+        : 0;
+    const jumpArc = Math.max(isJumpAcrobat ? Math.sin(jumpProg * Math.PI) : 0, Math.sin(celebAirProg * Math.PI), celebHopArc);
     const shadowScale = 1 - 0.24 * jumpArc;
     ctx.fillStyle = `rgba(0, 0, 0, ${(0.32 - 0.11 * jumpArc).toFixed(2)})`;
     ctx.beginPath();
@@ -1912,10 +1929,241 @@ export const drawLivePitchToCanvas = (
     ctx.stroke();
 
     // Subtle body bob & running shoulder sway
-    const bobY = -Math.abs(strideSin) * 1.65;
+    const celebHopOffset =
+      ag.intent === 'CELEBRATE' && ag.celebrateRole !== 'conceded'
+        ? ag.celebrateRole === 'scorer' && (ag.celebratePose === 'siu_jump' || ag.celebratePose === 'backflip')
+          ? 0
+          : -celebHopArc * playerRadius * 0.65
+        : 0;
+    const bobY = -Math.abs(strideSin) * 1.65 + celebHopOffset;
     ctx.translate(0, bobY);
-    if (speed > 2.5 && ag.intent !== 'DIVE') {
+    if (speed > 2.5 && ag.intent !== 'DIVE' && ag.intent !== 'CELEBRATE') {
       ctx.rotate(strideSin * 0.075);
+    }
+
+    // Distinct Choreographed Goal Celebration Animations & Postures
+    const cElapsed = world.celebration?.elapsed ?? 0;
+    if (ag.intent === 'CELEBRATE' && ag.celebrateRole !== 'conceded') {
+      const cPose = ag.celebratePose || 'group_huddle';
+      const cRole = ag.celebrateRole || 'teammate';
+      const cPh = clamp(ag.celebratePhase ?? 0, 0, 1);
+      const sleeveC = kit;
+      const skinC = '#f1c27d';
+
+      if (cRole === 'scorer') {
+        if (cPose === 'knee_slide') {
+          const sliding = cPh >= 0.28 && cPh <= 0.78;
+          const slideEnv = sliding ? Math.sin(((cPh - 0.28) / 0.5) * Math.PI) : 0;
+          if (sliding) {
+            ctx.rotate(-0.24 * slideEnv);
+            ctx.translate(0, playerRadius * 0.14 * slideEnv);
+            // Twin turf skid tracks trailing behind scorer
+            ctx.save();
+            ctx.strokeStyle = 'rgba(220, 252, 231, 0.78)';
+            ctx.lineWidth = 2.4;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-cosF * playerRadius * 2.5 + perpX * 2.8, -sinF * playerRadius * 2.5 + perpY * 2.8 + playerRadius * 0.45);
+            ctx.lineTo(-cosF * playerRadius * 0.5 + perpX * 2.8, -sinF * playerRadius * 0.5 + perpY * 2.8 + playerRadius * 0.45);
+            ctx.moveTo(-cosF * playerRadius * 2.5 - perpX * 2.8, -sinF * playerRadius * 2.5 - perpY * 2.8 + playerRadius * 0.45);
+            ctx.lineTo(-cosF * playerRadius * 0.5 - perpX * 2.8, -sinF * playerRadius * 0.5 - perpY * 2.8 + playerRadius * 0.45);
+            ctx.stroke();
+            ctx.restore();
+          }
+          // Victory V-arms raised
+          const armW = 0.2 + 0.3 * Math.sin(cElapsed * 12);
+          ctx.strokeStyle = sleeveC;
+          ctx.lineWidth = 2.6;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-playerRadius * 0.55, 0);
+          ctx.lineTo(-playerRadius * 1.15, -playerRadius * (0.95 + armW * 0.25));
+          ctx.moveTo(playerRadius * 0.55, 0);
+          ctx.lineTo(playerRadius * 1.15, -playerRadius * (0.95 + armW * 0.25));
+          ctx.stroke();
+          ctx.fillStyle = skinC;
+          ctx.beginPath();
+          ctx.arc(-playerRadius * 1.15, -playerRadius * (0.95 + armW * 0.25), 1.9, 0, Math.PI * 2);
+          ctx.arc(playerRadius * 1.15, -playerRadius * (0.95 + armW * 0.25), 1.9, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (cPose === 'siu_jump') {
+          if (cPh >= 0.34 && cPh <= 0.76) {
+            const jT = (cPh - 0.34) / 0.42;
+            const jArc = Math.sin(jT * Math.PI);
+            ctx.translate(0, -playerRadius * 1.08 * jArc);
+            ctx.rotate(jT * Math.PI * 2);
+            ctx.strokeStyle = `rgba(250, 204, 21, ${(0.9 * jArc).toFixed(2)})`;
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.arc(0, 0, playerRadius + 5.5, 0, Math.PI * 1.6);
+            ctx.stroke();
+          } else if (cPh > 0.76) {
+            const landT = clamp((cPh - 0.76) / 0.24, 0, 1);
+            ctx.strokeStyle = `rgba(250, 204, 21, ${(0.95 * (1 - landT)).toFixed(2)})`;
+            ctx.lineWidth = 2.6;
+            ctx.beginPath();
+            ctx.arc(0, 0, playerRadius + 4 + landT * 18, 0, Math.PI * 2);
+            ctx.stroke();
+            // Wide outstretched power landing arms
+            ctx.strokeStyle = sleeveC;
+            ctx.lineWidth = 2.6;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-playerRadius * 0.6, 0);
+            ctx.lineTo(-playerRadius * 1.55, playerRadius * 0.35);
+            ctx.moveTo(playerRadius * 0.6, 0);
+            ctx.lineTo(playerRadius * 1.55, playerRadius * 0.35);
+            ctx.stroke();
+            ctx.fillStyle = skinC;
+            ctx.beginPath();
+            ctx.arc(-playerRadius * 1.55, playerRadius * 0.35, 1.9, 0, Math.PI * 2);
+            ctx.arc(playerRadius * 1.55, playerRadius * 0.35, 1.9, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else if (cPose === 'backflip') {
+          if (cPh >= 0.28 && cPh <= 0.84) {
+            const fT = (cPh - 0.28) / 0.56;
+            const fArc = Math.sin(fT * Math.PI);
+            ctx.translate(0, -playerRadius * 1.15 * fArc);
+            ctx.rotate(-fT * Math.PI * 4);
+            ctx.strokeStyle = `rgba(251, 146, 60, ${(0.95 * fArc).toFixed(2)})`;
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.arc(0, 0, playerRadius + 6, -Math.PI * 0.9, Math.PI * 0.4);
+            ctx.stroke();
+            ctx.strokeStyle = `rgba(254, 240, 138, ${(0.85 * fArc).toFixed(2)})`;
+            ctx.lineWidth = 1.6;
+            ctx.beginPath();
+            ctx.arc(0, 0, playerRadius + 9.5, Math.PI * 0.1, Math.PI * 1.35);
+            ctx.stroke();
+          } else {
+            ctx.strokeStyle = sleeveC;
+            ctx.lineWidth = 2.5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(-playerRadius * 0.6, 0);
+            ctx.lineTo(-playerRadius * 1.2, -playerRadius * 1.05);
+            ctx.moveTo(playerRadius * 0.6, 0);
+            ctx.lineTo(playerRadius * 1.2, -playerRadius * 1.05);
+            ctx.stroke();
+          }
+        } else if (cPose === 'airplane') {
+          const bank = Math.sin(cElapsed * 6.5) * 0.24;
+          ctx.rotate(bank);
+          // Wide airplane wings + wingtip trails
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.moveTo(perpX * playerRadius * 1.65, perpY * playerRadius * 1.65);
+          ctx.lineTo(perpX * playerRadius * 1.65 - cosF * playerRadius * 1.9, perpY * playerRadius * 1.65 - sinF * playerRadius * 1.9);
+          ctx.moveTo(-perpX * playerRadius * 1.65, -perpY * playerRadius * 1.65);
+          ctx.lineTo(-perpX * playerRadius * 1.65 - cosF * playerRadius * 1.9, -perpY * playerRadius * 1.65 - sinF * playerRadius * 1.9);
+          ctx.stroke();
+
+          ctx.strokeStyle = sleeveC;
+          ctx.lineWidth = 2.8;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-perpX * playerRadius * 1.65, -perpY * playerRadius * 1.65);
+          ctx.lineTo(perpX * playerRadius * 1.65, perpY * playerRadius * 1.65);
+          ctx.stroke();
+          ctx.fillStyle = skinC;
+          ctx.beginPath();
+          ctx.arc(perpX * playerRadius * 1.65, perpY * playerRadius * 1.65, 2, 0, Math.PI * 2);
+          ctx.arc(-perpX * playerRadius * 1.65, -perpY * playerRadius * 1.65, 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (cPose === 'bow_crowd') {
+          const bowEnv = cPh > 0.32 ? Math.sin(clamp((cPh - 0.32) / 0.68, 0, 1) * Math.PI) : 0;
+          ctx.scale(1 + 0.04 * bowEnv, 1 - 0.14 * bowEnv);
+          ctx.strokeStyle = `rgba(250, 204, 21, ${(0.45 + 0.45 * bowEnv).toFixed(2)})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, playerRadius + 4.5 + bowEnv * 7, 0, Math.PI * 2);
+          ctx.stroke();
+          // Hands joined in graceful Thai Wai / salute in front
+          ctx.fillStyle = skinC;
+          ctx.strokeStyle = '#fde047';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(cosF * playerRadius * 0.92, sinF * playerRadius * 0.92, 2.3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else if (cPose === 'calm_shush') {
+          const pulseR = ((cElapsed * 1.6) % 1) * 13;
+          const pulseA = 1 - ((cElapsed * 1.6) % 1);
+          ctx.strokeStyle = `rgba(56, 189, 248, ${(pulseA * 0.9).toFixed(2)})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, playerRadius + 3 + pulseR, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(0, 0, playerRadius + 4.5, 0, Math.PI * 2);
+          ctx.stroke();
+        } else if (cPose === 'finger_point') {
+          const pointLen = playerRadius * (1.35 + Math.sin(cElapsed * 11) * 0.14);
+          ctx.strokeStyle = sleeveC;
+          ctx.lineWidth = 2.6;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.lineTo(cosF * pointLen, sinF * pointLen);
+          ctx.stroke();
+          ctx.fillStyle = '#fde047';
+          ctx.beginPath();
+          ctx.arc(cosF * pointLen, sinF * pointLen, 2.4, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // group_huddle / own_goal_modest
+          const wave = Math.sin(cElapsed * 13) * 0.25;
+          ctx.strokeStyle = sleeveC;
+          ctx.lineWidth = 2.6;
+          ctx.lineCap = 'round';
+          ctx.beginPath();
+          ctx.moveTo(-playerRadius * 0.55, 0);
+          ctx.lineTo(-playerRadius * 1.1, -playerRadius * (0.9 + wave));
+          ctx.moveTo(playerRadius * 0.55, 0);
+          ctx.lineTo(playerRadius * 1.1, -playerRadius * (0.9 - wave));
+          ctx.stroke();
+          ctx.strokeStyle = 'rgba(74, 222, 128, 0.78)';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.arc(0, 0, playerRadius + 4.5 + Math.sin(cElapsed * 8) * 2, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      } else if (cRole === 'assister' || cRole === 'teammate' || cRole === 'gk') {
+        const wave = Math.sin(cElapsed * 12 + ag.slotIndex) * 0.28;
+        ctx.strokeStyle = sleeveC;
+        ctx.lineWidth = 2.3;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(-playerRadius * 0.5, 0);
+        ctx.lineTo(-playerRadius * 1.05, -playerRadius * (0.85 + wave));
+        ctx.moveTo(playerRadius * 0.5, 0);
+        ctx.lineTo(playerRadius * 1.05, -playerRadius * (0.85 - wave));
+        ctx.stroke();
+        ctx.fillStyle = skinC;
+        ctx.beginPath();
+        ctx.arc(-playerRadius * 1.05, -playerRadius * (0.85 + wave), 1.6, 0, Math.PI * 2);
+        ctx.arc(playerRadius * 1.05, -playerRadius * (0.85 - wave), 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        if (cRole === 'assister') {
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.72)';
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.arc(0, 0, playerRadius + 3.5, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    } else if (ag.intent === 'CELEBRATE' && ag.celebrateRole === 'conceded' && ag.isOgCulprit) {
+      const shake = Math.sin(cElapsed * 18) * 0.14;
+      ctx.rotate(shake);
+      ctx.strokeStyle = 'rgba(251, 113, 133, 0.85)';
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      ctx.arc(0, 0, playerRadius + 4, 0, Math.PI * 2);
+      ctx.stroke();
     }
 
     // GK ready-stance padded gloves slightly out in front when not mid-dive
@@ -2107,8 +2355,27 @@ export const drawLivePitchToCanvas = (
     }
 
     // Compact label for carrier, target, shooter, blessed hot-streak, or "★ ฉัน"
-    if (isCarrier || isTarget || ag.isMe || isBlessed || ag.intent === 'CELEBRATE' || ag.intent === 'MAKE_RUN') {
-      const prefix = isBlessed ? '✨ ' : '';
+    if (isCarrier || isTarget || ag.isMe || isBlessed || (ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer') || ag.intent === 'MAKE_RUN') {
+      const prefix =
+        ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
+          ? ag.celebratePose === 'knee_slide'
+            ? '🦵 '
+            : ag.celebratePose === 'siu_jump'
+              ? '⚡ '
+              : ag.celebratePose === 'backflip'
+                ? '🤸 '
+                : ag.celebratePose === 'airplane'
+                  ? '✈️ '
+                  : ag.celebratePose === 'bow_crowd'
+                    ? '🙏 '
+                    : ag.celebratePose === 'calm_shush'
+                      ? '🤫 '
+                      : ag.celebratePose === 'finger_point'
+                        ? '👉 '
+                        : '🎉 '
+          : isBlessed
+            ? '✨ '
+            : '';
       const label = ag.isMe ? `${prefix}★ ${ag.shortName} ${Math.round(ag.fit)}%` : `${prefix}${ag.shortName}`;
       ctx.font = `700 ${Math.max(9, Math.round(playerRadius * 0.86))}px Sarabun, sans-serif`;
       const tw = measureTextCached(ctx, label);
@@ -2118,7 +2385,9 @@ export const drawLivePitchToCanvas = (
         ? 'rgba(245, 158, 11, 0.94)'
         : ag.isMe
           ? 'rgba(250, 204, 21, 0.92)'
-          : 'rgba(8, 22, 15, 0.78)';
+          : ag.intent === 'CELEBRATE' && ag.celebrateRole === 'scorer'
+            ? 'rgba(16, 185, 129, 0.92)'
+            : 'rgba(8, 22, 15, 0.78)';
       ctx.beginPath();
       ctx.roundRect(-bw / 2, by - 6.5, bw, 13, 4);
       ctx.fill();

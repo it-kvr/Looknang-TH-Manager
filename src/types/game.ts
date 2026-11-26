@@ -1050,6 +1050,17 @@ export type BallFlightType =
   | 'goalkick'
   | 'bounce';
 
+export type GoalCelebrationStyle =
+  | 'knee_slide'
+  | 'siu_jump'
+  | 'backflip'
+  | 'group_huddle'
+  | 'finger_point'
+  | 'airplane'
+  | 'bow_crowd'
+  | 'calm_shush'
+  | 'own_goal_modest';
+
 export interface LivePitchAgent {
   id: string;
   shortName: string;
@@ -1116,6 +1127,10 @@ export interface LivePitchAgent {
   vis: number[];
   blessedMins?: number;
   blessedTag?: string;
+  celebratePose?: GoalCelebrationStyle;
+  celebrateRole?: 'scorer' | 'assister' | 'teammate' | 'gk' | 'conceded';
+  celebratePhase?: number;
+  isOgCulprit?: boolean;
 }
 
 export interface LiveBallState {
@@ -1355,6 +1370,20 @@ export interface LiveMatchWorld {
   goalNetRippleLeft: number;
   goalNetRippleRight: number;
   celebrateTimer: number;
+  celebration?: {
+    style: GoalCelebrationStyle;
+    side: 'H' | 'A';
+    scorerId: string;
+    assisterId?: string;
+    anchorX: number;
+    anchorY: number;
+    duration: number;
+    elapsed: number;
+    isOwnGoal?: boolean;
+    label: string;
+  } | null;
+  lastCelebrationStyle?: GoalCelebrationStyle;
+  kickoffReturnElapsed?: number;
   dramaSlowSec: number;
   dramaLabel: string | null;
   sparkles: { x: number; y: number; vx: number; vy: number; color: string; size: number; ttl: number; maxTtl: number }[];

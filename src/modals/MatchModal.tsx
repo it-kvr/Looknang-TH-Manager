@@ -13,7 +13,7 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
@@ -1102,6 +1102,9 @@ export const MatchModal: React.FC<{
       goalNetRippleLeft: 0,
       goalNetRippleRight: 0,
       celebrateTimer: 0,
+      celebration: null,
+      lastCelebrationStyle: undefined,
+      kickoffReturnElapsed: 0,
       dramaSlowSec: 0,
       dramaLabel: null,
       sparkles: [],
@@ -2374,6 +2377,108 @@ export const MatchModal: React.FC<{
     return true;
   };
 
+  const pickKickoffPair = (pool: LivePitchAgent[]) => {
+    const activeOutfield = pool.filter((z) => !z.sentOff && z.pos !== 'GK');
+    const kicker = activeOutfield.find((z) => z.pos === 'FW') || activeOutfield.find((z) => z.pos === 'MF') || activeOutfield[0];
+    const partner = activeOutfield.find((z) => z.id !== kicker?.id && (z.pos === 'MF' || z.pos === 'FW')) || activeOutfield.find((z) => z.id !== kicker?.id);
+    return { kicker, partner };
+  };
+
+  const clearWorldCelebration = (w: LiveMatchWorld, nextIntent: LivePitchAgent['intent'] = 'SUPPORT') => {
+    w.celebrateTimer = 0;
+    w.celebration = null;
+    w.kickoffReturnElapsed = 0;
+    w.agents.forEach((ag) => {
+      ag.celebratePose = undefined;
+      ag.celebrateRole = undefined;
+      ag.celebratePhase = undefined;
+      ag.isOgCulprit = undefined;
+      if (ag.intent === 'CELEBRATE') {
+        ag.intent = nextIntent;
+      }
+    });
+  };
+
+  const pickGoalCelebrationStyle = (
+    w: LiveMatchWorld,
+    side: 'H' | 'A',
+    scorerAg: LivePitchAgent | undefined,
+    isOwnGoal: boolean,
+    isMyTeamGoal: boolean,
+    isMeScorer: boolean,
+    curMin: number,
+    ghAfter: number,
+    gaAfter: number,
+    hasAssister: boolean,
+    finishVerb: string
+  ): { style: GoalCelebrationStyle; label: string } => {
+    if (isOwnGoal) {
+      return { style: 'own_goal_modest', label: '👏 ดีใจแบบสุภาพ (ได้ประตูจาก OG)' };
+    }
+    const isHomeSide = side === 'H';
+    const sideDiff = side === 'H' ? ghAfter - gaAfter : gaAfter - ghAfter;
+    const isClutch = curMin >= 78 && sideDiff >= 0 && sideDiff <= 1;
+    const isEqualizer = sideDiff === 0;
+    const isAcrobaticFinish = finishVerb.includes('จักรยานอากาศ') || finishVerb.includes('วอลเลย์') || finishVerb.includes('ไกล') || finishVerb.includes('โค้ง');
+    const agi = scorerAg?.d.agi ?? 65;
+    const spd = scorerAg?.d.spd ?? 65;
+    const isFlair = Boolean(scorerAg && (scorerAg.sig === 'cur' || scorerAg.sig === 'fin' || agentHasTrait(scorerAg, 'flair_dribbler') || agentHasTrait(scorerAg, 'clutch_player')));
+    const isWinger = Boolean(scorerAg && (scorerAg.role === 'LW' || scorerAg.role === 'RW' || scorerAg.role === 'LM' || scorerAg.role === 'RM' || spd >= 75));
+
+    const candidates: { style: GoalCelebrationStyle; label: string; weight: number }[] = [
+      {
+        style: 'knee_slide',
+        label: '🦵 สไลด์เข่าฉลองประตู!',
+        weight: 22 + (isAcrobaticFinish ? 4 : 0) + (isClutch ? 6 : 0)
+      },
+      {
+        style: 'siu_jump',
+        label: '⚡ กระโดดหมุนตัว SIUUU!',
+        weight: 18 + (isFlair ? 10 : 0) + (isClutch || isMeScorer ? 8 : 0) + (scorerAg?.pos === 'FW' ? 5 : 0)
+      },
+      {
+        style: 'backflip',
+        label: '🤸 ตีลังกาฉลองสุดเหวี่ยง!',
+        weight: 11 + (agi >= 72 ? 12 : 0) + (isAcrobaticFinish ? 10 : 0) + (isMeScorer ? 5 : 0)
+      },
+      {
+        style: 'group_huddle',
+        label: '🫂 วิ่งกอดรวมพลังทั้งทีม!',
+        weight: 16 + (hasAssister ? 8 : 0) + (isEqualizer || isClutch ? 12 : 0)
+      },
+      {
+        style: 'finger_point',
+        label: hasAssister ? '👉 ชี้ขอบคุณเพื่อนร่วมทีม!' : '👆 ชี้ฟ้าฉลองประตู!',
+        weight: 15 + (hasAssister ? 16 : 0)
+      },
+      {
+        style: 'airplane',
+        label: '✈️ กางปีกเครื่องบินร่อนฉลอง!',
+        weight: 14 + (isWinger ? 13 : 0)
+      },
+      {
+        style: 'bow_crowd',
+        label: '🙏 ไหว้ขอบคุณแฟนบอลรอบสนาม!',
+        weight: 13 + (isHomeSide ? 11 : 0) + (isMyTeamGoal ? 10 : 0) + (isMeScorer ? 8 : 0)
+      },
+      {
+        style: 'calm_shush',
+        label: '🤫 จุ๊ปากเงียบกริบทั้งสนาม!',
+        weight: (!isHomeSide ? 18 : 7) + (sideDiff > 0 && curMin >= 65 ? 10 : 0) + (w.goalBanner?.isMyGoal === false ? 4 : 0)
+      }
+    ];
+
+    const filtered = candidates.filter((c) => c.style !== w.lastCelebrationStyle);
+    const pool = filtered.length ? filtered : candidates;
+    const totalW = pool.reduce((s, c) => s + Math.max(1, c.weight), 0);
+    let r = Math.random() * totalW;
+    for (const item of pool) {
+      r -= Math.max(1, item.weight);
+      if (r <= 0) return { style: item.style, label: item.label };
+    }
+    return { style: pool[0].style, label: pool[0].label };
+  };
+
   // Update all 22 AI agents' tactical targets & off-ball runs ("ทำทาง") smoothly
   const updateAgentTargets = (w: LiveMatchWorld, curMin: number) => {
     const b = w.ball;
@@ -2448,10 +2553,38 @@ export const MatchModal: React.FC<{
         ? activeAgents.filter((z) => z.side !== setPiece.side && z.pos !== 'GK')
         : [];
 
+    const celeb = w.celebration;
+    const isCelebrating = w.celebrateTimer > 0 && Boolean(celeb);
+    const celebProgress = isCelebrating && celeb ? clamp(celeb.elapsed / Math.max(0.4, celeb.duration), 0, 1) : 0;
+    const celebRunners =
+      isCelebrating && celeb
+        ? activeAgents
+            .filter(
+              (z) =>
+                z.side === celeb.side &&
+                z.pos !== 'GK' &&
+                (celeb.isOwnGoal || z.id !== celeb.scorerId) &&
+                (!celeb.assisterId || z.id !== celeb.assisterId)
+            )
+            .sort(
+              (u, v) =>
+                ((u.pos === 'FW' ? 0 : u.pos === 'MF' ? 1 : 2) * 100 + u.slotIndex) -
+                ((v.pos === 'FW' ? 0 : v.pos === 'MF' ? 1 : 2) * 100 + v.slotIndex)
+            )
+        : [];
+
     activeAgents.forEach((ag) => {
-      if (w.celebrateTimer <= 0 && ag.intent === 'CELEBRATE') {
-        ag.intent = 'SUPPORT';
-        ag.intentTimer = 0;
+      if (!isCelebrating) {
+        if (ag.celebratePose || ag.celebrateRole || ag.celebratePhase != null || ag.isOgCulprit) {
+          ag.celebratePose = undefined;
+          ag.celebrateRole = undefined;
+          ag.celebratePhase = undefined;
+          ag.isOgCulprit = undefined;
+        }
+        if (ag.intent === 'CELEBRATE') {
+          ag.intent = setPiece?.type === 'kickoff' ? 'RESET' : 'SUPPORT';
+          ag.intentTimer = 0;
+        }
       }
       if (b.targetId === ag.id && !w.pendingSetPiece && ag.intent !== 'DIVE' && ag.intent !== 'CELEBRATE') {
         ag.intent = 'PASS_TARGET';
@@ -2465,6 +2598,7 @@ export const MatchModal: React.FC<{
       }
       // Lock player cleanly at strike/header/acrobat contact point so they don't sprint away mid-animation
       if (
+        !isCelebrating &&
         (ag.acrobatTimer ?? 0) > 0 &&
         !w.pendingSetPiece &&
         b.carrierId !== ag.id &&
@@ -2489,7 +2623,7 @@ export const MatchModal: React.FC<{
         lockedTargetIds.add(ag.id);
         return;
       }
-      if (ag.intentTimer > 0) {
+      if (!isCelebrating && ag.intentTimer > 0) {
         if (ag.intent === 'CELEBRATE' || ag.intent === 'DIVE') {
           lockedTargetIds.add(ag.id);
           return;
@@ -2508,16 +2642,116 @@ export const MatchModal: React.FC<{
       const inPoss = b.possessionSide === ag.side;
       const dir = attRight ? 1 : -1;
 
-      // Celebration run!
-      if (w.celebrateTimer > 0 && inPoss && ag.pos !== 'GK') {
+      // Choreographed non-repetitive Goal Celebration!
+      if (isCelebrating && celeb) {
         ag.intent = 'CELEBRATE';
-        const cornerY = b.y < 50 ? 12 : 88;
-        const cornerX = attRight ? 92 : 8;
-        ag.tx = clamp(cornerX + (((ag.slotIndex % 3) - 1) * 4), 6, 94);
-        ag.ty = clamp(cornerY + (((ag.slotIndex % 4) - 1.5) * 4), 8, 92);
+        ag.celebratePose = celeb.style;
+        ag.celebratePhase = celebProgress;
         ag.runToX = undefined;
         ag.runToY = undefined;
         lockedTargetIds.add(ag.id);
+
+        if (ag.side === celeb.side) {
+          ag.isOgCulprit = false;
+          const ax = celeb.anchorX;
+          const ay = celeb.anchorY;
+          const crowdSideY = ay < 50 ? 9.5 : 90.5;
+          const crowdSign = ay < 50 ? -1 : 1;
+
+          if (!celeb.isOwnGoal && ag.id === celeb.scorerId) {
+            ag.celebrateRole = 'scorer';
+            if (celeb.style === 'knee_slide') {
+              const slidePush = celebProgress < 0.28 ? 0 : Math.min(1, (celebProgress - 0.28) / 0.5) * 4.5;
+              ag.tx = clamp(ax + dir * slidePush, 6, 94);
+              ag.ty = clamp(ay + crowdSign * slidePush * 0.35, 7.5, 92.5);
+            } else if (celeb.style === 'siu_jump') {
+              ag.tx = clamp(ax, 8, 92);
+              ag.ty = clamp(ay + crowdSign * 1.5, 8.5, 91.5);
+            } else if (celeb.style === 'backflip') {
+              ag.tx = clamp(ax - dir * 1.5, 10, 90);
+              ag.ty = clamp(ay, 11, 89);
+            } else if (celeb.style === 'airplane') {
+              const arc = celebProgress * Math.PI * 1.1;
+              ag.tx = clamp(ax - dir * 2 + Math.cos(arc) * dir * 5.2, 8, 92);
+              ag.ty = clamp(ay + Math.sin(arc) * crowdSign * 6.5, 8.5, 91.5);
+            } else if (celeb.style === 'bow_crowd') {
+              ag.tx = clamp(ax, 14, 86);
+              ag.ty = crowdSideY;
+            } else if (celeb.style === 'calm_shush') {
+              ag.tx = clamp(attRight ? 84 : 16, 12, 88);
+              ag.ty = clamp(ay, 26, 74);
+            } else if (celeb.style === 'finger_point') {
+              const assisterAg = celeb.assisterId ? activeAgents.find((z) => z.id === celeb.assisterId) : undefined;
+              ag.tx = clamp(assisterAg ? ax * 0.72 + assisterAg.x * 0.28 : ax, 10, 90);
+              ag.ty = clamp(assisterAg ? ay * 0.72 + assisterAg.y * 0.28 : ay, 10, 90);
+            } else {
+              ag.tx = clamp(ax, 10, 90);
+              ag.ty = clamp(ay, 10, 90);
+            }
+            return;
+          }
+
+          if (celeb.assisterId && ag.id === celeb.assisterId) {
+            ag.celebrateRole = 'assister';
+            if (celeb.style === 'bow_crowd') {
+              ag.tx = clamp(ax - dir * 3.2, 10, 90);
+              ag.ty = crowdSideY;
+            } else if (celeb.style === 'group_huddle') {
+              ag.tx = clamp(ax - dir * 2.6, 8, 92);
+              ag.ty = clamp(ay - crowdSign * 2.1, 9, 91);
+            } else if (celeb.style === 'finger_point') {
+              ag.tx = clamp(ax - dir * 5.5, 10, 90);
+              ag.ty = clamp(ay + (ay < 50 ? 5.5 : -5.5), 10, 90);
+            } else {
+              ag.tx = clamp(ax - dir * 3.4, 8, 92);
+              ag.ty = clamp(ay - crowdSign * 3.0, 9, 91);
+            }
+            return;
+          }
+
+          if (ag.pos === 'GK') {
+            ag.celebrateRole = 'gk';
+            ag.tx = attRight ? 7.2 : 92.8;
+            ag.ty = 50;
+            return;
+          }
+
+          ag.celebrateRole = 'teammate';
+          const runnerRank = celebRunners.findIndex((z) => z.id === ag.id);
+          if (runnerRank >= 0 && runnerRank < 4) {
+            if (celeb.style === 'group_huddle') {
+              const ang = (Math.PI * 2 * (runnerRank + 0.5)) / 4.5 + (attRight ? 0 : Math.PI);
+              ag.tx = clamp(ax + Math.cos(ang) * 3.6, 7, 93);
+              ag.ty = clamp(ay + Math.sin(ang) * 3.6, 8.5, 91.5);
+            } else if (celeb.style === 'bow_crowd') {
+              const offsetSide = (runnerRank - 1.5) * 3.4;
+              ag.tx = clamp(ax - dir * (4.2 + runnerRank * 1.4), 10, 90);
+              ag.ty = clamp(crowdSideY - crowdSign * (1.2 + Math.abs(offsetSide) * 0.25), 9.5, 90.5);
+            } else {
+              const fanAng = (attRight ? Math.PI : 0) + ((runnerRank - 1.5) * 0.55);
+              const rad = celeb.style === 'calm_shush' ? 6.8 : 4.8 + (runnerRank % 2) * 1.5;
+              ag.tx = clamp(ax + Math.cos(fanAng) * rad, 7, 93);
+              ag.ty = clamp(ay + Math.sin(fanAng) * rad, 8.5, 91.5);
+            }
+          } else {
+            const ownForwardX = clamp(attRight ? 54 + (ag.slotIndex % 3) * 6 : 46 - (ag.slotIndex % 3) * 6, 18, 82);
+            const rawSlotY = attRight ? ag.slotX : 100 - ag.slotX;
+            ag.tx = ownForwardX;
+            ag.ty = clamp(50 + (rawSlotY - 50) * 0.72, 12, 88);
+          }
+          return;
+        }
+
+        // Conceding team pauses briefly/dejectedly near current zones before walking back for kickoff
+        ag.celebrateRole = 'conceded';
+        ag.isOgCulprit = Boolean(celeb.isOwnGoal && ag.id === celeb.scorerId);
+        if (ag.pos === 'GK') {
+          ag.tx = attRight ? 3.5 : 96.5;
+          ag.ty = 50;
+        } else {
+          ag.tx = ag.x;
+          ag.ty = ag.y;
+        }
         return;
       }
 
@@ -2529,31 +2763,30 @@ export const MatchModal: React.FC<{
         if (ag.pos === 'GK') {
           ag.tx = attRight ? 2.4 : 97.6;
           ag.ty = 50;
-          ag.intent = 'SUPPORT';
+          ag.intent = 'RESET';
           return;
         }
         const teamActive = activeAgents.filter((z) => z.side === ag.side && z.pos !== 'GK');
-        const kicker = teamActive.find((z) => z.pos === 'FW') || teamActive.find((z) => z.pos === 'MF') || teamActive[0];
-        const partner = teamActive.find((z) => z.id !== kicker?.id && (z.pos === 'MF' || z.pos === 'FW')) || teamActive[1];
+        const { kicker, partner } = pickKickoffPair(teamActive);
         const isKickSide = ag.side === setPiece.side;
         if (isKickSide && kicker && ag.id === kicker.id) {
           ag.tx = 50 - dir * 0.6;
           ag.ty = 50;
-          ag.intent = 'SUPPORT';
+          ag.intent = 'RESET';
           return;
         }
         if (isKickSide && partner && ag.id === partner.id) {
           ag.tx = 50 - dir * 5.2;
           ag.ty = 45;
-          ag.intent = 'SUPPORT';
+          ag.intent = 'RESET';
           return;
         }
         const ownHalfNormX = clamp(8 + (100 - ag.slotY) * 0.43, 10, 47.2);
         const rawSlotY = attRight ? ag.slotX : 100 - ag.slotX;
         let kickTx = attRight ? ownHalfNormX : 100 - ownHalfNormX;
         const kickTy = clamp(50 + (rawSlotY - 50) * 0.92, 9, 91);
-        if (!isKickSide && Math.hypot(kickTx - 50, kickTy - 50) < 9.5) {
-          kickTx = attRight ? Math.min(kickTx, 40.5) : Math.max(kickTx, 59.5);
+        if (!isKickSide && Math.hypot(kickTx - 50, kickTy - 50) < 10.2) {
+          kickTx = attRight ? Math.min(kickTx, 39.8) : Math.max(kickTx, 60.2);
         }
         ag.tx = kickTx;
         ag.ty = kickTy;
@@ -3784,33 +4017,38 @@ export const MatchModal: React.FC<{
       const attCfg = getEffectiveTeamCfg(sp.side, curMin);
 
       if (sp.type === 'kickoff') {
-        const kicker = attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.pos === 'MF') || attPool[0];
-        const midTarget = attPool.find((a) => a.pos === 'MF' && a.id !== kicker?.id) || attPool[1] || kicker;
-        if (kicker && midTarget) {
-          kicker.x = 50;
-          kicker.y = 50;
+        const { kicker, partner: midTarget } = pickKickoffPair(attPool);
+        const passTo = midTarget || kicker;
+        if (kicker && passTo) {
+          if (Math.hypot(kicker.x - 50, kicker.y - 50) > 1.8) {
+            kicker.x = 50 - dir * 0.6;
+            kicker.y = 50;
+          }
+          kicker.facing = Math.atan2(passTo.y - kicker.y, passTo.x - kicker.x);
           b.x = 50;
           b.y = 50;
+          b.z = 0;
           b.fromX = 50;
           b.fromY = 50;
-          b.toX = midTarget.x;
-          b.toY = midTarget.y;
+          b.toX = passTo.x;
+          b.toY = passTo.y;
           b.curve = 0;
           b.maxZ = 0;
           b.startZ = 0;
           b.endZ = 0;
           b.progress = 0;
-          b.duration = 0.44;
+          b.duration = 0.42;
           b.flightType = 'pass';
           b.shotStyle = undefined;
           b.carrierId = null;
-          b.targetId = midTarget.id;
+          b.targetId = passTo.id;
           b.lastPasserId = kicker.id;
           b.possessionSide = sp.side;
-          midTarget.tx = b.toX;
-          midTarget.ty = b.toY;
-          midTarget.intent = 'PASS_TARGET';
-          w.phaseLabel = `⚽ ${attTeam.name} ครองบอลขึ้นเกม`;
+          passTo.tx = b.toX;
+          passTo.ty = b.toY;
+          passTo.intent = 'PASS_TARGET';
+          SFX.pass();
+          w.phaseLabel = `⚽ ${attTeam.name} เขี่ยบอลเริ่มเล่น`;
           w.phaseTone = 'normal';
         }
         return;
@@ -5807,17 +6045,74 @@ export const MatchModal: React.FC<{
     if (isMeScorer) {
       triggerConfetti();
     }
-    w.celebrateTimer = 1.65;
+    const attRight = isAttackRight(w, side);
+    const scorerAg = !isOwnGoal ? w.agents.find((a) => !a.sentOff && a.side === side && a.id === scorerName) : undefined;
+    const assisterAg = !isOwnGoal && assisterName ? w.agents.find((a) => !a.sentOff && a.side === side && a.id === assisterName) : undefined;
+    const pickedCeleb = pickGoalCelebrationStyle(
+      w,
+      side,
+      scorerAg,
+      isOwnGoal,
+      isMyTeamGoal,
+      isMeScorer,
+      curMin,
+      sr.gh,
+      sr.ga,
+      Boolean(assisterAg),
+      finishVerb
+    );
+    const celebDuration = isOwnGoal ? 1.45 : pickedCeleb.style === 'group_huddle' ? 2.55 : 2.35;
+    const anchorX = clamp(
+      pickedCeleb.style === 'calm_shush'
+        ? attRight ? 83 : 17
+        : pickedCeleb.style === 'bow_crowd'
+          ? clamp((scorerAg?.x ?? goalX) * 0.4 + (attRight ? 82 : 18) * 0.6, 16, 84)
+          : attRight ? 90.5 : 9.5,
+      8,
+      92
+    );
+    const preferTop = (scorerAg?.y ?? goalY) < 50;
+    const anchorY = clamp(
+      pickedCeleb.style === 'bow_crowd'
+        ? preferTop ? 10.5 : 89.5
+        : pickedCeleb.style === 'calm_shush'
+          ? clamp(goalY, 26, 74)
+          : pickedCeleb.style === 'group_huddle'
+            ? preferTop ? 22 : 78
+            : preferTop ? 12.5 : 87.5,
+      8.5,
+      91.5
+    );
+    w.lastCelebrationStyle = pickedCeleb.style;
+    w.kickoffReturnElapsed = 0;
+    w.celebrateTimer = celebDuration;
+    w.celebration = {
+      style: pickedCeleb.style,
+      side,
+      scorerId: isOwnGoal ? ogCulpritName : scorerName,
+      assisterId: assisterAg?.id,
+      anchorX,
+      anchorY,
+      duration: celebDuration,
+      elapsed: 0,
+      isOwnGoal,
+      label: pickedCeleb.label
+    };
     triggerCoachShout(w, side, '🔥 เยี่ยมมาก!', 2.8);
     triggerCoachShout(w, side === 'H' ? 'A' : 'H', '📣 ตั้งสติ! คุมเกม!', 2.6);
     w.ball.carrierId = null;
     w.ball.targetId = null;
     w.ball.lastPasserId = null;
-    triggerDramaSlow(w, 2.1, isOwnGoal ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritShort}` : `⚽ GOAL!! ${scorerShort} (${attTeam.name})`);
-    w.pendingSetPiece = { type: 'kickoff', side: defSide, x: 50, y: 50, waitSec: 3.15 };
+    w.ball.trail = [];
+    triggerDramaSlow(
+      w,
+      Math.min(2.1, celebDuration * 0.85),
+      isOwnGoal ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritShort}` : `⚽ GOAL!! ${scorerShort} · ${pickedCeleb.label}`
+    );
+    w.pendingSetPiece = { type: 'kickoff', side: defSide, x: 50, y: 50, waitSec: 0.42 };
     w.phaseLabel = isOwnGoal
       ? `🤦 เข้าประตูตัวเอง!! ${ogCulpritName} (${ogCulpritTeam.name})!`
-      : `⚽ ประตู!! ${scorerName} ยิงให้ ${attTeam.name}!`;
+      : `⚽ ประตู!! ${scorerName} (${attTeam.name}) · ${pickedCeleb.label}`;
     w.phaseTone = 'goal';
   };
 
@@ -7684,6 +7979,7 @@ export const MatchModal: React.FC<{
     }
 
     // Fast-forward 4 tactical plays for this minute inside world
+    clearWorldCelebration(w, 'SUPPORT');
     w.pendingSetPiece = null;
     for (let k = 0; k < 4; k++) {
       updateAgentTargets(w, curMin);
@@ -8184,6 +8480,7 @@ export const MatchModal: React.FC<{
     const firstKicker = resolveSetPieceTaker(w, 'H', 'penalty') || active.filter((a) => a.side === 'H' && a.pos !== 'GK')[0];
     const firstGk = active.find((a) => a.side === 'A' && a.pos === 'GK');
     w.phase = 'shootout';
+    clearWorldCelebration(w, 'SUPPORT');
     w.varReview = null;
     w.pendingSetPiece = null;
     w.ball.carrierId = null;
@@ -8471,6 +8768,7 @@ export const MatchModal: React.FC<{
     if (talkTone) SFX.coach();
     const sr = simRef.current;
     w.secondHalf = true;
+    clearWorldCelebration(w, 'RESET');
     const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
     // Halftime stamina recovery (+5%) & switch pitch sides for 2nd half
     w.agents.forEach((ag) => {
@@ -8487,7 +8785,10 @@ export const MatchModal: React.FC<{
       ag.y = baseY;
       ag.tx = ag.x;
       ag.ty = ag.y;
+      ag.vx = 0;
+      ag.vy = 0;
       ag.facing = attR ? 0 : Math.PI;
+      ag.intent = 'RESET';
     });
     if (state.mode === 'm' && talkTone) {
       if (talkTone === 'attack') {
@@ -8597,6 +8898,7 @@ export const MatchModal: React.FC<{
     });
 
     w.phase = 'ft';
+    clearWorldCelebration(w, 'SUPPORT');
     w.varReview = null;
     w.pendingSetPiece = null;
     syncUiStatsFromWorld(w, 90);
@@ -8687,7 +8989,19 @@ export const MatchModal: React.FC<{
         }
         w.goalNetRippleLeft = Math.max(0, w.goalNetRippleLeft - rawDt * 0.85);
         w.goalNetRippleRight = Math.max(0, w.goalNetRippleRight - rawDt * 0.85);
-        w.celebrateTimer = Math.max(0, w.celebrateTimer - rawDt);
+        if (w.celebrateTimer > 0) {
+          const celebDt = rawDt * (speedMul > 2.6 ? 1.45 : speedMul > 2.0 ? 1.2 : 1.0);
+          w.celebrateTimer = Math.max(0, w.celebrateTimer - celebDt);
+          if (w.celebration) {
+            w.celebration.elapsed = Math.min(w.celebration.duration, w.celebration.elapsed + celebDt);
+          }
+          if (w.celebrateTimer <= 0) {
+            clearWorldCelebration(w, 'RESET');
+            w.dramaSlowSec = 0;
+            w.dramaLabel = null;
+            w.ball.trail = [];
+          }
+        }
         w.dramaSlowSec = Math.max(0, w.dramaSlowSec - rawDt);
         if (w.dramaSlowSec <= 0 && !isSlowShot) {
           w.dramaLabel = null;
@@ -8934,14 +9248,17 @@ export const MatchModal: React.FC<{
         // Update tactical targets
         updateAgentTargets(w, Math.max(1, curIntMin));
 
-        // Smooth physical player movement + running stride + GK dive (slow-mo dampened during dramatic events)
-        const isKickoffResetting = w.pendingSetPiece?.type === 'kickoff' && w.celebrateTimer <= 0;
+        // Smooth physical player movement + running stride + GK dive (exempt celebration from slow-mo throttle so sprints & jumps look lively)
+        const isCelebratingNow = w.celebrateTimer > 0;
+        const isKickoffResetting = w.pendingSetPiece?.type === 'kickoff' && !isCelebratingNow;
         const baseMoveScale = speedMul > 2.6 ? 1.85 : speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
-        const moveScale = isKickoffResetting
-          ? Math.max(2.6, baseMoveScale * 2.4)
-          : slowActive
-            ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34)
-            : baseMoveScale;
+        const moveScale = isCelebratingNow
+          ? Math.max(1.22, Math.min(2.15, baseMoveScale * 1.25))
+          : isKickoffResetting
+            ? Math.max(2.7, baseMoveScale * 2.45)
+            : slowActive
+              ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34)
+              : baseMoveScale;
         const hFrameCfg = getEffectiveTeamCfg('H', Math.max(1, curIntMin));
         const aFrameCfg = getEffectiveTeamCfg('A', Math.max(1, curIntMin));
         w.agents.forEach((ag) => {
@@ -9024,10 +9341,27 @@ export const MatchModal: React.FC<{
             ag.y = clamp(ag.y + ag.vy * rawDt, 4, 96);
             ag.stride += curSpd * rawDt * 0.85;
           }
-          const targetAngle =
+          let targetAngle =
             dist > 0.38 && curSpd > 1.2
               ? Math.atan2(ag.vy, ag.vx)
               : Math.atan2(w.ball.y - ag.y, w.ball.x - ag.x);
+          if (ag.intent === 'CELEBRATE' && w.celebration && dist <= 0.65) {
+            const cel = w.celebration;
+            if (ag.celebrateRole === 'scorer') {
+              if (cel.style === 'bow_crowd' || cel.style === 'calm_shush') {
+                targetAngle = cel.anchorY < 50 ? -Math.PI / 2 : Math.PI / 2;
+              } else if (cel.style === 'finger_point' && cel.assisterId) {
+                const asAg = w.agents.find((z) => z.id === cel.assisterId);
+                targetAngle = asAg ? Math.atan2(asAg.y - ag.y, asAg.x - ag.x) : (cel.anchorY < 50 ? -Math.PI / 2 : Math.PI / 2);
+              }
+            } else if (ag.celebrateRole === 'teammate' || ag.celebrateRole === 'assister') {
+              targetAngle = Math.atan2(cel.anchorY - ag.y, cel.anchorX - ag.x);
+            } else if (ag.celebrateRole === 'conceded') {
+              targetAngle = Math.atan2(50 - ag.y, 50 - ag.x);
+            }
+          } else if (isKickoffResetting && dist <= 0.45) {
+            targetAngle = isAttackRight(w, ag.side) ? 0 : Math.PI;
+          }
           let angleDiff = targetAngle - ag.facing;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
           while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
@@ -9036,18 +9370,21 @@ export const MatchModal: React.FC<{
 
         // Soft physical body separation so players never visually stack identically on top of each other
         const agLen = w.agents.length;
+        const celebMinSep = w.celebration?.style === 'group_huddle' ? 1.15 : 1.45;
         for (let i = 0; i < agLen; i++) {
           const a = w.agents[i];
-          if (a.sentOff || a.intent === 'WALL' || a.intent === 'DIVE' || a.intent === 'CELEBRATE') continue;
+          if (a.sentOff || a.intent === 'WALL' || a.intent === 'DIVE') continue;
           for (let j = i + 1; j < agLen; j++) {
             const o = w.agents[j];
-            if (o.sentOff || o.intent === 'WALL' || o.intent === 'DIVE' || o.intent === 'CELEBRATE') continue;
+            if (o.sentOff || o.intent === 'WALL' || o.intent === 'DIVE') continue;
+            if ((a.intent === 'CELEBRATE') !== (o.intent === 'CELEBRATE')) continue;
+            const minSep = a.intent === 'CELEBRATE' ? celebMinSep : 1.9;
             const sdx = a.x - o.x;
             const sdy = a.y - o.y;
             const sdSq = sdx * sdx + sdy * sdy;
-            if (sdSq > 0.0004 && sdSq < 3.61) {
+            if (sdSq > 0.0004 && sdSq < minSep * minSep) {
               const sd = Math.sqrt(sdSq);
-              const push = (1.9 - sd) * 0.28;
+              const push = (minSep - sd) * 0.28;
               const nx = sdx / sd;
               const ny = sdy / sd;
               a.x = clamp(a.x + nx * push, 2.5, 97.5);
@@ -9075,36 +9412,50 @@ export const MatchModal: React.FC<{
           const spRate = isImportantSetPiece
             ? speedMul > 2.6 ? 1.1 : speedMul > 2.0 ? 0.95 : speedMul < 0.5 ? 0.65 : 0.85
             : speedMul > 2.6 ? 1.55 : speedMul > 2.0 ? 1.3 : speedMul < 0.5 ? 0.65 : 0.85;
-          w.pendingSetPiece.waitSec -= rawDt * spRate;
-          if (spType !== 'kickoff') {
-            w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec);
-          } else if (w.celebrateTimer <= 0) {
-            const kickTeam = w.pendingSetPiece.side === 'H' ? homeOrig : awayOrig;
-            w.phaseLabel = `⚽ กลับเข้าตำแหน่งเตรียมเขี่ยบอล (${kickTeam.name})`;
-            w.phaseTone = 'normal';
-          }
-          const keepBallInNet = spType === 'kickoff' && w.celebrateTimer > 0;
-          const keepBallOutForGoalKick = spType === 'goalkick' && w.pendingSetPiece.waitSec > 0.45;
-          if (!keepBallInNet && !keepBallOutForGoalKick) {
-            w.ball.x = w.pendingSetPiece.x;
-            w.ball.y = w.pendingSetPiece.y;
-            w.ball.z = 0;
-          }
-          const kickoffFormationReady =
-            spType !== 'kickoff' ||
-            (w.celebrateTimer <= 0 &&
-              w.agents.every((ag) => ag.sentOff || Math.hypot(ag.tx - ag.x, ag.ty - ag.y) <= 2.6));
-          if (w.pendingSetPiece.waitSec <= 0 && (kickoffFormationReady || (spType === 'kickoff' && w.pendingSetPiece.waitSec <= -2.5))) {
-            if (spType === 'kickoff' && !kickoffFormationReady) {
-              w.agents.forEach((ag) => {
-                if (!ag.sentOff) {
-                  ag.x = ag.tx;
-                  ag.y = ag.ty;
+
+          if (spType === 'kickoff') {
+            if (w.celebrateTimer <= 0) {
+              const kickTeam = w.pendingSetPiece.side === 'H' ? homeOrig : awayOrig;
+              w.phaseLabel = `⚽ กลับเข้าตำแหน่งเตรียมเขี่ยบอล (${kickTeam.name})`;
+              w.phaseTone = 'normal';
+              w.ball.x = w.pendingSetPiece.x;
+              w.ball.y = w.pendingSetPiece.y;
+              w.ball.z = 0;
+
+              const kickoffFormationReady = w.agents.every(
+                (ag) => ag.sentOff || Math.hypot(ag.tx - ag.x, ag.ty - ag.y) <= 1.9
+              );
+              if (!kickoffFormationReady) {
+                w.kickoffReturnElapsed = (w.kickoffReturnElapsed || 0) + rawDt * (speedMul > 2.0 ? 1.35 : 1.0);
+                if (w.kickoffReturnElapsed >= 3.2) {
+                  w.agents.forEach((ag) => {
+                    if (!ag.sentOff) {
+                      ag.x = ag.tx;
+                      ag.y = ag.ty;
+                      ag.vx = 0;
+                      ag.vy = 0;
+                    }
+                  });
                 }
-              });
+              } else {
+                w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec - rawDt * spRate);
+                if (w.pendingSetPiece.waitSec <= 0) {
+                  w.kickoffReturnElapsed = 0;
+                  scheduleNextPlay(w, Math.max(1, curIntMin));
+                }
+              }
             }
-            w.pendingSetPiece.waitSec = 0;
-            scheduleNextPlay(w, Math.max(1, curIntMin));
+          } else {
+            w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec - rawDt * spRate);
+            const keepBallOutForGoalKick = spType === 'goalkick' && w.pendingSetPiece.waitSec > 0.45;
+            if (!keepBallOutForGoalKick) {
+              w.ball.x = w.pendingSetPiece.x;
+              w.ball.y = w.pendingSetPiece.y;
+              w.ball.z = 0;
+            }
+            if (w.pendingSetPiece.waitSec <= 0) {
+              scheduleNextPlay(w, Math.max(1, curIntMin));
+            }
           }
         } else {
           const b = w.ball;
@@ -9257,7 +9608,7 @@ export const MatchModal: React.FC<{
     const w = worldRef.current!;
     w.dramaSlowSec = 0;
     w.dramaLabel = null;
-    w.celebrateTimer = 0;
+    clearWorldCelebration(w, 'SUPPORT');
     w.cardBanner = null;
     let penOutcome: { winnerHome: boolean; text: string } | null = null;
     setSfxSuppressed(true);
@@ -9309,7 +9660,7 @@ export const MatchModal: React.FC<{
         w.lastTickedMin = 90;
         w.dramaSlowSec = 0;
         w.dramaLabel = null;
-        w.celebrateTimer = 0;
+        clearWorldCelebration(w, 'SUPPORT');
         w.cardBanner = null;
         syncSidelineBenches(w);
         if (w.sideline) {
