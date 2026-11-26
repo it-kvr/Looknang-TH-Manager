@@ -5425,12 +5425,15 @@ export const MatchModal: React.FC<{
               attId: carrier.id,
               attShort: carrier.shortName,
               attNo: carrier.no,
+              attRole: carrier.role,
               attVis: carrier.vis,
               defId: nearestDef.id,
               defShort: nearestDef.shortName,
               defNo: nearestDef.no,
+              defRole: nearestDef.role,
               defVis: nearestDef.vis,
               gkNo: gkPen?.no,
+              gkRole: gkPen?.role || 'GK',
               gkVis: gkPen?.vis,
               passFromX: clamp(replayIncidentX + (attRight ? -7.5 : 7.5), 4, 96),
               passFromY: clamp(replayIncidentY + (replayIncidentY < 50 ? 8.5 : -8.5), 14, 86),
@@ -5470,6 +5473,10 @@ export const MatchModal: React.FC<{
           const replayIncY = clamp(carrier.y, 14, 86);
           const foulScenario: 'dogso' | 'late_slide' | 'reckless_duel' =
             foulKind === 'dogso' ? 'dogso' : foulKind === 'late_slide' ? 'late_slide' : 'reckless_duel';
+          const gkFoul = defPool.find((d) => !d.sentOff && d.pos === 'GK');
+          const supMfFoul =
+            attPool.find((a) => !a.sentOff && a.id !== carrier.id && a.pos === 'MF') ||
+            attPool.find((a) => !a.sentOff && a.id !== carrier.id);
           w.varReview = {
             kind: 'foul_card',
             side,
@@ -5495,11 +5502,19 @@ export const MatchModal: React.FC<{
               attId: carrier.id,
               attShort: carrier.shortName,
               attNo: carrier.no,
+              attRole: carrier.role,
               attVis: carrier.vis,
               defId: nearestDef.id,
               defShort: nearestDef.shortName,
               defNo: nearestDef.no,
+              defRole: nearestDef.role,
               defVis: nearestDef.vis,
+              gkNo: gkFoul?.no,
+              gkRole: gkFoul?.role || 'GK',
+              gkVis: gkFoul?.vis,
+              passerNo: supMfFoul?.no,
+              passerRole: supMfFoul?.role,
+              passerVis: supMfFoul?.vis,
               passFromX: clamp(replayIncX + (attRight ? -5.0 : 5.0), 4, 96),
               passFromY: clamp(replayIncY + (replayIncY < 50 ? -2.0 : 2.0), 10, 90),
               incidentX: replayIncX,
@@ -7987,6 +8002,10 @@ export const MatchModal: React.FC<{
                 ? `🖥 บอลเข้าประตูไปแล้ว แต่ VAR เรียกเช็กจังหวะปะทะก่อนยิงของ ${scorerName}!`
                 : `🖥 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`;
 
+          const passerAg = assisterName
+            ? attPool.find((a) => a.id === assisterName)
+            : attPool.find((a) => !a.sentOff && a.id !== scorerName && a.pos === 'MF');
+          const supDefAg = sortedOutfieldDefs[1];
           w.varReview = {
             kind: 'goal',
             side,
@@ -8006,13 +8025,22 @@ export const MatchModal: React.FC<{
               attId: scorerName,
               attShort: scorerShort,
               attNo: shooter?.no ?? 9,
+              attRole: shooter?.role,
               attVis: shooter?.vis,
               defId: lastDef?.id,
               defShort: lastDef?.shortName || 'กองหลัง',
               defNo: lastDef?.no ?? 4,
+              defRole: lastDef?.role,
               defVis: lastDef?.vis,
               gkNo: gk?.no ?? 1,
+              gkRole: gk?.role || 'GK',
               gkVis: gk?.vis,
+              passerNo: passerAg?.no,
+              passerRole: passerAg?.role,
+              passerVis: passerAg?.vis,
+              supportDefNo: supDefAg?.no,
+              supportDefRole: supDefAg?.role,
+              supportDefVis: supDefAg?.vis,
               passFromX: passerX,
               passFromY: passerY,
               incidentX: replayAttX,

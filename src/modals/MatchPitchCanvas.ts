@@ -677,6 +677,7 @@ const renderVarMonitorPanel = (
     ringColor?: string,
     labelColor = '#f8fafc',
     opts?: {
+      role?: string;
       facing?: number;
       stride?: number;
       action?: VarAgentAction;
@@ -893,6 +894,33 @@ const renderVarMonitorPanel = (
 
     ctx.restore();
 
+    // Crisp position role micro-badge above each player in VAR (matching live match pitch)
+    const roleStr = opts?.role || (opts?.isGk ? 'GK' : '');
+    if (roleStr) {
+      ctx.save();
+      if (opts?.dimmed) ctx.globalAlpha = 0.88;
+      const posPal = getPositionCanvasPalette(roleStr);
+      const roleFont = isStandalone ? Math.max(7.2, Math.round(r * 0.62)) : smallText ? 5.2 : 6.0;
+      ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
+      const rw = Math.max(isStandalone ? 17 : 12.5, measureTextCached(ctx, roleStr) + (isStandalone ? 6 : 4));
+      const rh = isStandalone ? Math.max(9.5, roleFont + 3) : smallText ? 7.2 : 8.2;
+      const leapLift = action === 'leap' ? r * 0.65 * arcEnv : 0;
+      const diveShiftY = action === 'gk_dive' ? (opts?.diveDir ?? 1) * arcEnv * r * 0.78 : 0;
+      const ry = y - r - rh - 1.5 - leapLift + diveShiftY;
+      ctx.fillStyle = posPal.bg;
+      ctx.strokeStyle = ringColor || 'rgba(6, 20, 13, 0.9)';
+      ctx.lineWidth = isStandalone ? 1.05 : 0.8;
+      ctx.beginPath();
+      ctx.roundRect(x - rw / 2, ry, rw, rh, 2.5);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = posPal.text;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(roleStr, x, ry + rh / 2 + 0.3);
+      ctx.restore();
+    }
+
     if (shortName) {
       ctx.save();
       const fSize = isStandalone ? 10 : smallText ? 6.5 : 7.2;
@@ -1080,13 +1108,25 @@ const renderVarMonitorPanel = (
         };
       });
 
-      drawMiniAgent(cbX, cbY, defKit, defTrim, rep?.defNo ?? 4, '', rep?.defVis, undefined, '#cbd5e1', {
-        facing: Math.atan2(incY - cbY, startX - cbX),
-        stride: simT * 15,
-        action: simT >= 0.18 && simT <= 0.6 ? 'slide' : 'run',
-        actionProg: clamp((simT - 0.18) / 0.42, 0, 1),
-        dimmed: true
-      });
+      drawMiniAgent(
+        cbX,
+        cbY,
+        defKit,
+        defTrim,
+        rep?.defNo ?? 4,
+        '',
+        rep?.defVis,
+        undefined,
+        '#cbd5e1',
+        {
+          role: rep?.defRole || 'CB',
+          facing: Math.atan2(incY - cbY, startX - cbX),
+          stride: simT * 15,
+          action: simT >= 0.18 && simT <= 0.6 ? 'slide' : 'run',
+          actionProg: clamp((simT - 0.18) / 0.42, 0, 1),
+          dimmed: true
+        }
+      );
       drawMiniAgent(
         attXNow,
         attYNow,
@@ -1098,6 +1138,7 @@ const renderVarMonitorPanel = (
         '#facc15',
         '#fde047',
         {
+          role: rep?.attRole || 'ST',
           facing: Math.atan2(incY - startY, apexX - startX),
           stride: simT * 15,
           action: simT <= 0.34 ? 'kick' : 'run',
@@ -1115,6 +1156,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? '#38bdf8' : undefined,
         '#bae6fd',
         {
+          role: rep?.gkRole || 'GK',
           facing: attRight ? Math.PI : 0,
           stride: simT * 16,
           isGk: true,
@@ -1229,6 +1271,7 @@ const renderVarMonitorPanel = (
       }
 
       drawMiniAgent(attRight ? 97.2 : 2.8, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        role: rep?.gkRole || 'GK',
         facing: attRight ? Math.PI : 0,
         stride: simT * 14,
         isGk: true,
@@ -1254,6 +1297,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? '#f59e0b' : undefined,
         '#fde68a',
         {
+          role: rep?.defRole || 'CB',
           facing: Math.atan2(attYNow - defYNow, attXNow - defXNow),
           stride: simT * 14,
           action: simT >= 0.25 && simT <= 0.62 ? (vr.overturn ? 'slide' : 'clash') : 'run',
@@ -1271,6 +1315,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
         pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047',
         {
+          role: rep?.attRole || 'ST',
           facing: Math.atan2(goalY - incY, goalX - incX),
           stride: simT * 15,
           action: simT >= 0.52 && simT <= 0.78 ? 'kick' : simT >= 0.38 && simT < 0.52 ? 'clash' : 'run',
@@ -1328,6 +1373,7 @@ const renderVarMonitorPanel = (
       const gkReadyY = clamp(50 + (incY - 50) * 0.28, 43, 57);
       const gkY = finishT > 0 ? gkReadyY + (50 - gkReadyY) * finishT * 0.78 : gkReadyY + Math.sin(simT * 8) * 0.7;
       drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        role: rep?.gkRole || 'GK',
         facing: attRight ? Math.PI : 0,
         stride: simT * 14,
         isGk: true,
@@ -1342,12 +1388,12 @@ const renderVarMonitorPanel = (
         clamp(incY + (incY < 50 ? 11.5 : -11.5), 22, 78),
         defKit,
         defTrim,
-        5,
+        rep?.supportDefNo ?? 5,
         '',
-        undefined,
+        rep?.supportDefVis,
         undefined,
         '#cbd5e1',
-        { facing: attRight ? Math.PI * 0.94 : 0.06, stride: simT * 14, action: 'run', dimmed: true }
+        { role: rep?.supportDefRole || 'CB', facing: attRight ? Math.PI * 0.94 : 0.06, stride: simT * 14, action: 'run', dimmed: true }
       );
 
       // Animated passer teammate kicking the through-ball (freezes right after follow-through)
@@ -1356,12 +1402,13 @@ const renderVarMonitorPanel = (
         passStartY,
         attKit,
         attTrim,
-        10,
+        rep?.passerNo ?? 10,
         '',
-        undefined,
+        rep?.passerVis,
         'rgba(250, 204, 21, 0.7)',
         '#fde047',
         {
+          role: rep?.passerRole || 'CM',
           facing: Math.atan2(incY - passStartY, incX - passStartX),
           stride: simT * 12,
           action: simT <= 0.56 ? 'kick' : 'run',
@@ -1443,6 +1490,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? '#3b82f6' : undefined,
         '#93c5fd',
         {
+          role: rep?.defRole || 'CB',
           facing: attRight ? Math.PI * 0.92 : 0.08,
           stride: simT * 15,
           action: 'run'
@@ -1459,6 +1507,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
         pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047',
         {
+          role: rep?.attRole || 'ST',
           facing: Math.atan2(50 - incY, goalX - incX),
           stride: simT * 17,
           action: finishT > 0 && finishT < 0.58 ? 'kick' : 'run',
@@ -1508,6 +1557,7 @@ const renderVarMonitorPanel = (
 
       const gkTrackY = clamp(50 + (byNow - 50) * 0.32, 43, 57);
       drawMiniAgent(attRight ? 97 : 3, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        role: rep?.gkRole || 'GK',
         facing: attRight ? Math.PI : 0,
         stride: simT * 14,
         isGk: true,
@@ -1568,6 +1618,7 @@ const renderVarMonitorPanel = (
         '#facc15',
         '#fde047',
         {
+          role: rep?.attRole || 'RW',
           facing: Math.atan2(incY - crossFromY, incX - crossFromX),
           stride: simT * 14,
           action: simT <= 0.34 ? 'kick' : 'run',
@@ -1585,6 +1636,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? (inBox ? '#ef4444' : '#38bdf8') : undefined,
         '#fca5a5',
         {
+          role: rep?.defRole || 'CB',
           facing: Math.atan2(crossFromY - incY, crossFromX - incX),
           stride: simT * 12,
           action: simT >= 0.22 ? 'handball' : 'run',
@@ -1650,6 +1702,7 @@ const renderVarMonitorPanel = (
         '#facc15',
         '#fde047',
         {
+          role: rep?.attRole || 'ST',
           facing: Math.atan2(50 - incY, (attRight ? 98 : 2) - incX),
           stride: simT * 16,
           action: simT >= 0.5 ? 'fall' : simT >= 0.28 ? 'kick' : 'run',
@@ -1667,6 +1720,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? (inBox ? '#ef4444' : '#22c55e') : undefined,
         '#bae6fd',
         {
+          role: rep?.gkRole || 'GK',
           facing: Math.atan2(attYNow - gkYNow, attXNow - gkXNow),
           stride: simT * 16,
           isGk: true,
@@ -1690,6 +1744,7 @@ const renderVarMonitorPanel = (
 
       const gkTrackY = clamp(50 + (attYNow - 50) * 0.35, 42, 58);
       drawMiniAgent(attRight ? 97 : 3, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        role: rep?.gkRole || 'GK',
         facing: attRight ? Math.PI : 0,
         stride: simT * 14,
         isGk: true,
@@ -1744,6 +1799,7 @@ const renderVarMonitorPanel = (
         '#facc15',
         '#fde047',
         {
+          role: rep?.attRole || 'CAM',
           facing: Math.atan2(50 - incY, (attRight ? 96 : 4) - incX),
           stride: simT * 16,
           action: simT >= 0.49 ? 'fall' : 'run',
@@ -1761,6 +1817,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? '#ef4444' : undefined,
         '#fca5a5',
         {
+          role: rep?.defRole || 'CB',
           facing: Math.atan2(attYNow - defYNow, attXNow - defXNow),
           stride: simT * 14,
           action: simT >= 0.22 && simT <= 0.68 ? 'slide' : 'run',
@@ -1807,6 +1864,7 @@ const renderVarMonitorPanel = (
       const gkX = attRight ? 96.5 - playT * 1.4 : 3.5 + playT * 1.4;
       const gkY = clamp(50 + (incY - 50) * 0.35, 43, 57);
       drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        role: rep?.gkRole || 'GK',
         facing: Math.atan2(attYNow - gkY, attXNow - gkX),
         stride: simT * 14,
         isGk: true,
@@ -1851,12 +1909,12 @@ const renderVarMonitorPanel = (
       clamp(incY + (incY < 50 ? 6.8 : -6.8), 16, 84),
       attKit,
       attTrim,
-      8,
+      rep?.passerNo ?? 8,
       '',
-      undefined,
+      rep?.passerVis,
       undefined,
       '#cbd5e1',
-      { facing: Math.atan2(incY - (incY < 50 ? 10 : -10), dirSign), stride: simT * 14, action: 'run', dimmed: true }
+      { role: rep?.passerRole || 'CM', facing: Math.atan2(incY - (incY < 50 ? 10 : -10), dirSign), stride: simT * 14, action: 'run', dimmed: true }
     );
     drawVarReferee(
       incX - dirSign * (5.2 - playT * 1.6),
@@ -1876,6 +1934,7 @@ const renderVarMonitorPanel = (
       '#ffffff',
       '#f8fafc',
       {
+        role: rep?.attRole || 'ST',
         facing: attRight ? 0 : Math.PI,
         stride: simT * 16,
         action: isReckless
@@ -1905,6 +1964,7 @@ const renderVarMonitorPanel = (
       pct >= 0.36 ? '#f59e0b' : undefined,
       '#fde047',
       {
+        role: rep?.defRole || 'CB',
         facing: Math.atan2(attYNow - defYNow, attXNow - defXNow),
         stride: simT * 15,
         action: isReckless
