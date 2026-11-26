@@ -753,6 +753,7 @@ export const drawLivePitchToCanvas = (
     const apronH = Math.max(26, cssH - touchBot);
     const zoneTop = touchBot + 3;
     const zoneH = clamp(apronH - 5, 22, 31);
+    const techH = Math.max(10, zoneH * 0.5);
 
     // Left (Home) & Right (Away) Technical Areas (FIFA-style dashed coach boxes flanking halfway line)
     const drawTechArea = (xStartPct: number, xEndPct: number, activeKit: string, trim: string) => {
@@ -761,23 +762,23 @@ export const drawLivePitchToCanvas = (
       ctx.save();
       ctx.fillStyle = 'rgba(6, 20, 13, 0.34)';
       ctx.beginPath();
-      ctx.roundRect(tx0, zoneTop, tw, zoneH, 3);
+      ctx.roundRect(tx0, zoneTop, tw, techH, 2.5);
       ctx.fill();
 
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.56)';
       ctx.lineWidth = 0.95;
       ctx.setLineDash([3, 2.2]);
-      ctx.strokeRect(tx0 + 0.5, zoneTop + 0.5, tw - 1, zoneH - 1);
+      ctx.strokeRect(tx0 + 0.5, zoneTop + 0.5, tw - 1, techH - 1);
       ctx.setLineDash([]);
 
       // Subtle sideline team mat strip along the back edge of technical area
       ctx.fillStyle = activeKit;
       ctx.beginPath();
-      ctx.roundRect(tx0 + 3, zoneTop + zoneH - 2.6, tw - 6, 1.8, 0.9);
+      ctx.roundRect(tx0 + 3, zoneTop + techH - 2.2, tw - 6, 1.4, 0.7);
       ctx.fill();
       ctx.fillStyle = trim;
       ctx.globalAlpha = 0.55;
-      ctx.fillRect(tx0 + 5, zoneTop + zoneH - 2.6, tw - 10, 0.7);
+      ctx.fillRect(tx0 + 5, zoneTop + techH - 2.2, tw - 10, 0.55);
       ctx.restore();
     };
     drawTechArea(39.4, 47.4, homeKit, homeTrim);
@@ -1048,8 +1049,8 @@ export const drawLivePitchToCanvas = (
     // Animated Head Coaches standing cleanly inside their Technical Areas
     const drawCoach = (c: LiveSidelineCoach, kit: string, trim: string) => {
       const cx = px(c.x);
-      const cy = zoneTop + zoneH * 0.5;
-      const cr = clamp(Math.min(cssW * 0.0115, zoneH * 0.33), 5.2, 8.2);
+      const cy = zoneTop + techH * 0.5;
+      const cr = clamp(Math.min(cssW * 0.0115, techH * 0.42), 4.4, 7.2);
       const speed = Math.hypot(c.tx - c.x, c.ty - c.y);
       const paceStep = speed > 0.3 ? Math.sin(c.pacePhase) * (cr * 0.34) : 0;
       const coachVis =
