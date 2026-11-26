@@ -11,6 +11,7 @@ import { PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { TalentBadge } from '../components/TalentBadge';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { PositionBadge } from '../components/PositionBadge';
 
 export const TeamTrainingView: React.FC<{
   state: GameState;
@@ -102,8 +103,9 @@ export const TeamTrainingView: React.FC<{
                       <PlayerFace player={q} team={me} state={state} size={26} />
                       <div className="min-w-0">
                         <div className="text-xs mland:text-[10px] font-bold truncate">{q.n}</div>
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                          {q.ro} · OVR {q.ov} {passedStages > 0 ? `· ✓${passedStages}` : ''}
+                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1">
+                          <PositionBadge role={q.ro} size="2xs" />
+                          <span className="truncate">OVR {q.ov} {passedStages > 0 ? `· ✓${passedStages}` : ''}</span>
                         </div>
                       </div>
                     </div>
@@ -432,7 +434,7 @@ export const TeamTrainingView: React.FC<{
                     <PlayerFace player={q} team={me} state={state} size={26} />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs mland:text-[10px] font-bold truncate flex items-center gap-1">
-                        <span className="px-1 rounded bg-[var(--surface-2)] text-[9.5px] font-extrabold shrink-0">{q.ro}</span>
+                        <PositionBadge role={q.ro} size="xs" />
                         <span className="truncate">{q.n}</span>
                         {isStarter && <span className="text-[9px] shrink-0" title="ตัวจริง">⭐</span>}
                       </div>

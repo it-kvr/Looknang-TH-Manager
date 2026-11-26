@@ -6,6 +6,7 @@ import { PlayerFace, resolveGkKitPalette } from './SvgVisuals';
 import { TalentBadge } from './TalentBadge';
 import { PotentialBadge } from './PotentialBadge';
 import { PlayerBioStrip } from './PlayerBioStrip';
+import { PositionBadge } from './PositionBadge';
 import {
   CardStudioToggleButton,
   getAthleteCardPalette,
@@ -104,11 +105,11 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           />
           <span
             title={roleLabel}
-            className={`inline-flex items-baseline gap-0.5 text-[10px] mland:text-[8px] font-extrabold tracking-tight whitespace-nowrap shrink-0 ${cardPalette.subText}`}
+            className="inline-flex items-center gap-0.5 whitespace-nowrap shrink-0"
           >
-            <span>{roleLabel}</span>
+            <PositionBadge role={roleLabel} size="2xs" />
             {altRolesCount > 0 && (
-              <span className={`text-[8px] mland:text-[6.5px] font-bold opacity-75`}>
+              <span className={`text-[8px] mland:text-[6.5px] font-bold opacity-75 ${cardPalette.subText}`}>
                 +{altRolesCount}
               </span>
             )}

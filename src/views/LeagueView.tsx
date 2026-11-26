@@ -8,6 +8,7 @@ import { xi, vlu, ensureCon } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
 import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort, EXTRA_CUP_META, getLeaguePrizeMoney } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { PositionBadge } from '../components/PositionBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -959,7 +960,8 @@ export const LeagueView: React.FC<{
                       <div className="font-bold text-[11.5px] mland:text-[10px] truncate">{x.q.n}</div>
                       <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1">
                         <ClubCrest name={x.t.name} size={12} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
-                        <span className="truncate">{x.t.name} · {x.q.pos}</span>
+                        <PositionBadge role={x.q.ro || x.q.pos} size="2xs" />
+                        <span className="truncate">{x.t.name}</span>
                       </div>
                     </div>
                     <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center shrink-0">{fmt(x.q)}</span>
@@ -1080,8 +1082,7 @@ export const LeagueView: React.FC<{
                             <div className="flex items-center gap-1.5 mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] min-w-0">
                               <ClubCrest name={leader.t.name} size={14} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
                               <span className="truncate font-medium text-[var(--ink)]/85">{leader.t.name}</span>
-                              <span aria-hidden="true">·</span>
-                              <span className="shrink-0">{leader.q.ro}</span>
+                              <PositionBadge role={leader.q.ro} size="2xs" />
                             </div>
                           </div>
                         </div>
@@ -1134,7 +1135,8 @@ export const LeagueView: React.FC<{
                                 </div>
                                 <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
                                   <ClubCrest name={entry.t.name} size={12} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
-                                  <span className="truncate">{entry.t.name} · {entry.q.ro}</span>
+                                  <PositionBadge role={entry.q.ro} size="2xs" />
+                                  <span className="truncate">{entry.t.name}</span>
                                 </div>
                               </div>
                               <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">

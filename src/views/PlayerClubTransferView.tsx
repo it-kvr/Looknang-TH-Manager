@@ -19,6 +19,7 @@ import {
 import { statTierMeta } from '../engine/missions';
 import { evaluateNationalTeamCallup } from '../engine/simulation';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { PositionBadge } from '../components/PositionBadge';
 
 export const PlayerClubTransferView: React.FC<{
   state: GameState;
@@ -344,21 +345,17 @@ export const PlayerClubTransferView: React.FC<{
               </div>
               <div className="flex flex-wrap items-center gap-1 text-[10px] mland:text-[8.5px]">
                 <span className="text-[var(--mut)] font-semibold">บทบาทหลัก:</span>
-                <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] border border-[var(--line)] font-bold">{p.sp}</span>
+                <PositionBadge role={p.sp} size="xs" />
                 <span className="text-[var(--mut)] font-semibold ml-1">ตำแหน่งเสริม:</span>
                 {myAltRoles.length > 0 ? (
                   myAltRoles.map((r) => (
-                    <span
+                    <PositionBadge
                       key={r}
-                      className={`px-1.5 py-0.5 rounded border font-bold ${
-                        (LINE[r] || p.pos) !== p.pos
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45 text-[#8a5b00] dark:text-[var(--lamp)]'
-                          : 'bg-[var(--g-soft)] border-[var(--g)]/35 text-[var(--g)]'
-                      }`}
+                      role={r}
+                      size="xs"
+                      className={(LINE[r] || p.pos) !== p.pos ? 'ring-1 ring-[#f5c242]' : ''}
                       title={(LINE[r] || p.pos) !== p.pos ? 'ตำแหน่งข้ามสาย (เพิ่มโอกาสติดทีมชาติสูงขึ้น)' : 'ตำแหน่งเสริมสายเดียวกัน'}
-                    >
-                      {r}
-                    </span>
+                    />
                   ))
                 ) : (
                   <span className="text-[var(--mut)] italic">ยังไม่ปลดล็อก (ฝึกในหน้าอาชีพ)</span>
@@ -393,8 +390,9 @@ export const PlayerClubTransferView: React.FC<{
                             {isMe && <span className="text-[var(--g)] font-extrabold shrink-0">(คุณ)</span>}
                             {(q.hg || q.customCreated) ? <span className="text-[10px] shrink-0" title="เด็กปั้นสโมสร">🌱</span> : null}
                           </div>
-                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
-                            {q.ro} · อายุ {q.age} ปี · {isStarter ? '⭐ ตัวจริง' : '🪑 สำรอง'}
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular flex items-center gap-1">
+                            <PositionBadge role={q.ro} size="2xs" />
+                            <span>อายุ {q.age} ปี · {isStarter ? '⭐ ตัวจริง' : '🪑 สำรอง'}</span>
                           </div>
                         </div>
                       </div>

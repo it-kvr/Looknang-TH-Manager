@@ -17,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import type { GameState, MatchEnvironment, Mentality, Player, SubRole, Team } from '../types/game';
-import { AR_T, FSD, LINE, POS, RN, TN } from '../data/thaiFootballData';
+import { AR_T, FSD, POS, RN, TN } from '../data/thaiFootballData';
 import { computeTurfMatchModifiers, getStadiumStyleSpec, getTurfGradeSpec } from '../data/crestAndKitData';
 import { SFX } from '../utils/audioTheme';
 import { clamp } from '../utils/math';
@@ -41,6 +41,7 @@ import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUp
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { PositionBadge } from '../components/PositionBadge';
 
 interface PreMatchModalProps {
   state: GameState;
@@ -494,15 +495,6 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const canEditRow = isMgr && team.id === state.me && viewMode !== 'compare' && !unavailable;
     const isPicked = swapPickName === pl.n;
     const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
-    const roleGroup = LINE[slotLabel] || pl.pos;
-    const roleBadgeCls =
-      roleGroup === 'DF'
-        ? 'bg-blue-600'
-        : roleGroup === 'MF'
-          ? 'bg-amber-600'
-          : roleGroup === 'GK'
-            ? 'bg-purple-600'
-            : 'bg-[var(--g)]';
     const starterWarnCls = isStarter && !unavailable ? stMeta.rowTint : '';
 
     const pickedIsStarter = swapPickName ? myXiNameSet.has(swapPickName) : false;
@@ -533,9 +525,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           <span className="text-[9.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center shrink-0 whitespace-nowrap">
             #{no}
           </span>
-          <span className={`px-1 py-0.2 rounded text-[9px] mland:text-[8px] font-bold text-white shrink-0 ${roleBadgeCls}`}>
-            {slotLabel}
-          </span>
+          <PositionBadge role={slotLabel} size="xs" />
         </span>
 
         <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">

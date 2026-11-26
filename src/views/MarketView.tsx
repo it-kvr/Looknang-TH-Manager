@@ -22,6 +22,7 @@ import {
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { PotentialBadge } from '../components/PotentialBadge';
+import { PositionBadge } from '../components/PositionBadge';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -1086,9 +1087,9 @@ export const MarketView: React.FC<{
                           <PlayerFace player={q} size={40} />
                         </div>
                         <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight">
-                            <span className="text-[var(--g)] mr-1.5">{q.ro}</span>
-                            {q.n}
+                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
+                            <PositionBadge role={q.ro} size="xs" />
+                            <span className="truncate">{q.n}</span>
                             {q.free ? (
                               <span className="ml-1.5 text-[11px] mland:text-[9.5px] text-[var(--g)] font-bold">· ฟรีเอเยนต์</span>
                             ) : q.age <= 19 ? (
@@ -1143,9 +1144,9 @@ export const MarketView: React.FC<{
                           <PlayerFace player={q} team={team} state={state} size={40} />
                         </div>
                         <button type="button" onClick={() => onInspectPlayer(q, team)} className="flex-1 min-w-0 text-left cursor-pointer">
-                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight">
-                            <span className="text-[var(--g)] mr-1.5">{q.ro}</span>
-                            {q.n}
+                          <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
+                            <PositionBadge role={q.ro} size="xs" />
+                            <span className="truncate">{q.n}</span>
                           </div>
                           <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-tight mt-0.5">
                             {team.name} ({TN[team.tier]}) · {SPN[q.ro] || q.pos} · อายุ {q.age} ปี
@@ -1289,7 +1290,7 @@ export const MarketView: React.FC<{
                       </div>
                       <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer group">
                         <div className="font-bold text-xs sm:text-[13px] mland:text-[11px] truncate leading-tight flex items-center gap-1.5">
-                          <span className="text-[var(--g)]">{q.ro}</span>
+                          <PositionBadge role={q.ro} size="xs" />
                           <span className="truncate group-hover:underline">{q.n}</span>
                           <span className="px-1.5 py-[1px] rounded bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
                             🌱 เด็กปั้น
@@ -1451,9 +1452,11 @@ export const MarketView: React.FC<{
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate mt-0.5 tabular">
-                            ขอซื้อ <span className="text-[var(--g)] font-bold">{targetQ.ro}</span>{' '}
-                            <b className="text-[var(--ink)]">{off.n}</b> · ลดค่าเหนื่อย {fmtMoneyNum(wg)}/นัด
+                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate mt-0.5 tabular flex items-center gap-1">
+                            <span>ขอซื้อ</span>
+                            <PositionBadge role={targetQ.ro} size="2xs" />
+                            <b className="text-[var(--ink)] truncate">{off.n}</b>
+                            <span>· ลดค่าเหนื่อย {fmtMoneyNum(wg)}/นัด</span>
                           </div>
                         </button>
                         <span
@@ -1672,7 +1675,7 @@ export const MarketView: React.FC<{
                       <PlayerFace player={q} team={me} state={state} size={34} />
                       <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
                         <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1">
-                          <span className="text-[var(--g)] shrink-0">{q.ro}</span>
+                          <PositionBadge role={q.ro} size="xs" />
                           <span className="truncate">{q.n}</span>
                           {q.listed ? (
                             <span className="px-1 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 text-[#8a5b00] dark:text-[var(--lamp)] text-[9.5px] mland:text-[8px] font-bold shrink-0">
@@ -1880,9 +1883,9 @@ export const MarketView: React.FC<{
                     <div key={`${q.n}-${i}`} className="flex items-center gap-3 mland:gap-2 px-3.5 py-2.5 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/50 transition-colors">
                       <PlayerFace player={q} size={36} />
                       <button type="button" onClick={() => onInspectPlayer(q, null)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight">
-                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                          {q.n}
+                        <div className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate leading-tight flex items-center gap-1.5">
+                          <PositionBadge role={q.ro} size="xs" />
+                          <span className="truncate">{q.n}</span>
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1">
                           <span>{SPN[q.ro] || q.pos} · อายุ {q.age} ปี ·</span>
@@ -1970,9 +1973,9 @@ export const MarketView: React.FC<{
                   <div key={q.n} className="flex items-center gap-2.5 px-3.5 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
                     <PlayerFace player={q} team={me} state={state} size={34} />
                     <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                      <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                        <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                        {q.n}{' '}
+                      <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1">
+                        <PositionBadge role={q.ro} size="xs" />
+                        <span className="truncate">{q.n}</span>{' '}
                         <span className={c.yr <= 1 ? 'text-[var(--red)] font-bold' : 'text-[#9a6700] dark:text-[var(--lamp)] font-semibold'}>
                           · {c.yr <= 0 ? 'หมดสัญญา!' : `เหลือ ${c.yr} ปี`}
                         </span>
@@ -2030,7 +2033,10 @@ export const MarketView: React.FC<{
                     <div key={q.n} className="flex items-center gap-2.5 px-3 py-2 mland:px-2.5 mland:py-1.5">
                       <PlayerFace player={q} team={me} state={state} size={32} />
                       <div className="flex-1 min-w-0">
-                        <div className="font-bold text-xs mland:text-[10.5px] truncate">{q.ro} · {q.n}</div>
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate flex items-center gap-1">
+                          <PositionBadge role={q.ro} size="xs" />
+                          <span className="truncate">{q.n}</span>
+                        </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">ค่าฉีกซื้อขาด {fmtMoney(q.loanOpt || 0)}</div>
                       </div>
                       <button
@@ -2073,9 +2079,9 @@ export const MarketView: React.FC<{
                     <div key={q.n} className="flex items-center gap-2.5 px-3 py-2 mland:px-2.5 mland:py-1.5 hover:bg-[var(--surface-2)]/40 transition-colors">
                       <PlayerFace player={q} team={me} state={state} size={34} />
                       <button type="button" onClick={() => onInspectPlayer(q, me)} className="flex-1 min-w-0 text-left cursor-pointer">
-                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight">
-                          <span className="text-[var(--g)] mr-1">{q.ro}</span>
-                          {q.n}
+                        <div className="font-bold text-xs mland:text-[10.5px] truncate leading-tight flex items-center gap-1">
+                          <PositionBadge role={q.ro} size="xs" />
+                          <span className="truncate">{q.n}</span>
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate mt-0.5 flex items-center gap-1">
                           <span>อายุ {q.age} ปี ·</span>

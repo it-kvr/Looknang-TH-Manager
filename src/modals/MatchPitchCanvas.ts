@@ -5,6 +5,7 @@ import { clamp } from '../utils/math';
 import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } from '../engine/playerCore';
 import { faceBodySvg } from '../components/SvgVisuals';
 import { getClubCaptainPalette } from '../components/CaptainBadge';
+import { getPositionCanvasPalette } from '../components/PositionBadge';
 
 export const buildAgentsForTeam = (
   team: Team,
@@ -2391,20 +2392,20 @@ export const drawLivePitchToCanvas = (
     // Crisp position role micro-badge above each player during live play
     if (showPositions && ag.role) {
       const roleStr = String(ag.role);
+      const posPal = getPositionCanvasPalette(ag.pos || ag.role);
       const roleFont = Math.max(6.5, Math.round(playerRadius * 0.58));
       ctx.font = `800 ${roleFont}px Sarabun, sans-serif`;
       const rw = Math.max(15, measureTextCached(ctx, roleStr) + 5.5);
       const rh = Math.max(8.5, roleFont + 2.5);
       const ry = -playerRadius - rh - 1.5;
-      ctx.fillStyle = 'rgba(6, 20, 13, 0.9)';
-      ctx.strokeStyle = ag.isMe ? '#facc15' : kit;
-      ctx.lineWidth = ag.isMe ? 1.15 : 0.9;
+      ctx.fillStyle = posPal.bg;
+      ctx.strokeStyle = ag.isMe ? '#facc15' : 'rgba(6, 20, 13, 0.88)';
+      ctx.lineWidth = ag.isMe ? 1.25 : 0.9;
       ctx.beginPath();
       ctx.roundRect(-rw / 2, ry, rw, rh, 3);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle =
-        ag.pos === 'GK' ? '#fde047' : ag.pos === 'DF' ? '#7dd3fc' : ag.pos === 'MF' ? '#86efac' : '#fda4af';
+      ctx.fillStyle = posPal.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);

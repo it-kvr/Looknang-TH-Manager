@@ -7,6 +7,7 @@ import { EXTRA_CUP_META, getPlayerCupTotals, normalizeCupCompKey } from '../engi
 import { xi } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
+import { PositionBadge } from '../components/PositionBadge';
 
 type CupTabId = 'fa' | 'lc' | 'dc' | 'sc' | 'asia';
 type CupStatCat = 'sg' | 'sa' | 'cs' | 'motm' | 'rt' | 'sp';
@@ -851,9 +852,10 @@ export const CupView: React.FC<{
                                     </div>
                                     <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 tabular">
                                       <ClubCrest name={item.t.name} size={12} team={item.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                                      <PositionBadge role={item.q.ro} size="2xs" />
                                       <span className="truncate">{item.t.name}</span>
                                       <span aria-hidden="true">·</span>
-                                      <span className="shrink-0">{item.q.ro} · {item.st.sp}น</span>
+                                      <span className="shrink-0">{item.st.sp}น</span>
                                     </div>
                                   </div>
                                   <div className="text-right shrink-0">

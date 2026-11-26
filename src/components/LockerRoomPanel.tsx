@@ -13,6 +13,7 @@ import {
 } from '../engine/playerCore';
 import { ClubCrest, KitJersey, PlayerFace } from './SvgVisuals';
 import { CaptainBadge } from './CaptainBadge';
+import { PositionBadge } from './PositionBadge';
 
 type LockerFilter = 'ALL' | 'XI' | Position;
 
@@ -383,10 +384,10 @@ export const LockerRoomPanel: React.FC<{
                         : 'bg-[var(--surface)]/75 border-[var(--line)]/70'
                     }`}
                   >
-                    <span className="truncate font-bold text-[var(--ink)]">
-                      {q.ro}
-                      <span className={`font-medium ${isStarter ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                        {isStarter ? ' · ตัวจริง' : ' · สำรอง'}
+                    <span className="inline-flex items-center gap-1 min-w-0">
+                      <PositionBadge role={q.ro} size="2xs" />
+                      <span className={`truncate font-medium ${isStarter ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                        {isStarter ? 'ตัวจริง' : 'สำรอง'}
                       </span>
                     </span>
                     <span className="font-extrabold text-[var(--ink)] shrink-0">OVR {q.ov}</span>
@@ -481,15 +482,14 @@ export const LockerRoomPanel: React.FC<{
                         ) : null}
                         <span className="truncate">{selectedPlayer.n}</span>
                       </div>
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5 leading-tight">
-                        <span>{selectedPlayer.ro}</span>
-                        <span aria-hidden="true"> · </span>
+                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5 leading-tight flex items-center gap-1">
+                        <PositionBadge role={selectedPlayer.ro} size="2xs" />
                         <span className={isSelectedStarter ? 'text-[var(--g)] font-semibold' : ''}>
                           {isSelectedStarter ? 'ตัวจริง' : 'สำรอง'}
                         </span>
-                        <span aria-hidden="true"> · </span>
+                        <span aria-hidden="true">·</span>
                         <span>อายุ {selectedPlayer.age}</span>
-                        <span aria-hidden="true"> · </span>
+                        <span aria-hidden="true">·</span>
                         <span>OVR {selectedPlayer.ov}</span>
                       </div>
                     </div>

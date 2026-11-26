@@ -22,6 +22,7 @@ import { AthleteCard } from '../components/AthleteCard';
 import { TalentBadge } from '../components/TalentBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { PositionBadge } from '../components/PositionBadge';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -766,7 +767,8 @@ export const TeamInspectorModal: React.FC<{
                               <span className="truncate">{q.n}</span>
                             </div>
                             <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 flex-wrap">
-                              <span>{q.ro} · อายุ {q.age}</span>
+                              <PositionBadge role={q.ro} size="2xs" />
+                              <span>อายุ {q.age}</span>
                               <PlayerBioStrip bio={qBio} variant="inline" className="hidden sm:inline-flex" />
                               <span>·</span>
                               <span className="inline-flex items-center gap-0.5 tabular">

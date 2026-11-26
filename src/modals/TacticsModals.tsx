@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { SubRole, CustomSlot, Team } from '../types/game';
 import { FSD, LINE, SPN, ROLE_HINT, POSL } from '../data/thaiFootballData';
 import { PITCH_SVG_BASE } from '../components/SvgVisuals';
+import { PositionBadge, getPositionBadgeClass } from '../components/PositionBadge';
 
 export const CustomFormationModal: React.FC<{
   team: Team;
@@ -104,24 +105,36 @@ export const CustomFormationModal: React.FC<{
 
           <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-1">
             <div>
-              <div className="text-xs font-bold mb-1">บทบาทของตำแหน่งที่เลือก: <span className="text-[var(--g)]">{slots[selIdx]?.[0]} · {SPN[slots[selIdx]?.[0]] || ''}</span></div>
+              <div className="text-xs font-bold mb-1 flex items-center gap-1.5 flex-wrap">
+                <span>บทบาทของตำแหน่งที่เลือก:</span>
+                {slots[selIdx]?.[0] && <PositionBadge role={slots[selIdx][0]} size="sm" />}
+                <span className="text-[var(--mut)] font-semibold">{SPN[slots[selIdx]?.[0]] || ''}</span>
+              </div>
               {ROLE_HINT[slots[selIdx]?.[0]] && (
                 <p className="text-[11px] text-[var(--mut)] mb-1.5">💡 {ROLE_HINT[slots[selIdx]?.[0]]}</p>
               )}
               <div className="flex flex-wrap gap-1">
-                {POSL.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => {
-                      if (selIdx <= 0) return;
-                      setSlots((prev) => prev.map((z, idx) => (idx === selIdx ? [p, z[1], z[2]] : z)));
-                    }}
-                    className={`px-2 py-1 rounded-lg text-xs font-semibold cursor-pointer ${slots[selIdx]?.[0] === p ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)]'}`}
-                  >
-                    {p}
-                  </button>
-                ))}
+                {POSL.map((p) => {
+                  const isSel = slots[selIdx]?.[0] === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => {
+                        if (selIdx <= 0) return;
+                        setSlots((prev) => prev.map((z, idx) => (idx === selIdx ? [p, z[1], z[2]] : z)));
+                      }}
+                      className={`px-2 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                        isSel
+                          ? `${getPositionBadgeClass(p)} ring-2 ring-[#f5c242] shadow-xs`
+                          : 'bg-[var(--surface-2)] hover:brightness-95 inline-flex items-center gap-1'
+                      }`}
+                    >
+                      {!isSel && <span className={`w-2 h-2 rounded-full ${getPositionBadgeClass(p).split(' ')[0]}`} />}
+                      <span>{p}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div>

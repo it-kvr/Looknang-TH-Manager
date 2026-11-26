@@ -57,6 +57,7 @@ import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { PositionBadge } from '../components/PositionBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 
@@ -11536,7 +11537,7 @@ export const MatchModal: React.FC<{
                                     <div className="min-w-0 space-y-0.5">
                                       <div className="font-bold truncate flex items-center gap-1.5">
                                         <span className="text-[#facc15] tabular">#{htPickedInfo.no}</span>
-                                        <span className="px-1 rounded bg-white/15 text-[9.5px] font-extrabold">{htPickedInfo.role}</span>
+                                        <PositionBadge role={htPickedInfo.role} size="2xs" />
                                         <span className="truncate">{htPickedInfo.name}</span>
                                       </div>
                                       <div className="text-[10px] text-white/80 flex flex-wrap items-center gap-1.5 tabular">
@@ -11887,7 +11888,7 @@ export const MatchModal: React.FC<{
                                     />
                                   )}
                                   <span className="text-[#facc15] tabular">#{pickedInfo.no}</span>
-                                  <span className="px-1 rounded bg-white/15 text-[9.5px] font-extrabold">{pickedInfo.role}</span>
+                                  <PositionBadge role={pickedInfo.role} size="2xs" />
                                   <span className="truncate">{pickedInfo.name}</span>
                                   {pickedInfo.isMotm && (
                                     <span className="px-1.5 py-0.2 rounded bg-[#facc15] text-[#1c1300] text-[9px] font-black shrink-0">
@@ -12012,7 +12013,7 @@ export const MatchModal: React.FC<{
                                 )}
                                 <span className="opacity-75 text-[9px] mland:text-[7.5px]">#{subNo}</span>
                                 <span className="font-bold max-w-[84px] truncate">{sb.inPlayer.split(' ')[0]}</span>
-                                {subPl?.ro && <span className="text-[8.5px] mland:text-[7.5px] font-extrabold opacity-80">{subPl.ro}</span>}
+                                {subPl?.ro && <PositionBadge role={subPl.ro} size="2xs" />}
                                 <span className="text-[8.5px] mland:text-[7.5px] opacity-65">{sb.m}&apos;</span>
                                 {(subGl > 0 || subAs > 0 || isSubMotm) && (
                                   <span className="inline-flex items-center gap-0.5 shrink-0">

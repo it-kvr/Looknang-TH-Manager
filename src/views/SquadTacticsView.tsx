@@ -14,6 +14,7 @@ import { CustomFormationModal } from '../modals/TacticsModals';
 import { SquadRenewModal, SquadSellModal, SquadReleaseModal } from '../modals/SquadActionModals';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
+import { PositionBadge } from '../components/PositionBadge';
 
 export const SquadTacticsView: React.FC<{
   state: GameState;
@@ -590,9 +591,7 @@ export const SquadTacticsView: React.FC<{
         >
           <PlayerFace player={q} team={me} state={state} size={20} />
           <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">#{no}</span>
-          <span className={`px-1 py-0.2 rounded text-[9px] font-bold text-white shrink-0 ${(slotSp ? LINE[slotSp] : q.pos) === 'DF' ? 'bg-blue-600' : (slotSp ? LINE[slotSp] : q.pos) === 'MF' ? 'bg-amber-600' : (slotSp ? LINE[slotSp] : q.pos) === 'GK' ? 'bg-purple-600' : 'bg-[var(--g)]'}`}>
-            {slotSp || q.ro}
-          </span>
+          <PositionBadge role={slotSp || q.ro} size="xs" />
         </span>
         <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">
           {isMe && (
@@ -1886,7 +1885,7 @@ export const SquadTacticsView: React.FC<{
                           </div>
 
                           <div className="flex items-center">
-                            <span className="px-1.5 mland:px-1 py-0.5 rounded-md bg-[var(--surface-2)] font-bold text-[10.5px] mland:text-[9px]">{q.ro}</span>
+                            <PositionBadge role={q.ro} size="sm" />
                           </div>
 
                           <div className={`text-center text-xs mland:text-[10px] tabular font-semibold ${isMgr ? 'hidden sm:block mland:block' : ''}`}>

@@ -11,13 +11,14 @@ import type {
   Team
 } from '../types/game';
 import { clamp } from '../utils/math';
-import { AR_T, LINE } from '../data/thaiFootballData';
+import { AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { ovColor } from '../engine/missions';
 import { FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
+import { PositionBadge } from '../components/PositionBadge';
 
 export interface LivePlayerMatchStats {
   shots: number;
@@ -582,13 +583,6 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     return out;
   }, [pitchNodes]);
 
-  const roleBadgeBg = (posOrSp: string) => {
-    const line = LINE[posOrSp] || posOrSp;
-    if (line === 'GK') return 'bg-purple-600';
-    if (line === 'DF') return 'bg-blue-600';
-    if (line === 'MF') return 'bg-amber-600';
-    return 'bg-[var(--g)]';
-  };
 
   const mySubsList = subLog.filter((s) => s.t === meTeamOrig.id);
   const mySlots = useMemo(() => getFormationSlots(myLiveTeam), [myLiveTeam]);
@@ -691,7 +685,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           <div className="min-w-0 text-[11px]">
             <div className="font-bold truncate flex items-center gap-1">
               <span>{dragUi.player.n.split(' ')[0]}</span>
-              <span className="px-1 rounded bg-[var(--surface-2)] text-[9.5px] font-extrabold">{dragUi.role || dragUi.player.ro}</span>
+              <PositionBadge role={dragUi.role || dragUi.player.ro} size="xs" />
               <span className="text-[var(--g)] font-extrabold tabular">{dragUi.player.ov}</span>
             </div>
             <div className="text-[10px] font-semibold text-[var(--mut)] truncate">
@@ -991,7 +985,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                       >
                         <PlayerFace player={pl} team={meTeamOrig} state={state} careerProfile={state.p} size={20} />
                         <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center">#{no}</span>
-                        <span className={`px-1 py-0.2 rounded text-[8.5px] font-extrabold text-white ${roleBadgeBg(pl.ro)}`}>{pl.ro}</span>
+                        <PositionBadge role={pl.ro} size="2xs" />
                       </span>
 
                       <div className="flex-1 min-w-0 flex items-center gap-1">

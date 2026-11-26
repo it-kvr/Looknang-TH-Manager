@@ -4,6 +4,7 @@ import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest } from '../components/SvgVisuals';
 import { ovColor } from '../engine/missions';
+import { PositionBadge } from '../components/PositionBadge';
 
 type SortKey = 'avgRating' | 'sg' | 'sa' | 'sp' | 'motm' | 'ov';
 
@@ -478,9 +479,7 @@ export const SeasonStatsModal: React.FC<{
                               {pl.name}
                               {pl.isMe && <span className="ml-1 text-[var(--lamp)]">★</span>}
                             </span>
-                            <span className="px-1 py-0.2 rounded bg-[var(--surface-2)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0">
-                              {pl.ro}
-                            </span>
+                            <PositionBadge role={pl.ro} size="xs" />
                             {isTopRt && <span title="คะแนนเฉลี่ยสูงสุดในทีม">⭐</span>}
                             {isTopGoal && <span title="ดาวซัลโวทีม">⚽</span>}
                             {isTopAst && <span title="แอสซิสต์สูงสุดทีม">👟</span>}
