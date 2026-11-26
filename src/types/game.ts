@@ -1161,6 +1161,7 @@ export interface LiveBallState {
   trail: { x: number; y: number; z: number }[];
   shotPlan?: {
     outcome: 'block' | 'deflect' | 'miss' | 'woodwork' | 'save' | 'goal';
+    goalFinishKind?: 'normal' | 'top_corner' | 'gk_face' | 'post_in' | 'bar_in' | 'gk_fumble_in';
     blockerId?: string;
     deflectorId?: string;
     deflectedFrom?: string;
@@ -1184,6 +1185,13 @@ export interface LiveBallState {
     phaseLabel?: string;
     phaseTone?: LiveMatchWorld['phaseTone'];
     trailLog?: string;
+    goalPayload?: {
+      side: 'H' | 'A';
+      scorerName: string;
+      scorerShort: string;
+      assisterName: string;
+      finishVerb: string;
+    };
   };
 }
 

@@ -434,7 +434,22 @@ export function genMatchGoals(t: Team, x: Player[], n: number, careerP?: PlayerC
         if (fb) asName = fb.n;
       }
     }
-    out[g] = { m: R(1, 90), t: t.id, who: q.n, as: asName };
+    const rollStyle = Math.random();
+    const simStyle =
+      rollStyle < 0.06
+        ? 'post_in'
+        : rollStyle < 0.11
+          ? 'bar_in'
+          : rollStyle < 0.21
+            ? 'top_corner'
+            : rollStyle < 0.28
+              ? 'gk_face'
+              : rollStyle < 0.35
+                ? 'gk_fumble_in'
+                : rollStyle < 0.43
+                  ? 'deflected'
+                  : undefined;
+    out[g] = { m: R(1, 90), t: t.id, who: q.n, as: asName, ...(simStyle ? { style: simStyle } : {}) };
   }
   return out;
 }
@@ -791,6 +806,18 @@ export function extractMatchHighlights(
   const teamName = (tid?: number) => (tid === h.id ? h.name : tid === a.id ? a.name : '');
   const styleDesc = (style?: string): string => {
     switch (style) {
+      case 'post_in':
+        return 'ยิงชนเสาในกระดอนเข้าประตู';
+      case 'bar_in':
+        return 'ยิงชนคานล่างกระดอนข้ามเส้นเข้าประตู';
+      case 'top_corner':
+        return 'ซัดบอลพุ่งเสียบสามเหลี่ยมบน';
+      case 'gk_face':
+        return 'ตะบันเต็มข้อแสกหน้าผู้รักษาประตูเข้าประตู';
+      case 'gk_fumble_in':
+        return 'ซัดแรงจนผู้รักษาประตูปัดไม่ออก บอลปลิ้นเข้าประตู';
+      case 'deflected':
+        return 'ยิงแฉลบเปลี่ยนทางเข้าประตู';
       case 'bicycle':
         return 'ตีลังกายิงสุดมหัศจรรย์';
       case 'curler':
