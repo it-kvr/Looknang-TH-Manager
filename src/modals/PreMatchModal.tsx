@@ -867,81 +867,63 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               </div>
             ) : (
               <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.95fr_1.05fr] mland:grid-cols-[0.9fr_1.1fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
-                {/* Formation Pitch Visual + Equal-Height Side Buttons */}
-                <div className="p-2 sm:p-2.5 mland:p-1.5 bg-[#092818] grid grid-cols-[66px_minmax(0,1fr)] sm:grid-cols-[74px_minmax(0,1fr)] mland:grid-cols-[56px_minmax(0,1fr)] items-stretch gap-1.5 sm:gap-2 mland:gap-1.5 h-[320px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
-                  {/* Side Buttons (Matched to Pitch Height) */}
-                  <div className="h-full min-h-0 flex flex-col gap-1.5 mland:gap-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        setSwapPickName(null);
-                        setViewMode('H');
-                      }}
-                      title={homeTeam.name}
-                      className={`flex-1 min-h-0 w-full px-1 py-1 rounded-xl mland:rounded-lg border flex flex-col items-center justify-center gap-1 mland:gap-0.5 text-center cursor-pointer transition-colors ${
-                        viewMode === 'H'
-                          ? 'bg-emerald-500 border-emerald-400 text-white shadow-sm'
-                          : 'bg-black/30 border-white/15 text-white/80 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="shrink-0 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-                        <ClubCrest name={homeTeam.name} size={22} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
-                      </div>
-                      <span className="text-[8.5px] mland:text-[7px] font-bold opacity-85 leading-none">
-                        {isNeutralVenue ? 'กลาง' : 'เหย้า'}
-                      </span>
-                      <span className="w-full truncate text-[9.5px] mland:text-[8px] font-extrabold leading-tight">
-                        {homeTeam.name}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        setSwapPickName(null);
-                        setViewMode('A');
-                      }}
-                      title={awayTeam.name}
-                      className={`flex-1 min-h-0 w-full px-1 py-1 rounded-xl mland:rounded-lg border flex flex-col items-center justify-center gap-1 mland:gap-0.5 text-center cursor-pointer transition-colors ${
-                        viewMode === 'A'
-                          ? 'bg-emerald-500 border-emerald-400 text-white shadow-sm'
-                          : 'bg-black/30 border-white/15 text-white/80 hover:text-white hover:bg-white/10'
-                      }`}
-                    >
-                      <div className="shrink-0 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
-                        <ClubCrest name={awayTeam.name} size={22} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
-                      </div>
-                      <span className="text-[8.5px] mland:text-[7px] font-bold opacity-85 leading-none">
-                        {isNeutralVenue ? 'กลาง' : 'เยือน'}
-                      </span>
-                      <span className="w-full truncate text-[9.5px] mland:text-[8px] font-extrabold leading-tight">
-                        {awayTeam.name}
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        setSwapPickName(null);
-                        setViewMode('compare');
-                      }}
-                      title="เทียบ 2 ทีม"
-                      className="flex-1 min-h-0 w-full px-1 py-1 rounded-xl mland:rounded-lg border bg-black/30 border-white/15 text-white/85 hover:text-white hover:bg-white/10 flex flex-col items-center justify-center gap-1 mland:gap-0.5 text-center cursor-pointer transition-colors"
-                    >
-                      <ArrowLeftRight className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-                      <span className="text-[9.5px] mland:text-[8px] font-extrabold leading-tight">
-                        เทียบ
-                        <br />
-                        2 ทีม
-                      </span>
-                    </button>
+                {/* Formation Pitch Visual (Full Height & Width with Compact Floating Pill Inside) */}
+                <div className="p-1.5 sm:p-2 mland:p-1 bg-[#092818] flex items-center justify-center h-[390px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
+                  {/* Compact Team & Compare Toggle Floating Inside Pitch */}
+                  <div className="absolute top-1.5 left-1.5 right-1.5 z-10 flex justify-center pointer-events-none">
+                    <div className="pointer-events-auto w-full max-w-[330px] grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-0.5 p-0.5 rounded-xl mland:rounded-lg bg-[#05180e]/85 border border-white/20 shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setSwapPickName(null);
+                          setViewMode('H');
+                        }}
+                        title={homeTeam.name}
+                        className={`h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
+                          viewMode === 'H'
+                            ? 'bg-emerald-500 text-white shadow-xs'
+                            : 'text-white/80 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="shrink-0">{isNeutralVenue ? '🏟️' : '🏠'}</span>
+                        <span className="truncate">{homeTeam.name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setSwapPickName(null);
+                          setViewMode('A');
+                        }}
+                        title={awayTeam.name}
+                        className={`h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
+                          viewMode === 'A'
+                            ? 'bg-emerald-500 text-white shadow-xs'
+                            : 'text-white/80 hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        <span className="shrink-0">{isNeutralVenue ? '🏟️' : '✈️'}</span>
+                        <span className="truncate">{awayTeam.name}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setSwapPickName(null);
+                          setViewMode('compare');
+                        }}
+                        title="เทียบ 2 ทีม"
+                        className="h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold inline-flex items-center justify-center gap-1 text-white/85 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer transition-colors whitespace-nowrap"
+                      >
+                        <ArrowLeftRight className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                        <span>เทียบ</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Formation Pitch */}
-                  <div className="h-full min-h-0 w-full flex items-center justify-center">
+                  {/* Full-Height Formation Pitch */}
+                  <div className="h-full min-h-0 w-full flex items-center justify-center pt-4 mland:pt-3.5">
                     <FormationPitch
                       team={activeTeam}
                       state={state}
