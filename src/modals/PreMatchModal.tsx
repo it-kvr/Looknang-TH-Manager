@@ -621,36 +621,29 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     <div className="fixed inset-0 z-50 bg-black/82 flex items-center justify-center p-2 sm:p-3.5 mland:p-1.5 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden">
         {/* TOP MATCHUP HEADER */}
-        <div className="shrink-0 px-3 py-2 sm:px-4 sm:py-2 mland:px-2.5 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex items-center justify-between gap-2 mb-1.5 mland:mb-1">
-            <div className="flex items-center gap-1.5 min-w-0 text-[10.5px] mland:text-[9px]">
-              <span className="font-extrabold text-[var(--g)] truncate">{compLabel}</span>
-              <span className="text-[var(--mut)] hidden sm:inline">·</span>
-              <span className="text-[var(--mut)] hidden sm:inline truncate">ฤดูกาลที่ {state.season}</span>
-              {isDerby && (
-                <>
-                  <span className="text-[var(--mut)]">·</span>
-                  <span className="font-extrabold text-[var(--red)] shrink-0">🔥 ดาร์บี้</span>
-                </>
-              )}
+        <div className="shrink-0 px-3 py-2 sm:px-4 sm:py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-2 sm:gap-3 mland:gap-2">
+          {/* Left: Competition Tier & Matchday */}
+          <div className="order-1 min-w-0 shrink sm:max-w-[190px] mland:max-w-[145px]">
+            <div className="font-extrabold text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--g)] truncate leading-tight">
+              {kind === 'league' ? `⚽ ${TN[homeTeam.tier]}` : compLabel.split(' · ')[0]}
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                onClose();
-              }}
-              aria-label="ปิดหน้าก่อนแข่ง"
-              className="btn-icon w-6 h-6 mland:w-5 mland:h-5"
-            >
-              <X className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
-            </button>
+            <div className="mt-0.5 flex items-center gap-1 text-[10px] mland:text-[8px] text-[var(--mut)] truncate tabular leading-tight">
+              <span>
+                {kind === 'league'
+                  ? `นัด ${state.md + 1}/${state.fx.length}`
+                  : compLabel.split(' · ')[1] || ''}
+              </span>
+              <span>·</span>
+              <span>ซีซั่น {state.season}</span>
+              {isDerby && <span className="font-extrabold text-[var(--red)] shrink-0">· 🔥 ดาร์บี้</span>}
+            </div>
           </div>
 
-          <div className="grid grid-cols-[1fr_auto_1fr] items-stretch gap-1.5 sm:gap-2.5 mland:gap-1.5">
+          {/* Center: Matchup Teams (Home VS Away) */}
+          <div className="order-3 sm:order-2 mland:order-2 w-full sm:w-auto mland:w-auto sm:flex-1 mland:flex-1 min-w-0 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-1.5 sm:gap-2 mland:gap-1">
             {/* Home Club Card */}
             <div
-              className={`flex items-center justify-end gap-2 mland:gap-1.5 min-w-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl border ${
+              className={`flex items-center justify-end gap-2 mland:gap-1 min-w-0 px-2 py-1 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 rounded-xl border ${
                 meIsHome
                   ? 'bg-[var(--g-soft)]/45 border-[var(--g)]/45'
                   : 'bg-[var(--surface)]/85 border-[var(--line)]'
@@ -659,20 +652,20 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               <div className="text-right min-w-0 flex-1">
                 <div className="flex items-center justify-end gap-1 min-w-0">
                   {meIsHome && (
-                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7.5px] font-black shrink-0">
+                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7px] font-black shrink-0">
                       คุณ
                     </span>
                   )}
                   <span
-                    className={`font-extrabold text-xs sm:text-sm mland:text-[11px] truncate font-display ${
+                    className={`font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] truncate font-display ${
                       meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'
                     }`}
                   >
                     {homeTeam.name}
                   </span>
                 </div>
-                <div className="mt-0.5 text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center justify-end gap-1.5 tabular">
-                  <span className="hidden md:inline-flex mland:hidden items-center">
+                <div className="mt-0.5 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] flex items-center justify-end gap-1 tabular">
+                  <span className="hidden xl:inline-flex items-center">
                     {renderFormDots(homeTeam.fm)}
                   </span>
                   <span>{isNeutralVenue ? 'กลาง' : 'เหย้า'}</span>
@@ -682,59 +675,112 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   <span className="font-bold text-[var(--ink)]">XI {homeXiOv}</span>
                 </div>
               </div>
-              <div className="shrink-0 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                <ClubCrest name={homeTeam.name} size={34} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+              <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                <ClubCrest name={homeTeam.name} size={30} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
               </div>
             </div>
 
             {/* Center VS */}
-            <div className="flex flex-col items-center justify-center px-2.5 sm:px-3.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-              <span className="text-[9px] mland:text-[7.5px] font-bold tracking-wide text-[var(--mut)] leading-none">
-                PRE-MATCH
-              </span>
-              <span className="mt-0.5 text-sm sm:text-base mland:text-xs font-black font-display tracking-wider text-[var(--ink)] leading-none">
+            <div className="flex flex-col items-center justify-center px-2 sm:px-2.5 mland:px-1.5 py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
+              <span className="text-[8px] mland:text-[6.5px] font-bold tracking-wide text-[var(--mut)] leading-none">
                 VS
+              </span>
+              <span className="mt-0.5 text-xs sm:text-sm mland:text-[10px] font-black font-display tracking-wider text-[var(--ink)] leading-none">
+                แข่ง
               </span>
             </div>
 
             {/* Away Club Card */}
             <div
-              className={`flex items-center gap-2 mland:gap-1.5 min-w-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl border ${
+              className={`flex items-center gap-2 mland:gap-1 min-w-0 px-2 py-1 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 rounded-xl border ${
                 !meIsHome
                   ? 'bg-[var(--g-soft)]/45 border-[var(--g)]/45'
                   : 'bg-[var(--surface)]/85 border-[var(--line)]'
               }`}
             >
-              <div className="shrink-0 mland:[&>svg]:w-7 mland:[&>svg]:h-7">
-                <ClubCrest name={awayTeam.name} size={34} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+              <div className="shrink-0 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                <ClubCrest name={awayTeam.name} size={30} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1 min-w-0">
                   <span
-                    className={`font-extrabold text-xs sm:text-sm mland:text-[11px] truncate font-display ${
+                    className={`font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] truncate font-display ${
                       !meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'
                     }`}
                   >
                     {awayTeam.name}
                   </span>
                   {!meIsHome && (
-                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7.5px] font-black shrink-0">
+                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7px] font-black shrink-0">
                       คุณ
                     </span>
                   )}
                 </div>
-                <div className="mt-0.5 text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center gap-1.5 tabular">
+                <div className="mt-0.5 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] flex items-center gap-1 tabular">
                   <span className="font-bold text-[var(--ink)]">XI {awayXiOv}</span>
                   <span>·</span>
                   <span>#{ranks.get(awayTeam.id) ?? '-'}</span>
                   <span>·</span>
                   <span>{isNeutralVenue ? 'กลาง' : 'เยือน'}</span>
-                  <span className="hidden md:inline-flex mland:hidden items-center">
+                  <span className="hidden xl:inline-flex items-center">
                     {renderFormDots(awayTeam.fm)}
                   </span>
                 </div>
               </div>
             </div>
+          </div>
+
+          {/* Right Top Corner: Play Button & Match Actions */}
+          <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
+            {isMgr && (
+              <button
+                type="button"
+                title="จัดทัพเต็ม"
+                onClick={() => {
+                  SFX.tap();
+                  onOpenFullTactics();
+                }}
+                className="btn btn-sm mland:btn-xs btn-secondary px-2 mland:px-1.5"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+                <span className="hidden xl:inline">จัดทัพเต็ม</span>
+              </button>
+            )}
+            <button
+              type="button"
+              title="จำลองผลเกมนี้ทันที"
+              onClick={() => {
+                SFX.tap();
+                onQuickSim();
+              }}
+              className="btn btn-sm mland:btn-xs btn-secondary px-2.5 mland:px-2"
+            >
+              <FastForward className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0" />
+              <span>ข้ามเกม</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.whistle();
+                onKickOff(matchEnv);
+              }}
+              className="btn btn-md mland:btn-sm btn-gold px-3.5 sm:px-4 mland:px-2.5 font-extrabold shadow-sm"
+            >
+              <Play className="w-3.5 h-3.5 mland:w-3 mland:h-3 fill-current shrink-0" />
+              <span className="hidden sm:inline mland:hidden">ลงสนามแข่งขัน</span>
+              <span className="sm:hidden mland:inline">เล่น</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                onClose();
+              }}
+              aria-label="ปิดหน้าก่อนแข่ง"
+              className="btn-icon w-7 h-7 mland:w-6 mland:h-6 shrink-0"
+            >
+              <X className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+            </button>
           </div>
         </div>
 
@@ -742,50 +788,48 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.45fr_1fr] mland:grid-cols-[1.42fr_1fr] overflow-y-auto lg:overflow-hidden mland:overflow-hidden">
           {/* LEFT COLUMN: LINEUPS & TACTICS */}
           <div className="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r mland:border-b-0 mland:border-r border-[var(--line)] overflow-hidden">
-            {/* Sub-header & Team View Toggle */}
-            <div className="shrink-0 px-3 sm:px-4 mland:px-2.5 py-2 mland:py-1 bg-[var(--surface)] border-b border-[var(--line)]/80 flex flex-wrap items-center justify-between gap-2">
-              <div className="seg-bar">
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setSwapPickName(null);
-                    setViewMode('H');
-                  }}
-                  className={`seg-btn ${viewMode === 'H' ? 'seg-btn-active' : ''}`}
-                >
-                  {isNeutralVenue ? '🏟️' : '🏠'} {homeTeam.name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setSwapPickName(null);
-                    setViewMode('A');
-                  }}
-                  className={`seg-btn ${viewMode === 'A' ? 'seg-btn-active' : ''}`}
-                >
-                  {isNeutralVenue ? '🏟️' : '✈️'} {awayTeam.name}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setSwapPickName(null);
-                    setViewMode('compare');
-                  }}
-                  className={`seg-btn ${viewMode === 'compare' ? 'seg-btn-active' : ''}`}
-                >
-                  <ArrowLeftRight className="w-3 h-3" />
-                  <span>เทียบ 2 ทีม</span>
-                </button>
-              </div>
-            </div>
-
-
             {/* Content Area */}
             {viewMode === 'compare' ? (
-              <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 mland:p-2 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2">
+              <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div className="shrink-0 px-3 sm:px-4 mland:px-2.5 py-2 mland:py-1 bg-[var(--surface)] border-b border-[var(--line)]/80 flex items-center justify-between gap-2">
+                  <div className="seg-bar w-full grid grid-cols-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('H');
+                      }}
+                      className="seg-btn truncate"
+                    >
+                      {isNeutralVenue ? '🏟️' : '🏠'} {homeTeam.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('A');
+                      }}
+                      className="seg-btn truncate"
+                    >
+                      {isNeutralVenue ? '🏟️' : '✈️'} {awayTeam.name}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('compare');
+                      }}
+                      className="seg-btn seg-btn-active truncate"
+                    >
+                      <ArrowLeftRight className="w-3 h-3 shrink-0" />
+                      <span>เทียบ 2 ทีม</span>
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 mland:p-2 grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2">
                 {[
                   { side: 'H' as const, team: homeTeam, list: homeXi, slots: homeSlots, bench: homeBench, cap: homeCap, ov: homeXiOv },
                   { side: 'A' as const, team: awayTeam, list: awayXi, slots: awaySlots, bench: awayBench, cap: awayCap, ov: awayXiOv }
@@ -819,11 +863,63 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     )}
                   </div>
                 ))}
+                </div>
               </div>
             ) : (
               <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.95fr_1.05fr] mland:grid-cols-[0.9fr_1.1fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
                 {/* Formation Pitch Visual */}
-                <div className="p-2.5 sm:p-3 mland:p-1.5 bg-[#092818] flex flex-col items-center justify-center min-h-[260px] sm:min-h-0 relative overflow-hidden">
+                <div className="p-2 sm:p-2.5 mland:p-1.5 bg-[#092818] flex flex-col items-center justify-center min-h-[280px] sm:min-h-0 relative overflow-hidden">
+                  {/* Team & Compare Toggle inside Pitch */}
+                  <div className="w-full grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1 p-0.5 mb-1.5 mland:mb-1 rounded-xl mland:rounded-lg bg-black/35 border border-white/15 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('H');
+                      }}
+                      title={homeTeam.name}
+                      className={`h-6 mland:h-5 px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
+                        viewMode === 'H'
+                          ? 'bg-emerald-500 text-white shadow-xs'
+                          : 'text-white/75 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="shrink-0">{isNeutralVenue ? '🏟️' : '🏠'}</span>
+                      <span className="truncate">{homeTeam.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('A');
+                      }}
+                      title={awayTeam.name}
+                      className={`h-6 mland:h-5 px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
+                        viewMode === 'A'
+                          ? 'bg-emerald-500 text-white shadow-xs'
+                          : 'text-white/75 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span className="shrink-0">{isNeutralVenue ? '🏟️' : '✈️'}</span>
+                      <span className="truncate">{awayTeam.name}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setSwapPickName(null);
+                        setViewMode('compare');
+                      }}
+                      title="เทียบ 2 ทีม"
+                      className="h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold inline-flex items-center justify-center gap-1 text-white/80 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer transition-colors whitespace-nowrap"
+                    >
+                      <ArrowLeftRight className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                      <span>เทียบ</span>
+                    </button>
+                  </div>
+
                   <div className="w-full flex items-center justify-between gap-2 text-[10.5px] mland:text-[8.5px] text-white/90 font-bold mb-1.5 mland:mb-1 px-1 shrink-0">
                     <span className="truncate">
                       แผน {activeTeam.cf ? 'กำหนดเอง' : activeTeam.form} · {AR_T[activeTeam.tac]}
@@ -1495,60 +1591,6 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 </div>
               );
             })()}
-          </div>
-        </div>
-
-        {/* STICKY ACTION FOOTER */}
-        <div className="shrink-0 px-3.5 py-2.5 sm:px-5 sm:py-3 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-t border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                onClose();
-              }}
-              className="btn btn-md mland:btn-sm btn-surface"
-            >
-              ย้อนกลับ
-            </button>
-            {isMgr && (
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  onOpenFullTactics();
-                }}
-                className="btn btn-md mland:btn-sm btn-secondary"
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5" />
-                <span>จัดทัพเต็ม</span>
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                onQuickSim();
-              }}
-              className="btn btn-md mland:btn-sm btn-secondary"
-            >
-              <FastForward className="w-3.5 h-3.5" />
-              <span>ข้ามเกม</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                SFX.whistle();
-                onKickOff(matchEnv);
-              }}
-              className="btn btn-lg mland:btn-md btn-gold px-5 mland:px-4 font-extrabold"
-            >
-              <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current" />
-              <span>ลงสนามแข่งขัน</span>
-            </button>
           </div>
         </div>
       </div>

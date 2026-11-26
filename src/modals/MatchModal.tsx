@@ -11345,82 +11345,82 @@ export const MatchModal: React.FC<{
                         : null;
 
                       return (
-                        <div className="flex flex-col bg-[var(--surface)] text-[var(--ink)]">
-                          {/* Top Team, Formation & Ratings Toggle Header */}
-                          <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-1.5">
-                            <div className="flex items-center gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold min-w-0 flex-wrap">
-                              <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] mland:text-[8px] font-extrabold shrink-0">☕ พักครึ่ง</span>
-                              {htPitchMode !== 'all' && (
-                                <ClubCrest
-                                  name={activeTeam.name}
-                                  size={16}
-                                  team={activeTeam}
-                                  club={state.club}
-                                  isMyClub={activeTeam.id === state.me && state.mode === 'm'}
-                                />
-                              )}
-                              <span className="truncate">
-                                แผน {htPitchMode === 'all' ? `${liveHome.cf ? 'กำหนดเอง' : liveHome.form} vs ${liveAway.cf ? 'กำหนดเอง' : liveAway.form}` : `${formLabel}${activeTeam.id === meTeamOrig.id ? ` · ${AR_T[liveTac]}` : ''}`}
-                              </span>
-                              <button
-                                type="button"
-                                disabled={halftimeWarmupUsed}
-                                onClick={handleHalftimeWarmup}
-                                title={state.mode === 'p' ? 'วอร์มอัพพักครึ่งเติมฟิต +6% ทันที' : 'สั่งทีมวอร์มอัพพักครึ่งเติมฟิต +4% ทันที'}
-                                className={`px-2 py-0.5 rounded-md border text-[10px] mland:text-[8.5px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors ${
-                                  halftimeWarmupUsed
-                                    ? 'bg-emerald-500/15 border-emerald-400/35 text-emerald-700 dark:text-emerald-300 cursor-default'
-                                    : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-700 dark:text-emerald-200 hover:brightness-110 cursor-pointer'
-                                }`}
-                              >
-                                {halftimeWarmupUsed
-                                  ? '✅ วอร์มแล้ว'
-                                  : state.mode === 'p'
-                                    ? '💪 วอร์ม (+6%)'
-                                    : '💪 วอร์มทีม (+4%)'}
-                              </button>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px]">
-                                <button
-                                  type="button"
-                                  title="แสดงแผนทั้งสองทีม"
-                                  aria-label="แสดงแผนทั้งสองทีม"
-                                  onClick={() => setHtPitchMode('all')}
-                                  className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'all' ? 'bg-[var(--g)] text-white shadow-xs ring-1 ring-white/25' : 'text-[var(--mut)] hover:bg-[var(--surface-2)]'}`}
-                                >
-                                  <span className="inline-flex items-center -space-x-1.5">
-                                    <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                    <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                                  </span>
-                                </button>
-                                <button
-                                  type="button"
-                                  title={homeOrig.name}
-                                  aria-label={homeOrig.name}
-                                  onClick={() => setHtPitchMode('H')}
-                                  className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'H' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)]'}`}
-                                >
-                                  <ClubCrest name={homeOrig.name} size={18} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                </button>
-                                <button
-                                  type="button"
-                                  title={awayOrig.name}
-                                  aria-label={awayOrig.name}
-                                  onClick={() => setHtPitchMode('A')}
-                                  className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'A' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)]'}`}
-                                >
-                                  <ClubCrest name={awayOrig.name} size={18} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
+                        <div className="flex flex-col bg-[#0c351f] text-[var(--ink)]">
                           {/* Halftime Stage: Split Pitch + Right-Side Halftime Team Talk Panel (Manager Mode) */}
                           <div className={`grid ${state.mode === 'm' ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_235px] lg:grid-cols-[minmax(0,1fr)_265px] mland:grid-cols-[minmax(0,1fr)_205px]' : 'grid-cols-1'} bg-[#0c351f]`}>
                             <div className="flex flex-col min-w-0">
+                              {/* Top Team, Formation, Warmup & View Toggle inside Stadium Pitch */}
+                              <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[#082414]/90 border-b border-white/12 text-white flex flex-wrap items-center justify-between gap-1.5 shrink-0">
+                                <div className="flex items-center gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold min-w-0 flex-wrap">
+                                  <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] mland:text-[8px] font-extrabold shrink-0">☕ พักครึ่ง</span>
+                                  {htPitchMode !== 'all' && (
+                                    <ClubCrest
+                                      name={activeTeam.name}
+                                      size={16}
+                                      team={activeTeam}
+                                      club={state.club}
+                                      isMyClub={activeTeam.id === state.me && state.mode === 'm'}
+                                    />
+                                  )}
+                                  <span className="truncate text-white/95">
+                                    แผน {htPitchMode === 'all' ? `${liveHome.cf ? 'กำหนดเอง' : liveHome.form} vs ${liveAway.cf ? 'กำหนดเอง' : liveAway.form}` : `${formLabel}${activeTeam.id === meTeamOrig.id ? ` · ${AR_T[liveTac]}` : ''}`}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={halftimeWarmupUsed}
+                                    onClick={handleHalftimeWarmup}
+                                    title={state.mode === 'p' ? 'วอร์มอัพพักครึ่งเติมฟิต +6% ทันที' : 'สั่งทีมวอร์มอัพพักครึ่งเติมฟิต +4% ทันที'}
+                                    className={`px-2 py-0.5 rounded-md border text-[10px] mland:text-[8.5px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap shrink-0 transition-colors ${
+                                      halftimeWarmupUsed
+                                        ? 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200 cursor-default'
+                                        : 'bg-emerald-500/25 border-emerald-400/55 text-emerald-100 hover:bg-emerald-500/40 cursor-pointer'
+                                    }`}
+                                  >
+                                    {halftimeWarmupUsed
+                                      ? '✅ วอร์มแล้ว'
+                                      : state.mode === 'p'
+                                        ? '💪 วอร์ม (+6%)'
+                                        : '💪 วอร์มทีม (+4%)'}
+                                  </button>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-black/35 border border-white/15 text-[10px] mland:text-[8.5px]">
+                                    <button
+                                      type="button"
+                                      title="แสดงแผนทั้งสองทีม"
+                                      aria-label="แสดงแผนทั้งสองทีม"
+                                      onClick={() => setHtPitchMode('all')}
+                                      className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'all' ? 'bg-emerald-500 text-white shadow-xs' : 'text-white/75 hover:bg-white/10'}`}
+                                    >
+                                      <span className="inline-flex items-center -space-x-1.5">
+                                        <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                        <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={homeOrig.name}
+                                      aria-label={homeOrig.name}
+                                      onClick={() => setHtPitchMode('H')}
+                                      className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'H' ? 'bg-white text-[#072213] shadow-xs' : 'text-white/75 hover:bg-white/10'}`}
+                                    >
+                                      <ClubCrest name={homeOrig.name} size={18} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title={awayOrig.name}
+                                      aria-label={awayOrig.name}
+                                      onClick={() => setHtPitchMode('A')}
+                                      className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'A' ? 'bg-white text-[#072213] shadow-xs' : 'text-white/75 hover:bg-white/10'}`}
+                                    >
+                                      <ClubCrest name={awayOrig.name} size={18} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+
                               {/* Tall SVG Formation Pitch Container */}
-                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 h-[400px] sm:h-[470px] lg:h-[520px] mland:h-[calc(var(--app-dvh,1dvh)*97-134px)] mland:min-h-[185px] select-none overflow-hidden flex items-center justify-center">
+                              <div className="relative w-full p-1.5 sm:p-2 mland:p-1 h-[390px] sm:h-[460px] lg:h-[510px] mland:h-[calc(var(--app-dvh,1dvh)*97-134px)] mland:min-h-[185px] select-none overflow-hidden flex items-center justify-center">
                                 {htPickedInfo && (
                                   <div className="absolute top-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
                                     <div className="min-w-0 space-y-0.5">
