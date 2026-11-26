@@ -695,7 +695,6 @@ export const MatchModal: React.FC<{
   const [selectedHalftimeTalk, setSelectedHalftimeTalk] = useState<HalftimeTalkTone>(() =>
     state.mode === 'p' ? 'follow_coach' : 'balanced'
   );
-  const [halftimeWarmupUsed, setHalftimeWarmupUsed] = useState(false);
   const [shootoutUi, setShootoutUi] = useState<ShootoutState | null>(null);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState<0.25 | 0.5 | 1 | 2 | 5>(() => getDefaultMatchSpeed(settings));
@@ -1145,6 +1144,7 @@ export const MatchModal: React.FC<{
   function buildTeamAgents(team: Team, side: 'H' | 'A', luNames: string[], secondHalf = false) {
     const sr = simRef.current;
     const activeCap = side === 'H' ? sr.captainH : sr.captainA;
+    const subbedInNames = sr.subs.filter((s) => s.t === team.id).map((s) => s.inPlayer);
     return buildAgentsForTeam(
       team,
       side,
@@ -1156,7 +1156,8 @@ export const MatchModal: React.FC<{
       myPlayerName,
       secondHalf,
       side === 'H' ? homeStatDeltas : awayStatDeltas,
-      activeCap
+      activeCap,
+      subbedInNames
     );
   }
 
@@ -9434,38 +9435,6 @@ export const MatchModal: React.FC<{
     }
   };
 
-  const handleHalftimeWarmup = () => {
-    const w = worldRef.current;
-    if (!w || w.phase !== 'halftime' || halftimeWarmupUsed) return;
-    const sr = simRef.current;
-    SFX.coach();
-    setHalftimeWarmupUsed(true);
-    if (state.mode === 'p' && myPlayerName) {
-      const meAg = w.agents.find((a) => a.id === myPlayerName);
-      if (meAg && !meAg.sentOff) {
-        meAg.fit = clamp(meAg.fit + 6, 25, 100);
-        sr.liveFit[meAg.id] = meAg.fit;
-      } else {
-        sr.liveFit[myPlayerName] = clamp((sr.liveFit[myPlayerName] ?? 80) + 6, 25, 100);
-      }
-      setLiveFitMap({ ...sr.liveFit });
-      pushLog(45, `💪 คุณวอร์มอัพเติมฟิตช่วงพักครึ่ง (+6%) พร้อมลุย 45 นาทีหลัง!`, 'sys');
-    } else if (state.mode === 'm') {
-      const myLu = meIsHome ? sr.homeLu : sr.awayLu;
-      myLu.forEach((name) => {
-        if (sr.sentOff.includes(name)) return;
-        const ag = w.agents.find((a) => a.id === name);
-        const curFit = ag ? ag.fit : (sr.liveFit[name] ?? 80);
-        const nextFit = clamp(curFit + 4, 25, 100);
-        if (ag) ag.fit = nextFit;
-        sr.liveFit[name] = nextFit;
-      });
-      setLiveFitMap({ ...sr.liveFit });
-      triggerCoachShout(w, meIsHome ? 'H' : 'A', '💪 วอร์มเตรียมลุยครึ่งหลัง!', 2.6);
-      pushLog(45, `💪 สั่งทีมวอร์มอัพพักครึ่ง (${meTeamOrig.name}): พลังกายผู้เล่นในสนาม +4%`, 'sys');
-    }
-  };
-
   const handleStartSecondHalf = (talkToneOverride?: HalftimeTalkTone) => {
     const w = worldRef.current;
     if (!w || w.phase !== 'halftime') return;
@@ -9527,7 +9496,7 @@ export const MatchModal: React.FC<{
     } else if (state.mode === 'p' && myPlayerName) {
       const meAg = w.agents.find((a) => a.id === myPlayerName);
       const mySideCfg = aiCoachRef.current[mySide];
-      if (talkTone === 'fit' && !halftimeWarmupUsed) {
+      if (talkTone === 'fit') {
         if (meAg) {
           meAg.fit = clamp(meAg.fit + 6, 25, 100);
           sr.liveFit[meAg.id] = meAg.fit;
@@ -9558,7 +9527,6 @@ export const MatchModal: React.FC<{
     syncSidelineBenches(w);
     triggerCoachShout(w, 'H', '📣 ย้ายฝั่ง! สู้ต่อ!', 3.2);
     triggerCoachShout(w, 'A', '📣 สลับฝั่ง! ลุย!', 3.2);
-    setHalftimeWarmupUsed(false);
     setHtPickedPlayer(null);
     setMlandMatchTab('stats');
     setPaused(false);
@@ -12069,7 +12037,7 @@ export const MatchModal: React.FC<{
                             <div className="flex flex-col min-w-0">
                               {/* Full-Height SVG Formation Pitch Container with Enlarged Logo Switcher & Pitch Crest */}
                               <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex flex-col gap-1.5 mland:gap-1">
-                                {/* Top Stage Bar: Enlarged Logo Team Switcher (Top-Left) + Warmup Pill (Top-Right) */}
+                                {/* Top Stage Bar: Enlarged Logo Team Switcher (Top-Left) */}
                                 <div className="shrink-0 flex items-center justify-between gap-2 z-20">
                                   <div className="flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/90 border border-white/25 shadow-lg">
                                     <button
@@ -12115,25 +12083,6 @@ export const MatchModal: React.FC<{
                                       <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
                                     </button>
                                   </div>
-
-                                  {/* Compact Halftime Warmup Pill Inside Pitch (Top-Right) */}
-                                  <button
-                                    type="button"
-                                    disabled={halftimeWarmupUsed}
-                                    onClick={handleHalftimeWarmup}
-                                    title={state.mode === 'p' ? 'วอร์มอัพพักครึ่งเติมฟิต +6% ทันที' : 'สั่งทีมวอร์มอัพพักครึ่งเติมฟิต +4% ทันที'}
-                                    className={`h-9 sm:h-10 mland:h-8 px-2.5 sm:px-3 mland:px-2 rounded-xl border text-[10.5px] sm:text-xs mland:text-[9px] font-extrabold inline-flex items-center gap-1 whitespace-nowrap shadow-lg transition-colors shrink-0 ${
-                                      halftimeWarmupUsed
-                                        ? 'bg-[#05180e]/90 border-emerald-400/40 text-emerald-300 cursor-default'
-                                        : 'bg-[#05180e]/90 border-emerald-400/60 text-emerald-100 hover:bg-emerald-500/35 cursor-pointer'
-                                    }`}
-                                  >
-                                    {halftimeWarmupUsed
-                                      ? '✅ วอร์มแล้ว'
-                                      : state.mode === 'p'
-                                        ? '💪 วอร์ม (+6%)'
-                                        : '💪 วอร์มทีม (+4%)'}
-                                  </button>
                                 </div>
 
                                 {htPickedInfo && (

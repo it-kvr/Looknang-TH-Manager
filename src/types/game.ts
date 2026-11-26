@@ -1122,6 +1122,7 @@ export interface LivePitchAgent {
   fit: number;
   hasYellow: boolean;
   sentOff: boolean;
+  subbedIn?: boolean;
   d: Record<string, number>;
   sig: string;
   traits?: string[];

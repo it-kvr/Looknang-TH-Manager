@@ -1489,17 +1489,17 @@ export const FormationPitch: React.FC<{
               </g>
             )}
 
-            {/* Mid-Left Edge: Sub In / Sub Out Arrow Badge */}
+            {/* Mid-Left Edge: Sub In / Sub Out Arrow Badge (matches StatIconBadge) */}
             {hasSubIn && (
-              <g transform={`translate(${cx - 19.5},${cy - 2.5})`}>
-                <circle r="5.2" fill="#10b981" stroke="#fff" strokeWidth="0.9" />
-                <path d="M0 -2.5 L2.7 2 L-2.7 2 Z" fill="#fff" />
+              <g transform={`translate(${cx - 20.5},${cy + (meta?.isMotm && isCaptain ? 3 : -2)})`}>
+                <circle r="5.5" fill="#10b981" stroke="#fff" strokeWidth="1" />
+                <path d="M0 -2.85 L2.6 0.3 H1.0 V2.95 H-1.0 V0.3 H-2.6 Z" fill="#fff" />
               </g>
             )}
             {hasSubOut && (
-              <g transform={`translate(${cx - 19.5},${cy - 2.5})`}>
-                <circle r="5.2" fill="#f43f5e" stroke="#fff" strokeWidth="0.9" />
-                <path d="M0 2.5 L2.7 -2 L-2.7 -2 Z" fill="#fff" />
+              <g transform={`translate(${cx - 20.5},${cy + (meta?.isMotm && isCaptain ? 3 : -2)})`}>
+                <circle r="5.5" fill="#f43f5e" stroke="#fff" strokeWidth="1" />
+                <path d="M0 2.85 L2.6 -0.3 H1.0 V-2.95 H-1.0 V-0.3 H-2.6 Z" fill="#fff" />
               </g>
             )}
             {(q.hg || q.customCreated) && (

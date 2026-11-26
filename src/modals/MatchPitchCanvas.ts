@@ -18,11 +18,13 @@ export const buildAgentsForTeam = (
   myPlayerName?: string,
   secondHalf = false,
   statDeltas?: Record<string, number> | null,
-  captainName?: string
+  captainName?: string,
+  subbedInNames?: string[]
 ): LivePitchAgent[] => {
   const slots = getFormationSlots(team);
   const attRight = (side === 'H') !== secondHalf;
   const activeCap = captainName || team.cap;
+  const subInSet = subbedInNames?.length ? new Set(subbedInNames) : null;
   return luNames.map((name, i) => {
     const pl = team.sq.find((q) => q.n === name) || team.sq[i] || team.sq[0];
     const slot = slots[i] || { sp: pl?.ro || 'CM', x: 50, y: 50, pos: pl?.pos || 'MF' };
@@ -69,6 +71,7 @@ export const buildAgentsForTeam = (
       fit: fitMap[name] ?? pl?.fit ?? 100,
       hasYellow: (yellowsMap[name] || 0) > 0,
       sentOff: sentOffNames.includes(name),
+      subbedIn: Boolean(subInSet?.has(name)),
       d: effectiveD,
       sig: dt.sig,
       tr: dt.tr,
@@ -1539,20 +1542,26 @@ export const drawLivePitchToCanvas = (
           ctx.fillText(noStr, nx0 + nW / 2, ny0 + nH / 2 + 0.2);
         }
         if (seat.subbedOut) {
+          ctx.globalAlpha = 1;
           const bxSub = sx - seatR * 0.72;
           const bySub = seatY - seatR * 0.72;
+          const br = 3.5;
           ctx.fillStyle = '#f43f5e';
           ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 0.65;
+          ctx.lineWidth = 0.75;
           ctx.beginPath();
-          ctx.arc(bxSub, bySub, 2.5, 0, Math.PI * 2);
+          ctx.arc(bxSub, bySub, br, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
           ctx.fillStyle = '#ffffff';
           ctx.beginPath();
-          ctx.moveTo(bxSub, bySub + 1.25);
-          ctx.lineTo(bxSub - 1.25, bySub - 0.85);
-          ctx.lineTo(bxSub + 1.25, bySub - 0.85);
+          ctx.moveTo(bxSub, bySub + br * 0.54);
+          ctx.lineTo(bxSub + br * 0.48, bySub - br * 0.05);
+          ctx.lineTo(bxSub + br * 0.19, bySub - br * 0.05);
+          ctx.lineTo(bxSub + br * 0.19, bySub - br * 0.55);
+          ctx.lineTo(bxSub - br * 0.19, bySub - br * 0.55);
+          ctx.lineTo(bxSub - br * 0.19, bySub - br * 0.05);
+          ctx.lineTo(bxSub - br * 0.48, bySub - br * 0.05);
           ctx.closePath();
           ctx.fill();
         }
@@ -3026,13 +3035,13 @@ export const drawLivePitchToCanvas = (
     // Captain 'C' circular badge on left shoulder using clean flat club colors
     if (ag.isCaptain) {
       const capPal = getClubCaptainPalette(kit, trim);
-      const capX = -playerRadius * 0.92;
-      const capY = -playerRadius * 0.56;
+      const capX = -playerRadius * 0.9;
+      const capY = ag.subbedIn ? -playerRadius * 0.72 : -playerRadius * 0.56;
       ctx.fillStyle = capPal.bg;
       ctx.strokeStyle = capPal.border;
       ctx.lineWidth = 1.0;
       ctx.beginPath();
-      ctx.arc(capX, capY, 4.5, 0, Math.PI * 2);
+      ctx.arc(capX, capY, 4.4, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = capPal.text;
@@ -3040,6 +3049,31 @@ export const drawLivePitchToCanvas = (
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('C', capX, capY + 0.35);
+    }
+
+    // Substitute-in circular emerald up-arrow badge on mid-left edge (matches FormationPitch & StatIconBadge)
+    if (ag.subbedIn) {
+      const subX = -playerRadius * 1.12;
+      const subY = ag.isCaptain ? -playerRadius * 0.04 : -playerRadius * 0.22;
+      const srBadge = 4.2;
+      ctx.fillStyle = '#10b981';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.arc(subX, subY, srBadge, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(subX, subY - srBadge * 0.54);
+      ctx.lineTo(subX + srBadge * 0.48, subY + srBadge * 0.05);
+      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.05);
+      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.55);
+      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.55);
+      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.05);
+      ctx.lineTo(subX - srBadge * 0.48, subY + srBadge * 0.05);
+      ctx.closePath();
+      ctx.fill();
     }
 
     // Yellow card mini indicator on right shoulder (clear of top position badge)
