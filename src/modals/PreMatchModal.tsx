@@ -527,8 +527,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               : starterWarnCls || 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
         } ${unavailable ? 'opacity-70' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="flex items-center gap-0.5 sm:gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4">
-          <PlayerFace player={pl} team={team} state={state} size={20} />
+        <span className="flex items-center gap-0.5 sm:gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-5 [&_svg]:h-auto mland:[&_svg]:w-4 mland:[&_svg]:h-auto">
+          <PlayerFace player={pl} team={team} state={state} size={22} />
           <span className="text-[9.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center shrink-0 whitespace-nowrap">
             #{no}
           </span>

@@ -139,6 +139,57 @@ function resolveLogVisual(
   return { team: finalTeam, playerEntry: bestEntry, isBothTeams };
 }
 
+const MATCH_THUMB_SIZE_CLS: Record<'xs' | 'sm' | 'md', string> = {
+  xs: 'w-[20px] h-[21px] mland:w-[17px] mland:h-[18px]',
+  sm: 'w-[24px] h-[25px] mland:w-[20px] mland:h-[21px]',
+  md: 'w-[28px] h-[30px]'
+};
+
+const MATCH_THUMB_PX: Record<'xs' | 'sm' | 'md', number> = {
+  xs: 20,
+  sm: 24,
+  md: 28
+};
+
+const MatchPlayerThumb: React.FC<{
+  player: Player;
+  team: Team;
+  state: GameState;
+  kitColor: string;
+  trimColor?: string;
+  size?: 'xs' | 'sm' | 'md';
+  dark?: boolean;
+  ringClassName?: string;
+}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName }) => {
+  const isMeClub = team.id === state.me && state.mode === 'm';
+  const effKit = kitColor || '#15803d';
+  const effTrim = player.pos === 'GK' ? undefined : trimColor;
+  const bgStyle = dark
+    ? `linear-gradient(155deg, color-mix(in srgb, ${effKit} 36%, #0f172a), color-mix(in srgb, ${effTrim || '#fad05a'} 16%, #1e293b))`
+    : `linear-gradient(155deg, color-mix(in srgb, ${effKit} 28%, var(--surface-2)), color-mix(in srgb, ${effTrim || '#fad05a'} 14%, var(--surface)))`;
+  const ringCls = ringClassName || (dark ? 'ring-white/30' : 'ring-black/14 dark:ring-white/22');
+
+  return (
+    <span
+      className={`shrink-0 ${MATCH_THUMB_SIZE_CLS[size]} rounded-lg overflow-hidden ring-1 ${ringCls} inline-flex items-end justify-center shadow-2xs [&>svg]:w-full [&>svg]:h-full [&>svg]:block`}
+      style={{ background: bgStyle }}
+    >
+      <PlayerFace
+        player={player}
+        team={team}
+        state={state}
+        careerProfile={player.me ? state.p : null}
+        club={isMeClub ? state.club : null}
+        isMyClub={isMeClub}
+        kitColor={effKit}
+        trimColor={effTrim}
+        size={MATCH_THUMB_PX[size]}
+        bare
+      />
+    </span>
+  );
+};
+
 const MatchLogRow = React.memo<{
   l: MatchLogItem;
   matchVisualIndex: MatchVisualIndex;
@@ -233,20 +284,14 @@ const MatchLogRow = React.memo<{
                 <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
               </span>
             )}
-            <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-black/15 dark:ring-white/25 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-              <PlayerFace
-                player={htPlayer}
-                team={htTeam}
-                state={state}
-                careerProfile={htPlayer.me ? state.p : null}
-                club={htIsMe ? state.club : null}
-                isMyClub={htIsMe}
-                kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
-                trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
-                size={20}
-                bare
-              />
-            </span>
+            <MatchPlayerThumb
+              player={htPlayer}
+              team={htTeam}
+              state={state}
+              kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
+              trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
+              size="sm"
+            />
             <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
               #{h.entry.no}
             </span>
@@ -320,20 +365,14 @@ const MatchLogRow = React.memo<{
 
       {vPlayer && !hasInlinePlayer && (
         <span className="inline-flex items-center gap-1 shrink-0">
-          <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-black/15 dark:ring-white/25 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-            <PlayerFace
-              player={vPlayer.player}
-              team={vPlayer.team}
-              state={state}
-              careerProfile={vPlayer.player.me ? state.p : null}
-              club={vPlayer.team.id === state.me && state.mode === 'm' ? state.club : null}
-              isMyClub={vPlayer.team.id === state.me && state.mode === 'm'}
-              kitColor={vPlayer.player.pos === 'GK' ? vGkKit : vKit}
-              trimColor={vPlayer.player.pos === 'GK' ? undefined : vTrim}
-              size={20}
-              bare
-            />
-          </span>
+          <MatchPlayerThumb
+            player={vPlayer.player}
+            team={vPlayer.team}
+            state={state}
+            kitColor={vPlayer.player.pos === 'GK' ? vGkKit : vKit}
+            trimColor={vPlayer.player.pos === 'GK' ? undefined : vTrim}
+            size="sm"
+          />
           <span className="px-1 py-0.2 rounded bg-black/10 dark:bg-white/12 text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
             #{vPlayer.no}
           </span>
@@ -10283,30 +10322,30 @@ export const MatchModal: React.FC<{
         case 'full_time':
           return <span className="text-[11px] leading-none shrink-0">🏁</span>;
         case 'goal':
-          return <span className="inline-flex items-center justify-center w-5 h-5 text-[12.5px] leading-none shrink-0">⚽</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12.5px] leading-none shrink-0">⚽</span>;
         case 'own_goal':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🤦</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🤦</span>;
         case 'pen_goal':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[11px] shrink-0">🎯</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🎯</span>;
         case 'pen_awarded':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300 text-[11px] shrink-0">🎯</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🎯</span>;
         case 'pen_miss':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">❌</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[11.5px] leading-none shrink-0">❌</span>;
         case 'yellow':
           return <StatIconBadge kind="yellow" size="xs" />;
         case 'red':
           return <StatIconBadge kind="red" size="xs" />;
         case 'injury':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[11px] shrink-0">🩹</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">🩹</span>;
         case 'var_no_goal':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] shrink-0">🖥</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[11.5px] leading-none shrink-0">🖥</span>;
         case 'miracle':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-300 text-[11px] shrink-0">⚡</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">⚡</span>;
         case 'blessed':
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-yellow-400/20 text-yellow-600 dark:text-yellow-300 text-[11px] shrink-0">✨</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[12px] leading-none shrink-0">✨</span>;
         case 'miss':
         default:
-          return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[var(--surface-2)] text-[var(--mut)] text-[10px] shrink-0">🥅</span>;
+          return <span className="inline-flex items-center justify-center w-4.5 h-4.5 text-[11.5px] leading-none shrink-0">🥅</span>;
       }
     };
 
@@ -10437,20 +10476,14 @@ export const MatchModal: React.FC<{
                               <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={sideId === state.me && state.mode === 'm'} />
                             </span>
                             {tlPlayer && (
-                              <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--line)] inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                <PlayerFace
-                                  player={tlPlayer}
-                                  team={sideTeam}
-                                  state={state}
-                                  careerProfile={tlPlayer.me ? state.p : null}
-                                  club={sideId === state.me && state.mode === 'm' ? state.club : null}
-                                  isMyClub={sideId === state.me && state.mode === 'm'}
-                                  kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
-                                  trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
-                                  size={20}
-                                  bare
-                                />
-                              </span>
+                              <MatchPlayerThumb
+                                player={tlPlayer}
+                                team={sideTeam}
+                                state={state}
+                                kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
+                                trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
+                                size="sm"
+                              />
                             )}
                             {tlNo != null && (
                               <span className="text-[9.5px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
@@ -10496,20 +10529,14 @@ export const MatchModal: React.FC<{
                               <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={sideId === state.me && state.mode === 'm'} />
                             </span>
                             {tlPlayer && (
-                              <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--line)] inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                <PlayerFace
-                                  player={tlPlayer}
-                                  team={sideTeam}
-                                  state={state}
-                                  careerProfile={tlPlayer.me ? state.p : null}
-                                  club={sideId === state.me && state.mode === 'm' ? state.club : null}
-                                  isMyClub={sideId === state.me && state.mode === 'm'}
-                                  kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
-                                  trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
-                                  size={20}
-                                  bare
-                                />
-                              </span>
+                              <MatchPlayerThumb
+                                player={tlPlayer}
+                                team={sideTeam}
+                                state={state}
+                                kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
+                                trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
+                                size="sm"
+                              />
                             )}
                             {tlNo != null && (
                               <span className="text-[9.5px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
@@ -10610,20 +10637,15 @@ export const MatchModal: React.FC<{
           <span className="shrink-0 inline-flex">
             <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
           </span>
-          <span className="shrink-0 w-[18px] h-[18px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-white/15 ring-1 ring-white/35 inline-flex items-start justify-center [&>svg]:w-[18px] [&>svg]:h-[19px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-            <PlayerFace
-              player={htPlayer}
-              team={htTeam}
-              state={state}
-              careerProfile={htPlayer.me ? state.p : null}
-              club={htIsMe ? state.club : null}
-              isMyClub={htIsMe}
-              kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
-              trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
-              size={18}
-              bare
-            />
-          </span>
+          <MatchPlayerThumb
+            player={htPlayer}
+            team={htTeam}
+            state={state}
+            kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
+            trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
+            size="xs"
+            dark
+          />
           <span className="text-[9.5px] mland:text-[8px] font-black tabular text-[#fde047]">#{h.entry.no}</span>
           <span className="font-extrabold">{label.slice(h.start, h.end)}</span>
         </span>
@@ -11725,20 +11747,16 @@ export const MatchModal: React.FC<{
                               </span>
                             )}
                             {motmPlayer && motmTeam && (
-                              <span className="shrink-0 w-[18px] h-[18px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-white/10 ring-1 ring-[#facc15] inline-flex items-start justify-center [&>svg]:w-[18px] [&>svg]:h-[19px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                <PlayerFace
-                                  player={motmPlayer}
-                                  team={motmTeam}
-                                  state={state}
-                                  careerProfile={motmPlayer.me ? state.p : null}
-                                  club={motmTeam.id === state.me && state.mode === 'm' ? state.club : null}
-                                  isMyClub={motmTeam.id === state.me && state.mode === 'm'}
-                                  kitColor={motmTeam.id === homeId ? (motmPlayer.pos === 'GK' ? homeGkKit : homeKit) : (motmPlayer.pos === 'GK' ? awayGkKit : awayKit)}
-                                  trimColor={motmPlayer.pos === 'GK' ? undefined : (motmTeam.id === homeId ? homeTrim : awayTrim)}
-                                  size={18}
-                                  bare
-                                />
-                              </span>
+                              <MatchPlayerThumb
+                                player={motmPlayer}
+                                team={motmTeam}
+                                state={state}
+                                kitColor={motmTeam.id === homeId ? (motmPlayer.pos === 'GK' ? homeGkKit : homeKit) : (motmPlayer.pos === 'GK' ? awayGkKit : awayKit)}
+                                trimColor={motmPlayer.pos === 'GK' ? undefined : (motmTeam.id === homeId ? homeTrim : awayTrim)}
+                                size="xs"
+                                dark
+                                ringClassName="ring-[#facc15]"
+                              />
                             )}
                             {motmNo != null && <span className="tabular shrink-0 text-white/90">#{motmNo}</span>}
                             <span className="truncate text-white">{motmName}</span>
@@ -11759,20 +11777,15 @@ export const MatchModal: React.FC<{
                               <div className="min-w-0">
                                 <div className="font-bold truncate flex items-center gap-1.5">
                                   {pkPl && (
-                                    <span className="shrink-0 w-6 h-6 rounded-full overflow-hidden bg-white/10 ring-1 ring-white/30 inline-flex items-start justify-center [&>svg]:w-6 [&>svg]:h-[25px]">
-                                      <PlayerFace
-                                        player={pkPl}
-                                        team={pickedInfo.team}
-                                        state={state}
-                                        careerProfile={pkPl.me ? state.p : null}
-                                        club={pickedInfo.team.id === state.me && state.mode === 'm' ? state.club : null}
-                                        isMyClub={pickedInfo.team.id === state.me && state.mode === 'm'}
-                                        kitColor={pkIsHome ? (pkPl.pos === 'GK' ? homeGkKit : homeKit) : (pkPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                        trimColor={pkPl.pos === 'GK' ? undefined : (pkIsHome ? homeTrim : awayTrim)}
-                                        size={24}
-                                        bare
-                                      />
-                                    </span>
+                                    <MatchPlayerThumb
+                                      player={pkPl}
+                                      team={pickedInfo.team}
+                                      state={state}
+                                      kitColor={pkIsHome ? (pkPl.pos === 'GK' ? homeGkKit : homeKit) : (pkPl.pos === 'GK' ? awayGkKit : awayKit)}
+                                      trimColor={pkPl.pos === 'GK' ? undefined : (pkIsHome ? homeTrim : awayTrim)}
+                                      size="md"
+                                      dark
+                                    />
                                   )}
                                   <span className="text-[#facc15] tabular">#{pickedInfo.no}</span>
                                   <span className="px-1 rounded bg-white/15 text-[9.5px] font-extrabold">{pickedInfo.role}</span>
@@ -11887,20 +11900,16 @@ export const MatchModal: React.FC<{
                                   <ClubCrest name={subTeam.name} size={12} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
                                 </span>
                                 {subPl && (
-                                  <span className={`shrink-0 w-[18px] h-[18px] rounded-full overflow-hidden ring-1 inline-flex items-start justify-center [&>svg]:w-[18px] [&>svg]:h-[19px] ${isSubMotm ? 'bg-[#1c1300]/20 ring-[#1c1300]/50' : 'bg-black/30 ring-white/25'}`}>
-                                    <PlayerFace
-                                      player={subPl}
-                                      team={subTeam}
-                                      state={state}
-                                      careerProfile={subPl.me ? state.p : null}
-                                      club={subTeam.id === state.me && state.mode === 'm' ? state.club : null}
-                                      isMyClub={subTeam.id === state.me && state.mode === 'm'}
-                                      kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                      trimColor={subPl.pos === 'GK' ? undefined : (subTeam.id === homeId ? homeTrim : awayTrim)}
-                                      size={18}
-                                      bare
-                                    />
-                                  </span>
+                                  <MatchPlayerThumb
+                                    player={subPl}
+                                    team={subTeam}
+                                    state={state}
+                                    kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
+                                    trimColor={subPl.pos === 'GK' ? undefined : (subTeam.id === homeId ? homeTrim : awayTrim)}
+                                    size="xs"
+                                    dark={!isSubMotm}
+                                    ringClassName={isSubMotm ? 'ring-[#1c1300]/50' : undefined}
+                                  />
                                 )}
                                 <span className="opacity-75 text-[9px] mland:text-[7.5px]">#{subNo}</span>
                                 <span className="font-bold max-w-[84px] truncate">{sb.inPlayer.split(' ')[0]}</span>
@@ -12170,9 +12179,15 @@ export const MatchModal: React.FC<{
                                 <span className="inline-flex items-center gap-1 font-semibold text-[var(--g)]">
                                   <span>เข้า</span>
                                   {inPl && (
-                                    <span className="shrink-0 w-[20px] h-[20px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--g)]/50 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[20px] [&>svg]:h-[21px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                      <PlayerFace player={inPl} team={tObj} state={state} careerProfile={inPl.me ? state.p : null} club={isTMe ? state.club : null} isMyClub={isTMe} kitColor={inPl.pos === 'GK' ? tGkKit : tKit} trimColor={inPl.pos === 'GK' ? undefined : tTrim} size={20} bare />
-                                    </span>
+                                    <MatchPlayerThumb
+                                      player={inPl}
+                                      team={tObj}
+                                      state={state}
+                                      kitColor={inPl.pos === 'GK' ? tGkKit : tKit}
+                                      trimColor={inPl.pos === 'GK' ? undefined : tTrim}
+                                      size="sm"
+                                      ringClassName="ring-[var(--g)]/55"
+                                    />
                                   )}
                                   {inNo != null && <span className="font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">#{inNo}</span>}
                                   <span>{sb.inPlayer}</span>
@@ -12181,9 +12196,15 @@ export const MatchModal: React.FC<{
                                 <span className="inline-flex items-center gap-1 text-[var(--red)]">
                                   <span>ออก</span>
                                   {outPl && (
-                                    <span className="shrink-0 w-[18px] h-[18px] mland:w-4 mland:h-4 rounded-full overflow-hidden bg-[var(--surface-2)] ring-1 ring-[var(--red)]/45 inline-flex items-start justify-center shadow-2xs [&>svg]:w-[18px] [&>svg]:h-[19px] mland:[&>svg]:w-4 mland:[&>svg]:h-[17px]">
-                                      <PlayerFace player={outPl} team={tObj} state={state} careerProfile={outPl.me ? state.p : null} club={isTMe ? state.club : null} isMyClub={isTMe} kitColor={outPl.pos === 'GK' ? tGkKit : tKit} trimColor={outPl.pos === 'GK' ? undefined : tTrim} size={18} bare />
-                                    </span>
+                                    <MatchPlayerThumb
+                                      player={outPl}
+                                      team={tObj}
+                                      state={state}
+                                      kitColor={outPl.pos === 'GK' ? tGkKit : tKit}
+                                      trimColor={outPl.pos === 'GK' ? undefined : tTrim}
+                                      size="sm"
+                                      ringClassName="ring-[var(--red)]/50"
+                                    />
                                   )}
                                   {outNo != null && <span className="font-bold tabular opacity-85">#{outNo}</span>}
                                   <span>{sb.outPlayer}</span>
