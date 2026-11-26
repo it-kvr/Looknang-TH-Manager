@@ -470,10 +470,21 @@ export const MatchModal: React.FC<{
   const [blessedListUi, setBlessedListUi] = useState<{ id: string; shortName: string; side: 'H' | 'A'; tag: string; minsLeft: number }[]>([]);
   const [gh, setGh] = useState(0);
   const [ga, setGa] = useState(0);
-  const [goalFlashSide, setGoalFlashSide] = useState<'H' | 'A' | null>(null);
+  const [goalFlashInfo, setGoalFlashInfo] = useState<{
+    side: 'H' | 'A';
+    scorer: string;
+    assister?: string;
+    minute: number;
+    isOwnGoal: boolean;
+    isMyGoal: boolean;
+    isMeScorer: boolean;
+    kit: string;
+    teamName: string;
+  } | null>(null);
   const goalFlashTimerRef = useRef<number | null>(null);
   const lastCoachSfxTsRef = useRef<number>(0);
   const lastBannerSigRef = useRef<string>('');
+  const lastRawBannerKeyRef = useRef<string>('');
   useEffect(() => () => {
     if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
   }, []);
@@ -1978,19 +1989,17 @@ export const MatchModal: React.FC<{
       if (nextItem) created.push(nextItem);
     }
     if (created.length > 0) {
-      setLiveComments((prev) => [...created, ...prev].slice(0, 85));
+      setLiveComments((prev) => [...created, ...prev].slice(0, 50));
     }
   };
 
   const pushLog = (m: number, text: string, tone?: 'goal' | 'card' | 'sys' | 'sub') => {
     const logId = logSeqRef.current++;
-    setLogs((prev) => [{ id: logId, m, text, tone }, ...prev].slice(0, 100));
+    setLogs((prev) => [{ id: logId, m, text, tone }, ...prev].slice(0, 65));
     const vTier = getStreamViewerTier(liveViewersRef.current);
     const baseSurge = Math.max(40, Math.round(streamProj.baseViewers * 0.05));
     const findNamedInLog = (exclude?: string) =>
-      [...homeOrig.sq, ...awayOrig.sq]
-        .filter((q) => q.n && q.n !== exclude && text.includes(q.n))
-        .sort((a, b) => b.n.length - a.n.length)[0];
+      matchVisualIndex.byFullLen.find((e) => e.player.n && e.player.n !== exclude && text.includes(e.player.n))?.player;
     if (tone === 'goal') {
       const isMyGoal = text.includes(meTeamOrig.name);
       const actorObj = findNamedInLog();
@@ -5732,7 +5741,17 @@ export const MatchModal: React.FC<{
       ttl: 4.2,
       maxTtl: 4.2
     };
-    setGoalFlashSide(side);
+    setGoalFlashInfo({
+      side,
+      scorer: isOwnGoal ? ogCulpritShort : scorerShort,
+      assister: isOwnGoal ? undefined : assisterName || undefined,
+      minute: curMin,
+      isOwnGoal,
+      isMyGoal: isMyTeamGoal,
+      isMeScorer,
+      kit: scoringKit,
+      teamName: attTeam.name
+    });
 
     // Check Miracle Comeback progress & completion!
     const sideMaxDef = side === 'H' ? sr.maxDeficitH : sr.maxDeficitA;
@@ -5759,7 +5778,7 @@ export const MatchModal: React.FC<{
       }
     }
     if (goalFlashTimerRef.current) window.clearTimeout(goalFlashTimerRef.current);
-    goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashSide(null), 3200);
+    goalFlashTimerRef.current = window.setTimeout(() => setGoalFlashInfo(null), 3400);
     if (isMeScorer) {
       triggerConfetti();
     }
@@ -9123,15 +9142,19 @@ export const MatchModal: React.FC<{
           }
         }
 
-        const liveBanner = buildBannerPayload(w, cineSlowMo);
-        if (lastBannerSigRef.current !== liveBanner.sig) {
-          lastBannerSigRef.current = liveBanner.sig;
-          setActionBanner({
-            label: liveBanner.label,
-            tone: liveBanner.tone,
-            actors: liveBanner.actors,
-            teamSide: liveBanner.teamSide
-          });
+        const rawBannerKey = `${w.dramaSlowSec > 0 ? 1 : 0}|${w.dramaLabel || ''}|${w.phaseLabel || ''}|${w.phaseTone}|${w.ball.flightType}|${cineSlowMo ? 1 : 0}`;
+        if (lastRawBannerKeyRef.current !== rawBannerKey) {
+          lastRawBannerKeyRef.current = rawBannerKey;
+          const liveBanner = buildBannerPayload(w, cineSlowMo);
+          if (lastBannerSigRef.current !== liveBanner.sig) {
+            lastBannerSigRef.current = liveBanner.sig;
+            setActionBanner({
+              label: liveBanner.label,
+              tone: liveBanner.tone,
+              actors: liveBanner.actors,
+              teamSide: liveBanner.teamSide
+            });
+          }
         }
 
         uiSyncAccum += rawDt;
@@ -9940,7 +9963,7 @@ export const MatchModal: React.FC<{
     );
   };
 
-  const renderActionBannerContent = () => {
+  const actionBannerContent = useMemo(() => {
     const label = actionBanner.label || '';
     if (!label) return null;
     const actors = actionBanner.actors || [];
@@ -10042,13 +10065,13 @@ export const MatchModal: React.FC<{
       nodes.push(<span key="bt-tail" className="whitespace-normal break-words">{label.slice(cursor)}</span>);
     }
     return <span className="inline-flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-center leading-snug">{nodes}</span>;
-  };
+  }, [actionBanner, matchVisualIndex, homeId, awayId, homeOrig, awayOrig, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, state]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
-        <div className="shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
+        <div className="relative z-20 shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
           <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2.5 gap-y-1.5">
             {/* Left: Unified Match Info Capsule (Full Competition Name · Weather · Attendance · Live) */}
             <div className="order-1 inline-flex flex-col items-start justify-center xl:flex-row xl:items-center gap-0.5 xl:gap-1.5 px-2 mland:px-1.5 py-1 xl:py-0 min-h-8 sm:min-h-9 mland:min-h-7 xl:h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 shrink-0 max-w-[calc(100%-205px)] sm:max-w-[195px] md:max-w-[235px] lg:max-w-[285px] xl:max-w-none">
@@ -10188,15 +10211,16 @@ export const MatchModal: React.FC<{
               {/* Home Team */}
               <div className="flex items-center justify-end gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
                 <div className="text-right min-w-0 flex-1">
-                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center justify-end gap-1.5 ${homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                    {goalFlashSide === 'H' && (
-                      <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] sm:text-[10px] font-extrabold shrink-0">
-                        GOAL
-                      </span>
-                    )}
+                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center justify-end gap-1.5 transition-colors duration-200 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 dark:text-rose-300' : 'text-[#8a5b00] dark:text-[var(--lamp)]') : homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                     <span className="break-words">{homeOrig.name}</span>
                   </div>
                   <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
+                    {goalFlashInfo?.side === 'H' && (
+                      <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
+                        {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
+                      </span>
+                    )}
+                    {goalFlashInfo?.side === 'H' && <span className="text-[var(--mut)]/50">·</span>}
                     {homeId === state.me && (
                       <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
                     )}
@@ -10204,13 +10228,13 @@ export const MatchModal: React.FC<{
                     <span className="text-[var(--mut)]">เหย้า</span>
                   </div>
                 </div>
-                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+                <div className={`shrink-0 rounded-full transition-transform duration-200 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'ring-2 ring-rose-400 scale-105' : 'ring-2 ring-[var(--lamp)] scale-105') : ''}`}>
                   <ClubCrest name={homeOrig.name} size={54} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
                 </div>
               </div>
 
               {/* Center Match Time Above Score Box */}
-              <div className="flex flex-col items-center justify-center gap-1 mland:gap-0.5 shrink-0">
+              <div className="relative flex flex-col items-center justify-center gap-1 mland:gap-0.5 shrink-0">
                 <div className="flex items-center justify-center leading-none">
                   {done ? (
                     <span className="px-2.5 py-0.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] tracking-wide shadow-2xs">
@@ -10232,33 +10256,92 @@ export const MatchModal: React.FC<{
                     </span>
                   )}
                 </div>
-                <div className={`px-3.5 sm:px-5 md:px-6 mland:px-3 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[76px] sm:min-w-[96px] md:min-w-[108px] mland:min-w-[68px] transition-all duration-300 shadow-xs ${goalFlashSide ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)] scale-105' : 'bg-[var(--surface)] border-[var(--line)]'}`}>
-                  <div className="text-2xl sm:text-3xl md:text-[34px] mland:text-xl font-extrabold font-display tabular leading-none tracking-tight">
-                    {gh}<span className="text-[var(--mut)]/50 mx-1">:</span>{ga}
+                <div
+                  className={`relative overflow-hidden px-3.5 sm:px-5 md:px-6 mland:px-3 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[78px] sm:min-w-[98px] md:min-w-[110px] mland:min-w-[70px] transition-colors duration-200 shadow-xs ${
+                    goalFlashInfo
+                      ? goalFlashInfo.isOwnGoal
+                        ? 'bg-rose-500/12 border-rose-400 ring-2 ring-rose-400/70'
+                        : 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)]/80'
+                      : 'bg-[var(--surface)] border-[var(--line)]'
+                  }`}
+                >
+                  {goalFlashInfo && (
+                    <div
+                      className="absolute inset-y-0 w-1.5"
+                      style={{
+                        backgroundColor: goalFlashInfo.kit || 'var(--lamp)',
+                        left: goalFlashInfo.side === 'H' ? 0 : undefined,
+                        right: goalFlashInfo.side === 'A' ? 0 : undefined
+                      }}
+                    />
+                  )}
+                  <div className="text-2xl sm:text-3xl md:text-[34px] mland:text-xl font-extrabold font-display tabular leading-none tracking-tight flex items-center justify-center">
+                    <span className={`transition-transform duration-200 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 scale-110' : 'text-[#8a5b00] dark:text-[var(--lamp)] scale-110') : ''}`}>
+                      {gh}
+                    </span>
+                    <span className="text-[var(--mut)]/45 mx-1.5">:</span>
+                    <span className={`transition-transform duration-200 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 scale-110' : 'text-[#8a5b00] dark:text-[var(--lamp)] scale-110') : ''}`}>
+                      {ga}
+                    </span>
                   </div>
                   {penResult && <div className="text-[9.5px] sm:text-[10px] mland:text-[8.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5 truncate">{penResult.text}</div>}
                 </div>
+
+                {/* Floating Broadcast Goal Scorer Toast (Zero Layout Shift) */}
+                {goalFlashInfo && (
+                  <div
+                    className={`pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 mland:py-0.5 rounded-full border shadow-lg whitespace-nowrap ${
+                      goalFlashInfo.isOwnGoal
+                        ? 'bg-[#2b0e16] border-rose-400/80 text-rose-100'
+                        : goalFlashInfo.isMeScorer
+                          ? 'bg-[#1f1603] border-[var(--lamp)] text-amber-100'
+                          : 'bg-[#0c1b13] border-[var(--lamp)]/75 text-white'
+                    }`}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0 ring-1 ring-white/50"
+                      style={{ backgroundColor: goalFlashInfo.kit || '#facc15' }}
+                    />
+                    <span className={`text-[10px] sm:text-[11px] mland:text-[8.5px] font-black tracking-wide uppercase ${goalFlashInfo.isOwnGoal ? 'text-rose-300' : 'text-[var(--lamp)]'}`}>
+                      {goalFlashInfo.isOwnGoal ? 'OG' : 'GOAL'} {goalFlashInfo.minute}&apos;
+                    </span>
+                    <span className="text-[11px] sm:text-xs mland:text-[9px] font-extrabold text-white max-w-[140px] sm:max-w-[190px] truncate">
+                      {goalFlashInfo.scorer}
+                    </span>
+                    {goalFlashInfo.assister && !goalFlashInfo.isOwnGoal && (
+                      <span className="hidden sm:inline mland:hidden text-[10px] text-white/70 font-semibold max-w-[115px] truncate">
+                        (🅰️ {goalFlashInfo.assister.split(' ')[0]})
+                      </span>
+                    )}
+                    {goalFlashInfo.isMeScorer && (
+                      <span className="px-1.5 py-[1px] rounded-full bg-[var(--lamp)] text-[#261900] text-[9px] font-black shrink-0">
+                        ★ คุณยิง!
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Away Team */}
               <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
-                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9">
+                <div className={`shrink-0 rounded-full transition-transform duration-200 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'ring-2 ring-rose-400 scale-105' : 'ring-2 ring-[var(--lamp)] scale-105') : ''}`}>
                   <ClubCrest name={awayOrig.name} size={54} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center gap-1.5 ${awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center gap-1.5 transition-colors duration-200 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 dark:text-rose-300' : 'text-[#8a5b00] dark:text-[var(--lamp)]') : awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                     <span className="break-words">{awayOrig.name}</span>
-                    {goalFlashSide === 'A' && (
-                      <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] sm:text-[10px] font-extrabold shrink-0">
-                        GOAL
-                      </span>
-                    )}
                   </div>
                   <div className="mt-0.5 flex items-center gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
                     <span className="text-[var(--mut)]">เยือน</span>
                     {awayId === state.me && <span className="text-[var(--mut)]/50">·</span>}
                     {awayId === state.me && (
                       <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
+                    )}
+                    {goalFlashInfo?.side === 'A' && <span className="text-[var(--mut)]/50">·</span>}
+                    {goalFlashInfo?.side === 'A' && (
+                      <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
+                        {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -10636,7 +10719,7 @@ export const MatchModal: React.FC<{
                                 miracleBannerUi || blessedListUi.length > 0 ? 'max-w-[54%] sm:max-w-[52%]' : 'max-w-[96%]'
                               } ${bannerCls}`}
                             >
-                              {renderActionBannerContent()}
+                              {actionBannerContent}
                             </span>
                           </div>
                         </>

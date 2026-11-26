@@ -221,6 +221,8 @@ export const FinanceClubView: React.FC<{
   const seasonStartBal = chartData[0]?.bal ?? Math.round(state.money);
   const seasonBalDelta = Math.round(state.money) - seasonStartBal;
   const activeBoardEffects = getActiveBoardEffects(state);
+  const memoizedClubStats = useMemo(() => (tab === 'u' ? teamStats(me, state) : null), [tab, me, state]);
+  const memoizedTierTbl = useMemo(() => (tab === 'u' ? sortTable(state.teams.filter((t) => t.tier === me.tier)) : []), [tab, state.teams, me.tier]);
 
   const upgradeFac = (key: FacilityKey, title: string, baseCost: number) => {
     const lv = state[key] ?? 1;
@@ -1896,12 +1898,12 @@ export const FinanceClubView: React.FC<{
 
   // Club Identity, Board, Facilities & Legacy View (tab === 'u')
   const k = ensureClubIdentity(state);
-  const ts = teamStats(me, state);
+  const ts = memoizedClubStats || teamStats(me, state);
   const bd = clamp(state.bd ?? 50, 0, 100);
   const rep = state.mgrRep ?? 50;
   const repRank =
     rep >= 180 ? 'ตำนานลูกหนังไทย' : rep >= 130 ? 'ยอดกุนซือระดับทวีป' : rep >= 90 ? 'กุนซือมือทอง' : rep >= 65 ? 'โค้ชฝีมือดี' : 'กุนซือหน้าใหม่';
-  const tierTbl = sortTable(state.teams.filter((t) => t.tier === me.tier));
+  const tierTbl = memoizedTierTbl;
   const curRank = Math.max(1, tierTbl.findIndex((t) => t.id === me.id) + 1);
   const targetRank = state.obj || 8;
   const cap = est.cap;

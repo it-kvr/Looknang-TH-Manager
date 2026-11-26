@@ -16,13 +16,14 @@ import { ovMe, DT } from './playerCore';
 export function appendPlayerCareerLog(
   q: Player | null | undefined,
   entry: string,
-  careerP?: PlayerCareerProfile | null
+  careerP?: PlayerCareerProfile | null,
+  maxLen = 30
 ) {
   if (!entry) return;
   if (q) {
     const prev = q.careerLog || [];
     if (prev[prev.length - 1] !== entry) {
-      q.careerLog = [...prev, entry].slice(-30);
+      q.careerLog = [...prev, entry].slice(-maxLen);
     }
   }
   if (careerP) {
@@ -84,7 +85,14 @@ export function snapshotPlayerForRecord(
   q: Player,
   retiredInfo?: { season: number; age: number }
 ): Player {
-  const { missions: _omitMissions, ...rest } = q;
+  const { missions: _omitMissions, seasonProg: _omitSeasonProg, ...rest } = q;
+  const trimmedHistory = q.history
+    ? q.history.slice(-10).map((h) => ({
+        ...h,
+        a: h.a ? { ...h.a } : undefined,
+        startA: undefined
+      }))
+    : undefined;
   const copy: Player = {
     ...rest,
     traits: q.traits ? [...q.traits] : undefined,
@@ -100,20 +108,8 @@ export function snapshotPlayerForRecord(
           Object.entries(q.cupStats).map(([k, v]) => [k, v ? { ...v } : v])
         ) as Player['cupStats'])
       : undefined,
-    history: q.history
-      ? q.history.map((h) => ({
-          ...h,
-          a: h.a ? { ...h.a } : undefined,
-          startA: h.startA ? { ...h.startA } : undefined
-        }))
-      : undefined,
-    careerLog: q.careerLog ? [...q.careerLog] : undefined,
-    seasonProg: q.seasonProg
-      ? {
-          s: q.seasonProg.s,
-          pts: q.seasonProg.pts ? q.seasonProg.pts.map((pt) => ({ ...pt, a: { ...pt.a } })) : []
-        }
-      : undefined
+    history: trimmedHistory,
+    careerLog: q.careerLog ? q.careerLog.slice(-12) : undefined
   };
   if (retiredInfo) {
     copy.retired = true;
@@ -124,7 +120,7 @@ export function snapshotPlayerForRecord(
     copy.sus = 0;
     const retireNote = `👋 อำลาสนามหลังจบซีซั่น ${retiredInfo.season} (อายุ ${retiredInfo.age} ปี)`;
     if (!copy.careerLog?.includes(retireNote)) {
-      copy.careerLog = [...(copy.careerLog || []), retireNote].slice(-30);
+      copy.careerLog = [...(copy.careerLog || []), retireNote].slice(-12);
     }
   }
   return copy;

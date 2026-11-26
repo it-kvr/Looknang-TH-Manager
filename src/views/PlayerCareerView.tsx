@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Scissors } from 'lucide-react';
 import type { Player, GameState, CupCompKey } from '../types/game';
 import { clamp } from '../utils/math';
@@ -47,24 +47,56 @@ export const PlayerCareerView: React.FC<{
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [showAppearanceModal, setShowAppearanceModal] = useState(false);
   const p = state.p;
-  if (!p) return null;
   const meTeam = state.teams[state.me];
-  const meSq = meTeam.sq.find((q) => q.me);
-  const myShirtNo = p.no || meSq?.no || getShirtNo(meTeam, { n: p.name, pos: p.pos, ro: p.sp });
-  const ov = ovMe(p);
+  const meSq = useMemo(() => (p && meTeam ? meTeam.sq.find((q) => q.me) : undefined), [meTeam, p]);
+  const ov = p ? ovMe(p) : 0;
+  const myShirtNo = p ? (p.no || meSq?.no || getShirtNo(meTeam, { n: p.name, pos: p.pos, ro: p.sp })) : 10;
+  const susCount = meSq?.sus ?? p?.sus ?? 0;
+  const injCount = meSq?.inj ?? p?.inj ?? 0;
+  const ycCount = meSq?.yc ?? p?.yc ?? 0;
+  const rcCount = meSq?.rc ?? p?.rc ?? 0;
+
+  const fakePlayer = useMemo<Player | null>(() => {
+    if (!p) return null;
+    return (
+      meSq || {
+        n: p.name,
+        pos: p.pos,
+        ro: p.sp,
+        ov,
+        age: p.age,
+        ht: p.ht,
+        wt: p.wt,
+        foot: p.foot,
+        pot: 95,
+        talent: p.talent,
+        traits: p.traits,
+        fit: p.en,
+        inj: injCount,
+        sus: susCount,
+        yc: ycCount,
+        rc: rcCount,
+        no: myShirtNo,
+        me: 1,
+        sb: p.sb,
+        missions: p.missions
+      }
+    );
+  }, [meSq, p, ov, injCount, susCount, ycCount, rcCount, myShirtNo]);
+
+  const details = useMemo(() => (fakePlayer && p ? dtInfo(fakePlayer, p) : null), [fakePlayer, p]);
+  const myTalent = useMemo(() => (fakePlayer && p ? getPlayerTalent(fakePlayer, p) : 60), [fakePlayer, p]);
+  const starters = useMemo(() => (meTeam ? xi(meTeam) : []), [meTeam]);
+  const mySlot = useMemo(() => {
+    if (!p || !meTeam) return null;
+    const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
+    return starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp ?? null : null;
+  }, [starters, p, meTeam]);
+
+  if (!p || !fakePlayer || !details) return null;
   const avgRt = p.ap ? (p.rs / p.ap).toFixed(2) : '-';
   const perks = p.perks || [];
-  const susCount = meSq?.sus ?? p.sus ?? 0;
-  const injCount = meSq?.inj ?? p.inj ?? 0;
-  const ycCount = meSq?.yc ?? p.yc ?? 0;
-  const rcCount = meSq?.rc ?? p.rc ?? 0;
-  const fakePlayer: Player = meSq || { n: p.name, pos: p.pos, ro: p.sp, ov, age: p.age, ht: p.ht, wt: p.wt, foot: p.foot, pot: 95, talent: p.talent, traits: p.traits, fit: p.en, inj: injCount, sus: susCount, yc: ycCount, rc: rcCount, no: myShirtNo, me: 1, sb: p.sb, missions: p.missions };
-  const details = dtInfo(fakePlayer, p);
-  const myTalent = getPlayerTalent(fakePlayer, p);
   const myPot = meSq?.pot ?? clamp(Math.max(88, myTalent + 6), ov + 4, 96);
-  const starters = xi(meTeam);
-  const starterIdx = starters.findIndex((q) => q.me || q.n === p.name);
-  const mySlot = starterIdx >= 0 ? getFormationSlots(meTeam)[starterIdx]?.sp : null;
   const kit1 = tc(meTeam, state, false);
   const kit2 = tc(meTeam, state, true);
   const isPitchOrNaturalGK = mySlot ? mySlot === 'GK' : (p.pos === 'GK' || p.sp === 'GK');

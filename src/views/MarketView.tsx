@@ -159,6 +159,7 @@ export const MarketView: React.FC<{
   }, [state.mk, filter, subFilter, sortBy, normalizedQuery]);
 
   const clubBasePool = useMemo(() => {
+    if (activeTab !== 'buy' || marketSource !== 'club') return [];
     const items: { q: Player; team: Team; idx: number; price: number }[] = [];
     state.teams.forEach((t) => {
       if (t.id === state.me) return;
@@ -169,7 +170,7 @@ export const MarketView: React.FC<{
       });
     });
     return items;
-  }, [state.teams, state.me, me.tier, clubTierFilter]);
+  }, [activeTab, marketSource, state.teams, state.me, me.tier, clubTierFilter]);
 
   const clubMarketList = useMemo(() => {
     const items = clubBasePool.filter(({ q, team: t }) => {

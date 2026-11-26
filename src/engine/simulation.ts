@@ -2952,9 +2952,11 @@ export function startSeason(s: GameState) {
       keepMeNo: (s.season ?? 1) === 1 && s.mode === 'p'
     });
     t.sq.forEach((q) => {
-      recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
       if (t.id === s.me || q.me) {
+        recordPlayerSeasonProgress(q, s.season ?? 1, 0, q.me ? s.p : null, true);
         initPlayerSeasonMissions(q, s.season ?? 1, t.name, q.me ? s.p : null, s);
+      } else {
+        delete q.seasonProg;
       }
     });
   });
@@ -6244,6 +6246,269 @@ export function getLeaguePrizeMoney(tier: number, rank: number, totalTeams = 16)
   return Math.max(30, 80 - (r - 6) * 5);
 }
 
+export interface NationalTeamCandidateRow {
+  player: Player;
+  team: Team;
+  ov: number;
+  avgRating: number;
+  apps: number;
+  score: number;
+  rank: number;
+  isMe: boolean;
+  altRolesCount: number;
+}
+
+export interface NationalTeamEvaluation {
+  qualified: boolean;
+  readinessPct: number;
+  pos: Position;
+  posQuota: number;
+  nationalPoolCount: number;
+  myNationalRank: number;
+  myScore: number;
+  cutoffScore: number;
+  cutoffOv: number;
+  seasonApps: number;
+  minAppsRequired: number;
+  avgRating: number;
+  minRatingRequired: number;
+  tierBonus: number;
+  altRoles: SubRole[];
+  crossLineRoles: SubRole[];
+  versatilityBonus: number;
+  utilityPath: { pos: Position; rank: number; quota: number; total: number; qualified: boolean } | null;
+  topRivals: NationalTeamCandidateRow[];
+  checklist: { id: string; label: string; ok: boolean; detail: string }[];
+}
+
+const NT_POS_QUOTA: Record<Position, number> = {
+  GK: 3,
+  DF: 8,
+  MF: 8,
+  FW: 7
+};
+
+export function evaluateNationalTeamCallup(
+  s: GameState,
+  opts?: { forSeasonEnd?: boolean }
+): NationalTeamEvaluation | null {
+  const p = s.p;
+  if (!p) return null;
+  const forSeasonEnd = Boolean(opts?.forSeasonEnd);
+  const meTeam = s.teams[s.me];
+  const meSq = meTeam?.sq.find((q) => q.me || q.n === p.name) || null;
+  const myOv = ovMe(p);
+  const myAlts = (p.altRoles || meSq?.altRoles || []) as SubRole[];
+  const crossLineRoles = myAlts.filter((r) => (LINE[r] || p.pos) !== p.pos);
+  const mySeasonApps = Math.max(
+    (meSq?.sp || 0) + getPlayerCupTotals(meSq, 'all').sp,
+    Math.max(0, (p.ap || 0) - (p.s0?.ap || 0))
+  );
+  const myAvgRating =
+    (meSq?.sra || 0) > 0
+      ? Math.round(((meSq!.srs || 0) / meSq!.sra!) * 100) / 100
+      : p.ap > 0
+        ? Math.round((p.rs / p.ap) * 100) / 100
+        : 0;
+
+  const minAppsRequired = forSeasonEnd ? 12 : Math.max(3, Math.min(12, Math.round((s.md || 3) * 0.6)));
+  const minRatingRequired = 6.85;
+  const domesticTeams = s.teams.filter((t) => t.tier < 3);
+
+  const scoreCandidate = (
+    q: Player,
+    t: Team,
+    targetPos: Position,
+    isMe: boolean
+  ): { ov: number; avgRating: number; apps: number; score: number; altRolesCount: number } => {
+    const cupT = getPlayerCupTotals(q, 'all');
+    const ov = isMe ? myOv : q.ov;
+    const apps = isMe ? mySeasonApps : (q.sp || 0) + cupT.sp;
+    const goals = (q.sg || 0) + cupT.sg;
+    const assists = (q.sa || 0) + cupT.sa;
+    const cs = (q.cs || 0) + cupT.cs;
+    const avgRating = isMe
+      ? myAvgRating
+      : calcSeasonAvgRating(q, q.sp || 0, q.sg || 0, q.sa || 0, q.cs || 0);
+    const alts = (isMe ? myAlts : (q.altRoles || [])) as SubRole[];
+    const samePosBonus = q.pos === targetPos ? 0 : -1.5;
+
+    const tierWeight = t.tier >= 2 ? 7.5 : t.tier === 1 ? 0.5 : -7.5;
+    const appsDelta =
+      apps >= minAppsRequired
+        ? Math.min(2.6, (apps - minAppsRequired) * 0.14)
+        : -(minAppsRequired - apps) * 0.65;
+    const formDelta = avgRating > 0 ? clamp((avgRating - 6.6) * 4.2, -3.5, 7.2) : -2.2;
+    const repDelta = isMe
+      ? clamp(((p.rep ?? 10) - 10) * 0.18, 0, 5.5)
+      : clamp(t.tier * 1.4 + Math.max(0, ov - 64) * 0.08, 0, 4.5);
+
+    let versatility = 0;
+    alts.forEach((r) => {
+      versatility += (LINE[r] || q.pos) !== q.pos ? 2.1 : 1.3;
+    });
+    versatility = Math.min(5.5, versatility);
+
+    const prodDelta = clamp(
+      ((goals * 0.24 + assists * 0.2 + cs * 0.24) / Math.max(10, apps || 10)) * 10,
+      0,
+      3.5
+    );
+
+    const score = +(ov + tierWeight + appsDelta + formDelta + repDelta + versatility + prodDelta + samePosBonus).toFixed(2);
+    return { ov, avgRating, apps, score, altRolesCount: alts.length };
+  };
+
+  const buildRankingsForPos = (targetPos: Position): NationalTeamCandidateRow[] => {
+    const rows: NationalTeamCandidateRow[] = [];
+    domesticTeams.forEach((t) => {
+      t.sq.forEach((q) => {
+        const isMe = Boolean(q.me || (t.id === s.me && q.n === p.name));
+        const qAlts = (isMe ? myAlts : (q.altRoles || [])) as SubRole[];
+        const canCoverTarget = q.pos === targetPos || (isMe && qAlts.some((r) => LINE[r] === targetPos));
+        if (!canCoverTarget) return;
+        const sc = scoreCandidate(q, t, targetPos, isMe);
+        rows.push({
+          player: q,
+          team: t,
+          ov: sc.ov,
+          avgRating: sc.avgRating,
+          apps: sc.apps,
+          score: sc.score,
+          rank: 0,
+          isMe,
+          altRolesCount: sc.altRolesCount
+        });
+      });
+    });
+    rows.sort((a, b) => b.score - a.score || b.ov - a.ov || b.avgRating - a.avgRating);
+    rows.forEach((r, idx) => {
+      r.rank = idx + 1;
+    });
+    return rows;
+  };
+
+  const primaryRows = buildRankingsForPos(p.pos);
+  const quota = NT_POS_QUOTA[p.pos] ?? 7;
+  const myPrimaryRow = primaryRows.find((r) => r.isMe);
+  const myNationalRank = myPrimaryRow?.rank ?? primaryRows.length;
+  const myScore = myPrimaryRow?.score ?? myOv;
+  const cutoffRow = primaryRows[Math.min(quota - 1, Math.max(0, primaryRows.length - 1))];
+  const cutoffScore = cutoffRow?.score ?? 75;
+  const cutoffOv = cutoffRow?.ov ?? 70;
+
+  let utilityBonus = 0;
+  myAlts.forEach((r) => {
+    utilityBonus += (LINE[r] || p.pos) !== p.pos ? 2.1 : 1.3;
+  });
+  utilityBonus = +(Math.min(5.5, utilityBonus)).toFixed(1);
+
+  const tierBonus = meTeam ? (meTeam.tier >= 2 ? 7.5 : meTeam.tier === 1 ? 0.5 : -7.5) : -7.5;
+  const extraUtilitySlot = crossLineRoles.length > 0 && (p.rep ?? 10) >= 20 ? 1 : 0;
+  const primaryRankOk = myNationalRank <= quota + extraUtilitySlot;
+
+  // Check if trained cross-line secondary position qualifies via another position's NT pool
+  let utilityPath: NationalTeamEvaluation['utilityPath'] = null;
+  const altLines = Array.from(
+    new Set(crossLineRoles.map((r) => LINE[r]).filter((posLine): posLine is Position => Boolean(posLine && posLine !== p.pos)))
+  );
+  for (const altPos of altLines) {
+    const altRows = buildRankingsForPos(altPos);
+    const altQuota = NT_POS_QUOTA[altPos] ?? 7;
+    const altMe = altRows.find((r) => r.isMe);
+    if (!altMe) continue;
+    const altQualified = altMe.rank <= altQuota;
+    if (
+      !utilityPath ||
+      (altQualified && !utilityPath.qualified) ||
+      altMe.rank / altQuota < utilityPath.rank / utilityPath.quota
+    ) {
+      utilityPath = {
+        pos: altPos,
+        rank: altMe.rank,
+        quota: altQuota,
+        total: altRows.length,
+        qualified: altQualified
+      };
+    }
+  }
+
+  const appsOk = mySeasonApps >= minAppsRequired;
+  const ratingOk = myAvgRating >= minRatingRequired;
+  const rankOk = primaryRankOk || Boolean(utilityPath?.qualified);
+  const qualified = appsOk && ratingOk && rankOk;
+
+  const scoreGap = myScore - cutoffScore;
+  const baseReadiness = 66 + scoreGap * 3.1 + (appsOk ? 8 : -10) + (ratingOk ? 8 : -8) + (utilityBonus > 0 ? Math.min(6, utilityBonus) : 0);
+  const readinessPct = clamp(
+    Math.round(qualified ? Math.max(82, baseReadiness) : Math.min(84, baseReadiness)),
+    6,
+    99
+  );
+
+  const checklist = [
+    {
+      id: 'rank',
+      label: `ติดท็อป ${quota + extraUtilitySlot} ตำแหน่ง ${p.pos} ระดับประเทศ`,
+      ok: rankOk,
+      detail: primaryRankOk
+        ? `อันดับ #${myNationalRank}/${primaryRows.length} (ผ่านเกณฑ์ตัดตัว)`
+        : utilityPath?.qualified
+          ? `ติดโควต้าตำแหน่งเสริม ${utilityPath.pos} (#${utilityPath.rank}/${utilityPath.quota})`
+          : `อันดับ #${myNationalRank}/${primaryRows.length} (ต้องการ OVR ~${cutoffOv}+)`
+    },
+    {
+      id: 'apps',
+      label: `ลงสนามสม่ำเสมอ (${minAppsRequired}+ นัดในซีซั่น)`,
+      ok: appsOk,
+      detail: `ลงแล้ว ${mySeasonApps} นัด`
+    },
+    {
+      id: 'rating',
+      label: `ฟอร์มเฉลี่ย ${minRatingRequired.toFixed(2)}+`,
+      ok: ratingOk,
+      detail: myAvgRating > 0 ? `เฉลี่ย ${myAvgRating.toFixed(2)}` : 'ยังไม่ถึงเกณฑ์'
+    },
+    {
+      id: 'versatility',
+      label: 'ตำแหน่งถนัดเสริม (โบนัสติดธง)',
+      ok: myAlts.length > 0,
+      detail:
+        myAlts.length > 0
+          ? `ปลดแล้ว ${myAlts.length} ตำแหน่ง (+${utilityBonus} คะแนนประเมิน${crossLineRoles.length > 0 ? ' · เปิดทางข้ามสาย!' : ''})`
+          : 'ยังไม่ปลดล็อก (ฝึกได้ที่หน้าอาชีพ › ตำแหน่งถนัด)'
+    }
+  ];
+
+  const topList = primaryRows.slice(0, Math.max(quota, 6));
+  if (myPrimaryRow && !topList.some((r) => r.isMe)) {
+    topList.push(myPrimaryRow);
+  }
+
+  return {
+    qualified,
+    readinessPct,
+    pos: p.pos,
+    posQuota: quota,
+    nationalPoolCount: primaryRows.length,
+    myNationalRank,
+    myScore,
+    cutoffScore,
+    cutoffOv,
+    seasonApps: mySeasonApps,
+    minAppsRequired,
+    avgRating: myAvgRating,
+    minRatingRequired,
+    tierBonus,
+    altRoles: myAlts,
+    crossLineRoles,
+    versatilityBonus: utilityBonus,
+    utilityPath,
+    topRivals: topList,
+    checklist
+  };
+}
+
 export function finishSeasonComputation(s: GameState) {
   const mt = s.teams[s.me].tier;
   const lp = s.teams.filter((t) => t.tier === mt).flatMap((t) => t.sq.map((q) => ({ q, t })));
@@ -6350,15 +6615,16 @@ export function finishSeasonComputation(s: GameState) {
   } else if (s.p && s.esd !== s.season) {
     s.esd = s.season;
     const p = s.p;
-    const av = p.ap ? p.rs / p.ap : 0;
     const meSqRef = meTeam.sq.find((q) => q.me);
-    if (ovMe(p) >= 62 && av >= 6.8) {
+    const ntEval = evaluateNationalTeamCallup(s, { forSeasonEnd: true });
+    if (ntEval?.qualified) {
       const gw = autoGrow(p, 1, meSqRef?.pot);
       p.ntCaps = (p.ntCaps || 0) + R(2, 4);
       const ntG = p.pos === 'FW' ? R(1, 3) : p.pos === 'MF' ? R(0, 2) : 0;
       p.ntGoals = (p.ntGoals || 0) + ntG;
       s.trophies.push({ season: s.season, title: 'ติดทีมชาติชุดใหญ่', type: 'nt' });
-      const ntNote = `🇹🇭 ซีซั่น ${s.season}: ติดทีมชาติไทย${ntG ? ` (ยิง ${ntG} ประตู)` : ''}${gw ? ` · ${gw}` : ''}`;
+      const viaAltNote = ntEval.utilityPath?.qualified && ntEval.myNationalRank > ntEval.posQuota ? ` [โควต้าสารพัดประโยชน์ ${ntEval.utilityPath.pos}]` : '';
+      const ntNote = `🇹🇭 ซีซั่น ${s.season}: ติดทีมชาติไทย${viaAltNote} (อันดับ #${ntEval.myNationalRank} ปท.)${ntG ? ` · ยิง ${ntG} ประตู` : ''}${gw ? ` · ${gw}` : ''}`;
       s.hist.push(ntNote);
       appendPlayerCareerLog(meSqRef, ntNote, p);
     }
@@ -6459,7 +6725,8 @@ export function finishSeasonComputation(s: GameState) {
         divCupStatus: tm.id === s.me ? divCupStatus : isDcChamp ? 'แชมป์ถ้วยดิวิชั่น' : undefined,
         topScorer: tmScorer && (tmScorer.sg || 0) > 0 ? `${tmScorer.n} (${tmScorer.sg})` : undefined
       };
-      tm.history = [...(tm.history || []).filter((h) => h.season !== s.season), teamHistEntry];
+      const maxTeamHist = tm.id === s.me ? 40 : 12;
+      tm.history = [...(tm.history || []).filter((h) => h.season !== s.season), teamHistEntry].slice(-maxTeamHist);
     }
 
     const honor = isAsiaChamp
@@ -6531,7 +6798,8 @@ export function finishSeasonComputation(s: GameState) {
           : {}),
         ...(honor ? { honor } : {})
       };
-      q.history = [...(q.history || []).filter((h) => h.season !== s.season), pEntry].slice(-20);
+      const maxPlayerHist = tm.id === s.me || q.me ? 20 : 6;
+      q.history = [...(q.history || []).filter((h) => h.season !== s.season), pEntry].slice(-maxPlayerHist);
       if (q.me && s.p) {
         s.p.history = [...q.history];
         const totalAppsLog = sp + cupT.sp;
@@ -6540,7 +6808,10 @@ export function finishSeasonComputation(s: GameState) {
         const summaryLine = `📅 จบซีซั่น ${s.season} (${tm.name}): ลง ${totalAppsLog} นัด${cupT.sp > 0 ? ` (ถ้วย ${cupT.sp})` : ''} · ${totalGoalsLog} ประตู · ${totalAstLog} แอสซิสต์${avgRating > 0 ? ` · เฉลี่ย ${avgRating.toFixed(2)}` : ''}${honor ? ` · 🏆 ${honor}` : ''}`;
         appendPlayerCareerLog(q, summaryLine, s.p);
       } else if (honor && (sp > 0 || cupT.sp > 0)) {
-        appendPlayerCareerLog(q, `🏆 ซีซั่น ${s.season}: คว้า${honor}กับ ${tm.name}`);
+        appendPlayerCareerLog(q, `🏆 ซีซั่น ${s.season}: คว้า${honor}กับ ${tm.name}`, null, tm.id === s.me ? 16 : 6);
+      }
+      if (tm.id !== s.me && !q.me && q.seasonProg) {
+        delete q.seasonProg;
       }
     });
   });
@@ -6670,7 +6941,10 @@ export function finishSeasonComputation(s: GameState) {
   }
 
   const existingArchives = (s.seasonArchives || []).filter((rec) => rec.season !== s.season);
-  s.seasonArchives = [...existingArchives, archive].sort((a, b) => b.season - a.season);
+  s.seasonArchives = [...existingArchives, archive].sort((a, b) => b.season - a.season).slice(0, 25);
+  if (s.hist.length > 80) {
+    s.hist = s.hist.slice(-80);
+  }
 
   const trophiesWon = (s.trophies || []).filter((tr) => tr.season === s.season);
 

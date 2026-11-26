@@ -44,6 +44,47 @@ export const LeagueView: React.FC<{
       .sort((a, b) => b.st[cmpSort] - a.st[cmpSort] || b.st.ovXi - a.st.ovXi);
   }, [sub, state, vt, cmpSort]);
 
+  const nextMatchResolved = useMemo(() => {
+    type NextKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+
+    const findCupPair = (
+      cupObj: GameState['cup'] | undefined,
+      flag: boolean | undefined,
+      targetKind: NextKind
+    ): { kind: NextKind; homeId: number; awayId: number; isDerby: boolean } | null => {
+      if (!flag || !cupObj || !cupObj.alive || cupObj.done) return null;
+      const idx = cupObj.ids.indexOf(state.me);
+      if (idx < 0) return null;
+      const pairIdx = Math.floor(idx / 2) * 2;
+      return { kind: targetKind, homeId: cupObj.ids[pairIdx], awayId: cupObj.ids[pairIdx + 1], isDerby: false };
+    };
+
+    return (
+      findCupPair(state.ac, state.pa, 'asia') ||
+      findCupPair(state.sc, state.psc, 'sc') ||
+      findCupPair(state.lc, state.plc, 'lc') ||
+      findCupPair(state.dc, state.pdc, 'dc') ||
+      findCupPair(state.cup, state.pc, 'cup') ||
+      (() => {
+        if (state.md < state.fx.length) {
+          const pair = state.fx[state.md].find((p) => p.includes(state.me));
+          if (pair) {
+            return { kind: 'league' as NextKind, homeId: pair[0], awayId: pair[1], isDerby: (pair[0] ^ 1) === pair[1] };
+          }
+        }
+        return { kind: 'league' as NextKind, homeId: -1, awayId: -1, isDerby: false };
+      })()
+    );
+  }, [state.ac, state.pa, state.sc, state.psc, state.lc, state.plc, state.dc, state.pdc, state.cup, state.pc, state.md, state.fx, state.me]);
+
+  const nextMatchOppStats = useMemo(() => {
+    const { homeId, awayId } = nextMatchResolved;
+    if (homeId < 0 || awayId < 0) return null;
+    const oppId = homeId === state.me ? awayId : homeId;
+    const oppTeam = state.teams[oppId];
+    return oppTeam ? teamStats(oppTeam, state) : null;
+  }, [nextMatchResolved, state]);
+
   const renderFormDots = (fm?: string) => {
     const chars = (fm || '').slice(-5).split('');
     if (!chars.length) return <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">—</span>;
@@ -66,37 +107,7 @@ export const LeagueView: React.FC<{
   };
 
   const renderNextMatchCard = () => {
-    type NextKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
-
-    const findCupPair = (
-      cupObj: GameState['cup'] | undefined,
-      flag: boolean | undefined,
-      targetKind: NextKind
-    ): { kind: NextKind; homeId: number; awayId: number; isDerby: boolean } | null => {
-      if (!flag || !cupObj || !cupObj.alive || cupObj.done) return null;
-      const idx = cupObj.ids.indexOf(state.me);
-      if (idx < 0) return null;
-      const pairIdx = Math.floor(idx / 2) * 2;
-      return { kind: targetKind, homeId: cupObj.ids[pairIdx], awayId: cupObj.ids[pairIdx + 1], isDerby: false };
-    };
-
-    const resolved =
-      findCupPair(state.ac, state.pa, 'asia') ||
-      findCupPair(state.sc, state.psc, 'sc') ||
-      findCupPair(state.lc, state.plc, 'lc') ||
-      findCupPair(state.dc, state.pdc, 'dc') ||
-      findCupPair(state.cup, state.pc, 'cup') ||
-      (() => {
-        if (state.md < state.fx.length) {
-          const pair = state.fx[state.md].find((p) => p.includes(state.me));
-          if (pair) {
-            return { kind: 'league' as NextKind, homeId: pair[0], awayId: pair[1], isDerby: (pair[0] ^ 1) === pair[1] };
-          }
-        }
-        return { kind: 'league' as NextKind, homeId: -1, awayId: -1, isDerby: false };
-      })();
-
-    const { kind, homeId, awayId, isDerby } = resolved;
+    const { kind, homeId, awayId, isDerby } = nextMatchResolved;
 
     if (homeId < 0 || awayId < 0 || !state.teams[homeId] || !state.teams[awayId]) {
       return (
@@ -115,7 +126,7 @@ export const LeagueView: React.FC<{
     const A = state.teams[awayId];
     const oppId = homeId === state.me ? awayId : homeId;
     const oppTeam = state.teams[oppId];
-    const oppSt = teamStats(oppTeam, state);
+    const oppSt = nextMatchOppStats || teamStats(oppTeam, state);
     const isHome = homeId === state.me;
     const compLabel =
       kind === 'asia'
@@ -1414,13 +1425,30 @@ export const ScheduleCalendarView: React.FC<{
     { idx: 4, label: 'เดือน 5', range: 'นัด 25–30', start: 24, end: totalMd }
   ];
 
-  const visibleMdIndices =
-    monthIdx === -1
-      ? Array.from({ length: totalMd }, (_, i) => i)
-      : Array.from(
-          { length: Math.max(0, (months[monthIdx]?.end ?? totalMd) - (months[monthIdx]?.start ?? 0)) },
-          (_, i) => (months[monthIdx]?.start ?? 0) + i
-        ).filter((i) => i < totalMd);
+  const visibleMdIndices = useMemo(
+    () =>
+      monthIdx === -1
+        ? Array.from({ length: totalMd }, (_, i) => i)
+        : Array.from(
+            { length: Math.max(0, (months[monthIdx]?.end ?? totalMd) - (months[monthIdx]?.start ?? 0)) },
+            (_, i) => (months[monthIdx]?.start ?? 0) + i
+          ).filter((i) => i < totalMd),
+    [monthIdx, totalMd]
+  );
+
+  const schedOppStatsMap = useMemo(() => {
+    const map = new Map<number, ReturnType<typeof teamStats>>();
+    visibleMdIndices.forEach((mdIdx) => {
+      const pair = state.fx[mdIdx]?.find((x) => x.includes(state.me));
+      if (!pair) return;
+      const oppId = pair[0] === state.me ? pair[1] : pair[0];
+      const opp = state.teams[oppId];
+      if (opp && !map.has(opp.id)) {
+        map.set(opp.id, teamStats(opp, state));
+      }
+    });
+    return map;
+  }, [visibleMdIndices, state]);
 
   const previewRoundPairs = state.fx[roundPreview] || [];
   const cupLogs = state.cupLog || [];
@@ -1570,7 +1598,7 @@ export const ScheduleCalendarView: React.FC<{
             const isHome = pair[0] === state.me;
             const opp = state.teams[isHome ? pair[1] : pair[0]];
             const isDerby = (pair[0] ^ 1) === pair[1];
-            const ost = teamStats(opp, state);
+            const ost = schedOppStatsMap.get(opp.id) || teamStats(opp, state);
             const isNext = mdIdx === state.md && !state.pc && !state.pa && !state.plc && !state.psc && !state.pdc;
             const isPast = mdIdx < state.md;
             const isWindowOpen = mdIdx < 6 || (mdIdx >= 14 && mdIdx < 20);
