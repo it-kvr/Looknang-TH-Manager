@@ -1234,6 +1234,9 @@ export interface PendingSetPiece {
   y: number;
   waitSec: number;
   wallPlayers?: { x: number; y: number }[];
+  takerId?: string;
+  wallIds?: string[];
+  setupElapsed?: number;
 }
 
 export interface VarReviewState {

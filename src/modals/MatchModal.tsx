@@ -2531,10 +2531,44 @@ export const MatchModal: React.FC<{
     const setPiece = w.pendingSetPiece;
     const lockedTargetIds = new Set<string>();
 
+    // Cache deterministic set-piece taker & wall IDs so runners never swap mid-approach or teleport
+    if (setPiece && setPiece.type !== 'kickoff') {
+      const existingTaker = setPiece.takerId ? activeAgents.find((z) => z.id === setPiece.takerId) : undefined;
+      if (!existingTaker) {
+        let pickedTaker: LivePitchAgent | undefined;
+        if (setPiece.type === 'penalty' || setPiece.type === 'freekick' || setPiece.type === 'corner') {
+          pickedTaker =
+            resolveSetPieceTaker(w, setPiece.side, setPiece.type) ||
+            activeAgents.find((z) => z.side === setPiece.side && z.pos !== 'GK');
+        } else if (setPiece.type === 'goalkick') {
+          pickedTaker =
+            activeAgents.find((z) => z.side === setPiece.side && z.pos === 'GK') ||
+            activeAgents.find((z) => z.side === setPiece.side);
+        } else if (setPiece.type === 'offside') {
+          pickedTaker =
+            activeAgents.find((z) => z.side === setPiece.side && z.pos === 'DF') ||
+            activeAgents.find((z) => z.side === setPiece.side && z.pos !== 'GK');
+        } else if (setPiece.type === 'throwin') {
+          pickedTaker = activeAgents
+            .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
+            .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))[0];
+        }
+        if (pickedTaker) setPiece.takerId = pickedTaker.id;
+      }
+      if (setPiece.type === 'freekick' && setPiece.wallPlayers?.length && !setPiece.wallIds?.length) {
+        setPiece.wallIds = activeAgents
+          .filter((z) => z.side !== setPiece.side && (z.pos === 'DF' || z.pos === 'MF'))
+          .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
+          .slice(0, setPiece.wallPlayers.length)
+          .map((z) => z.id);
+      }
+    }
+
     // Track corner role assignment indices so top aerial targets fill box zones and corner taker stays at flag
     const cornerTaker =
       setPiece && setPiece.type === 'corner'
-        ? resolveSetPieceTaker(w, setPiece.side, 'corner')
+        ? (setPiece.takerId ? activeAgents.find((z) => z.id === setPiece.takerId) : undefined) ||
+          resolveSetPieceTaker(w, setPiece.side, 'corner')
         : undefined;
     const cornerAttList =
       setPiece && setPiece.type === 'corner'
@@ -2819,14 +2853,23 @@ export const MatchModal: React.FC<{
         return;
       }
 
-      // In-match Penalty Kick positioning
+      // In-match Penalty Kick positioning (taker walks onto penalty spot; others stay outside arc/box)
       if (setPiece && setPiece.type === 'penalty') {
         const isAtt = ag.side === setPiece.side;
         const penRight = isAttackRight(w, setPiece.side);
+        const penDir = penRight ? 1 : -1;
         const spotX = penRight ? 88.5 : 11.5;
         lockedTargetIds.add(ag.id);
+        ag.runToX = undefined;
+        ag.runToY = undefined;
         if (!isAtt && ag.pos === 'GK') {
           ag.tx = penRight ? 98.2 : 1.8;
+          ag.ty = 50;
+          ag.intent = 'SUPPORT';
+          return;
+        }
+        if (isAtt && setPiece.takerId === ag.id) {
+          ag.tx = clamp(spotX - penDir * 2.1, 4, 96);
           ag.ty = 50;
           ag.intent = 'SUPPORT';
           return;
@@ -2834,11 +2877,79 @@ export const MatchModal: React.FC<{
         if (ag.pos !== 'GK') {
           const lineBackX = penRight ? 80.5 : 19.5;
           ag.tx = penRight
-            ? Math.min(spotX - 7.5, lineBackX - (ag.slotIndex % 3) * 2.8)
-            : Math.max(spotX + 7.5, lineBackX + (ag.slotIndex % 3) * 2.8);
+            ? Math.min(spotX - 7.8, lineBackX - (ag.slotIndex % 3) * 2.8)
+            : Math.max(spotX + 7.8, lineBackX + (ag.slotIndex % 3) * 2.8);
           ag.ty = clamp(22 + ((ag.slotIndex * 5.6) % 56), 18, 82);
           ag.intent = 'SUPPORT';
           return;
+        }
+      }
+
+      // Goal Kick & Offside Free Kick structured reset (kicker walks behind ball; teammates spread into build-up)
+      if (setPiece && (setPiece.type === 'goalkick' || setPiece.type === 'offside')) {
+        const isAtt = ag.side === setPiece.side;
+        const spAttRight = isAttackRight(w, setPiece.side);
+        const spDir = spAttRight ? 1 : -1;
+        lockedTargetIds.add(ag.id);
+        ag.runToX = undefined;
+        ag.runToY = undefined;
+        if (ag.id === setPiece.takerId) {
+          ag.tx = clamp(setPiece.x - spDir * 1.35, 2.2, 97.8);
+          ag.ty = clamp(setPiece.y, 6, 94);
+          ag.intent = 'SUPPORT';
+          return;
+        }
+        if (setPiece.type === 'goalkick') {
+          if (ag.pos === 'GK') {
+            ag.tx = attRight ? 2.6 : 97.4;
+            ag.ty = 50;
+            ag.intent = 'SUPPORT';
+            return;
+          }
+          const rawSlotY = attRight ? ag.slotX : 100 - ag.slotX;
+          if (isAtt) {
+            const ownNorm = clamp(100 - ag.slotY, 16, 72);
+            const spreadX = clamp(ownNorm * 0.85 + 10, 16, 72);
+            ag.tx = spAttRight ? spreadX : 100 - spreadX;
+            ag.ty = clamp(50 + (rawSlotY - 50) * 1.12, 8, 92);
+            ag.intent = 'SUPPORT';
+            return;
+          } else {
+            // Defending team must remain outside the kicker's penalty area in compact shape
+            const ownNorm = clamp(100 - ag.slotY, 18, 74);
+            const minSafeFromSpGoal = 24;
+            let defX = attRight ? ownNorm : 100 - ownNorm;
+            if (spAttRight) defX = Math.max(defX, minSafeFromSpGoal);
+            else defX = Math.min(defX, 100 - minSafeFromSpGoal);
+            ag.tx = clamp(defX, 14, 86);
+            ag.ty = clamp(50 + (rawSlotY - 50) * 0.92, 12, 88);
+            ag.intent = 'MARK';
+            return;
+          }
+        } else {
+          // Offside free kick: kicking side builds up around line; defending side retreats cleanly behind ball
+          if (ag.pos === 'GK') {
+            ag.tx = attRight ? 2.6 : 97.4;
+            ag.ty = 50;
+            ag.intent = 'SUPPORT';
+            return;
+          }
+          const spNormX = spAttRight ? setPiece.x : 100 - setPiece.x;
+          const rawSlotY = attRight ? ag.slotX : 100 - ag.slotX;
+          if (isAtt) {
+            const targetNorm = clamp(spNormX - 8 + (100 - ag.slotY) * 0.42, 14, 78);
+            ag.tx = spAttRight ? targetNorm : 100 - targetNorm;
+            ag.ty = clamp(50 + (rawSlotY - 50) * 1.02, 10, 90);
+            ag.intent = 'SUPPORT';
+            return;
+          } else {
+            const behindBallNorm = clamp((spAttRight ? 100 - setPiece.x : setPiece.x) - 10 + (100 - ag.slotY) * 0.35, 16, 72);
+            ag.tx = attRight ? Math.min(behindBallNorm, spAttRight ? 100 - spNormX - 11 : spNormX - 11) : Math.max(100 - behindBallNorm, spAttRight ? spNormX + 11 : 100 - spNormX + 11);
+            ag.tx = clamp(ag.tx, 14, 86);
+            ag.ty = clamp(50 + (rawSlotY - 50) * 0.9, 14, 86);
+            ag.intent = 'MARK';
+            return;
+          }
         }
       }
 
@@ -2849,23 +2960,19 @@ export const MatchModal: React.FC<{
           const fkDir = fkAttRight ? 1 : -1;
           const fkGoalX = fkAttRight ? 100 : 0;
           const fkDistToGoal = Math.hypot(fkGoalX - setPiece.x, 50 - setPiece.y);
-          const fkTaker = activeAgents
-            .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
-            .sort(
-              (u, v) =>
-                v.d.cur + v.d.pw + (v.sig === 'cur' ? 10 : 0) + (agentHasTrait(v, 'setpiece_specialist') ? 18 : 0) -
-                (u.d.cur + u.d.pw + (u.sig === 'cur' ? 10 : 0) + (agentHasTrait(u, 'setpiece_specialist') ? 18 : 0))
-            )[0];
-          if (fkTaker?.id === ag.id) {
-            ag.tx = clamp(setPiece.x - fkDir * 1.4, 4, 96);
-            ag.ty = clamp(setPiece.y, 5, 95);
+          const fkTakerId =
+            setPiece.takerId ||
+            resolveSetPieceTaker(w, setPiece.side, 'freekick')?.id;
+          if (fkTakerId === ag.id) {
+            ag.tx = clamp(setPiece.x - fkDir * 1.45, 3, 97);
+            ag.ty = clamp(setPiece.y, 4.5, 95.5);
             ag.intent = 'SUPPORT';
             lockedTargetIds.add(ag.id);
             return;
           }
           if (fkDistToGoal >= 36) {
             const boxCands = activeAgents
-              .filter((z) => z.side === setPiece.side && z.id !== fkTaker?.id && (z.pos === 'FW' || z.role === 'CB'))
+              .filter((z) => z.side === setPiece.side && z.id !== fkTakerId && (z.pos === 'FW' || z.role === 'CB'))
               .sort((u, v) => (v.d.hd + (v.sig === 'hd' ? 10 : 0)) - (u.d.hd + (u.sig === 'hd' ? 10 : 0)));
             const bIdx = boxCands.findIndex((z) => z.id === ag.id);
             if (bIdx >= 0 && bIdx < 4) {
@@ -2880,11 +2987,15 @@ export const MatchModal: React.FC<{
           }
         }
         if (ag.side !== setPiece.side && setPiece.wallPlayers) {
-          const wallIdx = activeAgents
-            .filter((z) => z.side === ag.side && (z.pos === 'DF' || z.pos === 'MF'))
-            .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
-            .slice(0, setPiece.wallPlayers.length)
-            .findIndex((z) => z.id === ag.id);
+          const wallIds =
+            setPiece.wallIds && setPiece.wallIds.length
+              ? setPiece.wallIds
+              : activeAgents
+                  .filter((z) => z.side === ag.side && (z.pos === 'DF' || z.pos === 'MF'))
+                  .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y))
+                  .slice(0, setPiece.wallPlayers.length)
+                  .map((z) => z.id);
+          const wallIdx = wallIds.indexOf(ag.id);
           if (wallIdx >= 0 && setPiece.wallPlayers[wallIdx]) {
             ag.intent = 'WALL';
             ag.tx = setPiece.wallPlayers[wallIdx].x;
@@ -2895,32 +3006,33 @@ export const MatchModal: React.FC<{
         }
       }
 
-      // Throw-in positioning on touchline
+      // Throw-in positioning on touchline (cached taker avoids swapping mid-run)
       if (setPiece && setPiece.type === 'throwin' && ag.pos !== 'GK') {
         const isAtt = ag.side === setPiece.side;
         const throwRight = isAttackRight(w, setPiece.side);
         const throwDir = throwRight ? 1 : -1;
-        const throwers = activeAgents
-          .filter((z) => z.side === setPiece.side && z.pos !== 'GK')
-          .sort((u, v) => Math.hypot(u.x - setPiece.x, u.y - setPiece.y) - Math.hypot(v.x - setPiece.x, v.y - setPiece.y));
+        const throwTakerId = setPiece.takerId;
         if (isAtt) {
-          if (throwers[0]?.id === ag.id) {
+          if (throwTakerId === ag.id) {
             ag.tx = clamp(setPiece.x, 6, 94);
-            ag.ty = setPiece.y < 50 ? 2.5 : 97.5;
+            ag.ty = setPiece.y < 50 ? 2.6 : 97.4;
             ag.intent = 'SUPPORT';
             lockedTargetIds.add(ag.id);
             return;
           }
-          const idxT = throwers.findIndex((z) => z.id === ag.id);
+          const supportOrder = activeAgents
+            .filter((z) => z.side === setPiece.side && z.pos !== 'GK' && z.id !== throwTakerId)
+            .sort((u, v) => Math.hypot(u.tx - setPiece.x, u.ty - setPiece.y) - Math.hypot(v.tx - setPiece.x, v.ty - setPiece.y));
+          const idxT = supportOrder.findIndex((z) => z.id === ag.id);
           const nearSideY = setPiece.y < 50 ? 12 : 88;
           const spNormX = throwRight ? setPiece.x : 100 - setPiece.x;
-          if (idxT === 1) {
+          if (idxT === 0) {
             // Short back option
             ag.tx = clamp(setPiece.x - throwDir * 9, 8, 92);
             ag.ty = clamp(nearSideY + (setPiece.y < 50 ? 10 : -10), 10, 90);
             ag.intent = 'SUPPORT';
             return;
-          } else if (idxT === 2) {
+          } else if (idxT === 1) {
             // Forward down-the-line runner
             ag.tx = clamp(setPiece.x + throwDir * 14, 8, 92);
             ag.ty = clamp(nearSideY, 8, 92);
@@ -2928,10 +3040,10 @@ export const MatchModal: React.FC<{
             ag.runToX = ag.tx;
             ag.runToY = ag.ty;
             return;
-          } else if (spNormX >= 68 && idxT <= 5) {
+          } else if (spNormX >= 68 && idxT >= 2 && idxT <= 4) {
             // Box targets for potential long throw-in!
-            ag.tx = clamp(throwRight ? 88 + (idxT - 3) * 2 : 12 - (idxT - 3) * 2, 7, 93);
-            ag.ty = clamp(44 + (idxT - 3) * 6, 36, 64);
+            ag.tx = clamp(throwRight ? 88 + (idxT - 2) * 2 : 12 - (idxT - 2) * 2, 7, 93);
+            ag.ty = clamp(44 + (idxT - 2) * 6, 36, 64);
             ag.intent = 'MAKE_RUN';
             ag.runToX = ag.tx;
             ag.runToY = ag.ty;
@@ -2960,8 +3072,8 @@ export const MatchModal: React.FC<{
         const toCornerX = (normX: number) => (cornerRight ? normX : 100 - normX);
         if (isAtt) {
           if (cornerTaker?.id === ag.id) {
-            ag.tx = clamp(setPiece.x, 1.5, 98.5);
-            ag.ty = clamp(setPiece.y, 2, 98);
+            ag.tx = clamp(setPiece.x + (cornerRight ? -0.6 : 0.6), 1.8, 98.2);
+            ag.ty = clamp(setPiece.y < 50 ? 2.6 : 97.4, 2.4, 97.6);
             ag.intent = 'SUPPORT';
             lockedTargetIds.add(ag.id);
             return;
@@ -4055,13 +4167,19 @@ export const MatchModal: React.FC<{
       }
 
       if (sp.type === 'goalkick' || sp.type === 'offside') {
-        const kicker = sp.type === 'goalkick' ? attPool.find((a) => a.pos === 'GK') || attPool[0] : attPool.find((a) => a.pos === 'DF') || attPool[0];
+        const kicker =
+          (sp.takerId ? attPool.find((a) => a.id === sp.takerId) : undefined) ||
+          (sp.type === 'goalkick' ? attPool.find((a) => a.pos === 'GK') || attPool[0] : attPool.find((a) => a.pos === 'DF') || attPool[0]);
         const longDistBias = attCfg.pass >= 2 || kicker?.sig === 'dist' || agentHasTrait(kicker, 'long_throw_counter') || agentHasTrait(kicker, 'long_diagonal');
         const receiver =
           longDistBias
             ? attPool.find((a) => a.pos === 'FW') || attPool.find((a) => a.pos === 'MF')
             : attPool.find((a) => (a.pos === 'DF' || a.pos === 'MF') && a.id !== kicker?.id);
         if (kicker && receiver) {
+          kicker.facing = Math.atan2(receiver.y - kicker.y, receiver.x - kicker.x);
+          kicker.acrobatType = 'kick';
+          kicker.acrobatMax = 0.42;
+          kicker.acrobatTimer = 0.42;
           b.fromX = sp.x;
           b.fromY = sp.y;
           b.toX = receiver.x;
@@ -4096,13 +4214,18 @@ export const MatchModal: React.FC<{
       if (sp.type === 'freekick') {
         const goalX = attRight ? 100 : 0;
         const distToGoal = Math.hypot(goalX - sp.x, 50 - sp.y);
-        const taker = resolveSetPieceTaker(w, sp.side, 'freekick') || attPool[0];
+        const taker =
+          (sp.takerId ? attPool.find((a) => a.id === sp.takerId) : undefined) ||
+          resolveSetPieceTaker(w, sp.side, 'freekick') ||
+          attPool[0];
         if (!taker) return;
-        taker.x = clamp(sp.x - dir * 1.5, 4, 96);
-        taker.y = sp.y;
+        taker.acrobatType = 'kick';
+        taker.acrobatMax = 0.44;
+        taker.acrobatTimer = 0.44;
         const canShootDirect = distToGoal < 36;
         if (canShootDirect) {
           const isCurlerFk = agentHasTrait(taker, 'setpiece_specialist') || agentHasTrait(taker, 'outside_curler') || taker.sig === 'cur' || taker.d.cur >= taker.d.pw;
+          taker.facing = Math.atan2(50 - taker.y, goalX - taker.x);
           b.lastPasserId = null;
           bumpPlayerStat(taker.id, 'setpieces');
           prepareShotFlight(w, curMin, {
@@ -4130,6 +4253,7 @@ export const MatchModal: React.FC<{
             taker;
           const destX = clamp(attRight ? 88 + Math.random() * 6 : 6 + Math.random() * 6, 6, 94);
           const destY = clamp(38 + Math.random() * 24, 30, 70);
+          taker.facing = Math.atan2(destY - taker.y, destX - taker.x);
           boxTarget.tx = destX;
           boxTarget.ty = destY;
           boxTarget.intent = 'PASS_TARGET';
@@ -4159,17 +4283,22 @@ export const MatchModal: React.FC<{
       }
 
       if (sp.type === 'corner') {
-        const taker = resolveSetPieceTaker(w, sp.side, 'corner') || attPool[0];
+        const taker =
+          (sp.takerId ? attPool.find((a) => a.id === sp.takerId) : undefined) ||
+          resolveSetPieceTaker(w, sp.side, 'corner') ||
+          attPool[0];
         const headerTarget =
           attPool
             .filter((a) => a.id !== taker?.id && a.pos !== 'GK')
             .sort((u, v) => (v.d.hd + v.d.str + (v.sig === 'hd' ? 12 : 0) + (agentHasTrait(v, 'aerial_menace') ? 16 : 0) + (agentHasTrait(v, 'near_post_runner') ? 8 : 0)) - (u.d.hd + u.d.str + (u.sig === 'hd' ? 12 : 0) + (agentHasTrait(u, 'aerial_menace') ? 16 : 0) + (agentHasTrait(u, 'near_post_runner') ? 8 : 0)))[0] || attPool[1];
         if (taker && headerTarget) {
-          taker.x = sp.x;
-          taker.y = sp.y;
           const nearPost = agentHasTrait(headerTarget, 'near_post_runner');
           const destX = attRight ? (nearPost ? 91.5 + Math.random() * 2.5 : 89.5 + Math.random() * 4.2) : (nearPost ? 6.0 + Math.random() * 2.5 : 6.3 + Math.random() * 4.2);
           const destY = nearPost ? (sp.y < 50 ? 41 + Math.random() * 6 : 53 + Math.random() * 6) : 42 + Math.random() * 16;
+          taker.facing = Math.atan2(destY - taker.y, destX - taker.x);
+          taker.acrobatType = 'kick';
+          taker.acrobatMax = 0.44;
+          taker.acrobatTimer = 0.44;
           headerTarget.tx = destX;
           headerTarget.ty = destY;
           headerTarget.intent = 'PASS_TARGET';
@@ -4199,12 +4328,18 @@ export const MatchModal: React.FC<{
       }
 
       if (sp.type === 'penalty') {
-        const taker = resolveSetPieceTaker(w, sp.side, 'penalty') || attPool[0];
+        const taker =
+          (sp.takerId ? attPool.find((a) => a.id === sp.takerId) : undefined) ||
+          resolveSetPieceTaker(w, sp.side, 'penalty') ||
+          attPool[0];
         if (!taker) return;
         const spotX = attRight ? 88.5 : 11.5;
+        const goalX = attRight ? 100 : 0;
         const isPanenka = (agentHasTrait(taker, 'chip_artist') || agentHasTrait(taker, 'clutch_player') || (taker.d.comp || 60) >= 74) && Math.random() < (agentHasTrait(taker, 'chip_artist') ? 0.32 : 0.18);
-        taker.x = spotX - dir * 1.8;
-        taker.y = 50;
+        taker.facing = Math.atan2(50 - taker.y, goalX - taker.x);
+        taker.acrobatType = 'kick';
+        taker.acrobatMax = 0.45;
+        taker.acrobatTimer = 0.45;
         b.lastPasserId = null;
         bumpPlayerStat(taker.id, 'setpieces');
         prepareShotFlight(w, curMin, {
@@ -4229,14 +4364,15 @@ export const MatchModal: React.FC<{
 
       if (sp.type === 'throwin') {
         const taker =
+          (sp.takerId ? attPool.find((a) => a.id === sp.takerId) : undefined) ||
           attPool
             .filter((a) => a.pos !== 'GK')
-            .sort((u, v) => Math.hypot(u.x - sp.x, u.y - sp.y) - Math.hypot(v.x - sp.x, v.y - sp.y))[0] || attPool[0];
+            .sort((u, v) => Math.hypot(u.x - sp.x, u.y - sp.y) - Math.hypot(v.x - sp.x, v.y - sp.y))[0] ||
+          attPool[0];
         if (!taker) return;
-        const clampedY = sp.y < 50 ? 2.6 : 97.4;
-        taker.x = clamp(sp.x, 8, 92);
-        taker.y = clampedY;
-        const spNormX = attRight ? taker.x : 100 - taker.x;
+        const releaseX = clamp(sp.x, 6, 94);
+        const releaseY = sp.y < 50 ? 2.6 : 97.4;
+        const spNormX = attRight ? releaseX : 100 - releaseX;
         const longThrowSpecialist = agentHasTrait(taker, 'long_throw_counter') || taker.d.str >= 70 || taker.sig === 'str';
         const doLongThrow = spNormX >= 68 && Math.random() < (longThrowSpecialist ? 0.56 : 0.30);
 
@@ -4248,11 +4384,12 @@ export const MatchModal: React.FC<{
           if (target) {
             const bx = clamp(attRight ? 88 + Math.random() * 5.5 : 6.5 + Math.random() * 5.5, 6, 94);
             const by = clamp(42 + Math.random() * 16, 36, 64);
+            taker.facing = Math.atan2(by - taker.y, bx - taker.x);
             target.tx = bx;
             target.ty = by;
             target.intent = 'PASS_TARGET';
-            b.fromX = taker.x;
-            b.fromY = taker.y;
+            b.fromX = releaseX;
+            b.fromY = releaseY;
             b.toX = bx;
             b.toY = by;
             b.curve = 0;
@@ -4270,8 +4407,8 @@ export const MatchModal: React.FC<{
             bumpPlayerStat(taker.id, 'setpieces');
             addWorldFx(w, {
               type: 'throwin',
-              x: taker.x,
-              y: taker.y,
+              x: releaseX,
+              y: releaseY,
               toX: bx,
               toY: by,
               label: `🚀 ทุ่มไกลลุ้นประตู! (${taker.shortName})`,
@@ -4292,23 +4429,24 @@ export const MatchModal: React.FC<{
 
         const cands = attPool.filter((a) => a.id !== taker.id && (a.pos !== 'GK' || spNormX < 42));
         const forwardCands = cands
-          .filter((a) => (attRight ? a.x > taker.x + 3 : a.x < taker.x - 3) && Math.hypot(a.x - taker.x, a.y - taker.y) < 30)
-          .sort((u, v) => Math.hypot(u.x - taker.x, u.y - taker.y) - Math.hypot(v.x - taker.x, v.y - taker.y));
+          .filter((a) => (attRight ? a.x > releaseX + 3 : a.x < releaseX - 3) && Math.hypot(a.x - releaseX, a.y - releaseY) < 30)
+          .sort((u, v) => Math.hypot(u.x - releaseX, u.y - releaseY) - Math.hypot(v.x - releaseX, v.y - releaseY));
         const backCands = cands
-          .filter((a) => (attRight ? a.x <= taker.x + 3 : a.x >= taker.x - 3) && Math.hypot(a.x - taker.x, a.y - taker.y) < 28)
-          .sort((u, v) => Math.hypot(u.x - taker.x, u.y - taker.y) - Math.hypot(v.x - taker.x, v.y - taker.y));
+          .filter((a) => (attRight ? a.x <= releaseX + 3 : a.x >= releaseX - 3) && Math.hypot(a.x - releaseX, a.y - releaseY) < 28)
+          .sort((u, v) => Math.hypot(u.x - releaseX, u.y - releaseY) - Math.hypot(v.x - releaseX, v.y - releaseY));
 
         const preferBack = spNormX < 40 ? Math.random() < 0.42 : Math.random() < 0.34;
         const target = preferBack ? (backCands[0] || forwardCands[0] || cands[0]) : (forwardCands[0] || backCands[0] || cands[0]);
         if (target) {
-          const isBackThrow = attRight ? target.x < taker.x - 1 : target.x > taker.x + 1;
+          const isBackThrow = attRight ? target.x < releaseX - 1 : target.x > releaseX + 1;
           const destX = clamp(target.x + (isBackThrow ? -dir * 1.5 : dir * 3), 6, 94);
           const destY = clamp(target.y, 8, 92);
+          taker.facing = Math.atan2(destY - taker.y, destX - taker.x);
           target.tx = destX;
           target.ty = destY;
           target.intent = 'PASS_TARGET';
-          b.fromX = taker.x;
-          b.fromY = taker.y;
+          b.fromX = releaseX;
+          b.fromY = releaseY;
           b.toX = destX;
           b.toY = destY;
           b.curve = 0;
@@ -4316,7 +4454,7 @@ export const MatchModal: React.FC<{
           b.startZ = 0;
           b.endZ = 0;
           b.progress = 0;
-          b.duration = clamp(Math.hypot(destX - taker.x, destY - taker.y) / 40, 0.36, 0.60);
+          b.duration = clamp(Math.hypot(destX - releaseX, destY - releaseY) / 40, 0.36, 0.60);
           b.flightType = 'throwin';
           b.shotStyle = undefined;
           b.carrierId = null;
@@ -4326,8 +4464,8 @@ export const MatchModal: React.FC<{
           bumpPlayerStat(taker.id, 'setpieces');
           addWorldFx(w, {
             type: 'throwin',
-            x: taker.x,
-            y: taker.y,
+            x: releaseX,
+            y: releaseY,
             toX: destX,
             toY: destY,
             label: isBackThrow ? `↩️ ทุ่มกลับให้ ${target.shortName}` : `↗️ ทุ่มขึ้นหน้าให้ ${target.shortName}`,
@@ -9248,17 +9386,20 @@ export const MatchModal: React.FC<{
         // Update tactical targets
         updateAgentTargets(w, Math.max(1, curIntMin));
 
-        // Smooth physical player movement + running stride + GK dive (exempt celebration from slow-mo throttle so sprints & jumps look lively)
+        // Smooth physical player movement + running stride + GK dive (exempt celebrations, kickoff reset, & set-piece setup from slow-mo throttle)
         const isCelebratingNow = w.celebrateTimer > 0;
         const isKickoffResetting = w.pendingSetPiece?.type === 'kickoff' && !isCelebratingNow;
+        const isSetPieceSettingUp = Boolean(w.pendingSetPiece) && w.pendingSetPiece?.type !== 'kickoff' && !isCelebratingNow;
         const baseMoveScale = speedMul > 2.6 ? 1.85 : speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
         const moveScale = isCelebratingNow
           ? Math.max(1.22, Math.min(2.15, baseMoveScale * 1.25))
           : isKickoffResetting
             ? Math.max(2.7, baseMoveScale * 2.45)
-            : slowActive
-              ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34)
-              : baseMoveScale;
+            : isSetPieceSettingUp
+              ? Math.max(1.55, baseMoveScale * 1.45)
+              : slowActive
+                ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34)
+                : baseMoveScale;
         const hFrameCfg = getEffectiveTeamCfg('H', Math.max(1, curIntMin));
         const aFrameCfg = getEffectiveTeamCfg('A', Math.max(1, curIntMin));
         w.agents.forEach((ag) => {
@@ -9335,10 +9476,13 @@ export const MatchModal: React.FC<{
           }
           const curSpd = Math.hypot(ag.vx, ag.vy);
           if (curSpd > 0.12) {
-            const minX = ag.pos === 'GK' ? 1.6 : 3;
-            const maxX = ag.pos === 'GK' ? 98.4 : 97;
+            const isSpTaker = Boolean(w.pendingSetPiece && w.pendingSetPiece.type !== 'kickoff' && w.pendingSetPiece.takerId === ag.id);
+            const minX = isSpTaker ? 1.5 : ag.pos === 'GK' ? 1.6 : 3;
+            const maxX = isSpTaker ? 98.5 : ag.pos === 'GK' ? 98.4 : 97;
+            const minY = isSpTaker ? 2.2 : 4;
+            const maxY = isSpTaker ? 97.8 : 96;
             ag.x = clamp(ag.x + ag.vx * rawDt, minX, maxX);
-            ag.y = clamp(ag.y + ag.vy * rawDt, 4, 96);
+            ag.y = clamp(ag.y + ag.vy * rawDt, minY, maxY);
             ag.stride += curSpd * rawDt * 0.85;
           }
           let targetAngle =
@@ -9361,6 +9505,10 @@ export const MatchModal: React.FC<{
             }
           } else if (isKickoffResetting && dist <= 0.45) {
             targetAngle = isAttackRight(w, ag.side) ? 0 : Math.PI;
+          } else if (isSetPieceSettingUp && dist <= 0.55 && w.pendingSetPiece) {
+            if (ag.intent === 'WALL' || w.pendingSetPiece.takerId === ag.id) {
+              targetAngle = Math.atan2(w.pendingSetPiece.y - ag.y, w.pendingSetPiece.x - ag.x);
+            }
           }
           let angleDiff = targetAngle - ag.facing;
           while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
@@ -9446,14 +9594,31 @@ export const MatchModal: React.FC<{
               }
             }
           } else {
-            w.pendingSetPiece.waitSec = Math.max(0, w.pendingSetPiece.waitSec - rawDt * spRate);
-            const keepBallOutForGoalKick = spType === 'goalkick' && w.pendingSetPiece.waitSec > 0.45;
+            const sp = w.pendingSetPiece;
+            sp.setupElapsed = (sp.setupElapsed || 0) + rawDt * (speedMul > 2.0 ? 1.25 : 1.0);
+            const spTaker = sp.takerId ? w.agents.find((a) => a.id === sp.takerId && !a.sentOff) : undefined;
+            const takerReady = !spTaker || Math.hypot(spTaker.tx - spTaker.x, spTaker.ty - spTaker.y) <= 2.1;
+            const penGk =
+              spType === 'penalty'
+                ? w.agents.find((a) => !a.sentOff && a.side !== sp.side && a.pos === 'GK')
+                : undefined;
+            const penGkReady = !penGk || Math.hypot(penGk.tx - penGk.x, penGk.ty - penGk.y) <= 1.8;
+            const wallReady =
+              spType !== 'freekick' ||
+              !sp.wallIds?.length ||
+              sp.wallIds.every((wid) => {
+                const wag = w.agents.find((a) => a.id === wid && !a.sentOff);
+                return !wag || Math.hypot(wag.tx - wag.x, wag.ty - wag.y) <= 2.4;
+              });
+            const setPieceReady = (takerReady && penGkReady && wallReady) || sp.setupElapsed >= 2.5;
+            sp.waitSec = Math.max(setPieceReady ? 0 : 0.26, sp.waitSec - rawDt * spRate);
+            const keepBallOutForGoalKick = spType === 'goalkick' && sp.waitSec > 0.45;
             if (!keepBallOutForGoalKick) {
-              w.ball.x = w.pendingSetPiece.x;
-              w.ball.y = w.pendingSetPiece.y;
+              w.ball.x = sp.x;
+              w.ball.y = sp.y;
               w.ball.z = 0;
             }
-            if (w.pendingSetPiece.waitSec <= 0) {
+            if (setPieceReady && sp.waitSec <= 0) {
               scheduleNextPlay(w, Math.max(1, curIntMin));
             }
           }
@@ -11239,6 +11404,15 @@ export const MatchModal: React.FC<{
                           <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/90 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-1.5">
                             <div className="flex items-center gap-1.5 text-[11px] sm:text-xs mland:text-[9.5px] font-bold min-w-0 flex-wrap">
                               <span className="px-1.5 py-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[9.5px] mland:text-[8px] font-extrabold shrink-0">☕ พักครึ่ง</span>
+                              {htPitchMode !== 'all' && (
+                                <ClubCrest
+                                  name={activeTeam.name}
+                                  size={16}
+                                  team={activeTeam}
+                                  club={state.club}
+                                  isMyClub={activeTeam.id === state.me && state.mode === 'm'}
+                                />
+                              )}
                               <span className="truncate">
                                 แผน {htPitchMode === 'all' ? `${liveHome.cf ? 'กำหนดเอง' : liveHome.form} vs ${liveAway.cf ? 'กำหนดเอง' : liveAway.form}` : `${formLabel}${activeTeam.id === meTeamOrig.id ? ` · ${AR_T[liveTac]}` : ''}`}
                               </span>
@@ -11264,24 +11438,33 @@ export const MatchModal: React.FC<{
                               <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px]">
                                 <button
                                   type="button"
+                                  title="แสดงแผนทั้งสองทีม"
+                                  aria-label="แสดงแผนทั้งสองทีม"
                                   onClick={() => setHtPitchMode('all')}
-                                  className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap ${htPitchMode === 'all' ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                                  className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'all' ? 'bg-[var(--g)] text-white shadow-xs ring-1 ring-white/25' : 'text-[var(--mut)] hover:bg-[var(--surface-2)]'}`}
                                 >
-                                  ทั้งหมด
+                                  <span className="inline-flex items-center -space-x-1.5">
+                                    <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                                    <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                                  </span>
                                 </button>
                                 <button
                                   type="button"
+                                  title={homeOrig.name}
+                                  aria-label={homeOrig.name}
                                   onClick={() => setHtPitchMode('H')}
-                                  className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[82px] truncate ${htPitchMode === 'H' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                                  className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'H' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)]'}`}
                                 >
-                                  {homeOrig.name}
+                                  <ClubCrest name={homeOrig.name} size={18} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
                                 </button>
                                 <button
                                   type="button"
+                                  title={awayOrig.name}
+                                  aria-label={awayOrig.name}
                                   onClick={() => setHtPitchMode('A')}
-                                  className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[82px] truncate ${htPitchMode === 'A' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'}`}
+                                  className={`h-6 mland:h-5 px-1.5 rounded-md font-bold cursor-pointer inline-flex items-center justify-center transition-colors ${htPitchMode === 'A' ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : 'text-[var(--mut)] hover:bg-[var(--surface-2)]'}`}
                                 >
-                                  {awayOrig.name}
+                                  <ClubCrest name={awayOrig.name} size={18} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
                                 </button>
                               </div>
                             </div>
@@ -11339,51 +11522,39 @@ export const MatchModal: React.FC<{
 
                                 {htPitchMode === 'all' ? (
                                   <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
-                                    <div className="flex flex-col min-h-0 items-center gap-1">
-                                      <div className="flex items-center gap-1 text-[10px] mland:text-[8px] font-bold text-white truncate max-w-full shrink-0">
-                                        <ClubCrest name={homeOrig.name} size={14} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                                        <span className="truncate">{homeOrig.name}</span>
-                                        <span className="text-white/65 shrink-0">({liveHome.cf ? 'กำหนดเอง' : liveHome.form})</span>
-                                      </div>
-                                      <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-                                        <FormationPitch
-                                          team={liveHome}
-                                          state={state}
-                                          lineupNames={curHomeLu}
-                                          kitOverride={homeKit}
-                                          gkKitOverride={homeGkKit}
-                                          trimOverride={homeTrim}
-                                          matchMeta={hMeta}
-                                          statMode={htStatMode}
-                                          showFitBar={true}
-                                          subAlertFitTh={subAlertFitTh}
-                                          selectedPlayerName={htPickedPlayer}
-                                          onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                        />
-                                      </div>
+                                    <div className="min-h-0 w-full flex items-center justify-center">
+                                      <FormationPitch
+                                        team={liveHome}
+                                        state={state}
+                                        lineupNames={curHomeLu}
+                                        kitOverride={homeKit}
+                                        gkKitOverride={homeGkKit}
+                                        trimOverride={homeTrim}
+                                        matchMeta={hMeta}
+                                        statMode={htStatMode}
+                                        showFitBar={true}
+                                        showPitchCrest={true}
+                                        subAlertFitTh={subAlertFitTh}
+                                        selectedPlayerName={htPickedPlayer}
+                                        onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                      />
                                     </div>
-                                    <div className="flex flex-col min-h-0 items-center gap-1">
-                                      <div className="flex items-center gap-1 text-[10px] mland:text-[8px] font-bold text-white truncate max-w-full shrink-0">
-                                        <ClubCrest name={awayOrig.name} size={14} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                                        <span className="truncate">{awayOrig.name}</span>
-                                        <span className="text-white/65 shrink-0">({liveAway.cf ? 'กำหนดเอง' : liveAway.form})</span>
-                                      </div>
-                                      <div className="flex-1 min-h-0 w-full flex items-center justify-center">
-                                        <FormationPitch
-                                          team={liveAway}
-                                          state={state}
-                                          lineupNames={curAwayLu}
-                                          kitOverride={awayKit}
-                                          gkKitOverride={awayGkKit}
-                                          trimOverride={awayTrim}
-                                          matchMeta={aMeta}
-                                          statMode={htStatMode}
-                                          showFitBar={true}
-                                          subAlertFitTh={subAlertFitTh}
-                                          selectedPlayerName={htPickedPlayer}
-                                          onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                        />
-                                      </div>
+                                    <div className="min-h-0 w-full flex items-center justify-center">
+                                      <FormationPitch
+                                        team={liveAway}
+                                        state={state}
+                                        lineupNames={curAwayLu}
+                                        kitOverride={awayKit}
+                                        gkKitOverride={awayGkKit}
+                                        trimOverride={awayTrim}
+                                        matchMeta={aMeta}
+                                        statMode={htStatMode}
+                                        showFitBar={true}
+                                        showPitchCrest={true}
+                                        subAlertFitTh={subAlertFitTh}
+                                        selectedPlayerName={htPickedPlayer}
+                                        onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
+                                      />
                                     </div>
                                   </div>
                                 ) : (
@@ -11397,6 +11568,7 @@ export const MatchModal: React.FC<{
                                     matchMeta={htPitchMode === 'H' ? hMeta : aMeta}
                                     statMode={htStatMode}
                                     showFitBar={true}
+                                    showPitchCrest={true}
                                     subAlertFitTh={subAlertFitTh}
                                     selectedPlayerName={htPickedPlayer}
                                     onPlayerClick={(pl) => setHtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
@@ -11416,93 +11588,99 @@ export const MatchModal: React.FC<{
                               </div>
                             </div>
 
-                            {/* Right Side Inside Stadium: Vertical Halftime Team Talk Options + Start 2nd Half Button */}
-                            <div className="bg-[#082414]/92 border-t sm:border-t-0 sm:border-l mland:border-t-0 mland:border-l border-white/15 p-2.5 sm:p-3 mland:p-2 flex flex-col justify-between gap-2.5 mland:gap-1.5">
+                            {/* Right Side Inside Stadium: Coach Explanation (Player Mode) or Tactical Orders (Manager Mode) */}
+                            <div className="bg-[#082414]/92 border-t sm:border-t-0 sm:border-l mland:border-t-0 mland:border-l border-white/15 p-2.5 sm:p-3 mland:p-2 flex flex-col gap-2.5 mland:gap-1.5">
                               <div className="space-y-2 mland:space-y-1 flex-1 min-h-0 flex flex-col">
-                                <div>
-                                  <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[#fde047] flex items-center gap-1.5">
-                                    <span>{state.mode === 'm' ? '🗣️ สั่งการครึ่งหลัง' : '👔 คำสั่งโค้ชพักครึ่ง'}</span>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[#fde047] flex items-center gap-1.5">
+                                      <span>{state.mode === 'm' ? '🗣️ สั่งการครึ่งหลัง' : '👔 คำสั่งโค้ชพักครึ่ง'}</span>
+                                    </div>
+                                    <p className="text-[10px] mland:text-[8px] text-white/70 leading-snug mt-0.5">
+                                      {state.mode === 'm'
+                                        ? 'เลือกคำสั่งปลุกใจ/แท็กติกทีม แล้วกดเริ่มครึ่งหลังด้านบน'
+                                        : 'ฟังคำชี้แจงแท็กติกจากโค้ชก่อนลงครึ่งหลัง'}
+                                    </p>
                                   </div>
-                                  <p className="text-[10px] mland:text-[8px] text-white/70 leading-snug mt-0.5">
-                                    {state.mode === 'm'
-                                      ? 'เลือกแผนสั่งการ แล้วกดเริ่มครึ่งหลัง'
-                                      : 'รับฟังคำสั่งโค้ช หรือเสนอความเห็นของคุณ'}
-                                  </p>
+                                  <ClubCrest
+                                    name={meTeamOrig.name}
+                                    size={22}
+                                    team={meTeamOrig}
+                                    club={state.club}
+                                    isMyClub={state.mode === 'm'}
+                                  />
                                 </div>
 
-                                {state.mode === 'p' && halftimeCoachOrder && (
-                                  <div className="rounded-xl mland:rounded-lg bg-white/10 border border-amber-300/35 px-2.5 py-2 mland:px-2 mland:py-1 space-y-1 mland:space-y-0.5 shrink-0">
-                                    <div className="font-extrabold text-[10.5px] mland:text-[8.5px] text-amber-200 leading-snug">
-                                      {halftimeCoachOrder.headline}
-                                    </div>
-                                    <div className="text-[9.5px] mland:text-[7.5px] text-white/85 leading-snug">
-                                      📋 {halftimeCoachOrder.detail}
-                                    </div>
-                                    <div className="text-[9.5px] mland:text-[7.5px] text-emerald-200 leading-snug">
-                                      💬 {halftimeCoachOrder.playerNote}
-                                    </div>
+                                {state.mode === 'p' ? (
+                                  <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-0.5">
+                                    {halftimeCoachOrder ? (
+                                      <div className="rounded-xl mland:rounded-lg bg-white/10 border border-amber-300/35 px-3 py-2.5 mland:px-2 mland:py-1.5 space-y-2 mland:space-y-1">
+                                        <div className="flex items-center justify-between gap-1.5 text-[9.5px] mland:text-[7.5px] text-white/75">
+                                          <span className="font-bold text-amber-200 truncate">{meTeamOrig.name}</span>
+                                          <span className="px-1.5 py-0.5 rounded bg-white/10 font-bold text-white/90 shrink-0">
+                                            {halftimeCoachOrder.form} · {halftimeCoachOrder.tacLabel}
+                                          </span>
+                                        </div>
+                                        <div className="font-extrabold text-[11px] sm:text-xs mland:text-[9px] text-amber-200 leading-snug">
+                                          {halftimeCoachOrder.headline}
+                                        </div>
+                                        <div className="text-[10px] mland:text-[8px] text-white/90 leading-relaxed">
+                                          📋 {halftimeCoachOrder.detail}
+                                        </div>
+                                        <div className="pt-1.5 border-t border-white/12 text-[10px] mland:text-[8px] text-emerald-200 leading-relaxed">
+                                          💬 {halftimeCoachOrder.playerNote}
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div className="rounded-xl mland:rounded-lg bg-white/10 border border-amber-300/30 px-3 py-2.5 text-[10.5px] text-white/85 leading-relaxed">
+                                        👔 โค้ชกำลังสรุปแท็กติกครึ่งหลังให้ทีมยึดวินัยและช่วยกันคุมจังหวะเกม กดปุ่ม &quot;เริ่มครึ่งหลัง&quot; ด้านบนเมื่อพร้อมลุยต่อ
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 mland:gap-1 pr-0.5">
+                                    {[
+                                      { id: 'attack' as const, icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
+                                      { id: 'press' as const, icon: '⚡', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
+                                      { id: 'balanced' as const, icon: '⚖️', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
+                                      { id: 'counter' as const, icon: '🚀', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
+                                      { id: 'defend' as const, icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
+                                    ].map((opt) => {
+                                      const active = selectedHalftimeTalk === opt.id;
+                                      return (
+                                        <button
+                                          key={opt.id}
+                                          type="button"
+                                          onClick={() => {
+                                            SFX.tap();
+                                            setSelectedHalftimeTalk(opt.id);
+                                          }}
+                                          className={`w-full text-left px-2.5 py-2 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                            active
+                                              ? 'bg-emerald-500/25 border-emerald-400 text-white shadow-[0_0_0_1px_rgba(52,211,153,0.4)]'
+                                              : 'bg-white/6 border-white/12 text-white/85 hover:bg-white/12 hover:border-white/25'
+                                          }`}
+                                        >
+                                          <div className="min-w-0">
+                                            <div className="font-bold text-[11px] sm:text-xs mland:text-[9.5px] flex items-center gap-1.5 leading-tight">
+                                              <span>{opt.icon}</span>
+                                              <span className="truncate">{opt.title}</span>
+                                            </div>
+                                            <div className="text-[9.5px] mland:text-[7.5px] text-white/65 truncate mt-0.5">
+                                              {opt.desc}
+                                            </div>
+                                          </div>
+                                          {active && (
+                                            <span className="w-5 h-5 mland:w-4 mland:h-4 rounded-full bg-emerald-400 text-[#052e16] flex items-center justify-center shrink-0">
+                                              <Check className="w-3 h-3 mland:w-2.5 mland:h-2.5 stroke-[3]" />
+                                            </span>
+                                          )}
+                                        </button>
+                                      );
+                                    })}
                                   </div>
                                 )}
-
-                                <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 mland:gap-1 pr-0.5">
-                                  {(state.mode === 'm'
-                                    ? [
-                                        { id: 'attack' as const, icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
-                                        { id: 'press' as const, icon: '⚡', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
-                                        { id: 'balanced' as const, icon: '⚖️', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
-                                        { id: 'counter' as const, icon: '🚀', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
-                                        { id: 'defend' as const, icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
-                                      ]
-                                    : [
-                                        { id: 'follow_coach' as const, icon: '🤝', title: 'ทำตามคำสั่งโค้ชเต็มที่', desc: 'คุมระเบียบตามแท็กติกทีม (+ฟอร์ม)' },
-                                        { id: 'ask_attack' as const, icon: '🔥', title: 'เสนอโค้ช: เปิดเกมรุกเพิ่ม', desc: 'ชวนทีมดันไลน์สูงล่าประตูครึ่งหลัง' },
-                                        { id: 'ask_defend' as const, icon: '🛡️', title: 'เสนอโค้ช: เน้นรับคุมโซน', desc: 'แพ็กหลังแน่นแล้วรอสวนกลับเร็ว' },
-                                        { id: 'fit' as const, icon: '💪', title: 'วอร์มเติมความฟิต (+6%)', desc: 'เตรียมพละกำลังให้พร้อมลุย 45 นาทีหลัง' }
-                                      ]
-                                  ).map((opt) => {
-                                    const active = selectedHalftimeTalk === opt.id;
-                                    return (
-                                      <button
-                                        key={opt.id}
-                                        type="button"
-                                        onClick={() => {
-                                          SFX.tap();
-                                          setSelectedHalftimeTalk(opt.id);
-                                        }}
-                                        className={`w-full text-left px-2.5 py-2 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 ${
-                                          active
-                                            ? 'bg-emerald-500/25 border-emerald-400 text-white shadow-[0_0_0_1px_rgba(52,211,153,0.4)]'
-                                            : 'bg-white/6 border-white/12 text-white/85 hover:bg-white/12 hover:border-white/25'
-                                        }`}
-                                      >
-                                        <div className="min-w-0">
-                                          <div className="font-bold text-[11px] sm:text-xs mland:text-[9.5px] flex items-center gap-1.5 leading-tight">
-                                            <span>{opt.icon}</span>
-                                            <span className="truncate">{opt.title}</span>
-                                          </div>
-                                          <div className="text-[9.5px] mland:text-[7.5px] text-white/65 truncate mt-0.5">
-                                            {opt.desc}
-                                          </div>
-                                        </div>
-                                        {active && (
-                                          <span className="w-5 h-5 mland:w-4 mland:h-4 rounded-full bg-emerald-400 text-[#052e16] flex items-center justify-center shrink-0">
-                                            <Check className="w-3 h-3 mland:w-2.5 mland:h-2.5 stroke-[3]" />
-                                          </span>
-                                        )}
-                                      </button>
-                                    );
-                                  })}
-                                </div>
                               </div>
-
-                              <button
-                                type="button"
-                                onClick={() => handleStartSecondHalf()}
-                                className="btn btn-md btn-gold w-full shrink-0"
-                              >
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                                <span>เริ่มครึ่งหลัง</span>
-                              </button>
                             </div>
                           </div>
                         </div>

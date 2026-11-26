@@ -1104,6 +1104,7 @@ export const FormationPitch: React.FC<{
   subAlertFitTh?: number;
   disableRedPlayers?: boolean;
   dropAttrPrefix?: 'default' | 'tactics';
+  showPitchCrest?: boolean;
   className?: string;
 }> = React.memo(({
   team,
@@ -1128,6 +1129,7 @@ export const FormationPitch: React.FC<{
   subAlertFitTh,
   disableRedPlayers = false,
   dropAttrPrefix = 'default',
+  showPitchCrest = false,
   className
 }) => {
   const uid = React.useId().replace(/:/g, '');
@@ -1141,6 +1143,9 @@ export const FormationPitch: React.FC<{
   const gkPal = resolveGkKitPalette(col, trCol, gkKitOverride);
   const gkCol = gkPal.kit;
   const gkTrCol = gkPal.trim;
+  const pitchCrestSpec = showPitchCrest
+    ? resolveCrestSpec(team.name, team, state.club, state.mode === 'm' && team.id === state.me)
+    : null;
   const zoneLineColors: Record<Position, { stroke: string; fill: string; text: string }> = {
     FW: { stroke: 'rgba(110, 231, 183, 0.55)', fill: 'rgba(16, 185, 129, 0.08)', text: 'rgba(209, 250, 229, 0.85)' },
     MF: { stroke: 'rgba(252, 211, 77, 0.55)', fill: 'rgba(245, 158, 11, 0.08)', text: 'rgba(254, 243, 199, 0.85)' },
@@ -1162,6 +1167,34 @@ export const FormationPitch: React.FC<{
         </clipPath>
       </defs>
       <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
+      {pitchCrestSpec && (
+        <g className="pointer-events-none">
+          <g
+            opacity="0.32"
+            transform="translate(124.8, 164.8) scale(2.1)"
+            dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcw`, true) }}
+          />
+          <g transform="translate(11, 10.5)">
+            <g
+              transform="scale(0.84)"
+              dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcb`, true) }}
+            />
+            <text
+              x="24"
+              y="13"
+              fontSize="9"
+              fontWeight="800"
+              fontFamily="Sarabun"
+              fill="#ffffff"
+              stroke="rgba(6, 28, 16, 0.88)"
+              strokeWidth="2.4"
+              paintOrder="stroke"
+            >
+              {team.name} · {team.cf ? 'กำหนดเอง' : team.form}
+            </text>
+          </g>
+        </g>
+      )}
 
       {showPositionZones && (
         <g className="pointer-events-none">
