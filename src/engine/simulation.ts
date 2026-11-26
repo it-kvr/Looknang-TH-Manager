@@ -2777,17 +2777,50 @@ export function teamStats(t: Team, s?: GameState | null) {
 }
 
 export function setBoardObjective(s: GameState) {
-  const t = s.teams[s.me];
-  const ts = s.teams
-    .filter((x) => x.tier === t.tier)
+  [0, 1, 2].forEach((tier) => {
+    const ts = s.teams
+      .filter((x) => x.tier === tier)
+      .map((x) => {
+        const r = rate(x, s);
+        return { team: x, power: r.at + r.df };
+      })
+      .sort((a, b) => b.power - a.power);
+    const maxTarget = Math.max(1, ts.length - 1);
+    ts.forEach((entry, idx) => {
+      const rank = idx + 1;
+      entry.team.seasonObj = clamp(Math.ceil(rank * 0.8), 1, maxTarget);
+    });
+  });
+
+  if (s.mode === 'm') {
+    const me = s.teams[s.me];
+    const meTierCount = Math.max(2, s.teams.filter((x) => x.tier === me.tier).length);
+    s.obj = me?.seasonObj ?? clamp(Math.ceil(meTierCount * 0.5), 1, meTierCount - 1);
+    s.bd = s.bd ?? 55;
+  }
+}
+
+export function getTeamSeasonObjectiveInfo(
+  team: Team,
+  s: Pick<GameState, 'teams' | 'me' | 'mode' | 'obj' | 'season' | 'md' | 'mor' | 'club' | 'boardEffects'>
+): { targetRank: number; powerRank: number; totalTeams: number } {
+  if (team.tier >= 3) {
+    return { targetRank: 1, powerRank: 1, totalTeams: 1 };
+  }
+  const tierRanked = s.teams
+    .filter((x) => x.tier === team.tier)
     .map((x) => {
-      const r = rate(x, s);
-      return [x.id, r.at + r.df] as const;
+      const r = rate(x, s as GameState);
+      return { id: x.id, power: r.at + r.df };
     })
-    .sort((a, b) => b[1] - a[1]);
-  const rank = ts.findIndex((a) => a[0] === s.me) + 1;
-  s.obj = clamp(Math.ceil(rank * 0.8), 1, ts.length - 1);
-  s.bd = s.bd ?? 55;
+    .sort((a, b) => b.power - a.power);
+  const totalTeams = Math.max(1, tierRanked.length);
+  const powerIdx = tierRanked.findIndex((x) => x.id === team.id);
+  const powerRank = powerIdx >= 0 ? powerIdx + 1 : totalTeams;
+  const computedTarget = clamp(Math.ceil(powerRank * 0.8), 1, Math.max(1, totalTeams - 1));
+  const storedTarget = team.id === s.me && s.mode === 'm' && s.obj != null ? s.obj : team.seasonObj;
+  const targetRank = storedTarget != null ? clamp(storedTarget, 1, totalTeams) : computedTarget;
+  return { targetRank, powerRank, totalTeams };
 }
 
 export function ensureAsia(s: GameState) {
@@ -2871,9 +2904,9 @@ export function createNewGame(
     ...(opts.diff !== undefined ? { diff: opts.diff } : {})
   };
 
+  setBoardObjective(s);
   if (mode === 'm') {
     ensureClubIdentity(s);
-    setBoardObjective(s);
   } else if (opts.player) {
     const p = opts.player;
     const chosenNo = clamp(p.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);
@@ -3039,8 +3072,8 @@ export function startSeason(s: GameState) {
   mkMarket(s);
   s.schedRes = {};
   s.cupLog = [];
+  setBoardObjective(s);
   if (s.mode === 'm') {
-    setBoardObjective(s);
     s.boardDirective = null;
     s.boardDirectiveCd = 1;
     s.boardEffects = [];
@@ -5703,8 +5736,8 @@ export function issueBoardDirective(s: GameState, preferredKind?: BoardDirective
       title: 'ลดภาระค่าเหนื่อยในทีม',
       feedback: `บอร์ดเห็นว่าค่าเหนื่อยใช้ไป ${tx.wagePct}% ของเพดานแล้ว ควรปล่อย/ขายตัวสำรองที่ไม่ใช้งานเพื่อลดรายจ่าย`,
       targetLabel: `ลดค่าเหนื่อยรวมลงเหลือ ≤ ${fmtMoneyNum(cutTarget)}/นัด ภายใน ${windowLen} นัด`,
-      rewardText: 'ขวัญทีม +6 · พลังทีม +2 (5 นัด) · เชื่อมั่น +6%',
-      penaltyText: 'ขวัญทีม -4 · พลังทีม -2 (4 นัด) · เชื่อมั่น -6%',
+      rewardText: 'เชื่อมั่น +8% · เครดิต +5 · ขวัญทีม +6 (5 นัด)',
+      penaltyText: 'เชื่อมั่น -6% · ขวัญทีม -4 (4 นัด)',
       issuedSeason: s.season,
       issuedMd: curMd,
       dueMd,
@@ -5721,8 +5754,8 @@ export function issueBoardDirective(s: GameState, preferredKind?: BoardDirective
       title: 'ยกระดับการปั้นนักเตะเยาวชน',
       feedback: 'บอร์ดต้องการเห็นอนาคตของสโมสร จงให้โอกาสนักเตะ U22 ลงสนาม เซ็นเด็กอะคาเดมี่ หรืออัปเกรดศูนย์เยาวชน',
       targetLabel: `สะสมแต้มพัฒนาดาวรุ่ง +${needGain} แต้ม ภายใน ${windowLen} นัด`,
-      rewardText: 'พลังบุก & รับ +2 · ขวัญทีม +5 (5 นัด) · เชื่อมั่น +6%',
-      penaltyText: 'แฟนบอล -4% · พลังทีม -1 (4 นัด) · เชื่อมั่น -6%',
+      rewardText: 'เชื่อมั่น +8% · เครดิต +6 · ขวัญทีม +5 · แฟนบอล +3% (5 นัด)',
+      penaltyText: 'เชื่อมั่น -6% · แฟนบอล -4% (4 นัด)',
       issuedSeason: s.season,
       issuedMd: curMd,
       dueMd,
@@ -5738,8 +5771,8 @@ export function issueBoardDirective(s: GameState, preferredKind?: BoardDirective
       title: 'ขันเกมรับให้เหนียวแน่น',
       feedback: 'บอร์ดกังวลสถิติการเสียประตูช่วงที่ผ่านมา ต้องปรับวินัยแนวรับให้รัดกุมขึ้นทันที',
       targetLabel: `เสียประตูไม่เกิน ${maxConcede} ลูก ตลอด ${windowLen} นัดข้างหน้า`,
-      rewardText: 'พลังเกมรับ +3 · ขวัญทีม +4 (5 นัด) · เชื่อมั่น +6%',
-      penaltyText: 'พลังเกมรับ -3 (4 นัด) · เชื่อมั่น -6%',
+      rewardText: 'เชื่อมั่น +8% · เครดิต +5 · ขวัญทีม +5 (5 นัด)',
+      penaltyText: 'เชื่อมั่น -6% · ขวัญทีม -4 (4 นัด)',
       issuedSeason: s.season,
       issuedMd: curMd,
       dueMd,
@@ -5755,8 +5788,8 @@ export function issueBoardDirective(s: GameState, preferredKind?: BoardDirective
       title: 'ปลุกเกมรุกให้ดุดันขึ้น',
       feedback: 'แฟนบอลและบอร์ดอยากเห็นเกมรุกที่เร้าใจและจบสกอร์เด็ดขาดกว่านี้ในสัปดาห์ต่อๆ ไป',
       targetLabel: `ยิงประตูรวมให้ได้ ≥ ${goalTarget} ลูก ภายใน ${windowLen} นัด`,
-      rewardText: 'พลังเกมรุก +3 · แฟนบอล +4% (5 นัด) · เชื่อมั่น +6%',
-      penaltyText: 'พลังเกมรุก -3 (4 นัด) · เชื่อมั่น -6%',
+      rewardText: 'เชื่อมั่น +8% · เครดิต +5 · แฟนบอล +5% (5 นัด)',
+      penaltyText: 'เชื่อมั่น -6% · แฟนบอล -4% (4 นัด)',
       issuedSeason: s.season,
       issuedMd: curMd,
       dueMd,
@@ -5772,8 +5805,8 @@ export function issueBoardDirective(s: GameState, preferredKind?: BoardDirective
       title: 'ฟื้นฟูสภาพคล่องสโมสร',
       feedback: 'บอร์ดกังวลกระแสเงินสดของสโมสร ควรเพิ่มรายได้แมตช์เหย้า เซ็นสปอนเซอร์ หรือขายนักเตะเพื่อพยุงงบ',
       targetLabel: `ทำงบสโมสรให้ถึง ≥ ${fmtMoney(moneyTarget)} ภายใน ${windowLen} นัด`,
-      rewardText: 'ขวัญทีม +5 · แฟนบอล +5% (5 นัด) · เชื่อมั่น +6%',
-      penaltyText: 'ขวัญทีม -5 · แฟนบอล -4% (4 นัด) · เชื่อมั่น -6%',
+      rewardText: 'เชื่อมั่น +8% · เครดิต +5 · ขวัญทีม +5 · แฟนบอล +5% (5 นัด)',
+      penaltyText: 'เชื่อมั่น -6% · ขวัญทีม -5 · แฟนบอล -4% (4 นัด)',
       issuedSeason: s.season,
       issuedMd: curMd,
       dueMd,
@@ -5789,8 +5822,8 @@ export function issueBoardDirective(s: GameState, preferredKind?: BoardDirective
       title: 'เร่งเก็บแต้มตามเป้าหมายลีก',
       feedback: 'บอร์ดคาดหวังผลงานที่สม่ำเสมอในช่วงโปรแกรมถัดไปเพื่อรักษาโมเมนตัมของสโมสร',
       targetLabel: `เก็บอย่างน้อย ${ptTarget} แต้ม ภายใน ${windowLen} นัด`,
-      rewardText: 'พลังทีม +2 · ขวัญทีม +5 (5 นัด) · เชื่อมั่น +6%',
-      penaltyText: 'ขวัญทีม -5 (4 นัด) · เชื่อมั่น -6%',
+      rewardText: 'เชื่อมั่น +8% · เครดิต +6 · ขวัญทีม +6 (5 นัด)',
+      penaltyText: 'เชื่อมั่น -6% · ขวัญทีม -5 (4 นัด)',
       issuedSeason: s.season,
       issuedMd: curMd,
       dueMd,
@@ -5825,30 +5858,28 @@ export function evaluateAndIssueBoardDirectives(s: GameState) {
     if (prog.isComplete && !earlyFailDefense) {
       activeDir.status = 'passed';
       activeDir.evaluatedMd = curMd;
-      s.bd = clamp((s.bd ?? 50) + 6, 0, 100);
-      s.mgrRep = (s.mgrRep ?? 50) + 5;
+      s.bd = clamp((s.bd ?? 50) + 8, 0, 100);
+      const repGain = activeDir.kind === 'youth_focus' || activeDir.kind === 'win_form' ? 6 : 5;
+      s.mgrRep = (s.mgrRep ?? 50) + repGain;
       s.boardDirectiveCd = curMd + 3;
 
       if (activeDir.kind === 'reduce_wages') {
         addBoardTempEffect(s, 'โบนัสบอร์ด: วินัยการเงินเยี่ยม (+6 ขวัญทีม)', 'bonus', 'mor', 6, 5);
-        addBoardTempEffect(s, 'โบนัสบอร์ด: ทีมลงตัว (+2 เกมรุก)', 'bonus', 'att', 2, 5);
       } else if (activeDir.kind === 'youth_focus') {
-        addBoardTempEffect(s, 'โบนัสบอร์ด: พลังหนุ่มคึกคัก (+2 เกมรุก)', 'bonus', 'att', 2, 5);
-        addBoardTempEffect(s, 'โบนัสบอร์ด: พลังหนุ่มช่วยรับ (+2 เกมรับ)', 'bonus', 'def', 2, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ปลุกพลังดาวรุ่ง (+5 ขวัญทีม)', 'bonus', 'mor', 5, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: แฟนหนุนแนวทางสโมสร (+3% แฟนบอล)', 'bonus', 'fan', 3, 5);
       } else if (activeDir.kind === 'tighten_defense') {
-        addBoardTempEffect(s, 'โบนัสบอร์ด: วินัยเกมรับแน่น (+3 เกมรับ)', 'bonus', 'def', 3, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ห้องแต่งตัวมั่นใจ (+5 ขวัญทีม)', 'bonus', 'mor', 5, 5);
       } else if (activeDir.kind === 'attack_spark') {
-        addBoardTempEffect(s, 'โบนัสบอร์ด: เกมรุกมั่นใจ (+3 เกมรุก)', 'bonus', 'att', 3, 5);
-        addBoardTempEffect(s, 'โบนัสบอร์ด: แฟนบอลคึกคัก (+4% แฟนบอล)', 'bonus', 'fan', 4, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: แฟนบอลคึกคัก (+5% แฟนบอล)', 'bonus', 'fan', 5, 5);
       } else if (activeDir.kind === 'boost_finances') {
         addBoardTempEffect(s, 'โบนัสบอร์ด: การเงินมั่นคง (+5 ขวัญทีม)', 'bonus', 'mor', 5, 5);
         addBoardTempEffect(s, 'โบนัสบอร์ด: ศรัทธาแฟนบอล (+5% แฟนบอล)', 'bonus', 'fan', 5, 5);
       } else {
-        addBoardTempEffect(s, 'โบนัสบอร์ด: ฟอร์มร้อนแรง (+2 เกมรุก)', 'bonus', 'att', 2, 5);
-        addBoardTempEffect(s, 'โบนัสบอร์ด: ห้องแต่งตัวคึกคัก (+5 ขวัญทีม)', 'bonus', 'mor', 5, 5);
+        addBoardTempEffect(s, 'โบนัสบอร์ด: ห้องแต่งตัวคึกคัก (+6 ขวัญทีม)', 'bonus', 'mor', 6, 5);
       }
 
-      pushBoardFeedback(s, 'ok', `✅ บอร์ดพอใจภารกิจ "${activeDir.title}" สำเร็จ! รับโบนัสชั่วคราว 5 นัด`);
+      pushBoardFeedback(s, 'ok', `✅ บอร์ดพอใจภารกิจ "${activeDir.title}" สำเร็จ! (เชื่อมั่น +8% · เครดิต +${repGain})`);
       pushFeed(s, 'บอร์ดบริหาร', `✅ ผ่านคำสั่งบอร์ด "${activeDir.title}"! (${activeDir.rewardText})`, 'ok');
     } else if (earlyFailDefense || deadlineHit) {
       activeDir.status = 'failed';
@@ -5856,23 +5887,18 @@ export function evaluateAndIssueBoardDirectives(s: GameState) {
       s.bd = clamp((s.bd ?? 50) - 6, 0, 100);
       s.boardDirectiveCd = curMd + 3;
 
-      if (activeDir.kind === 'reduce_wages') {
-        addBoardTempEffect(s, 'แรงกดดันบอร์ด: งบค่าเหนื่อยตึง (-4 ขวัญทีม)', 'penalty', 'mor', -4, 4);
-        addBoardTempEffect(s, 'แรงกดดันบอร์ด: สมาธิลดลง (-2 เกมรุก)', 'penalty', 'att', -2, 4);
-      } else if (activeDir.kind === 'youth_focus') {
+      if (activeDir.kind === 'reduce_wages' || activeDir.kind === 'tighten_defense') {
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: บรรยากาศทีมตึง (-4 ขวัญทีม)', 'penalty', 'mor', -4, 4);
+      } else if (activeDir.kind === 'youth_focus' || activeDir.kind === 'attack_spark') {
         addBoardTempEffect(s, 'แรงกดดันบอร์ด: แฟนบอลผิดหวัง (-4% แฟนบอล)', 'penalty', 'fan', -4, 4);
-        addBoardTempEffect(s, 'แรงกดดันบอร์ด: พลังทีมแผ่ว (-1 เกมรุก)', 'penalty', 'att', -1, 4);
-      } else if (activeDir.kind === 'tighten_defense') {
-        addBoardTempEffect(s, 'แรงกดดันบอร์ด: แนวรับขาดความมั่นใจ (-3 เกมรับ)', 'penalty', 'def', -3, 4);
-      } else if (activeDir.kind === 'attack_spark') {
-        addBoardTempEffect(s, 'แรงกดดันบอร์ด: กองหน้ากดดัน (-3 เกมรุก)', 'penalty', 'att', -3, 4);
       } else if (activeDir.kind === 'boost_finances') {
         addBoardTempEffect(s, 'แรงกดดันบอร์ด: วิกฤติการเงิน (-5 ขวัญทีม)', 'penalty', 'mor', -5, 4);
+        addBoardTempEffect(s, 'แรงกดดันบอร์ด: แฟนบอลกังวล (-4% แฟนบอล)', 'penalty', 'fan', -4, 4);
       } else {
         addBoardTempEffect(s, 'แรงกดดันบอร์ด: ฟอร์มต่ำกว่าเป้า (-5 ขวัญทีม)', 'penalty', 'mor', -5, 4);
       }
 
-      pushBoardFeedback(s, 'urg', `⚠️ ไม่ผ่านคำสั่ง "${activeDir.title}" — บอร์ดคาดโทษชั่วคราว 4 นัด`);
+      pushBoardFeedback(s, 'urg', `⚠️ ไม่ผ่านคำสั่ง "${activeDir.title}" — ${activeDir.penaltyText}`);
       pushFeed(s, 'บอร์ดบริหาร', `⚠️ ไม่ผ่านคำสั่งบอร์ด "${activeDir.title}" (${activeDir.penaltyText})`, 'urg');
     }
   } else if (activeDir && curMd >= (activeDir.evaluatedMd ?? curMd) + 2) {
@@ -6633,8 +6659,19 @@ export function finishSeasonComputation(s: GameState) {
     if (s.esd !== s.season) {
       s.esd = s.season;
       if (s.obj != null) {
-        s.bd = clamp((s.bd ?? 50) + (pos <= s.obj ? 25 : pos <= s.obj + 3 ? -8 : -25), 0, 100);
-        s.hist.push(`บอร์ด: เป้า อันดับ ${s.obj} · จบอันดับ ${pos}`);
+        const metObj = pos <= s.obj;
+        s.bd = clamp((s.bd ?? 50) + (metObj ? 25 : pos <= s.obj + 3 ? -8 : -25), 0, 100);
+        if (metObj) {
+          const repGain = s.obj - pos >= 3 ? 8 : 5;
+          s.mgrRep = (s.mgrRep ?? 50) + repGain;
+          const awardTitle = `บรรลุเป้าบอร์ด ${TN[mt]} (1–${s.obj})`;
+          if (!s.trophies.some((tr) => tr.season === s.season && tr.type === 'award' && tr.title.startsWith('บรรลุเป้าบอร์ด'))) {
+            s.trophies.push({ season: s.season, title: awardTitle, tier: mt, type: 'award' });
+          }
+          s.hist.push(`บอร์ด: ผ่านเป้า 1-${s.obj} (จบ #${pos}) · เชื่อมั่น +25% · เครดิต +${repGain}`);
+        } else {
+          s.hist.push(`บอร์ด: เป้า อันดับ ${s.obj} · จบอันดับ ${pos}`);
+        }
         if (s.bd <= 0) s.sack = 1;
       }
     }

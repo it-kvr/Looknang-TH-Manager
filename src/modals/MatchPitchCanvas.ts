@@ -2282,32 +2282,23 @@ export const drawLivePitchToCanvas = (
       ctx.fillText(pillStr, rx0 + pillW / 2, ry0 + pillH / 2 + 0.3);
     }
 
-    // Captain armband 'C' badge on left shoulder using the club's colors
+    // Captain 'C' circular badge on left shoulder using clean flat club colors
     if (ag.isCaptain) {
       const capPal = getClubCaptainPalette(kit, trim);
-      const bw = 11.2;
-      const bh = 8.8;
-      const bx = -playerRadius * 0.92 - bw / 2;
-      const by = -playerRadius * 0.56 - bh / 2;
-      ctx.save();
-      ctx.beginPath();
-      ctx.roundRect(bx, by, bw, bh, 2.2);
-      ctx.clip();
+      const capX = -playerRadius * 0.92;
+      const capY = -playerRadius * 0.56;
       ctx.fillStyle = capPal.bg;
-      ctx.fillRect(bx, by, bw, bh);
-      ctx.fillStyle = capPal.stripe;
-      ctx.fillRect(bx, by, 2.7, bh);
-      ctx.restore();
       ctx.strokeStyle = capPal.border;
-      ctx.lineWidth = 0.95;
+      ctx.lineWidth = 1.0;
       ctx.beginPath();
-      ctx.roundRect(bx, by, bw, bh, 2.2);
+      ctx.arc(capX, capY, 4.5, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
       ctx.fillStyle = capPal.text;
       ctx.font = '900 5.8px Sarabun, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('C', bx + bw * 0.62, by + bh / 2 + 0.35);
+      ctx.fillText('C', capX, capY + 0.35);
     }
 
     // Yellow card mini indicator on right shoulder (clear of top position badge)

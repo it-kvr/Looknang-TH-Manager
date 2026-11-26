@@ -62,9 +62,9 @@ export function resolveTeamCaptainPalette(
 }
 
 const SIZE_CLASSES: Record<'xs' | 'sm' | 'md', string> = {
-  xs: 'w-[15px] h-[12px] mland:w-[13px] mland:h-[10.5px]',
-  sm: 'w-[18px] h-[14px] mland:w-[15px] mland:h-[12px]',
-  md: 'w-[22px] h-[17px] mland:w-[18px] mland:h-[14px]'
+  xs: 'w-[13px] h-[13px] mland:w-[11px] mland:h-[11px]',
+  sm: 'w-[16px] h-[16px] mland:w-[13.5px] mland:h-[13.5px]',
+  md: 'w-[20px] h-[20px] mland:w-[16px] mland:h-[16px]'
 };
 
 export const CaptainBadge: React.FC<{
@@ -86,7 +86,6 @@ export const CaptainBadge: React.FC<{
   title = 'กัปตันทีม',
   className = ''
 }) => {
-  const rawId = React.useId().replace(/:/g, '');
   const pal = c1
     ? getClubCaptainPalette(c1, c2, c3)
     : resolveTeamCaptainPalette(team, state);
@@ -98,43 +97,23 @@ export const CaptainBadge: React.FC<{
       className={`inline-flex items-center justify-center shrink-0 align-middle select-none leading-none ${SIZE_CLASSES[size]} ${className}`}
     >
       <svg
-        viewBox="0 0 20 16"
-        className="w-full h-full block drop-shadow-[0_1px_1px_rgba(0,0,0,0.22)]"
+        viewBox="0 0 16 16"
+        className="w-full h-full block"
         aria-hidden="true"
       >
-        <defs>
-          <clipPath id={`cap-clip-${rawId}`}>
-            <rect x="1" y="1" width="18" height="14" rx="3.5" />
-          </clipPath>
-        </defs>
-        <g clipPath={`url(#cap-clip-${rawId})`}>
-          <rect x="1" y="1" width="18" height="14" fill={pal.bg} />
-          <rect x="1" y="1" width="4.6" height="14" fill={pal.stripe} />
-          <line
-            x1="6"
-            y1="2.2"
-            x2="17.8"
-            y2="2.2"
-            stroke="rgba(255,255,255,0.22)"
-            strokeWidth="0.9"
-            strokeLinecap="round"
-          />
-        </g>
-        <rect
-          x="1"
-          y="1"
-          width="18"
-          height="14"
-          rx="3.5"
-          fill="none"
+        <circle
+          cx="8"
+          cy="8"
+          r="6.8"
+          fill={pal.bg}
           stroke={pal.border}
           strokeWidth="1.25"
         />
         <text
-          x="12.1"
-          y="11.6"
+          x="8"
+          y="11.2"
           textAnchor="middle"
-          fontSize="10.2"
+          fontSize="9.2"
           fontWeight="900"
           fontFamily="Sarabun, sans-serif"
           fill={pal.text}

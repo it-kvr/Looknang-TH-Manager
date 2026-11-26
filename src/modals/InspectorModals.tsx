@@ -6,7 +6,7 @@ import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
-import { sortTable, teamStats, ensureTeamFans, fmtFans, CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
+import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans, CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -545,6 +545,7 @@ export const TeamInspectorModal: React.FC<{
   const isMeTeam = team.id === state.me;
   const tierTable = sortTable(state.teams.filter((t) => t.tier === team.tier));
   const rank = team.tier < 3 ? tierTable.findIndex((t) => t.id === team.id) + 1 : null;
+  const objInfo = team.tier < 3 ? getTeamSeasonObjectiveInfo(team, state) : null;
   const starters = xi(team);
   const starterNames = new Set(starters.map((q) => q.n));
   const topScorer = team.sq.slice().sort((a, b) => (b.sg || 0) - (a.sg || 0) || b.ov - a.ov)[0];
@@ -811,6 +812,24 @@ export const TeamInspectorModal: React.FC<{
                       มูลค่ารวม <b className="text-[var(--ink)]">{fmtMoney(totalVal)}</b>
                     </div>
                   </div>
+                  {objInfo && (
+                    <div className="flex items-center justify-between gap-2 min-w-0 tabular">
+                      <div className="truncate text-[var(--mut)]">
+                        เป้าหมายซีซั่น:{' '}
+                        <b className={rank && rank <= objInfo.targetRank ? 'text-[var(--g)]' : 'text-[var(--ink)]'}>
+                          เป้า 1–{objInfo.targetRank}
+                        </b>
+                        {rank ? (
+                          <span className="ml-1 text-[10px] mland:text-[8px]">
+                            ({rank <= objInfo.targetRank ? 'ตามเป้า' : 'ต่ำกว่าเป้า'})
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="shrink-0 text-[var(--mut)]">
+                        พลังลีก <b className="text-[var(--ink)]">#{objInfo.powerRank}/{objInfo.totalTeams}</b>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="truncate text-[var(--mut)] tabular">
                       ⚽ <b className="text-[var(--ink)]">{topScorer ? `${topScorer.n.split(' ')[0]} (${topScorer.sg || 0})` : '-'}</b>

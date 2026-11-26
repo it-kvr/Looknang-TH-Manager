@@ -441,7 +441,11 @@ export const SeasonEndModal: React.FC<{
                   )}
                 </div>
                 <div className={`text-[10.5px] mland:text-[9px] font-semibold truncate ${state.sack === 1 ? 'text-[var(--red)]' : metBoardGoal ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                  {state.sack === 1 ? 'มติปลดออกจากตำแหน่ง' : `เป้า 1-${state.obj || '-'} · จบ #${summary.pos}`}
+                  {state.sack === 1
+                    ? 'มติปลดออกจากตำแหน่ง'
+                    : metBoardGoal
+                      ? `✓ ผ่านเป้า 1–${state.obj} · รับโล่บอร์ด & เครดิต`
+                      : `เป้า 1–${state.obj || '-'} · จบ #${summary.pos}`}
                 </div>
               </div>
             ) : (

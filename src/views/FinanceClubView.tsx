@@ -41,6 +41,7 @@ import {
   getLeagueTransferContext,
   calcMatchdayFinanceEstimate,
   teamStats,
+  getTeamSeasonObjectiveInfo,
   getActiveBoardEffects,
   getBoardDirectiveProgress,
   issueBoardDirective,
@@ -2077,7 +2078,8 @@ export const FinanceClubView: React.FC<{
     rep >= 180 ? 'ตำนานลูกหนังไทย' : rep >= 130 ? 'ยอดกุนซือระดับทวีป' : rep >= 90 ? 'กุนซือมือทอง' : rep >= 65 ? 'โค้ชฝีมือดี' : 'กุนซือหน้าใหม่';
   const tierTbl = memoizedTierTbl;
   const curRank = Math.max(1, tierTbl.findIndex((t) => t.id === me.id) + 1);
-  const targetRank = state.obj || 8;
+  const objInfo = getTeamSeasonObjectiveInfo(me, state);
+  const targetRank = objInfo.targetRank;
   const cap = est.cap;
   const totV = me.sq.reduce((a, q) => a + Math.round((q.ov * q.ov) / 40), 0);
   const avgAge = (me.sq.reduce((a, q) => a + q.age, 0) / Math.max(1, me.sq.length)).toFixed(1);
@@ -2806,8 +2808,8 @@ export const FinanceClubView: React.FC<{
                     </span>
                   </div>
 
-                  {/* Slim Confidence Bar + 1-Line Target Evaluation */}
-                  <div className="space-y-1.5">
+                  {/* Slim Confidence Bar + 3-Column Hairline Season Target Summary + Evaluation */}
+                  <div className="space-y-2 mland:space-y-1.5">
                     <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all"
@@ -2817,17 +2819,36 @@ export const FinanceClubView: React.FC<{
                         }}
                       />
                     </div>
-                    <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[10px]">
-                      <span className="text-[var(--mut)] truncate">
-                        {bd < 30
-                          ? 'ความเชื่อมั่นวิกฤติ เร่งเก็บแต้มและรักษางบ'
-                          : curRank <= targetRank
-                            ? `ผลงานตามเป้า (อันดับ ${curRank}/${tierTbl.length} · เป้า ${targetRank}+)`
-                            : `ต่ำกว่าเป้า (ตอนนี้ #${curRank} · ต้องติดอันดับ ${targetRank}+)`}
-                      </span>
-                      <span className="font-bold text-[var(--ink)] shrink-0 tabular">
-                        เป้า 1–{targetRank}
-                      </span>
+
+                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular">
+                      <div className="px-1">
+                        <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">อันดับ / เป้าซีซั่น</div>
+                        <div className={`font-bold text-xs sm:text-sm mland:text-xs ${curRank <= targetRank ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                          #{curRank} <span className="text-[10.5px] font-semibold text-[var(--mut)]">/ 1–{targetRank}</span>
+                        </div>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">อันดับพลังในลีก</div>
+                        <div className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">
+                          #{objInfo.powerRank} <span className="text-[10.5px] font-semibold text-[var(--mut)]">/ {objInfo.totalTeams}</span>
+                        </div>
+                      </div>
+                      <div className="px-1">
+                        <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">รางวัลตามเป้า</div>
+                        <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight pt-0.5 truncate">
+                          บอร์ด +25% · เครดิต/โล่
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+                      {bd < 30 ? (
+                        <span className="text-[var(--red)] font-semibold">ความเชื่อมั่นวิกฤติ เร่งเก็บแต้มและรักษางบ</span>
+                      ) : curRank <= targetRank ? (
+                        <span>ผลงานตามเป้า (เป้าซีซั่นล็อกตามพลังต้นซีซั่น · ซีซั่นหน้าปรับตามพลังใหม่)</span>
+                      ) : (
+                        <span>ต้องติดอันดับ 1–{targetRank} · เสริมพลังทีมช่วยดันอันดับพลังในลีกตอนนี้ (เป้าปรับซีซั่นหน้า)</span>
+                      )}
                     </div>
                   </div>
 
@@ -2882,7 +2903,7 @@ export const FinanceClubView: React.FC<{
                     })() : (
                       <div className="flex items-center justify-between gap-2 text-[10.5px]">
                         <span className="text-[var(--mut)] truncate">
-                          ภารกิจเสริมจากบอร์ด: ว่างอยู่ (รับเพื่อลุ้นบัฟทีมชั่วคราว)
+                          ภารกิจเสริมจากบอร์ด: ว่างอยู่ (รับเพื่อลุ้นความเชื่อมั่น เครดิต &amp; ขวัญทีม)
                         </span>
                         {(state.md ?? 0) < (state.fx?.length || 30) - 2 && (
                           <button

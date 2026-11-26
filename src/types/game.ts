@@ -247,6 +247,7 @@ export interface Team {
   tacticTrialMd?: number;
   tacticTrialLabel?: string;
   fans?: number;
+  seasonObj?: number;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';
