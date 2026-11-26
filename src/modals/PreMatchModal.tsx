@@ -527,12 +527,12 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               : starterWarnCls || 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
         } ${unavailable ? 'opacity-70' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="flex items-center gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4">
+        <span className="flex items-center gap-0.5 sm:gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4">
           <PlayerFace player={pl} team={team} state={state} size={20} />
-          <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">
+          <span className="text-[9.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] min-w-[20px] text-center shrink-0 whitespace-nowrap">
             #{no}
           </span>
-          <span className={`px-1 py-0.2 rounded text-[9px] font-bold text-white shrink-0 ${roleBadgeCls}`}>
+          <span className={`px-1 py-0.2 rounded text-[9px] mland:text-[8px] font-bold text-white shrink-0 ${roleBadgeCls}`}>
             {slotLabel}
           </span>
         </span>
@@ -558,14 +558,14 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
         </span>
 
         {(pl.sus || 0) > 0 ? (
-          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[50px] sm:w-[56px]' : 'w-[62px] sm:w-[70px] mland:w-[54px]'}`}>
+          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[46px] sm:w-[52px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}`}>
             <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
               <StatIconBadge kind="red" count={pl.sus} size="xs" />
               {(pl.sus || 0) <= 1 && <span>แบน</span>}
             </span>
           </div>
         ) : pl.inj > 0 ? (
-          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[50px] sm:w-[56px]' : 'w-[62px] sm:w-[70px] mland:w-[54px]'}`}>
+          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[46px] sm:w-[52px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}`}>
             <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular text-right">
               🩹พัก {pl.inj}น
             </span>
@@ -575,7 +575,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
             value={fit}
             variant="compact"
             showStatusLabel
-            className={compact ? 'w-[52px] sm:w-[58px] mland:w-[48px]' : 'w-[62px] sm:w-[70px] mland:w-[54px]'}
+            className={compact ? 'w-[46px] sm:w-[52px] mland:w-[44px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}
           />
         )}
 
@@ -610,7 +610,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)]'
             }`}
           >
-            {isPicked ? 'ยกเลิก' : isCrossGroupSwap ? '↔ เปลี่ยน' : swapPickName ? '↔ สลับ' : 'เปลี่ยนตัว'}
+            {isPicked ? 'ยกเลิก' : isCrossGroupSwap ? '↔ เปลี่ยน' : swapPickName ? '↔ สลับ' : 'สลับ'}
           </button>
         )}
       </div>
@@ -788,8 +788,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
           </div>
         </div>
 
-        {/* MAIN 2-COLUMN BODY */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.62fr_1fr] mland:grid-cols-[1.56fr_1fr] overflow-y-auto lg:overflow-hidden mland:overflow-hidden">
+        {/* MAIN 2-COLUMN BODY (Compact Right Stadium Column so Pitch + Squad Name Box fit completely) */}
+        <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_285px] xl:grid-cols-[minmax(0,1fr)_315px] mland:grid-cols-[minmax(0,1fr)_240px] overflow-y-auto lg:overflow-hidden mland:overflow-hidden">
           {/* LEFT COLUMN: LINEUPS & TACTICS */}
           <div className="flex flex-col min-h-0 border-b lg:border-b-0 lg:border-r mland:border-b-0 mland:border-r border-[var(--line)] overflow-hidden">
             {/* Content Area */}
@@ -870,7 +870,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.06fr_0.94fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
+              <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.94fr_1.06fr] mland:grid-cols-[0.94fr_1.06fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
                 {/* Formation Pitch Visual (Full Height & Width with Compact Logo Switcher Inside) */}
                 <div className="p-1.5 sm:p-2 mland:p-1 bg-[#092818] flex items-center justify-center h-[400px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
                   {/* Compact Logo-Only Team & Compare Switcher Inside Pitch */}
@@ -1183,27 +1183,27 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
             )}
           </div>
 
-          {/* RIGHT COLUMN: ASSISTANT COACH NOTES (MANAGER) + STADIUM, WEATHER & PITCH CONDITIONS */}
-          <div className="flex flex-col min-h-0 overflow-y-auto p-2.5 sm:p-3 mland:p-2 space-y-2.5 mland:space-y-1.5 bg-[var(--surface)]">
+          {/* RIGHT COLUMN: COMPACT ASSISTANT COACH NOTES & STADIUM/PITCH INFO */}
+          <div className="flex flex-col min-h-0 overflow-y-auto p-2 mland:p-1.5 space-y-2 mland:space-y-1.5 bg-[var(--surface)]">
             {isMgr && assistantReport && (
               <section
                 aria-label="บันทึกโน้ตจากผู้ช่วยโค้ช"
-                className="rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] p-2.5 sm:p-3 mland:p-2 space-y-2 mland:space-y-1.5"
+                className="rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] p-2 mland:p-1.5 space-y-1.5 mland:space-y-1"
               >
                 {/* Header */}
-                <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/80">
+                <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-[var(--line)]/80">
                   <div className="min-w-0">
-                    <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold text-[var(--ink)] flex items-center gap-1.5">
-                      <ClipboardList className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
-                      <span className="truncate">บันทึกโน้ตจากผู้ช่วยโค้ช</span>
+                    <div className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] flex items-center gap-1">
+                      <ClipboardList className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--g)] shrink-0" />
+                      <span className="truncate">โน้ตผู้ช่วยโค้ช</span>
                     </div>
-                    <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
-                      {assistantReport.rankTitle} · {assistantReport.tierLabel} · {assistantReport.confidenceLabel}
+                    <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular truncate">
+                      {assistantReport.rankTitle} · {assistantReport.confidenceLabel}
                     </div>
                   </div>
                   {assistantReport.asstLv === 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] shrink-0">
-                      <Lock className="w-3 h-3" />
+                    <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0">
+                      <Lock className="w-2.5 h-2.5" />
                       <span>Lv.0</span>
                     </span>
                   ) : null}
@@ -1212,11 +1212,11 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 {/* Weaknesses & Key Observations */}
                 <div className="divide-y divide-[var(--line)]/65">
                   {assistantReport.weaknesses.map((item, idx) => (
-                    <div key={idx} className="py-1.5 first:pt-0 last:pb-0 space-y-0.5">
-                      <div className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
+                    <div key={idx} className="py-1 first:pt-0 last:pb-0 space-y-0.5">
+                      <div className="text-[10.5px] mland:text-[9px] font-extrabold text-[var(--ink)] leading-tight">
                         {assistantReport.asstLv > 0 ? `${idx + 1}. ` : ''}{item.title}
                       </div>
-                      <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">
+                      <p className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
                         {item.detail}
                       </p>
                     </div>
@@ -1225,20 +1225,20 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
                 {/* Danger Threat & Specific Target (Lv.2+ / Lv.5+) */}
                 {(assistantReport.dangerThreat || assistantReport.targetPlayerNote) && (
-                  <div className="pt-1.5 border-t border-[var(--line)]/70 space-y-1.5 text-[10.5px] mland:text-[9px]">
+                  <div className="pt-1 border-t border-[var(--line)]/70 space-y-1 text-[10px] mland:text-[8.5px]">
                     {assistantReport.dangerThreat && (
-                      <div className="rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2.5 py-1.5 space-y-0.5">
-                        <div className="font-extrabold text-[var(--red)]">{assistantReport.dangerThreat.title}</div>
+                      <div className="rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2 py-1 space-y-0.5">
+                        <div className="font-extrabold text-[var(--red)] leading-tight">{assistantReport.dangerThreat.title}</div>
                         <div className="text-[var(--mut)] leading-snug">{assistantReport.dangerThreat.detail}</div>
                       </div>
                     )}
                     {assistantReport.targetPlayerNote && (
-                      <div className="rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2.5 py-1.5 space-y-0.5">
-                        <div className="font-extrabold text-[var(--g)] tabular">
-                          เป้าหมายเจาะจุดอ่อน: {assistantReport.targetPlayerNote.name} ({assistantReport.targetPlayerNote.role} · OV {assistantReport.targetPlayerNote.ov} · ฟิต {assistantReport.targetPlayerNote.fit}%)
+                      <div className="rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 px-2 py-1 space-y-0.5">
+                        <div className="font-extrabold text-[var(--g)] tabular leading-tight">
+                          เจาะจุดอ่อน: {assistantReport.targetPlayerNote.name} ({assistantReport.targetPlayerNote.role} · OV {assistantReport.targetPlayerNote.ov} · {assistantReport.targetPlayerNote.fit}%)
                         </div>
                         <div className="text-[var(--mut)] leading-snug">
-                          สาเหตุ: {assistantReport.targetPlayerNote.reason} — เน้นขึ้นเกมบุกเข้าพื้นที่รับผิดชอบของรายนี้
+                          {assistantReport.targetPlayerNote.reason}
                         </div>
                       </div>
                     )}
@@ -1247,33 +1247,33 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
                 {/* Tactical Recommendation + 1-Click Apply */}
                 {assistantReport.recommendation && (
-                  <div className="pt-2 border-t border-[var(--line)]/80 space-y-1.5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--g)]">
-                        คำแนะนำการจัดแผน
+                  <div className="pt-1.5 border-t border-[var(--line)]/80 space-y-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className="text-[10.5px] mland:text-[9px] font-extrabold text-[var(--g)] truncate">
+                        คำแนะนำแผน
                       </span>
                       {assistantReport.canApplyTactics && (
                         <button
                           type="button"
                           onClick={handleApplyAssistantTactics}
                           disabled={isRecommendedApplied}
-                          className={`btn btn-xs ${isRecommendedApplied ? 'btn-surface text-[var(--g)] border-[var(--g)]/50' : 'btn-primary'}`}
+                          className={`btn btn-xs !h-6 !px-2 !text-[9.5px] mland:!text-[8px] shrink-0 ${isRecommendedApplied ? 'btn-surface text-[var(--g)] border-[var(--g)]/50' : 'btn-primary'}`}
                         >
                           {isRecommendedApplied ? (
                             <>
-                              <Check className="w-3 h-3" />
+                              <Check className="w-2.5 h-2.5" />
                               <span>ใช้อยู่แล้ว</span>
                             </>
                           ) : (
-                            <span>ใช้แผนที่ผู้ช่วยแนะนำ</span>
+                            <span>ใช้แผนแนะนำ</span>
                           )}
                         </button>
                       )}
                     </div>
-                    <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] tabular">
+                    <div className="text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] tabular leading-tight">
                       {assistantReport.recommendation.summaryLine}
                     </div>
-                    <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">
+                    <p className="text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-snug">
                       {assistantReport.recommendation.rationale}
                     </p>
                   </div>
@@ -1281,15 +1281,15 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
                 {/* Squad Fit / Pitch Condition Note */}
                 {(assistantReport.squadFitNote || assistantReport.envNote) && (
-                  <div className="pt-1.5 border-t border-[var(--line)]/65 space-y-1 text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
+                  <div className="pt-1 border-t border-[var(--line)]/65 space-y-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-snug">
                     {assistantReport.squadFitNote && (
                       <div>
-                        <b className="text-[var(--ink)]">ความพร้อมทีมเรา:</b> {assistantReport.squadFitNote}
+                        <b className="text-[var(--ink)]">ความพร้อม:</b> {assistantReport.squadFitNote}
                       </div>
                     )}
                     {assistantReport.envNote && (
                       <div>
-                        <b className="text-[var(--ink)]">สภาพสนาม &amp; จังหวะเกม:</b> {assistantReport.envNote}
+                        <b className="text-[var(--ink)]">จังหวะสนาม:</b> {assistantReport.envNote}
                       </div>
                     )}
                   </div>
@@ -1297,21 +1297,21 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
                 {/* Upgrade Hint */}
                 {assistantReport.unlockHint && (
-                  <div className="pt-1.5 border-t border-[var(--line)]/60 text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
+                  <div className="pt-1 border-t border-[var(--line)]/60 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-snug">
                     💡 {assistantReport.unlockHint}
                   </div>
                 )}
               </section>
             )}
 
-            {/* Unified Stadium, Attendance, Weather & Pitch Card */}
+            {/* Compact Unified Stadium, Attendance, Weather & Pitch Card */}
             <section
               aria-label="สนามแข่งขันและสภาพสนาม"
-              className="rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)] p-2.5 sm:p-3 mland:p-2 space-y-2 mland:space-y-1.5"
+              className="rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)] p-2 mland:p-1.5 space-y-1.5 mland:space-y-1"
             >
-              {/* Stadium Header */}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+              {/* Compact Stadium Header */}
+              <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <FacilityUpgradeSvg
                     kind="st"
                     stadiumStyle={matchEnv.stadiumStyle}
@@ -1319,78 +1319,77 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     condition={100}
                     c1={homeKit}
                     c2={homeTrim}
-                    className="w-[62px] h-[40px] mland:w-[52px] mland:h-[34px] shrink-0"
+                    className="w-[44px] h-[28px] mland:w-[36px] mland:h-[23px] shrink-0"
                   />
                   <div className="min-w-0">
-                    <div className="text-[10px] mland:text-[8px] font-bold text-[var(--g)] flex items-center gap-1">
-                      <MapPin className="w-3 h-3 shrink-0" />
-                      <span>สนามแข่งขัน &amp; สภาพแวดล้อม</span>
+                    <div className="flex items-center gap-1 text-[9.5px] mland:text-[7.5px] font-bold text-[var(--g)] leading-none">
+                      <MapPin className="w-2.5 h-2.5 shrink-0" />
+                      <span className="truncate">สนามแข่งขัน</span>
                     </div>
-                    <h3 className="font-extrabold text-sm mland:text-xs text-[var(--ink)] font-display truncate">
+                    <h3 className="font-extrabold text-xs mland:text-[10.5px] text-[var(--ink)] font-display truncate leading-tight mt-0.5">
                       {stadiumName}
                     </h3>
-                    <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate">
+                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] truncate leading-tight">
                       {stadiumStyleSpec.name}
                       {stadiumStyleSpec.rainShield === 'full'
-                        ? ' · หลังคากันฝน 100%'
+                        ? ' · กันฝน 100%'
                         : stadiumStyleSpec.rainShield === 'partial'
-                          ? ' · หลังคากันฝนบางส่วน'
+                          ? ' · กันฝนบางส่วน'
                           : ''}
+                      {' · จุ '}
+                      <b className="text-[var(--ink)] tabular">{attendance.cap.toLocaleString()}</b>
                     </div>
                   </div>
                 </div>
-                <span className="text-[10.5px] mland:text-[9px] font-extrabold text-[var(--ink)] tabular shrink-0">
-                  ความจุ {attendance.cap.toLocaleString()}
-                </span>
               </div>
 
-              {/* Attendance & Broadcast */}
-              <div className="p-2 mland:p-1.5 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/65 space-y-1">
-                <div className="flex items-center justify-between text-[10.5px] mland:text-[9px] tabular">
+              {/* Compact Attendance & Broadcast */}
+              <div className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/65 space-y-1">
+                <div className="flex items-center justify-between text-[10px] mland:text-[8.5px] tabular">
                   <span className="text-[var(--mut)] font-semibold inline-flex items-center gap-1">
-                    <Users className="w-3.5 h-3.5 text-[var(--g)]" />
-                    <span>คาดการณ์ผู้ชม</span>
+                    <Users className="w-3 h-3 text-[var(--g)] shrink-0" />
+                    <span>ผู้ชม</span>
                   </span>
                   <span className="font-extrabold text-[var(--ink)]">
-                    {attendance.att.toLocaleString()} คน <span className="text-[var(--g)]">({attendance.pct}%)</span>
+                    {attendance.att.toLocaleString()} <span className="text-[var(--g)]">({attendance.pct}%)</span>
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden border border-[var(--line)]/50">
+                <div className="h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
                   <div
                     className="h-full rounded-full bg-[var(--g)]"
                     style={{ width: `${clamp(attendance.pct, 4, 100)}%` }}
                   />
                 </div>
-                <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
+                <div className="flex items-center justify-between gap-1 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] tabular">
                   <span className="inline-flex items-center gap-1 truncate">
-                    <Tv className="w-3 h-3 shrink-0" />
+                    <Tv className="w-2.5 h-2.5 shrink-0" />
                     <span className="truncate">{broadcastChannel.name}</span>
                   </span>
                   <span className="shrink-0 font-semibold text-[var(--ink)]">
-                    สด ~{fmtFansShort(streamProj.baseViewers)} · แฟนเหย้า {fmtFansShort(ensureTeamFans(homeTeam))}
+                    ~{fmtFansShort(streamProj.baseViewers)} · แฟน {fmtFansShort(ensureTeamFans(homeTeam))}
                   </span>
                 </div>
               </div>
 
-              {/* Weather & Turf */}
-              <div className="pt-1.5 border-t border-[var(--line)]/70 space-y-1.5 mland:space-y-1">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 mland:w-6 mland:h-6 rounded-lg bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center shrink-0">
+              {/* Compact Weather & Turf */}
+              <div className="pt-1 border-t border-[var(--line)]/70 space-y-1">
+                <div className="flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <div className="w-6 h-6 mland:w-5 mland:h-5 rounded-md bg-[var(--surface)] border border-[var(--line)] flex items-center justify-center shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5">
                       {weatherBadge.icon}
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate">{weatherBadge.title}</div>
-                      <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate">{weatherBadge.sub}</div>
+                      <div className="font-bold text-[10px] mland:text-[8.5px] text-[var(--ink)] truncate leading-tight">{weatherBadge.title}</div>
+                      <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] truncate leading-tight">{weatherBadge.sub}</div>
                     </div>
                   </div>
-                  <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] shrink-0 tabular">
-                    {matchEnv.puddles.length > 0 ? `แอ่งน้ำ ${matchEnv.puddles.length} จุด` : 'ระบายน้ำดี'}
+                  <span className="text-[9.5px] mland:text-[7.5px] font-bold text-[var(--mut)] shrink-0 tabular">
+                    {matchEnv.puddles.length > 0 ? `แอ่ง ${matchEnv.puddles.length}` : 'ระบายดี'}
                   </span>
                 </div>
 
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
+                <div className="space-y-0.5">
+                  <div className="flex items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px]">
                     <span className="font-extrabold text-[var(--ink)] truncate">{turfMods.gradeName}</span>
                     <span
                       className={`font-extrabold tabular shrink-0 ${
@@ -1401,10 +1400,10 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                             : 'text-[var(--red)]'
                       }`}
                     >
-                      สภาพ {matchEnv.turfCond}%
+                      {matchEnv.turfCond}%
                     </span>
                   </div>
-                  <div className="h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                  <div className="h-1 rounded-full bg-[var(--surface)] overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
                         matchEnv.turfCond >= 80
@@ -1416,14 +1415,14 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       style={{ width: `${clamp(matchEnv.turfCond, 5, 100)}%` }}
                     />
                   </div>
-                  <p className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
-                    {turfSpec.desc} · หญ้า <b className="text-[var(--ink)]">{grassLenText}</b> · <b className="text-[var(--ink)]">{surfaceText}</b>
+                  <p className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-tight truncate" title={`${turfSpec.desc} · หญ้า ${grassLenText} · ${surfaceText}`}>
+                    หญ้า<b className="text-[var(--ink)]">{grassLenText}</b> · <b className="text-[var(--ink)]">{surfaceText}</b>
                   </p>
                   <div className="grid grid-cols-2 gap-1 pt-0.5">
                     {turfMods.effectsSummary.map((line, i) => (
                       <div
                         key={i}
-                        className="px-2 py-1 mland:py-0.5 rounded-md bg-[var(--surface)]/80 border border-[var(--line)]/60 text-[10px] mland:text-[8.5px] font-semibold text-[var(--ink)] tabular truncate"
+                        className="px-1.5 py-0.5 rounded bg-[var(--surface)]/80 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] font-semibold text-[var(--ink)] tabular truncate"
                         title={line}
                       >
                         {line}
@@ -1434,7 +1433,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               </div>
             </section>
 
-            {/* Home Advantage & Away Travel Readiness (Non-duplicated Modifiers) */}
+            {/* Compact Home Advantage & Away Travel Readiness */}
             {(() => {
               const fmtSign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
               const toneCls = (n: number) =>
@@ -1454,127 +1453,105 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               const awayTravelFatPct = Math.round(((awayFacMods.travelFatigueMult ?? 1) - 1) * 100);
 
               return (
-                <div className="space-y-1.5 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-                    <div className="font-extrabold text-[var(--ink)] flex items-center gap-1 min-w-0 truncate">
-                      <Sparkles className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--lamp)] shrink-0" />
-                      <span className="truncate">
-                        {isNeutralVenue ? 'ความพร้อมเดินทางสนามกลาง' : 'ความได้เปรียบเจ้าบ้าน & การเดินทางทีมเยือน'}
-                      </span>
-                    </div>
+                <div className="rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)] p-2 mland:p-1.5 space-y-1.5 mland:space-y-1">
+                  <div className="font-extrabold text-[10px] mland:text-[8.5px] text-[var(--ink)] flex items-center gap-1 min-w-0 truncate">
+                    <Sparkles className="w-3 h-3 text-[var(--lamp)] shrink-0" />
+                    <span className="truncate">
+                      {isNeutralVenue ? 'เดินทางสนามกลาง' : 'เจ้าบ้าน & เดินทางทีมเยือน'}
+                    </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
-                    {/* Left Card: Home Advantage (or Neutral Travel) */}
-                    <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]/75 space-y-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {isNeutralVenue ? (
-                          <FacilityUpgradeSvg
-                            kind="travelLv"
-                            level={homeTravelLv}
-                            condition={homeTravelCond}
-                            c1={homeKit}
-                            c2={homeTrim}
-                            className="w-[34px] h-[22px] mland:w-[28px] mland:h-[18px] shrink-0"
-                          />
-                        ) : (
-                          <div className="shrink-0 mland:[&>svg]:w-5 mland:[&>svg]:h-5">
-                            <ClubCrest name={homeTeam.name} size={24} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
-                          </div>
-                        )}
-                        <div className="min-w-0 flex-1 flex items-center justify-between gap-1">
+                  <div className="space-y-1">
+                    {/* Home / Neutral Strip */}
+                    <div className="px-1.5 py-1 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/65 space-y-0.5">
+                      <div className="flex items-center justify-between gap-1 min-w-0">
+                        <div className="flex items-center gap-1 min-w-0">
+                          {isNeutralVenue ? (
+                            <FacilityUpgradeSvg
+                              kind="travelLv"
+                              level={homeTravelLv}
+                              condition={homeTravelCond}
+                              c1={homeKit}
+                              c2={homeTrim}
+                              className="w-[26px] h-[17px] shrink-0"
+                            />
+                          ) : (
+                            <ClubCrest name={homeTeam.name} size={16} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+                          )}
                           <span className="text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate">
                             {homeTeam.name}
                           </span>
-                          <span className="px-1.5 py-[1px] rounded bg-[var(--g-soft)] text-[var(--g)] text-[8.5px] mland:text-[7.5px] font-bold shrink-0">
-                            {isNeutralVenue ? 'กลาง' : 'เจ้าบ้าน'}
-                          </span>
                         </div>
+                        <span className="px-1 py-[1px] rounded bg-[var(--g-soft)] text-[var(--g)] text-[8px] mland:text-[7px] font-bold shrink-0">
+                          {isNeutralVenue ? 'กลาง' : 'เหย้า'}
+                        </span>
                       </div>
 
                       {!isNeutralVenue ? (
-                        <div className="pt-1 border-t border-[var(--line)]/50 space-y-0.5 text-[9.5px] mland:text-[8px]">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[var(--mut)] truncate">🏟️ เชียร์ Lv.{homeFacMods.levels.st} · หญ้า Lv.{homeFacMods.levels.turfLv}</span>
-                            <span className="font-bold tabular shrink-0">
-                              <span className={toneCls(homeCrowdDelta)}>นิ่ง {fmtSign(homeCrowdDelta)}</span>
-                              <span className="text-[var(--mut)] mx-1">·</span>
-                              <span className={toneCls(homeTurfDelta)}>คุม {fmtSign(homeTurfDelta)}</span>
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[var(--mut)] truncate">🛡️ ยึดเกาะพื้นสนาม</span>
-                            <span className={`font-bold tabular shrink-0 ${homeSlipSavePct > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                              {homeSlipSavePct > 0 ? `ลดลื่น -${homeSlipSavePct}%` : 'มาตรฐาน'}
-                            </span>
-                          </div>
+                        <div className="flex items-center justify-between gap-1 text-[9px] mland:text-[7.5px] tabular">
+                          <span className="text-[var(--mut)] truncate">
+                            เชียร์ Lv.{homeFacMods.levels.st} · หญ้า Lv.{homeFacMods.levels.turfLv}{homeSlipSavePct > 0 ? ` · เกาะ +${homeSlipSavePct}%` : ''}
+                          </span>
+                          <span className="font-bold shrink-0">
+                            <span className={toneCls(homeCrowdDelta)}>นิ่ง {fmtSign(homeCrowdDelta)}</span>
+                            <span className="text-[var(--mut)] mx-0.5">·</span>
+                            <span className={toneCls(homeTurfDelta)}>คุม {fmtSign(homeTurfDelta)}</span>
+                          </span>
                         </div>
                       ) : (
-                        <div className="pt-1 border-t border-[var(--line)]/50 space-y-0.5 text-[9.5px] mland:text-[8px]">
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[var(--mut)] truncate">🚌 {getTravelTierLabel(homeTravelLv)}</span>
-                            <span className={`font-bold tabular shrink-0 ${homeTravelCond < 75 ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--ink)]'}`}>
-                              {homeTravelLv > 0 ? `Lv.${homeTravelLv}/10 · ${homeTravelCond}%` : 'ไม่มีระบบ'}
+                        <div className="flex items-center justify-between gap-1 text-[9px] mland:text-[7.5px] tabular">
+                          <span className="text-[var(--mut)] truncate">
+                            🚌 {getTravelTierLabel(homeTravelLv)} {homeTravelLv > 0 ? `Lv.${homeTravelLv} (${homeTravelCond}%)` : ''}
+                          </span>
+                          <span className="font-bold shrink-0">
+                            <span className={toneCls(homeTravelDelta)}>นิ่ง {fmtSign(homeTravelDelta)}</span>
+                            <span className="text-[var(--mut)] mx-0.5">·</span>
+                            <span className={homeTravelFatPct < 0 ? 'text-[var(--g)]' : homeTravelFatPct > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>
+                              ล้า {homeTravelFatPct > 0 ? `+${homeTravelFatPct}%` : `${homeTravelFatPct}%`}
                             </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="text-[var(--mut)] truncate">⚡ พร้อม / ความล้า</span>
-                            <span className="font-bold tabular shrink-0">
-                              <span className={toneCls(homeTravelDelta)}>นิ่ง {fmtSign(homeTravelDelta)}</span>
-                              <span className="text-[var(--mut)] mx-1">·</span>
-                              <span className={homeTravelFatPct < 0 ? 'text-[var(--g)]' : homeTravelFatPct > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>
-                                {homeTravelFatPct < 0 ? `ล้า ${homeTravelFatPct}%` : homeTravelFatPct > 0 ? `ล้า +${homeTravelFatPct}%` : '0%'}
-                              </span>
-                            </span>
-                          </div>
+                          </span>
                         </div>
                       )}
                     </div>
 
-                    {/* Right Card: Away Team Travel Upgrade Readiness */}
-                    <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)]/75 space-y-1">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <FacilityUpgradeSvg
-                          kind="travelLv"
-                          level={awayTravelLv}
-                          condition={awayTravelCond}
-                          c1={awayKit}
-                          c2={awayTrim}
-                          className="w-[34px] h-[22px] mland:w-[28px] mland:h-[18px] shrink-0"
-                        />
-                        <div className="min-w-0 flex-1 flex items-center justify-between gap-1">
+                    {/* Away Travel Strip */}
+                    <div className="px-1.5 py-1 rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/65 space-y-0.5">
+                      <div className="flex items-center justify-between gap-1 min-w-0">
+                        <div className="flex items-center gap-1 min-w-0">
+                          <FacilityUpgradeSvg
+                            kind="travelLv"
+                            level={awayTravelLv}
+                            condition={awayTravelCond}
+                            c1={awayKit}
+                            c2={awayTrim}
+                            className="w-[26px] h-[17px] shrink-0"
+                          />
                           <span className="text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)] truncate">
                             {awayTeam.name}
                           </span>
-                          <span
-                            className={`px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-bold shrink-0 ${
-                              awayTravelLv <= 0
-                                ? 'bg-[var(--red-soft)] text-[var(--red)]'
-                                : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)]'
-                            }`}
-                          >
-                            {isNeutralVenue ? 'กลาง' : 'เยือน'}
-                          </span>
                         </div>
+                        <span
+                          className={`px-1 py-[1px] rounded text-[8px] mland:text-[7px] font-bold shrink-0 ${
+                            awayTravelLv <= 0
+                              ? 'bg-[var(--red-soft)] text-[var(--red)]'
+                              : 'bg-[var(--surface-2)] text-[var(--ink)]'
+                          }`}
+                        >
+                          {isNeutralVenue ? 'กลาง' : 'เยือน'}
+                        </span>
                       </div>
 
-                      <div className="pt-1 border-t border-[var(--line)]/50 space-y-0.5 text-[9.5px] mland:text-[8px]">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[var(--mut)] truncate">🚌 {getTravelTierLabel(awayTravelLv)}</span>
-                          <span className={`font-bold tabular shrink-0 ${awayTravelLv <= 0 ? 'text-[var(--red)]' : awayTravelCond < 75 ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--ink)]'}`}>
-                            {awayTravelLv > 0 ? `Lv.${awayTravelLv}/10 · ${awayTravelCond}%` : 'ไม่มีระบบ'}
+                      <div className="flex items-center justify-between gap-1 text-[9px] mland:text-[7.5px] tabular">
+                        <span className={`truncate ${awayTravelLv <= 0 ? 'text-[var(--red)]' : awayTravelCond < 75 ? 'text-amber-600 dark:text-amber-300' : 'text-[var(--mut)]'}`}>
+                          🚌 {awayTravelLv > 0 ? `${getTravelTierLabel(awayTravelLv)} Lv.${awayTravelLv} (${awayTravelCond}%)` : 'ไม่มีระบบเดินทาง'}
+                        </span>
+                        <span className="font-bold shrink-0">
+                          <span className={toneCls(awayTravelDelta)}>นิ่ง {fmtSign(awayTravelDelta)}</span>
+                          <span className="text-[var(--mut)] mx-0.5">·</span>
+                          <span className={awayTravelFatPct < 0 ? 'text-[var(--g)]' : awayTravelFatPct > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>
+                            {awayTravelFatPct < 0 ? `ล้า ${awayTravelFatPct}%` : awayTravelFatPct > 0 ? `ล้า +${awayTravelFatPct}%` : 'ปกติ'}
                           </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-[var(--mut)] truncate">⚡ พร้อม / ความล้า</span>
-                          <span className="font-bold tabular shrink-0">
-                            <span className={toneCls(awayTravelDelta)}>นิ่ง {fmtSign(awayTravelDelta)}</span>
-                            <span className="text-[var(--mut)] mx-1">·</span>
-                            <span className={awayTravelFatPct < 0 ? 'text-[var(--g)]' : awayTravelFatPct > 0 ? 'text-[var(--red)]' : 'text-[var(--mut)]'}>
-                              {awayTravelFatPct < 0 ? `ล้า ${awayTravelFatPct}%` : awayTravelFatPct > 0 ? `ล้า +${awayTravelFatPct}%` : 'ปกติ'}
-                            </span>
-                          </span>
-                        </div>
+                        </span>
                       </div>
                     </div>
                   </div>
