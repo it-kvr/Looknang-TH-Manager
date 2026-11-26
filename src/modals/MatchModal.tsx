@@ -6649,7 +6649,7 @@ export const MatchModal: React.FC<{
     } else {
       pushLog(
         curMin,
-        `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · 👟 แอสซิสต์ ${assisterName}` : ''}`,
+        `⚽ ประตู!! ${scorerName} (${attTeam.name}) ${finishVerb}${assisterName ? ` · 👟 ${assisterName}` : ''}`,
         'goal',
         varReplayId
       );
@@ -13265,49 +13265,57 @@ export const MatchModal: React.FC<{
                             setFtPitchMode(motmTeam.id === homeOrig.id ? 'H' : 'A');
                           }
                         }}
-                        className="w-full text-left px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl bg-[#facc15]/14 hover:bg-[#facc15]/22 border border-[#eab308]/45 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                        className="w-full text-left rounded-xl overflow-hidden border border-amber-400/50 bg-gradient-to-r from-amber-400/16 via-amber-300/8 to-[var(--surface-2)]/70 hover:from-amber-400/24 hover:via-amber-300/14 transition-all cursor-pointer shadow-2xs"
                         title={`คลิกเพื่อดูข้อมูล ${motmName} บนสนาม`}
                       >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="px-1.5 py-0.5 rounded-md bg-[#facc15] text-[#1c1300] text-[9.5px] mland:text-[8px] font-black inline-flex items-center gap-1 shrink-0">
-                            <span>👑</span>
-                            <span>MOTM</span>
-                          </span>
-                          {motmTeam && (
-                            <span className="shrink-0 inline-flex">
-                              <ClubCrest name={motmTeam.name} size={15} team={motmTeam} club={state.club} isMyClub={motmTeam.id === state.me && state.mode === 'm'} />
-                            </span>
-                          )}
-                          {motmPlayer && motmTeam && (
-                            <MatchPlayerThumb
-                              player={motmPlayer}
-                              team={motmTeam}
-                              state={state}
-                              kitColor={motmTeam.id === homeId ? (motmPlayer.pos === 'GK' ? homeGkKit : homeKit) : (motmPlayer.pos === 'GK' ? awayGkKit : awayKit)}
-                              trimColor={motmPlayer.pos === 'GK' ? undefined : (motmTeam.id === homeId ? homeTrim : awayTrim)}
-                              size="sm"
-                              ringClassName="ring-[#eab308]"
-                            />
-                          )}
-                          <div className="min-w-0 leading-tight">
-                            <div className="flex items-center gap-1 text-[11.5px] mland:text-[10px] font-extrabold text-[var(--ink)] truncate">
-                              {motmNo != null && <span className="tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">#{motmNo}</span>}
-                              {motmPlayer?.ro && <PositionBadge role={motmPlayer.ro} size="2xs" />}
-                              <span className="truncate">{motmName}</span>
-                            </div>
-                            {motmTeam && (
-                              <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate">
-                                แมนออฟเดอะแมตช์ · {motmTeam.name}
+                        <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">
+                            {motmPlayer && motmTeam && (
+                              <div className="relative shrink-0">
+                                <MatchPlayerThumb
+                                  player={motmPlayer}
+                                  team={motmTeam}
+                                  state={state}
+                                  kitColor={motmTeam.id === homeId ? (motmPlayer.pos === 'GK' ? homeGkKit : homeKit) : (motmPlayer.pos === 'GK' ? awayGkKit : awayKit)}
+                                  trimColor={motmPlayer.pos === 'GK' ? undefined : (motmTeam.id === homeId ? homeTrim : awayTrim)}
+                                  size="md"
+                                  ringClassName="ring-2 ring-amber-400"
+                                />
+                                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-[#1c1300] text-[9px] flex items-center justify-center shadow">
+                                  👑
+                                </span>
                               </div>
                             )}
+                            <div className="min-w-0 space-y-0.5">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="px-1.5 py-[1px] rounded bg-amber-400 text-[#1c1300] text-[9px] mland:text-[7.5px] font-black tracking-wide shrink-0">
+                                  MOTM
+                                </span>
+                                {motmPlayer?.ro && <PositionBadge role={motmPlayer.ro} size="2xs" />}
+                                <span className="text-[12px] mland:text-[10.5px] font-extrabold text-[var(--ink)] truncate">
+                                  {motmName}
+                                </span>
+                                {motmNo != null && (
+                                  <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
+                                    #{motmNo}
+                                  </span>
+                                )}
+                              </div>
+                              {motmTeam && (
+                                <div className="flex items-center gap-1 text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                                  <ClubCrest name={motmTeam.name} size={12} team={motmTeam} club={state.club} isMyClub={motmTeam.id === state.me && state.mode === 'm'} />
+                                  <span className="truncate font-semibold">{motmTeam.name}</span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0 tabular">
-                          {motmGl > 0 && <StatIconBadge kind="goal" count={motmGl} size="xs" />}
-                          {motmAs > 0 && <StatIconBadge kind="assist" count={motmAs} size="xs" />}
-                          <span className="px-1.5 py-0.5 rounded-md bg-[#facc15] text-[#1c1300] text-[10.5px] mland:text-[9px] font-black">
-                            ⭐ {motmRt.toFixed(1)}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0 tabular">
+                            {motmGl > 0 && <StatIconBadge kind="goal" count={motmGl} size="xs" />}
+                            {motmAs > 0 && <StatIconBadge kind="assist" count={motmAs} size="xs" />}
+                            <span className="px-2 py-0.5 rounded-lg bg-amber-400 text-[#1c1300] text-[11px] mland:text-[9.5px] font-black shadow-2xs">
+                              ⭐ {motmRt.toFixed(1)}
+                            </span>
+                          </div>
                         </div>
                       </button>
                     );
@@ -13321,7 +13329,7 @@ export const MatchModal: React.FC<{
                             <span>⚽</span>
                             <span>สรุปผู้ทำประตู</span>
                           </span>
-                          <span className="inline-flex items-center gap-1.5 text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)]">
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)]">
                             <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
                             <span>{gh} - {ga}</span>
                             <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
@@ -13351,11 +13359,11 @@ export const MatchModal: React.FC<{
                                       setFtPitchMode(culpritTeam.id === homeOrig.id ? 'H' : 'A');
                                     }
                                   }}
-                                  className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 hover:bg-[var(--surface)]/80 transition-colors flex flex-wrap items-center justify-between gap-x-2 gap-y-1 cursor-pointer"
+                                  className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 hover:bg-[var(--surface)]/85 transition-colors flex items-center justify-between gap-2 cursor-pointer"
                                 >
-                                  <div className="flex items-center gap-1.5 min-w-0">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                     <span
-                                      className={`min-w-[26px] h-4.5 px-1 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
+                                      className={`min-w-[28px] h-5 px-1 rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
                                         ev.og
                                           ? 'bg-rose-500/18 text-rose-600 dark:text-rose-300'
                                           : isHomeScore
@@ -13379,7 +13387,7 @@ export const MatchModal: React.FC<{
                                       />
                                     )}
                                     {scorerPl?.ro && <PositionBadge role={scorerPl.ro} size="2xs" />}
-                                    <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate max-w-[140px]">
+                                    <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate">
                                       {ev.who}
                                     </span>
                                     {scorerNo != null && (
@@ -13399,11 +13407,13 @@ export const MatchModal: React.FC<{
                                     )}
                                   </div>
                                   {!ev.og && ev.as && (
-                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] text-[var(--mut)] shrink-0 max-w-full ml-auto">
-                                      <span className="leading-none">👟</span>
-                                      <span>แอสซิสต์โดย</span>
+                                    <span
+                                      title={`ผู้จ่ายบอล: ${ev.as}`}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] shrink-0 max-w-[44%]"
+                                    >
+                                      <span className="leading-none shrink-0">👟</span>
                                       {assisterPl?.ro && <PositionBadge role={assisterPl.ro} size="2xs" />}
-                                      <span className="font-bold text-[var(--ink)] truncate max-w-[115px]">{ev.as}</span>
+                                      <span className="font-bold text-[var(--ink)] truncate">{ev.as}</span>
                                     </span>
                                   )}
                                 </button>
@@ -13415,32 +13425,53 @@ export const MatchModal: React.FC<{
                     );
                   })()}
                   {varHistory.length > 0 && (eventFilter === 'all' || eventFilter === 'card') && (
-                    <div className="p-2 mland:p-1.5 rounded-xl bg-sky-500/8 border border-sky-400/35 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] font-extrabold text-sky-700 dark:text-sky-300">
-                        <span className="inline-flex items-center gap-1">
+                    <div className="rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
+                      <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-sky-700 dark:text-sky-300">
                           <span>🖥</span>
-                          <span>ภาพช้า VAR ในเกมนี้ ({varHistory.length})</span>
+                          <span>ภาพช้า VAR ({varHistory.length})</span>
                         </span>
                         <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">
-                          กดเพื่อดูย้อนหลังได้
+                          กดดูรีเพลย์ได้
                         </span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {varHistory.map((rec) => (
-                          <button
-                            key={rec.id}
-                            type="button"
-                            onClick={() => openVarReplayById(rec.id)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[var(--surface)] hover:bg-sky-500/15 border border-sky-400/45 text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] shadow-2xs cursor-pointer transition-colors"
-                            title={rec.varState.reasonText}
-                          >
-                            <span className="tabular font-extrabold text-sky-600 dark:text-sky-300">{rec.minute}&apos;</span>
-                            <span>{rec.verdictShort}</span>
-                            <span className="px-1 py-[1px] rounded bg-sky-500/18 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold">
-                              ▶ ดูซ้ำ
-                            </span>
-                          </button>
-                        ))}
+                      <div className="divide-y divide-[var(--line)]/55">
+                        {varHistory.map((rec) => {
+                          const toneCls =
+                            rec.verdictTone === 'goal'
+                              ? 'bg-emerald-500/16 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                              : rec.verdictTone === 'no_goal' || rec.verdictTone === 'penalty' || rec.verdictTone === 'red'
+                                ? 'bg-rose-500/16 border-rose-500/40 text-rose-700 dark:text-rose-300'
+                                : rec.verdictTone === 'freekick'
+                                  ? 'bg-sky-500/16 border-sky-500/40 text-sky-700 dark:text-sky-300'
+                                  : 'bg-amber-500/16 border-amber-500/40 text-amber-700 dark:text-amber-300';
+                          return (
+                            <button
+                              key={rec.id}
+                              type="button"
+                              onClick={() => openVarReplayById(rec.id)}
+                              className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 hover:bg-sky-500/10 transition-colors flex items-center justify-between gap-2 cursor-pointer"
+                              title={rec.varState.reasonText}
+                            >
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <span className="min-w-[28px] h-5 px-1 rounded-md bg-sky-500/18 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0">
+                                  {rec.minute}&apos;
+                                </span>
+                                <span className="text-[10.5px] mland:text-[9px] font-semibold text-[var(--ink)] truncate">
+                                  {rec.varState.reasonText}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span className={`px-1.5 py-0.5 rounded-md border text-[9.5px] mland:text-[8px] font-extrabold whitespace-nowrap ${toneCls}`}>
+                                  {rec.verdictShort}
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold whitespace-nowrap">
+                                  ▶ ดูซ้ำ
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

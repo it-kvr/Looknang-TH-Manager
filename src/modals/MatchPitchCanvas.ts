@@ -187,10 +187,29 @@ const renderVarMonitorPanel = (
   const showVerdict = pct >= 0.72;
   const frameAccent = showVerdict ? verdictColor : accent;
   const smallText = !isStandalone && monW < 185;
+  const sc = rep?.scenario;
+
+  // Forensic 3-stage timeline:
+  // 0.00..0.36: Slow-mo buildup (simT 0.00 -> 0.49)
+  // 0.36..0.64: Freeze-frame inspection lock (simT holds 0.49 -> 0.51 with micro-shimmer)
+  // 0.64..1.00: Resumed follow-through & referee call (simT 0.51 -> 1.00)
+  const isFreezePhase = pct >= 0.36 && pct < 0.64;
+  const simT =
+    pct < 0.36
+      ? (pct / 0.36) * 0.49
+      : pct < 0.64
+        ? 0.49 + ((pct - 0.36) / 0.28) * 0.02
+        : 0.51 + ((pct - 0.64) / 0.36) * 0.49;
+  const zoomEnv =
+    pct < 0.36
+      ? Math.pow(clamp(pct / 0.36, 0, 1), 1.4)
+      : pct < 0.64
+        ? 1
+        : 1 - clamp((pct - 0.64) / 0.3, 0, 1) * 0.55;
 
   ctx.save();
   if (!isStandalone) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.52)';
     ctx.beginPath();
     ctx.roundRect(monX + 2, monY + 3, monW, monH, 9);
     ctx.fill();
@@ -222,7 +241,6 @@ const renderVarMonitorPanel = (
   ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 7.5 : 8.5}px Sarabun, sans-serif`;
   ctx.fillText(isStandalone ? '🖥 จอภาพช้า VAR · รีเพลย์มุมซูม' : 'จอภาพช้า VAR', monX + (isStandalone ? 22 : 15), monY + hdrH / 2 + 0.8);
 
-  const sc = rep?.scenario;
   const statusTag = showVerdict
     ? vr.kind === 'goal'
       ? sc === 'goal_line_tech'
@@ -251,7 +269,7 @@ const renderVarMonitorPanel = (
         : vr.pendingCardUpgrade === 'R'
           ? 'ใบแดง!'
           : 'ใบเหลือง'
-    : pct >= 0.48
+    : isFreezePhase
       ? 'หยุดภาพตรวจจุด'
       : 'สโลว์โมชัน';
   ctx.textAlign = 'right';
@@ -279,45 +297,70 @@ const renderVarMonitorPanel = (
   const defTrim = defSide === 'H' ? homeTrim : awayTrim;
   const defGkKit = defSide === 'H' ? homeGkKit : awayGkKit;
 
-  let camCenterX = rep?.incidentX ?? vr.x;
-  let camCenterY = rep?.incidentY ?? 50;
-  let spanX = 28;
+  // Dynamic Broadcast Pan & Forensic Zoom Camera
+  const rawIncX = rep?.incidentX ?? vr.x;
+  const rawIncY = rep?.incidentY ?? vr.y ?? 50;
+  let baseCamX = rawIncX;
+  let baseCamY = rawIncY;
+  let startCamX = rawIncX;
+  let startCamY = rawIncY;
+  let baseSpanX = 28;
   if (vr.kind === 'goal') {
     if (sc === 'goal_line_tech') {
-      camCenterX = attRight ? 96.4 : 3.6;
-      camCenterY = clamp(rep?.incidentY ?? 50, 40, 60);
-      spanX = 16;
+      baseCamX = attRight ? 96.8 : 3.2;
+      baseCamY = clamp(rawIncY, 41, 59);
+      startCamX = attRight ? 94.0 : 6.0;
+      startCamY = baseCamY;
+      baseSpanX = 16.5;
     } else if (sc === 'foul_buildup') {
-      camCenterX = attRight ? clamp(rep?.incidentX ?? 82, 72, 90) : clamp(rep?.incidentX ?? 18, 10, 28);
-      camCenterY = clamp(rep?.incidentY ?? 50, 28, 72);
-      spanX = 31;
+      baseCamX = attRight ? clamp(rawIncX + 2.5, 74, 91) : clamp(rawIncX - 2.5, 9, 26);
+      baseCamY = clamp(rawIncY, 28, 72);
+      startCamX = attRight ? baseCamX - 2.6 : baseCamX + 2.6;
+      startCamY = baseCamY;
+      baseSpanX = 30;
     } else {
-      camCenterX = attRight ? 88 : 12;
-      camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
-      spanX = 30;
+      baseCamX = attRight ? 88.5 : 11.5;
+      baseCamY = clamp(rawIncY, 32, 68);
+      startCamX = rep?.passFromX != null ? (baseCamX * 0.72 + rep.passFromX * 0.28) : baseCamX;
+      startCamY = rep?.passFromY != null ? clamp(baseCamY * 0.72 + rep.passFromY * 0.28, 28, 72) : baseCamY;
+      baseSpanX = 29;
     }
   } else if (vr.kind === 'penalty') {
     if (sc === 'gk_clash_box') {
-      camCenterX = attRight ? 92 : 8;
-      camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
-      spanX = 22;
+      baseCamX = attRight ? 92.2 : 7.8;
+      baseCamY = clamp(rawIncY, 33, 67);
+      startCamX = attRight ? 88.5 : 11.5;
+      startCamY = baseCamY;
+      baseSpanX = 22.5;
     } else {
       const boxEdge = attRight ? 83 : 17;
-      camCenterX = attRight ? clamp(boxEdge + 2, 78, 92) : clamp(boxEdge - 2, 8, 22);
-      camCenterY = clamp(rep?.incidentY ?? 50, 26, 74);
-      spanX = 24;
+      baseCamX = attRight ? clamp(boxEdge + 2.2, 78, 92) : clamp(boxEdge - 2.2, 8, 22);
+      baseCamY = clamp(rawIncY, 26, 74);
+      startCamX = rep?.passFromX != null ? (baseCamX * 0.78 + rep.passFromX * 0.22) : baseCamX;
+      startCamY = baseCamY;
+      baseSpanX = 24;
     }
   } else {
-    camCenterX = clamp(rep?.incidentX ?? vr.x, 12, 88);
-    camCenterY = clamp(rep?.incidentY ?? vr.y, 16, 84);
-    spanX = sc === 'dogso' ? 27 : 21;
+    baseCamX = clamp(rawIncX, 12, 88);
+    baseCamY = clamp(rawIncY, 16, 84);
+    startCamX = attRight ? clamp(baseCamX - 2.8, 10, 90) : clamp(baseCamX + 2.8, 10, 90);
+    startCamY = baseCamY;
+    baseSpanX = sc === 'dogso' ? 27 : 21.5;
   }
+
+  const panT = clamp(simT / 0.5, 0, 1);
+  const panEase = 1 - Math.pow(1 - panT, 2);
+  const zoomMaxDrop = isStandalone ? 0.16 : 0.1;
+  const spanX = baseSpanX * (1 - zoomMaxDrop * zoomEnv);
+  const camCenterX = startCamX + (baseCamX - startCamX) * panEase;
+  const camCenterY = startCamY + (baseCamY - startCamY) * panEase;
   const spanY = spanX * (scrH / Math.max(1, scrW)) * pitchAspect;
   const minFX = camCenterX - spanX / 2;
   const minFY = camCenterY - spanY / 2;
   const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
   const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
 
+  // Pitch turf + mowed bands
   ctx.fillStyle = '#0f3823';
   ctx.fillRect(scrX, scrY, scrW, scrH);
   const stripeStep = 5.5;
@@ -325,11 +368,12 @@ const renderVarMonitorPanel = (
   for (let sx = firstStripe; sx < minFX + spanX + stripeStep; sx += stripeStep * 2) {
     const rx0 = mx(sx);
     const rx1 = mx(sx + stripeStep);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.045)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.048)';
     ctx.fillRect(rx0, scrY, rx1 - rx0, scrH);
   }
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+  // Pitch chalk markings
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.74)';
   ctx.lineWidth = isStandalone ? 1.8 : 1.25;
   ctx.strokeRect(mx(0), my(0), mx(100) - mx(0), my(100) - my(0));
   ctx.beginPath();
@@ -365,38 +409,86 @@ const renderVarMonitorPanel = (
   const mGoalD = Math.max(5, mx(100) - mx(97.2));
   const mGoalTop = my(42);
   const mGoalH = my(58) - mGoalTop;
-  const drawVarGoalNet = (gx: number) => {
+  const drawVarGoalNet = (gx: number, rippleProg = 0, rippleY = 50, frameFlashColor?: string) => {
+    const waveAmp = rippleProg > 0 && rippleProg < 1 ? Math.sin(rippleProg * Math.PI) * (isStandalone ? 4.5 : 2.8) : 0;
+    const waveFreq = rippleProg * Math.PI * 6;
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
     ctx.fillRect(gx, mGoalTop, mGoalD, mGoalH);
     ctx.beginPath();
-    ctx.rect(gx, mGoalTop, mGoalD, mGoalH);
+    ctx.rect(gx - 2, mGoalTop - 2, mGoalD + 4, mGoalH + 4);
     ctx.clip();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-    ctx.lineWidth = 0.7;
+    ctx.strokeStyle = waveAmp > 0.2 ? 'rgba(255, 255, 255, 0.42)' : 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 0.75;
     const step = Math.max(3.5, mGoalD / 4);
+    const impactScreenY = my(rippleY);
     for (let nx = gx; nx <= gx + mGoalD; nx += step) {
       ctx.beginPath();
       ctx.moveTo(nx, mGoalTop);
-      ctx.lineTo(nx, mGoalTop + mGoalH);
+      if (waveAmp > 0) {
+        const midY = clamp(impactScreenY, mGoalTop + 3, mGoalTop + mGoalH - 3);
+        const bulge = Math.sin(waveFreq + (nx - gx) * 0.2) * waveAmp;
+        ctx.quadraticCurveTo(nx + (attRight ? Math.abs(bulge) : -Math.abs(bulge)), midY, nx, mGoalTop + mGoalH);
+      } else {
+        ctx.lineTo(nx, mGoalTop + mGoalH);
+      }
       ctx.stroke();
     }
     for (let ny = mGoalTop; ny <= mGoalTop + mGoalH; ny += step) {
       ctx.beginPath();
       ctx.moveTo(gx, ny);
-      ctx.lineTo(gx + mGoalD, ny);
+      const distFactor = Math.max(0, 1 - Math.abs(ny - impactScreenY) / Math.max(10, mGoalH * 0.6));
+      const sag = waveAmp * distFactor * Math.sin(waveFreq);
+      ctx.quadraticCurveTo(gx + mGoalD * 0.5, ny + sag, gx + mGoalD, ny);
       ctx.stroke();
     }
     ctx.restore();
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = isStandalone ? 2.1 : 1.5;
+    ctx.strokeStyle = frameFlashColor || '#ffffff';
+    ctx.lineWidth = frameFlashColor ? (isStandalone ? 2.6 : 1.8) : isStandalone ? 2.1 : 1.5;
     ctx.strokeRect(gx, mGoalTop, mGoalD, mGoalH);
   };
-  if (attRight) {
-    drawVarGoalNet(mx(100));
-  } else {
-    drawVarGoalNet(mx(0) - mGoalD);
-  }
+
+  const drawVarTurfTrack = (
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    prog: number,
+    sprayColor = 'rgba(74, 222, 128, 0.72)'
+  ) => {
+    if (prog <= 0.05) return;
+    const sx0 = mx(x0);
+    const sy0 = my(y0);
+    const sx1 = mx(x1);
+    const sy1 = my(y1);
+    const curX = sx0 + (sx1 - sx0) * clamp(prog, 0, 1);
+    const curY = sy0 + (sy1 - sy0) * clamp(prog, 0, 1);
+    ctx.save();
+    // Dark soil turf gouge parallel tracks
+    ctx.strokeStyle = 'rgba(20, 42, 22, 0.62)';
+    ctx.lineWidth = isStandalone ? 3.6 : 2.3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(sx0, sy0 - 1.4);
+    ctx.lineTo(curX, curY - 1.4);
+    ctx.moveTo(sx0, sy0 + 1.8);
+    ctx.lineTo(curX, curY + 1.8);
+    ctx.stroke();
+
+    // Flying grass blades / turf divots while sliding
+    if (prog > 0.1 && prog < 0.92) {
+      const angBase = Math.atan2(curY - sy0, curX - sx0) + Math.PI;
+      for (let k = 0; k < 5; k++) {
+        const a = angBase + (k - 2) * 0.34;
+        const dist = (isStandalone ? 4 : 2.5) + ((prog * 14 + k * 1.9) % (isStandalone ? 11 : 7));
+        ctx.fillStyle = k % 2 === 0 ? sprayColor : 'rgba(133, 94, 52, 0.85)';
+        ctx.beginPath();
+        ctx.arc(curX + Math.cos(a) * dist, curY + Math.sin(a) * dist, isStandalone ? 1.45 : 0.95, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  };
 
   const drawVarSoccerBall = (
     fx: number,
@@ -456,13 +548,13 @@ const renderVarMonitorPanel = (
     ctx.save();
     ctx.translate(bx, drawBy);
 
-    // Optional focus halo around ball (e.g. goal-line, handball)
+    // Optional focus halo around ball
     if (opts?.glowColor) {
       ctx.save();
       ctx.fillStyle = opts.glowColor;
-      ctx.globalAlpha = 0.28;
+      ctx.globalAlpha = 0.28 + (isFreezePhase ? 0.14 : 0);
       ctx.beginPath();
-      ctx.arc(0, 0, ballR * 1.72, 0, Math.PI * 2);
+      ctx.arc(0, 0, ballR * 1.78, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -538,6 +630,42 @@ const renderVarMonitorPanel = (
     ctx.restore();
   };
 
+  type VarAgentAction = 'run' | 'kick' | 'gk_ready' | 'gk_dive' | 'slide' | 'clash' | 'handball' | 'fall' | 'leap';
+
+  const drawVarImpactBurst = (
+    fx: number,
+    fy: number,
+    color: string,
+    burstT: number,
+    ringRadius?: number
+  ) => {
+    if (burstT <= 0 || burstT >= 1) return;
+    const cxB = mx(fx);
+    const cyB = my(fy);
+    const alpha = Math.max(0, 1 - burstT);
+    const baseR = ringRadius ?? (isStandalone ? 18 : 11);
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.92;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = (isStandalone ? 2.2 : 1.5) * (0.5 + 0.5 * alpha);
+    ctx.beginPath();
+    ctx.arc(cxB, cyB, baseR * (0.45 + burstT * 0.95), 0, Math.PI * 2);
+    ctx.stroke();
+
+    const sparkCount = 8;
+    for (let i = 0; i < sparkCount; i++) {
+      const ang = (i * Math.PI * 2) / sparkCount + 0.25;
+      const dist = baseR * (0.35 + burstT * 1.15);
+      const sx = cxB + Math.cos(ang) * dist;
+      const sy = cyB + Math.sin(ang) * dist;
+      ctx.fillStyle = i % 2 === 0 ? color : '#ffffff';
+      ctx.beginPath();
+      ctx.arc(sx, sy, (isStandalone ? 2.0 : 1.35) * alpha, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  };
+
   const drawMiniAgent = (
     fx: number,
     fy: number,
@@ -547,47 +675,226 @@ const renderVarMonitorPanel = (
     shortName: string,
     vis?: number[],
     ringColor?: string,
-    labelColor = '#f8fafc'
+    labelColor = '#f8fafc',
+    opts?: {
+      facing?: number;
+      stride?: number;
+      action?: VarAgentAction;
+      actionProg?: number;
+      diveDir?: number;
+      isGk?: boolean;
+      handDir?: number;
+      dimmed?: boolean;
+    }
   ) => {
     const x = mx(fx);
     const y = my(fy);
-    const r = isStandalone ? clamp(scrH * 0.078, 9, 14) : clamp(scrH * 0.082, 5.8, 8.2);
+    const scaleDim = opts?.dimmed ? 0.88 : 1;
+    const r = (isStandalone ? clamp(scrH * 0.078, 9, 14) : clamp(scrH * 0.082, 5.8, 8.2)) * scaleDim;
+    const facing = opts?.facing ?? (attRight ? 0 : Math.PI);
+    const cosF = Math.cos(facing);
+    const sinF = Math.sin(facing);
+    const perpX = -sinF;
+    const perpY = cosF;
+    const action = opts?.action ?? 'run';
+    const prog = clamp(opts?.actionProg ?? 0, 0, 1);
+    const arcEnv = Math.sin(prog * Math.PI);
+    const strideVal = opts?.stride ?? 0;
+    const isMoving = action === 'run' || action === 'gk_ready';
+    const strideSin = isMoving ? Math.sin(strideVal) : 0;
+
     ctx.save();
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    if (opts?.dimmed) ctx.globalAlpha = 0.86;
+    ctx.translate(x, y);
+
+    // 1. Ground shadow (shrinks on aerial leap)
+    const leapArc = action === 'leap' ? arcEnv : 0;
+    const shScale = 1 - 0.26 * leapArc;
+    ctx.fillStyle = `rgba(0,0,0,${(0.45 - 0.14 * leapArc).toFixed(2)})`;
     ctx.beginPath();
-    ctx.ellipse(x, y + r * 0.85, r * 0.88, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, r * (0.86 + 0.14 * leapArc), r * 0.9 * shScale, r * 0.35 * shScale, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // 2. Sprint turf wake specks
+    if (action === 'run' && strideVal > 0.2 && !isFreezePhase) {
+      const dustPhase = (strideVal * 0.35) % 1;
+      const d1 = r * (0.85 + dustPhase * 0.65);
+      const d2 = r * (1.18 + ((dustPhase + 0.5) % 1) * 0.5);
+      ctx.fillStyle = 'rgba(220, 252, 231, 0.38)';
+      ctx.beginPath();
+      ctx.arc(-cosF * d1 + sinF * 1.8, -sinF * d1 - cosF * 1.8 + r * 0.35, isStandalone ? 1.5 : 1.05, 0, Math.PI * 2);
+      ctx.arc(-cosF * d2 - sinF * 1.8, -sinF * d2 + cosF * 1.8 + r * 0.35, isStandalone ? 1.2 : 0.85, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Action-specific body transforms & live-match FX arcs
+    if (action === 'gk_dive') {
+      const diveDir = opts?.diveDir ?? 1;
+      const diveShift = diveDir * arcEnv * r * 0.78;
+      ctx.translate(0, diveShift);
+      ctx.rotate(diveDir * arcEnv * 0.82);
+      // Cyan & gold supersave motion trail
+      ctx.strokeStyle = `rgba(56, 189, 248, ${(0.88 * (0.4 + 0.6 * arcEnv)).toFixed(2)})`;
+      ctx.lineWidth = isStandalone ? 2.4 : 1.6;
+      ctx.beginPath();
+      ctx.arc(0, 0, r + (isStandalone ? 5 : 3) + prog * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      // Both extended diving gloves
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#0ea5e9';
+      ctx.lineWidth = isStandalone ? 1.2 : 0.9;
+      ctx.beginPath();
+      ctx.arc(cosF * r * 0.35, diveDir * (r * 1.18), r * 0.36, 0, Math.PI * 2);
+      ctx.arc(-cosF * r * 0.15, diveDir * (r * 0.92), r * 0.28, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (action === 'kick') {
+      const kickPhase = prog < 0.25 ? -(prog / 0.25) : Math.sin(((prog - 0.25) / 0.75) * Math.PI);
+      const pushDist = kickPhase * r * 0.48;
+      ctx.translate(cosF * pushDist, sinF * pushDist);
+      ctx.rotate(0.24 * kickPhase);
+      if (prog > 0.1) {
+        ctx.strokeStyle = `rgba(251, 146, 60, ${(0.95 * (1 - prog * 0.5)).toFixed(2)})`;
+        ctx.lineWidth = isStandalone ? 2.4 : 1.6;
+        ctx.beginPath();
+        ctx.arc(0, 0, r + (isStandalone ? 4.5 : 3) + Math.max(0, kickPhase) * 4, facing - 0.85, facing + 0.85);
+        ctx.stroke();
+      }
+    } else if (action === 'slide') {
+      const slidePush = arcEnv * r * 0.76;
+      ctx.translate(cosF * slidePush, sinF * slidePush);
+      ctx.rotate((sinF >= 0 ? 0.62 : -0.62) * arcEnv);
+      ctx.strokeStyle = `rgba(56, 189, 248, ${(0.9 * (1 - prog * 0.4)).toFixed(2)})`;
+      ctx.lineWidth = isStandalone ? 2.4 : 1.6;
+      ctx.beginPath();
+      ctx.moveTo(-cosF * r * 1.4, -sinF * r * 1.4);
+      ctx.lineTo(cosF * r * 1.05, sinF * r * 1.05);
+      ctx.stroke();
+    } else if (action === 'clash') {
+      const recoil = Math.sin(prog * Math.PI * 2) * (isStandalone ? 2.6 : 1.7);
+      ctx.translate(cosF * recoil, sinF * recoil);
+      ctx.strokeStyle = `rgba(251, 146, 60, ${(0.92 * (1 - prog * 0.5)).toFixed(2)})`;
+      ctx.lineWidth = isStandalone ? 2.2 : 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, r + (isStandalone ? 4.2 : 2.8) + prog * 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (action === 'fall') {
+      const fallEase = clamp(prog * 1.35, 0, 1);
+      ctx.translate(cosF * r * 0.46 * fallEase, r * 0.36 * fallEase);
+      ctx.rotate(1.12 * fallEase);
+      ctx.strokeStyle = `rgba(248, 113, 113, ${(0.85 * (1 - prog * 0.65)).toFixed(2)})`;
+      ctx.lineWidth = isStandalone ? 1.8 : 1.2;
+      ctx.beginPath();
+      ctx.ellipse(0, r * 0.25, r + (isStandalone ? 4.5 : 3) + prog * 4, r * 0.55 + prog * 2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (action === 'leap') {
+      const leapY = -r * 0.85 * arcEnv;
+      const leapScale = 1 + 0.16 * arcEnv;
+      ctx.translate(cosF * r * 0.3 * arcEnv, leapY);
+      ctx.scale(leapScale, leapScale);
+      ctx.strokeStyle = `rgba(253, 224, 71, ${(0.9 * (1 - prog * 0.45)).toFixed(2)})`;
+      ctx.lineWidth = isStandalone ? 2.1 : 1.4;
+      ctx.beginPath();
+      ctx.arc(0, 0, r + (isStandalone ? 4.2 : 2.8) + prog * 3.5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // 4. Animated cleated boots along facing direction
+    if (action !== 'gk_dive') {
+      const kickSwing =
+        action === 'kick'
+          ? (prog < 0.25 ? -0.45 : Math.sin(((prog - 0.25) / 0.75) * Math.PI) * 1.1) * (r * 0.88)
+          : strideSin * (r * 0.55);
+      const backSwing = action === 'kick' ? -r * 0.26 : -kickSwing;
+      const bLen = r * (action === 'kick' ? 0.36 : 0.31);
+      const bWid = r * 0.19;
+      ctx.fillStyle = '#0f172a';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
+      ctx.lineWidth = 0.65;
+      ctx.beginPath();
+      ctx.ellipse(perpX * r * 0.38 + cosF * kickSwing, perpY * r * 0.38 + sinF * kickSwing + r * 0.34, bLen, bWid, facing, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(-perpX * r * 0.38 + cosF * backSwing, -perpY * r * 0.38 + sinF * backSwing + r * 0.34, bLen * 0.94, bWid, facing, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Running bob & subtle shoulder sway
+    const bobY = action === 'run' && !isFreezePhase ? -Math.abs(strideSin) * (isStandalone ? 1.5 : 1.0) : 0;
+    ctx.translate(0, bobY);
+    if (action === 'run' && !isFreezePhase) {
+      ctx.rotate(strideSin * 0.07);
+    }
+
+    // 5. Outstretched handball arm OR GK ready-stance padded gloves
+    if (action === 'handball') {
+      const hDir = opts?.handDir ?? -1;
+      const armAng = facing + hDir * (0.95 + 0.3 * arcEnv);
+      const armLen = r * (1.32 + 0.24 * arcEnv);
+      ctx.strokeStyle = kit;
+      ctx.lineWidth = isStandalone ? 2.8 : 1.9;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(armAng) * armLen, Math.sin(armAng) * armLen);
+      ctx.stroke();
+      ctx.fillStyle = '#f1c27d';
+      ctx.strokeStyle = prog > 0.32 ? '#ef4444' : 'rgba(255,255,255,0.65)';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(Math.cos(armAng) * armLen, Math.sin(armAng) * armLen, isStandalone ? 2.5 : 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    } else if (opts?.isGk && action !== 'gk_dive') {
+      const gFwd = r * 0.72;
+      const gSpread = r * 0.66;
+      const readyBob = Math.sin(strideVal * 1.4) * (r * 0.08);
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = isStandalone ? 1.0 : 0.75;
+      ctx.beginPath();
+      ctx.arc(cosF * gFwd + perpX * gSpread, sinF * gFwd + perpY * gSpread + readyBob, r * 0.25, 0, Math.PI * 2);
+      ctx.arc(cosF * gFwd - perpX * gSpread, sinF * gFwd - perpY * gSpread - readyBob, r * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // 6. Jersey body + portrait face
     ctx.fillStyle = kit;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.fill();
 
     const faceC = vis ? getPitchFaceCanvas(vis, kit, trim) : null;
     if (faceC) {
       ctx.save();
       ctx.beginPath();
-      ctx.arc(x, y, Math.max(1, r - 0.6), 0, Math.PI * 2);
+      ctx.arc(0, 0, Math.max(1, r - 0.6), 0, Math.PI * 2);
       ctx.clip();
       const fw = r * 2.1;
       const fh = (fw * 68) / 64;
-      ctx.drawImage(faceC, x - fw / 2, y - fh * 0.45, fw, fh);
+      ctx.drawImage(faceC, -fw / 2, -fh * 0.45, fw, fh);
       ctx.restore();
     } else {
       ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
       ctx.font = `800 ${Math.round(r * 1.05)}px Sarabun, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(String(no), x, y + 0.3);
+      ctx.fillText(String(no), 0, 0.3);
     }
 
     ctx.strokeStyle = ringColor || '#ffffff';
     ctx.lineWidth = ringColor ? (isStandalone ? 2.4 : 1.8) : isStandalone ? 1.5 : 1.1;
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
 
+    ctx.restore();
+
     if (shortName) {
+      ctx.save();
       const fSize = isStandalone ? 10 : smallText ? 6.5 : 7.2;
       const pillH = isStandalone ? 13 : 8.5;
       ctx.font = `700 ${fSize}px Sarabun, sans-serif`;
@@ -601,6 +908,85 @@ const renderVarMonitorPanel = (
       ctx.fill();
       ctx.fillStyle = labelColor;
       ctx.fillText(lbl, x, y + r + 2 + pillH / 2 + 0.3);
+      ctx.restore();
+    }
+  };
+
+  // Referee agent jogging in, touching VAR earpiece during freeze, and signaling call/card at >=0.72
+  const drawVarReferee = (fx: number, fy: number, targetX: number, targetY: number) => {
+    const rx = mx(fx);
+    const ry = my(fy);
+    const rr = isStandalone ? clamp(scrH * 0.066, 7.5, 11.5) : clamp(scrH * 0.068, 4.8, 6.8);
+    const ang = Math.atan2(targetY - fy, targetX - fx);
+    const walkSin = !isFreezePhase && pct < 0.72 ? Math.sin(simT * 20) : 0;
+
+    ctx.save();
+    ctx.translate(rx, ry);
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.beginPath();
+    ctx.ellipse(0, rr * 0.86, rr * 0.88, rr * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Boots
+    ctx.fillStyle = '#0f172a';
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(ang) * walkSin * rr * 0.45, rr * 0.48, rr * 0.28, rr * 0.16, ang, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Referee black/gold striped shirt
+    ctx.fillStyle = '#18181b';
+    ctx.beginPath();
+    ctx.arc(0, 0, rr, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = isStandalone ? 1.6 : 1.1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#facc15';
+    ctx.font = `900 ${Math.max(6, Math.round(rr * 0.85))}px Sarabun, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('R', 0, 0.4);
+
+    // Gesture overlays
+    if (isFreezePhase) {
+      // Hand to VAR headset + pulse wave
+      const earPulse = 0.5 + 0.5 * Math.sin(pct * 40);
+      ctx.strokeStyle = `rgba(56, 189, 248, ${(0.7 + 0.3 * earPulse).toFixed(2)})`;
+      ctx.lineWidth = isStandalone ? 1.5 : 1.1;
+      ctx.beginPath();
+      ctx.arc(rr * 0.75, -rr * 0.35, rr * (0.45 + earPulse * 0.25), -0.9, 0.9);
+      ctx.stroke();
+    } else if (showVerdict) {
+      if (vr.kind === 'foul_card' || (vr.kind === 'penalty' && !vr.overturn)) {
+        // Raised Yellow or Red Card
+        const cardClr =
+          vr.kind === 'foul_card'
+            ? vr.pendingCardUpgrade === 'R'
+              ? '#ef4444'
+              : '#facc15'
+            : '#facc15';
+        const cw = rr * 0.78;
+        const ch = rr * 1.12;
+        ctx.fillStyle = cardClr;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.roundRect(rr * 0.48, -rr * 1.45, cw, ch, 1.5);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        // VAR TV rectangle / signal badge
+        ctx.strokeStyle = verdictColor;
+        ctx.lineWidth = isStandalone ? 1.5 : 1.1;
+        ctx.fillStyle = 'rgba(8, 15, 28, 0.9)';
+        ctx.beginPath();
+        ctx.roundRect(-rr * 0.75, -rr * 1.85, rr * 1.5, rr * 0.9, 2);
+        ctx.fill();
+        ctx.stroke();
+      }
     }
     ctx.restore();
   };
@@ -627,37 +1013,52 @@ const renderVarMonitorPanel = (
     ctx.restore();
   };
 
-  const rawPlayT = clamp(pct / 0.48, 0, 1);
+  // Decisive moment hits at simT = 0.49 (locked during pct 0.36..0.64!)
+  const rawPlayT = clamp(simT / 0.49, 0, 1);
   const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
-  const postT = clamp((pct - 0.54) / 0.42, 0, 1);
+  const postT = clamp((simT - 0.51) / 0.49, 0, 1);
+  const dirSign = attRight ? 1 : -1;
 
   if (vr.kind === 'goal') {
-    const dirSign = attRight ? 1 : -1;
     if (sc === 'goal_line_tech') {
-      // GOAL-LINE TECHNOLOGY SCENARIO
+      // GOAL-LINE TECHNOLOGY SCENARIO (Shot -> Freeze on line -> Ripple net or GK Push-away Save!)
       const goalLineX = attRight ? 100 : 0;
       const incY = clamp(rep?.incidentY ?? 50, 44, 56);
       const startX = rep?.passFromX ?? (attRight ? 91.5 : 8.5);
       const startY = rep?.passFromY ?? clamp(incY + 3, 42, 58);
       const apexX = vr.overturn
         ? attRight ? 99.65 : 0.35
-        : attRight ? 100.75 : -0.75;
-      const clearX = attRight ? 98.2 : 1.8;
+        : attRight ? 100.85 : -0.85;
+      const clearX = attRight ? 97.2 : 2.8;
+      const netSettleX = attRight ? 101.6 : -1.6;
 
-      const ballPhase = clamp(pct / 0.42, 0, 1);
-      const easeBall = 1 - Math.pow(1 - ballPhase, 2.1);
-      const bounceBackT = vr.overturn && pct > 0.62 ? clamp((pct - 0.62) / 0.32, 0, 1) : 0;
+      const ballPhase = rawPlayT;
+      const easeBall = 1 - Math.pow(1 - ballPhase, 1.9);
       const bxNow =
-        pct <= 0.42
-          ? startX + (apexX - startX) * easeBall
-          : apexX + (clearX - apexX) * bounceBackT;
-      const byNow = startY + (incY - startY) * easeBall;
-      const bzNow = Math.sin(easeBall * Math.PI) * 5.2;
+        postT > 0
+          ? vr.overturn
+            ? apexX + (clearX - apexX) * postT
+            : apexX + (netSettleX - apexX) * clamp(postT * 1.4, 0, 1)
+          : startX + (apexX - startX) * easeBall;
+      const byNow = startY + (incY - startY) * easeBall + (vr.overturn ? postT * (incY < 50 ? 2.6 : -2.6) : 0);
+      const bzNow = Math.sin(easeBall * Math.PI) * 5.0 + (vr.overturn ? postT * 1.8 : (1 - postT) * 1.2);
 
-      const gkX = attRight ? 98.8 - (1 - playT) * 1.4 : 1.2 + (1 - playT) * 1.4;
-      const gkY = incY + (1 - playT) * (incY < 50 ? 5.2 : -5.2);
-      const attXNow = clamp(startX - dirSign * (1 - playT) * 2.2, 6, 94);
-      const attYNow = startY + (1 - playT) * 1.4;
+      // Draw goal net with live ripple when ball hits back of net
+      const netRipple = !vr.overturn && postT > 0 ? clamp(postT * 1.35, 0, 1) : 0;
+      const postFlash = pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : undefined;
+      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, incY, postFlash);
+
+      const gkStartY = incY < 50 ? 55.0 : 45.0;
+      const gkDiveT = clamp((simT - 0.14) / 0.62, 0, 1);
+      const gkX = attRight ? 98.7 - (1 - rawPlayT) * 1.6 : 1.3 + (1 - rawPlayT) * 1.6;
+      const gkY = gkStartY + (incY - gkStartY) * (1 - Math.pow(1 - gkDiveT, 1.75));
+      const gkDiveDir = incY < gkStartY ? -1 : 1;
+      const attXNow = clamp(startX - dirSign * (1 - playT) * 2.6 + postT * dirSign * 0.8, 6, 94);
+      const attYNow = startY + (1 - playT) * 1.5;
+
+      // Supporting center-back lunging to block late
+      const cbX = startX + dirSign * (1.8 - playT * 0.5);
+      const cbY = clamp(incY + (incY < 50 ? 5.6 : -5.6), 36, 64);
 
       // Glowing Goal-Line Laser Plane
       const glScreenX = mx(goalLineX);
@@ -670,16 +1071,22 @@ const renderVarMonitorPanel = (
       ctx.stroke();
       ctx.restore();
 
-      // Shot trail
       const trailPts = Array.from({ length: 6 }, (_, i) => {
         const t = Math.max(0, easeBall - (5 - i) * 0.06);
         return {
           x: startX + (apexX - startX) * t,
           y: startY + (incY - startY) * t,
-          z: Math.sin(t * Math.PI) * 5.2
+          z: Math.sin(t * Math.PI) * 5.0
         };
       });
 
+      drawMiniAgent(cbX, cbY, defKit, defTrim, rep?.defNo ?? 4, '', rep?.defVis, undefined, '#cbd5e1', {
+        facing: Math.atan2(incY - cbY, startX - cbX),
+        stride: simT * 15,
+        action: simT >= 0.18 && simT <= 0.6 ? 'slide' : 'run',
+        actionProg: clamp((simT - 0.18) / 0.42, 0, 1),
+        dimmed: true
+      });
       drawMiniAgent(
         attXNow,
         attYNow,
@@ -689,7 +1096,13 @@ const renderVarMonitorPanel = (
         rep?.attShort || vr.shooterShort || 'ผู้ยิง',
         rep?.attVis,
         '#facc15',
-        '#fde047'
+        '#fde047',
+        {
+          facing: Math.atan2(incY - startY, apexX - startX),
+          stride: simT * 15,
+          action: simT <= 0.34 ? 'kick' : 'run',
+          actionProg: clamp(simT / 0.34, 0, 1)
+        }
       );
       drawMiniAgent(
         gkX,
@@ -700,12 +1113,24 @@ const renderVarMonitorPanel = (
         'GK',
         rep?.gkVis,
         pct >= 0.36 ? '#38bdf8' : undefined,
-        '#bae6fd'
+        '#bae6fd',
+        {
+          facing: attRight ? Math.PI : 0,
+          stride: simT * 16,
+          isGk: true,
+          action: simT >= 0.15 ? 'gk_dive' : 'gk_ready',
+          actionProg: clamp((simT - 0.15) / 0.65, 0, 1),
+          diveDir: gkDiveDir
+        }
       );
 
-      drawVarSoccerBall(bxNow, byNow, pct * 12, {
+      if (vr.overturn && postT > 0) {
+        drawVarImpactBurst(apexX, incY, '#38bdf8', clamp(postT * 1.4, 0, 1));
+      }
+
+      drawVarSoccerBall(bxNow, byNow, simT * 16, {
         z: bzNow,
-        trailPts: pct < 0.62 ? trailPts : undefined,
+        trailPts: postT < 0.35 ? trailPts : undefined,
         trailColor: 'rgba(56, 189, 248, 0.55)',
         glowColor: pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#38bdf8'
       });
@@ -715,7 +1140,6 @@ const renderVarMonitorPanel = (
         const badgeTxt = vr.overturn ? `โกล์ไลน์: ยังไม่เต็มใบ (-${mm} มม.)` : `โกล์ไลน์: ข้ามเต็มใบ (+${mm} มม.)`;
         drawTopPillBadge(badgeTxt, vr.overturn ? '#fca5a5' : '#86efac', undefined, vr.overturn ? '#ef4444' : '#22c55e');
 
-        // Crisp Goal-Line Tech Sensor Inset Box
         const boxW = isStandalone ? 86 : 56;
         const boxH = isStandalone ? 42 : 28;
         const boxX = attRight ? scrX + 8 : scrX + scrW - boxW - 8;
@@ -747,14 +1171,30 @@ const renderVarMonitorPanel = (
       // BUILDUP FOUL / HANDBALL BEFORE GOAL SCENARIO
       const incX = rep?.incidentX ?? (attRight ? 80 : 20);
       const incY = rep?.incidentY ?? 48;
-      const goalX = attRight ? 99 : 1;
+      const goalX = attRight ? 100.8 : -0.8;
       const goalY = 50;
 
-      const attXNow = incX - dirSign * (1 - playT) * 4.5 + postT * dirSign * 6.5;
+      const attXNow = incX - dirSign * (1 - playT) * 4.5 + postT * dirSign * 4.8;
       const attYNow = incY + (1 - playT) * 2.0;
-      const defXNow = incX + dirSign * (1.2 - playT * 0.6);
-      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.4 : -4.4) + (incY < 50 ? 1.2 : -1.2);
-      const gkY = clamp(50 + (incY - 50) * 0.25, 43, 57);
+      const defXNow = incX + dirSign * (1.1 - playT * 0.5);
+      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.2 : -4.2) + (incY < 50 ? 1.1 : -1.1);
+      const gkDiveT = clamp((simT - 0.56) / 0.36, 0, 1);
+      const gkBaseY = clamp(50 + (incY - 50) * 0.25, 43, 57);
+      const gkY = gkBaseY + (goalY - gkBaseY) * gkDiveT;
+      const gkDiveDir = goalY >= gkBaseY ? 1 : -1;
+
+      const netRipple = postT > 0.55 ? clamp((postT - 0.55) / 0.4, 0, 1) : 0;
+      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, goalY);
+
+      if (playT > 0.28) {
+        drawVarTurfTrack(
+          incX + dirSign * 1.0,
+          incY + (incY < 50 ? 4.4 : -4.4),
+          defXNow,
+          defYNow,
+          clamp((simT - 0.16) / 0.38, 0, 1)
+        );
+      }
 
       // Shot path from buildup duel toward goal
       ctx.save();
@@ -779,6 +1219,7 @@ const renderVarMonitorPanel = (
         ctx.fill();
         ctx.stroke();
         ctx.restore();
+        drawVarImpactBurst(incX, incY, ringClr, clamp((pct - 0.36) / 0.32, 0, 1));
         drawTopPillBadge(
           vr.overturn ? 'เช็กการปะทะก่อนยิง: ฟาวล์!' : 'เช็กการปะทะก่อนยิง: ปกติ',
           vr.overturn ? '#fca5a5' : '#86efac',
@@ -787,7 +1228,21 @@ const renderVarMonitorPanel = (
         );
       }
 
-      drawMiniAgent(attRight ? 97.2 : 2.8, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      drawMiniAgent(attRight ? 97.2 : 2.8, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        facing: attRight ? Math.PI : 0,
+        stride: simT * 14,
+        isGk: true,
+        action: simT >= 0.56 ? 'gk_dive' : 'gk_ready',
+        actionProg: gkDiveT,
+        diveDir: gkDiveDir
+      });
+      // Referee jogging behind play
+      drawVarReferee(
+        incX - dirSign * (8.5 - playT * 2.5),
+        clamp(incY + (incY < 50 ? 8.2 : -8.2), 14, 86),
+        incX,
+        incY
+      );
       drawMiniAgent(
         defXNow,
         defYNow,
@@ -797,7 +1252,13 @@ const renderVarMonitorPanel = (
         rep?.defShort || 'กองหลัง',
         rep?.defVis,
         pct >= 0.36 ? '#f59e0b' : undefined,
-        '#fde68a'
+        '#fde68a',
+        {
+          facing: Math.atan2(attYNow - defYNow, attXNow - defXNow),
+          stride: simT * 14,
+          action: simT >= 0.25 && simT <= 0.62 ? (vr.overturn ? 'slide' : 'clash') : 'run',
+          actionProg: clamp((simT - 0.25) / 0.37, 0, 1)
+        }
       );
       drawMiniAgent(
         attXNow,
@@ -808,12 +1269,18 @@ const renderVarMonitorPanel = (
         rep?.attShort || vr.shooterShort || 'ผู้ยิง',
         rep?.attVis,
         pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
-        pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
+        pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047',
+        {
+          facing: Math.atan2(goalY - incY, goalX - incX),
+          stride: simT * 15,
+          action: simT >= 0.52 && simT <= 0.78 ? 'kick' : simT >= 0.38 && simT < 0.52 ? 'clash' : 'run',
+          actionProg: simT >= 0.52 ? clamp((simT - 0.52) / 0.26, 0, 1) : clamp((simT - 0.38) / 0.14, 0, 1)
+        }
       );
 
-      const shotProg = clamp((pct - 0.42) / 0.48, 0, 1);
-      const bxNow = pct <= 0.42 ? incX - dirSign * (1 - playT) * 3.0 : incX + (goalX - incX) * shotProg;
-      const byNow = pct <= 0.42 ? incY : incY + (goalY - incY) * shotProg;
+      const shotProg = postT;
+      const bxNow = shotProg > 0 ? incX + (goalX - incX) * shotProg : incX - dirSign * (1 - playT) * 3.0;
+      const byNow = shotProg > 0 ? incY + (goalY - incY) * shotProg : incY;
       const trailPts =
         shotProg > 0.05
           ? Array.from({ length: 6 }, (_, i) => {
@@ -821,48 +1288,89 @@ const renderVarMonitorPanel = (
               return { x: incX + (goalX - incX) * t, y: incY + (goalY - incY) * t, z: Math.sin(t * Math.PI) * 3.8 };
             })
           : undefined;
-      drawVarSoccerBall(bxNow, byNow, pct * 14, {
+      drawVarSoccerBall(bxNow, byNow, simT * 15, {
         z: Math.sin(shotProg * Math.PI) * 3.8,
         trailPts,
         trailColor: 'rgba(250, 204, 21, 0.55)'
       });
     } else {
-      // OFFSIDE CALIBRATION LINE SCENARIO (Upgraded with Passer + 3D Ball Pass & Finish)
+      // OFFSIDE CALIBRATION LINE SCENARIO (Freeze at pass release + Semi-Automated Drop-Lines + Follow-through Goal/Save!)
       const incX = rep?.incidentX ?? (attRight ? 86 : 14);
       const incY = rep?.incidentY ?? 48;
       const defLineX = rep?.defLineX ?? (attRight ? 84 : 16);
-      const attXNow = incX - dirSign * (1 - playT) * 5.8 + (pct > 0.72 && !vr.overturn ? postT * dirSign * 3.5 : 0);
-      const attYNow = incY + (1 - playT) * 2.2;
-      const defXNow = defLineX + dirSign * (1 - playT) * 1.6;
-      const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
+      const goalX = attRight ? 100.8 : -0.8;
 
-      const gkX = attRight ? 97.2 : 2.8;
-      const gkY = clamp(50 + (incY - 50) * 0.28, 43, 57);
-      drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      const attXNow = incX - dirSign * (1 - playT) * 5.8 + postT * dirSign * 4.5;
+      const attYNow = incY + (1 - playT) * 2.0 + postT * (50 - incY) * 0.28;
+      const defXNow = defLineX + dirSign * (1 - playT) * 1.4 - postT * dirSign * 0.6;
+      const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
 
       const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
       const passStartY = rep?.passFromY ?? clamp(incY + 7, 22, 78);
 
-      // Subtle teammate passer marker at origin
-      ctx.save();
-      ctx.fillStyle = attKit;
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.8)';
-      ctx.lineWidth = 1.4;
-      ctx.beginPath();
-      ctx.arc(mx(passStartX), my(passStartY), isStandalone ? 6 : 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
+      // Ball travels from passer -> reaches receiver after freeze -> finished at goal
+      const passTravelT = simT < 0.49 ? rawPlayT * 0.42 : clamp(0.42 + (postT / 0.42) * 0.58, 0.42, 1);
+      const finishT = postT > 0.42 ? clamp((postT - 0.42) / 0.52, 0, 1) : 0;
+      const bxNow =
+        finishT > 0
+          ? attXNow + (goalX - attXNow) * finishT
+          : passStartX + (incX - passStartX) * passTravelT;
+      const byNow =
+        finishT > 0
+          ? attYNow + (50 - attYNow) * finishT
+          : passStartY + (incY - passStartY) * passTravelT;
+      const bzNow = finishT > 0 ? Math.sin(finishT * Math.PI) * 3.5 : Math.sin(passTravelT * Math.PI) * 2.8;
 
-      const passT = clamp(playT * 1.05, 0, 1);
-      const goalX = attRight ? 99 : 1;
-      const finishT = pct > 0.65 ? clamp((pct - 0.65) / 0.3, 0, 1) : 0;
-      const bxNow = finishT > 0 ? incX + (goalX - incX) * finishT : passStartX + (attXNow - passStartX) * passT;
-      const byNow = finishT > 0 ? incY + (50 - incY) * finishT : passStartY + (attYNow - passStartY) * passT;
-      const bzNow = finishT > 0 ? Math.sin(finishT * Math.PI) * 3.5 : Math.sin(passT * Math.PI) * 2.8;
+      const netRipple = finishT > 0.65 ? clamp((finishT - 0.65) / 0.35, 0, 1) : 0;
+      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, 50);
+
+      const gkX = attRight ? 97.2 : 2.8;
+      const gkReadyY = clamp(50 + (incY - 50) * 0.28, 43, 57);
+      const gkY = finishT > 0 ? gkReadyY + (50 - gkReadyY) * finishT * 0.78 : gkReadyY + Math.sin(simT * 8) * 0.7;
+      drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        facing: attRight ? Math.PI : 0,
+        stride: simT * 14,
+        isGk: true,
+        action: finishT > 0.14 ? 'gk_dive' : 'gk_ready',
+        actionProg: finishT,
+        diveDir: 50 >= gkReadyY ? 1 : -1
+      });
+
+      // Supporting 2nd defender tracking central channel
+      drawMiniAgent(
+        defXNow - dirSign * 2.2,
+        clamp(incY + (incY < 50 ? 11.5 : -11.5), 22, 78),
+        defKit,
+        defTrim,
+        5,
+        '',
+        undefined,
+        undefined,
+        '#cbd5e1',
+        { facing: attRight ? Math.PI * 0.94 : 0.06, stride: simT * 14, action: 'run', dimmed: true }
+      );
+
+      // Animated passer teammate kicking the through-ball (freezes right after follow-through)
+      drawMiniAgent(
+        passStartX - dirSign * (1 - playT) * 1.8,
+        passStartY,
+        attKit,
+        attTrim,
+        10,
+        '',
+        undefined,
+        'rgba(250, 204, 21, 0.7)',
+        '#fde047',
+        {
+          facing: Math.atan2(incY - passStartY, incX - passStartX),
+          stride: simT * 12,
+          action: simT <= 0.56 ? 'kick' : 'run',
+          actionProg: clamp(simT / 0.56, 0, 1)
+        }
+      );
 
       ctx.save();
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.48)';
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
       ctx.lineWidth = isStandalone ? 1.6 : 1.1;
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
@@ -873,7 +1381,7 @@ const renderVarMonitorPanel = (
       ctx.restore();
 
       if (pct >= 0.36) {
-        const lineAlpha = clamp((pct - 0.36) / 0.12, 0, 1);
+        const lineAlpha = clamp((pct - 0.36) / 0.1, 0, 1);
         const defScreenX = mx(defLineX);
         const attScreenX = mx(incX);
         const offsideClr = vr.overturn ? '#ef4444' : '#22c55e';
@@ -885,6 +1393,7 @@ const renderVarMonitorPanel = (
         const bandW = Math.max(2, Math.abs(attScreenX - defScreenX));
         ctx.fillRect(bandX, scrY, bandW, scrH);
 
+        // Calibrated Blue Defender Line + Shoulder/Boot Projection Drop
         ctx.strokeStyle = '#3b82f6';
         ctx.lineWidth = isStandalone ? 2.6 : 1.8;
         ctx.beginPath();
@@ -892,12 +1401,28 @@ const renderVarMonitorPanel = (
         ctx.lineTo(defScreenX, scrY + scrH);
         ctx.stroke();
 
+        // Semi-automated vertical drop cues onto grass line
+        ctx.strokeStyle = 'rgba(96, 165, 250, 0.9)';
+        ctx.lineWidth = 1.1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(mx(defXNow), my(defYNow));
+        ctx.lineTo(defScreenX, my(defYNow));
+        ctx.stroke();
+
+        // Calibrated Attacker Offside Line
         ctx.strokeStyle = offsideClr;
         ctx.lineWidth = isStandalone ? 2.6 : 1.8;
         ctx.setLineDash([5, 3]);
         ctx.beginPath();
         ctx.moveTo(attScreenX, scrY);
         ctx.lineTo(attScreenX, scrY + scrH);
+        ctx.stroke();
+
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(mx(attXNow), my(attYNow));
+        ctx.lineTo(attScreenX, my(attYNow));
         ctx.stroke();
         ctx.setLineDash([]);
 
@@ -916,7 +1441,12 @@ const renderVarMonitorPanel = (
         rep?.defShort || 'กองหลัง',
         rep?.defVis,
         pct >= 0.36 ? '#3b82f6' : undefined,
-        '#93c5fd'
+        '#93c5fd',
+        {
+          facing: attRight ? Math.PI * 0.92 : 0.08,
+          stride: simT * 15,
+          action: 'run'
+        }
       );
       drawMiniAgent(
         attXNow,
@@ -927,18 +1457,24 @@ const renderVarMonitorPanel = (
         rep?.attShort || vr.shooterShort || 'ผู้ยิง',
         rep?.attVis,
         pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
-        pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
+        pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047',
+        {
+          facing: Math.atan2(50 - incY, goalX - incX),
+          stride: simT * 17,
+          action: finishT > 0 && finishT < 0.58 ? 'kick' : 'run',
+          actionProg: clamp(finishT / 0.58, 0, 1)
+        }
       );
 
       const trailPts = Array.from({ length: 6 }, (_, i) => {
-        const t = Math.max(0, passT - (5 - i) * 0.06);
+        const t = Math.max(0, passTravelT - (5 - i) * 0.06);
         return {
-          x: passStartX + (attXNow - passStartX) * t,
-          y: passStartY + (attYNow - passStartY) * t,
+          x: passStartX + (incX - passStartX) * t,
+          y: passStartY + (incY - passStartY) * t,
           z: Math.sin(t * Math.PI) * 2.8
         };
       });
-      drawVarSoccerBall(bxNow, byNow, pct * 13, {
+      drawVarSoccerBall(bxNow, byNow, simT * 15, {
         z: bzNow,
         trailPts: finishT > 0 ? undefined : trailPts,
         trailColor: 'rgba(250, 204, 21, 0.5)'
@@ -949,31 +1485,42 @@ const renderVarMonitorPanel = (
     const incY = rep?.incidentY ?? 48;
     const boxLineX = rep?.defLineX ?? (attRight ? 83 : 17);
     const inBox = rep?.inBox ?? !vr.overturn;
-    const dirSign = attRight ? 1 : -1;
     const bxScreen = mx(boxLineX);
 
+    drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, 0, 50);
+
     if (sc === 'handball_box') {
-      // HANDBALL IN THE PENALTY BOX SCENARIO
+      // HANDBALL IN THE PENALTY BOX SCENARIO (Freeze on arm-ball impact + deflection!)
       const crossFromX = rep?.passFromX ?? (incX - dirSign * 9.5);
       const crossFromY = rep?.passFromY ?? clamp(incY + (incY < 50 ? 10 : -10), 14, 86);
-      const defXNow = incX;
-      const defYNow = incY;
-      const attXNow = crossFromX - dirSign * (1 - playT) * 2.2;
-      const attYNow = crossFromY;
+      const defXNow = incX + dirSign * (1 - playT) * 1.4;
+      const defYNow = incY + (1 - playT) * (incY < 50 ? -2.2 : 2.2);
+      const attXNow = crossFromX - dirSign * (1 - playT) * 2.4;
+      const attYNow = crossFromY + (1 - playT) * 1.2;
 
-      // Ball travels from shooter/crosser -> hits defender's outstretched arm at incX, incY -> deflects
-      const hitT = clamp(pct / 0.44, 0, 1);
-      const deflectT = pct > 0.56 ? clamp((pct - 0.56) / 0.36, 0, 1) : 0;
-      const deflX = incX - dirSign * 3.8;
-      const deflY = incY + (incY < 50 ? 5.5 : -5.5);
+      const hitT = rawPlayT;
+      const deflectT = postT;
+      const deflX = incX - dirSign * 4.4;
+      const deflY = incY + (incY < 50 ? 6.2 : -6.2);
       const bxNow = deflectT > 0 ? incX + (deflX - incX) * deflectT : crossFromX + (incX - crossFromX) * hitT;
       const byNow = deflectT > 0 ? incY + (deflY - incY) * deflectT : crossFromY + (incY - crossFromY) * hitT;
-      const bzNow = deflectT > 0 ? 4.2 * (1 - deflectT * 0.6) : 2.0 + hitT * 2.5;
+      const bzNow = deflectT > 0 ? 4.4 * (1 - deflectT * 0.6) : 2.0 + hitT * 2.4;
 
-      drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      const gkTrackY = clamp(50 + (byNow - 50) * 0.32, 43, 57);
+      drawMiniAgent(attRight ? 97 : 3, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        facing: attRight ? Math.PI : 0,
+        stride: simT * 14,
+        isGk: true,
+        action: 'gk_ready'
+      });
+      drawVarReferee(
+        incX - dirSign * (7.2 - playT * 1.8),
+        clamp(incY + (incY < 50 ? 9 : -9), 14, 86),
+        incX,
+        incY
+      );
       drawTopPillBadge('เช็กแฮนด์บอล & เส้นเขตโทษ', '#bae6fd', bxScreen);
 
-      // Dashed ball flight trajectory
       ctx.save();
       ctx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
       ctx.lineWidth = isStandalone ? 1.6 : 1.1;
@@ -981,7 +1528,7 @@ const renderVarMonitorPanel = (
       ctx.beginPath();
       ctx.moveTo(mx(crossFromX), my(crossFromY));
       ctx.lineTo(mx(incX), my(incY));
-      if (pct >= 0.44) {
+      if (pct >= 0.36) {
         ctx.lineTo(mx(deflX), my(deflY));
       }
       ctx.stroke();
@@ -1005,6 +1552,9 @@ const renderVarMonitorPanel = (
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.restore();
+        if (pct >= 0.42) {
+          drawVarImpactBurst(incX, incY, contactClr, clamp((pct - 0.42) / 0.32, 0, 1));
+        }
       }
 
       drawMiniAgent(
@@ -1016,7 +1566,13 @@ const renderVarMonitorPanel = (
         rep?.attShort || 'ผู้เปิด/ยิง',
         rep?.attVis,
         '#facc15',
-        '#fde047'
+        '#fde047',
+        {
+          facing: Math.atan2(incY - crossFromY, incX - crossFromX),
+          stride: simT * 14,
+          action: simT <= 0.34 ? 'kick' : 'run',
+          actionProg: clamp(simT / 0.34, 0, 1)
+        }
       );
       drawMiniAgent(
         defXNow,
@@ -1027,14 +1583,21 @@ const renderVarMonitorPanel = (
         rep?.defShort || vr.culpritShort || 'ตัวสกัด',
         rep?.defVis,
         pct >= 0.36 ? (inBox ? '#ef4444' : '#38bdf8') : undefined,
-        '#fca5a5'
+        '#fca5a5',
+        {
+          facing: Math.atan2(crossFromY - incY, crossFromX - incX),
+          stride: simT * 12,
+          action: simT >= 0.22 ? 'handball' : 'run',
+          actionProg: clamp((simT - 0.22) / 0.42, 0, 1),
+          handDir: crossFromY < incY ? -1 : 1
+        }
       );
 
       const trailPts = Array.from({ length: 6 }, (_, i) => {
         const t = Math.max(0, hitT - (5 - i) * 0.06);
-        return { x: crossFromX + (incX - crossFromX) * t, y: crossFromY + (incY - crossFromY) * t, z: 2.0 + t * 2.5 };
+        return { x: crossFromX + (incX - crossFromX) * t, y: crossFromY + (incY - crossFromY) * t, z: 2.0 + t * 2.4 };
       });
-      drawVarSoccerBall(bxNow, byNow, pct * 16, {
+      drawVarSoccerBall(bxNow, byNow, simT * 16, {
         z: bzNow,
         trailPts: deflectT > 0 ? undefined : trailPts,
         trailColor: 'rgba(56, 189, 248, 0.55)',
@@ -1042,13 +1605,18 @@ const renderVarMonitorPanel = (
       });
     } else if (sc === 'gk_clash_box') {
       // GOALKEEPER / 1V1 COLLISION IN THE BOX SCENARIO
-      const attXNow = incX - dirSign * (1 - playT) * 4.5;
-      const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
+      const attXNow = incX - dirSign * (1 - playT) * 4.8 + postT * dirSign * 0.9;
+      const attYNow = incY + (1 - playT) * (incY < 50 ? -1.6 : 1.6);
       const gkStartX = attRight ? 97 : 3;
-      const gkXNow = gkStartX + (incX + dirSign * 0.8 - gkStartX) * clamp(playT * 0.95, 0, 1);
-      const gkYNow = 50 + (incY - 50) * clamp(playT * 0.95, 0, 1);
+      const gkMoveT = clamp(playT * 0.96, 0, 1);
+      const gkXNow = gkStartX + (incX + dirSign * 0.8 - gkStartX) * gkMoveT;
+      const gkYNow = 50 + (incY - 50) * gkMoveT;
 
       drawTopPillBadge('เช็กผู้รักษาประตูปะทะในกรอบ', '#bae6fd');
+
+      if (simT >= 0.28) {
+        drawVarTurfTrack(gkStartX, 50, gkXNow, gkYNow, clamp((simT - 0.28) / 0.45, 0, 1), 'rgba(56, 189, 248, 0.72)');
+      }
 
       if (pct >= 0.36) {
         const contactClr = inBox ? '#ef4444' : '#22c55e';
@@ -1061,7 +1629,15 @@ const renderVarMonitorPanel = (
         ctx.arc(cX, cY, (isStandalone ? 15 : 10) + Math.sin(pct * Math.PI * 10) * 1.8, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
+        drawVarImpactBurst(incX, incY, contactClr, clamp((pct - 0.36) / 0.34, 0, 1));
       }
+
+      drawVarReferee(
+        incX - dirSign * (6.8 - playT * 2.0),
+        clamp(incY + (incY < 50 ? 8.8 : -8.8), 16, 84),
+        incX,
+        incY
+      );
 
       drawMiniAgent(
         attXNow,
@@ -1072,7 +1648,13 @@ const renderVarMonitorPanel = (
         rep?.attShort || 'ตัวรุก',
         rep?.attVis,
         '#facc15',
-        '#fde047'
+        '#fde047',
+        {
+          facing: Math.atan2(50 - incY, (attRight ? 98 : 2) - incX),
+          stride: simT * 16,
+          action: simT >= 0.5 ? 'fall' : simT >= 0.28 ? 'kick' : 'run',
+          actionProg: simT >= 0.5 ? clamp((simT - 0.5) / 0.45, 0, 1) : clamp((simT - 0.28) / 0.22, 0, 1)
+        }
       );
       drawMiniAgent(
         gkXNow,
@@ -1083,34 +1665,40 @@ const renderVarMonitorPanel = (
         rep?.defShort || 'GK',
         rep?.gkVis,
         pct >= 0.36 ? (inBox ? '#ef4444' : '#22c55e') : undefined,
-        '#bae6fd'
+        '#bae6fd',
+        {
+          facing: Math.atan2(attYNow - gkYNow, attXNow - gkXNow),
+          stride: simT * 16,
+          isGk: true,
+          action: simT >= 0.28 ? 'gk_dive' : 'gk_ready',
+          actionProg: clamp((simT - 0.28) / 0.46, 0, 1),
+          diveDir: incY >= 50 ? 1 : -1
+        }
       );
 
-      // Ball tapped past GK rolling away
-      const ballRoll = clamp(pct * 1.1, 0, 1);
-      const bxNow = incX + dirSign * (1.2 + ballRoll * 3.8);
+      const ballRoll = postT;
+      const bxNow = incX + dirSign * (1.0 + ballRoll * 4.2);
       const byNow = incY + (incY < 50 ? 1.8 : -1.8) * ballRoll;
-      drawVarSoccerBall(bxNow, byNow, pct * 14, { z: 0.8 });
+      drawVarSoccerBall(bxNow, byNow, simT * 14, { z: 0.8 + Math.sin(postT * Math.PI) * 1.4 });
     } else {
-      // BOX-EDGE FOUL CHECK SCENARIO (Upgraded)
-      const attXNow = incX - dirSign * (1 - playT) * 4.2;
+      // BOX-EDGE FOUL CHECK SCENARIO
+      const attXNow = incX - dirSign * (1 - playT) * 4.4 + postT * dirSign * 0.8;
       const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
       const defXNow = incX + dirSign * (1.2 - playT * 0.4);
+      const defStartY = incY + (incY < 50 ? 5.8 : -5.8);
       const defYNow = incY + (1 - playT) * (incY < 50 ? 4.8 : -4.8) + (incY < 50 ? 1.0 : -1.0);
 
-      drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+      const gkTrackY = clamp(50 + (attYNow - 50) * 0.35, 42, 58);
+      drawMiniAgent(attRight ? 97 : 3, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        facing: attRight ? Math.PI : 0,
+        stride: simT * 14,
+        isGk: true,
+        action: 'gk_ready'
+      });
       drawTopPillBadge('เส้นเขตโทษ', '#bae6fd', bxScreen);
 
-      if (playT > 0.22) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.32)';
-        ctx.lineWidth = isStandalone ? 3.2 : 2.2;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(mx(incX + dirSign * 0.8), my(incY + (incY < 50 ? 5.2 : -5.2)));
-        ctx.lineTo(mx(defXNow), my(defYNow));
-        ctx.stroke();
-        ctx.restore();
+      if (simT > 0.22) {
+        drawVarTurfTrack(incX + dirSign * 0.8, defStartY, defXNow, defYNow, clamp((simT - 0.22) / 0.44, 0, 1));
       }
 
       if (pct >= 0.36) {
@@ -1135,7 +1723,15 @@ const renderVarMonitorPanel = (
         ctx.arc(cX, cY, isStandalone ? 3.5 : 2.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+        drawVarImpactBurst(incX, incY, contactClr, clamp((pct - 0.36) / 0.34, 0, 1));
       }
+
+      drawVarReferee(
+        incX - dirSign * (7.2 - playT * 2.0),
+        clamp(incY + (incY < 50 ? 9.5 : -9.5), 14, 86),
+        incX,
+        incY
+      );
 
       drawMiniAgent(
         attXNow,
@@ -1146,7 +1742,13 @@ const renderVarMonitorPanel = (
         rep?.attShort || 'ตัวรุก',
         rep?.attVis,
         '#facc15',
-        '#fde047'
+        '#fde047',
+        {
+          facing: Math.atan2(50 - incY, (attRight ? 96 : 4) - incX),
+          stride: simT * 16,
+          action: simT >= 0.49 ? 'fall' : 'run',
+          actionProg: clamp((simT - 0.49) / 0.44, 0, 1)
+        }
       );
       drawMiniAgent(
         defXNow,
@@ -1157,27 +1759,36 @@ const renderVarMonitorPanel = (
         rep?.defShort || vr.culpritShort || 'ตัวสกัด',
         rep?.defVis,
         pct >= 0.36 ? '#ef4444' : undefined,
-        '#fca5a5'
+        '#fca5a5',
+        {
+          facing: Math.atan2(attYNow - defYNow, attXNow - defXNow),
+          stride: simT * 14,
+          action: simT >= 0.22 && simT <= 0.68 ? 'slide' : 'run',
+          actionProg: clamp((simT - 0.22) / 0.46, 0, 1)
+        }
       );
 
-      const bxNow = attXNow + dirSign * (1.3 + postT * 2.1);
-      const byNow = attYNow - 0.5 + postT * (incY < 50 ? 1.2 : -1.2);
-      drawVarSoccerBall(bxNow, byNow, pct * 13, { z: 0.6 });
+      const bxNow = attXNow + dirSign * (1.3 + postT * 2.4);
+      const byNow = attYNow - 0.5 + postT * (incY < 50 ? 1.4 : -1.4);
+      drawVarSoccerBall(bxNow, byNow, simT * 13, { z: 0.6 + postT * 0.4 });
     }
   } else {
     // FOUL / RED CARD VAR SCENARIOS
     const incX = rep?.incidentX ?? vr.x;
     const incY = rep?.incidentY ?? vr.y;
-    const dirSign = attRight ? 1 : -1;
 
-    const attXNow = incX - dirSign * (1 - playT) * 3.6;
+    const attXNow = incX - dirSign * (1 - playT) * 3.8 + postT * dirSign * 0.6;
     const attYNow = incY;
     const defXNow = incX + dirSign * (1.1 - playT * 0.25);
+    const defStartY = incY + 5.8;
     const defYNow = incY + (1 - playT) * 5.2 + 0.9;
 
-    if (sc === 'dogso' || rep?.foulKind === 'dogso') {
-      // DOGSO: Draw open corridor cone toward goal
+    const isDogso = sc === 'dogso' || rep?.foulKind === 'dogso';
+    const isReckless = sc === 'reckless_duel';
+
+    if (isDogso) {
       const gX = attRight ? 99 : 1;
+      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, 0, 50);
       ctx.save();
       ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
       ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
@@ -1192,9 +1803,17 @@ const renderVarMonitorPanel = (
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
-    } else if (sc === 'reckless_duel') {
-      // RECKLESS AERIAL / DUEL: Draw impact shockwave & bouncing ball
-      if (playT > 0.28) {
+
+      const gkX = attRight ? 96.5 - playT * 1.4 : 3.5 + playT * 1.4;
+      const gkY = clamp(50 + (incY - 50) * 0.35, 43, 57);
+      drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+        facing: Math.atan2(attYNow - gkY, attXNow - gkX),
+        stride: simT * 14,
+        isGk: true,
+        action: 'gk_ready'
+      });
+    } else if (isReckless) {
+      if (simT > 0.28) {
         ctx.save();
         ctx.strokeStyle = 'rgba(251, 146, 60, 0.48)';
         ctx.lineWidth = isStandalone ? 2.0 : 1.4;
@@ -1205,17 +1824,8 @@ const renderVarMonitorPanel = (
         ctx.setLineDash([]);
         ctx.restore();
       }
-    } else if (playT > 0.25) {
-      // LATE SLIDE: Turf skid marks
-      ctx.save();
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-      ctx.lineWidth = isStandalone ? 3.4 : 2.4;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(mx(incX + dirSign * 0.8), my(incY + 5.8));
-      ctx.lineTo(mx(defXNow), my(defYNow));
-      ctx.stroke();
-      ctx.restore();
+    } else if (simT > 0.22) {
+      drawVarTurfTrack(incX + dirSign * 0.8, defStartY, defXNow, defYNow, clamp((simT - 0.22) / 0.44, 0, 1));
     }
 
     if (pct >= 0.36) {
@@ -1232,7 +1842,28 @@ const renderVarMonitorPanel = (
       ctx.fill();
       ctx.stroke();
       ctx.restore();
+      drawVarImpactBurst((attXNow + defXNow) * 0.5, (attYNow + defYNow) * 0.5, spotClr, clamp((pct - 0.36) / 0.34, 0, 1));
     }
+
+    // Supporting midfielder watching / chasing nearby
+    drawMiniAgent(
+      incX - dirSign * (6.2 - playT * 1.6),
+      clamp(incY + (incY < 50 ? 6.8 : -6.8), 16, 84),
+      attKit,
+      attTrim,
+      8,
+      '',
+      undefined,
+      undefined,
+      '#cbd5e1',
+      { facing: Math.atan2(incY - (incY < 50 ? 10 : -10), dirSign), stride: simT * 14, action: 'run', dimmed: true }
+    );
+    drawVarReferee(
+      incX - dirSign * (5.2 - playT * 1.6),
+      clamp(incY + (incY < 50 ? -7.2 : 7.2), 14, 86),
+      (attXNow + defXNow) * 0.5,
+      (attYNow + defYNow) * 0.5
+    );
 
     drawMiniAgent(
       attXNow,
@@ -1242,7 +1873,26 @@ const renderVarMonitorPanel = (
       rep?.attNo ?? 10,
       rep?.attShort || 'ผู้ถูกสกัด',
       rep?.attVis,
-      '#ffffff'
+      '#ffffff',
+      '#f8fafc',
+      {
+        facing: attRight ? 0 : Math.PI,
+        stride: simT * 16,
+        action: isReckless
+          ? simT >= 0.49
+            ? 'fall'
+            : simT >= 0.2
+              ? 'leap'
+              : 'run'
+          : simT >= 0.49
+            ? 'fall'
+            : 'run',
+        actionProg: isReckless
+          ? simT >= 0.49
+            ? clamp((simT - 0.49) / 0.42, 0, 1)
+            : clamp((simT - 0.2) / 0.29, 0, 1)
+          : clamp((simT - 0.49) / 0.42, 0, 1)
+      }
     );
     drawMiniAgent(
       defXNow,
@@ -1253,27 +1903,69 @@ const renderVarMonitorPanel = (
       rep?.defShort || vr.culpritShort || 'ผู้ทำฟาวล์',
       rep?.defVis,
       pct >= 0.36 ? '#f59e0b' : undefined,
-      '#fde047'
+      '#fde047',
+      {
+        facing: Math.atan2(attYNow - defYNow, attXNow - defXNow),
+        stride: simT * 15,
+        action: isReckless
+          ? simT >= 0.24 && simT <= 0.55
+            ? 'leap'
+            : simT > 0.55
+              ? 'clash'
+              : 'run'
+          : simT >= 0.22 && simT <= 0.68
+            ? 'slide'
+            : 'run',
+        actionProg: isReckless
+          ? simT <= 0.55
+            ? clamp((simT - 0.24) / 0.31, 0, 1)
+            : clamp((simT - 0.55) / 0.3, 0, 1)
+          : clamp((simT - 0.22) / 0.46, 0, 1)
+      }
     );
 
-    const isAerial = sc === 'reckless_duel';
-    const bxNow = attXNow + dirSign * (1.4 + postT * 2.2);
-    const byNow = attYNow - 0.6 + (isAerial ? Math.sin(pct * Math.PI) * 1.2 : 0);
-    const bzNow = isAerial ? Math.abs(Math.sin(pct * Math.PI * 1.8)) * 5.5 : 0.7;
-    drawVarSoccerBall(bxNow, byNow, pct * 14, { z: bzNow });
+    const bxNow = attXNow + dirSign * (1.4 + postT * 2.4);
+    const byNow = attYNow - 0.6 + (isReckless ? Math.sin(simT * Math.PI) * 1.2 : 0);
+    const bzNow = isReckless ? Math.abs(Math.sin(simT * Math.PI * 1.8)) * 5.2 : 0.7;
+    drawVarSoccerBall(bxNow, byNow, simT * 14, { z: bzNow });
 
     if (pct >= 0.36) {
-      const fTag =
-        sc === 'dogso' || rep?.foulKind === 'dogso'
-          ? 'เช็กตัวสุดท้าย (DOGSO)'
-          : sc === 'reckless_duel'
-            ? 'เช็กจังหวะปะทะรุนแรง / นอกเกม'
-            : 'เช็กจังหวะเปิดปุ่ม / เสียบช้า';
+      const fTag = isDogso
+        ? 'เช็กตัวสุดท้าย (DOGSO)'
+        : isReckless
+          ? 'เช็กจังหวะปะทะรุนแรง / นอกเกม'
+          : 'เช็กจังหวะเปิดปุ่ม / เสียบช้า';
       drawTopPillBadge(fTag, '#fcd34d');
     }
   }
 
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+  // Sweeping Forensic VAR Laser Scanline during Freeze-frame lock
+  if (isFreezePhase) {
+    const scanFrac = (pct - 0.36) / 0.28;
+    const scanY = scrY + scanFrac * scrH;
+    const scanGrad = ctx.createLinearGradient(scrX, scanY - 10, scrX, scanY + 10);
+    scanGrad.addColorStop(0, 'rgba(56, 189, 248, 0)');
+    scanGrad.addColorStop(0.5, 'rgba(56, 189, 248, 0.26)');
+    scanGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+    ctx.fillStyle = scanGrad;
+    ctx.fillRect(scrX, scanY - 10, scrW, 20);
+  }
+
+  // Subtle Broadcast Lens Vignette + Monitor Scanlines
+  const vigGrad = ctx.createRadialGradient(
+    scrX + scrW * 0.5,
+    scrY + scrH * 0.5,
+    Math.min(scrW, scrH) * 0.34,
+    scrX + scrW * 0.5,
+    scrY + scrH * 0.5,
+    Math.max(scrW, scrH) * 0.76
+  );
+  vigGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  vigGrad.addColorStop(1, 'rgba(2, 6, 23, 0.42)');
+  ctx.fillStyle = vigGrad;
+  ctx.fillRect(scrX, scrY, scrW, scrH);
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
   ctx.lineWidth = 1;
   for (let sy = scrY + 3; sy < scrY + scrH; sy += 4) {
     ctx.beginPath();
@@ -1282,9 +1974,41 @@ const renderVarMonitorPanel = (
     ctx.stroke();
   }
 
+  // Broadcast Speed / Frame HUD Telemetry (Top-Left in standalone & PiP)
+  if (!smallText || isStandalone) {
+    const modeChip = isFreezePhase ? '⏸ FREEZE · 120FPS' : pct < 0.36 ? '▶ SLOW-MO 0.25×' : '▶ CALL · LIVE';
+    ctx.save();
+    ctx.font = `800 ${isStandalone ? 9.5 : 6.4}px Sarabun, sans-serif`;
+    const mw = measureTextCached(ctx, modeChip) + (isStandalone ? 10 : 6);
+    const mh = isStandalone ? 15 : 10;
+    ctx.fillStyle = 'rgba(6, 12, 24, 0.78)';
+    ctx.beginPath();
+    ctx.roundRect(scrX + 6, scrY + scrH - mh - (showVerdict ? (isStandalone ? 27 : 18) : 6), mw, mh, 3);
+    ctx.fill();
+    ctx.fillStyle = isFreezePhase ? '#7dd3fc' : showVerdict ? verdictColor : '#e2e8f0';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(modeChip, scrX + 6 + (isStandalone ? 5 : 3), scrY + scrH - mh / 2 - (showVerdict ? (isStandalone ? 27 : 18) : 6) + 0.3);
+
+    if (isStandalone) {
+      const frmTxt = `FRM ${String(Math.round(pct * 120)).padStart(3, '0')}`;
+      const fw = measureTextCached(ctx, frmTxt) + 10;
+      const fyPos = scrY + scrH - mh - (showVerdict ? 27 : 6);
+      ctx.fillStyle = 'rgba(6, 12, 24, 0.78)';
+      ctx.beginPath();
+      ctx.roundRect(scrX + scrW - fw - 6, fyPos, fw, mh, 3);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(226, 232, 240, 0.85)';
+      ctx.textAlign = 'right';
+      ctx.fillText(frmTxt, scrX + scrW - 11, fyPos + mh / 2 + 0.3);
+    }
+    ctx.restore();
+  }
+
+  // Broadcast Viewfinder Corner Brackets
   const br = isStandalone ? 10 : 7;
   const bp = isStandalone ? 8 : 5;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
+  ctx.strokeStyle = isFreezePhase ? 'rgba(56, 189, 248, 0.78)' : 'rgba(255, 255, 255, 0.48)';
   ctx.lineWidth = isStandalone ? 1.6 : 1.2;
   ctx.beginPath();
   ctx.moveTo(scrX + bp, scrY + bp + br);

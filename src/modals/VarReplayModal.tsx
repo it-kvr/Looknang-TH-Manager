@@ -55,7 +55,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [pct, setPct] = useState<number>(() => (liveMode ? 0.15 : 0));
   const [playing, setPlaying] = useState<boolean>(true);
-  const [replaySpeed, setReplaySpeed] = useState<0.5 | 1 | 1.5>(1);
+  const [replaySpeed, setReplaySpeed] = useState<0.25 | 0.5 | 1 | 1.5>(1);
 
   // Reset playback from start when switching between saved VAR incidents
   useEffect(() => {
@@ -114,10 +114,10 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
   }, [activeRecord, pct, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
 
   const phaseLabel =
-    pct >= 0.72
+    pct >= 0.64
       ? 'คำตัดสินสุดท้าย VAR'
       : pct >= 0.36
-        ? 'หยุดภาพตรวจจุดชี้ขาด'
+        ? 'หยุดภาพตรวจจุดชี้ขาด (Freeze)'
         : 'สโลว์โมชันจังหวะปะทะ';
 
   const sc = activeRecord.varState.replay?.scenario;
@@ -301,7 +301,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => handleJump(0.55)}
+                onClick={() => handleJump(0.5)}
                 className="h-8 mland:h-7 px-2 rounded-lg bg-amber-400/18 border border-amber-300/40 hover:bg-amber-400/28 text-amber-200 text-[11px] mland:text-[9.5px] font-bold cursor-pointer transition-colors"
                 title="หยุดที่จุดตีเส้น / จุดปะทะ"
               >
@@ -321,7 +321,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
 
             <div className="flex items-center gap-1.5">
               <div className="inline-flex items-center p-0.5 rounded-lg bg-white/8 border border-white/12">
-                {([0.5, 1, 1.5] as const).map((sp) => (
+                {([0.25, 0.5, 1, 1.5] as const).map((sp) => (
                   <button
                     key={sp}
                     type="button"
