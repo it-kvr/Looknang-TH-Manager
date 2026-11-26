@@ -25,6 +25,105 @@ const NUMBER_PAGES: ReadonlyArray<{ label: string; start: number; end: number; n
 
 const getPageForNumber = (num: number): number => clamp(Math.floor((num - 1) / 25), 0, NUMBER_PAGES.length - 1);
 
+const LockerCabinDecor: React.FC<{ selected?: boolean; compact?: boolean }> = ({ selected = false, compact = false }) => {
+  const uid = React.useId().replace(/:/g, '');
+  return (
+    <>
+      {/* Recessed wooden/slate locker back wall with subtle architectural vertical paneling */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          backgroundImage: [
+            selected
+              ? 'radial-gradient(ellipse 85% 58% at 50% 6%, rgba(52, 211, 153, 0.24), transparent 70%)'
+              : 'radial-gradient(ellipse 82% 54% at 50% 6%, rgba(254, 243, 199, 0.14), transparent 72%)',
+            'repeating-linear-gradient(90deg, rgba(255,255,255,0.022) 0px, rgba(255,255,255,0.022) 1px, transparent 1px, transparent 14px)',
+            'linear-gradient(180deg, #1b2226 0%, #12171a 58%, #0b0e10 100%)'
+          ].join(', ')
+        }}
+      />
+      {/* Top cabinet shelf overhang shadow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-2.5 bg-gradient-to-b from-black/55 to-transparent"
+      />
+      {/* Side cabinet depth framing */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 left-0 w-2 bg-gradient-to-r from-black/45 to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-y-0 right-0 w-2 bg-gradient-to-l from-black/45 to-transparent"
+      />
+      {/* Brushed stainless steel hanging rail with end brackets */}
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-2.5 mland:inset-x-2 ${compact ? 'top-[5px]' : 'top-[7px] mland:top-[5px]'} h-[2.5px] rounded-full bg-gradient-to-b from-[#e2e8f0] via-[#94a3b8] to-[#475569] shadow-[0_1px_3px_rgba(0,0,0,0.75)]`}
+      >
+        <span className="absolute -left-0.5 top-1/2 -translate-y-1/2 w-1 h-2 rounded-xs bg-[#334155] border border-white/20" />
+        <span className="absolute -right-0.5 top-1/2 -translate-y-1/2 w-1 h-2 rounded-xs bg-[#334155] border border-white/20" />
+      </div>
+      {/* Realistic chrome hook + contoured teak wood clothes hanger */}
+      <svg
+        viewBox="0 0 100 38"
+        aria-hidden="true"
+        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-[5] drop-shadow-[0_3px_4px_rgba(0,0,0,0.65)] ${
+          compact
+            ? 'top-[2px] w-[42px] h-[16px] mland:w-[32px] mland:h-[13px]'
+            : 'top-[3px] mland:top-[2px] w-[46px] h-[18px] mland:w-[36px] mland:h-[14px]'
+        }`}
+      >
+        <defs>
+          <linearGradient id={`hw-${uid}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#d49b63" />
+            <stop offset="45%" stopColor="#9f6838" />
+            <stop offset="100%" stopColor="#653b1b" />
+          </linearGradient>
+          <linearGradient id={`hc-${uid}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#f8fafc" />
+            <stop offset="55%" stopColor="#94a3b8" />
+            <stop offset="100%" stopColor="#475569" />
+          </linearGradient>
+        </defs>
+        {/* Chrome hook gripping the steel rod */}
+        <path
+          d="M 50 14.5 L 50 11.5 C 50 9 54.5 8.5 54.5 5.8 C 54.5 3.6 52.4 2.3 50 2.3 C 47.9 2.3 46.2 3.5 45.8 5.2"
+          fill="none"
+          stroke={`url(#hc-${uid})`}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        />
+        {/* Brass collar ferrule */}
+        <rect x="47.4" y="13.2" width="5.2" height="3.2" rx="1.2" fill="#e5b85c" stroke="#5c3d0e" strokeWidth="0.6" />
+        {/* Contoured wooden hanger shoulders */}
+        <path
+          d="M 50 16 C 56 16.5 72 22.5 84.5 29.5 C 86.5 30.6 86.4 33.4 83.8 33.8 C 81.8 34.1 79.2 33 76.5 31.8 C 67 27.5 57 23.2 50 23.2 C 43 23.2 33 27.5 23.5 31.8 C 20.8 33 18.2 34.1 16.2 33.8 C 13.6 33.4 13.5 30.6 15.5 29.5 C 28 22.5 44 16.5 50 16 Z"
+          fill={`url(#hw-${uid})`}
+          stroke="#3b200c"
+          strokeWidth="0.9"
+          strokeLinejoin="round"
+        />
+        {/* Subtle wood top rim highlight */}
+        <path
+          d="M 20 28.8 C 31.5 22.6 43.5 17.7 50 17.7 C 56.5 17.7 68.5 22.6 80 28.8"
+          fill="none"
+          stroke="#f3cca1"
+          strokeOpacity="0.45"
+          strokeWidth="1"
+          strokeLinecap="round"
+        />
+      </svg>
+      {/* Grounded oak locker bench ledge */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[5px] mland:h-[4px] bg-gradient-to-b from-[#694426] to-[#3c2412] border-t border-[#b98456]/35"
+      />
+    </>
+  );
+};
+
 export const LockerRoomPanel: React.FC<{
   state: GameState;
   team: Team;
@@ -294,31 +393,11 @@ export const LockerRoomPanel: React.FC<{
                   </div>
 
                   {/* Locker Compartment Interior */}
-                  <div className="relative mx-2 mt-2 mland:mx-1.5 mland:mt-1.5 rounded-lg bg-gradient-to-b from-[#1a2922] via-[#101a16] to-[#0a110e] border border-white/10 pt-3 pb-2 mland:pt-2 mland:pb-1.5 px-2 flex items-center justify-center overflow-hidden shadow-inner">
-                    {/* Locker Top Vent Slits & Hanger Rod */}
-                    <div
-                      aria-hidden="true"
-                      className="absolute top-1 left-2 flex items-center gap-[2px] opacity-35"
-                    >
-                      <span className="w-[2px] h-1.5 rounded-full bg-white/70" />
-                      <span className="w-[2px] h-1.5 rounded-full bg-white/70" />
-                      <span className="w-[2px] h-1.5 rounded-full bg-white/70" />
-                    </div>
-                    <div
-                      aria-hidden="true"
-                      className={`absolute top-1.5 left-1/2 -translate-x-1/2 w-10 h-[3px] rounded-full ${
-                        isSelected ? 'bg-emerald-300/65' : 'bg-white/20'
-                      }`}
-                    />
-                    {isSelected && (
-                      <div
-                        aria-hidden="true"
-                        className="pointer-events-none absolute inset-x-3 top-0 h-8 bg-gradient-to-b from-emerald-400/20 to-transparent"
-                      />
-                    )}
+                  <div className="relative mx-2 mt-2 mland:mx-1.5 mland:mt-1.5 rounded-lg border border-white/12 pt-[18px] pb-2 mland:pt-[14px] mland:pb-1.5 px-2 flex items-center justify-center overflow-hidden shadow-inner">
+                    <LockerCabinDecor selected={isSelected} />
 
                     {/* Hanging Jersey */}
-                    <div className="relative z-10 shrink-0 [&>svg]:w-[54px] [&>svg]:h-[54px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[42px] drop-shadow-[0_6px_12px_rgba(0,0,0,0.6)] transition-transform duration-150 group-hover:scale-[1.03]">
+                    <div className="relative z-10 shrink-0 mt-0.5 [&>svg]:w-[54px] [&>svg]:h-[54px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[42px] drop-shadow-[0_7px_12px_rgba(0,0,0,0.72)] transition-transform duration-150 group-hover:scale-[1.03]">
                       <KitJersey
                         club={clubIdentity}
                         away={kitSide === 'away'}
@@ -330,7 +409,7 @@ export const LockerRoomPanel: React.FC<{
                     </div>
 
                     {/* Docked Player Portrait */}
-                    <div className="absolute bottom-1.5 right-1.5 mland:bottom-1 mland:right-1 z-20 w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-full bg-[#0a130f]/95 border border-white/20 shadow-md flex items-center justify-center overflow-hidden [&>svg]:w-[28px] [&>svg]:h-[30px] mland:[&>svg]:w-[22px] mland:[&>svg]:h-[24px]">
+                    <div className="absolute bottom-2 right-1.5 mland:bottom-1.5 mland:right-1 z-20 w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-full bg-[#0b1114]/95 border border-white/25 shadow-md flex items-center justify-center overflow-hidden [&>svg]:w-[28px] [&>svg]:h-[30px] mland:[&>svg]:w-[22px] mland:[&>svg]:h-[24px]">
                       <PlayerFace player={{ ...q, no }} team={team} state={state} size={28} />
                     </div>
                   </div>
@@ -366,31 +445,34 @@ export const LockerRoomPanel: React.FC<{
         </div>
 
         {/* Right: Selected Locker Spotlight & 1–99 Number Assignment */}
-        <div className="min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3 mland:p-2 flex flex-col gap-2.5 mland:gap-1.5">
+        <div className="min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 sm:p-3 mland:p-1.5 flex flex-col gap-2 mland:gap-1">
           {selectedPlayer ? (
             <>
               {/* Selected Player Showcase */}
-              <div className="flex items-center gap-2.5 mland:gap-2 pb-2.5 mland:pb-1.5 border-b border-[var(--line)]">
-                <div className="relative shrink-0 rounded-xl bg-gradient-to-b from-[#1a2922] via-[#101a16] to-[#0a110e] border border-white/10 p-2 mland:p-1.5 flex items-center justify-center shadow-inner">
-                  <div className="[&>svg]:w-[58px] [&>svg]:h-[58px] mland:[&>svg]:w-[44px] mland:[&>svg]:h-[44px] drop-shadow-[0_6px_10px_rgba(0,0,0,0.6)]">
-                    <KitJersey
-                      club={clubIdentity}
-                      away={kitSide === 'away'}
-                      size={58}
-                      team={team}
-                      shirtNo={selectedNo}
-                      isGK={selectedPlayer.pos === 'GK'}
-                    />
+              <div className="shrink-0 flex items-center gap-2.5 mland:gap-2 pb-2 mland:pb-1 border-b border-[var(--line)]">
+                <div className="relative shrink-0">
+                  <div className="relative rounded-xl mland:rounded-lg border border-white/12 pt-[16px] pb-1.5 px-2 mland:pt-[13px] mland:pb-1 mland:px-1.5 flex items-center justify-center overflow-hidden shadow-inner">
+                    <LockerCabinDecor selected compact />
+                    <div className="relative z-10 mt-0.5 [&>svg]:w-[52px] [&>svg]:h-[52px] mland:[&>svg]:w-[38px] mland:[&>svg]:h-[38px] drop-shadow-[0_7px_12px_rgba(0,0,0,0.72)]">
+                      <KitJersey
+                        club={clubIdentity}
+                        away={kitSide === 'away'}
+                        size={52}
+                        team={team}
+                        shirtNo={selectedNo}
+                        isGK={selectedPlayer.pos === 'GK'}
+                      />
+                    </div>
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-8 h-8 mland:w-6.5 mland:h-6.5 rounded-full bg-[#0b1410] border border-white/25 shadow-md flex items-center justify-center overflow-hidden [&>svg]:w-[28px] [&>svg]:h-[30px] mland:[&>svg]:w-[22px] mland:[&>svg]:h-[24px]">
-                    <PlayerFace player={{ ...selectedPlayer, no: selectedNo }} team={team} state={state} size={28} />
+                  <div className="absolute -bottom-1 -right-1 z-20 w-7 h-7 mland:w-5.5 mland:h-5.5 rounded-full bg-[#0b1114] border border-white/25 shadow-md flex items-center justify-center overflow-hidden [&>svg]:w-[24px] [&>svg]:h-[26px] mland:[&>svg]:w-[18px] mland:[&>svg]:h-[20px]">
+                    <PlayerFace player={{ ...selectedPlayer, no: selectedNo }} team={team} state={state} size={24} />
                   </div>
                 </div>
 
-                <div className="min-w-0 flex-1 space-y-1 mland:space-y-0.5">
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate flex items-center gap-1">
+                      <div className="text-xs sm:text-sm mland:text-[10.5px] font-extrabold font-display text-[var(--ink)] truncate flex items-center gap-1 leading-tight">
                         {isSelectedMe ? (
                           <span className="text-[#9a6700] dark:text-[var(--lamp)] shrink-0">★</span>
                         ) : null}
@@ -399,7 +481,7 @@ export const LockerRoomPanel: React.FC<{
                         ) : null}
                         <span className="truncate">{selectedPlayer.n}</span>
                       </div>
-                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5">
+                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular mt-0.5 leading-tight">
                         <span>{selectedPlayer.ro}</span>
                         <span aria-hidden="true"> · </span>
                         <span className={isSelectedStarter ? 'text-[var(--g)] font-semibold' : ''}>
@@ -438,8 +520,8 @@ export const LockerRoomPanel: React.FC<{
 
               {/* Position Traditional Shirt Number Quick-Picks */}
               {shirtGuide && quickRecommendedNumbers.length > 0 && (
-                <div className="pb-2 mland:pb-1.5 border-b border-[var(--line)]/80 space-y-1.5 mland:space-y-1">
-                  <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[8.5px]">
+                <div className="shrink-0 pb-2 mland:pb-1 border-b border-[var(--line)]/80 space-y-1 mland:space-y-0.5">
+                  <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[8.5px] leading-tight">
                     <span className="font-bold text-[var(--ink)] truncate">{shirtGuide.label}</span>
                     <span className="text-[var(--mut)] shrink-0">เบอร์แนะนำตำแหน่ง</span>
                   </div>
@@ -463,7 +545,7 @@ export const LockerRoomPanel: React.FC<{
                                 ? `สลับกับ ${holder!.n} (#${num})`
                                 : `เลือกเบอร์ #${num}`
                           }
-                          className={`h-6 mland:h-5 px-2 mland:px-1.5 rounded-md border text-[10.5px] mland:text-[8.5px] font-extrabold tabular inline-flex items-center gap-1 transition-colors cursor-pointer disabled:cursor-default ${
+                          className={`h-6 mland:h-4.5 px-2 mland:px-1.5 rounded-md border text-[10.5px] mland:text-[8.5px] font-extrabold tabular inline-flex items-center gap-1 transition-colors cursor-pointer disabled:cursor-default ${
                             isCurrent
                               ? 'bg-[var(--g)] border-[var(--g)] text-white'
                               : isTaken
@@ -483,9 +565,9 @@ export const LockerRoomPanel: React.FC<{
               )}
 
               {/* 4-Page 5x5 Number Board (1–99) */}
-              <div className="space-y-2 mland:space-y-1.5 flex-1 flex flex-col min-h-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] whitespace-nowrap">
+              <div className="flex-1 min-h-0 flex flex-col gap-1.5 mland:gap-1">
+                <div className="shrink-0 flex items-center justify-between gap-2">
+                  <span className="text-[11px] mland:text-[9px] font-bold text-[var(--ink)] whitespace-nowrap">
                     เลือกเบอร์เสื้อ (1–99)
                   </span>
                   <div className="seg-bar grid grid-cols-4 flex-1 max-w-[228px]">
@@ -500,7 +582,7 @@ export const LockerRoomPanel: React.FC<{
                             SFX.tap();
                             setNumPage(idx);
                           }}
-                          className={`seg-btn px-1! py-0.5! text-[10px] mland:text-[8.5px] tabular whitespace-nowrap ${
+                          className={`seg-btn px-1! py-0.5! text-[10px] mland:text-[8px] tabular whitespace-nowrap ${
                             active ? 'seg-btn-active' : containsCurrent ? 'text-[var(--g)]! font-extrabold!' : ''
                           }`}
                           title={`หน้า ${idx + 1}: เบอร์ ${pg.label}${containsCurrent ? ' (เบอร์ปัจจุบันอยู่ในหน้านี้)' : ''}`}
@@ -512,7 +594,7 @@ export const LockerRoomPanel: React.FC<{
                   </div>
                 </div>
 
-                <div className="grid grid-cols-5 gap-1.5 mland:gap-1">
+                <div className="flex-1 min-h-0 max-h-[245px] mland:max-h-none grid grid-cols-5 grid-rows-5 gap-1.5 mland:gap-1">
                   {activePageSpec.nums.map((num) => {
                     const holder = numberHolderMap.get(num);
                     const isCurrent = holder?.n === selectedPlayer.n;
@@ -534,7 +616,7 @@ export const LockerRoomPanel: React.FC<{
                               ? `เบอร์ #${num} เป็นของ ${holder!.n} (${holder!.ro}) — แตะเพื่อสลับ`
                               : `เบอร์ #${num} ว่าง${isPrimaryRec || isAltRec ? ' (เบอร์แนะนำประจำตำแหน่ง)' : ''} — แตะเพื่อเลือก`
                         }
-                        className={`relative h-10 mland:h-7 rounded-lg border px-1 transition-colors cursor-pointer disabled:cursor-default flex flex-col items-center justify-center leading-none ${
+                        className={`relative min-h-[34px] md:min-h-0 mland:min-h-0 h-full rounded-lg mland:rounded-md border px-1 transition-colors cursor-pointer disabled:cursor-default flex flex-col items-center justify-center leading-none ${
                           isCurrent
                             ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
                             : isTaken
@@ -546,17 +628,17 @@ export const LockerRoomPanel: React.FC<{
                                   : 'bg-[var(--surface-2)]/35 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)] disabled:opacity-45'
                         }`}
                       >
-                        <span className="text-xs mland:text-[9.5px] font-extrabold tabular">{num}</span>
+                        <span className="text-xs mland:text-[9px] font-extrabold tabular">{num}</span>
                         {isCurrent ? (
-                          <span className="mt-0.5 inline-flex items-center gap-0.5 text-[8px] mland:text-[7px] font-bold text-white/95">
-                            <Check className="w-2.5 h-2.5" />
+                          <span className="mt-0.5 inline-flex items-center gap-0.5 text-[8px] mland:text-[6.5px] font-bold text-white/95">
+                            <Check className="w-2.5 h-2.5 mland:w-2 mland:h-2" />
                           </span>
                         ) : isTaken ? (
-                          <span className="mt-0.5 text-[8px] mland:text-[6.5px] font-semibold text-[#855800] dark:text-[var(--lamp)] truncate max-w-full">
+                          <span className="mt-0.5 text-[8px] mland:text-[6px] font-semibold text-[#855800] dark:text-[var(--lamp)] truncate max-w-full">
                             ⇄ {holderShort}
                           </span>
                         ) : isPrimaryRec || isAltRec ? (
-                          <span className="mt-0.5 text-[8px] mland:text-[6.5px] font-bold text-[var(--g)]">
+                          <span className="mt-0.5 text-[8px] mland:text-[6px] font-bold text-[var(--g)]">
                             แนะนำ
                           </span>
                         ) : null}
@@ -564,54 +646,6 @@ export const LockerRoomPanel: React.FC<{
                     );
                   })}
                 </div>
-
-                {/* Board Footer Legend & Pagination */}
-                <div className="flex items-center justify-between gap-2 pt-1 text-[10px] mland:text-[8px] text-[var(--mut)] border-t border-[var(--line)]/60">
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 min-w-0">
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block" />
-                      <span>ใช้อยู่</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <span className="w-2 h-2 rounded-xs bg-[var(--lamp-soft)] border border-dashed border-[var(--lamp)] inline-block" />
-                      <span>⇄ สลับเบอร์</span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <span className="w-2 h-2 rounded-xs bg-[var(--g-soft)] border border-[var(--g)]/60 inline-block" />
-                      <span>แนะนำตำแหน่ง</span>
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        setNumPage((p) => (p + NUMBER_PAGES.length - 1) % NUMBER_PAGES.length);
-                      }}
-                      className="px-2 py-0.5 rounded border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] text-[var(--ink)] font-bold cursor-pointer"
-                      aria-label="หน้าก่อนหน้า"
-                    >
-                      ‹
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        SFX.tap();
-                        setNumPage((p) => (p + 1) % NUMBER_PAGES.length);
-                      }}
-                      className="px-2 py-0.5 rounded border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] text-[var(--ink)] font-bold cursor-pointer"
-                      aria-label="หน้าถัดไป"
-                    >
-                      ›
-                    </button>
-                  </div>
-                </div>
-
-                {!canEditSelected && (
-                  <p className="text-[10px] mland:text-[8px] text-[var(--mut)] leading-snug">
-                    ในโหมดนักเตะอาชีพ สามารถปรับเบอร์ของตัวเองได้ หรือใช้ปุ่มจัดเบอร์ออโต้ด้านบน
-                  </p>
-                )}
               </div>
             </>
           ) : (
