@@ -8942,6 +8942,8 @@ export const MatchModal: React.FC<{
           : slowActive
             ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34)
             : baseMoveScale;
+        const hFrameCfg = getEffectiveTeamCfg('H', Math.max(1, curIntMin));
+        const aFrameCfg = getEffectiveTeamCfg('A', Math.max(1, curIntMin));
         w.agents.forEach((ag) => {
           if (ag.sentOff) return;
           if (ag.acrobatTimer && ag.acrobatTimer > 0) {
@@ -8976,11 +8978,24 @@ export const MatchModal: React.FC<{
           const dx = ag.tx - ag.x;
           const dy = ag.ty - ag.y;
           const dist = Math.hypot(dx, dy);
+          const agCfg = ag.side === 'H' ? hFrameCfg : aFrameCfg;
+          const agInPoss = w.ball.possessionSide === ag.side;
+          const tempoMult = agCfg.tempo === 2 ? 1.13 : agCfg.tempo === 0 ? 0.88 : 1.0;
+          const pressMult = !agInPoss && ag.intent === 'PRESS' && agCfg.press === 2 ? 1.11 : !agInPoss && agCfg.press === 0 ? 0.93 : 1.0;
+          const counterOrSiegeMult =
+            agInPoss && (agCfg.tac === 'Z' || agCfg.tac === 'D') && (ag.pos === 'FW' || ag.intent === 'MAKE_RUN')
+              ? 1.11
+              : agCfg.tac === 'X' && (ag.pos === 'FW' || ag.intent === 'OVERLAP' || ag.intent === 'MAKE_RUN')
+                ? 1.08
+                : 1.0;
           const agFacMods = getSideFacMods(ag.side);
           const lowFitSpd = ag.fit < 50 ? clamp(0.76 + (agFacMods.lowFitResilience - 0.7) * 0.45, 0.76, 0.94) : 1.0;
           const maxSpd =
             (18 + ((ag.d.spd || 60) - 55) * 0.22) *
             (ag.intent === 'PASS_TARGET' ? 1.65 : ag.intent === 'MAKE_RUN' || ag.intent === 'OVERLAP' || ag.intent === 'PRESS' || ag.intent === 'RESET' ? 1.38 : 1.0) *
+            tempoMult *
+            pressMult *
+            counterOrSiegeMult *
             lowFitSpd *
             turfMatchMods.sprintSpeedMult *
             agFacMods.sprintBonusMult *
@@ -8988,7 +9003,8 @@ export const MatchModal: React.FC<{
             (w.miracle?.side === ag.side && w.miracle.minsLeft > 0 ? (w.miracle.maxDeficit >= 3 ? 1.2 : 1.16) : 1.0) *
             moveScale;
           const isUrgent = ag.intent === 'PASS_TARGET' || ag.intent === 'PRESS' || ag.intent === 'RESET' || ag.intent === 'MAKE_RUN';
-          const accelRate = Math.min(1, rawDt * (isUrgent ? 14.5 : 9.2));
+          const tempoAccelMult = agCfg.tempo === 2 ? 1.18 : agCfg.tempo === 0 ? 0.85 : 1.0;
+          const accelRate = Math.min(1, rawDt * (isUrgent ? 14.5 : 9.2) * tempoAccelMult);
           const stepSpd = Math.min(dist * 6.5 * moveScale, maxSpd);
           if (dist > 0.16) {
             const desiredVx = (dx / dist) * stepSpd;
@@ -10583,13 +10599,35 @@ export const MatchModal: React.FC<{
                 );
                 pushLog(minute, `📣 สั่งการข้างสนาม: ปรับแผนเป็น "${AR_T[m]}"`, 'sys');
               }}
-              onSetPress={(v) => { SFX.coach(); setLivePress(v); }}
-              onSetTempo={(v) => { SFX.coach(); setLiveTempo(v); }}
-              onSetLine={(v) => { SFX.coach(); setLiveLine(v); }}
-              onSetWid={(v) => { SFX.coach(); setLiveWid(v); }}
+              onSetPress={(v) => {
+                SFX.coach();
+                setLivePress(v);
+                triggerCoachShout(worldRef.current, meIsHome ? 'H' : 'A', v === 2 ? '⚡ บีบเพรสสูง!' : v === 0 ? '🛡️ ถอยคุมโซน!' : '⚖️ เพรสสมดุล', 2.2);
+              }}
+              onSetTempo={(v) => {
+                SFX.coach();
+                setLiveTempo(v);
+                triggerCoachShout(worldRef.current, meIsHome ? 'H' : 'A', v === 2 ? '⚡ เร่งสปีดบอล!' : v === 0 ? '🐢 ดึงจังหวะช้า!' : '⚖️ จังหวะปกติ', 2.2);
+              }}
+              onSetLine={(v) => {
+                SFX.coach();
+                setLiveLine(v);
+                triggerCoachShout(worldRef.current, meIsHome ? 'H' : 'A', v === 2 ? '⬆️ ดันไลน์สูง!' : v === 0 ? '⬇️ ยืนรับลึก!' : '↔️ ไลน์สมดุล', 2.2);
+              }}
+              onSetWid={(v) => {
+                SFX.coach();
+                setLiveWid(v);
+                triggerCoachShout(worldRef.current, meIsHome ? 'H' : 'A', v === 2 ? '↔️ ถ่างเกมริมเส้น!' : v === 0 ? '🎯 บีบเข้ากลาง!' : '⚖️ กว้างสมดุล', 2.2);
+              }}
               onSetPass={(idx) => {
                 SFX.coach();
                 setLivePass(idx);
+                triggerCoachShout(
+                  worldRef.current,
+                  meIsHome ? 'H' : 'A',
+                  ['🤝 ต่อบอลสั้น!', '⚽ จ่ายผสม!', '↗️ วางบอลยาว!', '🚀 สวนกลับเร็ว!'][idx] || '⚽ ปรับการจ่าย',
+                  2.2
+                );
                 pushLog(minute, `📣 สั่งการข้างสนาม: เน้นจ่ายแบบ "${['บอลสั้น', 'ผสม', 'บอลยาว', 'เกมสวน'][idx]}"`, 'sys');
               }}
               onSubstitute={performSubstitution}
