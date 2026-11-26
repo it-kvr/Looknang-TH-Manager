@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Pencil, Check, X, Dices, Palette, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -583,7 +584,7 @@ export const FinanceClubView: React.FC<{
           <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
             <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">งบสโมสรปัจจุบัน</div>
             <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
-              {fmtMoney(state.money)}
+              <AnimatedMoney value={state.money} deltaPlacement="above" />
             </div>
             <div className={`text-[11px] mland:text-[8.5px] mt-0.5 mland:mt-0 truncate ${state.money < 0 ? 'text-[var(--red)] font-bold' : 'text-[var(--mut)]'}`}>
               {state.money < 0 ? '⚠️ ติดลบ (ล็อก FFP ซื้อตัว)' : 'สถานะการเงินพร้อมดำเนินการ'}
@@ -3073,7 +3074,7 @@ export const FinanceClubView: React.FC<{
             {/* Dedicated Spacious Club Info Editor Modal (Easy Thai Input + Clear Buttons + Mobile Keyboard Safe) */}
             {editingClubInfo && (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-3 sm:p-4 mland:p-2"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 mland:p-2"
                 onClick={cancelClubEdit}
               >
                 <form
@@ -3435,7 +3436,7 @@ export const FinanceClubView: React.FC<{
 
               return (
                 <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-3 sm:p-4 mland:p-2"
+                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 mland:p-2"
                   onClick={closeCoachEditor}
                 >
                   <div
@@ -5074,7 +5075,7 @@ export const FinanceClubView: React.FC<{
         }
         const canFull = curLv - minLv >= 2;
         return (
-          <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-3">
             <div className="w-full max-w-md rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl overflow-hidden">
               <div className="px-4 py-3 bg-[var(--red-soft)]/60 border-b border-[var(--line)] flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">

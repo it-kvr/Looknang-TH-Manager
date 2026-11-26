@@ -138,11 +138,66 @@ export const SquadTacticsView: React.FC<{
     immediate: boolean;
     holdTimer?: number;
   } | null>(null);
-  const [dragUi, setDragUi] = useState<{ player: Player; fromSlot?: SubRole; x: number; y: number } | null>(null);
+  const [dragUi, setDragUi] = useState<{ player: Player; fromSlot?: SubRole } | null>(null);
+  const dragUiRef = useRef<{ player: Player; fromSlot?: SubRole } | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragGhostPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dropTarget, setDropTarget] = useState<{ name: string; slot?: string } | null>(null);
   const [pitchDragPreview, setPitchDragPreview] = useState<PitchDragPreview | null>(null);
   const pitchDragPreviewRef = useRef<PitchDragPreview | null>(null);
   const [touchAnchorPt, setTouchAnchorPt] = useState<{ px: number; py: number } | null>(null);
+
+  const updateDragGhostPos = (rawX: number, rawY: number) => {
+    const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 216) : rawX - 95;
+    const gy = typeof window !== 'undefined' ? clamp(rawY - 76, 8, window.innerHeight - 68) : rawY - 76;
+    dragGhostPosRef.current = { x: gx, y: gy };
+    if (dragGhostRef.current) {
+      dragGhostRef.current.style.transform = `translate3d(${gx}px, ${gy}px, 0)`;
+    }
+  };
+
+  const setDragUiIfChanged = (next: { player: Player; fromSlot?: SubRole } | null) => {
+    const prev = dragUiRef.current;
+    if ((prev?.player.n ?? null) === (next?.player.n ?? null) && (prev?.fromSlot ?? null) === (next?.fromSlot ?? null)) {
+      return;
+    }
+    dragUiRef.current = next;
+    setDragUi(next);
+  };
+
+  const setDropTargetIfChanged = (next: { name: string; slot?: string } | null) => {
+    setDropTarget((prev) =>
+      (prev?.name ?? null) === (next?.name ?? null) && (prev?.slot ?? null) === (next?.slot ?? null) ? prev : next
+    );
+  };
+
+  const setPitchDragPreviewIfChanged = (next: PitchDragPreview | null) => {
+    setPitchDragPreview((prev) => {
+      if (!prev && !next) return prev;
+      if (
+        prev &&
+        next &&
+        prev.slotIdx === next.slotIdx &&
+        prev.x === next.x &&
+        prev.y === next.y &&
+        prev.sp === next.sp &&
+        prev.zoneId === next.zoneId
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  };
+
+  const setTouchAnchorPtIfChanged = (next: { px: number; py: number } | null) => {
+    setTouchAnchorPt((prev) => {
+      if (!prev && !next) return prev;
+      if (prev && next && Math.round(prev.px) === Math.round(next.px) && Math.round(prev.py) === Math.round(next.py)) {
+        return prev;
+      }
+      return next;
+    });
+  };
 
   const swapAnyPlayers = (nameA: string, nameB: string) => {
     const s = me.sq.find((q) => q.n === nameA);
@@ -299,9 +354,10 @@ export const SquadTacticsView: React.FC<{
         cur.active = true;
         cur.immediate = true;
         vibrate(14);
-        setDragUi({ player: cur.player, fromSlot: cur.fromSlot, x: cur.x, y: cur.y });
+        updateDragGhostPos(cur.x, cur.y);
+        setDragUiIfChanged({ player: cur.player, fromSlot: cur.fromSlot });
         const hit = findDropAt(cur.x, cur.y, cur.player.n);
-        setDropTarget(hit);
+        setDropTargetIfChanged(hit);
       }, 190);
     }
     dragRef.current = {
@@ -352,10 +408,10 @@ export const SquadTacticsView: React.FC<{
       }
       dragRef.current = null;
       pitchDragPreviewRef.current = null;
-      setDragUi(null);
-      setDropTarget(null);
-      setPitchDragPreview(null);
-      setTouchAnchorPt(null);
+      setDragUiIfChanged(null);
+      setDropTargetIfChanged(null);
+      setPitchDragPreviewIfChanged(null);
+      setTouchAnchorPtIfChanged(null);
     };
 
     const onMove = (e: PointerEvent) => {
@@ -391,12 +447,12 @@ export const SquadTacticsView: React.FC<{
       const pitchPt = clientToPitchCoords(e.clientX, e.clientY, liftPx);
       if (d.fromPitchIdx !== undefined && d.fromPitchIdx >= 1 && pitchPt?.inside) {
         if (d.isTouch) {
-          setTouchAnchorPt({
+          setTouchAnchorPtIfChanged({
             px: clamp(pitchPt.rawPx, 8, 292),
             py: clamp(pitchPt.rawPy, 8, 372)
           });
         } else {
-          setTouchAnchorPt(null);
+          setTouchAnchorPtIfChanged(null);
         }
 
         const { starters: curStarters, slots: curSlots } = dragActionsRef.current;
@@ -415,9 +471,10 @@ export const SquadTacticsView: React.FC<{
         if (closestSwap) {
           const swapObj = closestSwap as { name: string; slot?: string };
           pitchDragPreviewRef.current = null;
-          setPitchDragPreview(null);
-          setDropTarget({ name: swapObj.name, slot: swapObj.slot });
-          setDragUi({ player: d.player, fromSlot: d.fromSlot, x: e.clientX, y: e.clientY - (d.isTouch ? 36 : 0) });
+          setPitchDragPreviewIfChanged(null);
+          setDropTargetIfChanged({ name: swapObj.name, slot: swapObj.slot });
+          updateDragGhostPos(e.clientX, e.clientY - (d.isTouch ? 36 : 0));
+          setDragUiIfChanged({ player: d.player, fromSlot: d.fromSlot });
           return;
         }
 
@@ -435,18 +492,19 @@ export const SquadTacticsView: React.FC<{
           zoneLabel: zone.label
         };
         pitchDragPreviewRef.current = preview;
-        setPitchDragPreview(preview);
-        setDropTarget(null);
-        setDragUi(null);
+        setPitchDragPreviewIfChanged(preview);
+        setDropTargetIfChanged(null);
+        setDragUiIfChanged(null);
         return;
       }
 
       pitchDragPreviewRef.current = null;
-      setPitchDragPreview(null);
-      setTouchAnchorPt(null);
-      setDragUi({ player: d.player, fromSlot: d.fromSlot, x: e.clientX, y: e.clientY });
+      setPitchDragPreviewIfChanged(null);
+      setTouchAnchorPtIfChanged(null);
+      updateDragGhostPos(e.clientX, e.clientY);
+      setDragUiIfChanged({ player: d.player, fromSlot: d.fromSlot });
       const hit = findDropAt(e.clientX, e.clientY, d.player.n, d.fromPitchIdx === undefined && d.isTouch ? 34 : 0);
-      setDropTarget(hit);
+      setDropTargetIfChanged(hit);
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -665,10 +723,10 @@ export const SquadTacticsView: React.FC<{
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
       {dragUi && (
         <div
-          className="fixed z-[100] pointer-events-none flex items-center gap-2 px-3 py-2 rounded-2xl bg-[var(--surface)] border-2 border-[var(--lamp)] shadow-2xl max-w-[210px]"
+          ref={dragGhostRef}
+          className="fixed left-0 top-0 z-[100] pointer-events-none flex items-center gap-2 px-3 py-2 rounded-2xl bg-[var(--surface)] border-2 border-[var(--lamp)] shadow-2xl max-w-[210px] will-change-transform"
           style={{
-            left: typeof window !== 'undefined' ? clamp(dragUi.x - 95, 8, window.innerWidth - 216) : dragUi.x - 95,
-            top: typeof window !== 'undefined' ? clamp(dragUi.y - 76, 8, window.innerHeight - 68) : dragUi.y - 76
+            transform: `translate3d(${dragGhostPosRef.current.x}px, ${dragGhostPosRef.current.y}px, 0)`
           }}
         >
           <PlayerFace player={dragUi.player} team={me} state={state} size={30} />
@@ -760,23 +818,23 @@ export const SquadTacticsView: React.FC<{
                           setShowFormationSheet((v) => !v);
                         }}
                         title="กดเพื่อเปลี่ยนแผนและสไตล์คุมทีม"
-                        className={`inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border backdrop-blur-xs shadow-md cursor-pointer transition-colors max-w-full overflow-x-auto no-scrollbar ${
+                        className={`inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border shadow-md cursor-pointer transition-colors max-w-full overflow-x-auto no-scrollbar ${
                           showFormationSheet
                             ? 'bg-[var(--surface)] border-[var(--g)] ring-1 ring-[var(--g)]/40 text-[var(--ink)]'
-                            : 'bg-[var(--surface)]/92 border-[var(--line)]/90 text-[var(--ink)] hover:border-[var(--g)]/70'
+                            : 'bg-[var(--surface)]/95 border-[var(--line)]/90 text-[var(--ink)] hover:border-[var(--g)]/70'
                         }`}
                       >
                         {formationStatusSummary}
                         <span className="text-[9px] text-[var(--g)] ml-0.5 shrink-0">{showFormationSheet ? '▴' : '▾'}</span>
                       </button>
                     ) : (
-                      <div className="inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border border-[var(--line)]/90 bg-[var(--surface)]/92 backdrop-blur-xs shadow-md max-w-full overflow-x-auto no-scrollbar">
+                      <div className="inline-flex items-center gap-1 text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-semibold tabular whitespace-nowrap px-2 mland:px-1.5 py-0.5 rounded-lg border border-[var(--line)]/90 bg-[var(--surface)]/95 shadow-md max-w-full overflow-x-auto no-scrollbar">
                         {formationStatusSummary}
                       </div>
                     )}
 
                     {isMgr && showFormationSheet && (
-                      <div className="mt-1.5 w-[275px] sm:w-[310px] mland:w-[250px] max-w-[calc(100%-4px)] p-2 mland:p-1.5 rounded-xl bg-[var(--surface)]/96 backdrop-blur-md border border-[var(--g)]/55 shadow-xl space-y-1.5 mland:space-y-1">
+                      <div className="mt-1.5 w-[275px] sm:w-[310px] mland:w-[250px] max-w-[calc(100%-4px)] p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--g)]/55 shadow-xl space-y-1.5 mland:space-y-1">
                         <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
                           <span className="font-bold text-[var(--ink)]">🧭 เปลี่ยนแผน &amp; สไตล์คุมทีม</span>
                           <button

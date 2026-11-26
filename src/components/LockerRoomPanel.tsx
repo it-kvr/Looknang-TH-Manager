@@ -71,7 +71,7 @@ const LockerCabinDecor: React.FC<{ selected?: boolean; compact?: boolean }> = ({
       <svg
         viewBox="0 0 100 38"
         aria-hidden="true"
-        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-[5] drop-shadow-[0_3px_4px_rgba(0,0,0,0.65)] ${
+        className={`pointer-events-none absolute left-1/2 -translate-x-1/2 z-[5] ${
           compact
             ? 'top-[2px] w-[42px] h-[16px] mland:w-[32px] mland:h-[13px]'
             : 'top-[3px] mland:top-[2px] w-[46px] h-[18px] mland:w-[36px] mland:h-[14px]'
@@ -399,7 +399,7 @@ export const LockerRoomPanel: React.FC<{
                     <LockerCabinDecor selected={isSelected} />
 
                     {/* Hanging Jersey */}
-                    <div className="relative z-10 shrink-0 mt-0.5 [&>svg]:w-[54px] [&>svg]:h-[54px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[42px] drop-shadow-[0_7px_12px_rgba(0,0,0,0.72)] transition-transform duration-150 group-hover:scale-[1.03]">
+                    <div className="relative z-10 shrink-0 mt-0.5 [&>svg]:w-[54px] [&>svg]:h-[54px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[42px] transition-transform duration-150 group-hover:scale-[1.03]">
                       <KitJersey
                         club={clubIdentity}
                         away={kitSide === 'away'}
@@ -455,7 +455,7 @@ export const LockerRoomPanel: React.FC<{
                 <div className="relative shrink-0">
                   <div className="relative rounded-xl mland:rounded-lg border border-white/12 pt-[16px] pb-1.5 px-2 mland:pt-[13px] mland:pb-1 mland:px-1.5 flex items-center justify-center overflow-hidden shadow-inner">
                     <LockerCabinDecor selected compact />
-                    <div className="relative z-10 mt-0.5 [&>svg]:w-[52px] [&>svg]:h-[52px] mland:[&>svg]:w-[38px] mland:[&>svg]:h-[38px] drop-shadow-[0_7px_12px_rgba(0,0,0,0.72)]">
+                    <div className="relative z-10 mt-0.5 [&>svg]:w-[52px] [&>svg]:h-[52px] mland:[&>svg]:w-[38px] mland:[&>svg]:h-[38px]">
                       <KitJersey
                         club={clubIdentity}
                         away={kitSide === 'away'}

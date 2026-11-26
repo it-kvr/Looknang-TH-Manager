@@ -23,6 +23,7 @@ import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { AnimatedMoney } from '../components/AnimatedMoney';
 import { TransferMarketIcon } from '../components/TransferMarketIcon';
 import { OvrBadge } from '../components/OvrBadge';
 import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
@@ -837,7 +838,7 @@ export const MarketView: React.FC<{
           </span>
           <span aria-hidden="true">·</span>
           <span className={`font-bold ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}>
-            งบ {fmtMoney(state.money)}
+            งบ <AnimatedMoney value={state.money} deltaPlacement="inline" />
           </span>
           {tx.ffpLocked && (
             <>

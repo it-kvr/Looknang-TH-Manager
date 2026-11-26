@@ -9696,6 +9696,32 @@ export const MatchModal: React.FC<{
 
   // High-FPS 60fps Animation + Simulation Loop
   useEffect(() => {
+    const isTacticsHidden = state.mode === 'm' && mlandMatchTab === 'tactics';
+    const isStaticState =
+      paused || done || simRef.current.done || matchPhaseUi === 'halftime' || isTacticsHidden;
+    const initialWorld = worldRef.current;
+    const initialCanvas = canvasRef.current;
+
+    if (isStaticState) {
+      if (initialWorld && initialCanvas && !done && !simRef.current.done && initialWorld.phase !== 'halftime' && !isTacticsHidden) {
+        drawLivePitchToCanvas(
+          initialCanvas,
+          initialWorld,
+          homeKit,
+          awayKit,
+          homeGkKit,
+          awayGkKit,
+          showRunVectors,
+          homeTrim,
+          awayTrim,
+          showPositions,
+          showRatings,
+          simRef.current.liveForm
+        );
+      }
+      return;
+    }
+
     let rafId = 0;
     let lastTs = performance.now();
     let uiSyncAccum = 0;
@@ -10415,16 +10441,18 @@ export const MatchModal: React.FC<{
         }
       }
 
-      if (canvas) {
+      if (canvas && w.phase !== 'halftime' && !simRef.current.done) {
         drawLivePitchToCanvas(canvas, w, homeKit, awayKit, homeGkKit, awayGkKit, showRunVectors, homeTrim, awayTrim, showPositions, showRatings, simRef.current.liveForm);
       }
-      rafId = window.requestAnimationFrame(frame);
+      if (!paused && !done && !simRef.current.done && w.phase !== 'halftime') {
+        rafId = window.requestAnimationFrame(frame);
+      }
     };
 
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, showRatings, showRunVectors, showPositions, cineSlowMo, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
+  }, [paused, done, speed, showRatings, showRunVectors, showPositions, cineSlowMo, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, matchPhaseUi, mlandMatchTab]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;

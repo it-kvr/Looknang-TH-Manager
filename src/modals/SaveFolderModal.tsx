@@ -683,7 +683,7 @@ export const SaveFolderModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-[65] bg-black/72 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
+      className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
       onClick={onClose}
     >
       <div
@@ -1348,7 +1348,7 @@ export const SaveFolderModal: React.FC<{
         {/* Confirm Save Checkpoint Sub-dialog */}
         {confirmSaveOpen && currentState && (
           <div
-            className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4"
             onClick={() => !busy && setConfirmSaveOpen(false)}
           >
             <div
@@ -1425,7 +1425,7 @@ export const SaveFolderModal: React.FC<{
         {/* Confirm Delete Sub-dialog */}
         {confirmDeleteEntry && (
           <div
-            className="fixed inset-0 z-[70] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4"
             onClick={() => !busy && setConfirmDeleteEntry(null)}
           >
             <div
@@ -1495,7 +1495,7 @@ export const SaveFolderModal: React.FC<{
           const modeLabel = confirmLoadEntry.mode === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
           return (
             <div
-              className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+              className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4"
               onClick={() => setConfirmLoadEntry(null)}
             >
               <div

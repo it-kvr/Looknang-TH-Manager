@@ -538,7 +538,7 @@ export const PlayerTraitsStrip: React.FC<{
         typeof document !== 'undefined' &&
         createPortal(
           <div
-            className="fixed inset-0 z-[90] bg-black/72 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
+            className="fixed inset-0 z-[90] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
             onClick={() => setShowGuideModal(false)}
           >
             <div

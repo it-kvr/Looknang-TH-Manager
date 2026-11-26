@@ -144,7 +144,7 @@ export const TrophySvg: React.FC<{
       viewBox="0 0 64 64"
       fill="none"
       aria-hidden="true"
-      className={muted ? 'opacity-30 grayscale' : 'drop-shadow-[0_4px_8px_rgba(0,0,0,0.22)]'}
+      className={muted ? 'opacity-30 grayscale' : ''}
     >
       <defs>
         <linearGradient id={`tg-${uid}`} x1="14" y1="8" x2="50" y2="48" gradientUnits="userSpaceOnUse">
@@ -570,7 +570,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                 className="h-2.5 w-full bg-gradient-to-b from-[#3d2512] to-[#1d1209] border-b border-[#d4a84f]/35 relative flex items-center justify-around px-6"
               >
                 {[0, 1, 2, 3].map((dot) => (
-                  <span key={dot} className="w-6 h-1 rounded-full bg-[#fef08a]/55 blur-[1px]" />
+                  <span key={dot} className="w-6 h-1 rounded-full bg-[#fef08a]/40" />
                 ))}
               </div>
 
@@ -633,7 +633,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                                       uid={`tr-${compact ? 'c' : 'f'}-${team.id}-${grp.season}-${i}`}
                                       size={compact ? 52 : 60}
                                     />
-                                    <div className="w-11 h-1.5 rounded-full bg-black/75 blur-[1.5px] -mt-1" />
+                                    <div className="w-11 h-1.5 rounded-full bg-black/50 -mt-1" />
                                     <div className="w-14 h-1.5 rounded-t-sm bg-gradient-to-b from-[#2f241d] to-[#1a130f] border-x border-t border-[#d4a84f]/35" />
                                   </div>
                                   <div className="w-full mt-0.5 px-1.5 py-1 rounded bg-gradient-to-b from-[#f3d47b] via-[#d7a83f] to-[#a3751a] border border-[#fef08a]/65 shadow-[0_2px_5px_rgba(0,0,0,0.55)]">

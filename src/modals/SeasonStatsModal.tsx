@@ -162,7 +162,7 @@ export const SeasonStatsModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-black/75 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
+      className="fixed inset-0 z-[60] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

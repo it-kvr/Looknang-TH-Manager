@@ -6,7 +6,7 @@ export const DilemmaModal: React.FC<{
   dilemma: ActiveDilemma;
   onChoose: (idx: number) => void;
 }> = ({ dilemma, onChoose }) => (
-  <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
+  <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-3 sm:p-4 mland:p-1.5 overflow-hidden">
     <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
       <div className="shrink-0 px-5 pt-4 pb-2 mland:px-3 mland:pt-1.5 mland:pb-1 border-b border-[var(--line)]/60">
         <div className="text-xs mland:text-[9.5px] font-bold text-[var(--lamp)]">📌 เหตุการณ์ · {dilemma.category}</div>

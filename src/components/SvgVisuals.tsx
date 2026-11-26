@@ -1196,7 +1196,7 @@ export const FormationPitch: React.FC<{
       <g dangerouslySetInnerHTML={{ __html: PITCH_SVG_BASE }} />
       {pitchCrestSpec && (
         <g className="pointer-events-none">
-          <g transform="translate(256, 10)" style={{ filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.42))' }}>
+          <g transform="translate(256, 10)">
             <g
               transform="scale(1.42)"
               dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(pitchCrestSpec, `${uid}-pcb`, true) }}
@@ -1524,7 +1524,6 @@ export const FormationPitch: React.FC<{
                           strokeWidth="2.4"
                           strokeLinejoin="round"
                           paintOrder="stroke"
-                          style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.85))' }}
                         >
                           {goalsCount}⚽
                         </text>
@@ -1534,7 +1533,6 @@ export const FormationPitch: React.FC<{
                           y="3.4"
                           textAnchor="middle"
                           fontSize="9.6"
-                          style={{ filter: 'drop-shadow(0 1px 1.6px rgba(0,0,0,0.88))' }}
                         >
                           ⚽
                         </text>
@@ -1556,7 +1554,6 @@ export const FormationPitch: React.FC<{
                           strokeWidth="2.4"
                           strokeLinejoin="round"
                           paintOrder="stroke"
-                          style={{ filter: 'drop-shadow(0 1px 1.5px rgba(0,0,0,0.85))' }}
                         >
                           {assistsCount}👟
                         </text>
@@ -1566,7 +1563,6 @@ export const FormationPitch: React.FC<{
                           y="3.4"
                           textAnchor="middle"
                           fontSize="9.6"
-                          style={{ filter: 'drop-shadow(0 1px 1.6px rgba(0,0,0,0.88))' }}
                         >
                           👟
                         </text>

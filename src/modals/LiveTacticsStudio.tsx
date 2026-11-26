@@ -208,13 +208,59 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
     source: 'bench' | 'pitch';
     player: Player;
     role?: SubRole;
-    x: number;
-    y: number;
   } | null>(null);
+  const dragUiRef = useRef<{
+    source: 'bench' | 'pitch';
+    player: Player;
+    role?: SubRole;
+  } | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
+  const dragGhostPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
 
   const pitchRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<DragRuntime | null>(null);
+
+  const updateDragGhostPos = (rawX: number, rawY: number) => {
+    const gx = typeof window !== 'undefined' ? clamp(rawX - 95, 8, window.innerWidth - 230) : rawX - 95;
+    const gy = typeof window !== 'undefined' ? clamp(rawY - 54, 8, window.innerHeight - 66) : rawY - 54;
+    dragGhostPosRef.current = { x: gx, y: gy };
+    if (dragGhostRef.current) {
+      dragGhostRef.current.style.transform = `translate3d(${gx}px, ${gy}px, 0)`;
+    }
+  };
+
+  const setDragUiIfChanged = (
+    next: { source: 'bench' | 'pitch'; player: Player; role?: SubRole } | null
+  ) => {
+    const prev = dragUiRef.current;
+    if (
+      (prev?.source ?? null) === (next?.source ?? null) &&
+      (prev?.player.n ?? null) === (next?.player.n ?? null) &&
+      (prev?.role ?? null) === (next?.role ?? null)
+    ) {
+      return;
+    }
+    dragUiRef.current = next;
+    setDragUi(next);
+  };
+
+  const setDropTargetIfChanged = (next: DropTargetState | null) => {
+    setDropTarget((prev) => {
+      if (!prev && !next) return prev;
+      if (
+        prev &&
+        next &&
+        prev.kind === next.kind &&
+        prev.name === next.name &&
+        (prev.role ?? null) === (next.role ?? null) &&
+        (prev.pitchIdx ?? null) === (next.pitchIdx ?? null)
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  };
 
   const homeOrig = meIsHome ? meTeamOrig : oppTeamOrig;
   const awayOrig = meIsHome ? oppTeamOrig : meTeamOrig;
@@ -385,8 +431,8 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         window.clearTimeout(dragRef.current.holdTimer);
       }
       dragRef.current = null;
-      setDragUi(null);
-      setDropTarget(null);
+      setDragUiIfChanged(null);
+      setDropTargetIfChanged(null);
     };
 
     const onMove = (e: PointerEvent) => {
@@ -416,15 +462,14 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       d.x = e.clientX;
       d.y = e.clientY;
       const liftPx = d.isTouch ? TOUCH_LIFT_PX : 0;
-      setDragUi({
+      updateDragGhostPos(e.clientX, e.clientY - (d.isTouch ? 24 : 0));
+      setDragUiIfChanged({
         source: d.source,
         player: d.player,
-        role: d.role,
-        x: e.clientX,
-        y: e.clientY - (d.isTouch ? 24 : 0)
+        role: d.role
       });
       const hit = actionsRef.current.findDropTarget(e.clientX, e.clientY, d.source, d.player.n, liftPx);
-      setDropTarget(hit);
+      setDropTargetIfChanged(hit);
     };
 
     const onTouchMove = (e: TouchEvent) => {
@@ -524,15 +569,14 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
         cur.active = true;
         cur.immediate = true;
         vibrate(14);
-        setDragUi({
+        updateDragGhostPos(cur.x, cur.y - 24);
+        setDragUiIfChanged({
           source: cur.source,
           player: cur.player,
-          role: cur.role,
-          x: cur.x,
-          y: cur.y - 24
+          role: cur.role
         });
         const hit = actionsRef.current.findDropTarget(cur.x, cur.y, cur.source, cur.player.n, TOUCH_LIFT_PX);
-        setDropTarget(hit);
+        setDropTargetIfChanged(hit);
       }, 150);
     }
 
@@ -720,10 +764,10 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       {/* Floating Drag Ghost Badge */}
       {dragUi && (
         <div
-          className="fixed z-[120] pointer-events-none flex items-center gap-2 px-2.5 py-1.5 rounded-2xl bg-[var(--surface)]/95 border-2 border-[var(--lamp)] shadow-2xl max-w-[225px]"
+          ref={dragGhostRef}
+          className="fixed left-0 top-0 z-[120] pointer-events-none flex items-center gap-2 px-2.5 py-1.5 rounded-2xl bg-[var(--surface)]/95 border-2 border-[var(--lamp)] shadow-2xl max-w-[225px] will-change-transform"
           style={{
-            left: typeof window !== 'undefined' ? clamp(dragUi.x - 95, 8, window.innerWidth - 230) : dragUi.x - 95,
-            top: typeof window !== 'undefined' ? clamp(dragUi.y - 54, 8, window.innerHeight - 66) : dragUi.y - 54
+            transform: `translate3d(${dragGhostPosRef.current.x}px, ${dragGhostPosRef.current.y}px, 0)`
           }}
         >
           <div className="shrink-0 [&_svg]:w-7 [&_svg]:h-7">

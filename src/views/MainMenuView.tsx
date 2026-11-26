@@ -2539,7 +2539,7 @@ export const MainMenu: React.FC<{
         const ov = topPl?.ov || 0;
         return (
           <div
-            className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4"
             onClick={() => !slotActionBusy && setConfirmSaveSlot(null)}
           >
             <div
@@ -2625,7 +2625,7 @@ export const MainMenu: React.FC<{
         const ov = topPl?.ov || 0;
         return (
           <div
-            className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4"
             onClick={() => setConfirmDelSlot(null)}
           >
             <div
@@ -2691,7 +2691,7 @@ export const MainMenu: React.FC<{
         const modeTitle = isMgr ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
         return (
           <div
-            className="fixed inset-0 z-[75] bg-black/65 backdrop-blur-xs flex items-center justify-center p-4"
+            className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4"
             onClick={() => setSlotFullPrompt(null)}
           >
             <div

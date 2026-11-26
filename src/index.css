@@ -571,6 +571,89 @@ button:not(:disabled):active {
   animation: goal-sheen-sweep 1.35s ease-out both;
 }
 
+@keyframes money-delta-gain {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0) scale(0.86);
+  }
+  16% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  30%, 74% {
+    opacity: 1;
+    transform: translate3d(0, -1px, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0) scale(0.95);
+  }
+}
+
+@keyframes money-delta-loss {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -5px, 0) scale(0.86);
+  }
+  16% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  30%, 74% {
+    opacity: 1;
+    transform: translate3d(0, 1px, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.95);
+  }
+}
+
+@keyframes money-val-pop-gain {
+  0% {
+    transform: scale(1);
+  }
+  32% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes money-val-pop-loss {
+  0% {
+    transform: scale(1);
+  }
+  28% {
+    transform: scale(0.95);
+  }
+  60% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.money-delta-gain {
+  will-change: transform, opacity;
+  animation: money-delta-gain 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.money-delta-loss {
+  will-change: transform, opacity;
+  animation: money-delta-loss 1.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.money-val-pop-gain {
+  animation: money-val-pop-gain 0.52s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.money-val-pop-loss {
+  animation: money-val-pop-loss 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .cv-row {
   content-visibility: auto;
   contain-intrinsic-size: auto 46px;
@@ -586,7 +669,11 @@ button:not(:disabled):active {
   .goal-board-blink-og,
   .goal-tag-blink,
   .goal-ribbon-in,
-  .goal-sheen-sweep {
+  .goal-sheen-sweep,
+  .money-delta-gain,
+  .money-delta-loss,
+  .money-val-pop-gain,
+  .money-val-pop-loss {
     animation: none !important;
   }
   .confetti-piece {

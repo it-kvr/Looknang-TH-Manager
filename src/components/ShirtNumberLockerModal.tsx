@@ -114,7 +114,7 @@ export const ShirtNumberLockerModal: React.FC<{
 
   return (
     <div
-      className="fixed inset-0 z-[80] bg-black/68 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 mland:p-2 overflow-hidden"
+      className="fixed inset-0 z-[80] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-2 overflow-hidden"
       onClick={(e) => {
         e.stopPropagation();
         onClose();
@@ -128,7 +128,7 @@ export const ShirtNumberLockerModal: React.FC<{
         <header className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-3 mland:gap-2 min-w-0">
             <div className="relative shrink-0 rounded-xl bg-gradient-to-b from-[#1a2922] via-[#101a16] to-[#0a110e] border border-white/10 p-1.5 mland:p-1 flex items-center justify-center shadow-inner">
-              <div className="[&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 drop-shadow-[0_4px_8px_rgba(0,0,0,0.55)]">
+              <div className="[&>svg]:w-10 [&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8">
                 <KitJersey
                   club={clubIdentity}
                   away={false}

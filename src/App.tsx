@@ -20,6 +20,7 @@ import { ClubCrest, PlayerFace } from './components/SvgVisuals';
 import { StaminaBar } from './components/StaminaBar';
 import { TransferMarketIcon } from './components/TransferMarketIcon';
 import { OvrBadge } from './components/OvrBadge';
+import { AnimatedMoney, MoneyDeltaPill, type MoneyDeltaState } from './components/AnimatedMoney';
 import stadiumHeroBg from './assets/images/thai_stadium_hero_1795511663761.jpg';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -46,6 +47,8 @@ export default function App() {
   const [enteredGame, setEnteredGame] = useState(false);
   const [state, setState] = useState<GameState | null>(null);
   const [slot, setSlot] = useState<number>(1);
+  const [saveEpoch, setSaveEpoch] = useState<number>(0);
+  const [hudMoneyDelta, setHudMoneyDelta] = useState<MoneyDeltaState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null; initialTab?: 'info' | 'history' | 'missions' } | null>(null);
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
@@ -214,6 +217,8 @@ export default function App() {
     fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
+    setHudMoneyDelta(null);
+    setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
@@ -234,6 +239,8 @@ export default function App() {
     fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
+    setHudMoneyDelta(null);
+    setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
@@ -251,6 +258,8 @@ export default function App() {
     setActiveMatch(null);
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
+    setHudMoneyDelta(null);
+    setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(normalized);
     saveGameToSlot(normalized, targetSlot);
@@ -1223,7 +1232,7 @@ export default function App() {
                 </span>
                 {state.mode === 'm' ? (
                   <span className={`sm:hidden text-[11px] font-extrabold tabular shrink-0 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                    {fmtMoney(state.money)}
+                    <AnimatedMoney value={state.money} resetKey={saveEpoch} deltaPlacement="below" />
                   </span>
                 ) : (
                   <OvrBadge ov={state.p ? ovMe(state.p) : 60} size="2xs" prefix="OVR" className="sm:hidden" />
@@ -1246,7 +1255,7 @@ export default function App() {
           </div>
 
           {/* Zone 2: Center Club / Player Telemetry Strip */}
-          <div className="hidden sm:flex items-center justify-center shrink-0">
+          <div className="hidden sm:flex items-center justify-center shrink-0 relative">
             <div className="flex items-stretch h-10 mland:h-8 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)]/85 divide-x divide-[var(--line)]/80 overflow-hidden">
               {state.mode === 'm' ? (
                 <>
@@ -1258,7 +1267,12 @@ export default function App() {
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">งบสโมสร</div>
                     <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                      {fmtMoney(state.money)}
+                      <AnimatedMoney
+                        value={state.money}
+                        resetKey={saveEpoch}
+                        deltaPlacement="none"
+                        onDeltaChange={setHudMoneyDelta}
+                      />
                     </div>
                   </button>
                   <button
@@ -1347,6 +1361,13 @@ export default function App() {
                 </>
               )}
             </div>
+            {state.mode === 'm' && (
+              <MoneyDeltaPill
+                delta={hudMoneyDelta}
+                placement="below"
+                className="!left-2 !translate-x-0"
+              />
+            )}
           </div>
 
           {/* Zone 3: Matchday CTA & Settings */}
