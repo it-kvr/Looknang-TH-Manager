@@ -84,14 +84,14 @@ function ensureAudio(): AudioContext | null {
     if (!audioCtx) {
       audioCtx = new AudioCtx();
       const comp = audioCtx.createDynamicsCompressor();
-      comp.threshold.value = -16;
-      comp.knee.value = 18;
-      comp.ratio.value = 4;
+      comp.threshold.value = -14;
+      comp.knee.value = 16;
+      comp.ratio.value = 3.5;
       comp.attack.value = 0.004;
-      comp.release.value = 0.16;
+      comp.release.value = 0.14;
 
       masterBus = audioCtx.createGain();
-      masterBus.gain.value = 0.92;
+      masterBus.gain.value = 0.94;
 
       sfxBus = audioCtx.createGain();
       sfxBus.gain.value = getSfxScale(getSettings());
@@ -158,9 +158,8 @@ function getCrispNoiseBuffer(ctx: AudioContext): AudioBuffer {
   const length = ctx.sampleRate * 2;
   const buf = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = buf.getChannelData(0);
-  // Full-scale broadband noise for crisp nylon net whip/snap transients
   for (let i = 0; i < length; i++) {
-    data[i] = (Math.random() * 2 - 1) * 0.85;
+    data[i] = (Math.random() * 2 - 1) * 0.88;
   }
   crispNoiseBuffer = buf;
   return buf;
@@ -217,7 +216,51 @@ function playNoiseBurst(dur: number, filterType: BiquadFilterType, freq: number,
   }
 }
 
-function playThump(startFreq: number, endFreq: number, dur: number, vol: number, delay = 0) {
+function playCrispSweep(
+  dur: number,
+  filterType: BiquadFilterType,
+  startFreq: number,
+  endFreq: number,
+  q: number,
+  vol: number,
+  delay = 0,
+  attackSec = 0.005
+) {
+  if (sfxSuppressed) return;
+  const st = getSettings();
+  if (st.mute || getSfxScale(st) <= 0) return;
+  const ctx = ensureAudio();
+  if (!ctx || !sfxBus) return;
+  try {
+    const src = ctx.createBufferSource();
+    src.buffer = getCrispNoiseBuffer(ctx);
+    const filt = ctx.createBiquadFilter();
+    filt.type = filterType;
+    const now = ctx.currentTime + delay;
+    filt.frequency.setValueAtTime(Math.max(40, startFreq), now);
+    filt.frequency.exponentialRampToValueAtTime(Math.max(40, endFreq), now + dur);
+    filt.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(vol, now + attackSec);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(sfxBus);
+    src.start(now, Math.random() * 0.9, dur + 0.03);
+  } catch {
+    // ignore
+  }
+}
+
+function playThump(
+  startFreq: number,
+  endFreq: number,
+  dur: number,
+  vol: number,
+  delay = 0,
+  wave: OscillatorType = 'sine'
+) {
   if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
@@ -227,10 +270,11 @@ function playThump(startFreq: number, endFreq: number, dur: number, vol: number,
     const o = ctx.createOscillator();
     const g = ctx.createGain();
     const now = ctx.currentTime + delay;
-    o.type = 'sine';
+    o.type = wave;
     o.frequency.setValueAtTime(startFreq, now);
     o.frequency.exponentialRampToValueAtTime(Math.max(24, endFreq), now + dur);
-    g.gain.setValueAtTime(vol, now);
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.linearRampToValueAtTime(vol, now + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
     o.connect(g);
     g.connect(sfxBus);
@@ -241,7 +285,8 @@ function playThump(startFreq: number, endFreq: number, dur: number, vol: number,
   }
 }
 
-function playPeaWhistle(duration = 0.24, delay = 0, baseFreq = 2680, vol = 0.048) {
+// Balanced, realistic stadium referee pea-whistle (softened ~10 dB from raw high-freq sine so it never pierces)
+function playPeaWhistle(duration = 0.21, delay = 0, baseFreq = 2420, vol = 0.015) {
   if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
@@ -252,26 +297,38 @@ function playPeaWhistle(duration = 0.24, delay = 0, baseFreq = 2680, vol = 0.048
     const osc = ctx.createOscillator();
     const lfo = ctx.createOscillator();
     const lfoGain = ctx.createGain();
+    const bp = ctx.createBiquadFilter();
+    const lp = ctx.createBiquadFilter();
     const g = ctx.createGain();
 
     osc.type = 'sine';
     osc.frequency.setValueAtTime(baseFreq, now);
-    osc.frequency.linearRampToValueAtTime(baseFreq * 1.03, now + duration * 0.4);
-    osc.frequency.linearRampToValueAtTime(baseFreq * 0.98, now + duration);
+    osc.frequency.linearRampToValueAtTime(baseFreq * 1.022, now + duration * 0.35);
+    osc.frequency.linearRampToValueAtTime(baseFreq * 0.985, now + duration);
 
-    // Rapid pea-trill inside referee whistle
+    // Subtle internal pea-trill inside whistle chamber
     lfo.type = 'sine';
-    lfo.frequency.setValueAtTime(42, now);
-    lfoGain.gain.setValueAtTime(115, now);
+    lfo.frequency.setValueAtTime(34, now);
+    lfoGain.gain.setValueAtTime(64, now);
     lfo.connect(lfoGain);
     lfoGain.connect(osc.frequency);
 
+    // Warm broadcast distance contour
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(baseFreq, now);
+    bp.Q.value = 1.4;
+
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(3000, now);
+
     g.gain.setValueAtTime(0.0001, now);
-    g.gain.linearRampToValueAtTime(vol, now + 0.018);
-    g.gain.setValueAtTime(vol * 0.9, now + Math.max(0.02, duration - 0.045));
+    g.gain.linearRampToValueAtTime(vol, now + 0.022);
+    g.gain.setValueAtTime(vol * 0.85, now + Math.max(0.024, duration - 0.05));
     g.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-    osc.connect(g);
+    osc.connect(bp);
+    bp.connect(lp);
+    lp.connect(g);
     g.connect(sfxBus);
 
     osc.start(now);
@@ -279,8 +336,8 @@ function playPeaWhistle(duration = 0.24, delay = 0, baseFreq = 2680, vol = 0.048
     osc.stop(now + duration + 0.02);
     lfo.stop(now + duration + 0.02);
 
-    // Subtle breath air rush
-    playNoiseBurst(duration * 0.9, 'bandpass', 3200, 1.8, vol * 0.28, delay);
+    // Soft breath air rush
+    playCrispSweep(duration * 0.88, 'bandpass', 2900, 2400, 1.8, vol * 0.36, delay, 0.015);
   } catch {
     // ignore
   }
@@ -366,7 +423,7 @@ function playMeshSnap(delay = 0, intensity = 1) {
     gWhip.connect(sfxBus);
     src.start(now, Math.random() * 0.8, dur + 0.04);
 
-    // 2. High-frequency mesh cord rustle shimmer (gives unmistakable "ตุงตาข่าย" texture)
+    // 2. High-frequency mesh cord rustle shimmer (unmistakable "ตุงตาข่าย" texture)
     const cordSrc = ctx.createBufferSource();
     cordSrc.buffer = getCrispNoiseBuffer(ctx);
     const hp = ctx.createBiquadFilter();
@@ -412,7 +469,6 @@ function playCheerNoise(intensity = 0.85, delay = 0) {
     const src = ctx.createBufferSource();
     src.buffer = getPinkNoiseBuffer(ctx);
 
-    // Warm lower-mid stadium wall + excited upper crowd roar
     const fLow = ctx.createBiquadFilter();
     fLow.type = 'bandpass';
     fLow.frequency.setValueAtTime(460, now);
@@ -484,7 +540,6 @@ function playBooNoise(intensity = 0.8) {
     g.connect(sfxBus);
     src.start(now, Math.random() * 1.2, dur + 0.05);
 
-    // Subtle low crowd groan formant
     [164, 198].forEach((fStart, idx) => {
       const o = ctx.createOscillator();
       const lp = ctx.createBiquadFilter();
@@ -511,57 +566,159 @@ function playBooNoise(intensity = 0.8) {
 
 export const SFX = {
   tap: () => {
-    playThump(580, 340, 0.04, 0.045);
-    snd(740, 0.038, 'triangle', 0.024);
+    playThump(540, 310, 0.036, 0.038);
+    snd(720, 0.032, 'triangle', 0.018);
   },
   confirm: () => {
-    snd(523.25, 0.075, 'triangle', 0.042, 0);
-    snd(659.25, 0.11, 'triangle', 0.045, 0.055);
+    snd(523.25, 0.075, 'triangle', 0.038, 0);
+    snd(659.25, 0.11, 'triangle', 0.042, 0.055);
   },
   coin: () => {
-    snd(987.77, 0.07, 'sine', 0.042, 0);
-    snd(1318.51, 0.14, 'sine', 0.048, 0.06);
+    snd(987.77, 0.07, 'sine', 0.036, 0);
+    snd(1318.51, 0.14, 'sine', 0.042, 0.06);
   },
   levelUp: () => {
-    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => snd(f, 0.16, 'triangle', 0.048, i * 0.07));
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => snd(f, 0.16, 'triangle', 0.042, i * 0.07));
   },
+  // Soft inside-boot ground pass
   pass: () => {
-    // Realistic soft leather tap with natural pitch variation
-    playThump(jitter(144, 0.07), jitter(52, 0.06), 0.052, 0.055);
-    playNoiseBurst(0.028, 'bandpass', jitter(980, 0.08), 0.9, 0.024);
+    playThump(jitter(154, 0.07), jitter(50, 0.06), 0.056, 0.07);
+    playCrispSweep(0.026, 'bandpass', jitter(1350, 0.08), 760, 1.1, 0.038, 0, 0.003);
+    playThump(90, 38, 0.045, 0.034);
   },
+  // Crisp full-instep long pass / cross / goal kick ("ปึ้ก!")
   kick: () => {
-    // Full hollow leather long-ball strike + turf brush
-    playThump(jitter(190, 0.06), 44, 0.088, 0.088);
-    playNoiseBurst(0.042, 'bandpass', jitter(1450, 0.07), 1.05, 0.042);
-    playNoiseBurst(0.08, 'lowpass', 640, 0.8, 0.02, 0.012);
+    playThump(jitter(215, 0.05), 46, 0.105, 0.142);
+    playThump(112, 36, 0.11, 0.075);
+    playCrispSweep(0.034, 'bandpass', jitter(2150, 0.07), 860, 1.05, 0.095, 0, 0.003);
+    playNoiseBurst(0.09, 'bandpass', 920, 0.85, 0.036, 0.012);
   },
+  // Heavy power strike / volley / free kick ("ปัง-ฟิ้ว!!")
   shot: () => {
-    // Heavy boot-lace punch + air whip + crowd anticipation
-    playThump(jitter(248, 0.05), 36, 0.13, 0.125);
-    playNoiseBurst(0.056, 'bandpass', jitter(2150, 0.07), 1.1, 0.066);
-    playNoiseBurst(0.13, 'bandpass', 1120, 0.75, 0.034, 0.016);
+    playThump(jitter(275, 0.05), 32, 0.15, 0.21);
+    playThump(130, 34, 0.16, 0.11);
+    playCrispSweep(0.032, 'bandpass', jitter(2750, 0.06), 1080, 1.0, 0.145, 0, 0.002);
+    playNoiseBurst(0.16, 'bandpass', 1850, 0.75, 0.068, 0.014);
     pulseCrowdRoar(0.36);
   },
+  // Solid forehead-on-leather header ("ปุ้ก!")
+  header: () => {
+    playThump(jitter(168, 0.06), 58, 0.08, 0.135);
+    playCrispSweep(0.032, 'bandpass', jitter(820, 0.08), 420, 1.3, 0.064, 0, 0.004);
+    playNoiseBurst(0.055, 'lowpass', 540, 0.9, 0.028, 0.008);
+  },
+  // Body / shin / defensive wall block ("ตุ้บ!")
+  block: () => {
+    playThump(jitter(135, 0.06), 38, 0.105, 0.155);
+    playCrispSweep(0.052, 'bandpass', jitter(960, 0.08), 350, 1.15, 0.092, 0, 0.003);
+    playNoiseBurst(0.075, 'lowpass', 480, 0.8, 0.035, 0.01);
+  },
+  // Standing poke steal OR sliding turf-tear tackle
   tackle: (isSlide = false) => {
     if (isSlide) {
-      // Grass rip + firm boot-on-ball intercept thud
-      playNoiseBurst(0.15, 'bandpass', jitter(1750, 0.08), 1.1, 0.056, 0);
-      playNoiseBurst(0.1, 'highpass', 2550, 1.0, 0.026, 0.018);
-      playThump(jitter(164, 0.06), 50, 0.08, 0.085, 0.026);
+      // Grass shred skid ("ซวาก!") -> crisp cleat-on-ball intercept thud ("ปึ้ก!")
+      playCrispSweep(0.22, 'bandpass', jitter(2300, 0.07), 780, 1.0, 0.115, 0, 0.01);
+      playCrispSweep(0.14, 'highpass', 2700, 1900, 0.9, 0.048, 0.012, 0.01);
+      playThump(jitter(182, 0.06), 46, 0.09, 0.15, 0.032);
+      playCrispSweep(0.03, 'bandpass', 1750, 820, 1.2, 0.076, 0.032, 0.003);
     } else {
-      // Crisp boot-on-ball & turf crunch
-      playThump(jitter(152, 0.06), 48, 0.065, 0.076);
-      playNoiseBurst(0.046, 'bandpass', jitter(1360, 0.08), 1.2, 0.04);
+      // Sharp boot-on-ball & stud turf crunch
+      playThump(jitter(172, 0.06), 50, 0.068, 0.13);
+      playCrispSweep(0.046, 'bandpass', jitter(1700, 0.08), 880, 1.15, 0.075, 0, 0.003);
+      playNoiseBurst(0.04, 'lowpass', 620, 0.9, 0.025, 0.01);
     }
   },
-  save: () => {
-    // Latex palm slap + ball compression thud + crowd reaction
-    playThump(jitter(182, 0.06), 56, 0.085, 0.095);
-    playNoiseBurst(0.052, 'bandpass', 2550, 1.5, 0.068);
-    playThump(124, 50, 0.055, 0.044, 0.042);
-    playNoiseBurst(0.38, 'bandpass', 1420, 0.85, 0.034, 0.05);
-    pulseCrowdRoar(0.65);
+  // Latex glove impact save / parry + ground rebound + crowd gasp-applause
+  save: (intensity = 1) => {
+    const s = Math.max(0.65, Math.min(1.15, intensity));
+    playCrispSweep(0.038, 'bandpass', jitter(2420, 0.06), 1120, 1.3, 0.15 * s, 0, 0.003);
+    playThump(jitter(186, 0.06), 50, 0.105, 0.165 * s);
+    playThump(118, 42, 0.085, 0.078 * s, 0.068);
+    playNoiseBurst(0.32, 'bandpass', 1420, 0.85, 0.036 * s, 0.05);
+    pulseCrowdRoar(0.62 * s);
+  },
+  // GK aerial glove catch or leaping fist punch clear
+  catch: (isPunch = false) => {
+    if (isPunch) {
+      playThump(jitter(208, 0.05), 56, 0.088, 0.138);
+      playCrispSweep(0.034, 'bandpass', jitter(2150, 0.06), 920, 1.2, 0.105, 0, 0.003);
+    } else {
+      playThump(jitter(142, 0.06), 56, 0.056, 0.095);
+      playCrispSweep(0.026, 'bandpass', 1650, 860, 1.35, 0.058, 0, 0.004);
+    }
+  },
+  // Air kick whiff swoosh ("ฟิ้ว!")
+  whiff: () => {
+    playCrispSweep(0.15, 'bandpass', jitter(1680, 0.07), 380, 1.25, 0.088, 0, 0.016);
+    playThump(98, 46, 0.04, 0.034, 0.02);
+  },
+  // Wet grass slip / stumble
+  slip: () => {
+    playCrispSweep(0.18, 'bandpass', jitter(2100, 0.08), 640, 1.1, 0.075, 0, 0.012);
+    playThump(105, 42, 0.07, 0.058, 0.04);
+  },
+  // Hollow aluminum/steel goalpost & crossbar clang ("ป๊อง-ก๊องงง!!")
+  woodwork: () => {
+    if (sfxSuppressed) return;
+    const st = getSettings();
+    if (st.mute || getSfxScale(st) <= 0) return;
+    const ctx = ensureAudio();
+    if (!ctx || !sfxBus) return;
+    try {
+      const now = ctx.currentTime;
+      // 1. Leather-on-metal initial impact smack
+      playCrispSweep(0.026, 'bandpass', 2900, 1080, 1.1, 0.145, 0, 0.002);
+      playThump(180, 44, 0.09, 0.145, 0);
+
+      // 2. Cylindrical metal goalpost resonant modes (inharmonic Bessel ratios)
+      const modes = [
+        { f: jitter(318, 0.015), dur: 0.62, vol: 0.078, wave: 'sine' as OscillatorType },
+        { f: jitter(756, 0.015), dur: 0.45, vol: 0.054, wave: 'triangle' as OscillatorType },
+        { f: jitter(1310, 0.018), dur: 0.30, vol: 0.032, wave: 'sine' as OscillatorType },
+        { f: jitter(1960, 0.02), dur: 0.18, vol: 0.016, wave: 'sine' as OscillatorType }
+      ];
+      modes.forEach((m) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = m.wave;
+        o.frequency.setValueAtTime(m.f, now);
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.linearRampToValueAtTime(m.vol, now + 0.003);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + m.dur);
+        o.connect(g);
+        g.connect(sfxBus!);
+        o.start(now);
+        o.stop(now + m.dur + 0.02);
+      });
+
+      // 3. Sharp metallic clang transient FM burst
+      const carrier = ctx.createOscillator();
+      const mod = ctx.createOscillator();
+      const modGain = ctx.createGain();
+      const fg = ctx.createGain();
+      carrier.type = 'sine';
+      carrier.frequency.setValueAtTime(845, now);
+      mod.type = 'sine';
+      mod.frequency.setValueAtTime(512, now);
+      modGain.gain.setValueAtTime(620, now);
+      modGain.gain.exponentialRampToValueAtTime(10, now + 0.06);
+      fg.gain.setValueAtTime(0.0001, now);
+      fg.gain.linearRampToValueAtTime(0.048, now + 0.002);
+      fg.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+      mod.connect(modGain);
+      modGain.connect(carrier.frequency);
+      carrier.connect(fg);
+      fg.connect(sfxBus);
+      carrier.start(now);
+      mod.start(now);
+      carrier.stop(now + 0.09);
+      mod.stop(now + 0.09);
+
+      pulseCrowdRoar(0.6);
+      playCheerNoise(0.45, 0.04);
+    } catch {
+      // ignore
+    }
   },
   cheer: (intensity = 0.85) => {
     pulseCrowdRoar(intensity);
@@ -579,7 +736,6 @@ export const SFX = {
     if (!ctx || !sfxBus) return;
     try {
       const now = ctx.currentTime;
-      // Soft, understated sideline tactical whistle-chirp + clap cue
       const chirp = (f1: number, f2: number, dur: number, vol: number, delay: number) => {
         const o = ctx.createOscillator();
         const g = ctx.createGain();
@@ -595,86 +751,78 @@ export const SFX = {
         o.start(t);
         o.stop(t + dur + 0.02);
       };
-      chirp(1140, 1340, 0.055, 0.014, 0);
-      chirp(1280, 1480, 0.075, 0.016, 0.075);
-      playNoiseBurst(0.032, 'bandpass', 1550, 1.4, 0.012, 0.01);
+      chirp(1140, 1340, 0.055, 0.012, 0);
+      chirp(1280, 1480, 0.075, 0.014, 0.075);
+      playNoiseBurst(0.032, 'bandpass', 1550, 1.4, 0.01, 0.01);
     } catch {
       // ignore
     }
   },
-  woodwork: () => {
-    // Hollow metallic goalpost clang with inharmonic steel partials
-    playThump(165, 55, 0.07, 0.068);
-    [418, 794, 1285].forEach((f, idx) => snd(jitter(f, 0.015), 0.38 - idx * 0.06, idx === 0 ? 'sine' : 'triangle', 0.052 - idx * 0.012));
-    playNoiseBurst(0.045, 'highpass', 1950, 1.3, 0.032);
-    pulseCrowdRoar(0.6);
-    playCheerNoise(0.5);
-  },
   foul: () => {
-    playPeaWhistle(0.22, 0, 2720, 0.05);
+    playPeaWhistle(0.20, 0, 2440, 0.015);
   },
   card: () => {
-    playPeaWhistle(0.14, 0, 2780, 0.052);
-    playPeaWhistle(0.24, 0.17, 2680, 0.052);
-    playThump(140, 62, 0.14, 0.055, 0.05);
+    playPeaWhistle(0.13, 0, 2480, 0.015);
+    playPeaWhistle(0.22, 0.16, 2400, 0.016);
+    playThump(135, 56, 0.12, 0.05, 0.04);
   },
   var: () => {
-    snd(880, 0.13, 'sine', 0.045, 0);
-    snd(1174.66, 0.22, 'sine', 0.048, 0.12);
+    snd(880, 0.13, 'sine', 0.034, 0);
+    snd(1174.66, 0.22, 'sine', 0.036, 0.12);
   },
   sub: () => {
-    snd(440, 0.09, 'triangle', 0.036, 0);
-    snd(587.33, 0.12, 'triangle', 0.04, 0.07);
+    snd(440, 0.09, 'triangle', 0.032, 0);
+    snd(587.33, 0.12, 'triangle', 0.035, 0.07);
   },
   goal: (isPositive = true) => {
-    // 1. Immediate unmistakable physical ball-into-net impact ("สวบ-ตุงตาข่าย!")
-    playThump(150, 36, 0.19, 0.22, 0);
+    // 1. Immediate physical ball-into-net impact ("สวบ-ตุงตาข่าย!")
+    playThump(156, 36, 0.19, 0.22, 0);
     playMeshSnap(0, 1.05);
     // 2. Secondary back-net rebound & ripple rattle (+90ms & +170ms)
     playMeshSnap(0.09, 0.72);
-    playThump(98, 34, 0.13, 0.11, 0.09);
+    playThump(102, 34, 0.13, 0.11, 0.09);
     playMeshSnap(0.17, 0.42);
 
-    // 3. Stagger crowd explosion ~120ms after net impact so the net whip cuts through cleanly first!
+    // 3. Stagger crowd explosion ~120ms after net impact so net whip cuts through cleanly first
     if (isPositive) {
-      playThump(74, 118, 0.56, 0.05, 0.12);
+      playThump(74, 118, 0.56, 0.048, 0.12);
       pulseCrowdRoar(1.0);
-      playCheerNoise(1.18, 0.12);
+      playCheerNoise(1.15, 0.12);
     } else {
       pulseCrowdBoo(0.55);
-      playNoiseBurst(0.45, 'bandpass', 460, 1.3, 0.055, 0.13);
+      playNoiseBurst(0.45, 'bandpass', 460, 1.3, 0.052, 0.13);
     }
   },
   whistle: () => {
-    playPeaWhistle(0.22, 0, 2680, 0.052);
-    playPeaWhistle(0.32, 0.26, 2640, 0.052);
+    playPeaWhistle(0.19, 0, 2420, 0.015);
+    playPeaWhistle(0.28, 0.23, 2380, 0.016);
   },
   halfWhistle: () => {
-    playPeaWhistle(0.18, 0, 2680, 0.05);
-    playPeaWhistle(0.36, 0.22, 2620, 0.054);
+    playPeaWhistle(0.16, 0, 2420, 0.015);
+    playPeaWhistle(0.32, 0.20, 2360, 0.016);
   },
   fullWhistle: () => {
-    playPeaWhistle(0.16, 0, 2680, 0.05);
-    playPeaWhistle(0.16, 0.21, 2680, 0.05);
-    playPeaWhistle(0.42, 0.42, 2620, 0.055);
+    playPeaWhistle(0.15, 0, 2420, 0.015);
+    playPeaWhistle(0.15, 0.19, 2420, 0.015);
+    playPeaWhistle(0.38, 0.39, 2360, 0.017);
   },
   win: () => {
-    [392, 493.88, 587.33, 783.99].forEach((f, i) => snd(f, 0.24, 'triangle', 0.055, i * 0.1));
-    snd(783.99, 0.42, 'sine', 0.04, 0.42);
+    [392, 493.88, 587.33, 783.99].forEach((f, i) => snd(f, 0.24, 'triangle', 0.046, i * 0.1));
+    snd(783.99, 0.42, 'sine', 0.036, 0.42);
   },
   celebrate: () => {
-    playCheerNoise(1.1);
+    playCheerNoise(1.05);
     pulseCrowdRoar(1.0);
     const fanfare = [392, 523.25, 659.25, 783.99, 1046.5];
     fanfare.forEach((f, i) => {
-      snd(f, 0.28, 'triangle', 0.056, i * 0.085);
-      snd(f * 0.5, 0.3, 'sawtooth', 0.016, i * 0.085);
+      snd(f, 0.28, 'triangle', 0.048, i * 0.085);
+      snd(f * 0.5, 0.3, 'sawtooth', 0.014, i * 0.085);
     });
-    snd(783.99, 0.45, 'triangle', 0.045, 0.46);
-    snd(1046.5, 0.55, 'sine', 0.052, 0.52);
+    snd(783.99, 0.45, 'triangle', 0.04, 0.46);
+    snd(1046.5, 0.55, 'sine', 0.046, 0.52);
   },
   lose: () => {
-    [349.23, 311.13, 261.63, 220].forEach((f, i) => snd(f, 0.26, 'triangle', 0.042, i * 0.13));
+    [349.23, 311.13, 261.63, 220].forEach((f, i) => snd(f, 0.26, 'triangle', 0.038, i * 0.13));
   }
 };
 
@@ -723,7 +871,6 @@ export function setCrowdAudio(on: boolean) {
     src.buffer = getPinkNoiseBuffer(ctx);
     src.loop = true;
 
-    // Warm low stadium murmur + mid crowd presence
     const lowBody = ctx.createBiquadFilter();
     lowBody.type = 'lowpass';
     lowBody.frequency.value = 440;
@@ -736,7 +883,6 @@ export function setCrowdAudio(on: boolean) {
     const gain = ctx.createGain();
     gain.gain.value = 0.056 * scale;
 
-    // Gentle crowd swell modulation
     const lfo = ctx.createOscillator();
     const lfoGain = ctx.createGain();
     lfo.type = 'sine';

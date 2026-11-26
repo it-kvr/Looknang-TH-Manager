@@ -3540,7 +3540,7 @@ export const MatchModal: React.FC<{
       ttl: 1.9,
       maxTtl: 1.9
     });
-    SFX.pass();
+    SFX.slip();
     SFX.boo(0.45);
   };
 
@@ -3596,7 +3596,7 @@ export const MatchModal: React.FC<{
       ttl: 1.9,
       maxTtl: 1.9
     });
-    SFX.tap();
+    SFX.whiff();
     SFX.boo(0.45);
     triggerCoachMood(w, side, '🤦', 2.0);
     const trickleDist = 4.5 + Math.random() * 4.5;
@@ -4639,7 +4639,7 @@ export const MatchModal: React.FC<{
         b.shotStyle = undefined;
         w.phaseLabel = `🔥 ${defTeam.name} รุมกดดันเพรสซิ่งแย่งบอลจาก ${carrier.shortName}!`;
         w.phaseTone = 'attack';
-        SFX.pass();
+        SFX.tackle(false);
         if (Math.random() < 0.35) {
           pushLog(curMin, `🔥 เพรสซิ่งหนัก! ${winner.id} และเพื่อนรุมกดดันแย่งบอลจาก ${carrier.id} (${attTeam.name}) สำเร็จ!`);
         }
@@ -6428,7 +6428,7 @@ export const MatchModal: React.FC<{
     const culprit = vr.culpritId ? w.agents.find((a) => a.id === vr.culpritId && !a.sentOff) : undefined;
     const penRightVar = isAttackRight(w, vr.side);
     if (vr.overturn) {
-      SFX.pass();
+      SFX.var();
       if (vr.side === 'H') w.freeKicksH++;
       else w.freeKicksA++;
       const edgeX = penRightVar ? 80.5 : 19.5;
@@ -6693,7 +6693,7 @@ export const MatchModal: React.FC<{
           ttl: 1.85,
           maxTtl: 1.85
         });
-        SFX.pass();
+        SFX.block();
 
         const deflectRoll = Math.random();
         const defDist = Math.hypot((attRightNow ? 100 : 0) - b.toX, 50 - b.toY);
@@ -6822,6 +6822,7 @@ export const MatchModal: React.FC<{
               maxTtl: 0.9
             });
           }
+          SFX.block();
           addWorldFx(w, {
             type: 'block',
             x: nearDef.x,
@@ -7295,7 +7296,7 @@ export const MatchModal: React.FC<{
         b.shotStyle = undefined;
         w.phaseLabel = `🛡️ ${nearDef.shortName} อ่านทางตัดลูกคัทแบ็คได้ทัน!`;
         w.phaseTone = 'normal';
-        SFX.pass();
+        SFX.tackle(false);
       }
       return;
     }
@@ -7441,7 +7442,7 @@ export const MatchModal: React.FC<{
             };
             w.phaseLabel = `🧤 ${topDef.shortName} กระโดดชกบอลพ้นกรอบ!`;
             w.phaseTone = 'normal';
-            SFX.kick();
+            SFX.catch(true);
           } else {
             b.possessionSide = defSide;
             b.carrierId = topDef.id;
@@ -7461,6 +7462,7 @@ export const MatchModal: React.FC<{
             b.shotStyle = undefined;
             w.phaseLabel = `🧤 ${topDef.shortName} ออกมาคว้าบอลกลางอากาศไว้ได้`;
             w.phaseTone = 'normal';
+            SFX.catch(false);
           }
         } else {
           // Defender tries to clear cross/corner: small chance of OG slice or clearance whiff!
@@ -7497,7 +7499,7 @@ export const MatchModal: React.FC<{
               ttl: 1.9,
               maxTtl: 1.9
             });
-            SFX.tap();
+            SFX.whiff();
             SFX.boo(0.45);
             triggerCoachMood(w, defSide, '🤦', 2.0);
             b.possessionSide = side;
@@ -7554,7 +7556,7 @@ export const MatchModal: React.FC<{
           };
           w.phaseLabel = `🗣️ ${topDef.shortName} เทกตัวโหม่งสกัดบอลทิ้ง!`;
           w.phaseTone = 'normal';
-          SFX.pass();
+          SFX.header();
         }
       }
       return;
@@ -7638,7 +7640,7 @@ export const MatchModal: React.FC<{
             b.lastPasserId = receiver.id;
             w.phaseLabel = `🗣️ ${receiver.shortName} โหม่งเช็ดตั้งให้ ${partner.shortName}!`;
             w.phaseTone = 'attack';
-            SFX.pass();
+            SFX.header();
             return;
           }
           b.carrierId = receiver.id;
@@ -7649,7 +7651,7 @@ export const MatchModal: React.FC<{
           b.shotStyle = undefined;
           w.phaseLabel = `🗣️ ${receiver.shortName} เทกตัวโหม่งคุมจังหวะได้`;
           w.phaseTone = 'normal';
-          SFX.pass();
+          SFX.header();
           return;
         } else {
           nearestOpp.x = clamp(b.toX, 4, 96);
@@ -7692,7 +7694,7 @@ export const MatchModal: React.FC<{
           };
           w.phaseLabel = `🗣️ ${nearestOpp.shortName} โหม่งสกัดบอลโด่ง!`;
           w.phaseTone = 'normal';
-          SFX.pass();
+          SFX.header();
           return;
         }
       }
@@ -7745,7 +7747,7 @@ export const MatchModal: React.FC<{
         b.shotStyle = undefined;
         w.phaseLabel = `🔀 ${nearestOpp.shortName}${agentHasTrait(nearestOpp, 'interception_hawk') ? ' [เหยี่ยวดักบอล]' : ''} อ่านทางบอลดักตัดไว้ได้!`;
         w.phaseTone = 'normal';
-        SFX.pass();
+        SFX.tackle(false);
         return;
       }
 
