@@ -695,7 +695,7 @@ export const MatchModal: React.FC<{
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const triggeredRulesRef = useRef<number[]>([]);
-  const lastSoundMinRef = useRef(-1);
+  const lastGoalSoundMsRef = useRef(0);
   const alertLoggedRef = useRef<Set<string>>(new Set());
 
   const simRef = useRef({
@@ -6104,8 +6104,9 @@ export const MatchModal: React.FC<{
       });
     }
     const isMyTeamGoal = (side === 'H') === meIsHome;
-    if (lastSoundMinRef.current !== curMin) {
-      lastSoundMinRef.current = curMin;
+    const nowSoundMs = Date.now();
+    if (nowSoundMs - lastGoalSoundMsRef.current > 250) {
+      lastGoalSoundMsRef.current = nowSoundMs;
       SFX.goal(!isOwnGoal && isMyTeamGoal);
       vibrate([50, 40, 80]);
     }

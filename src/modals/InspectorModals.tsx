@@ -255,22 +255,27 @@ export const PlayerInspectorModal: React.FC<{
                         </span>
                       )}
                       {livePlayer.blessed && (
-                        <span className="px-1 py-[1px] rounded bg-amber-300 text-[#261900] text-[8px] mland:text-[6.5px] font-extrabold leading-none">
-                          ✨ พร
+                        <span
+                          title="ผู้เล่นได้รับพร"
+                          className="px-1 py-[1px] rounded bg-amber-300 text-[#261900] text-[8px] mland:text-[6.5px] font-extrabold leading-none"
+                        >
+                          ✨
                         </span>
                       )}
                       {(livePlayer.hg || livePlayer.customCreated) && (
                         <span
+                          title="เด็กปั้นสโมสร"
                           className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-extrabold leading-none ${palette.hgBadge}`}
                         >
-                          🌱 เด็กปั้น
+                          🌱
                         </span>
                       )}
                       {isCap && (
                         <span
+                          title="กัปตันทีม"
                           className={`px-1 py-[1px] rounded text-[8px] mland:text-[6.5px] font-bold leading-none ${palette.capBadge}`}
                         >
-                          © กัปตัน
+                          ©
                         </span>
                       )}
                     </>

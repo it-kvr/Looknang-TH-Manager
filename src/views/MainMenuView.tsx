@@ -1395,8 +1395,11 @@ export const MainMenu: React.FC<{
               bio={previewBio}
               categories={summarizeStatGroups(subStats)}
               renderBadges={(palette) => (
-                <span className={`text-[8.5px] mland:text-[7px] font-bold truncate max-w-[115px] ${palette.clubText}`}>
-                  {cTraits.length > 0 ? `🧬 ${cTraits.length} สไตล์การเล่น` : 'นักเตะใหม่'}
+                <span
+                  title={cTraits.length > 0 ? `🧬 ${cTraits.length} สไตล์การเล่น` : 'นักเตะใหม่'}
+                  className={`text-[8px] mland:text-[6.5px] font-bold truncate max-w-[52px] mland:max-w-[38px] ${palette.clubText}`}
+                >
+                  {cTraits.length > 0 ? `🧬 ${cTraits.length}` : 'ใหม่'}
                 </span>
               )}
             />
@@ -2284,11 +2287,11 @@ export const MainMenu: React.FC<{
               categories={activeStar.categories}
               className="shadow-[0_18px_42px_rgba(0,0,0,0.65)]"
               renderBadges={(palette) => (
-                <div className="flex items-center gap-1 max-w-[130px] mland:max-w-[95px]">
+                <div title={activeStar.clubName} className="flex items-center gap-0.5 max-w-[56px] sm:max-w-[68px] mland:max-w-[44px]">
                   <div className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
                     <ClubCrest name={activeStar.clubName} size={14} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
                   </div>
-                  <span className={`text-[9px] mland:text-[7px] font-semibold truncate ${palette.clubText}`}>
+                  <span className={`hidden sm:inline mland:hidden text-[8.5px] font-semibold truncate ${palette.clubText}`}>
                     {activeStar.clubName}
                   </span>
                 </div>

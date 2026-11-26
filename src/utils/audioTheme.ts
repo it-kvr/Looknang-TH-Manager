@@ -54,6 +54,7 @@ let crowdPresenceFilter: BiquadFilterNode | null = null;
 let crowdLfo: OscillatorNode | null = null;
 let crowdActive = false;
 let noiseBuffer: AudioBuffer | null = null;
+let crispNoiseBuffer: AudioBuffer | null = null;
 let unlockBound = false;
 let sfxSuppressed = false;
 
@@ -149,6 +150,19 @@ function getPinkNoiseBuffer(ctx: AudioContext): AudioBuffer {
     b6 = white * 0.115926;
   }
   noiseBuffer = buf;
+  return buf;
+}
+
+function getCrispNoiseBuffer(ctx: AudioContext): AudioBuffer {
+  if (crispNoiseBuffer && crispNoiseBuffer.sampleRate === ctx.sampleRate) return crispNoiseBuffer;
+  const length = ctx.sampleRate * 2;
+  const buf = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buf.getChannelData(0);
+  // Full-scale broadband noise for crisp nylon net whip/snap transients
+  for (let i = 0; i < length; i++) {
+    data[i] = (Math.random() * 2 - 1) * 0.85;
+  }
+  crispNoiseBuffer = buf;
   return buf;
 }
 
@@ -331,47 +345,69 @@ function playMeshSnap(delay = 0, intensity = 1) {
   if (!ctx || !sfxBus) return;
   try {
     const now = ctx.currentTime + delay;
-    const dur = 0.14 + intensity * 0.06;
+    const dur = 0.16 + intensity * 0.06;
     const src = ctx.createBufferSource();
-    src.buffer = getPinkNoiseBuffer(ctx);
+    src.buffer = getCrispNoiseBuffer(ctx);
 
-    // Swept bandpass mimics taut nylon mesh catching and snapping back ("ตุงตาข่าย")
+    // 1. Primary taut nylon net whip ("สวบ!" — crisp broadband sweep through cord tension band)
     const bp = ctx.createBiquadFilter();
     bp.type = 'bandpass';
-    bp.frequency.setValueAtTime(jitter(2150, 0.07), now);
-    bp.frequency.exponentialRampToValueAtTime(680, now + dur);
-    bp.Q.value = 1.65;
+    bp.frequency.setValueAtTime(jitter(3400, 0.06), now);
+    bp.frequency.exponentialRampToValueAtTime(780, now + dur);
+    bp.Q.value = 1.05;
 
-    // Secondary lower cord tension body
-    const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass';
-    lp.frequency.setValueAtTime(1600, now);
-    lp.frequency.exponentialRampToValueAtTime(420, now + dur);
-
-    const g = ctx.createGain();
-    const peak = 0.095 * intensity;
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.linearRampToValueAtTime(peak, now + 0.009);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    const gWhip = ctx.createGain();
+    gWhip.gain.setValueAtTime(0.0001, now);
+    gWhip.gain.linearRampToValueAtTime(0.32 * intensity, now + 0.007);
+    gWhip.gain.exponentialRampToValueAtTime(0.0001, now + dur);
 
     src.connect(bp);
-    bp.connect(lp);
-    lp.connect(g);
-    g.connect(sfxBus);
-    src.start(now, Math.random() * 1.4, dur + 0.04);
+    bp.connect(gWhip);
+    gWhip.connect(sfxBus);
+    src.start(now, Math.random() * 0.8, dur + 0.04);
+
+    // 2. High-frequency mesh cord rustle shimmer (gives unmistakable "ตุงตาข่าย" texture)
+    const cordSrc = ctx.createBufferSource();
+    cordSrc.buffer = getCrispNoiseBuffer(ctx);
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.setValueAtTime(2100, now);
+    const gCord = ctx.createGain();
+    const cordDur = 0.095 + intensity * 0.03;
+    gCord.gain.setValueAtTime(0.0001, now);
+    gCord.gain.linearRampToValueAtTime(0.14 * intensity, now + 0.005);
+    gCord.gain.exponentialRampToValueAtTime(0.0001, now + cordDur);
+    cordSrc.connect(hp);
+    hp.connect(gCord);
+    gCord.connect(sfxBus);
+    cordSrc.start(now, Math.random() * 0.8, cordDur + 0.03);
+
+    // 3. Taut net pocket thwang/snap resonance
+    const cordTone = ctx.createOscillator();
+    const cordToneGain = ctx.createGain();
+    cordTone.type = 'triangle';
+    cordTone.frequency.setValueAtTime(jitter(215, 0.05), now);
+    cordTone.frequency.exponentialRampToValueAtTime(58, now + 0.11);
+    cordToneGain.gain.setValueAtTime(0.0001, now);
+    cordToneGain.gain.linearRampToValueAtTime(0.17 * intensity, now + 0.005);
+    cordToneGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+    cordTone.connect(cordToneGain);
+    cordToneGain.connect(sfxBus);
+    cordTone.start(now);
+    cordTone.stop(now + 0.13);
   } catch {
     // ignore
   }
 }
 
-function playCheerNoise(intensity = 0.85) {
+function playCheerNoise(intensity = 0.85, delay = 0) {
   if (sfxSuppressed) return;
   const st = getSettings();
   if (st.mute || getSfxScale(st) <= 0) return;
   const ctx = ensureAudio();
   if (!ctx || !sfxBus) return;
   try {
-    const now = ctx.currentTime;
+    const now = ctx.currentTime + delay;
     const dur = 0.85 + intensity * 0.72;
     const src = ctx.createBufferSource();
     src.buffer = getPinkNoiseBuffer(ctx);
@@ -591,22 +627,22 @@ export const SFX = {
     snd(587.33, 0.12, 'triangle', 0.04, 0.07);
   },
   goal: (isPositive = true) => {
-    // 1. Immediate physical ball-hitting-the-net impact ("ตุงตาข่าย": deep pocket thump + taut nylon mesh snap)
-    playThump(134, 34, 0.17, 0.138, 0);
-    playMeshSnap(0, 1.0);
-    // 2. Secondary rebound rattle against back net cords (+85ms & +155ms)
-    playMeshSnap(0.085, 0.72);
-    playThump(92, 32, 0.12, 0.065, 0.085);
-    playNoiseBurst(0.11, 'bandpass', 1420, 2.0, 0.03, 0.15);
+    // 1. Immediate unmistakable physical ball-into-net impact ("สวบ-ตุงตาข่าย!")
+    playThump(150, 36, 0.19, 0.22, 0);
+    playMeshSnap(0, 1.05);
+    // 2. Secondary back-net rebound & ripple rattle (+90ms & +170ms)
+    playMeshSnap(0.09, 0.72);
+    playThump(98, 34, 0.13, 0.11, 0.09);
+    playMeshSnap(0.17, 0.42);
 
-    // 3. Authentic stadium crowd reaction (no cheesy arcade synth notes)
+    // 3. Stagger crowd explosion ~120ms after net impact so the net whip cuts through cleanly first!
     if (isPositive) {
-      playThump(74, 116, 0.58, 0.045, 0.045);
+      playThump(74, 118, 0.56, 0.05, 0.12);
       pulseCrowdRoar(1.0);
-      playCheerNoise(1.18);
+      playCheerNoise(1.18, 0.12);
     } else {
-      pulseCrowdBoo(0.52);
-      playNoiseBurst(0.45, 'bandpass', 460, 1.3, 0.046, 0.055);
+      pulseCrowdBoo(0.55);
+      playNoiseBurst(0.45, 'bandpass', 460, 1.3, 0.055, 0.13);
     }
   },
   whistle: () => {

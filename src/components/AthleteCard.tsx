@@ -79,61 +79,56 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
         style={{ background: `linear-gradient(90deg, ${kit1}, #fad05a 52%, ${kit2})` }}
       />
 
-      {/* Top Corner Header: OVR / Role #NO + POT / TL / Context Badges / Optional Action */}
-      <div className="px-2.5 pt-1.5 pb-0.5 mland:px-2 mland:pt-1 mland:pb-0 flex items-start justify-between gap-1.5 shrink-0">
-        <div className="leading-none min-w-0">
-          <div
-            className={`text-xl sm:text-[22px] mland:text-[15px] font-extrabold font-display tabular leading-none ${
+      {/* Single-Row Top Header: OVR · Role · #NO | POT · TL · Badges · Action */}
+      <div className="px-2.5 pt-1.5 pb-0.5 mland:px-2 mland:pt-1 mland:pb-0 flex items-center justify-between gap-1 shrink-0 min-w-0">
+        <div className="flex items-center gap-1 mland:gap-0.5 leading-none min-w-0">
+          <span
+            className={`text-[17px] sm:text-[18px] mland:text-[13px] font-extrabold font-display tabular leading-none shrink-0 ${
               isLight ? statTierMeta(ov).textClass : statTierMeta(ov).darkTextClass
             }`}
           >
             {ov}
-          </div>
-          <div className="mt-0.5 flex items-center gap-1 leading-none min-w-0">
-            <span
-              className={`text-[9.5px] mland:text-[7.5px] font-bold tracking-wide truncate max-w-[88px] ${cardPalette.subText}`}
+          </span>
+          <span
+            title={roleLabel}
+            className={`text-[9.5px] mland:text-[7.5px] font-bold tracking-tight truncate max-w-[54px] sm:max-w-[66px] mland:max-w-[44px] ${cardPalette.subText}`}
+          >
+            {roleLabel}
+          </span>
+          {onShirtClick ? (
+            <button
+              type="button"
+              onClick={onShirtClick}
+              title={shirtButtonTitle || 'สลับเบอร์เสื้อ'}
+              className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular cursor-pointer transition-colors shrink-0 ${cardPalette.lockerBtn}`}
             >
-              {roleLabel}
+              #{shirtNo} ▾
+            </button>
+          ) : (
+            <span
+              className={`text-[9px] mland:text-[7px] font-bold tabular shrink-0 ${cardPalette.subText}`}
+            >
+              #{shirtNo}
             </span>
-            {onShirtClick ? (
-              <button
-                type="button"
-                onClick={onShirtClick}
-                title={shirtButtonTitle || 'สลับเบอร์เสื้อ'}
-                className={`px-1.5 py-[1px] rounded text-[8.5px] mland:text-[7px] font-extrabold tabular cursor-pointer transition-colors shrink-0 ${cardPalette.lockerBtn}`}
-              >
-                #{shirtNo} ▾
-              </button>
-            ) : (
-              <span
-                className={`text-[9.5px] mland:text-[7.5px] font-bold tabular shrink-0 ${cardPalette.subText}`}
-              >
-                · #{shirtNo}
-              </span>
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="flex items-start gap-1.5 mland:gap-1 min-w-0">
-          <div className="flex flex-col items-end gap-0.5 min-w-0">
-            <div className="flex items-center gap-1">
-              {pot !== undefined && (
-                <span
-                  className={`text-[9.5px] mland:text-[7.5px] font-bold tabular ${
-                    isLight ? statTierMeta(pot).textClass : statTierMeta(pot).darkTextClass
-                  }`}
-                >
-                  POT {pot}
-                </span>
-              )}
-              <TalentBadge talent={talent} variant="card" tone={cardTone} size="xs" />
+        <div className="flex items-center justify-end gap-1 mland:gap-0.5 min-w-0 shrink-0">
+          {pot !== undefined && (
+            <span
+              className={`text-[9px] mland:text-[7px] font-bold tabular whitespace-nowrap shrink-0 ${
+                isLight ? statTierMeta(pot).textClass : statTierMeta(pot).darkTextClass
+              }`}
+            >
+              POT {pot}
+            </span>
+          )}
+          <TalentBadge talent={talent} variant="card" tone={cardTone} size="xs" />
+          {badgeNodes && (
+            <div className="flex items-center justify-end gap-0.5 min-w-0 shrink-0">
+              {badgeNodes}
             </div>
-            {badgeNodes && (
-              <div className="flex items-center justify-end gap-1 min-h-[14px] mland:min-h-[12px] max-w-full">
-                {badgeNodes}
-              </div>
-            )}
-          </div>
+          )}
           {actionNode}
         </div>
       </div>
@@ -141,7 +136,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
       {/* Neutral Studio Spotlight Portrait Stage */}
       <div
         className={`relative mx-2.5 my-1 mland:mx-1.5 mland:my-0.5 rounded-xl mland:rounded-lg border pt-1.5 mland:pt-1 flex items-end justify-center overflow-hidden ${
-          stretchStage ? 'flex-1 min-h-[64px] mland:min-h-[42px]' : 'min-h-[72px] mland:min-h-[48px]'
+          stretchStage ? 'flex-1 min-h-[76px] mland:min-h-[50px]' : 'min-h-[82px] mland:min-h-[54px]'
         } ${cardPalette.stageBox}`}
       >
         {stageTopLeftNode && (
@@ -156,7 +151,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           className={`relative z-10 [&>svg]:block ${
             stretchStage
               ? '[&>svg]:w-[76px] [&>svg]:h-[82px] sm:[&>svg]:w-[88px] sm:[&>svg]:h-[94px] mland:[&>svg]:w-[48px] mland:[&>svg]:h-[52px]'
-              : '[&>svg]:w-[60px] [&>svg]:h-[64px] mland:[&>svg]:w-[40px] mland:[&>svg]:h-[42px]'
+              : '[&>svg]:w-[62px] [&>svg]:h-[66px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[44px]'
           }`}
         >
           <PlayerFace
