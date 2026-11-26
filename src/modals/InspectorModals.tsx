@@ -408,26 +408,22 @@ export const PlayerInspectorModal: React.FC<{
                         </div>
                       </div>
 
-                      {statCompScope === 'cup' && (
+                      {statCompScope === 'cup' && playedCups.length > 0 && (
                         <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 text-[9px] mland:text-[7.5px] text-[var(--mut)] tabular leading-snug">
-                          {playedCups.length > 0 ? (
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                              {playedCups.map((ck) => {
-                                const m = CUP_COMP_META[ck];
-                                const st = livePlayer.cupStats![ck]!;
-                                return (
-                                  <span key={ck} className="whitespace-nowrap">
-                                    {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
-                                    {st.sg > 0 ? `·${st.sg}⚽` : ''}
-                                    {livePlayer.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}🎯` : ''}
-                                    {st.motm > 0 ? `·${st.motm}👑` : ''}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <span>ยังไม่ได้ลงเล่นรายการบอลถ้วยในซีซั่นนี้</span>
-                          )}
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                            {playedCups.map((ck) => {
+                              const m = CUP_COMP_META[ck];
+                              const st = livePlayer.cupStats![ck]!;
+                              return (
+                                <span key={ck} className="whitespace-nowrap">
+                                  {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
+                                  {st.sg > 0 ? `·${st.sg}⚽` : ''}
+                                  {livePlayer.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}🎯` : ''}
+                                  {st.motm > 0 ? `·${st.motm}👑` : ''}
+                                </span>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
                     </div>

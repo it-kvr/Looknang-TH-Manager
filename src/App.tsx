@@ -7,7 +7,7 @@ import {
   enterLandscapeFullscreen,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
-import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload } from './types/game';
+import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
@@ -27,6 +27,7 @@ import { FinanceClubView } from './views/FinanceClubView';
 import { PlayerCareerView } from './views/PlayerCareerView';
 import { PlayerClubTransferView } from './views/PlayerClubTransferView';
 import { MatchModal } from './modals/MatchModal';
+import { PreMatchModal } from './modals/PreMatchModal';
 import { GodBlessingModal } from './modals/GodBlessingModal';
 import { PlayerInspectorModal, TeamInspectorModal } from './modals/InspectorModals';
 import type { SeasonSummaryData } from './modals/SeasonEndModal';
@@ -43,7 +44,8 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null; initialTab?: 'info' | 'history' | 'missions' } | null>(null);
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
-  const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
+  const [preMatch, setPreMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean } | null>(null);
+  const [activeMatch, setActiveMatch] = useState<{ kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean; matchEnv?: MatchEnvironment } | null>(null);
   const [seasonSummary, setSeasonSummary] = useState<SeasonSummaryData | null>(null);
   const [seasonStatsTarget, setSeasonStatsTarget] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -230,6 +232,8 @@ export default function App() {
     const currentTier = loaded.teams?.[loaded.me]?.tier ?? 0;
     const normalized: GameState = { ...loaded, v: 't', tv: 0, sub: 0, lg: currentTier };
     ensureSeasonExtraCups(normalized);
+    setPreMatch(null);
+    setActiveMatch(null);
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
     setSlot(targetSlot);
@@ -840,40 +844,41 @@ export default function App() {
     if (outcome.missionToast) showToast(outcome.missionToast);
   };
 
+  const runInstantNextMatch = (fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean }) => {
+    if (!state) return;
+    const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
+    const clone = cloneGameState(state);
+    if (fixture.isDerby) clone.derby = 1;
+    const payload = simulateInstantMatchPayload(clone, fixture.kind, fixture.homeId, fixture.awayId);
+    const outcome = applyFinishedMatchToDraft(clone, fixture, payload);
+    navigateDraftToLeague(clone);
+    const H = clone.teams[fixture.homeId];
+    const A = clone.teams[fixture.awayId];
+    const myGf = fixture.homeId === clone.me ? payload.gh : payload.ga;
+    const myGa = fixture.homeId === clone.me ? payload.ga : payload.gh;
+    setNavIntent(null);
+    if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+    skipNextSaveRef.current = false;
+    setState(clone);
+    if (outcome.shouldConfetti) triggerConfetti();
+    if (myGf > myGa) SFX.win();
+    else SFX.confirm();
+    const scoreMsg = `⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`;
+    showToast(outcome.missionToast ? `${scoreMsg} · ${outcome.missionToast}` : scoreMsg);
+  };
+
   const handleTriggerNextStep = () => {
     if (!state) return;
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     if (nextMatchInfo) {
       if (appSettings.autoSkipMatch) {
-        const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
-        const clone = cloneGameState(state);
-        if (nextMatchInfo.isDerby) clone.derby = 1;
-        const payload = simulateInstantMatchPayload(clone, nextMatchInfo.kind, nextMatchInfo.homeId, nextMatchInfo.awayId);
-        const outcome = applyFinishedMatchToDraft(clone, nextMatchInfo, payload);
-        navigateDraftToLeague(clone);
-        const H = clone.teams[nextMatchInfo.homeId];
-        const A = clone.teams[nextMatchInfo.awayId];
-        const myGf = nextMatchInfo.homeId === clone.me ? payload.gh : payload.ga;
-        const myGa = nextMatchInfo.homeId === clone.me ? payload.ga : payload.gh;
-        setNavIntent(null);
-        if (!wasOnLeagueHome) setNavResetSeq((n) => n + 1);
-        if (mainRef.current) mainRef.current.scrollTop = 0;
-        skipNextSaveRef.current = false;
-        setState(clone);
-        if (outcome.shouldConfetti) triggerConfetti();
-        if (myGf > myGa) SFX.win();
-        else SFX.confirm();
-        const scoreMsg = `⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`;
-        showToast(outcome.missionToast ? `${scoreMsg} · ${outcome.missionToast}` : scoreMsg);
+        runInstantNextMatch(nextMatchInfo);
         return;
       }
       SFX.tap();
-      enterAutoMobileFullscreen().catch(() => undefined);
-      if (nextMatchInfo.isDerby) {
-        updateState((d) => { d.derby = 1; });
-      }
-      setActiveMatch(nextMatchInfo);
+      setPreMatch(nextMatchInfo);
       return;
     }
     SFX.tap();
@@ -1382,6 +1387,37 @@ export default function App() {
       </div>
 
       {/* Modals */}
+      {preMatch && !activeMatch && (
+        <PreMatchModal
+          state={state}
+          kind={preMatch.kind}
+          homeId={preMatch.homeId}
+          awayId={preMatch.awayId}
+          isDerby={preMatch.isDerby}
+          onUpdateState={updateState}
+          onKickOff={(env) => {
+            const target = preMatch;
+            setPreMatch(null);
+            enterAutoMobileFullscreen().catch(() => undefined);
+            if (target.isDerby) {
+              updateState((d) => { d.derby = 1; });
+            }
+            setActiveMatch({ ...target, matchEnv: env });
+          }}
+          onQuickSim={() => {
+            const target = preMatch;
+            setPreMatch(null);
+            runInstantNextMatch(target);
+          }}
+          onOpenFullTactics={() => {
+            setPreMatch(null);
+            navigateToTab('q');
+          }}
+          onClose={() => setPreMatch(null)}
+          onToast={showToast}
+        />
+      )}
+
       {activeMatch && (
         <MatchModal
           state={state}
@@ -1389,6 +1425,7 @@ export default function App() {
           homeId={activeMatch.homeId}
           awayId={activeMatch.awayId}
           isDerby={activeMatch.isDerby}
+          initialMatchEnv={activeMatch.matchEnv}
           onFinish={handleMatchFinish}
         />
       )}
@@ -1445,7 +1482,7 @@ export default function App() {
         );
       })()}
 
-      {state.dilemma && !activeMatch && !seasonSummary && (
+      {state.dilemma && !preMatch && !activeMatch && !seasonSummary && (
         <DilemmaModal
           dilemma={state.dilemma}
           onChoose={(idx) => {
@@ -1465,6 +1502,8 @@ export default function App() {
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => {
             flushPendingSave();
+            setPreMatch(null);
+            setActiveMatch(null);
             setShowSettings(false);
             setSeasonStatsTarget(null);
             setState(null);

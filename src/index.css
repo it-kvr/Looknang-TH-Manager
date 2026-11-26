@@ -396,6 +396,7 @@ button:not(:disabled):active {
   border-radius: 2px;
   z-index: 9999;
   pointer-events: none;
+  will-change: transform, opacity;
   animation-name: confetti-fall;
   animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
   animation-fill-mode: forwards;

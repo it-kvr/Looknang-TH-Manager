@@ -1105,7 +1105,7 @@ export const FormationPitch: React.FC<{
   disableRedPlayers?: boolean;
   dropAttrPrefix?: 'default' | 'tactics';
   className?: string;
-}> = ({
+}> = React.memo(({
   team,
   state,
   svgRef,
@@ -1651,5 +1651,5 @@ export const FormationPitch: React.FC<{
       })()}
     </svg>
   );
-};
+});
 

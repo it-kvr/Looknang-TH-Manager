@@ -649,10 +649,10 @@ export function vibrate(pattern: number | number[]) {
 export function triggerConfetti(waves = 1) {
   if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const colors = ['#f5c242', '#2fc476', '#ff7a5c', '#60a5fa', '#ffffff', '#fde047'];
-  const totalWaves = Math.max(1, Math.min(4, Math.round(waves)));
+  const totalWaves = Math.max(1, Math.min(2, Math.round(waves)));
   for (let w = 0; w < totalWaves; w++) {
-    const count = w === 0 ? 45 : 32;
-    const baseDelay = w * 0.45;
+    const count = w === 0 ? 24 : 14;
+    const baseDelay = w * 0.42;
     for (let i = 0; i < count; i++) {
       const el = document.createElement('i');
       el.className = 'confetti-piece';
@@ -662,10 +662,10 @@ export function triggerConfetti(waves = 1) {
         el.style.width = '7px';
         el.style.height = '18px';
       }
-      el.style.animationDuration = `${1.6 + Math.random() * 1.4}s`;
-      el.style.animationDelay = `${baseDelay + Math.random() * 0.4}s`;
+      el.style.animationDuration = `${1.4 + Math.random() * 1.1}s`;
+      el.style.animationDelay = `${baseDelay + Math.random() * 0.35}s`;
       document.body.appendChild(el);
-      setTimeout(() => el.remove(), (baseDelay + 3.6) * 1000);
+      setTimeout(() => el.remove(), (baseDelay + 3.0) * 1000);
     }
   }
 }

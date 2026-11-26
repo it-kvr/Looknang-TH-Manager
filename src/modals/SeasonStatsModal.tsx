@@ -63,8 +63,6 @@ export const SeasonStatsModal: React.FC<{
     });
   }, [recPlayers, compScope]);
 
-  const hasAnyCupStats = useMemo(() => recPlayers.some((p) => (p.cupSp || 0) > 0), [recPlayers]);
-
   const sortedPlayers = useMemo(() => {
     const list = scopedPlayers.slice();
     return list.sort((a: SeasonPlayerStatRecord, b: SeasonPlayerStatRecord) => {
@@ -433,12 +431,6 @@ export const SeasonStatsModal: React.FC<{
                 ))}
               </div>
             </div>
-
-            {compScope === 'cup' && !hasAnyCupStats && (
-              <div className="px-3 py-2 bg-[var(--surface-2)]/40 border-b border-[var(--line)]/60 text-[11px] mland:text-[9.5px] text-[var(--mut)]">
-                ซีซั่นนี้ยังไม่มีบันทึกสถิตินักเตะรายคนสำหรับรายการบอลถ้วย
-              </div>
-            )}
 
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs mland:text-[10px]">
