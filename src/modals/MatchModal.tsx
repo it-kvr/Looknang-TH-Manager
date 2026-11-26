@@ -9692,6 +9692,7 @@ export const MatchModal: React.FC<{
           pushTimeline(45, 'N', 'first_half', 'จบครึ่งแรก', `${simRef.current.gh} - ${simRef.current.ga}`);
           w.phaseLabel = `☕ พักครึ่งเวลา (${simRef.current.gh} - ${simRef.current.ga})`;
           w.phaseTone = 'normal';
+          if (isPlayerMode) setMlandMatchTab('tactics');
           syncUiStatsFromWorld(w, 45);
         } else if (w.phase === 'play2' && w.minuteFloat >= 90) {
           w.phase = 'stop2';
@@ -11415,8 +11416,8 @@ export const MatchModal: React.FC<{
                             </div>
                           </div>
 
-                          {/* Halftime Stage: Split Pitch + Right-Side Halftime Team Talk Panel */}
-                          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_235px] lg:grid-cols-[minmax(0,1fr)_265px] mland:grid-cols-[minmax(0,1fr)_205px] bg-[#0c351f]">
+                          {/* Halftime Stage: Split Pitch + Right-Side Halftime Team Talk Panel (Manager Mode) */}
+                          <div className={`grid ${state.mode === 'm' ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_235px] lg:grid-cols-[minmax(0,1fr)_265px] mland:grid-cols-[minmax(0,1fr)_205px]' : 'grid-cols-1'} bg-[#0c351f]`}>
                             <div className="flex flex-col min-w-0">
                               {/* Tall SVG Formation Pitch Container */}
                               <div className="relative w-full p-1.5 sm:p-2 mland:p-1 h-[400px] sm:h-[470px] lg:h-[520px] mland:h-[calc(var(--app-dvh,1dvh)*97-134px)] mland:min-h-[185px] select-none overflow-hidden flex items-center justify-center">
@@ -11533,56 +11534,28 @@ export const MatchModal: React.FC<{
                               </div>
                             </div>
 
-                            {/* Right Side Inside Stadium: Coach Explanation (Player Mode) or Tactical Orders (Manager Mode) */}
-                            <div className="bg-[#082414]/92 border-t sm:border-t-0 sm:border-l mland:border-t-0 mland:border-l border-white/15 p-2.5 sm:p-3 mland:p-2 flex flex-col gap-2.5 mland:gap-1.5">
-                              <div className="space-y-2 mland:space-y-1 flex-1 min-h-0 flex flex-col">
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[#fde047] flex items-center gap-1.5">
-                                      <span>{state.mode === 'm' ? '🗣️ สั่งการครึ่งหลัง' : '👔 คำสั่งโค้ชพักครึ่ง'}</span>
+                            {/* Right Side Inside Stadium: Tactical Orders (Manager Mode only — Player Mode shows in แผนโค้ช panel) */}
+                            {state.mode === 'm' && (
+                              <div className="bg-[#082414]/92 border-t sm:border-t-0 sm:border-l mland:border-t-0 mland:border-l border-white/15 p-2.5 sm:p-3 mland:p-2 flex flex-col gap-2.5 mland:gap-1.5">
+                                <div className="space-y-2 mland:space-y-1 flex-1 min-h-0 flex flex-col">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] text-[#fde047] flex items-center gap-1.5">
+                                        <span>🗣️ สั่งการครึ่งหลัง</span>
+                                      </div>
+                                      <p className="text-[10px] mland:text-[8px] text-white/70 leading-snug mt-0.5">
+                                        เลือกคำสั่งปลุกใจ/แท็กติกทีม แล้วกดเริ่มครึ่งหลังด้านบน
+                                      </p>
                                     </div>
-                                    <p className="text-[10px] mland:text-[8px] text-white/70 leading-snug mt-0.5">
-                                      {state.mode === 'm'
-                                        ? 'เลือกคำสั่งปลุกใจ/แท็กติกทีม แล้วกดเริ่มครึ่งหลังด้านบน'
-                                        : 'ฟังคำชี้แจงแท็กติกจากโค้ชก่อนลงครึ่งหลัง'}
-                                    </p>
+                                    <ClubCrest
+                                      name={meTeamOrig.name}
+                                      size={22}
+                                      team={meTeamOrig}
+                                      club={state.club}
+                                      isMyClub={true}
+                                    />
                                   </div>
-                                  <ClubCrest
-                                    name={meTeamOrig.name}
-                                    size={22}
-                                    team={meTeamOrig}
-                                    club={state.club}
-                                    isMyClub={state.mode === 'm'}
-                                  />
-                                </div>
 
-                                {state.mode === 'p' ? (
-                                  <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2 pr-0.5">
-                                    {halftimeCoachOrder ? (
-                                      <div className="rounded-xl mland:rounded-lg bg-white/10 border border-amber-300/35 px-3 py-2.5 mland:px-2 mland:py-1.5 space-y-2 mland:space-y-1">
-                                        <div className="flex items-center justify-between gap-1.5 text-[9.5px] mland:text-[7.5px] text-white/75">
-                                          <span className="font-bold text-amber-200 truncate">{meTeamOrig.name}</span>
-                                          <span className="px-1.5 py-0.5 rounded bg-white/10 font-bold text-white/90 shrink-0">
-                                            {halftimeCoachOrder.form} · {halftimeCoachOrder.tacLabel}
-                                          </span>
-                                        </div>
-                                        <div className="font-extrabold text-[11px] sm:text-xs mland:text-[9px] text-amber-200 leading-snug">
-                                          {halftimeCoachOrder.headline}
-                                        </div>
-                                        <div className="text-[10px] mland:text-[8px] text-white/90 leading-relaxed">
-                                          📋 {halftimeCoachOrder.detail}
-                                        </div>
-                                        <div className="pt-1.5 border-t border-white/12 text-[10px] mland:text-[8px] text-emerald-200 leading-relaxed">
-                                          💬 {halftimeCoachOrder.playerNote}
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <div className="rounded-xl mland:rounded-lg bg-white/10 border border-amber-300/30 px-3 py-2.5 text-[10.5px] text-white/85 leading-relaxed">
-                                        👔 โค้ชกำลังสรุปแท็กติกครึ่งหลังให้ทีมยึดวินัยและช่วยกันคุมจังหวะเกม กดปุ่ม &quot;เริ่มครึ่งหลัง&quot; ด้านบนเมื่อพร้อมลุยต่อ
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
                                   <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 mland:gap-1 pr-0.5">
                                     {[
                                       { id: 'attack' as const, icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
@@ -11624,9 +11597,9 @@ export const MatchModal: React.FC<{
                                       );
                                     })}
                                   </div>
-                                )}
+                                </div>
                               </div>
-                            </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -12312,16 +12285,24 @@ export const MatchModal: React.FC<{
                                 : ''
                           }`}
                         >
-                          <span>🗣️ คุยโค้ช</span>
-                          {userPitchStatus === 'subbed_out' ? (
+                          <span>🧠 แผนโค้ช</span>
+                          {matchPhaseUi === 'halftime' ? (
+                            <span
+                              className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
+                                activeTab
+                                  ? 'bg-amber-400/25 text-amber-200'
+                                  : 'bg-amber-500 text-white'
+                              }`}
+                            >
+                              พักครึ่ง
+                            </span>
+                          ) : userPitchStatus === 'subbed_out' ? (
                             <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ออกแล้ว</span>
                           ) : userPitchStatus === 'sent_off' ? (
                             <span className="text-[9px] mland:text-[8px] text-[var(--red)] shrink-0">ใบแดง</span>
                           ) : userPitchStatus === 'bench' ? (
                             <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">สำรอง</span>
-                          ) : coachChatCount >= 2 ? (
-                            <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ครบ 2/2</span>
-                          ) : canSpeakTab ? (
+                          ) : coachChatCount >= 2 ? null : canSpeakTab ? (
                             <span
                               className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
                                 activeTab
@@ -12391,44 +12372,75 @@ export const MatchModal: React.FC<{
                         </div>
 
                         <div className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
-                          <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] font-bold">
-                            <span className="text-[var(--ink)] truncate">
-                              🗣️ สื่อสารข้างสนาม · สิทธิ์ {quotaLeft}/2 ครั้ง
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0 ${
-                                userPitchStatus !== 'on'
-                                  ? 'bg-[var(--surface-2)] text-[var(--mut)] border border-[var(--line)]'
-                                  : canSpeak
-                                    ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
-                                    : 'bg-[var(--surface-2)] text-[var(--mut)] border border-[var(--line)]'
-                              }`}
-                            >
-                              {userPitchStatus === 'subbed_out'
-                                ? '🔄 เปลี่ยนตัวออกแล้ว'
-                                : userPitchStatus === 'sent_off'
-                                  ? '🟥 ถูกใบแดง'
-                                  : userPitchStatus === 'bench'
-                                    ? '🪑 นั่งสำรอง'
-                                    : quotaLeft <= 0
-                                      ? 'ครบโควตา 2/2'
+                          {matchPhaseUi === 'halftime' && (
+                            <div className="rounded-xl mland:rounded-lg bg-amber-500/10 border border-amber-500/40 p-2.5 mland:p-2 space-y-1.5 mland:space-y-1">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-extrabold text-[11px] mland:text-[9.5px] text-amber-600 dark:text-amber-300 truncate">
+                                  👔 คำสั่งโค้ชพักครึ่ง
+                                </span>
+                                <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9.5px] mland:text-[8px] font-bold text-[var(--ink)] shrink-0">
+                                  {halftimeCoachOrder ? `${halftimeCoachOrder.form} · ${halftimeCoachOrder.tacLabel}` : `${myTeamLive.form} · ${AR_T[myTeamLive.tac]}`}
+                                </span>
+                              </div>
+                              {halftimeCoachOrder ? (
+                                <>
+                                  <div className="font-extrabold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-snug">
+                                    {halftimeCoachOrder.headline}
+                                  </div>
+                                  <div className="text-[10px] mland:text-[8.5px] text-[var(--ink)]/90 leading-relaxed">
+                                    📋 {halftimeCoachOrder.detail}
+                                  </div>
+                                  <div className="pt-1 border-t border-amber-500/25 text-[10px] mland:text-[8.5px] text-[var(--g)] font-semibold leading-relaxed">
+                                    💬 {halftimeCoachOrder.playerNote}
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-relaxed">
+                                  โค้ชกำลังสรุปแท็กติกครึ่งหลังให้ทีมยึดวินัยและช่วยกันคุมจังหวะเกม กดปุ่ม &quot;เริ่มครึ่งหลัง&quot; ด้านบนเมื่อพร้อมลุยต่อ
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div className={matchPhaseUi === 'halftime' ? 'pt-2 border-t border-[var(--line)] space-y-2 mland:space-y-1.5' : 'space-y-2 mland:space-y-1.5'}>
+                            <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] font-bold">
+                              <span className="text-[var(--ink)] truncate">
+                                🗣️ คุยโค้ช
+                              </span>
+                              {!(userPitchStatus === 'on' && quotaLeft <= 0) && (
+                                <span
+                                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0 ${
+                                    userPitchStatus !== 'on'
+                                      ? 'bg-[var(--surface-2)] text-[var(--mut)] border border-[var(--line)]'
                                       : canSpeak
-                                        ? '● พร้อมคุย'
-                                        : `⏳ รอ ${waitSpeakMins} น.`}
-                            </span>
-                          </div>
+                                        ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                                        : 'bg-[var(--surface-2)] text-[var(--mut)] border border-[var(--line)]'
+                                  }`}
+                                >
+                                  {userPitchStatus === 'subbed_out'
+                                    ? '🔄 เปลี่ยนตัวออกแล้ว'
+                                    : userPitchStatus === 'sent_off'
+                                      ? '🟥 ถูกใบแดง'
+                                      : userPitchStatus === 'bench'
+                                        ? '🪑 นั่งสำรอง'
+                                        : canSpeak
+                                          ? '● พร้อมคุย'
+                                          : `⏳ รอ ${waitSpeakMins} น.`}
+                                </span>
+                              )}
+                            </div>
 
                           {userPitchStatus !== 'on' ? (
                             <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
                               {userPitchStatus === 'subbed_out'
-                                ? `คุณถูกเปลี่ยนตัวออกจากสนามแล้ว (${simRef.current.userSubOutMin ? `น.${simRef.current.userSubOutMin}'` : 'เกมนี้'}) — ไม่สามารถสื่อสารแท็กติกในสนามกับโค้ชได้อีก`
+                                ? `คุณถูกเปลี่ยนตัวออกจากสนามแล้ว (${simRef.current.userSubOutMin ? `น.${simRef.current.userSubOutMin}'` : 'เกมนี้'}) — ไม่สามารถคุยแท็กติกในสนามกับโค้ชได้อีก`
                                 : userPitchStatus === 'sent_off'
-                                  ? 'คุณถูกใบแดงไล่ออกจากสนามแล้ว — งดการสื่อสารข้างสนามในเกมนี้'
-                                  : 'คุณยังนั่งอยู่ที่ม้านั่งสำรอง — ต้องรอลงสนามก่อนจึงจะสื่อสารแท็กติกกับโค้ชได้'}
+                                  ? 'คุณถูกใบแดงไล่ออกจากสนามแล้ว — งดคุยกับโค้ชในเกมนี้'
+                                  : 'คุณยังนั่งอยู่ที่ม้านั่งสำรอง — ต้องรอลงสนามก่อนจึงจะคุยแท็กติกกับโค้ชได้'}
                             </div>
                           ) : quotaLeft <= 0 ? (
                             <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
-                              ใช้สิทธิ์สื่อสารข้างสนามครบ 2/2 ครั้งในแมตช์นี้แล้ว โค้ชจะคุมเกมตามแผนในสนามต่อไป
+                              โค้ชกำลังคุมเกมตามแผนในสนามต่อไป
                             </div>
                           ) : (
                             <div className="grid grid-cols-1 gap-1.5 mland:gap-1">
@@ -12516,6 +12528,7 @@ export const MatchModal: React.FC<{
                               ))}
                             </div>
                           )}
+                          </div>
                         </div>
                       </div>
                     );
