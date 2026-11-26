@@ -84,7 +84,7 @@ export const GodBlessingModal: React.FC<{
               >
                 <option value={String(state.me)}>⭐ ทีมของเรา · {state.teams[state.me]?.name}</option>
                 <option value="yth">🎓 อคาเดมีเยาวชน ({state.yth.length})</option>
-                <option value="mk">🛒 ตลาดซื้อขาย / ฟรีเอเยนต์ ({state.mk.length})</option>
+                <option value="mk">⇄ ตลาดซื้อขาย / ฟรีเอเยนต์ ({state.mk.length})</option>
                 {state.teams
                   .filter((t) => t.id !== state.me)
                   .map((t) => (

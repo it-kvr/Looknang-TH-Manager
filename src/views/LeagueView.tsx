@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronDown, Coins, X } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coins, Trophy, X } from 'lucide-react';
 import type { ArchivedMatchReport, MainTab, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
@@ -1367,6 +1367,7 @@ export const LeagueView: React.FC<{
         <ScheduleCalendarView
           state={state}
           onInspectTeam={onInspectTeam}
+          onOpenMarket={state.mode === 'm' && onNavigate ? () => onNavigate('k') : undefined}
           onOpenVarReplay={onOpenVarReplay}
           onOpenMatchReport={onOpenMatchReport}
         />
@@ -1482,15 +1483,17 @@ export const ScheduleCalendarView: React.FC<{
   const totalMd = state.fx.length || 30;
   const defaultMonth = state.md >= totalMd ? 4 : Math.min(4, Math.floor(state.md / 6));
   const [monthIdx, setMonthIdx] = useState<number>(defaultMonth);
-  const [roundPreview, setRoundPreview] = useState<number>(Math.min(state.md, Math.max(0, totalMd - 1)));
+  const currentNextIdx = Math.min(state.md, Math.max(0, totalMd - 1));
+  const [roundPreview, setRoundPreview] = useState<number>(currentNextIdx);
+  const [leftTab, setLeftTab] = useState<'round' | 'cup'>('round');
   const tw = getTransferWindowInfo(state);
 
   const months = [
-    { idx: 0, label: 'เดือน 1', range: 'นัด 1–6', start: 0, end: 6 },
-    { idx: 1, label: 'เดือน 2', range: 'นัด 7–12', start: 6, end: 12 },
-    { idx: 2, label: 'เดือน 3', range: 'นัด 13–18', start: 12, end: 18 },
-    { idx: 3, label: 'เดือน 4', range: 'นัด 19–24', start: 18, end: 24 },
-    { idx: 4, label: 'เดือน 5', range: 'นัด 25–30', start: 24, end: totalMd }
+    { idx: 0, label: 'เดือน 1', range: '1–6', start: 0, end: 6 },
+    { idx: 1, label: 'เดือน 2', range: '7–12', start: 6, end: 12 },
+    { idx: 2, label: 'เดือน 3', range: '13–18', start: 12, end: 18 },
+    { idx: 3, label: 'เดือน 4', range: '19–24', start: 18, end: 24 },
+    { idx: 4, label: 'เดือน 5', range: '25–30', start: 24, end: totalMd }
   ];
 
   const visibleMdIndices = useMemo(
@@ -1520,144 +1523,430 @@ export const ScheduleCalendarView: React.FC<{
 
   const previewRoundPairs = state.fx[roundPreview] || [];
   const cupLogs = state.cupLog || [];
-  const progressPct = Math.round((Math.min(state.md, totalMd) / totalMd) * 100);
+  const playedCount = Math.min(state.md, totalMd);
+  const progressPct = Math.round((playedCount / Math.max(1, totalMd)) * 100);
+  const hasMidweekCup = Boolean(state.pc || state.pa || state.plc || state.psc || state.pdc);
+
+  const activeRangeText =
+    monthIdx === -1
+      ? `ทั้งหมด ${totalMd} นัด`
+      : `นัดที่ ${(months[monthIdx]?.start ?? 0) + 1}–${Math.min(totalMd, months[monthIdx]?.end ?? totalMd)}`;
+
+  const milestoneSchedule = [
+    { icon: '🟢', name: 'ตลาดซื้อขายรอบ 1', rounds: 'นัด 1–6' },
+    { icon: '🟢', name: 'ตลาดซื้อขายรอบ 2', rounds: 'นัด 15–20' },
+    { icon: EXTRA_CUP_META.sc.icon, name: EXTRA_CUP_META.sc.name, rounds: 'นัด 2' },
+    { icon: '🌏', name: 'บอลถ้วยทวีป', rounds: 'นัด 3, 10, 17, 24' },
+    { icon: EXTRA_CUP_META.lc.icon, name: EXTRA_CUP_META.lc.name, rounds: 'นัด 4, 11, 18, 25' },
+    { icon: EXTRA_CUP_META.dc.icon, name: EXTRA_CUP_META.dc.name, rounds: 'นัด 5, 12, 19, 26' },
+    { icon: '🏆', name: 'ถ้วยประชาชน', rounds: 'นัด 6, 13, 20, 27' }
+  ];
 
   return (
-    <div className="grid grid-cols-[0.88fr_1.12fr] grid-rows-[auto_1fr] gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-hidden">
-      {/* Top Season Calendar Overview */}
-      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1 col-start-1 row-start-1">
-        <div className="flex flex-wrap items-center justify-between gap-2 mland:gap-1">
-          <div>
-            <h3 className="font-bold text-sm sm:text-base mland:text-[11px] flex items-center gap-1.5">
-              <span>📅 ปฏิทิน & ตารางแข่ง · ซีซั่น {state.season}</span>
-              <span className="text-xs mland:text-[9.5px] font-normal text-[var(--mut)]">({TN[me.tier]})</span>
-            </h3>
-            <p className="text-xs mland:text-[9.5px] text-[var(--mut)]">
-              ความคืบหน้า: แข่งแล้ว {Math.min(state.md, totalMd)}/{totalMd} นัด ({progressPct}%)
-            </p>
+    <div className="grid grid-cols-1 md:grid-cols-[0.88fr_1.12fr] mland:grid-cols-[0.86fr_1.14fr] gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-hidden">
+      {/* LEFT COLUMN: Compact Season Overview + Tabbed League Round & Cup Schedule */}
+      <div className="flex flex-col gap-2 mland:gap-1.5 min-h-0 overflow-hidden">
+        {/* Season Overview Card */}
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs shrink-0 space-y-2 mland:space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <ClubCrest
+                name={me.name}
+                size={26}
+                team={me}
+                club={state.club}
+                isMyClub={state.mode === 'm'}
+              />
+              <div className="min-w-0">
+                <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
+                  ฤดูกาลที่ {state.season} · {TN[me.tier]}
+                </div>
+                <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate">
+                  แข่งแล้ว {playedCount}/{totalMd} นัด ({progressPct}%) · ชนะ {me.w} เสมอ {me.d} แพ้ {me.l}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {onOpenMarket && state.mode === 'm' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onOpenMarket();
+                  }}
+                  className={`h-7 mland:h-6 px-2.5 mland:px-2 rounded-lg text-[11px] mland:text-[9px] font-bold border inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap ${
+                    tw.open
+                      ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)] hover:border-[var(--g)]'
+                      : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  <span>{tw.shortLabel}</span>
+                  <ChevronRight className="w-3 h-3 shrink-0" />
+                </button>
+              ) : (
+                <span
+                  className={`text-[11px] mland:text-[9px] font-bold whitespace-nowrap ${
+                    tw.open ? 'text-[var(--g)]' : 'text-[var(--mut)]'
+                  }`}
+                >
+                  {tw.shortLabel}
+                </span>
+              )}
+              {onPlayNext && (
+                <button
+                  type="button"
+                  onClick={onPlayNext}
+                  className="btn btn-sm btn-gold px-3 mland:px-2"
+                >
+                  {state.md >= totalMd
+                    ? '🏁 สรุปจบฤดูกาล'
+                    : state.pa
+                      ? '🌏 แข่งถ้วยทวีป'
+                      : state.psc
+                        ? `${EXTRA_CUP_META.sc.icon} แข่ง${EXTRA_CUP_META.sc.short}`
+                        : state.plc
+                          ? `${EXTRA_CUP_META.lc.icon} แข่ง${EXTRA_CUP_META.lc.short}`
+                          : state.pdc
+                            ? `${EXTRA_CUP_META.dc.icon} แข่ง${EXTRA_CUP_META.dc.short}`
+                            : state.pc
+                              ? '🏆 แข่งถ้วยประชาชน'
+                              : `▶ แข่งนัดที่ ${state.md + 1}`}
+                </button>
+              )}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 mland:gap-1">
-            {onOpenMarket && state.mode === 'm' ? (
-              <button
-                type="button"
-                onClick={onOpenMarket}
-                className={`btn btn-sm ${
-                  tw.open
-                    ? 'bg-[var(--g-soft)] border border-[var(--g)]/50 text-[var(--g)] hover:border-[var(--g)]'
-                    : 'btn-secondary text-[var(--mut)]'
-                }`}
-              >
-                {tw.shortLabel} ›
-              </button>
-            ) : (
-              <span
-                className={`h-8 mland:h-6.5 px-2.5 mland:px-2 inline-flex items-center rounded-lg text-[11px] mland:text-[9.5px] font-bold border whitespace-nowrap ${
-                  tw.open
-                    ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]'
-                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'
-                }`}
-              >
-                {tw.shortLabel}
+          {/* Season Progress Bar */}
+          <div className="h-1.5 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[var(--g)] transition-all duration-300"
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
+
+          {/* Unboxed Milestone Key Line */}
+          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug tabular">
+            <span className="font-semibold text-[var(--g)]">ตลาด 1: นัด 1–6</span>
+            <span className="mx-1.5 opacity-45">·</span>
+            <span className="font-semibold text-[var(--g)]">ตลาด 2: นัด 15–20</span>
+            <span className="mx-1.5 opacity-45">·</span>
+            <span>ทวีป: 3, 10, 17, 24</span>
+            <span className="mx-1.5 opacity-45">·</span>
+            <span>บอลถ้วย: 2, 4–6, 11–13, 18–20, 25–27</span>
+          </div>
+
+          {/* Queued Midweek Cup Alert */}
+          {hasMidweekCup && (
+            <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/70 flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
+              <span className="font-bold text-[#7a4f00] dark:text-[var(--lamp)] truncate">
+                {state.pa && state.ac
+                  ? `🌏 คิวแข่งกลางสัปดาห์: บอลถ้วยทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`
+                  : state.psc && state.sc
+                    ? `${EXTRA_CUP_META.sc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.sc.name} (ชิงชนะเลิศ)`
+                    : state.plc && state.lc
+                      ? `${EXTRA_CUP_META.lc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.lc.name} ${RN[state.lc.r] || `รอบ ${state.lc.r + 1}`}`
+                      : state.pdc && state.dc
+                        ? `${EXTRA_CUP_META.dc.icon} คิวแข่งกลางสัปดาห์: ${EXTRA_CUP_META.dc.name} ${RN[state.dc.r] || `รอบ ${state.dc.r + 1}`}`
+                        : `🏆 คิวแข่งกลางสัปดาห์: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
               </span>
-            )}
-            {onPlayNext && (
+              {onPlayNext && (
+                <button type="button" onClick={onPlayNext} className="btn btn-xs btn-gold shrink-0">
+                  ▶ ลงสนาม
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bottom-Left Tabbed Panel: League Round Fixtures / Cup History & Milestones */}
+        <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+          <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/70 border-b border-[var(--line)] flex items-center justify-between gap-2">
+            <div className="seg-bar shrink-0">
               <button
                 type="button"
-                onClick={onPlayNext}
-                className="btn btn-sm btn-gold px-3.5 mland:px-2.5"
+                onClick={() => {
+                  SFX.tap();
+                  setLeftTab('round');
+                }}
+                className={`seg-btn py-1 mland:py-0.5 px-2.5 mland:px-2 text-[11px] mland:text-[9.5px] ${
+                  leftTab === 'round' ? 'seg-btn-active' : ''
+                }`}
               >
-                {state.md >= totalMd
-                  ? '🏁 สรุปจบฤดูกาล'
-                  : state.pa
-                    ? '🌏 แข่งถ้วยทวีป'
-                    : state.psc
-                      ? `${EXTRA_CUP_META.sc.icon} แข่ง${EXTRA_CUP_META.sc.short}`
-                      : state.plc
-                        ? `${EXTRA_CUP_META.lc.icon} แข่ง${EXTRA_CUP_META.lc.short}`
-                        : state.pdc
-                          ? `${EXTRA_CUP_META.dc.icon} แข่ง${EXTRA_CUP_META.dc.short}`
-                          : state.pc
-                            ? '🏆 แข่งถ้วยประชาชน'
-                            : `▶ แข่งนัดที่ ${state.md + 1}`}
+                <Calendar className="w-3 h-3 shrink-0" />
+                <span>คู่อื่นในลีก</span>
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  setLeftTab('cup');
+                }}
+                className={`seg-btn py-1 mland:py-0.5 px-2.5 mland:px-2 text-[11px] mland:text-[9.5px] ${
+                  leftTab === 'cup' ? 'seg-btn-active' : ''
+                }`}
+              >
+                <Trophy className="w-3 h-3 shrink-0" />
+                <span>บอลถ้วย</span>
+                {cupLogs.length > 0 && (
+                  <span className="tabular opacity-80">({cupLogs.length})</span>
+                )}
+              </button>
+            </div>
+
+            {leftTab === 'round' && (
+              <div className="flex items-center gap-1 shrink-0">
+                {roundPreview !== currentNextIdx && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setRoundPreview(currentNextIdx);
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold hover:brightness-95 cursor-pointer whitespace-nowrap"
+                    title="กลับไปยังนัดปัจจุบัน"
+                  >
+                    นัดปัจจุบัน
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={roundPreview <= 0}
+                  onClick={() => {
+                    SFX.tap();
+                    setRoundPreview((r) => Math.max(0, r - 1));
+                  }}
+                  aria-label="นัดก่อนหน้า"
+                  className="w-6 h-6 mland:w-5.5 mland:h-5.5 rounded-md bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] disabled:opacity-40 flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-[11px] mland:text-[9.5px] font-bold tabular text-[var(--ink)] min-w-[54px] text-center">
+                  นัด {roundPreview + 1}/{totalMd}
+                </span>
+                <button
+                  type="button"
+                  disabled={roundPreview >= totalMd - 1}
+                  onClick={() => {
+                    SFX.tap();
+                    setRoundPreview((r) => Math.min(totalMd - 1, r + 1));
+                  }}
+                  aria-label="นัดถัดไป"
+                  className="w-6 h-6 mland:w-5.5 mland:h-5.5 rounded-md bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] disabled:opacity-40 flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-2 mland:p-1.5">
+            {leftTab === 'round' ? (
+              <div className="divide-y divide-[var(--line)]/55">
+                {previewRoundPairs.map(([hid, aid], i) => {
+                  const ht = state.teams[hid];
+                  const at = state.teams[aid];
+                  if (!ht || !at) return null;
+                  const involvesMe = hid === state.me || aid === state.me;
+                  const rec = involvesMe ? state.schedRes?.[roundPreview] : undefined;
+                  return (
+                    <div
+                      key={i}
+                      className={`grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-lg text-[11.5px] mland:text-[9.5px] ${
+                        involvesMe ? 'bg-[var(--lamp-soft)]/70 font-bold' : 'hover:bg-[var(--surface-2)]/45'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onInspectTeam(hid)}
+                        className="min-w-0 flex items-center justify-end gap-1.5 text-right hover:text-[var(--g)] cursor-pointer transition-colors"
+                      >
+                        <span className={`truncate ${hid === state.me ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : ''}`}>
+                          {ht.name}
+                        </span>
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest name={ht.name} size={15} team={ht} club={state.club} isMyClub={state.mode === 'm' && hid === state.me} />
+                        </span>
+                      </button>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {rec && onOpenMatchReport ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${roundPreview + 1}`)}
+                            title="ดูหน้าสรุปหลังเกม"
+                            className="px-2 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] mland:text-[9px] font-extrabold tabular inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <span>{rec.gh}-{rec.ga}</span>
+                            <span className="text-[9px] opacity-80">📊</span>
+                          </button>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] text-[10.5px] mland:text-[9px] font-bold tabular text-[var(--mut)]">
+                            {rec ? `${rec.gh}-${rec.ga}` : 'vs'}
+                          </span>
+                        )}
+                        {rec?.varReplays?.length && onOpenVarReplay ? (
+                          <button
+                            type="button"
+                            onClick={() => onOpenVarReplay(rec.h, rec.a, rec.varReplays!)}
+                            className="px-1.5 py-0.5 rounded-md bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[9.5px] font-extrabold hover:bg-sky-500/28 cursor-pointer"
+                            title="ดูภาพช้า VAR ย้อนหลัง"
+                          >
+                            VAR
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => onInspectTeam(aid)}
+                        className="min-w-0 flex items-center justify-start gap-1.5 text-left hover:text-[var(--g)] cursor-pointer transition-colors"
+                      >
+                        <span className="shrink-0 inline-flex">
+                          <ClubCrest name={at.name} size={15} team={at} club={state.club} isMyClub={state.mode === 'm' && aid === state.me} />
+                        </span>
+                        <span className={`truncate ${aid === state.me ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : ''}`}>
+                          {at.name}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="space-y-2.5 mland:space-y-1.5">
+                {cupLogs.length > 0 && (
+                  <div className="divide-y divide-[var(--line)]/55">
+                    {cupLogs.map((cl, idx) => {
+                      const ht = state.teams[cl.h];
+                      const at = state.teams[cl.a];
+                      const compLabel =
+                        cl.comp === 'asia'
+                          ? `🌏 ทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                          : cl.comp === 'sc'
+                            ? `${EXTRA_CUP_META.sc.icon} ซูเปอร์คัพ`
+                            : cl.comp === 'lc'
+                              ? `${EXTRA_CUP_META.lc.icon} ลีกคัพ · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                              : cl.comp === 'dc'
+                                ? `${EXTRA_CUP_META.dc.icon} ดิวิชั่น · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                                : `🏆 ปชช. · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`;
+                      const cupTitle =
+                        cl.comp === 'asia'
+                          ? `บอลถ้วยทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                          : cl.comp === 'cup'
+                            ? `ถ้วยประชาชน · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
+                            : `${EXTRA_CUP_META[cl.comp].name} · ${cl.comp === 'sc' ? 'ชิงชนะเลิศ' : RN[cl.r] || `รอบ ${cl.r + 1}`}`;
+                      return (
+                        <div key={idx} className="py-1.5 px-1 flex items-center justify-between gap-2 text-[11px] mland:text-[9.5px]">
+                          <div className="min-w-0 flex-1 space-y-0.5">
+                            <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">
+                              {compLabel}
+                              {cl.penText ? ` · ${cl.penText}` : ''}
+                            </div>
+                            <div className="font-semibold text-[var(--ink)] truncate tabular">
+                              {ht?.name} <b className="mx-1">{cl.gh} - {cl.ga}</b> {at?.name}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            {cl.varReplays?.length && onOpenVarReplay && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenVarReplay(cl.h, cl.a, cl.varReplays!)}
+                                className="px-1.5 py-0.5 rounded-md bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8.5px] font-extrabold hover:bg-sky-500/28 cursor-pointer whitespace-nowrap"
+                                title="ดูภาพช้า VAR ย้อนหลัง"
+                              >
+                                🖥 VAR ({cl.varReplays.length})
+                              </button>
+                            )}
+                            {onOpenMatchReport && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenMatchReport(cl, cupTitle)}
+                                className="px-2 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[10px] mland:text-[8.5px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+                                title="ดูหน้าสรุปหลังเกม"
+                              >
+                                📊 สรุป
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className={cupLogs.length > 0 ? 'pt-2 border-t border-[var(--line)]' : ''}>
+                  <div className="text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] mb-1 px-1">
+                    กำหนดการสำคัญประจำฤดูกาล
+                  </div>
+                  <div className="divide-y divide-[var(--line)]/45">
+                    {milestoneSchedule.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between gap-2 px-1 py-1.5 mland:py-1 text-[11px] mland:text-[9.5px]">
+                        <span className="font-semibold text-[var(--ink)] truncate">
+                          <span className="mr-1.5">{item.icon}</span>
+                          {item.name}
+                        </span>
+                        <span className="tabular font-bold text-[var(--mut)] shrink-0">
+                          {item.rounds}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
-
-        {/* Season Progress Bar */}
-        <div className="h-2 mland:h-1 rounded-full bg-[var(--surface-2)] overflow-hidden">
-          <div className="h-full rounded-full bg-[var(--g)] transition-all" style={{ width: `${progressPct}%` }} />
-        </div>
-
-        {/* Key Calendar Events Legend */}
-        <div className="flex flex-wrap gap-1.5 mland:gap-1 text-[11px] mland:text-[9px]">
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-semibold">🟢 ตลาดรอบ 1: นัด 1–6</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--g-soft)] text-[var(--g)] font-semibold">🟢 ตลาดรอบ 2: นัด 15–20</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🏅 แชมเปี้ยนส์คัพ: 2</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🌏 ทวีป: 3,10,17,24</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🥇 ลีกคัพ: 4,11,18,25</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)] text-[var(--ink)] font-semibold">🛡️ ถ้วยดิวิชั่น: 5,12,19,26</span>
-          <span className="px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--lamp-soft)] text-[#7a4f00] dark:text-[var(--lamp)] font-semibold">🏆 ปชช.: 6,13,20,27</span>
-        </div>
-
-        {/* Immediate Cup / Asia Banner */}
-        {(state.pc || state.pa || state.plc || state.psc || state.pdc) && (
-          <div className="p-3 mland:p-1.5 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)] flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[10px]">
-            <span className="font-bold">
-              {state.pa && state.ac
-                ? `🌏 คิวแข่งคั่นกลางสัปดาห์นี้: บอลถ้วยทวีป ${RN[state.ac.r] || `รอบ ${state.ac.r + 1}`}`
-                : state.psc && state.sc
-                  ? `${EXTRA_CUP_META.sc.icon} คิวแข่งคั่นกลางสัปดาห์นี้: ${EXTRA_CUP_META.sc.name} (นัดชิงชนะเลิศ)`
-                  : state.plc && state.lc
-                    ? `${EXTRA_CUP_META.lc.icon} คิวแข่งคั่นกลางสัปดาห์นี้: ${EXTRA_CUP_META.lc.name} ${RN[state.lc.r] || `รอบ ${state.lc.r + 1}`}`
-                    : state.pdc && state.dc
-                      ? `${EXTRA_CUP_META.dc.icon} คิวแข่งคั่นกลางสัปดาห์นี้: ${EXTRA_CUP_META.dc.name} ${RN[state.dc.r] || `รอบ ${state.dc.r + 1}`}`
-                      : `🏆 คิวแข่งคั่นกลางสัปดาห์นี้: ถ้วยประชาชน ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`}
-            </span>
-            {onPlayNext && (
-              <button type="button" onClick={onPlayNext} className="btn btn-xs btn-gold">
-                ▶ ลงสนามนัดนี้
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
-      {/* Month / View Selector + Calendar Grid */}
-      <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 col-start-2 row-start-1 row-span-2 h-full flex flex-col min-h-0">
-        <div className="flex flex-wrap items-center gap-1.5 mland:gap-1 shrink-0">
-          {months.map((m) => {
-            const isCurMonth = state.md >= m.start && state.md < m.end;
-            return (
-              <button
-                key={m.idx}
-                type="button"
-                onClick={() => { SFX.tap(); setMonthIdx(m.idx); }}
-                className={`btn btn-xs ${
-                  monthIdx === m.idx
-                    ? 'btn-primary'
-                    : isCurMonth
-                      ? 'bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 text-[var(--ink)] hover:border-[var(--lamp)]'
-                      : 'btn-secondary text-[var(--mut)]'
-                }`}
-              >
-                {m.label} <span className="opacity-80 text-[9.5px]">({m.range})</span>
-              </button>
-            );
-          })}
-          <button
-            type="button"
-            onClick={() => { SFX.tap(); setMonthIdx(-1); }}
-            className={`btn btn-xs ml-auto ${
-              monthIdx === -1 ? 'bg-[var(--ink)] text-[var(--bg)] border border-[var(--ink)]' : 'btn-secondary text-[var(--mut)]'
-            }`}
-          >
-            📋 ดูทั้ง 30 นัด
-          </button>
+      {/* RIGHT COLUMN: Main Matchday Calendar Stage */}
+      <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs h-full flex flex-col min-h-0 overflow-hidden">
+        <div className="shrink-0 pb-2 mland:pb-1.5 border-b border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
+          <div className="seg-bar overflow-x-auto max-w-full">
+            {months.map((m) => {
+              const isCurMonth = state.md >= m.start && state.md < m.end;
+              const isActive = monthIdx === m.idx;
+              return (
+                <button
+                  key={m.idx}
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setMonthIdx(m.idx);
+                  }}
+                  className={`seg-btn py-1 mland:py-0.5 px-2.5 mland:px-2 text-[11px] mland:text-[9.5px] whitespace-nowrap shrink-0 ${
+                    isActive
+                      ? 'seg-btn-active'
+                      : isCurMonth
+                        ? 'text-[#8a5b00] dark:text-[var(--lamp)] font-extrabold hover:bg-[var(--lamp-soft)]/50'
+                        : ''
+                  }`}
+                >
+                  <span>{m.label}</span>
+                  {isCurMonth && !isActive && <span className="text-[9px] leading-none">★</span>}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                setMonthIdx(-1);
+              }}
+              className={`seg-btn py-1 mland:py-0.5 px-2.5 mland:px-2 text-[11px] mland:text-[9.5px] whitespace-nowrap shrink-0 ${
+                monthIdx === -1 ? 'seg-btn-active' : ''
+              }`}
+            >
+              ทั้ง {totalMd} นัด
+            </button>
+          </div>
+
+          <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)] tabular shrink-0">
+            {activeRangeText}
+          </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mland:gap-1.5 flex-1 min-h-0 overflow-y-auto pr-0.5 content-start">
+        <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5 flex-1 min-h-0 overflow-y-auto pt-2.5 mland:pt-1.5 pr-0.5 content-start">
           {visibleMdIndices.map((mdIdx) => {
             const mdNum = mdIdx + 1;
             const rd = state.fx[mdIdx];
@@ -1665,10 +1954,12 @@ export const ScheduleCalendarView: React.FC<{
             if (!pair) return null;
             const isHome = pair[0] === state.me;
             const opp = state.teams[isHome ? pair[1] : pair[0]];
+            if (!opp) return null;
             const isDerby = (pair[0] ^ 1) === pair[1];
             const ost = schedOppStatsMap.get(opp.id) || teamStats(opp, state);
-            const isNext = mdIdx === state.md && !state.pc && !state.pa && !state.plc && !state.psc && !state.pdc;
+            const isNext = mdIdx === state.md && !hasMidweekCup;
             const isPast = mdIdx < state.md;
+            const isPreviewed = leftTab === 'round' && roundPreview === mdIdx;
             const isWindowOpen = mdIdx < 6 || (mdIdx >= 14 && mdIdx < 20);
             const rec = state.schedRes?.[mdIdx];
 
@@ -1677,6 +1968,20 @@ export const ScheduleCalendarView: React.FC<{
             const dcIdx = [5, 12, 19, 26].indexOf(mdNum);
             const isSuperCup = mdNum === 2;
             const asiaIdx = [3, 10, 17, 24].indexOf(mdNum);
+
+            const milestoneTag = isSuperCup
+              ? { label: '🏅 ซูเปอร์คัพ', cls: 'text-amber-700 dark:text-[var(--lamp)]', title: EXTRA_CUP_META.sc.name }
+              : asiaIdx >= 0
+                ? { label: '🌏 ทวีป', cls: 'text-[var(--g)]', title: `กำหนดถ้วยทวีป ${RN[asiaIdx]}` }
+                : lcIdx >= 0
+                  ? { label: '🥇 ลีกคัพ', cls: 'text-sky-700 dark:text-sky-400', title: `กำหนด${EXTRA_CUP_META.lc.name} ${RN[lcIdx]}` }
+                  : dcIdx >= 0
+                    ? { label: '🛡️ ดิวิชั่น', cls: 'text-emerald-700 dark:text-emerald-400', title: `กำหนด${EXTRA_CUP_META.dc.name} ${RN[dcIdx]}` }
+                    : cupIdx >= 0
+                      ? { label: '🏆 ถ้วย ปชช.', cls: 'text-[#8a5b00] dark:text-[var(--lamp)]', title: `กำหนดถ้วยประชาชน ${RN[cupIdx]}` }
+                      : isWindowOpen
+                        ? { label: '🟢 ตลาดเปิด', cls: 'text-[var(--g)]', title: 'ช่วงเปิดตลาดซื้อขาย' }
+                        : null;
 
             let resLabel = '';
             let resCls = 'bg-[var(--surface-2)] text-[var(--mut)]';
@@ -1700,59 +2005,96 @@ export const ScheduleCalendarView: React.FC<{
             return (
               <div
                 key={mdNum}
-                className={`p-3 rounded-2xl border flex flex-col justify-between gap-2 transition-colors ${
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  SFX.tap();
+                  setLeftTab('round');
+                  setRoundPreview(mdIdx);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    SFX.tap();
+                    setLeftTab('round');
+                    setRoundPreview(mdIdx);
+                  }
+                }}
+                className={`p-2.5 mland:p-2 rounded-xl border flex flex-col justify-between gap-2 mland:gap-1.5 transition-colors cursor-pointer ${
                   isNext
-                    ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] shadow-xs'
-                    : isPast
-                      ? 'bg-[var(--surface-2)]/45 border-[var(--line)]/80'
-                      : 'bg-[var(--surface-2)]/80 border-[var(--line)] hover:border-[var(--g)]'
+                    ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] shadow-xs'
+                    : isPreviewed
+                      ? 'bg-[var(--surface-2)]/75 border-[var(--g)]/70'
+                      : isPast
+                        ? 'bg-[var(--surface-2)]/35 border-[var(--line)]/85 hover:border-[var(--line)]'
+                        : 'bg-[var(--surface-2)]/65 border-[var(--line)] hover:border-[var(--g)]/60'
                 }`}
               >
-                <div className="flex items-center justify-between gap-1.5 text-[11px]">
-                  <div className="flex items-center gap-1 flex-wrap">
-                    <span className={`px-2 py-0.5 rounded-md font-bold tabular ${isNext ? 'bg-[var(--lamp)] text-[#261900]' : 'bg-[var(--surface)] border border-[var(--line)]'}`}>
+                {/* Clean Unboxed Top Metadata Line */}
+                <div className="flex items-center justify-between gap-1.5 text-[10.5px] mland:text-[9px] tabular leading-none">
+                  <div className="flex items-center gap-1 min-w-0 truncate">
+                    <span className={`font-extrabold ${isNext ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}`}>
                       นัด {mdNum}
                     </span>
-                    <span className="font-semibold text-[var(--mut)]">{isHome ? '🏠 เหย้า' : '✈️ เยือน'}</span>
-                    {isDerby && <span className="text-[var(--red)] font-bold">🔥 ดาร์บี้</span>}
+                    <span className="text-[var(--mut)]/50">·</span>
+                    <span className="font-semibold text-[var(--mut)]">
+                      {isHome ? '🏠 เหย้า' : '✈️ เยือน'}
+                    </span>
+                    {isDerby && (
+                      <>
+                        <span className="text-[var(--mut)]/50">·</span>
+                        <span className="text-[var(--red)] font-extrabold">🔥 ดาร์บี้</span>
+                      </>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {isWindowOpen && <span title="ช่วงเปิดตลาดซื้อขาย" className="text-[10px] font-bold text-[var(--g)]">🟢 ตลาด</span>}
-                    {isSuperCup && <span title={EXTRA_CUP_META.sc.name} className="text-[10px] font-bold text-amber-600 dark:text-[var(--lamp)]">🏅 ซูเปอร์คัพ</span>}
-                    {lcIdx >= 0 && <span title={`กำหนด${EXTRA_CUP_META.lc.name} ${RN[lcIdx]}`} className="text-[10px] font-bold text-sky-600 dark:text-sky-400">🥇 ลีกคัพ</span>}
-                    {dcIdx >= 0 && <span title={`กำหนด${EXTRA_CUP_META.dc.name} ${RN[dcIdx]}`} className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400">🛡️ ดิวิชั่น</span>}
-                    {cupIdx >= 0 && <span title={`กำหนดถ้วยประชาชน ${RN[cupIdx]}`} className="text-[10px] font-bold text-[#9a6300] dark:text-[var(--lamp)]">🏆 ถ้วย</span>}
-                    {asiaIdx >= 0 && <span title={`กำหนดถ้วยทวีป ${RN[asiaIdx]}`} className="text-[10px] font-bold text-[var(--g)]">🌏 ทวีป</span>}
-                  </div>
+                  {milestoneTag && (
+                    <span
+                      title={milestoneTag.title}
+                      className={`font-bold shrink-0 ${milestoneTag.cls}`}
+                    >
+                      {milestoneTag.label}
+                    </span>
+                  )}
                 </div>
 
+                {/* Opponent + Result / Action Row */}
                 <div className="flex items-center justify-between gap-2">
                   <button
                     type="button"
-                    onClick={() => onInspectTeam(opp.id)}
-                    className="flex items-center gap-2.5 text-left cursor-pointer group min-w-0 flex-1"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      SFX.tap();
+                      onInspectTeam(opp.id);
+                    }}
+                    className="flex items-center gap-2 text-left cursor-pointer group min-w-0 flex-1"
+                    title={`ดูข้อมูลทีม ${opp.name}`}
                   >
-                    <ClubCrest name={opp.name} size={30} team={opp} />
+                    <span className="shrink-0 inline-flex mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                      <ClubCrest name={opp.name} size={28} team={opp} club={state.club} />
+                    </span>
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-xs sm:text-sm truncate group-hover:text-[var(--g)] transition-colors">
+                      <div className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] truncate group-hover:text-[var(--g)] transition-colors">
                         {opp.name}
                       </div>
-                      <div className="text-[11px] text-[var(--mut)]">
+                      <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
                         เฉลี่ย {ost.ovSq} · ตัวจริง {ost.ovXi}
                       </div>
                     </div>
                   </button>
 
                   {isPast ? (
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div
+                      className="flex items-center gap-1 shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       {rec?.varReplays?.length && onOpenVarReplay ? (
                         <button
                           type="button"
                           onClick={() => onOpenVarReplay(rec.h, rec.a, rec.varReplays!)}
                           title="ดูภาพช้า VAR ย้อนหลัง"
-                          className="px-1.5 py-1 rounded-lg bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
+                          className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8.5px] font-extrabold hover:bg-sky-500/28 cursor-pointer transition-colors whitespace-nowrap"
                         >
-                          🖥 VAR ({rec.varReplays.length})
+                          🖥 {rec.varReplays.length}
                         </button>
                       ) : null}
                       {rec && onOpenMatchReport ? (
@@ -1760,26 +2102,30 @@ export const ScheduleCalendarView: React.FC<{
                           type="button"
                           onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${mdNum}`)}
                           title="ดูหน้าสรุปหลังเกม"
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 cursor-pointer hover:brightness-110 transition-all shadow-2xs ${resCls}`}
+                          className={`inline-flex items-center gap-1 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold tabular shrink-0 cursor-pointer hover:brightness-110 transition-all shadow-2xs ${resCls}`}
                         >
                           <span>{resLabel}</span>
-                          <span className="text-[10px] opacity-90">📊</span>
+                          <span className="text-[9.5px] opacity-90">📊</span>
                         </button>
                       ) : (
-                        <span className={`px-2 py-1 rounded-lg text-[11px] font-bold tabular shrink-0 ${resCls}`}>
+                        <span className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg text-[10.5px] mland:text-[9px] font-bold tabular shrink-0 ${resCls}`}>
                           {resLabel}
                         </span>
                       )}
                     </div>
                   ) : isNext ? (
-                    <span className="px-2 py-1 rounded-lg bg-[var(--ink)] text-[var(--bg)] text-[10px] font-bold shrink-0">
+                    <span className="px-2 py-0.5 rounded-md bg-[var(--ink)] text-[var(--bg)] text-[10px] mland:text-[8.5px] font-extrabold shrink-0">
                       ถัดไป
                     </span>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => onInspectTeam(opp.id)}
-                      className="text-[11px] text-[var(--g)] font-semibold shrink-0 hover:underline cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        SFX.tap();
+                        onInspectTeam(opp.id);
+                      }}
+                      className="text-[11px] mland:text-[9px] text-[var(--g)] font-bold shrink-0 hover:underline cursor-pointer whitespace-nowrap"
                     >
                       ส่องทีม ›
                     </button>
@@ -1788,148 +2134,6 @@ export const ScheduleCalendarView: React.FC<{
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Bottom Left: Weekly League Fixtures & Cup Log */}
-      <div className="grid grid-cols-1 gap-2.5 mland:gap-2 col-start-1 row-start-2 min-h-0 overflow-y-auto pr-0.5">
-        <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <h4 className="font-bold text-xs sm:text-sm">📋 โปรแกรมคู่อื่นในลีก · นัดที่ {roundPreview + 1}</h4>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={roundPreview <= 0}
-                onClick={() => setRoundPreview((r) => Math.max(0, r - 1))}
-                className="btn btn-xs btn-secondary"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                disabled={roundPreview >= totalMd - 1}
-                onClick={() => setRoundPreview((r) => Math.min(totalMd - 1, r + 1))}
-                className="btn btn-xs btn-secondary"
-              >
-                ›
-              </button>
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            {previewRoundPairs.map(([hid, aid], i) => {
-              const ht = state.teams[hid];
-              const at = state.teams[aid];
-              const involvesMe = hid === state.me || aid === state.me;
-              const rec = involvesMe ? state.schedRes?.[roundPreview] : undefined;
-              return (
-                <div
-                  key={i}
-                  className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-xs ${
-                    involvesMe ? 'bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 font-semibold' : 'bg-[var(--surface-2)]/65'
-                  }`}
-                >
-                  <button type="button" onClick={() => onInspectTeam(hid)} className="flex-1 text-right whitespace-normal break-words leading-tight hover:text-[var(--g)] cursor-pointer">
-                    {ht.name}
-                  </button>
-                  {rec && onOpenMatchReport ? (
-                    <button
-                      type="button"
-                      onClick={() => onOpenMatchReport(rec, `${TN[me.tier]} · นัดที่ ${roundPreview + 1}`)}
-                      title="ดูหน้าสรุปหลังเกม"
-                      className="px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[11px] font-bold tabular shrink-0 inline-flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <span>{rec.gh}-{rec.ga}</span>
-                      <span className="text-[9.5px]">📊</span>
-                    </button>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] text-[11px] font-bold tabular shrink-0">
-                      {rec ? `${rec.gh}-${rec.ga}` : 'vs'}
-                    </span>
-                  )}
-                  {rec?.varReplays?.length && onOpenVarReplay && (
-                    <button
-                      type="button"
-                      onClick={() => onOpenVarReplay(rec.h, rec.a, rec.varReplays!)}
-                      className="px-1.5 py-0.5 rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer shrink-0"
-                      title="ดูภาพช้า VAR ย้อนหลัง"
-                    >
-                      🖥 VAR
-                    </button>
-                  )}
-                  <button type="button" onClick={() => onInspectTeam(aid)} className="flex-1 text-left whitespace-normal break-words leading-tight hover:text-[var(--g)] cursor-pointer">
-                    {at.name}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5">
-          <h4 className="font-bold text-xs sm:text-sm">🏆 ประวัติบอลถ้วยในฤดูกาลนี้</h4>
-          {cupLogs.length ? (
-            <div className="space-y-1.5">
-              {cupLogs.map((cl, idx) => {
-                const ht = state.teams[cl.h];
-                const at = state.teams[cl.a];
-                const badge =
-                  cl.comp === 'asia'
-                    ? `🌏 ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                    : cl.comp === 'sc'
-                      ? `${EXTRA_CUP_META.sc.icon} ชิงชนะเลิศ`
-                      : cl.comp === 'lc'
-                        ? `${EXTRA_CUP_META.lc.icon} ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                        : cl.comp === 'dc'
-                          ? `${EXTRA_CUP_META.dc.icon} ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                          : `🏆 ${RN[cl.r] || `รอบ ${cl.r + 1}`}`;
-                const cupTitle =
-                  cl.comp === 'asia'
-                    ? `บอลถ้วยทวีป · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                    : cl.comp === 'cup'
-                      ? `ถ้วยประชาชน · ${RN[cl.r] || `รอบ ${cl.r + 1}`}`
-                      : `${EXTRA_CUP_META[cl.comp].name} · ${cl.comp === 'sc' ? 'ชิงชนะเลิศ' : RN[cl.r] || `รอบ ${cl.r + 1}`}`;
-                return (
-                  <div key={idx} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)] text-xs">
-                    <span className="font-bold shrink-0">
-                      {badge}
-                    </span>
-                    <span className="truncate text-center flex-1">
-                      {ht?.name} <b>{cl.gh}-{cl.ga}</b> {at?.name}
-                    </span>
-                    {cl.penText && <span className="text-[10px] text-[var(--mut)] shrink-0">({cl.penText})</span>}
-                    <div className="flex items-center gap-1 shrink-0">
-                      {cl.varReplays?.length && onOpenVarReplay && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenVarReplay(cl.h, cl.a, cl.varReplays!)}
-                          className="px-1.5 py-0.5 rounded bg-sky-500/18 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] font-extrabold hover:bg-sky-500/28 cursor-pointer whitespace-nowrap"
-                          title="ดูภาพช้า VAR ย้อนหลัง"
-                        >
-                          🖥 VAR ({cl.varReplays.length})
-                        </button>
-                      )}
-                      {onOpenMatchReport && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenMatchReport(cl, cupTitle)}
-                          className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] text-[var(--ink)] text-[10px] font-bold cursor-pointer transition-colors whitespace-nowrap"
-                          title="ดูหน้าสรุปหลังเกม"
-                        >
-                          📊 สรุป
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="text-xs text-[var(--mut)] space-y-1">
-              <p>ยังไม่มีผลบอลถ้วยในฤดูกาลนี้</p>
-              <p>• แชมเปี้ยนส์ คัพ: นัด 2 · ถ้วยทวีป: นัด 3, 10, 17, 24</p>
-              <p>• ไทยลีก คัพ: นัด 4, 11, 18, 25 · ถ้วยดิวิชั่น: นัด 5, 12, 19, 26 · ถ้วยประชาชน: นัด 6, 13, 20, 27</p>
-            </div>
-          )}
         </div>
       </div>
     </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { FastForward, Pause, Play, RotateCcw, SkipBack, SkipForward, Tv, X } from 'lucide-react';
 import type { GameState, Team, VarReplayRecord } from '../types/game';
 import { ClubCrest } from '../components/SvgVisuals';
-import { drawVarReplayToCanvas } from './MatchPitchCanvas';
+import { drawVarReplayToCanvas, type VarCameraMode } from './MatchPitchCanvas';
 import { SFX } from '../utils/audioTheme';
 
 export type { VarReplayRecord };
@@ -56,6 +56,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
   const [pct, setPct] = useState<number>(() => (liveMode ? 0.15 : 0));
   const [playing, setPlaying] = useState<boolean>(true);
   const [replaySpeed, setReplaySpeed] = useState<0.25 | 0.5 | 1 | 1.5>(1);
+  const [cameraMode, setCameraMode] = useState<VarCameraMode>('wide');
 
   // Reset playback from start when switching between saved VAR incidents
   useEffect(() => {
@@ -102,7 +103,8 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
         homeGkKit,
         awayGkKit,
         homeTrim,
-        awayTrim
+        awayTrim,
+        cameraMode
       );
     };
     render();
@@ -111,7 +113,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
     const ro = new ResizeObserver(() => render());
     ro.observe(target);
     return () => ro.disconnect();
-  }, [activeRecord, pct, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim]);
+  }, [activeRecord, pct, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, cameraMode]);
 
   const phaseLabel =
     pct >= 0.64
@@ -236,7 +238,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
               ref={canvasRef}
               onClick={handleTogglePlay}
               className="w-full h-full block cursor-pointer select-none"
-              aria-label="จอภาพช้า VAR มุมซูม"
+              aria-label="จอภาพช้า VAR"
             />
           </div>
         </div>
@@ -319,7 +321,40 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="inline-flex items-center p-0.5 rounded-lg bg-white/8 border border-white/12">
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setCameraMode('wide');
+                  }}
+                  title="กล้องระยะไกล (เห็นภาพรวมพื้นที่และผู้เล่นที่เกี่ยวข้อง)"
+                  className={`h-6 px-2 rounded-md text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
+                    cameraMode === 'wide'
+                      ? 'bg-sky-400 text-slate-950'
+                      : 'text-white/75 hover:text-white'
+                  }`}
+                >
+                  🔭 ระยะไกล
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setCameraMode('zoom');
+                  }}
+                  title="กล้องระยะใกล้ (ซูมดูจุดชี้ขาด)"
+                  className={`h-6 px-2 rounded-md text-[10.5px] mland:text-[9px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
+                    cameraMode === 'zoom'
+                      ? 'bg-sky-400 text-slate-950'
+                      : 'text-white/75 hover:text-white'
+                  }`}
+                >
+                  🔍 ระยะใกล้
+                </button>
+              </div>
+
               <div className="inline-flex items-center p-0.5 rounded-lg bg-white/8 border border-white/12">
                 {([0.25, 0.5, 1, 1.5] as const).map((sp) => (
                   <button

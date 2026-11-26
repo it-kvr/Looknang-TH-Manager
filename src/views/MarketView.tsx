@@ -24,6 +24,7 @@ import { PlayerBioStrip } from '../components/PlayerBioStrip';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { TransferMarketIcon } from '../components/TransferMarketIcon';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -804,11 +805,11 @@ export const MarketView: React.FC<{
     );
   };
 
-  const marketTabs: { id: MarketTab; label: string; count?: string }[] = [
-    { id: 'buy', label: '🛒 ซื้อ & ยืมนักเตะ', count: `${activeCount}` },
-    { id: 'sell', label: '🏷️ ขายออก & ข้อเสนอ', count: incomingOffers.length > 0 ? `${incomingOffers.length} ดีลเข้า` : listedPlayers.length > 0 ? `${listedPlayers.length} ตั้งขาย` : undefined },
-    { id: 'scout', label: '🔍 แมวมองสโมสร', count: state.scout?.results ? 'รายงานพร้อม' : state.scout ? `รอ ${state.scout.turnsLeft} นัด` : undefined },
-    { id: 'con', label: '📋 สัญญา & เยาวชน', count: expiringCount + loanPlayers.length > 0 ? `${expiringCount + loanPlayers.length} ใกล้หมด` : undefined }
+  const marketTabs: { id: MarketTab; icon: React.ReactNode; label: string; count?: string }[] = [
+    { id: 'buy', icon: <TransferMarketIcon size={14} className="w-[14px] h-[14px] mland:w-[12px] mland:h-[12px]" />, label: 'ซื้อ & ยืมนักเตะ', count: `${activeCount}` },
+    { id: 'sell', icon: '🏷️', label: 'ขายออก & ข้อเสนอ', count: incomingOffers.length > 0 ? `${incomingOffers.length} ดีลเข้า` : listedPlayers.length > 0 ? `${listedPlayers.length} ตั้งขาย` : undefined },
+    { id: 'scout', icon: '🔍', label: 'แมวมองสโมสร', count: state.scout?.results ? 'รายงานพร้อม' : state.scout ? `รอ ${state.scout.turnsLeft} นัด` : undefined },
+    { id: 'con', icon: '📋', label: 'สัญญา & เยาวชน', count: expiringCount + loanPlayers.length > 0 ? `${expiringCount + loanPlayers.length} ใกล้หมด` : undefined }
   ];
 
   return (
@@ -864,7 +865,10 @@ export const MarketView: React.FC<{
               }}
               className={`seg-btn min-w-0 ${active ? 'seg-btn-active' : ''}`}
             >
-              <span className="truncate whitespace-nowrap">{t.label}</span>
+              <span className="inline-flex items-center justify-center gap-1.5 min-w-0">
+                <span className="inline-flex items-center justify-center shrink-0 leading-none">{t.icon}</span>
+                <span className="truncate whitespace-nowrap">{t.label}</span>
+              </span>
               {t.count && (
                 <span className={`hidden sm:inline mland:inline text-[10px] mland:text-[8.5px] font-semibold tabular shrink-0 whitespace-nowrap ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
                   · {t.count}
@@ -891,7 +895,10 @@ export const MarketView: React.FC<{
                       marketSource === 'mk' ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs' : ''
                     }`}
                   >
-                    🏪 ตลาด
+                    <span className="inline-flex items-center justify-center gap-1">
+                      <TransferMarketIcon size={13} className="w-[13px] h-[13px] mland:w-[11px] mland:h-[11px]" />
+                      <span>ตลาด</span>
+                    </span>
                   </button>
                   <button
                     type="button"
@@ -1052,9 +1059,12 @@ export const MarketView: React.FC<{
             <div className="shrink-0 px-3.5 py-2 mland:px-2.5 mland:py-1.5 border-b border-[var(--line)] bg-[var(--surface-2)]/30 flex items-center justify-between gap-2">
               <div className="flex items-baseline gap-2 min-w-0">
                 <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-                  {marketSource === 'mk'
-                    ? '🏪 รายชื่อนักเตะในตลาดกลาง'
-                    : marketSource === 'club'
+                  {marketSource === 'mk' ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <TransferMarketIcon size={16} className="w-4 h-4 mland:w-[13px] mland:h-[13px]" />
+                      <span>รายชื่อนักเตะในตลาดกลาง</span>
+                    </span>
+                  ) : marketSource === 'club'
                       ? '🏟️ นักเตะจากสโมสรในลีก'
                       : '⭐ นักเตะที่คุณสร้างเอง (ดึงเป็นเด็กปั้นหรือซื้อเข้าทีม)'}
                 </h3>

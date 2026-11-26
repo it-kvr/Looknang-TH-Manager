@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Settings } from 'lucide-react';
 import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
 import {
@@ -18,6 +18,7 @@ import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/mi
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
 import { StaminaBar } from './components/StaminaBar';
+import { TransferMarketIcon } from './components/TransferMarketIcon';
 import stadiumHeroBg from './assets/images/thai_stadium_hero_1795511663761.jpg';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
@@ -1135,13 +1136,13 @@ export default function App() {
         sb: state.p.sb
       }
     : null;
-  const tabs: [MainTab, string, string][] =
+  const tabs: [MainTab, ReactNode, string][] =
     state.mode === 'm'
       ? [
           ['t', '🏆', 'การแข่งขัน'],
           ['q', '⚽', 'ทีม & แผน'],
           ['r', '🏋️', 'ฝึกซ้อม'],
-          ['k', '🤝', 'ตลาด'],
+          ['k', <TransferMarketIcon size={18} className="w-[18px] h-[18px] mland:w-[15px] mland:h-[15px]" />, 'ตลาด'],
           ['f', '💰', 'การเงิน'],
           ['u', '🏟️', 'สโมสร']
         ]
@@ -1531,7 +1532,7 @@ export default function App() {
                       {badgeCount > 9 ? '9+' : badgeCount}
                     </span>
                   )}
-                  <span className="text-base mland:text-[13px] leading-none">{icon}</span>
+                  <span className="text-base mland:text-[13px] leading-none inline-flex items-center justify-center">{icon}</span>
                   <span className="truncate max-w-full leading-tight">{label}</span>
                 </button>
               );

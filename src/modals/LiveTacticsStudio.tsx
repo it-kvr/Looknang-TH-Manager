@@ -16,11 +16,14 @@ import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
 import { ovColor } from '../engine/missions';
-import { FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
+import { Check } from 'lucide-react';
+import { FormationPitch, PlayerFace, ClubCrest, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+
+export type ManagerHalftimeTalk = 'attack' | 'press' | 'balanced' | 'counter' | 'defend';
 
 export interface LivePlayerMatchStats {
   shots: number;
@@ -91,6 +94,8 @@ interface LiveTacticsStudioProps {
   liveViewers?: number;
   autoSubEnabled?: boolean;
   onToggleAutoSub?: () => void;
+  selectedHalftimeTalk?: ManagerHalftimeTalk;
+  onSetHalftimeTalk?: (tone: ManagerHalftimeTalk) => void;
 }
 
 interface DragRuntime {
@@ -169,7 +174,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
   onCloseToChat,
   liveViewers,
   autoSubEnabled,
-  onToggleAutoSub
+  onToggleAutoSub,
+  selectedHalftimeTalk = 'balanced',
+  onSetHalftimeTalk
 }) => {
   const [pitchTeamView, setPitchTeamView] = useState<'me' | 'opp'>('me');
   const [dragUi, setDragUi] = useState<{
@@ -859,8 +866,76 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
           </button>
         </div>
 
-        {/* Scrollable Bench + Tactical Orders */}
+        {/* Scrollable Halftime Talk (at Halftime) + Bench + Tactical Orders */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-2 mland:space-y-1.5">
+          {matchPhaseUi === 'halftime' && onSetHalftimeTalk && (() => {
+            const htTalkOptions: { id: ManagerHalftimeTalk; icon: string; title: string; desc: string }[] = [
+              { id: 'attack', icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
+              { id: 'press', icon: '⚡', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
+              { id: 'balanced', icon: '⚖️', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
+              { id: 'counter', icon: '🚀', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
+              { id: 'defend', icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
+            ];
+            return (
+              <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-amber-500/8 border border-amber-500/40 space-y-1.5 mland:space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-extrabold text-[11.5px] mland:text-[9.5px] text-[#b45309] dark:text-[#fde047] flex items-center gap-1.5">
+                      <span>🗣️ สั่งการครึ่งหลัง</span>
+                    </div>
+                    <p className="text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-snug">
+                      เลือกคำสั่งปลุกใจ/แท็กติกทีม แล้วกดเริ่มครึ่งหลังด้านบน
+                    </p>
+                  </div>
+                  <div className="shrink-0">
+                    <ClubCrest
+                      name={meTeamOrig.name}
+                      size={20}
+                      team={meTeamOrig}
+                      club={state.club}
+                      isMyClub={true}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-1">
+                  {htTalkOptions.map((opt) => {
+                    const active = selectedHalftimeTalk === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          onSetHalftimeTalk(opt.id);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg border transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                          active
+                            ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                            : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/60'
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-bold text-[10.5px] mland:text-[9px] flex items-center gap-1.5 leading-tight">
+                            <span>{opt.icon}</span>
+                            <span className="truncate">{opt.title}</span>
+                          </div>
+                          <div className={`text-[9px] mland:text-[7.5px] truncate mt-0.5 ${active ? 'text-white/85' : 'text-[var(--mut)]'}`}>
+                            {opt.desc}
+                          </div>
+                        </div>
+                        {active && (
+                          <span className="w-4 h-4 rounded-full bg-white text-[var(--g)] flex items-center justify-center shrink-0">
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Draggable Substitutes Bench */}
           <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-1.5 mland:space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] mland:text-[9.5px]">

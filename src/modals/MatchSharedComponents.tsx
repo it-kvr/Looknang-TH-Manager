@@ -1675,33 +1675,8 @@ export const FullTimeMatchStage: React.FC<{
       return posDiff || (b.pl?.ov ?? 0) - (a.pl?.ov ?? 0);
     });
 
-    const motmName = fullTimeAnalysis.motm;
-    const motmTeam = motmName
-      ? homeOrig.sq.some((q) => q.n === motmName)
-        ? homeOrig
-        : awayOrig.sq.some((q) => q.n === motmName)
-          ? awayOrig
-          : fullTimeAnalysis.playedNames[awayId]?.includes(motmName)
-            ? awayOrig
-            : fullTimeAnalysis.playedNames[homeId]?.includes(motmName)
-              ? homeOrig
-              : null
-      : null;
-    const motmPlayer = motmTeam?.sq.find((q) => q.n === motmName) || null;
-    const motmRole = motmPlayer?.ro || (motmTeam ? playedSlots?.[motmTeam.id]?.[motmName || ''] : undefined);
-    const motmPos = motmPlayer?.pos || (motmRole ? LINE[motmRole] : undefined);
-    const motmNo = motmTeam && motmPlayer ? getShirtNo(motmTeam, motmPlayer) : null;
-    const motmRt = motmName ? (fullTimeAnalysis.ratings[motmName] ?? 6.5) : 0;
-    const motmGl = motmTeam && motmName ? evs.filter((e) => !e.og && e.t === motmTeam.id && e.who === motmName).length : 0;
-    const motmAs = motmTeam && motmName ? evs.filter((e) => !e.og && e.t === motmTeam.id && e.as === motmName).length : 0;
-    const motmCs =
-      motmTeam && (motmPos === 'GK' || motmPos === 'DF')
-        ? (motmTeam.id === homeId ? ga : gh) === 0
-        : false;
-    const motmSaves = motmName ? (playerSavesMap[motmName] || 0) : 0;
-
     const gridColsCls =
-      'grid-cols-[22px_34px_28px_minmax(0,1fr)_64px_44px] mland:grid-cols-[19px_30px_25px_minmax(0,1fr)_56px_40px]';
+      'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_46px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_42px]';
 
     const renderPlayerRow = (item: FtPlayerRow) => {
       const isPicked = ftPickedPlayer === item.name;
@@ -1750,7 +1725,7 @@ export const FullTimeMatchStage: React.FC<{
           }`}
         >
           {/* 1. รูป */}
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-start">
             {item.pl ? (
               <MatchPlayerThumb
                 player={item.pl}
@@ -1767,17 +1742,17 @@ export const FullTimeMatchStage: React.FC<{
           </div>
 
           {/* 2. ตำแหน่ง */}
-          <div className="flex items-center justify-center">
+          <div className="flex items-center justify-start">
             {item.role ? <PositionBadge role={item.role} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
           </div>
 
           {/* 3. เบอร์ */}
-          <div className="text-center text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+          <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
             {item.no != null ? `#${item.no}` : '—'}
           </div>
 
           {/* 4. ชื่อ */}
-          <div className="flex items-center gap-1 min-w-0">
+          <div className="flex items-center justify-start gap-1 min-w-0">
             <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
               {item.name}
             </span>
@@ -1792,8 +1767,12 @@ export const FullTimeMatchStage: React.FC<{
               </span>
             )}
             {item.isMotm && (
-              <span title="Man of the Match" className="text-[10px] mland:text-[8.5px] leading-none shrink-0">
-                👑
+              <span
+                title="Man of the Match"
+                className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded bg-amber-400 text-[#1c1300] text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 shadow-2xs"
+              >
+                <span>👑</span>
+                <span>MOTM</span>
               </span>
             )}
             {item.subOut && (
@@ -1820,7 +1799,7 @@ export const FullTimeMatchStage: React.FC<{
           </div>
 
           {/* 5. ผลงาน */}
-          <div className="flex items-center justify-center flex-wrap gap-0.5 text-[10px] mland:text-[8.5px] tabular">
+          <div className="flex items-center justify-start flex-wrap gap-0.5 text-[10px] mland:text-[8.5px] tabular">
             {hasAnyStat ? (
               <>
                 {item.goals > 0 && <StatIconBadge kind="goal" count={item.goals} size="xs" />}
@@ -1851,7 +1830,7 @@ export const FullTimeMatchStage: React.FC<{
           </div>
 
           {/* 6. เรตติ้ง */}
-          <div className="flex items-center justify-end">
+          <div className="flex items-center justify-start">
             <span className={`px-1.5 py-[1px] rounded-md text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${rtTone}`}>
               {rt != null ? `⭐ ${rt.toFixed(1)}` : '—'}
             </span>
@@ -1864,72 +1843,6 @@ export const FullTimeMatchStage: React.FC<{
 
     return (
       <div className="flex-1 min-h-0 flex flex-col gap-1 mland:gap-0.5 overflow-hidden">
-        {motmName && (
-          <button
-            type="button"
-            onClick={() => {
-              SFX.tap();
-              setFtPickedPlayer((prev) => (prev === motmName ? null : motmName));
-              if (motmTeam) {
-                setFtRosterTeam(motmTeam.id === homeOrig.id ? 'H' : 'A');
-                if (ftPitchMode !== 'all') {
-                  setFtPitchMode(motmTeam.id === homeOrig.id ? 'H' : 'A');
-                }
-              }
-            }}
-            className="shrink-0 w-full text-left rounded-xl overflow-hidden border border-amber-400/50 bg-gradient-to-r from-amber-400/18 via-amber-300/8 to-[var(--surface)] hover:from-amber-400/25 transition-all cursor-pointer shadow-2xs"
-            title={`คลิกเพื่อดูข้อมูล ${motmName} บนสนาม`}
-          >
-            <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 min-w-0">
-                {motmPlayer && motmTeam && (
-                  <div className="relative shrink-0">
-                    <MatchPlayerThumb
-                      player={motmPlayer}
-                      team={motmTeam}
-                      state={state}
-                      kitColor={motmTeam.id === homeId ? (motmPlayer.pos === 'GK' ? homeGkKit : homeKit) : (motmPlayer.pos === 'GK' ? awayGkKit : awayKit)}
-                      trimColor={motmPlayer.pos === 'GK' ? undefined : (motmTeam.id === homeId ? homeTrim : awayTrim)}
-                      size="xs"
-                      ringClassName="ring-2 ring-amber-400"
-                    />
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-400 text-[#1c1300] text-[8px] flex items-center justify-center shadow">
-                      👑
-                    </span>
-                  </div>
-                )}
-                <span className="px-1 py-[1px] rounded bg-amber-400 text-[#1c1300] text-[8.5px] mland:text-[7.5px] font-black tracking-wide shrink-0">
-                  MOTM
-                </span>
-                {motmRole && <PositionBadge role={motmRole} size="2xs" />}
-                {motmNo != null && (
-                  <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
-                    #{motmNo}
-                  </span>
-                )}
-                <span className="text-[11.5px] mland:text-[10px] font-extrabold text-[var(--ink)] truncate">
-                  {motmName}
-                </span>
-                {motmTeam && (
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate max-w-[110px]">
-                    <ClubCrest name={motmTeam.name} size={11} team={motmTeam} club={state.club} isMyClub={motmTeam.id === state.me && state.mode === 'm'} />
-                    <span className="truncate font-semibold">{motmTeam.name}</span>
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-1 shrink-0 tabular">
-                {motmGl > 0 && <StatIconBadge kind="goal" count={motmGl} size="xs" />}
-                {motmAs > 0 && <StatIconBadge kind="assist" count={motmAs} size="xs" />}
-                {motmCs && <StatIconBadge kind="cleansheet" count={1} size="xs" title={motmSaves > 0 ? `คลีนชีต · เซฟ ${motmSaves} ครั้ง` : 'คลีนชีต'} />}
-                {!motmCs && motmSaves > 0 && <StatIconBadge kind="save" count={motmSaves} size="xs" title={`เซฟ ${motmSaves} ครั้ง`} />}
-                <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-[#1c1300] text-[10.5px] mland:text-[9px] font-black shadow-2xs">
-                  ⭐ {motmRt.toFixed(1)}
-                </span>
-              </div>
-            </div>
-          </button>
-        )}
-
         <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
           {/* Team Switcher (Separate Home vs Away) */}
           <div className="shrink-0 p-1 mland:p-0.5 bg-[var(--surface-2)]/85 border-b border-[var(--line)] grid grid-cols-2 gap-1">
@@ -1976,16 +1889,6 @@ export const FullTimeMatchStage: React.FC<{
                 เยือน
               </span>
             </button>
-          </div>
-
-          {/* Column Header: รูป ตำแหน่ง เบอร์ ชื่อ ผลงาน เรตติ้ง */}
-          <div className={`shrink-0 grid ${gridColsCls} items-center gap-1 mland:gap-0.5 px-2 py-1 mland:px-1.5 mland:py-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/55 border-b border-[var(--line)]`}>
-            <div className="text-center">รูป</div>
-            <div className="text-center whitespace-nowrap">ตำแหน่ง</div>
-            <div className="text-center whitespace-nowrap">เบอร์</div>
-            <div>ชื่อ</div>
-            <div className="text-center">ผลงาน</div>
-            <div className="text-right whitespace-nowrap">เรตติ้ง</div>
           </div>
 
           <div ref={ftPlayersScrollRef} className="flex-1 min-h-0 overflow-y-auto">

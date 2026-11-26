@@ -147,6 +147,8 @@ const measureTextCached = (ctx: CanvasRenderingContext2D, text: string): number 
   return w;
 };
 
+export type VarCameraMode = 'wide' | 'zoom';
+
 const renderVarMonitorPanel = (
   ctx: CanvasRenderingContext2D,
   vr: VarReviewState,
@@ -162,7 +164,8 @@ const renderVarMonitorPanel = (
   awayGkKit: string,
   homeTrim: string,
   awayTrim: string,
-  isStandalone = false
+  isStandalone = false,
+  cameraMode: VarCameraMode = 'wide'
 ) => {
   const rep = vr.replay;
   const accent = vr.kind === 'foul_card' ? '#f59e0b' : '#38bdf8';
@@ -239,7 +242,15 @@ const renderVarMonitorPanel = (
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#f8fafc';
   ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 7.5 : 8.5}px Sarabun, sans-serif`;
-  ctx.fillText(isStandalone ? '🖥 จอภาพช้า VAR · รีเพลย์มุมซูม' : 'จอภาพช้า VAR', monX + (isStandalone ? 22 : 15), monY + hdrH / 2 + 0.8);
+  ctx.fillText(
+    isStandalone
+      ? cameraMode === 'wide'
+        ? '🖥 จอภาพช้า VAR · กล้องระยะไกล'
+        : '🖥 จอภาพช้า VAR · กล้องระยะใกล้'
+      : 'จอภาพช้า VAR',
+    monX + (isStandalone ? 22 : 15),
+    monY + hdrH / 2 + 0.8
+  );
 
   const statusTag = showVerdict
     ? vr.kind === 'goal'
@@ -297,69 +308,134 @@ const renderVarMonitorPanel = (
   const defTrim = defSide === 'H' ? homeTrim : awayTrim;
   const defGkKit = defSide === 'H' ? homeGkKit : awayGkKit;
 
-  // Dynamic Broadcast Pan & Forensic Zoom Camera
+  // Dynamic Broadcast Camera: Wide Tactical Framing vs Close-Up Zoom Framing
+  const isWideCam = cameraMode === 'wide';
   const rawIncX = rep?.incidentX ?? vr.x;
   const rawIncY = rep?.incidentY ?? vr.y ?? 50;
+  const attDir = attRight ? 1 : -1;
   let baseCamX = rawIncX;
   let baseCamY = rawIncY;
   let startCamX = rawIncX;
   let startCamY = rawIncY;
-  let baseSpanX = 28;
+  let baseSpanX = isWideCam ? 52 : 28;
   if (vr.kind === 'goal') {
     if (sc === 'goal_line_tech') {
-      baseCamX = attRight ? 97.4 : 2.6;
-      baseCamY = clamp(rawIncY, 41, 59);
-      startCamX = attRight ? 94.6 : 5.4;
-      startCamY = baseCamY;
-      baseSpanX = 16.0;
+      const shooterX = attRight ? clamp(rep?.passFromX ?? 88, 76, 95.5) : clamp(rep?.passFromX ?? 12, 4.5, 24);
+      const goalLineX = attRight ? 100 : 0;
+      if (isWideCam) {
+        const minNeedX = Math.min(shooterX - 5, attRight ? 82 : -2.5);
+        const maxNeedX = Math.max(shooterX + 5, attRight ? 102.5 : 18);
+        baseSpanX = clamp(maxNeedX - minNeedX + 10, 48, 58);
+        baseCamX = attRight ? 102.5 - baseSpanX * 0.45 : -2.5 + baseSpanX * 0.45;
+        baseCamY = clamp(rawIncY, 34, 66);
+        startCamX = baseCamX - attDir * 2.0;
+        startCamY = baseCamY;
+      } else {
+        baseSpanX = clamp(Math.abs(goalLineX - shooterX) + 14, 24, 34);
+        baseCamX = attRight ? 102.2 - baseSpanX * 0.43 : -2.2 + baseSpanX * 0.43;
+        baseCamY = clamp(rawIncY, 38, 62);
+        startCamX = baseCamX - attDir * 1.8;
+        startCamY = baseCamY;
+      }
     } else if (sc === 'foul_buildup') {
-      baseCamX = attRight ? clamp(rawIncX + 2.5, 74, 91) : clamp(rawIncX - 2.5, 9, 26);
-      baseCamY = clamp(rawIncY, 28, 72);
-      startCamX = attRight ? baseCamX - 2.6 : baseCamX + 2.6;
-      startCamY = baseCamY;
-      baseSpanX = 30;
+      if (isWideCam) {
+        const minNeedX = Math.min(rawIncX - 8, attRight ? 81 : -2.5);
+        const maxNeedX = Math.max(rawIncX + 8, attRight ? 102.5 : 19);
+        baseSpanX = clamp(maxNeedX - minNeedX + 10, 48, 60);
+        baseCamX = (minNeedX + maxNeedX) * 0.5;
+        baseCamY = clamp(rawIncY, 30, 70);
+        startCamX = baseCamX - attDir * 2.0;
+        startCamY = baseCamY;
+      } else {
+        baseCamX = attRight ? clamp(rawIncX + 3.5, 72, 91) : clamp(rawIncX - 3.5, 9, 28);
+        baseCamY = clamp(rawIncY, 28, 72);
+        startCamX = baseCamX - attDir * 2.5;
+        startCamY = baseCamY;
+        baseSpanX = 30;
+      }
     } else {
-      baseCamX = attRight ? 88.5 : 11.5;
-      baseCamY = clamp(rawIncY, 32, 68);
-      startCamX = rep?.passFromX != null ? (baseCamX * 0.72 + rep.passFromX * 0.28) : baseCamX;
-      startCamY = rep?.passFromY != null ? clamp(baseCamY * 0.72 + rep.passFromY * 0.28, 28, 72) : baseCamY;
-      baseSpanX = 29;
+      const defLX = rep?.defLineX ?? (attRight ? 84 : 16);
+      const passX = rep?.passFromX ?? (attRight ? clamp(rawIncX - 13, 28, 80) : clamp(rawIncX + 13, 20, 72));
+      if (isWideCam) {
+        const minNeedX = Math.min(passX - 6, rawIncX - 5, defLX - 5, attRight ? 81 : -2.5);
+        const maxNeedX = Math.max(passX + 6, rawIncX + 5, defLX + 5, attRight ? 102.5 : 19);
+        baseSpanX = clamp(maxNeedX - minNeedX + 10, 50, 68);
+        baseCamX = (minNeedX + maxNeedX) * 0.5;
+        baseCamY = clamp(rep?.passFromY != null ? (rawIncY + rep.passFromY) * 0.5 : rawIncY, 28, 72);
+        startCamX = baseCamX - attDir * 1.5;
+        startCamY = baseCamY;
+      } else {
+        baseSpanX = clamp(Math.abs(rawIncX - defLX) + 26, 30, 40);
+        baseCamX = (rawIncX + defLX) * 0.5 + attDir * 2.5;
+        baseCamY = clamp(rawIncY, 28, 72);
+        startCamX = rep?.passFromX != null ? baseCamX * 0.78 + rep.passFromX * 0.22 : baseCamX - attDir * 2.5;
+        startCamY = rep?.passFromY != null ? clamp(baseCamY * 0.78 + rep.passFromY * 0.22, 26, 74) : baseCamY;
+      }
     }
   } else if (vr.kind === 'penalty') {
-    if (sc === 'gk_clash_box') {
-      baseCamX = attRight ? 92.2 : 7.8;
+    const boxEdge = attRight ? 83.5 : 16.5;
+    if (isWideCam) {
+      const minNeedX = Math.min(rawIncX - 8, rep?.passFromX ?? rawIncX, attRight ? 79 : -2.5);
+      const maxNeedX = Math.max(rawIncX + 8, rep?.passFromX ?? rawIncX, attRight ? 102.5 : 21);
+      baseSpanX = clamp(maxNeedX - minNeedX + 8, 48, 58);
+      baseCamX = (minNeedX + maxNeedX) * 0.5;
+      baseCamY = clamp(rawIncY, 30, 70);
+      startCamX = baseCamX - attDir * 1.5;
+      startCamY = baseCamY;
+    } else if (sc === 'gk_clash_box') {
+      baseCamX = attRight ? 90.5 : 9.5;
       baseCamY = clamp(rawIncY, 33, 67);
-      startCamX = attRight ? 88.5 : 11.5;
+      startCamX = attRight ? 87.5 : 12.5;
       startCamY = baseCamY;
-      baseSpanX = 22.5;
+      baseSpanX = 28;
     } else {
-      const boxEdge = attRight ? 83.5 : 16.5;
-      baseCamX = attRight ? clamp(boxEdge + 2.0, 78, 92) : clamp(boxEdge - 2.0, 8, 22);
+      baseCamX = attRight ? clamp((rawIncX + boxEdge) * 0.5 + 1.5, 76, 92) : clamp((rawIncX + boxEdge) * 0.5 - 1.5, 8, 24);
       baseCamY = clamp(rawIncY, 24, 76);
-      startCamX = rep?.passFromX != null ? (baseCamX * 0.78 + rep.passFromX * 0.22) : baseCamX;
+      startCamX = baseCamX - attDir * 2.0;
       startCamY = baseCamY;
-      baseSpanX = 24;
+      baseSpanX = 28;
     }
   } else {
-    baseCamX = clamp(rawIncX, 12, 88);
-    baseCamY = clamp(rawIncY, 16, 84);
-    if (sc === 'dogso' || rep?.foulKind === 'dogso') {
-      baseCamX = attRight ? clamp(rawIncX + 5.5, 16, 86) : clamp(rawIncX - 5.5, 14, 84);
+    const isDogsoCam = sc === 'dogso' || rep?.foulKind === 'dogso';
+    if (isWideCam) {
+      if (isDogsoCam) {
+        const gX = attRight ? 102 : -2;
+        const minNeedX = Math.min(rawIncX - 8, gX);
+        const maxNeedX = Math.max(rawIncX + 8, gX);
+        baseSpanX = clamp(maxNeedX - minNeedX + 10, 52, 68);
+        baseCamX = (minNeedX + maxNeedX) * 0.5;
+      } else {
+        baseSpanX = 54;
+        baseCamX = clamp(rawIncX, 24, 76);
+      }
+      baseCamY = clamp(rawIncY, 26, 74);
+      startCamX = baseCamX - attDir * 1.5;
+      startCamY = baseCamY;
+    } else {
+      baseCamX = clamp(rawIncX, 14, 86);
+      baseCamY = clamp(rawIncY, 18, 82);
+      if (isDogsoCam) {
+        baseCamX = attRight ? clamp(rawIncX + 4.5, 16, 86) : clamp(rawIncX - 4.5, 14, 84);
+      }
+      startCamX = clamp(baseCamX - attDir * 2.2, 10, 90);
+      startCamY = baseCamY;
+      baseSpanX = isDogsoCam ? 34 : 27;
     }
-    startCamX = attRight ? clamp(baseCamX - 2.8, 10, 90) : clamp(baseCamX + 2.8, 10, 90);
-    startCamY = baseCamY;
-    baseSpanX = sc === 'dogso' || rep?.foulKind === 'dogso' ? 31.5 : 21.5;
   }
 
   const panT = clamp(simT / 0.5, 0, 1);
   const panEase = 1 - Math.pow(1 - panT, 2);
-  const zoomMaxDrop = isStandalone ? 0.16 : 0.1;
+  const zoomMaxDrop = isWideCam ? 0.05 : isStandalone ? 0.14 : 0.08;
   const spanX = baseSpanX * (1 - zoomMaxDrop * zoomEnv);
-  const camCenterX = startCamX + (baseCamX - startCamX) * panEase;
-  const camCenterY = startCamY + (baseCamY - startCamY) * panEase;
+  const rawCamCenterX = startCamX + (baseCamX - startCamX) * panEase;
+  const rawCamCenterY = startCamY + (baseCamY - startCamY) * panEase;
   const spanY = spanX * (scrH / Math.max(1, scrW)) * pitchAspect;
-  const minFX = camCenterX - spanX / 2;
-  const minFY = camCenterY - spanY / 2;
+  const halfSpanX = spanX / 2;
+  const halfSpanY = spanY / 2;
+  const camCenterX = spanX < 107 ? clamp(rawCamCenterX, -3.5 + halfSpanX, 103.5 - halfSpanX) : 50;
+  const camCenterY = spanY < 105 ? clamp(rawCamCenterY, -2.5 + halfSpanY, 102.5 - halfSpanY) : 50;
+  const minFX = camCenterX - halfSpanX;
+  const minFY = camCenterY - halfSpanY;
   const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
   const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
   const pxPerFx = scrW / Math.max(1, spanX);
@@ -474,12 +550,13 @@ const renderVarMonitorPanel = (
   const mGoalTop = my(42);
   const mGoalBot = my(58);
   const mGoalH = mGoalBot - mGoalTop;
-  const drawVarGoalNet = (gx: number, rippleProg = 0, rippleY = 50, frameFlashColor?: string) => {
+  const drawVarGoalNet = (isRightGoal: boolean, rippleProg = 0, rippleY = 50, frameFlashColor?: string) => {
+    const gx = isRightGoal ? mx(100) : mx(0) - mGoalD;
     const waveAmp = rippleProg > 0 && rippleProg < 1 ? Math.sin(rippleProg * Math.PI) * (isStandalone ? 4.8 : 3.0) : 0;
     const waveFreq = rippleProg * Math.PI * 6;
-    const postX = attRight ? mx(100) : mx(0);
+    const postX = isRightGoal ? mx(100) : mx(0);
     const bulgeOut = rippleProg > 0 ? Math.sin(rippleProg * Math.PI) * (isStandalone ? 4.2 : 2.5) : 0;
-    const backX = attRight ? gx + mGoalD + bulgeOut : gx - bulgeOut;
+    const backX = isRightGoal ? gx + mGoalD + bulgeOut : gx - bulgeOut;
     const taper = isStandalone ? 2.2 : 1.4;
     ctx.save();
     ctx.fillStyle = rippleProg > 0 ? 'rgba(245, 194, 66, 0.24)' : 'rgba(255, 255, 255, 0.14)';
@@ -504,7 +581,7 @@ const renderVarMonitorPanel = (
       if (waveAmp > 0) {
         const midY = clamp(impactScreenY, mGoalTop + 3, mGoalBot - 3);
         const bulge = Math.sin(waveFreq + (nx - nxMin) * 0.2) * waveAmp;
-        ctx.quadraticCurveTo(nx + (attRight ? Math.abs(bulge) : -Math.abs(bulge)), midY, nx, mGoalBot);
+        ctx.quadraticCurveTo(nx + (isRightGoal ? Math.abs(bulge) : -Math.abs(bulge)), midY, nx, mGoalBot);
       } else {
         ctx.lineTo(nx, mGoalBot);
       }
@@ -594,6 +671,8 @@ const renderVarMonitorPanel = (
     ctx.restore();
   };
 
+  const modeSizeScale = isWideCam ? 0.78 : 1;
+
   const drawVarSoccerBall = (
     fx: number,
     fy: number,
@@ -607,7 +686,7 @@ const renderVarMonitorPanel = (
     }
   ) => {
     const zVal = opts?.z ?? 0;
-    const baseR = isStandalone ? 5.6 : smallText ? 3.5 : 4.2;
+    const baseR = (isStandalone ? 5.4 : smallText ? 3.4 : 4.0) * (isWideCam ? 0.82 : 1);
     const ballR = baseR * (1 + clamp(zVal / 26, 0, 0.45)) * (opts?.radiusScale ?? 1);
     const bx = mx(fx);
     const byGround = my(fy);
@@ -794,8 +873,8 @@ const renderVarMonitorPanel = (
   ) => {
     const x = mx(fx);
     const y = my(fy);
-    const scaleDim = opts?.dimmed ? 0.88 : 1;
-    const r = (isStandalone ? clamp(scrH * 0.078, 9, 14) : clamp(scrH * 0.082, 5.8, 8.2)) * scaleDim;
+    const scaleDim = (opts?.dimmed ? 0.88 : 1) * modeSizeScale;
+    const r = (isStandalone ? clamp(scrH * 0.072, 8.2, 12.6) : clamp(scrH * 0.074, 5.2, 7.4)) * scaleDim;
     const facing = opts?.facing ?? (attRight ? 0 : Math.PI);
     const cosF = Math.cos(facing);
     const sinF = Math.sin(facing);
@@ -1048,7 +1127,7 @@ const renderVarMonitorPanel = (
   const drawVarReferee = (fx: number, fy: number, targetX: number, targetY: number) => {
     const rx = mx(fx);
     const ry = my(fy);
-    const rr = isStandalone ? clamp(scrH * 0.066, 7.5, 11.5) : clamp(scrH * 0.068, 4.8, 6.8);
+    const rr = (isStandalone ? clamp(scrH * 0.062, 7.2, 10.6) : clamp(scrH * 0.064, 4.6, 6.4)) * modeSizeScale;
     const ang = screenAngle(fx, fy, targetX, targetY);
     const walkSin = !isFreezePhase && pct < 0.72 ? Math.sin(simT * 20) : 0;
 
@@ -1150,42 +1229,19 @@ const renderVarMonitorPanel = (
   const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
   const postT = clamp((simT - 0.51) / 0.49, 0, 1);
   const dirSign = attRight ? 1 : -1;
-  const agentPixR = isStandalone ? clamp(scrH * 0.078, 9, 14) : clamp(scrH * 0.082, 5.8, 8.2);
+  const agentPixR = (isStandalone ? clamp(scrH * 0.072, 8.2, 12.6) : clamp(scrH * 0.074, 5.2, 7.4)) * modeSizeScale;
   const agentFxR = agentPixR / pxPerFx;
   const agentFyR = agentPixR / pxPerFy;
-  const baseBallPixR = isStandalone ? 5.6 : smallText ? 3.5 : 4.2;
+  const baseBallPixR = (isStandalone ? 5.4 : smallText ? 3.4 : 4.0) * (isWideCam ? 0.82 : 1);
   const ballFxR = baseBallPixR / pxPerFx;
   const ballFyR = baseBallPixR / pxPerFy;
 
-  const drawNearbyVarAgents = (excludePositions: { x: number; y: number }[]) => {
-    if (!rep?.nearbyAgents?.length) return;
-    const driftT = (simT - 0.49) * 0.45;
-    rep.nearbyAgents.forEach((na) => {
-      const nx = clamp(na.x + na.vx * driftT, 1.5, 98.5);
-      const ny = clamp(na.y + na.vy * driftT, 2, 98);
-      if (nx < minFX - 4 || nx > minFX + spanX + 4 || ny < minFY - 4 || ny > minFY + spanY + 4) return;
-      if (excludePositions.some((ep) => Math.hypot(ep.x - nx, ep.y - ny) < 3.0)) return;
-      const nKit = na.isGk ? (na.side === 'H' ? homeGkKit : awayGkKit) : na.side === 'H' ? homeKit : awayKit;
-      const nTrim = na.isGk ? '#ffffff' : na.side === 'H' ? homeTrim : awayTrim;
-      const nFace =
-        Math.abs(na.vx) + Math.abs(na.vy) > 0.05
-          ? screenAngle(0, 0, na.vx, na.vy)
-          : na.side === attSide
-            ? attRight
-              ? 0
-              : Math.PI
-            : attRight
-              ? Math.PI
-              : 0;
-      drawMiniAgent(nx, ny, nKit, nTrim, na.no, '', na.vis, undefined, '#cbd5e1', {
-        role: na.role,
-        facing: nFace,
-        stride: simT * 13,
-        isGk: na.isGk,
-        action: na.isGk ? 'gk_ready' : 'run',
-        dimmed: true
-      });
-    });
+  // In wide camera mode, draw opposite goal frame if it happens to enter view
+  const drawVisibleOtherGoal = () => {
+    const oppGoalX = attRight ? 0 : 100;
+    if (oppGoalX >= minFX - 4 && oppGoalX <= minFX + spanX + 4) {
+      drawVarGoalNet(!attRight, 0, 50);
+    }
   };
 
   if (vr.kind === 'goal') {
@@ -1218,7 +1274,7 @@ const renderVarMonitorPanel = (
       // Draw goal net with live ripple when ball hits back of net
       const netRipple = !vr.overturn && postT > 0 ? clamp(postT * 1.35, 0, 1) : 0;
       const postFlash = pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : undefined;
-      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, incY, postFlash);
+      drawVarGoalNet(attRight, netRipple, incY, postFlash);
 
       const gkStartX = rep?.gkX != null ? clamp(rep.gkX, attRight ? 94 : 1.5, attRight ? 98.5 : 6) : attRight ? 97.8 : 2.2;
       const gkStartY = rep?.gkY != null ? clamp(rep.gkY, 43.2, 56.8) : incY < 50 ? 54.5 : 45.5;
@@ -1242,12 +1298,6 @@ const renderVarMonitorPanel = (
       );
       const attYNow = clamp(startY - Math.sin(attFacing) * (agentFyR * 0.75 + (1 - attKickApproach) * 1.1), 8, 92);
 
-      // Supporting center-back lunging to block from snapshot if provided
-      const cbStartX = rep?.defX != null ? clamp(rep.defX, attRight ? 82 : 2, attRight ? 98 : 18) : clamp(startX + dirSign * 2.2, 4, 96);
-      const cbStartY = clamp(rep?.defY ?? (incY + (incY < 50 ? 5.2 : -5.2)), 30, 70);
-      const cbX = cbStartX + (startX + dirSign * 0.8 - cbStartX) * playT * 0.38;
-      const cbY = cbStartY + (startY - cbStartY) * playT * 0.28;
-
       // Glowing Goal-Line Laser Plane strictly across the goalmouth between the two goalposts (mGoalTop..mGoalBot)
       const glScreenX = mx(goalLineX);
       ctx.save();
@@ -1257,6 +1307,16 @@ const renderVarMonitorPanel = (
       ctx.moveTo(glScreenX, mGoalTop);
       ctx.lineTo(glScreenX, mGoalBot);
       ctx.stroke();
+
+      // Dashed shot trajectory from shooter toward goal line
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.42)';
+      ctx.lineWidth = isStandalone ? 1.5 : 1.05;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(mx(startX), my(startY));
+      ctx.lineTo(mx(apexX), my(incY));
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.restore();
 
       const trailPts =
@@ -1270,32 +1330,6 @@ const renderVarMonitorPanel = (
               };
             })
           : undefined;
-
-      drawNearbyVarAgents([
-        { x: attXNow, y: attYNow },
-        { x: gkX, y: gkY },
-        { x: cbX, y: cbY }
-      ]);
-
-      drawMiniAgent(
-        cbX,
-        cbY,
-        defKit,
-        defTrim,
-        rep?.defNo ?? 4,
-        '',
-        rep?.defVis,
-        undefined,
-        '#cbd5e1',
-        {
-          role: rep?.defRole || 'CB',
-          facing: screenAngle(cbX, cbY, startX, startY),
-          stride: simT * 15,
-          action: simT >= 0.14 && simT <= 0.56 ? 'slide' : 'run',
-          actionProg: clamp((simT - 0.14) / 0.42, 0, 1),
-          dimmed: true
-        }
-      );
       drawMiniAgent(
         attXNow,
         attYNow,
@@ -1391,8 +1425,11 @@ const renderVarMonitorPanel = (
       const stepT = clamp(postT / 0.35, 0, 1);
       const attXNow = incX - dirSign * (1 - playT) * 4.5 + stepT * dirSign * 1.15;
       const attYNow = incY + (1 - playT) * 1.5 + stepT * (goalY - incY) * 0.04;
-      const defStartX = rep?.defX != null ? clamp(rep.defX, 2, 98) : incX + dirSign * 2.2;
-      const defStartY = clamp(rep?.defY ?? (incY + defSideSign * 5.0), 8, 92);
+      const rawDefStartX = rep?.defX != null ? clamp(rep.defX, 2, 98) : incX + dirSign * 2.4;
+      const rawDefStartY = clamp(rep?.defY ?? (incY + defSideSign * 5.2), 8, 92);
+      const sepBuildup = Math.hypot(rawDefStartX - incX, rawDefStartY - incY);
+      const defStartX = rawDefStartX;
+      const defStartY = sepBuildup < 3.0 ? clamp(incY + defSideSign * 5.2, 8, 92) : rawDefStartY;
       const defContactX = incX + dirSign * (agentFxR * 0.55);
       const defContactY = incY + defSideSign * (agentFyR * 1.05);
       const defXNow = defStartX + (defContactX - defStartX) * playT;
@@ -1405,7 +1442,7 @@ const renderVarMonitorPanel = (
 
       const shotProg = clamp((postT - 0.14) / 0.86, 0, 1);
       const netRipple = shotProg > 0.68 ? clamp((shotProg - 0.68) / 0.32, 0, 1) : 0;
-      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, goalY);
+      drawVarGoalNet(attRight, netRipple, goalY);
 
       if (playT > 0.28) {
         drawVarTurfTrack(defStartX, defStartY, defXNow, defYNow, clamp((simT - 0.16) / 0.38, 0, 1));
@@ -1450,12 +1487,6 @@ const renderVarMonitorPanel = (
 
       const refX = incX - dirSign * (8.5 - playT * 2.5);
       const refY = clamp(incY + (incY < 50 ? 8.2 : -8.2), 14, 86);
-      drawNearbyVarAgents([
-        { x: attXNow, y: attYNow },
-        { x: defXNow, y: defYNow },
-        { x: gkStartX, y: gkY },
-        { x: refX, y: refY }
-      ]);
 
       drawMiniAgent(gkStartX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
         role: rep?.gkRole || 'GK',
@@ -1578,22 +1609,12 @@ const renderVarMonitorPanel = (
       const bzNow = finishT > 0 ? Math.sin(finishT * Math.PI) * 3.4 : Math.sin(passTravelT * Math.PI) * 2.5;
 
       const netRipple = finishT > 0.65 ? clamp((finishT - 0.65) / 0.35, 0, 1) : 0;
-      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, targetGoalY);
+      drawVarGoalNet(attRight, netRipple, targetGoalY);
 
       const gkX = rep?.gkX != null ? clamp(rep.gkX, attRight ? 94 : 1.5, attRight ? 98.5 : 6) : attRight ? 97.6 : 2.4;
       const gkReadyY = rep?.gkY != null ? clamp(rep.gkY, 43, 57) : clamp(50 + (incY - 50) * 0.28, 43.5, 56.5);
       const gkY = finishT > 0 ? gkReadyY + (targetGoalY - gkReadyY) * finishT * 0.78 : gkReadyY + Math.sin(simT * 8) * 0.4;
       const passerXNow = passStartX - dirSign * (1 - playT) * 1.6;
-      const supDefXNow = defXNow - dirSign * 2.2;
-      const supDefYNow = clamp(defYNow + defSideSign * 7.5, 16, 84);
-
-      drawNearbyVarAgents([
-        { x: attXNow, y: attYNow },
-        { x: defXNow, y: defYNow },
-        { x: gkX, y: gkY },
-        { x: passerXNow, y: passStartY },
-        { x: supDefXNow, y: supDefYNow }
-      ]);
 
       drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
         role: rep?.gkRole || 'GK',
@@ -1604,20 +1625,6 @@ const renderVarMonitorPanel = (
         actionProg: finishT,
         diveDir: targetGoalY >= gkReadyY ? 1 : -1
       });
-
-      // Supporting 2nd defender tracking central channel
-      drawMiniAgent(
-        supDefXNow,
-        supDefYNow,
-        defKit,
-        defTrim,
-        rep?.supportDefNo ?? 5,
-        '',
-        rep?.supportDefVis,
-        undefined,
-        '#cbd5e1',
-        { role: rep?.supportDefRole || 'CB', facing: attRight ? Math.PI * 0.94 : 0.06, stride: simT * 14, action: 'run', dimmed: true }
-      );
 
       // Animated passer teammate kicking the through-ball (freezes right at foot impact!)
       drawMiniAgent(
@@ -1777,7 +1784,7 @@ const renderVarMonitorPanel = (
     const bxScreen = mx(boxLineX);
     const defSideSign = rep?.defY != null ? (rep.defY < incY ? -1 : 1) : incY < 50 ? 1 : -1;
 
-    drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, 0, 50);
+    drawVarGoalNet(attRight, 0, 50);
 
     if (sc === 'handball_box') {
       // HANDBALL IN THE PENALTY BOX SCENARIO (Kick -> Cross flight -> Freeze on exact hand-ball contact -> Deflection!)
@@ -1812,13 +1819,6 @@ const renderVarMonitorPanel = (
       const gkTrackY = clamp(50 + (byNow - 50) * 0.32, 43, 57);
       const refX = incX - dirSign * (7.2 - playT * 1.8);
       const refY = clamp(incY + (incY < 50 ? 9 : -9), 14, 86);
-
-      drawNearbyVarAgents([
-        { x: attXNow, y: attYNow },
-        { x: defXNow, y: defYNow },
-        { x: gkX, y: gkTrackY },
-        { x: refX, y: refY }
-      ]);
 
       drawMiniAgent(gkX, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
         role: rep?.gkRole || 'GK',
@@ -1956,11 +1956,6 @@ const renderVarMonitorPanel = (
 
       const refX = incX - dirSign * (6.8 - playT * 2.0);
       const refY = clamp(incY + (incY < 50 ? 8.8 : -8.8), 16, 84);
-      drawNearbyVarAgents([
-        { x: attXNow, y: attYNow },
-        { x: gkXNow, y: gkYNow },
-        { x: refX, y: refY }
-      ]);
 
       drawVarReferee(refX, refY, incX, incY);
 
@@ -2016,8 +2011,11 @@ const renderVarMonitorPanel = (
       const attFacing = screenAngle(incX, incY, attRight ? 96 : 4, 50);
       const attXNow = incX - dirSign * (1 - playT) * 4.4 + postT * dirSign * 0.8;
       const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
-      const defStartX = rep?.defX != null ? clamp(rep.defX, 2, 98) : incX + dirSign * 1.4;
-      const defStartY = clamp(rep?.defY ?? (incY + defSideSign * 5.6), 8, 92);
+      const rawDefStartX = rep?.defX != null ? clamp(rep.defX, 2, 98) : incX + dirSign * 1.6;
+      const rawDefStartY = clamp(rep?.defY ?? (incY + defSideSign * 5.8), 8, 92);
+      const sepPen = Math.hypot(rawDefStartX - incX, rawDefStartY - incY);
+      const defStartX = rawDefStartX;
+      const defStartY = sepPen < 3.2 ? clamp(incY + defSideSign * 5.8, 8, 92) : rawDefStartY;
       const defContactX = incX + dirSign * (agentFxR * 0.58);
       const defContactY = incY + defSideSign * (agentFyR * 0.96);
       const defXNow = defStartX + (defContactX - defStartX) * playT;
@@ -2027,13 +2025,6 @@ const renderVarMonitorPanel = (
       const gkTrackY = clamp(50 + (attYNow - 50) * 0.35, 42, 58);
       const refX = incX - dirSign * (7.2 - playT * 2.0);
       const refY = clamp(incY + (incY < 50 ? 9.5 : -9.5), 14, 86);
-
-      drawNearbyVarAgents([
-        { x: attXNow, y: attYNow },
-        { x: defXNow, y: defYNow },
-        { x: gkX, y: gkTrackY },
-        { x: refX, y: refY }
-      ]);
 
       drawMiniAgent(gkX, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
         role: rep?.gkRole || 'GK',
@@ -2129,13 +2120,16 @@ const renderVarMonitorPanel = (
     const incY = rep?.incidentY ?? vr.y;
     const defSideSign = rep?.defY != null ? (rep.defY < incY ? -1 : 1) : 1;
 
-    const attStartX = incX - dirSign * 3.8;
+    const attStartX = incX - dirSign * 4.2;
     const attStartY = clamp(incY + (incY < 50 ? -1.4 : 1.4), 6, 94);
     const attFacing = screenAngle(attStartX, attStartY, attRight ? 100 : 0, 50);
     const attXNow = attStartX + (incX - attStartX) * playT + postT * dirSign * 0.65;
     const attYNow = attStartY + (incY - attStartY) * playT;
-    const defStartX = rep?.defX != null ? clamp(rep.defX, 2, 98) : incX + dirSign * 1.4;
-    const defStartY = clamp(rep?.defY ?? (incY + defSideSign * 5.6), 6, 94);
+    const rawDefStartX = rep?.defX != null ? clamp(rep.defX, 2, 98) : incX + dirSign * 1.6;
+    const rawDefStartY = clamp(rep?.defY ?? (incY + defSideSign * 5.8), 6, 94);
+    const sepFoul = Math.hypot(rawDefStartX - incX, rawDefStartY - incY);
+    const defStartX = rawDefStartX;
+    const defStartY = sepFoul < 3.2 ? clamp(incY + defSideSign * 5.8, 6, 94) : rawDefStartY;
     const defContactX = incX + dirSign * (agentFxR * 0.62);
     const defContactY = clamp(incY + defSideSign * (agentFyR * 0.96), 6, 94);
     const defXNow = defStartX + (defContactX - defStartX) * playT;
@@ -2147,9 +2141,11 @@ const renderVarMonitorPanel = (
     let dogsoGkX = attRight ? 96.5 - playT * 1.4 : 3.5 + playT * 1.4;
     let dogsoGkY = clamp(50 + (incY - 50) * 0.35, 43, 57);
 
+    drawVisibleOtherGoal();
+
     if (isDogso) {
       const gLineX = attRight ? 100 : 0;
-      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, 0, 50);
+      drawVarGoalNet(attRight, 0, 50);
       ctx.save();
       ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
       ctx.strokeStyle = 'rgba(250, 204, 21, 0.45)';
@@ -2208,34 +2204,8 @@ const renderVarMonitorPanel = (
       drawVarImpactBurst((attXNow + defXNow) * 0.5, (attYNow + defYNow) * 0.5, spotClr, clamp((pct - 0.36) / 0.34, 0, 1));
     }
 
-    // Supporting midfielder watching / chasing nearby (prefer captured passFromX/Y if distinct)
-    const supMidX =
-      rep?.passFromX != null && Math.hypot(rep.passFromX - incX, rep.passFromY - incY) > 3.5
-        ? rep.passFromX + dirSign * playT * 1.4
-        : incX - dirSign * (6.2 - playT * 1.6);
-    const supMidY =
-      rep?.passFromY != null && Math.hypot(rep.passFromX - incX, rep.passFromY - incY) > 3.5
-        ? clamp(rep.passFromY, 10, 90)
-        : clamp(incY + (incY < 50 ? 6.8 : -6.8), 16, 84);
-    const refX = incX - dirSign * (5.2 - playT * 1.6);
-    const refY = clamp(incY + (incY < 50 ? -7.2 : 7.2), 14, 86);
-
-    const exclusions = [
-      { x: attXNow, y: attYNow },
-      { x: defXNow, y: defYNow },
-      { x: supMidX, y: supMidY },
-      { x: refX, y: refY }
-    ];
-    if (isDogso) exclusions.push({ x: dogsoGkX, y: dogsoGkY });
-    drawNearbyVarAgents(exclusions);
-
-    drawMiniAgent(supMidX, supMidY, attKit, attTrim, rep?.passerNo ?? 8, '', rep?.passerVis, undefined, '#cbd5e1', {
-      role: rep?.passerRole || 'CM',
-      facing: screenAngle(supMidX, supMidY, incX, incY),
-      stride: simT * 14,
-      action: 'run',
-      dimmed: true
-    });
+    const refX = incX - dirSign * (5.6 - playT * 1.6);
+    const refY = clamp(incY + (incY < 50 ? -7.4 : 7.4), 14, 86);
     drawVarReferee(refX, refY, (attXNow + defXNow) * 0.5, (attYNow + defYNow) * 0.5);
 
     drawMiniAgent(
@@ -2453,7 +2423,8 @@ export const drawVarReplayToCanvas = (
   homeGkKit = '#16a34a',
   awayGkKit = '#ea580c',
   homeTrim = '#ffffff',
-  awayTrim = '#ffffff'
+  awayTrim = '#ffffff',
+  cameraMode: VarCameraMode = 'wide'
 ) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -2479,14 +2450,15 @@ export const drawVarReplayToCanvas = (
     1,
     cssW - 2,
     cssH - 2,
-    2.2,
+    1.85,
     homeKit,
     awayKit,
     homeGkKit,
     awayGkKit,
     homeTrim,
     awayTrim,
-    true
+    true,
+    cameraMode
   );
 };
 
@@ -5301,7 +5273,8 @@ export const drawLivePitchToCanvas = (
       awayGkKit,
       homeTrim,
       awayTrim,
-      false
+      false,
+      'wide'
     );
   }
 
