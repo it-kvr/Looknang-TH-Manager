@@ -173,7 +173,8 @@ export const drawLivePitchToCanvas = (
           .map((pd) => `${pd.x.toFixed(1)},${pd.y.toFixed(1)},${pd.rx.toFixed(1)},${pd.ry.toFixed(1)},${pd.rot.toFixed(2)},${pd.alpha.toFixed(2)}`)
           .join(';')
       : '';
-  const bgKey = `${cssW}x${cssH}@${dpr}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
+  const stadiumStyle = env?.stadiumStyle || 'modern_bowl';
+  const bgKey = `${cssW}x${cssH}@${dpr}|${stadiumStyle}|${turfSpec.id}|${Math.round(turfCond / 5)}|${grassLength}|${Math.round(dirtMix * 20)}|${pitchSeed}|${isRainy ? 'r' : 's'}|${isNight ? 'n' : 'd'}|${(env?.sunAngle ?? 0.4).toFixed(3)}|${puddleSig}`;
 
   if (typeof document !== 'undefined') {
     if (!pitchBgCache || pitchBgCache.key !== bgKey) {
@@ -197,6 +198,78 @@ export const drawLivePitchToCanvas = (
 
         bctx.fillStyle = apronFill;
         bctx.fillRect(0, 0, cssW, cssH);
+
+        // Stadium architectural apron surround (cached per stadiumStyle)
+        bctx.save();
+        if (stadiumStyle === 'open_track') {
+          const trackPadX = Math.max(4, padX * 0.2);
+          const trackPadTop = Math.max(4, padTop * 0.2);
+          const trackPadBottom = Math.max(6, padBottom * 0.25);
+          bctx.fillStyle = isNight ? 'rgba(138, 62, 46, 0.55)' : 'rgba(176, 82, 58, 0.58)';
+          bctx.beginPath();
+          bctx.roundRect(trackPadX, trackPadTop, cssW - trackPadX * 2, cssH - trackPadTop - trackPadBottom, 26);
+          bctx.fill();
+          bctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+          bctx.lineWidth = 1;
+          for (let lane = 1; lane <= 3; lane++) {
+            const inset = lane * 4.5;
+            bctx.beginPath();
+            bctx.roundRect(
+              trackPadX + inset,
+              trackPadTop + inset,
+              cssW - (trackPadX + inset) * 2,
+              cssH - trackPadTop - trackPadBottom - inset * 2,
+              Math.max(8, 26 - inset)
+            );
+            bctx.stroke();
+          }
+        } else if (stadiumStyle === 'fortress_kop') {
+          bctx.strokeStyle = isNight ? 'rgba(239, 68, 68, 0.36)' : 'rgba(185, 28, 28, 0.38)';
+          bctx.lineWidth = 5;
+          bctx.strokeRect(padX - 6, padY - 6, pw + 12, ph + 12);
+          bctx.strokeStyle = 'rgba(255,255,255,0.18)';
+          bctx.lineWidth = 1.5;
+          bctx.strokeRect(padX - 10, padY - 10, pw + 20, ph + 20);
+        } else if (stadiumStyle === 'thai_heritage') {
+          bctx.strokeStyle = isNight ? 'rgba(244, 198, 61, 0.45)' : 'rgba(217, 159, 28, 0.48)';
+          bctx.lineWidth = 2.5;
+          bctx.strokeRect(padX - 7, padY - 7, pw + 14, ph + 14);
+          const cornerSize = 14;
+          bctx.fillStyle = 'rgba(244, 198, 61, 0.32)';
+          [
+            [padX - 9, padY - 9],
+            [padX + pw - 5, padY - 9],
+            [padX - 9, padY + ph - 5],
+            [padX + pw - 5, padY + ph - 5]
+          ].forEach(([cx, cy]) => {
+            bctx.fillRect(cx, cy, cornerSize, cornerSize);
+          });
+        } else if (stadiumStyle === 'glass_pavilion') {
+          bctx.strokeStyle = isNight ? 'rgba(125, 211, 252, 0.48)' : 'rgba(186, 230, 253, 0.56)';
+          bctx.lineWidth = 2.5;
+          bctx.strokeRect(padX - 6, padY - 6, pw + 12, ph + 12);
+          bctx.fillStyle = 'rgba(125, 211, 252, 0.12)';
+          bctx.fillRect(padX - 12, 3, pw + 24, Math.max(8, padY - 11));
+        } else if (stadiumStyle === 'cyber_dome') {
+          bctx.strokeStyle = isNight ? 'rgba(34, 211, 238, 0.65)' : 'rgba(56, 189, 248, 0.5)';
+          bctx.lineWidth = 3;
+          bctx.beginPath();
+          bctx.roundRect(padX - 9, padY - 9, pw + 18, ph + 18, 16);
+          bctx.stroke();
+          bctx.strokeStyle = 'rgba(16, 185, 129, 0.35)';
+          bctx.lineWidth = 1.2;
+          bctx.beginPath();
+          bctx.roundRect(padX - 14, padY - 14, pw + 28, ph + 28, 20);
+          bctx.stroke();
+        } else {
+          // modern_bowl: crisp double ad-board perimeter
+          bctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+          bctx.lineWidth = 2;
+          bctx.beginPath();
+          bctx.roundRect(padX - 7, padY - 7, pw + 14, ph + 14, 10);
+          bctx.stroke();
+        }
+        bctx.restore();
 
         const stripeCount =
           turfSpec.cutStyle === 'patchy'

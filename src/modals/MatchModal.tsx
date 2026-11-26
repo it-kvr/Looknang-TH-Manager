@@ -418,22 +418,25 @@ export const MatchModal: React.FC<{
     [homeOrig, awayOrig, state, kind, isDerby]
   );
 
+  const isNeutralVenue = kind === 'sc';
   const homeFacMods = useMemo(
     () =>
       computeTeamFacilityMatchModifiers(homeOrig, state, {
-        isHome: true,
+        isHome: !isNeutralVenue,
+        isNeutral: isNeutralVenue,
         attendancePct: matchAttendance.pct,
         turfCondOverride: matchEnv.turfCond
       }),
-    [homeOrig, state, matchAttendance.pct, matchEnv.turfCond]
+    [homeOrig, state, isNeutralVenue, matchAttendance.pct, matchEnv.turfCond]
   );
   const awayFacMods = useMemo(
     () =>
       computeTeamFacilityMatchModifiers(awayOrig, state, {
         isHome: false,
+        isNeutral: isNeutralVenue,
         attendancePct: matchAttendance.pct
       }),
-    [awayOrig, state, matchAttendance.pct]
+    [awayOrig, state, isNeutralVenue, matchAttendance.pct]
   );
   const homeStatDeltas = useMemo(
     () => combineMatchStatDeltas(turfMatchMods.statDeltas, homeFacMods.statDeltas),
@@ -10115,8 +10118,14 @@ export const MatchModal: React.FC<{
                     </div>
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
-                        { title: `${homeOrig.name} (เหย้า)`, mods: homeFacMods },
-                        { title: `${awayOrig.name} (เยือน)`, mods: awayFacMods }
+                        {
+                          title: isNeutralVenue ? `${homeOrig.name} (สนามกลาง)` : `${homeOrig.name} (เหย้า)`,
+                          mods: homeFacMods
+                        },
+                        {
+                          title: isNeutralVenue ? `${awayOrig.name} (สนามกลาง)` : `${awayOrig.name} (เยือน)`,
+                          mods: awayFacMods
+                        }
                       ].map((sideBox, sIdx) => (
                         <div key={sIdx} className="rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)]/60 p-1.5 space-y-1">
                           <div className="font-bold text-[9.5px] text-[var(--ink)] truncate">{sideBox.title}</div>

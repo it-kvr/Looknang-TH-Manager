@@ -1,4 +1,4 @@
-import type { MatchEnvironment, TurfMatchModifiers } from '../types/game';
+import type { MatchEnvironment, StadiumStyleId, TurfMatchModifiers } from '../types/game';
 
 export const CREST_SHAPES: { label: string; d: string }[] = [
   { label: 'โล่คลาสสิก', d: 'M3 2h18v11c0 5-4 8-9 10-5-2-9-5-9-10z' },
@@ -344,5 +344,128 @@ export const computeTurfMatchModifiers = (
     ]
   };
 };
+
+export interface StadiumStyleSpec {
+  id: StadiumStyleId;
+  name: string;
+  shortName: string;
+  archTag: string;
+  desc: string;
+  buildCost: number;
+  capMult: number;
+  crowdBonus: number;
+  vipTicketMult: number;
+  merchBoost: number;
+  wearResist: number;
+  rainShield: 'none' | 'partial' | 'full';
+  highlights: readonly string[];
+}
+
+export const STADIUM_STYLE_SPECS: readonly StadiumStyleSpec[] = [
+  {
+    id: 'open_track',
+    name: 'สเตเดียมกรีฑามาตรฐาน',
+    shortName: 'ทรงกรีฑาเปิด',
+    archTag: 'สนามเปิด 8 ลู่วิ่ง',
+    desc: 'สนามกีฬาอเนกประสงค์แบบเปิดพร้อมลู่วิ่งรอบสนาม โครงสร้างโปร่ง ซ่อมบำรุงประหยัดและเสื่อมสภาพช้า',
+    buildCost: 0,
+    capMult: 1.0,
+    crowdBonus: 0,
+    vipTicketMult: 1.0,
+    merchBoost: 0,
+    wearResist: 0.78,
+    rainShield: 'none',
+    highlights: ['บำรุงรักษาง่าย เสื่อมสภาพช้า -22%', 'ความจุมาตรฐาน 100%']
+  },
+  {
+    id: 'thai_heritage',
+    name: 'เรือนไทยประยุกต์ อารีน่า',
+    shortName: 'ทรงไทยประยุกต์',
+    archTag: 'สถาปัตย์ไทยร่วมสมัย',
+    desc: 'อัฒจันทร์หลังคาจั่วไทยประยุกต์อันเป็นเอกลักษณ์ ดึงดูดแฟนท้องถิ่นซื้อของที่ระลึกและส่งพลังใจเกมเหย้า',
+    buildCost: 75,
+    capMult: 1.04,
+    crowdBonus: 1,
+    vipTicketMult: 1.05,
+    merchBoost: 0.14,
+    wearResist: 0.92,
+    rainShield: 'none',
+    highlights: ['ยอดขายสโตร์เหย้า +14%', 'บรรยากาศเหย้า +1 · จุเพิ่ม +4%']
+  },
+  {
+    id: 'fortress_kop',
+    name: 'ป้อมปราการหลังโกล',
+    shortName: 'ทรงป้อมปราการ',
+    archTag: 'อัฒจันทร์ชันชิดขอบสนาม',
+    desc: 'ไร้ลู่วิ่งคั่น อัฒจันทร์สูงชันติดขอบสนาม กดดันคู่แข่งทุกจังหวะและปลุกความนิ่ง/มุ่งมั่นทีมเหย้าสูงสุด',
+    buildCost: 95,
+    capMult: 1.06,
+    crowdBonus: 2,
+    vipTicketMult: 1.04,
+    merchBoost: 0.06,
+    wearResist: 1.0,
+    rainShield: 'none',
+    highlights: ['บรรยากาศเหย้า +2 (สูงสุด)', 'ความจุ +6% · กดดันคู่แข่งใกล้ชิด']
+  },
+  {
+    id: 'modern_bowl',
+    name: 'โถงชาม 360 องศา',
+    shortName: 'ทรงโถงชาม 360°',
+    archTag: 'โถงอัฒจันทร์ปิดรอบทิศ',
+    desc: 'โครงสร้างโค้งปิดล้อมรอบด้าน ขยายความจุที่นั่งสูงสุดถึง 15% พร้อมกักเก็บเสียงเชียร์กระหึ่มทั่วสนาม',
+    buildCost: 115,
+    capMult: 1.15,
+    crowdBonus: 1,
+    vipTicketMult: 1.08,
+    merchBoost: 0.08,
+    wearResist: 0.96,
+    rainShield: 'none',
+    highlights: ['ความจุที่นั่ง +15%', 'บรรยากาศเหย้า +1 · รายได้ตั๋ว +8%']
+  },
+  {
+    id: 'glass_pavilion',
+    name: 'พาวิลเลียนกระจกพรีเมียม',
+    shortName: 'ทรงกระจก VIP',
+    archTag: 'บูติกพรีเมียม & บ็อกซ์ VIP',
+    desc: 'หลังคากันสาดกระจกโปร่งแสงและเลานจ์รับรองหรูหรา ทำกำไรค่าตั๋วเกมเหย้าสูงและช่วยบังฝนบางส่วน',
+    buildCost: 130,
+    capMult: 0.96,
+    crowdBonus: 0,
+    vipTicketMult: 1.24,
+    merchBoost: 0.12,
+    wearResist: 1.02,
+    rainShield: 'partial',
+    highlights: ['รายได้ค่าตั๋ว +24% (สูงสุด)', 'หลังคาคลุมอัฒจันทร์กันฝนบางส่วน']
+  },
+  {
+    id: 'cyber_dome',
+    name: 'เมกะโดมหลังคาคลุม',
+    shortName: 'ทรงเมกะโดม',
+    archTag: 'อารีน่าหลังคาคลุมระดับทวีป',
+    desc: 'สุดยอดอารีน่าหลังคาคลุมพร้อมจอ LED รอบทิศ ป้องกันแอ่งน้ำฝน 100% จุคนเยอะ และเสียงก้องกังวานระดับทวีป',
+    buildCost: 175,
+    capMult: 1.18,
+    crowdBonus: 2,
+    vipTicketMult: 1.16,
+    merchBoost: 0.14,
+    wearResist: 1.06,
+    rainShield: 'full',
+    highlights: ['ความจุ +18% · บรรยากาศ +2 · ตั๋ว +16%', 'หลังคาคลุมลดแอ่งน้ำฝนบนสนาม 100%']
+  }
+];
+
+export const getStadiumStyleSpec = (id?: string | null): StadiumStyleSpec =>
+  STADIUM_STYLE_SPECS.find((s) => s.id === id) || STADIUM_STYLE_SPECS[0];
+
+export const getAiTeamStadiumStyleId = (teamId: number, teamName?: string, tier = 0): StadiumStyleId => {
+  const hash =
+    ([...(teamName || 'Club')].reduce((acc, ch, idx) => acc + ch.charCodeAt(0) * (idx + 5), 0) + (teamId + 1) * 29) >>> 0;
+  if (tier >= 2) {
+    const elitePool: StadiumStyleId[] = ['modern_bowl', 'fortress_kop', 'glass_pavilion', 'cyber_dome', 'thai_heritage'];
+    return elitePool[hash % elitePool.length];
+  }
+  return STADIUM_STYLE_SPECS[hash % STADIUM_STYLE_SPECS.length].id;
+};
+
 
 

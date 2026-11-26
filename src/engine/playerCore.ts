@@ -1,7 +1,7 @@
 import type { Position, SubRole, StatKey, GameMode, CoreAttrs, Player, PlayerSeasonProgressPoint, PlayerSeasonHistoryRecord, Team, ClubIdentity, PlayerCareerProfile, GameState, FootballTraitDef, CreatedPlayerTemplate, PreferredFoot } from '../types/game';
 import type { ClubPhilosophyDef } from '../data/thaiFootballData';
 import { R, P, clamp } from '../utils/math';
-import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS } from '../data/crestAndKitData';
+import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, KIT_PATTERNS, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
 import { A1, A2, S1, S2, FN, SN, NG, BASE, POS, ATT, SFX0, FSD, LINE, EQ, SIMP, PM, SKIN_P, HAIR_P, FS_N, KIT_P, SIGL, FOOTBALL_TRAITS, TRAIT_BY_ID, PLAYER_PERSONALITIES, TN, CLUB_PHILOSOPHIES } from '../data/thaiFootballData';
 
 export const NMU = new Set<string>();
@@ -2411,7 +2411,8 @@ export function getTeamClubIdentity(t: Team, s?: GameState | null): ClubIdentity
     icon: icKeys[h % icKeys.length] || '⚽',
     iconColor: '',
     crestBorder: (h >> 6) % 4,
-    kit: (h >> 3) % KIT_PATTERNS.length
+    kit: (h >> 3) % KIT_PATTERNS.length,
+    stadiumStyle: getAiTeamStadiumStyleId(t.id, t.name, t.tier)
   };
 }
 
@@ -2451,12 +2452,22 @@ export function ensureClubIdentity(s: GameState): ClubIdentity {
       iconColor: '',
       crestBorder: (h >> 6) % 4,
       kit: (h >> 3) % KIT_PATTERNS.length,
+      stadiumStyle: 'open_track',
+      builtStadiumStyles: ['open_track'],
       managerName: 'หัวหน้าผู้ฝึกสอน',
       managerStyle: 'balanced',
       managerOutfit: 'suit_navy',
       managerRandomOutfitPerMatch: false,
       managerVis: getDefaultCoachVis(t.name || 'coach')
     };
+  }
+  if (!s.club.stadiumStyle) {
+    s.club.stadiumStyle = 'open_track';
+  }
+  if (!Array.isArray(s.club.builtStadiumStyles) || s.club.builtStadiumStyles.length === 0) {
+    s.club.builtStadiumStyles = [s.club.stadiumStyle];
+  } else if (!s.club.builtStadiumStyles.includes(s.club.stadiumStyle)) {
+    s.club.builtStadiumStyles = [...s.club.builtStadiumStyles, s.club.stadiumStyle];
   }
   if (!s.club.managerVis || s.club.managerVis.length < 8) {
     const baseVis = getDefaultCoachVis(s.club.managerName || s.club.name || 'coach');

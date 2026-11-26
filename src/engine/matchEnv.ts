@@ -1,6 +1,6 @@
 import { clamp } from '../utils/math';
-import { getTurfGradeForLevel } from '../data/crestAndKitData';
-import type { GameState, MatchEnvironment, MatchPitchPuddle, Team } from '../types/game';
+import { getAiTeamStadiumStyleId, getStadiumStyleSpec, getTurfGradeForLevel } from '../data/crestAndKitData';
+import type { GameState, MatchEnvironment, MatchPitchPuddle, StadiumStyleId, Team } from '../types/game';
 import { getFacilityCondition } from './simulation';
 
 export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
@@ -73,10 +73,24 @@ export function buildMatchEnvironment(
               : 0;
   const dirtMix = Number(clamp(rawDirtMix + (season === 'rainy' && rawDirtMix > 0 ? 0.08 : 0), 0, 0.92).toFixed(2));
 
-  const puddleCount =
+  const stadiumStyle: StadiumStyleId =
+    kind === 'sc'
+      ? 'modern_bowl'
+      : meIsHome && state.mode === 'm'
+        ? state.club?.stadiumStyle || 'open_track'
+        : getAiTeamStadiumStyleId(homeOrig.id, homeOrig.name, homeOrig.tier);
+  const styleSpec = getStadiumStyleSpec(stadiumStyle);
+
+  const rawPuddleCount =
     season === 'rainy'
       ? Math.min(7, turfSpecInit.maxPuddles + (turfSpecInit.maxPuddles > 0 && effectiveCond < 70 ? 1 : 0))
       : 0;
+  const puddleCount =
+    styleSpec.rainShield === 'full'
+      ? 0
+      : styleSpec.rainShield === 'partial'
+        ? Math.floor(rawPuddleCount * 0.5)
+        : rawPuddleCount;
   const puddles: MatchPitchPuddle[] =
     puddleCount > 0
       ? Array.from({ length: puddleCount }, () => ({
@@ -98,7 +112,8 @@ export function buildMatchEnvironment(
     turfCond: effectiveCond,
     grassLength,
     dirtMix,
-    pitchSeed: clubSeed
+    pitchSeed: clubSeed,
+    stadiumStyle
   };
 }
 

@@ -25,10 +25,11 @@ import type {
   StaffRoleKey,
   ClubMegastoreState,
   MegastoreSeasonArchive,
-  PlayerJerseySaleRecord
+  PlayerJerseySaleRecord,
+  StadiumStyleId
 } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
-import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS, AWAY_KIT_PAIRINGS, getTurfGradeForLevel } from '../data/crestAndKitData';
+import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS, AWAY_KIT_PAIRINGS, getTurfGradeForLevel, STADIUM_STYLE_SPECS, getStadiumStyleSpec } from '../data/crestAndKitData';
 import { TN, KIT_P, KIT_SW, SKIN_P, HAIR_P, HS_N, FH_N, FS_N, EY_N, ACC_N, COACH_STYLES, COACH_OUTFITS } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { wagOf, logFin, colDist, ensureClubIdentity, getDefaultCoachVis, getShirtNo } from '../engine/playerCore';
@@ -166,6 +167,7 @@ export const FinanceClubView: React.FC<{
     baseCost: number;
     minLv: number;
   } | null>(null);
+  const [showStadiumPicker, setShowStadiumPicker] = useState(false);
 
   useEffect(() => {
     if (
@@ -332,6 +334,47 @@ export const FinanceClubView: React.FC<{
       logFin(d, `ปรับปรุงสิ่งอำนวยความสะดวกทั้งสโมสร (${toFix.length} รายการ)`, -totalCost);
     });
     onToast(`🔧 ปรับปรุงสิ่งอำนวยความสะดวกทั้ง ${toFix.length} แห่งเป็น 100% สำเร็จ!`);
+  };
+
+  const curStadiumStyle: StadiumStyleId = state.club?.stadiumStyle || 'open_track';
+  const curStadiumStyleSpec = getStadiumStyleSpec(curStadiumStyle);
+  const builtStadiumStyles: StadiumStyleId[] = Array.isArray(state.club?.builtStadiumStyles) && state.club.builtStadiumStyles.length > 0
+    ? state.club.builtStadiumStyles
+    : [curStadiumStyle];
+
+  const buildOrSelectStadiumStyle = (styleId: StadiumStyleId) => {
+    const spec = getStadiumStyleSpec(styleId);
+    if (styleId === curStadiumStyle) {
+      onToast(`กำลังใช้งานรูปแบบ "${spec.name}" อยู่แล้ว`);
+      return;
+    }
+    const alreadyBuilt = builtStadiumStyles.includes(styleId);
+    if (alreadyBuilt) {
+      SFX.tap();
+      onUpdateState((d) => {
+        const club = ensureClubIdentity(d);
+        club.stadiumStyle = styleId;
+      });
+      onToast(`🏟️ เปลี่ยนรูปแบบสนามเป็น "${spec.name}" แล้ว`);
+      return;
+    }
+    if (state.money < spec.buildCost) {
+      onToast(`งบไม่พอสร้าง "${spec.name}" (ต้องการ ${fmtMoney(spec.buildCost)})`);
+      return;
+    }
+    SFX.tap();
+    onUpdateState((d) => {
+      d.money -= spec.buildCost;
+      const club = ensureClubIdentity(d);
+      const prevBuilt = Array.isArray(club.builtStadiumStyles) && club.builtStadiumStyles.length > 0
+        ? club.builtStadiumStyles
+        : [club.stadiumStyle || 'open_track'];
+      club.builtStadiumStyles = prevBuilt.includes(styleId) ? prevBuilt : [...prevBuilt, styleId];
+      club.stadiumStyle = styleId;
+      d.facCond = { ...(d.facCond || {}), st: 100 };
+      logFin(d, `ก่อสร้างรูปแบบสนาม: ${spec.name}`, -spec.buildCost);
+    });
+    onToast(`🏗️ ก่อสร้างสนามรูปแบบ "${spec.name}" สำเร็จ!`);
   };
 
   const hireStaff = (role: StaffRoleKey, title: string) => {
@@ -2416,8 +2459,8 @@ export const FinanceClubView: React.FC<{
                         <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
                       </div>
                       <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">{k.std}</div>
-                      <div className="text-[10px] text-[var(--mut)] tabular">
-                        ความจุ {cap.toLocaleString()} ที่นั่ง · Lv.{state.st ?? 1}
+                      <div className="text-[10px] text-[var(--mut)] tabular truncate">
+                        {getStadiumStyleSpec(k.stadiumStyle).shortName} · จุ {cap.toLocaleString()} · Lv.{state.st ?? 1}
                       </div>
                     </button>
                     <button
@@ -3779,6 +3822,7 @@ export const FinanceClubView: React.FC<{
                           condition={cond}
                           c1={me.kc[0]}
                           c2={me.kc[1]}
+                          stadiumStyle={key === 'st' ? curStadiumStyle : undefined}
                           className="w-[104px] h-[66px] mland:w-[88px] mland:h-[56px]"
                         />
                         <div className="flex-1 min-w-0 space-y-1">
@@ -3807,6 +3851,23 @@ export const FinanceClubView: React.FC<{
                             </span>
                           </div>
                           <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
+                          {key === 'st' && (
+                            <div className="pt-0.5 flex flex-wrap items-center justify-between gap-1.5">
+                              <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] truncate">
+                                🏛️ รูปแบบสนาม: {curStadiumStyleSpec.name} ({builtStadiumStyles.length}/{STADIUM_STYLE_SPECS.length})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  SFX.tap();
+                                  setShowStadiumPicker((v) => !v);
+                                }}
+                                className={`btn btn-xs ${showStadiumPicker ? 'btn-surface border-[var(--g)] text-[var(--g)]' : 'btn-secondary'}`}
+                              >
+                                {showStadiumPicker ? 'ซ่อนรูปแบบสนาม' : `เลือกรูปแบบ (${STADIUM_STYLE_SPECS.length} แบบ)`}
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -3868,6 +3929,96 @@ export const FinanceClubView: React.FC<{
                           </button>
                         </div>
                       </div>
+
+                      {key === 'st' && showStadiumPicker && (
+                        <div className="pt-2 border-t border-[var(--line)]/70 space-y-2">
+                          <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
+                            <span className="font-extrabold text-[var(--ink)]">
+                              เลือกสร้างรูปแบบสนาม (ปลดล็อกแล้ว {builtStadiumStyles.length}/{STADIUM_STYLE_SPECS.length} แบบ · สร้างแล้วสลับใช้ซ้ำได้ฟรี)
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {STADIUM_STYLE_SPECS.map((spec) => {
+                              const isActive = spec.id === curStadiumStyle;
+                              const isBuilt = builtStadiumStyles.includes(spec.id);
+                              const canAfford = isBuilt || state.money >= spec.buildCost;
+                              return (
+                                <div
+                                  key={spec.id}
+                                  className={`p-2 rounded-xl border flex flex-col justify-between gap-2 transition-colors ${
+                                    isActive
+                                      ? 'bg-[var(--g-soft)]/60 border-[var(--g)]'
+                                      : isBuilt
+                                        ? 'bg-[var(--surface)] border-[var(--line)]'
+                                        : 'bg-[var(--surface)]/80 border-[var(--line)]/75'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <FacilityUpgradeSvg
+                                      kind="st"
+                                      level={lv}
+                                      condition={100}
+                                      c1={me.kc[0]}
+                                      c2={me.kc[1]}
+                                      stadiumStyle={spec.id}
+                                      className="w-[74px] h-[48px] shrink-0"
+                                    />
+                                    <div className="min-w-0 flex-1 space-y-0.5">
+                                      <div className="flex items-center justify-between gap-1">
+                                        <span className="font-extrabold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate">
+                                          {spec.name}
+                                        </span>
+                                        {isActive ? (
+                                          <span className="px-1.5 py-0.5 rounded bg-[var(--g)] text-white text-[9px] font-bold shrink-0">
+                                            ใช้งานอยู่
+                                          </span>
+                                        ) : isBuilt ? (
+                                          <span className="px-1.5 py-0.5 rounded bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] text-[9px] font-bold shrink-0">
+                                            สร้างแล้ว
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                      <div className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">
+                                        {spec.archTag}
+                                      </div>
+                                      <div className="space-y-0.5 pt-0.5">
+                                        {spec.highlights.map((hl, hIdx) => (
+                                          <div key={hIdx} className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--g)] leading-tight">
+                                            • {hl}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-[var(--line)]/50">
+                                    <span className="text-[9.5px] text-[var(--mut)] truncate">{spec.desc}</span>
+                                    <button
+                                      type="button"
+                                      disabled={isActive || !canAfford}
+                                      onClick={() => buildOrSelectStadiumStyle(spec.id)}
+                                      className={`btn btn-xs shrink-0 ${
+                                        isActive
+                                          ? 'btn-surface text-[var(--g)] border-[var(--g)]/40'
+                                          : isBuilt
+                                            ? 'btn-secondary'
+                                            : 'btn-primary'
+                                      }`}
+                                    >
+                                      {isActive
+                                        ? '✓ กำลังใช้งาน'
+                                        : isBuilt
+                                          ? 'เปลี่ยนมาใช้'
+                                          : spec.buildCost <= 0
+                                            ? 'สร้างฟรี'
+                                            : `🏗️ สร้าง ${fmtMoneyNum(spec.buildCost)}`}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

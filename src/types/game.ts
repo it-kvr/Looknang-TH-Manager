@@ -260,10 +260,20 @@ export type CoachOutfitId =
   | 'polo'
   | 'shirt';
 
+export type StadiumStyleId =
+  | 'open_track'
+  | 'thai_heritage'
+  | 'modern_bowl'
+  | 'fortress_kop'
+  | 'glass_pavilion'
+  | 'cyber_dome';
+
 export interface ClubIdentity {
   name: string;
   nick: string;
   std: string;
+  stadiumStyle?: StadiumStyleId;
+  builtStadiumStyles?: StadiumStyleId[];
   c1: string;
   c2: string;
   c3?: string;
@@ -1318,6 +1328,7 @@ export interface MatchEnvironment {
   grassLength?: 'short' | 'medium' | 'long';
   dirtMix?: number;
   pitchSeed?: number;
+  stadiumStyle?: StadiumStyleId;
 }
 
 export interface LiveMatchWorld {

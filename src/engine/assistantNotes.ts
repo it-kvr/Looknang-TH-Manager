@@ -62,6 +62,20 @@ export interface AssistantCoachReport {
   canShowFormation: boolean;
 }
 
+export interface AssistantAppliedPlanResult {
+  form: string;
+  tac: Mentality;
+  pass: number;
+  press: number;
+  tempo: number;
+  line: number;
+  wid: number;
+  lineupNames: string[];
+  avgFit: number;
+  weaknessSummary: string;
+  usedAssistantLevel: number;
+}
+
 function avg(nums: number[]): number {
   if (!nums.length) return 0;
   return nums.reduce((s, n) => s + n, 0) / nums.length;
@@ -572,5 +586,188 @@ export function buildAssistantCoachNotes(params: {
     canApplyTactics: asstLv >= 3,
     canShowFullSliders: asstLv >= 3,
     canShowFormation: asstLv >= 2
+  };
+}
+
+function scorePlayerFitnessForSlot(pl: Player, slot: { sp: SubRole; pos: Position }): number {
+  const fit = clamp(pl.fit ?? 100, 0, 100);
+  const unavailPenalty = pl.inj > 0 || (pl.sus || 0) > 0 ? -5000 : 0;
+
+  if (slot.pos === 'GK') {
+    const gkRoleBonus = pl.pos === 'GK' ? 600 : -600;
+    return unavailPenalty + gkRoleBonus + fit * 10 + pl.ov * 0.15;
+  }
+
+  if (pl.pos === 'GK') {
+    return unavailPenalty - 600 + fit * 10 + pl.ov * 0.1;
+  }
+
+  const penLvl = playerPen(pl, slot.sp);
+  const roleBonus = penLvl === 0 ? 80 : penLvl === 1 ? 40 : -80;
+  return unavailPenalty + roleBonus + fit * 10 + pl.ov * 0.2;
+}
+
+export function pickFittestLineupForFormation(team: Team, formName: string): string[] {
+  const rawSlots = FSD[formName] || FSD['4-2-3-1'] || FSD['4-4-2'];
+  const slots = rawSlots.map(([sp]) => ({ sp, pos: LINE[sp] || ('MF' as Position) }));
+  if (team.sq.length < slots.length) {
+    return team.sq.map((q) => q.n);
+  }
+
+  const availablePool = team.sq.filter((q) => q.inj === 0 && (q.sus || 0) === 0);
+  const pool =
+    availablePool.length >= slots.length
+      ? availablePool
+      : [
+          ...availablePool,
+          ...team.sq
+            .filter((q) => q.inj > 0 || (q.sus || 0) > 0)
+            .sort((a, b) => a.inj + (a.sus || 0) - (b.inj + (b.sus || 0)) || (b.fit ?? 100) - (a.fit ?? 100))
+        ];
+
+  // Assign GK first, then outfield positions in scarcity order (fewest natural candidates first)
+  const slotOrder = slots
+    .map((sl, idx) => {
+      const naturalCount = pool.filter((q) =>
+        sl.pos === 'GK' ? q.pos === 'GK' : q.pos !== 'GK' && playerPen(q, sl.sp) === 0
+      ).length;
+      return { idx, isGk: sl.pos === 'GK' ? 0 : 1, naturalCount };
+    })
+    .sort((a, b) => a.isGk - b.isGk || a.naturalCount - b.naturalCount)
+    .map((x) => x.idx);
+
+  const chosen = new Array<Player | null>(slots.length).fill(null);
+  const used = new Set<string>();
+
+  for (const idx of slotOrder) {
+    const sl = slots[idx];
+    let bestPlayer: Player | null = null;
+    let bestScore = -Infinity;
+    for (const pl of pool) {
+      if (used.has(pl.n)) continue;
+      const sc = scorePlayerFitnessForSlot(pl, sl);
+      if (sc > bestScore) {
+        bestScore = sc;
+        bestPlayer = pl;
+      }
+    }
+    if (bestPlayer) {
+      chosen[idx] = bestPlayer;
+      used.add(bestPlayer.n);
+    }
+  }
+
+  // Quick polish: swap any two starters if doing so improves total fitness+role score
+  for (let pass = 0; pass < 3; pass++) {
+    let improved = false;
+    for (let i = 0; i < slots.length; i++) {
+      for (let j = i + 1; j < slots.length; j++) {
+        const pi = chosen[i];
+        const pj = chosen[j];
+        if (!pi || !pj) continue;
+        const curScore = scorePlayerFitnessForSlot(pi, slots[i]) + scorePlayerFitnessForSlot(pj, slots[j]);
+        const swappedScore = scorePlayerFitnessForSlot(pj, slots[i]) + scorePlayerFitnessForSlot(pi, slots[j]);
+        if (swappedScore > curScore + 0.01) {
+          chosen[i] = pj;
+          chosen[j] = pi;
+          improved = true;
+        }
+      }
+    }
+    if (!improved) break;
+  }
+
+  return chosen.filter((q): q is Player => Boolean(q)).map((q) => q.n);
+}
+
+export function recommendMatchPlanAndLineup(params: {
+  state: GameState;
+  myTeam: Team;
+  oppTeam: Team;
+  meIsHome: boolean;
+  myRate?: { at: number; df: number };
+  oppRate?: { at: number; df: number };
+  matchEnv: MatchEnvironment;
+  kind: MatchFixtureKind;
+  isDerby: boolean;
+  existingReport?: AssistantCoachReport | null;
+}): AssistantAppliedPlanResult {
+  const { state, myTeam, oppTeam, meIsHome, matchEnv, kind, isDerby } = params;
+  const report =
+    params.existingReport ??
+    buildAssistantCoachNotes({
+      state,
+      myTeam,
+      oppTeam,
+      meIsHome,
+      myRate: params.myRate,
+      oppRate: params.oppRate,
+      matchEnv,
+      kind,
+      isDerby
+    });
+
+  const myRate = params.myRate ?? rate(myTeam, state, false, undefined, undefined, undefined, meIsHome);
+  const oppRate = params.oppRate ?? rate(oppTeam, state, false, undefined, undefined, undefined, !meIsHome);
+  const powGap = (myRate.at + myRate.df) / 2 - (oppRate.at + oppRate.df) / 2;
+
+  let chosenForm = report.recommendation?.form || (myTeam.cf ? '4-2-3-1' : myTeam.form);
+  let chosenTac: Mentality = report.recommendation?.tac || (powGap >= 3 ? 'A' : powGap <= -3 ? 'D' : 'B');
+  const chosenPass = report.recommendation?.pass ?? 1;
+  const chosenPress = report.recommendation?.press ?? 1;
+  const chosenTempo = report.recommendation?.tempo ?? 1;
+  const chosenLine = report.recommendation?.line ?? (powGap <= -3 ? 0 : 1);
+  const chosenWid = report.recommendation?.wid ?? 1;
+
+  // If no assistant coach hired yet (Lv.0), still pick best formation for fittest squad
+  if (!report.recommendation) {
+    let bestScore = -Infinity;
+    for (const fname of Object.keys(FSD)) {
+      const names = pickFittestLineupForFormation(myTeam, fname);
+      const rawSlots = FSD[fname];
+      const sc = names.reduce((sum, name, idx) => {
+        const pl = myTeam.sq.find((q) => q.n === name);
+        if (!pl) return sum;
+        const sp = rawSlots[idx]?.[0] || pl.ro;
+        return sum + scorePlayerFitnessForSlot(pl, { sp, pos: LINE[sp] || pl.pos });
+      }, 0);
+      if (sc > bestScore) {
+        bestScore = sc;
+        chosenForm = fname;
+      }
+    }
+    chosenTac = powGap >= 3 ? 'A' : powGap <= -3 ? 'D' : 'B';
+  }
+
+  const lineupNames = pickFittestLineupForFormation(myTeam, chosenForm);
+  const pickedPlayers = lineupNames
+    .map((n) => myTeam.sq.find((q) => q.n === n))
+    .filter((q): q is Player => Boolean(q));
+  const avgFit = Math.round(
+    pickedPlayers.reduce((sum, q) => sum + (q.fit ?? 100), 0) / Math.max(1, pickedPlayers.length)
+  );
+
+  const oppXi = xi(oppTeam);
+  const oppAvgFit = Math.round(avg(oppXi.map((q) => q.fit ?? 100)));
+  const weaknessTitles = report.weaknesses.slice(0, 2).map((w) => w.title);
+  const weaknessSummary =
+    report.asstLv > 0 && weaknessTitles.length > 0
+      ? report.targetPlayerNote
+        ? `${weaknessTitles.join(' · ')} (เป้าเจาะ: ${report.targetPlayerNote.name})`
+        : weaknessTitles.join(' · ')
+      : `สรุปเบื้องต้น: คู่แข่งฟิตเฉลี่ย ${oppAvgFit}% (จ้างผู้ช่วยโค้ชเพื่อเจาะจุดอ่อนลึกขึ้น)`;
+
+  return {
+    form: chosenForm,
+    tac: chosenTac,
+    pass: chosenPass,
+    press: chosenPress,
+    tempo: chosenTempo,
+    line: chosenLine,
+    wid: chosenWid,
+    lineupNames,
+    avgFit,
+    weaknessSummary,
+    usedAssistantLevel: report.asstLv
   };
 }

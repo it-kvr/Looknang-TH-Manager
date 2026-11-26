@@ -1,5 +1,5 @@
 import React from 'react';
-import type { FacilityKey, StaffRoleKey } from '../types/game';
+import type { FacilityKey, StadiumStyleId, StaffRoleKey } from '../types/game';
 import { clamp } from '../utils/math';
 
 export const getFacilityTierLabel = (lv: number): string => {
@@ -21,16 +21,18 @@ export const FacilityUpgradeSvg: React.FC<{
   kind: FacilityKey;
   level: number;
   condition?: number;
+  stadiumStyle?: StadiumStyleId;
   c1?: string;
   c2?: string;
   className?: string;
-}> = ({ kind, level, condition = 100, c1 = '#177c45', c2 = '#f5c242', className = '' }) => {
+}> = ({ kind, level, condition = 100, stadiumStyle = 'modern_bowl', c1 = '#177c45', c2 = '#f5c242', className = '' }) => {
   const lv = clamp(level, 0, 10);
   const destroyed = lv <= 0;
   const tier = lv >= 9 ? 4 : lv >= 6 ? 3 : lv >= 3 ? 2 : 1;
   const needsRepair = !destroyed && condition < 75;
   const severelyDamaged = !destroyed && condition < 55;
-  const uid = `${kind}-${lv}-${tier}-${destroyed ? 'r' : needsRepair ? 'd' : 'ok'}`;
+  const styleTag = kind === 'st' ? stadiumStyle : 'std';
+  const uid = `${kind}-${styleTag}-${lv}-${tier}-${destroyed ? 'r' : severelyDamaged ? 's' : needsRepair ? 'd' : 'ok'}`;
 
   return (
     <svg
@@ -138,83 +140,187 @@ export const FacilityUpgradeSvg: React.FC<{
         </g>
       )}
 
-      {/* 1. STADIUM (st) */}
+      {/* 1. STADIUM (st) - 6 Distinct Architectural Styles */}
       {!destroyed && kind === 'st' && (
         <g>
-          {/* Outer floodlight towers at tier >= 2 */}
-          {tier >= 2 && (
-            <g stroke={needsRepair ? '#94a3b8' : '#cbd5e1'} strokeWidth="1.8">
-              <line
-                x1="16"
-                y1="52"
-                x2={needsRepair ? 13 : 18}
-                y2={tier >= 3 ? (needsRepair ? 21 : 16) : needsRepair ? 27 : 24}
-              />
-              <line x1="104" y1="52" x2="102" y2={tier >= 3 ? 16 : 24} />
-              <rect
-                x={needsRepair ? 8 : 13}
-                y={tier >= 3 ? (needsRepair ? 17 : 12) : needsRepair ? 23 : 20}
-                width="10"
-                height="5"
-                rx="1"
-                transform={needsRepair ? 'rotate(-16 13 20)' : undefined}
-                fill={needsRepair ? '#334155' : '#fef08a'}
-                stroke="none"
-              />
-              <rect
-                x="97"
-                y={tier >= 3 ? 12 : 20}
-                width="10"
-                height="5"
-                rx="1"
-                fill={needsRepair ? '#94a3b8' : '#fef08a'}
-                stroke="none"
-              />
-            </g>
-          )}
-          {/* Stadium bowl & tiered stands */}
-          {tier === 1 && (
+          {/* Running track surround for open_track */}
+          {stadiumStyle === 'open_track' && (
             <g>
-              <rect x="26" y="39" width="68" height="14" rx="2" fill="#475569" stroke="#94a3b8" strokeWidth="0.8" />
-              <rect x="30" y="42" width="60" height="4" fill={c1} opacity={needsRepair ? 0.55 : 1} />
-              <rect x="28" y="34" width="64" height="5" rx="1.5" fill={c2} opacity={needsRepair ? 0.55 : 1} />
+              <path d="M8 76 Q60 47 112 76 L120 76 Q60 41 0 76 Z" fill="#b45309" opacity={needsRepair ? 0.45 : 0.78} />
+              <path d="M14 76 Q60 50 106 76" fill="none" stroke="#fef3c7" strokeWidth="0.6" strokeDasharray="3 2" opacity="0.65" />
+              {/* Main single covered grandstand + side open bleachers */}
+              <path d="M22 52 L27 33 L93 33 L98 52 Z" fill="#334155" stroke="#94a3b8" strokeWidth="0.9" />
+              <rect x="29" y="38" width="62" height={tier >= 3 ? 9 : 6} rx="1.2" fill={c1} opacity={needsRepair ? 0.52 : 0.92} />
+              <path d="M24 33 L32 25 L88 25 L96 33 Z" fill={needsRepair ? '#64748b' : '#cbd5e1'} />
+              <rect x="47" y="21" width="26" height="5" rx="1" fill="#0f172a" stroke={c2} strokeWidth="0.9" />
+              {tier >= 2 && (
+                <g stroke="#cbd5e1" strokeWidth="1.6">
+                  <line x1="15" y1="53" x2="17" y2={tier >= 3 ? 17 : 23} />
+                  <line x1="105" y1="53" x2="103" y2={tier >= 3 ? 17 : 23} />
+                  <rect x="12" y={tier >= 3 ? 13 : 19} width="9" height="4.5" rx="1" fill="#fef08a" stroke="none" />
+                  <rect x="99" y={tier >= 3 ? 13 : 19} width="9" height="4.5" rx="1" fill="#fef08a" stroke="none" />
+                </g>
+              )}
             </g>
           )}
-          {tier === 2 && (
+
+          {/* Thai Heritage Arena (ทรงไทยประยุกต์) */}
+          {stadiumStyle === 'thai_heritage' && (
             <g>
-              <path d="M18 53 L24 31 L96 31 L102 53 Z" fill="#334155" stroke="#94a3b8" strokeWidth="1" />
-              <rect x="26" y="36" width="68" height="11" rx="1.5" fill={c1} opacity={needsRepair ? 0.5 : 0.9} />
-              <path
-                d={needsRepair ? 'M20 32 L54 26 M62 27 L100 32' : 'M20 31 Q60 22 100 31'}
-                fill="none"
-                stroke={needsRepair ? '#94a3b8' : '#e2e8f0'}
-                strokeWidth="2.6"
-              />
-              <rect x="48" y="27" width="24" height="6" rx="1.5" fill={c2} opacity={needsRepair ? 0.6 : 1} />
+              <path d="M14 54 L20 31 L100 31 L106 54 Z" fill="#292524" stroke="#f59e0b" strokeWidth="0.9" />
+              <rect x="22" y="37" width="76" height="7" rx="1.5" fill={c1} opacity={needsRepair ? 0.55 : 0.95} />
+              <rect x="24" y="45" width="72" height="5" rx="1" fill={c2} opacity={needsRepair ? 0.5 : 0.85} />
+              {/* Tiered Thai gable roofs (จั่วซ้อนชั้น) */}
+              <polygon points="10,32 34,21 58,32" fill="#991b1b" stroke="#fbbf24" strokeWidth="1" />
+              <polygon points="62,32 86,21 110,32" fill="#991b1b" stroke="#fbbf24" strokeWidth="1" />
+              <polygon points="34,30 60,13 86,30" fill="#b91c1c" stroke="#fde047" strokeWidth="1.2" />
+              {/* Golden spire / gable apex */}
+              <path d="M58 14 L60 7 L62 14 Z" fill="#fde047" />
+              <path d="M33 21 L34 16 L35 21 Z M85 21 L86 16 L87 21 Z" fill="#fbbf24" />
+              <rect x="49" y="23" width="22" height="5" rx="1" fill="#1c1917" stroke="#fbbf24" strokeWidth="0.8" />
+              {tier >= 3 && (
+                <g stroke="#fde047" strokeWidth="1.3">
+                  <line x1="12" y1="53" x2="13" y2="17" />
+                  <line x1="108" y1="53" x2="107" y2="17" />
+                  <circle cx="13" cy="16" r="2.5" fill="#fef08a" stroke="none" />
+                  <circle cx="107" cy="16" r="2.5" fill="#fef08a" stroke="none" />
+                </g>
+              )}
             </g>
           )}
-          {tier === 3 && (
+
+          {/* Fortress Kop (ป้อมปราการหลังโกล - steep vertical walls close to pitch) */}
+          {stadiumStyle === 'fortress_kop' && (
             <g>
-              <path d="M12 54 L18 26 L102 26 L108 54 Z" fill="#1e293b" stroke="#cbd5e1" strokeWidth="1" />
-              <rect x="20" y="31" width="80" height="8" rx="1.5" fill={c1} opacity={needsRepair ? 0.52 : 1} />
-              <rect x="22" y="41" width="76" height="8" rx="1.5" fill={c2} opacity={needsRepair ? 0.48 : 0.85} />
-              <path d="M12 26 Q60 14 108 26 L102 31 L18 31 Z" fill={needsRepair ? '#94a3b8' : '#e2e8f0'} opacity="0.92" />
-              <rect x="44" y="18" width="32" height="7" rx="2" fill="#0f172a" stroke={c2} strokeWidth="1" />
-              <rect x="48" y="20" width="24" height="3" rx="1" fill={needsRepair ? '#ef4444' : '#38bdf8'} />
+              {/* Steep towering twin-wall stands */}
+              <path d="M12 54 L14 22 L106 22 L108 54 Z" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+              <rect x="17" y="25" width="86" height="9" rx="1" fill={c1} opacity={needsRepair ? 0.55 : 1} />
+              <rect x="17" y="36" width="86" height="9" rx="1" fill={c2} opacity={needsRepair ? 0.5 : 0.92} />
+              <rect x="17" y="47" width="86" height="5" rx="0.5" fill={c1} opacity="0.85" />
+              {/* Vertical steel roof truss & floodlight gantries */}
+              <rect x="10" y="18" width="100" height="5" rx="1" fill="#334155" stroke="#94a3b8" strokeWidth="0.8" />
+              <path d="M18 18 L24 12 L96 12 L102 18" fill="none" stroke={c2} strokeWidth="1.4" />
+              <rect x="16" y="10" width="12" height="4" rx="0.8" fill="#fef08a" />
+              <rect x="92" y="10" width="12" height="4" rx="0.8" fill="#fef08a" />
+              {tier >= 3 && (
+                <rect x="44" y="13" width="32" height="5.5" rx="1" fill="#020617" stroke={c2} strokeWidth="0.9" />
+              )}
             </g>
           )}
-          {tier === 4 && (
+
+          {/* Glass Pavilion (พาวิลเลียนกระจกพรีเมียม) */}
+          {stadiumStyle === 'glass_pavilion' && (
             <g>
-              <path d="M8 54 L15 24 L105 24 L112 54 Z" fill="#0f172a" stroke={c2} strokeWidth="1.2" />
-              <rect x="17" y="29" width="86" height="9" rx="2" fill={c1} opacity={needsRepair ? 0.55 : 1} />
-              <rect x="19" y="40" width="82" height="9" rx="2" fill={c2} opacity={needsRepair ? 0.5 : 0.9} />
-              <path d="M7 24 Q60 6 113 24 L105 29 Q60 15 15 29 Z" fill={needsRepair ? '#94a3b8' : '#f8fafc'} />
-              <path d="M22 22 Q60 3 98 22" fill="none" stroke={c2} strokeWidth="2" />
-              <rect x="41" y="12" width="38" height="8" rx="2" fill="#020617" stroke={c2} strokeWidth="1.1" />
-              <rect x="45" y="14.5" width="30" height="3" rx="1" fill={needsRepair ? '#f59e0b' : '#4ade80'} />
-              <rect x="20" y="51.5" width="80" height="2.5" rx="1" fill={needsRepair ? '#64748b' : '#38bdf8'} />
+              <path d="M14 54 L20 29 L100 29 L106 54 Z" fill="#1e293b" stroke="#94a3b8" strokeWidth="0.9" />
+              <rect x="22" y="34" width="76" height="7" rx="1.5" fill={c1} opacity={needsRepair ? 0.5 : 0.92} />
+              {/* Translucent glass VIP hospitality suite deck */}
+              <rect x="26" y="42" width="68" height="7" rx="1.5" fill="#bae6fd" opacity="0.72" stroke="#38bdf8" strokeWidth="0.8" />
+              <line x1="40" y1="42" x2="40" y2="49" stroke="#0284c7" strokeWidth="0.7" />
+              <line x1="60" y1="42" x2="60" y2="49" stroke="#0284c7" strokeWidth="0.7" />
+              <line x1="80" y1="42" x2="80" y2="49" stroke="#0284c7" strokeWidth="0.7" />
+              {/* Sleek cantilevered glass roof */}
+              <path d="M8 28 Q60 15 112 24 L104 31 Q60 24 16 31 Z" fill="#7dd3fc" opacity="0.65" stroke="#e0f2fe" strokeWidth="1.2" />
+              <path d="M22 26 L28 21 M45 23 L49 19 M72 23 L75 19 M95 25 L98 21" stroke="#f8fafc" strokeWidth="0.9" opacity="0.8" />
+              <rect x="46" y="21" width="28" height="5" rx="1.5" fill="#0f172a" stroke={c2} strokeWidth="0.9" />
             </g>
           )}
+
+          {/* Cyber Dome (เมกะโดมหลังคาคลุม) */}
+          {stadiumStyle === 'cyber_dome' && (
+            <g>
+              {/* Enclosed geodesic arena dome */}
+              <path d="M6 54 Q6 10 60 10 Q114 10 114 54 Z" fill="#0f172a" stroke="#38bdf8" strokeWidth="1.2" />
+              <path d="M12 52 Q16 18 60 18 Q104 18 108 52 Z" fill="#1e293b" stroke={c2} strokeWidth="0.9" />
+              {/* Glowing skylight oculus + radial dome ribs */}
+              <ellipse cx="60" cy="18" rx="22" ry="5" fill="#38bdf8" opacity="0.28" stroke="#7dd3fc" strokeWidth="1" />
+              <path d="M60 13 L60 32 M36 16 L28 34 M84 16 L92 34" stroke="#475569" strokeWidth="0.9" />
+              {/* LED wraparound ribbon & tiered club bowl */}
+              <rect x="15" y="34" width="90" height="7" rx="2" fill={c1} opacity={needsRepair ? 0.55 : 1} />
+              <rect x="18" y="43" width="84" height="6" rx="2" fill={c2} opacity={needsRepair ? 0.5 : 0.9} />
+              <rect x="14" y="31" width="92" height="2.4" rx="1" fill={needsRepair ? '#ef4444' : '#38bdf8'} />
+              <rect x="42" y="21" width="36" height="6" rx="1.5" fill="#020617" stroke="#38bdf8" strokeWidth="1" />
+              <rect x="46" y="23" width="28" height="2.2" rx="1" fill={needsRepair ? '#f59e0b' : '#4ade80'} />
+            </g>
+          )}
+
+          {/* Modern Bowl 360° (default / modern_bowl) */}
+          {(stadiumStyle === 'modern_bowl' || !['open_track', 'thai_heritage', 'fortress_kop', 'glass_pavilion', 'cyber_dome'].includes(stadiumStyle)) && (
+            <g>
+              {tier >= 2 && (
+                <g stroke={needsRepair ? '#94a3b8' : '#cbd5e1'} strokeWidth="1.8">
+                  <line
+                    x1="16"
+                    y1="52"
+                    x2={needsRepair ? 13 : 18}
+                    y2={tier >= 3 ? (needsRepair ? 21 : 16) : needsRepair ? 27 : 24}
+                  />
+                  <line x1="104" y1="52" x2="102" y2={tier >= 3 ? 16 : 24} />
+                  <rect
+                    x={needsRepair ? 8 : 13}
+                    y={tier >= 3 ? (needsRepair ? 17 : 12) : needsRepair ? 23 : 20}
+                    width="10"
+                    height="5"
+                    rx="1"
+                    transform={needsRepair ? 'rotate(-16 13 20)' : undefined}
+                    fill={needsRepair ? '#334155' : '#fef08a'}
+                    stroke="none"
+                  />
+                  <rect
+                    x="97"
+                    y={tier >= 3 ? 12 : 20}
+                    width="10"
+                    height="5"
+                    rx="1"
+                    fill={needsRepair ? '#94a3b8' : '#fef08a'}
+                    stroke="none"
+                  />
+                </g>
+              )}
+              {tier === 1 && (
+                <g>
+                  <rect x="22" y="38" width="76" height="15" rx="4" fill="#475569" stroke="#94a3b8" strokeWidth="0.8" />
+                  <rect x="26" y="42" width="68" height="4" fill={c1} opacity={needsRepair ? 0.55 : 1} />
+                  <rect x="24" y="33" width="72" height="5" rx="2" fill={c2} opacity={needsRepair ? 0.55 : 1} />
+                </g>
+              )}
+              {tier === 2 && (
+                <g>
+                  <path d="M16 53 L22 31 L98 31 L104 53 Z" fill="#334155" stroke="#94a3b8" strokeWidth="1" />
+                  <rect x="24" y="36" width="72" height="11" rx="2" fill={c1} opacity={needsRepair ? 0.5 : 0.9} />
+                  <path
+                    d={needsRepair ? 'M20 32 L54 26 M62 27 L100 32' : 'M18 31 Q60 21 102 31'}
+                    fill="none"
+                    stroke={needsRepair ? '#94a3b8' : '#e2e8f0'}
+                    strokeWidth="2.6"
+                  />
+                  <rect x="48" y="27" width="24" height="6" rx="1.5" fill={c2} opacity={needsRepair ? 0.6 : 1} />
+                </g>
+              )}
+              {tier === 3 && (
+                <g>
+                  <path d="M12 54 L18 26 L102 26 L108 54 Z" fill="#1e293b" stroke="#cbd5e1" strokeWidth="1" />
+                  <rect x="20" y="31" width="80" height="8" rx="2" fill={c1} opacity={needsRepair ? 0.52 : 1} />
+                  <rect x="22" y="41" width="76" height="8" rx="2" fill={c2} opacity={needsRepair ? 0.48 : 0.85} />
+                  <path d="M10 26 Q60 13 110 26 L102 31 L18 31 Z" fill={needsRepair ? '#94a3b8' : '#e2e8f0'} opacity="0.92" />
+                  <rect x="44" y="18" width="32" height="7" rx="2" fill="#0f172a" stroke={c2} strokeWidth="1" />
+                  <rect x="48" y="20" width="24" height="3" rx="1" fill={needsRepair ? '#ef4444' : '#38bdf8'} />
+                </g>
+              )}
+              {tier === 4 && (
+                <g>
+                  <path d="M8 54 L15 24 L105 24 L112 54 Z" fill="#0f172a" stroke={c2} strokeWidth="1.2" />
+                  <rect x="17" y="29" width="86" height="9" rx="2" fill={c1} opacity={needsRepair ? 0.55 : 1} />
+                  <rect x="19" y="40" width="82" height="9" rx="2" fill={c2} opacity={needsRepair ? 0.5 : 0.9} />
+                  <path d="M7 24 Q60 6 113 24 L105 29 Q60 15 15 29 Z" fill={needsRepair ? '#94a3b8' : '#f8fafc'} />
+                  <path d="M22 22 Q60 3 98 22" fill="none" stroke={c2} strokeWidth="2" />
+                  <rect x="41" y="12" width="38" height="8" rx="2" fill="#020617" stroke={c2} strokeWidth="1.1" />
+                  <rect x="45" y="14.5" width="30" height="3" rx="1" fill={needsRepair ? '#f59e0b' : '#4ade80'} />
+                  <rect x="20" y="51.5" width="80" height="2.5" rx="1" fill={needsRepair ? '#64748b' : '#38bdf8'} />
+                </g>
+              )}
+            </g>
+          )}
+
           {/* Foreground pitch goal box */}
           <rect
             x="34"

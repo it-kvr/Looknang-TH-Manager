@@ -17,8 +17,8 @@ import {
   X
 } from 'lucide-react';
 import type { GameState, MatchEnvironment, Mentality, Player, SubRole, Team } from '../types/game';
-import { AR_T, FSD, POS, RN, TN } from '../data/thaiFootballData';
-import { computeTurfMatchModifiers, getTurfGradeSpec } from '../data/crestAndKitData';
+import { AR_T, FSD, LINE, POS, RN, TN } from '../data/thaiFootballData';
+import { computeTurfMatchModifiers, getStadiumStyleSpec, getTurfGradeSpec } from '../data/crestAndKitData';
 import { SFX } from '../utils/audioTheme';
 import { clamp } from '../utils/math';
 import { getFormationSlots, getShirtNo, matchKits, pickBestCaptain, pickGK, playerPen, xi } from '../engine/playerCore';
@@ -34,10 +34,12 @@ import {
 } from '../engine/simulation';
 import { getMatchBroadcastChannel } from '../engine/liveStreamChat';
 import { buildMatchEnvironment, getStadiumDisplayName, type MatchFixtureKind } from '../engine/matchEnv';
-import { buildAssistantCoachNotes } from '../engine/assistantNotes';
+import { buildAssistantCoachNotes, recommendMatchPlanAndLineup, type AssistantAppliedPlanResult } from '../engine/assistantNotes';
 import { ovColor } from '../engine/missions';
-import { ClubCrest, FormationPitch } from '../components/SvgVisuals';
-import { StaminaBar } from '../components/StaminaBar';
+import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals';
+import { FacilityUpgradeSvg } from '../components/FacilityUpgradeSvg';
+import { StatIconBadge } from '../components/StatIconBadge';
+import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 
 interface PreMatchModalProps {
   state: GameState;
@@ -78,7 +80,10 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const isMgr = state.mode === 'm';
 
   const [viewMode, setViewMode] = useState<'H' | 'A' | 'compare'>(() => (meIsHome ? 'H' : 'A'));
+  const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [swapPickName, setSwapPickName] = useState<string | null>(null);
+  const [recommendedPlanBanner, setRecommendedPlanBanner] = useState<AssistantAppliedPlanResult | null>(null);
+  const isNeutralVenue = kind === 'sc';
 
   const [homeKit, awayKit, homeTrim, awayTrim] = useMemo(
     () => matchKits(homeTeam, awayTeam, state),
@@ -96,6 +101,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
   const turfSpec = useMemo(() => getTurfGradeSpec(matchEnv.turfGrade), [matchEnv.turfGrade]);
   const turfMods = useMemo(() => computeTurfMatchModifiers(matchEnv), [matchEnv]);
+  const stadiumStyleSpec = useMemo(() => getStadiumStyleSpec(matchEnv.stadiumStyle), [matchEnv.stadiumStyle]);
 
   const attendance = useMemo(
     () => computeMatchAttendance(homeTeam, awayTeam, state, { kind, derby: isDerby }),
@@ -122,20 +128,22 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const homeFacMods = useMemo(
     () =>
       computeTeamFacilityMatchModifiers(homeTeam, state, {
-        isHome: true,
+        isHome: !isNeutralVenue,
+        isNeutral: isNeutralVenue,
         attendancePct: attendance.pct,
         turfCondOverride: matchEnv.turfCond
       }),
-    [homeTeam, state, attendance.pct, matchEnv.turfCond]
+    [homeTeam, state, isNeutralVenue, attendance.pct, matchEnv.turfCond]
   );
 
   const awayFacMods = useMemo(
     () =>
       computeTeamFacilityMatchModifiers(awayTeam, state, {
         isHome: false,
+        isNeutral: isNeutralVenue,
         attendancePct: attendance.pct
       }),
-    [awayTeam, state, attendance.pct]
+    [awayTeam, state, isNeutralVenue, attendance.pct]
   );
 
   const stadiumName = useMemo(
@@ -153,8 +161,14 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     return map;
   }, [state.teams]);
 
-  const homeRate = useMemo(() => rate(homeTeam, state), [homeTeam, state]);
-  const awayRate = useMemo(() => rate(awayTeam, state), [awayTeam, state]);
+  const homeRate = useMemo(
+    () => rate(homeTeam, state, false, undefined, undefined, undefined, !isNeutralVenue),
+    [homeTeam, state, isNeutralVenue]
+  );
+  const awayRate = useMemo(
+    () => rate(awayTeam, state, false, undefined, undefined, undefined, false),
+    [awayTeam, state]
+  );
 
   const homeXi = useMemo(() => xi(homeTeam), [homeTeam]);
   const awayXi = useMemo(() => xi(awayTeam), [awayTeam]);
@@ -187,24 +201,33 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const homeBench = useMemo(() => {
     const used = new Set(homeXi.map((q) => q.n));
     return homeTeam.sq
-      .filter((q) => !used.has(q.n) && q.inj === 0 && (q.sus || 0) === 0)
-      .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov)
-      .slice(0, 7);
+      .filter((q) => !used.has(q.n))
+      .sort((a, b) => {
+        const aUn = a.inj > 0 || (a.sus || 0) > 0 ? 1 : 0;
+        const bUn = b.inj > 0 || (b.sus || 0) > 0 ? 1 : 0;
+        return aUn - bUn || POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
+      });
   }, [homeTeam.sq, homeXi]);
 
   const awayBench = useMemo(() => {
     const used = new Set(awayXi.map((q) => q.n));
     return awayTeam.sq
-      .filter((q) => !used.has(q.n) && q.inj === 0 && (q.sus || 0) === 0)
-      .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov)
-      .slice(0, 7);
+      .filter((q) => !used.has(q.n))
+      .sort((a, b) => {
+        const aUn = a.inj > 0 || (a.sus || 0) > 0 ? 1 : 0;
+        const bUn = b.inj > 0 || (b.sus || 0) > 0 ? 1 : 0;
+        return aUn - bUn || POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
+      });
   }, [awayTeam.sq, awayXi]);
 
   const myTeam = meIsHome ? homeTeam : awayTeam;
   const oppTeam = meIsHome ? awayTeam : homeTeam;
   const myXi = meIsHome ? homeXi : awayXi;
   const myAvgFit = Math.round(myXi.reduce((sum, q) => sum + (q.fit ?? 100), 0) / Math.max(1, myXi.length));
-  const tiredStarterCount = myXi.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) < 72).length;
+  const restNeededStarters = myXi.filter((q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) < 65);
+  const tiredWarningStarters = myXi.filter(
+    (q) => q.inj === 0 && (q.sus || 0) === 0 && Math.round(q.fit ?? 100) >= 65 && Math.round(q.fit ?? 100) < 75
+  );
 
   const assistantReport = useMemo(() => {
     if (!isMgr) return null;
@@ -257,6 +280,39 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     onToast(`📋 ปรับใช้แผน ${rec.form} (${AR_T[rec.tac]}) ตามบันทึกผู้ช่วยโค้ชแล้ว`);
   };
 
+  const handleRecommendPlan = () => {
+    if (!isMgr) return;
+    const plan = recommendMatchPlanAndLineup({
+      state,
+      myTeam,
+      oppTeam,
+      meIsHome,
+      myRate: meIsHome ? homeRate : awayRate,
+      oppRate: meIsHome ? awayRate : homeRate,
+      matchEnv,
+      kind,
+      isDerby,
+      existingReport: assistantReport
+    });
+    SFX.tap();
+    onUpdateState((d) => {
+      const t = d.teams[d.me];
+      t.cf = undefined;
+      t.form = plan.form;
+      t.tac = plan.tac;
+      t.pass = plan.pass;
+      t.press = plan.press;
+      t.tempo = plan.tempo;
+      t.line = plan.line;
+      t.wid = plan.wid;
+      t.lu = plan.lineupNames;
+    });
+    setSwapPickName(null);
+    setViewMode(meIsHome ? 'H' : 'A');
+    setRecommendedPlanBanner(plan);
+    onToast(`🎯 แนะนำแผน ${plan.form} (${AR_T[plan.tac]}) และจัด 11 ตัวจริงฟิตสูงสุด (เฉลี่ย ${plan.avgFit}%) แล้ว`);
+  };
+
   const compLabel =
     kind === 'asia'
       ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
@@ -286,25 +342,37 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const handleQuickSwap = (targetName: string) => {
     if (!isMgr) return;
     if ((viewMode === 'H' && !meIsHome) || (viewMode === 'A' && meIsHome)) return;
+    const targetPlayer = myTeam.sq.find((q) => q.n === targetName);
+    if (!targetPlayer) return;
+    if (targetPlayer.inj > 0 || (targetPlayer.sus || 0) > 0) {
+      onToast(
+        (targetPlayer.sus || 0) > 0
+          ? `${targetPlayer.n.split(' ')[0]} ติดโทษแบน ลงสนามไม่ได้`
+          : `${targetPlayer.n.split(' ')[0]} มีอาการบาดเจ็บ ลงสนามไม่ได้`
+      );
+      return;
+    }
     if (!swapPickName) {
       SFX.tap();
       setSwapPickName(targetName);
       return;
     }
     if (swapPickName === targetName) {
+      SFX.tap();
       setSwapPickName(null);
       return;
     }
     const pA = myTeam.sq.find((q) => q.n === swapPickName);
-    const pB = myTeam.sq.find((q) => q.n === targetName);
-    if (!pA || !pB) {
-      setSwapPickName(null);
+    const pB = targetPlayer;
+    if (!pA || pA.inj > 0 || (pA.sus || 0) > 0) {
+      setSwapPickName(targetName);
       return;
     }
     const curNames = myXi.map((q) => q.n);
     const idxA = curNames.indexOf(pA.n);
     const idxB = curNames.indexOf(pB.n);
     if (idxA < 0 && idxB < 0) {
+      SFX.tap();
       setSwapPickName(targetName);
       return;
     }
@@ -329,6 +397,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
   const handleRestTiredStarters = () => {
     if (!isMgr) return;
+    const threshold = restNeededStarters.length > 0 ? 65 : 75;
     const swapped: string[] = [];
     SFX.tap();
     onUpdateState((d) => {
@@ -342,7 +411,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
       curXi.forEach((starter, idx) => {
         if (starter.inj > 0 || (starter.sus || 0) > 0) return;
-        if (Math.round(starter.fit ?? 100) >= 72) return;
+        if (Math.round(starter.fit ?? 100) >= threshold) return;
         const subIdx = freshPool.findIndex((b) =>
           starter.pos === 'GK' ? b.pos === 'GK' : b.pos === starter.pos
         );
@@ -360,6 +429,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
       });
       t.lu = nextLu;
     });
+    setSwapPickName(null);
     if (swapped.length > 0) {
       onToast(`🛌 พักตัวล้า ${swapped.length} ตำแหน่งเรียบร้อย`);
     } else {
@@ -416,51 +486,146 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const dirtPct = Math.round((matchEnv.dirtMix || 0) * 100);
   const surfaceText = dirtPct <= 5 ? 'หญ้าแน่นสมบูรณ์' : dirtPct <= 25 ? `มีรอยสึกเล็กน้อย (${dirtPct}%)` : `พื้นสึก/ดินปน (${dirtPct}%)`;
 
-  const renderPlayerRow = (pl: Player, slotLabel: SubRole, team: Team, isStarter: boolean, isCap: boolean) => {
+  const myXiNameSet = useMemo(() => new Set(myXi.map((q) => q.n)), [myXi]);
+
+  const renderPlayerRow = (
+    pl: Player,
+    slotLabel: SubRole,
+    team: Team,
+    isStarter: boolean,
+    isCap: boolean,
+    opts?: { compact?: boolean }
+  ) => {
+    const compact = Boolean(opts?.compact);
     const no = getShirtNo(team, pl);
-    const fit = Math.round(pl.fit ?? 100);
+    const stMeta = getStaminaMeta(pl.fit);
+    const fit = stMeta.f;
     const pen = isStarter ? playerPen(pl, slotLabel) : 0;
+    const unavailable = pl.inj > 0 || (pl.sus || 0) > 0;
+    const canEditRow = isMgr && team.id === state.me && viewMode !== 'compare' && !unavailable;
     const isPicked = swapPickName === pl.n;
     const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
+    const roleGroup = LINE[slotLabel] || pl.pos;
+    const roleBadgeCls =
+      roleGroup === 'DF'
+        ? 'bg-blue-600'
+        : roleGroup === 'MF'
+          ? 'bg-amber-600'
+          : roleGroup === 'GK'
+            ? 'bg-purple-600'
+            : 'bg-[var(--g)]';
+    const starterWarnCls = isStarter && !unavailable ? stMeta.rowTint : '';
+
+    const pickedIsStarter = swapPickName ? myXiNameSet.has(swapPickName) : false;
+    const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
 
     return (
-      <button
+      <div
         key={`${isStarter ? 'xi' : 'bn'}-${pl.n}`}
-        type="button"
-        disabled={!canEditActiveTeam}
-        onClick={() => canEditActiveTeam && handleQuickSwap(pl.n)}
-        className={`w-full px-2 py-1 mland:py-0.5 rounded-lg border text-left flex items-center gap-1.5 text-[11px] mland:text-[9.5px] transition-colors ${
+        role={canEditRow ? 'button' : undefined}
+        tabIndex={canEditRow ? 0 : undefined}
+        onClick={() => canEditRow && handleQuickSwap(pl.n)}
+        onKeyDown={(e) => {
+          if (canEditRow && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            handleQuickSwap(pl.n);
+          }
+        }}
+        className={`w-full flex items-center gap-1 px-1.5 py-1 mland:py-0.5 rounded-lg border text-left select-none transition-all ${
           isPicked
-            ? 'bg-[var(--g-soft)] border-[var(--g)] ring-1 ring-[var(--g)]'
+            ? 'bg-[var(--g-soft)] border-[var(--g)] ring-2 ring-[var(--g)]/55'
             : isMePlayer
-              ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60'
-              : 'bg-[var(--surface-2)]/65 border-[var(--line)]/65 hover:border-[var(--g)]/55'
-        } ${canEditActiveTeam ? 'cursor-pointer' : 'cursor-default'}`}
+              ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] ring-1 ring-[var(--lamp)]/45'
+              : starterWarnCls || 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
+        } ${unavailable ? 'opacity-70' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="w-5 text-center font-black tabular text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
-          {no}
+        <span className="flex items-center gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-4 [&_svg]:h-4">
+          <PlayerFace player={pl} team={team} state={state} size={20} />
+          <span className="text-[9.5px] font-bold tabular text-[var(--mut)] min-w-[21px] text-center shrink-0 whitespace-nowrap">
+            #{no}
+          </span>
+          <span className={`px-1 py-0.2 rounded text-[9px] font-bold text-white shrink-0 ${roleBadgeCls}`}>
+            {slotLabel}
+          </span>
         </span>
-        <span
-          className={`w-8 text-center py-[1px] rounded text-[9.5px] mland:text-[8.5px] font-extrabold shrink-0 ${
-            pen === 0
-              ? 'bg-[var(--surface)] text-[var(--ink)] border border-[var(--line)]'
-              : pen === 1
-                ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/35'
-                : 'bg-[var(--red-soft)] text-[var(--red)] border border-[var(--red)]/35'
-          }`}
-        >
-          {slotLabel}
-        </span>
-        <span className="font-bold truncate flex-1 min-w-0 text-[var(--ink)]">
+
+        <span className="flex-1 min-w-0 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold truncate">
+          {isMePlayer && (
+            <span
+              title="ตัวคุณ"
+              aria-label="ตัวคุณ"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 mr-1 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black align-middle"
+            >
+              ★
+            </span>
+          )}
+          {isCap && <span className="inline-block px-1 mr-0.5 rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-bold">C</span>}
+          {(pl.hg || pl.customCreated) ? <span title="เด็กปั้นสโมสร" className="mr-0.5">🌱</span> : null}
           {pl.n}
-          {isCap && <span className="ml-1 text-[9.5px] text-[#b45309] dark:text-[var(--lamp)] font-black">(C)</span>}
-          {isMePlayer && <span className="ml-1 text-[9.5px] text-[var(--g)] font-black">★</span>}
+          {isStarter && slotLabel !== pl.ro && (
+            <span className="ml-1 text-[8.5px] text-[var(--mut)]">
+              ({pl.ro}{pen === 2 ? ' ⚠️' : ''})
+            </span>
+          )}
         </span>
-        <span className="font-extrabold tabular shrink-0" style={{ color: ovColor(pl.ov) }}>
+
+        {(pl.sus || 0) > 0 ? (
+          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[50px] sm:w-[56px]' : 'w-[62px] sm:w-[70px] mland:w-[54px]'}`}>
+            <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
+              <StatIconBadge kind="red" count={pl.sus} size="xs" />
+              {(pl.sus || 0) <= 1 && <span>แบน</span>}
+            </span>
+          </div>
+        ) : pl.inj > 0 ? (
+          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[50px] sm:w-[56px]' : 'w-[62px] sm:w-[70px] mland:w-[54px]'}`}>
+            <span className="text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular text-right">
+              🩹พัก {pl.inj}น
+            </span>
+          </div>
+        ) : (
+          <StaminaBar
+            value={fit}
+            variant="compact"
+            showStatusLabel
+            className={compact ? 'w-[52px] sm:w-[58px] mland:w-[48px]' : 'w-[62px] sm:w-[70px] mland:w-[54px]'}
+          />
+        )}
+
+        <span
+          className="px-1.5 py-0.2 rounded-md text-white text-[10px] mland:text-[9px] font-bold tabular shrink-0"
+          style={{ background: ovColor(pl.ov) }}
+        >
           {pl.ov}
         </span>
-        <StaminaBar value={fit} variant="inline" barWidthClass="w-8 mland:w-6" />
-      </button>
+
+        {canEditRow && !compact && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleQuickSwap(pl.n);
+            }}
+            title={
+              isPicked
+                ? 'ยกเลิกการเลือก'
+                : swapPickName
+                  ? `สลับกับ ${swapPickName.split(' ')[0]}`
+                  : 'กดเพื่อเปลี่ยนตัว/สลับตำแหน่ง'
+            }
+            className={`px-1.5 py-0.5 mland:px-1 mland:py-[1px] rounded-md border text-[9.5px] mland:text-[8px] font-bold whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+              isPicked
+                ? 'bg-[var(--g)] border-[var(--g)] text-white'
+                : isCrossGroupSwap
+                  ? 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
+                  : swapPickName
+                    ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)] hover:bg-[var(--lamp)] hover:text-[#261900]'
+                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)]'
+            }`}
+          >
+            {isPicked ? 'ยกเลิก' : isCrossGroupSwap ? '↔ เปลี่ยน' : swapPickName ? '↔ สลับ' : 'เปลี่ยนตัว'}
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -566,7 +731,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   }}
                   className={`seg-btn ${viewMode === 'H' ? 'seg-btn-active' : ''}`}
                 >
-                  🏠 {homeTeam.name}
+                  {isNeutralVenue ? '🏟️' : '🏠'} {homeTeam.name}
                 </button>
                 <button
                   type="button"
@@ -577,7 +742,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   }}
                   className={`seg-btn ${viewMode === 'A' ? 'seg-btn-active' : ''}`}
                 >
-                  ✈️ {awayTeam.name}
+                  {isNeutralVenue ? '🏟️' : '✈️'} {awayTeam.name}
                 </button>
                 <button
                   type="button"
@@ -592,16 +757,6 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   <span>เทียบ 2 ทีม</span>
                 </button>
               </div>
-
-              {isMgr && tiredStarterCount > 0 && viewMode !== 'compare' && (
-                <button
-                  type="button"
-                  onClick={handleRestTiredStarters}
-                  className="btn btn-xs btn-secondary border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)]"
-                >
-                  🛌 พักตัวล้า ({tiredStarterCount})
-                </button>
-              )}
             </div>
 
             {playerCareerStatus && (
@@ -637,7 +792,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     </div>
                     <div className="space-y-1">
                       {col.list.map((pl, idx) =>
-                        renderPlayerRow(pl, col.slots[idx]?.sp || pl.ro, col.team, true, pl.n === col.cap)
+                        renderPlayerRow(pl, col.slots[idx]?.sp || pl.ro, col.team, true, pl.n === col.cap, { compact: true })
                       )}
                     </div>
                     {col.bench.length > 0 && (
@@ -646,8 +801,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                           ตัวสำรอง ({col.bench.length})
                         </div>
                         <div className="space-y-1">
-                          {col.bench.slice(0, 5).map((pl) =>
-                            renderPlayerRow(pl, pl.ro, col.team, false, false)
+                          {col.bench.slice(0, 7).map((pl) =>
+                            renderPlayerRow(pl, pl.ro, col.team, false, false, { compact: true })
                           )}
                         </div>
                       </div>
@@ -690,39 +845,50 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   )}
                 </div>
 
-                {/* Tactics Summary + Starting XI & Bench List */}
-                <div className="flex flex-col min-h-0 overflow-y-auto p-2.5 sm:p-3 mland:p-2 space-y-2.5 mland:space-y-1.5">
+                {/* Tactics Summary + Squad Lineup Panel (matching SquadTacticsView) */}
+                <div className="flex flex-col min-h-0 sm:overflow-hidden mland:overflow-hidden p-2 sm:p-2.5 mland:p-1.5 gap-2 mland:gap-1.5">
                   {/* Tactics & Quick Adjustment */}
-                  <div className="pb-2 mland:pb-1.5 border-b border-[var(--line)] space-y-1.5 mland:space-y-1">
+                  <div className="shrink-0 pb-2 mland:pb-1.5 border-b border-[var(--line)] space-y-1.5 mland:space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] flex items-center gap-1">
-                        <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--g)]" />
-                        <span>แผนการเล่น &amp; แท็กติก</span>
+                      <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] flex items-center gap-1 min-w-0 truncate">
+                        <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--g)] shrink-0" />
+                        <span className="truncate">แผนการเล่น &amp; แท็กติก</span>
                       </span>
                       {canEditActiveTeam ? (
-                        <select
-                          aria-label="เลือกแผนการเล่น"
-                          value={activeTeam.cf ? '__custom__' : activeTeam.form}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '__custom__') return;
-                            SFX.tap();
-                            onUpdateState((d) => {
-                              const t = d.teams[d.me];
-                              t.cf = undefined;
-                              t.form = val;
-                              t.lu = null;
-                            });
-                          }}
-                          className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] cursor-pointer"
-                        >
-                          {activeTeam.cf && <option value="__custom__">กำหนดเอง</option>}
-                          {Object.keys(FSD).map((f) => (
-                            <option key={f} value={f}>
-                              {f}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={handleRecommendPlan}
+                            title="วิเคราะห์จุดอ่อนคู่แข่งจากผู้ช่วยโค้ช + จัด 11 ตัวจริงที่ความฟิตสูงสุดอัตโนมัติ"
+                            className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--g)] text-white text-[10.5px] mland:text-[9px] font-bold inline-flex items-center gap-1 hover:brightness-110 transition-all cursor-pointer shrink-0 whitespace-nowrap"
+                          >
+                            <Sparkles className="w-3 h-3 shrink-0" />
+                            <span>แนะนำแผน</span>
+                          </button>
+                          <select
+                            aria-label="เลือกแผนการเล่น"
+                            value={activeTeam.cf ? '__custom__' : activeTeam.form}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '__custom__') return;
+                              SFX.tap();
+                              onUpdateState((d) => {
+                                const t = d.teams[d.me];
+                                t.cf = undefined;
+                                t.form = val;
+                                t.lu = null;
+                              });
+                            }}
+                            className="h-7 mland:h-6 px-2 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] cursor-pointer"
+                          >
+                            {activeTeam.cf && <option value="__custom__">กำหนดเอง</option>}
+                            {Object.keys(FSD).map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       ) : (
                         <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--g)]">
                           {activeTeam.cf ? 'กำหนดเอง' : activeTeam.form}
@@ -765,36 +931,157 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       <span>·</span>
                       <span>กว้าง: <b className="text-[var(--ink)]">{WID_LABELS[activeTeam.wid ?? 1]}</b></span>
                     </div>
-                  </div>
 
-                  {/* Starting 11 List */}
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[11px] mland:text-[9.5px] font-bold">
-                      <span className="text-[var(--ink)]">11 ตัวจริง</span>
-                      <span className="text-[var(--mut)] tabular">
-                        ฟิตเฉลี่ย {activeTeam.id === state.me ? myAvgFit : Math.round(activeXi.reduce((s, q) => s + (q.fit ?? 100), 0) / Math.max(1, activeXi.length))}%
-                      </span>
-                    </div>
-                    <div className="space-y-1">
-                      {activeXi.map((pl, idx) =>
-                        renderPlayerRow(pl, activeSlots[idx]?.sp || pl.ro, activeTeam, true, pl.n === activeCap)
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bench List */}
-                  {activeBench.length > 0 && (
-                    <div className="pt-2 border-t border-[var(--line)]/70 space-y-1">
-                      <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--mut)]">
-                        ตัวสำรอง ({activeBench.length})
+                    {canEditActiveTeam && recommendedPlanBanner && (
+                      <div className="p-2 mland:p-1.5 rounded-lg bg-[var(--g-soft)]/70 border border-[var(--g)]/45 text-[10px] mland:text-[8.5px] space-y-0.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-extrabold text-[var(--g)] tabular truncate">
+                            🎯 จัดแผน {recommendedPlanBanner.form} ({AR_T[recommendedPlanBanner.tac]}) · 11 ตัวจริงฟิตเฉลี่ย {recommendedPlanBanner.avgFit}%
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setRecommendedPlanBanner(null)}
+                            aria-label="ปิดสรุปแผนแนะนำ"
+                            className="text-[var(--mut)] hover:text-[var(--ink)] shrink-0 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <div className="text-[var(--ink)]/90 leading-snug">
+                          {recommendedPlanBanner.weaknessSummary}
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        {activeBench.map((pl) =>
-                          renderPlayerRow(pl, pl.ro, activeTeam, false, false)
+                    )}
+                  </div>
+
+                  {/* Squad Panel (matching SquadTacticsView) */}
+                  <div className="flex-1 min-h-[240px] sm:min-h-0 p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden">
+                    {/* Single Compact Header Row: "👥 รายชื่อทีม" + Filter Tabs + Rest/Auto Buttons */}
+                    <div className="flex items-center justify-between gap-1.5 mland:gap-1 mb-1.5 mland:mb-1 shrink-0 min-w-0">
+                      <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0">
+                        👥 รายชื่อทีม
+                      </span>
+
+                      <div className="flex items-center justify-end gap-1 min-w-0 overflow-x-auto no-scrollbar">
+                        <div className="seg-bar shrink-0 !p-[2px]">
+                          {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${activeBench.length}`, 2]] as const).map(([l, k]) => (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => {
+                                SFX.tap();
+                                setLuTab(k);
+                              }}
+                              className={`seg-btn !px-1.5 !py-0.5 mland:!px-1 mland:!py-[1px] !text-[10px] mland:!text-[8.5px] whitespace-nowrap ${
+                                luTab === k ? 'seg-btn-active' : ''
+                              }`}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+
+                        {canEditActiveTeam && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                              <button
+                                type="button"
+                                onClick={handleRestTiredStarters}
+                                title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
+                                className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                                  restNeededStarters.length > 0
+                                    ? 'bg-[var(--red)] border-[var(--red)] text-white hover:brightness-110'
+                                    : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                                }`}
+                              >
+                                🛌 พักล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              title={activeTeam.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
+                              onClick={() => {
+                                SFX.tap();
+                                setSwapPickName(null);
+                                onUpdateState((d) => {
+                                  d.teams[d.me].lu = null;
+                                });
+                                onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                              }}
+                              className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                                !activeTeam.lu
+                                  ? 'bg-[var(--g-soft)] border-[var(--g)]/45 text-[var(--g)]'
+                                  : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
+                              }`}
+                            >
+                              {activeTeam.lu ? '⚡ อัตโนมัติ' : '✓ อัตโนมัติ'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
-                  )}
+
+                    {/* Compact Stamina Spectrum Legend */}
+                    {canEditActiveTeam && (
+                      <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 mb-1 rounded-md bg-[var(--surface-2)]/70 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] shrink-0">
+                        <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
+                        <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
+                          <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
+                            <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold">
+                            <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
+                          </span>
+                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                            <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> ≥75% พร้อม
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Active Swap Selection Bar */}
+                    {canEditActiveTeam && swapPickName && (
+                      <div className="flex items-center justify-between gap-2 px-2 py-1 mb-1 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/55 text-[10px] mland:text-[8.5px] shrink-0">
+                        <span className="font-bold text-[var(--g)] truncate">
+                          กำลังเลือก <b className="text-[var(--ink)]">{swapPickName.split(' ')[0]}</b> — กดเลือกนักเตะอีกคนเพื่อเปลี่ยนตัวหรือสลับตำแหน่ง
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            setSwapPickName(null);
+                          }}
+                          className="px-1.5 py-0.5 rounded border border-[var(--g)]/50 bg-[var(--surface)] text-[var(--ink)] font-bold shrink-0 cursor-pointer"
+                        >
+                          ยกเลิก
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Player Rows */}
+                    <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
+                      {luTab !== 2 &&
+                        activeXi.map((pl, idx) =>
+                          renderPlayerRow(pl, activeSlots[idx]?.sp || pl.ro, activeTeam, true, pl.n === activeCap)
+                        )}
+                      {luTab !== 1 && (
+                        <>
+                          {luTab === 0 && (
+                            <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">
+                              <span>ตัวสำรอง ({activeBench.length} คน)</span>
+                            </div>
+                          )}
+                          {activeBench.length > 0 ? (
+                            activeBench.map((pl) => renderPlayerRow(pl, pl.ro, activeTeam, false, false))
+                          ) : (
+                            <div className="text-center py-3 text-[10.5px] mland:text-[9px] text-[var(--mut)]">
+                              ไม่มีนักเตะสำรองในทีม
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -818,12 +1105,23 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       {assistantReport.rankTitle} · {assistantReport.tierLabel} · {assistantReport.confidenceLabel}
                     </div>
                   </div>
-                  {assistantReport.asstLv === 0 ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] shrink-0">
-                      <Lock className="w-3 h-3" />
-                      <span>ยังไม่ปลดล็อก</span>
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleRecommendPlan}
+                      className="btn btn-xs btn-primary"
+                      title="วิเคราะห์จุดอ่อนคู่แข่ง + จัด 11 ตัวจริงฟิตสูงสุดอัตโนมัติ"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>แนะนำแผน</span>
+                    </button>
+                    {assistantReport.asstLv === 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] shrink-0">
+                        <Lock className="w-3 h-3" />
+                        <span>Lv.0</span>
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 {/* Weaknesses & Key Observations */}
@@ -923,15 +1221,34 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
             {/* Stadium & Attendance */}
             <div className={`space-y-2 mland:space-y-1 ${isMgr ? 'pt-2.5 mland:pt-2 border-t border-[var(--line)]' : ''}`}>
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 shrink-0" />
-                    <span>ข้อมูลสนามแข่งขัน</span>
+              <div className="flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <FacilityUpgradeSvg
+                    kind="st"
+                    stadiumStyle={matchEnv.stadiumStyle}
+                    level={meIsHome && isMgr ? clamp(state.st ?? 1, 1, 10) : clamp(homeTeam.tier * 2 + 4, 2, 10)}
+                    condition={100}
+                    c1={homeKit}
+                    c2={homeTrim}
+                    className="w-[74px] h-[48px] mland:w-[62px] mland:h-[40px] shrink-0"
+                  />
+                  <div className="min-w-0">
+                    <div className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />
+                      <span>ข้อมูลสนามแข่งขัน</span>
+                    </div>
+                    <h3 className="font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] font-display truncate">
+                      {stadiumName}
+                    </h3>
+                    <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                      {stadiumStyleSpec.name}
+                      {stadiumStyleSpec.rainShield === 'full'
+                        ? ' · หลังคาคลุมกันฝน 100%'
+                        : stadiumStyleSpec.rainShield === 'partial'
+                          ? ' · หลังคาคลุมกันฝนบางส่วน'
+                          : ''}
+                    </div>
                   </div>
-                  <h3 className="font-extrabold text-sm sm:text-base mland:text-xs text-[var(--ink)] font-display truncate">
-                    {stadiumName}
-                  </h3>
                 </div>
                 <span className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] tabular shrink-0">
                   ความจุ {attendance.cap.toLocaleString()}
@@ -1030,16 +1347,33 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               </div>
             </div>
 
-            {/* Facility Match Modifiers */}
+            {/* Facility & Venue Match Modifiers */}
             <div className="pt-2.5 mland:pt-2 border-t border-[var(--line)] space-y-1.5 mland:space-y-1">
-              <div className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] flex items-center gap-1">
-                <Sparkles className="w-3.5 h-3.5 text-[var(--lamp)]" />
-                <span>ความได้เปรียบสนาม &amp; สิ่งอำนวยความสะดวก</span>
+              <div className="space-y-0.5">
+                <div className="text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)] flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5 text-[var(--lamp)] shrink-0" />
+                  <span>
+                    {isNeutralVenue
+                      ? 'ความพร้อมสโมสร (สนามกลาง · ไม่มีโบนัสเจ้าบ้าน)'
+                      : 'ความได้เปรียบเจ้าบ้าน & ความพร้อมสโมสร'}
+                  </span>
+                </div>
+                <p className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
+                  {isNeutralVenue
+                    ? 'เตะสนามกลางราชมังฯ ทั้งสองทีมไม่ได้โบนัสเจ้าบ้าน — ผลต่างมาจากความพร้อมศูนย์ฝึก วิเคราะห์เกม และทีมแพทย์ของแต่ละสโมสร'
+                    : 'เฉพาะเจ้าบ้านที่ได้โบนัสเสียงเชียร์และชินพื้นสนาม — ส่วนทีมเยือนนำความพร้อมจากศูนย์ฝึก ห้องวิเคราะห์ และศูนย์แพทย์ของสโมสรติดตัวมาแข่ง'}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-2 mland:gap-1.5">
                 {[
-                  { title: `${homeTeam.name} (เหย้า)`, list: homeFacMods.breakdown },
-                  { title: `${awayTeam.name} (เยือน)`, list: awayFacMods.breakdown }
+                  {
+                    title: isNeutralVenue ? `${homeTeam.name} (สนามกลาง)` : `${homeTeam.name} (เหย้า)`,
+                    list: homeFacMods.breakdown
+                  },
+                  {
+                    title: isNeutralVenue ? `${awayTeam.name} (สนามกลาง)` : `${awayTeam.name} (เยือน)`,
+                    list: awayFacMods.breakdown
+                  }
                 ].map((box) => (
                   <div
                     key={box.title}
@@ -1047,7 +1381,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   >
                     <div className="text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)] truncate">{box.title}</div>
                     <div className="space-y-0.5 text-[10px] mland:text-[8.5px]">
-                      {box.list.slice(0, 4).map((b) => (
+                      {box.list.map((b) => (
                         <div key={b.key} className="flex items-center justify-between gap-1">
                           <span className="text-[var(--mut)] truncate">{b.label}</span>
                           <span

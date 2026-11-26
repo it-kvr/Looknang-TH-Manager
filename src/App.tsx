@@ -10,6 +10,7 @@ import {
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment } from './types/game';
 import { P, clamp, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
+import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement } from './engine/simulation';
@@ -749,8 +750,9 @@ export default function App() {
         const fanScale = clamp(0.65 + Math.log10(Math.max(1000, myFans) / 4000) * 0.42, 0.65, 1.55);
         const stCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'st') / 100);
         const merchCondMul = 0.85 + 0.15 * (getFacilityCondition(d, 'merchLv') / 100);
+        const stStyleSpec = getStadiumStyleSpec(d.club?.stadiumStyle);
         const ticket = isHomeMatch
-          ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * fanScale * tPlan.revMult * (d.promo === 1 ? 1.35 : 1) * stCondMul)
+          ? Math.round((8 + clamp(d.st ?? 1, 1, 10) * 6) * (fanEff / 60) * fanScale * tPlan.revMult * (d.promo === 1 ? 1.35 : 1) * stCondMul * stStyleSpec.vipTicketMult)
           : 0;
         const merchLv = clamp(d.merchLv ?? 1, 0, 10);
         const partnerMerchBoost = getActivePartnerDeals(d).reduce((sum, x) => sum + (x.merchBoost || 0), 0);
