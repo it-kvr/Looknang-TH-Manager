@@ -630,41 +630,53 @@ const renderVarMonitorPanel = (
   };
 
   const drawVarTurfTrack = (
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-    prog: number,
-    sprayColor = 'rgba(74, 222, 128, 0.72)'
+    sx0: number,
+    sy0: number,
+    sx1: number,
+    sy1: number,
+    isActivelySliding: boolean,
+    phaseVal: number,
+    sprayColor = 'rgba(74, 222, 128, 0.78)'
   ) => {
-    if (prog <= 0.05) return;
-    const sx0 = mx(x0);
-    const sy0 = my(y0);
-    const sx1 = mx(x1);
-    const sy1 = my(y1);
-    const curX = sx0 + (sx1 - sx0) * clamp(prog, 0, 1);
-    const curY = sy0 + (sy1 - sy0) * clamp(prog, 0, 1);
+    const dx = sx1 - sx0;
+    const dy = sy1 - sy0;
+    const len = Math.hypot(dx, dy);
+    if (len < 1.8) return;
+    const ux = dx / len;
+    const uy = dy / len;
+    const px = -uy;
+    const py = ux;
+    const trackOff = isStandalone ? 2.1 : 1.35;
+
     ctx.save();
-    // Dark soil turf gouge parallel tracks
-    ctx.strokeStyle = 'rgba(20, 42, 22, 0.62)';
-    ctx.lineWidth = isStandalone ? 3.6 : 2.3;
+    // Soft turf scuff swath beneath parallel cleat grooves
+    ctx.strokeStyle = 'rgba(12, 32, 18, 0.36)';
+    ctx.lineWidth = isStandalone ? 6.4 : 4.2;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(sx0, sy0 - 1.4);
-    ctx.lineTo(curX, curY - 1.4);
-    ctx.moveTo(sx0, sy0 + 1.8);
-    ctx.lineTo(curX, curY + 1.8);
+    ctx.moveTo(sx0, sy0);
+    ctx.lineTo(sx1, sy1);
     ctx.stroke();
 
-    // Flying grass blades / turf divots while sliding
-    if (prog > 0.1 && prog < 0.92) {
-      const angBase = Math.atan2(curY - sy0, curX - sx0) + Math.PI;
+    // Parallel soil cleat gouge tracks perpendicular to slide direction
+    ctx.strokeStyle = 'rgba(22, 42, 20, 0.78)';
+    ctx.lineWidth = isStandalone ? 2.1 : 1.35;
+    ctx.beginPath();
+    ctx.moveTo(sx0 + px * trackOff, sy0 + py * trackOff);
+    ctx.lineTo(sx1 + px * trackOff, sy1 + py * trackOff);
+    ctx.moveTo(sx0 - px * trackOff, sy0 - py * trackOff);
+    ctx.lineTo(sx1 - px * trackOff, sy1 - py * trackOff);
+    ctx.stroke();
+
+    // Flying grass blades / turf divots right behind the cleats while actively sliding
+    if (isActivelySliding) {
+      const angBase = Math.atan2(-dy, -dx);
       for (let k = 0; k < 5; k++) {
-        const a = angBase + (k - 2) * 0.34;
-        const dist = (isStandalone ? 4 : 2.5) + ((prog * 14 + k * 1.9) % (isStandalone ? 11 : 7));
-        ctx.fillStyle = k % 2 === 0 ? sprayColor : 'rgba(133, 94, 52, 0.85)';
+        const a = angBase + (k - 2) * 0.36;
+        const dist = (isStandalone ? 3.5 : 2.2) + ((phaseVal * 26 + k * 2.1) % (isStandalone ? 10 : 6.5));
+        ctx.fillStyle = k % 2 === 0 ? sprayColor : 'rgba(133, 94, 52, 0.88)';
         ctx.beginPath();
-        ctx.arc(curX + Math.cos(a) * dist, curY + Math.sin(a) * dist, isStandalone ? 1.45 : 0.95, 0, Math.PI * 2);
+        ctx.arc(sx1 + Math.cos(a) * dist, sy1 + Math.sin(a) * dist, isStandalone ? 1.45 : 0.95, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -945,7 +957,8 @@ const renderVarMonitorPanel = (
         ctx.stroke();
       }
     } else if (action === 'slide') {
-      const slidePush = arcEnv * r * 0.76;
+      const slideExtend = Math.sin(clamp(prog * 2, 0, 1) * (Math.PI / 2));
+      const slidePush = slideExtend * r * 0.76;
       ctx.translate(cosF * slidePush, sinF * slidePush);
       ctx.rotate((sinF >= 0 ? 0.62 : -0.62) * arcEnv);
       ctx.strokeStyle = `rgba(56, 189, 248, ${(0.9 * (1 - prog * 0.4)).toFixed(2)})`;
@@ -1227,6 +1240,9 @@ const renderVarMonitorPanel = (
   // Decisive moment hits at simT = 0.49 (locked during pct 0.36..0.64!)
   const rawPlayT = clamp(simT / 0.49, 0, 1);
   const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
+  const slideStartPlayT = 1 - Math.pow(1 - clamp(0.2 / 0.49, 0, 1), 2.05);
+  const slideActionProg = simT >= 0.2 ? clamp((simT - 0.2) / 0.58, 0, 1) : 0;
+  const slideExtendNow = Math.sin(clamp(slideActionProg * 2, 0, 1) * (Math.PI / 2));
   const postT = clamp((simT - 0.51) / 0.49, 0, 1);
   const dirSign = attRight ? 1 : -1;
   const agentPixR = (isStandalone ? clamp(scrH * 0.072, 8.2, 12.6) : clamp(scrH * 0.074, 5.2, 7.4)) * modeSizeScale;
@@ -1444,8 +1460,19 @@ const renderVarMonitorPanel = (
       const netRipple = shotProg > 0.68 ? clamp((shotProg - 0.68) / 0.32, 0, 1) : 0;
       drawVarGoalNet(attRight, netRipple, goalY);
 
-      if (playT > 0.28) {
-        drawVarTurfTrack(defStartX, defStartY, defXNow, defYNow, clamp((simT - 0.16) / 0.38, 0, 1));
+      const defFacing = screenAngle(defXNow, defYNow, attXNow, attYNow);
+      if (simT >= 0.2) {
+        const defSlideStartX = defStartX + (defContactX - defStartX) * slideStartPlayT;
+        const defSlideStartY = defStartY + (defContactY - defStartY) * slideStartPlayT;
+        const slidePushPx = slideExtendNow * agentPixR * 0.76;
+        drawVarTurfTrack(
+          mx(defSlideStartX),
+          my(defSlideStartY) + agentPixR * 0.34,
+          mx(defXNow) + Math.cos(defFacing) * slidePushPx,
+          my(defYNow) + Math.sin(defFacing) * slidePushPx + agentPixR * 0.34,
+          !isFreezePhase && simT < 0.51,
+          simT
+        );
       }
 
       const shootOriginX = incX + dirSign * 1.25;
@@ -1510,10 +1537,10 @@ const renderVarMonitorPanel = (
         '#fde68a',
         {
           role: rep?.defRole || 'CB',
-          facing: screenAngle(defXNow, defYNow, attXNow, attYNow),
+          facing: defFacing,
           stride: simT * 14,
-          action: simT >= 0.34 && simT <= 0.64 ? 'clash' : 'run',
-          actionProg: clamp((simT - 0.34) / 0.3, 0, 1)
+          action: simT >= 0.2 && simT <= 0.78 ? 'slide' : 'run',
+          actionProg: slideActionProg
         }
       );
       drawMiniAgent(
@@ -1936,8 +1963,21 @@ const renderVarMonitorPanel = (
 
       drawTopPillBadge('เช็กผู้รักษาประตูปะทะในกรอบ', '#bae6fd');
 
-      if (simT >= 0.24) {
-        drawVarTurfTrack(gkStartX, gkStartY, gkXNow, gkYNow, clamp((simT - 0.24) / 0.42, 0, 1), 'rgba(56, 189, 248, 0.72)');
+      if (simT >= 0.22) {
+        const gkDiveStartPlayT = 1 - Math.pow(1 - clamp(0.22 / 0.49, 0, 1), 2.05);
+        const gkDiveStartMoveT = clamp(gkDiveStartPlayT * 0.98, 0, 1);
+        const gkDiveStartX = gkStartX + (gkTargetX - gkStartX) * gkDiveStartMoveT;
+        const gkDiveStartY = gkStartY + (incY - gkStartY) * gkDiveStartMoveT;
+        const gkDiveShiftPx = gkDiveDir * gkArcNow * agentPixR * 0.78;
+        drawVarTurfTrack(
+          mx(gkDiveStartX),
+          my(gkDiveStartY) + agentPixR * 0.34,
+          mx(gkXNow),
+          my(gkYNow) + gkDiveShiftPx + agentPixR * 0.34,
+          !isFreezePhase && simT < 0.51,
+          simT,
+          'rgba(56, 189, 248, 0.72)'
+        );
       }
 
       if (pct >= 0.36) {
@@ -2035,8 +2075,19 @@ const renderVarMonitorPanel = (
       });
       drawTopPillBadge('เส้นเขตโทษ', '#bae6fd', bxScreen);
 
-      if (simT > 0.22) {
-        drawVarTurfTrack(defStartX, defStartY, defXNow, defYNow, clamp((simT - 0.22) / 0.44, 0, 1));
+      const defFacingPen = screenAngle(defXNow, defYNow, attXNow, attYNow);
+      if (simT >= 0.2) {
+        const defSlideStartX = defStartX + (defContactX - defStartX) * slideStartPlayT;
+        const defSlideStartY = defStartY + (defContactY - defStartY) * slideStartPlayT;
+        const slidePushPx = slideExtendNow * agentPixR * 0.76;
+        drawVarTurfTrack(
+          mx(defSlideStartX),
+          my(defSlideStartY) + agentPixR * 0.34,
+          mx(defXNow) + Math.cos(defFacingPen) * slidePushPx,
+          my(defYNow) + Math.sin(defFacingPen) * slidePushPx + agentPixR * 0.34,
+          !isFreezePhase && simT < 0.51,
+          simT
+        );
       }
 
       if (pct >= 0.36) {
@@ -2096,10 +2147,10 @@ const renderVarMonitorPanel = (
         '#fca5a5',
         {
           role: rep?.defRole || 'CB',
-          facing: screenAngle(defXNow, defYNow, attXNow, attYNow),
+          facing: defFacingPen,
           stride: simT * 14,
-          action: simT >= 0.22 && simT <= 0.68 ? 'slide' : 'run',
-          actionProg: clamp((simT - 0.22) / 0.46, 0, 1)
+          action: simT >= 0.2 && simT <= 0.78 ? 'slide' : 'run',
+          actionProg: slideActionProg
         }
       );
 
@@ -2143,6 +2194,8 @@ const renderVarMonitorPanel = (
 
     drawVisibleOtherGoal();
 
+    const defFacingFoul = screenAngle(defXNow, defYNow, attXNow, attYNow);
+
     if (isDogso) {
       const gLineX = attRight ? 100 : 0;
       drawVarGoalNet(attRight, 0, 50);
@@ -2183,8 +2236,20 @@ const renderVarMonitorPanel = (
         ctx.setLineDash([]);
         ctx.restore();
       }
-    } else if (simT > 0.22) {
-      drawVarTurfTrack(defStartX, defStartY, defXNow, defYNow, clamp((simT - 0.22) / 0.44, 0, 1));
+    }
+
+    if (!isReckless && simT >= 0.2) {
+      const defSlideStartX = defStartX + (defContactX - defStartX) * slideStartPlayT;
+      const defSlideStartY = defStartY + (defContactY - defStartY) * slideStartPlayT;
+      const slidePushPx = slideExtendNow * agentPixR * 0.76;
+      drawVarTurfTrack(
+        mx(defSlideStartX),
+        my(defSlideStartY) + agentPixR * 0.34,
+        mx(defXNow) + Math.cos(defFacingFoul) * slidePushPx,
+        my(defYNow) + Math.sin(defFacingFoul) * slidePushPx + agentPixR * 0.34,
+        !isFreezePhase && simT < 0.51,
+        simT
+      );
     }
 
     if (pct >= 0.36) {
@@ -2250,7 +2315,7 @@ const renderVarMonitorPanel = (
       '#fde047',
       {
         role: rep?.defRole || 'CB',
-        facing: screenAngle(defXNow, defYNow, attXNow, attYNow),
+        facing: defFacingFoul,
         stride: simT * 15,
         action: isReckless
           ? simT >= 0.32
@@ -2258,14 +2323,14 @@ const renderVarMonitorPanel = (
             : simT >= 0.14
               ? 'leap'
               : 'run'
-          : simT >= 0.22 && simT <= 0.68
+          : simT >= 0.2 && simT <= 0.78
             ? 'slide'
             : 'run',
         actionProg: isReckless
           ? simT >= 0.32
             ? clamp((simT - 0.32) / 0.36, 0, 1)
             : clamp((simT - 0.14) / 0.18, 0, 1)
-          : clamp((simT - 0.22) / 0.46, 0, 1)
+          : slideActionProg
       }
     );
 

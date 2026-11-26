@@ -1436,8 +1436,8 @@ export const FormationPitch: React.FC<{
             {/* Top-Left: MOTM Crown and/or Captain Badge */}
             {meta?.isMotm && (
               <g transform={`translate(${cx - 13.5},${cy - 14})`}>
-                <circle r="6" fill="#facc15" stroke="#fff" strokeWidth="1.1" />
-                <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#1c1300" />
+                <circle r="6" fill="#111418" stroke="#facc15" strokeWidth="1.15" />
+                <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#fde047" />
               </g>
             )}
             {isCaptain && (() => {

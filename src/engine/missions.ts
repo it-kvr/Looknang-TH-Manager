@@ -28,6 +28,16 @@ export const ovColor = (v: number): string => {
   return '#64748b';
 };
 
+export const ovTextColorClass = (v: number): string => {
+  if (v >= 100) return 'text-pink-600 dark:text-pink-400';
+  if (v >= 90) return 'text-[#b45309] dark:text-[#fde047]';
+  if (v >= 80) return 'text-violet-700 dark:text-violet-300';
+  if (v >= 70) return 'text-emerald-700 dark:text-emerald-400';
+  if (v >= 60) return 'text-teal-700 dark:text-teal-300';
+  if (v >= 50) return 'text-sky-700 dark:text-sky-300';
+  return 'text-[var(--mut)]';
+};
+
 export const statBarColor = (v: number): string => {
   if (v >= 100) return '#ec4899';
   if (v >= 90) return '#f59e0b';

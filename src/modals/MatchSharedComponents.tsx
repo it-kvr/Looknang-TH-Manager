@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type {
   ArchivedStreamComment,
   GameState,
@@ -29,6 +29,22 @@ import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../
 import { StatIconBadge } from '../components/StatIconBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
+
+const ftRatingTextColor = (rt: number | null): string => {
+  if (rt == null) return 'text-[var(--mut)]/55';
+  if (rt >= 8.0) return 'text-[#b45309] dark:text-[#fde047]';
+  if (rt >= 7.0) return 'text-emerald-600 dark:text-emerald-400';
+  if (rt >= 6.0) return 'text-sky-600 dark:text-sky-400';
+  return 'text-rose-600 dark:text-rose-400';
+};
+
+const ftRatingDarkTextColor = (rt: number): string => {
+  if (rt >= 8.0) return 'text-[#fde047]';
+  if (rt >= 7.0) return 'text-emerald-300';
+  if (rt >= 6.0) return 'text-sky-300';
+  return 'text-rose-300';
+};
 
 export interface MatchSubLogInfo {
   teamId: number;
@@ -614,9 +630,11 @@ export const MatchStatsPanel: React.FC<{
             <ClubCrest name={homeOrig.name} size={20} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
           </div>
           <span className="leading-tight break-words text-[var(--ink)]">{homeOrig.name}</span>
+          {homeId === state.me && <MyTeamBadge size="2xs" />}
         </div>
         <span className="text-[10px] mland:text-[9px] text-[var(--mut)] font-extrabold uppercase tracking-wider shrink-0">📊 สถิติ</span>
         <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 text-right">
+          {awayId === state.me && <MyTeamBadge size="2xs" />}
           <span className="leading-tight break-words text-[var(--ink)]">{awayOrig.name}</span>
           <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
             <ClubCrest name={awayOrig.name} size={20} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
@@ -791,6 +809,7 @@ export const MatchTimelinePanel: React.FC<{
     <div className={standalone ? '' : 'border-t border-[var(--line)]'}>
       <div className="px-3 sm:px-3.5 mland:px-2.5 py-1.5 mland:py-1 bg-[var(--surface-2)]/50 border-b border-[var(--line)]/65 grid grid-cols-[1fr_auto_1fr] items-center gap-1.5">
         <div className="flex items-center justify-end gap-1.5 min-w-0">
+          {homeId === state.me && <MyTeamBadge size="2xs" />}
           <span className="text-[10px] mland:text-[9px] font-bold text-[var(--g)] truncate">เหย้า</span>
           <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
             <ClubCrest name={homeOrig.name} size={16} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
@@ -804,6 +823,7 @@ export const MatchTimelinePanel: React.FC<{
             <ClubCrest name={awayOrig.name} size={16} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
           </div>
           <span className="text-[10px] mland:text-[9px] font-bold text-amber-600 dark:text-amber-400 truncate">เยือน</span>
+          {awayId === state.me && <MyTeamBadge size="2xs" />}
         </div>
       </div>
 
@@ -1172,6 +1192,7 @@ export const MatchBroadcastHeader: React.FC<{
               className={`text-right min-w-0 flex-1 ${onInspectTeam ? 'cursor-pointer hover:opacity-80 transition-opacity' : 'cursor-default'}`}
             >
               <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center justify-end gap-1.5 transition-colors duration-200 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 dark:text-rose-300' : 'text-[#8a5b00] dark:text-[var(--lamp)]') : homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                {homeId === state.me && <MyTeamBadge size="md" />}
                 <span className="break-words">{homeOrig.name}</span>
               </div>
               <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
@@ -1181,8 +1202,6 @@ export const MatchBroadcastHeader: React.FC<{
                   </span>
                 )}
                 {goalFlashInfo?.side === 'H' && <span className="text-[var(--mut)]/50">·</span>}
-                {homeId === state.me && <span className="text-[var(--g)] font-extrabold">★ คุณ</span>}
-                {homeId === state.me && <span className="text-[var(--mut)]/50">·</span>}
                 <span className="text-[var(--mut)]">เหย้า</span>
               </div>
             </button>
@@ -1300,11 +1319,10 @@ export const MatchBroadcastHeader: React.FC<{
             >
               <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center gap-1.5 transition-colors duration-200 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 dark:text-rose-300' : 'text-[#8a5b00] dark:text-[var(--lamp)]') : awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
                 <span className="break-words">{awayOrig.name}</span>
+                {awayId === state.me && <MyTeamBadge size="md" />}
               </div>
               <div className="mt-0.5 flex items-center gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
                 <span className="text-[var(--mut)]">เยือน</span>
-                {awayId === state.me && <span className="text-[var(--mut)]/50">·</span>}
-                {awayId === state.me && <span className="text-[var(--g)] font-extrabold">★ คุณ</span>}
                 {goalFlashInfo?.side === 'A' && <span className="text-[var(--mut)]/50">·</span>}
                 {goalFlashInfo?.side === 'A' && (
                   <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
@@ -1435,12 +1453,24 @@ export const FullTimeMatchStage: React.FC<{
   onOpenVarReplay,
   onInspectPlayer
 }) => {
-  const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>('all');
+  const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>(() =>
+    homeOrig.id === state.me ? 'H' : awayOrig.id === state.me ? 'A' : 'all'
+  );
   const [ftPickedPlayer, setFtPickedPlayer] = useState<string | null>(null);
   const [ftRosterTeam, setFtRosterTeam] = useState<'H' | 'A'>(() =>
     homeOrig.id === state.me ? 'H' : awayOrig.id === state.me ? 'A' : 'H'
   );
   const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'sub'>('all');
+
+  useEffect(() => {
+    const myPitchSide: 'all' | 'H' | 'A' =
+      homeOrig.id === state.me ? 'H' : awayOrig.id === state.me ? 'A' : 'all';
+    const myRosterSide: 'H' | 'A' =
+      homeOrig.id === state.me ? 'H' : awayOrig.id === state.me ? 'A' : 'H';
+    setFtPitchMode(myPitchSide);
+    setFtRosterTeam(myRosterSide);
+    setFtPickedPlayer(null);
+  }, [homeOrig.id, awayOrig.id, state.me]);
 
   const leftStageScrollRef = useRef<HTMLDivElement | null>(null);
   const rightStageScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1676,21 +1706,12 @@ export const FullTimeMatchStage: React.FC<{
     });
 
     const gridColsCls =
-      'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_46px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_42px]';
+      'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_34px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_28px]';
 
     const renderPlayerRow = (item: FtPlayerRow) => {
       const isPicked = ftPickedPlayer === item.name;
       const rt = item.rt;
-      const rtTone =
-        rt == null
-          ? 'bg-[var(--surface-2)]/70 text-[var(--mut)] border border-[var(--line)]/70'
-          : item.isMotm || rt >= 8.0
-            ? 'bg-amber-400 text-[#1c1300]'
-            : rt >= 7.0
-              ? 'bg-emerald-500/18 text-emerald-700 dark:text-emerald-300 border border-emerald-500/35'
-              : rt < 6.0
-                ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
-                : 'bg-[var(--surface-2)] text-[var(--ink)] border border-[var(--line)]';
+      const rtColorCls = ftRatingTextColor(rt);
       const hasAnyStat =
         item.goals > 0 ||
         item.assists > 0 ||
@@ -1769,7 +1790,7 @@ export const FullTimeMatchStage: React.FC<{
             {item.isMotm && (
               <span
                 title="Man of the Match"
-                className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded bg-amber-400 text-[#1c1300] text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 shadow-2xs"
+                className="inline-flex items-center gap-0.5 px-1.5 py-[1px] rounded bg-[#111418] border border-amber-400/60 text-[#fde047] text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 shadow-2xs"
               >
                 <span>👑</span>
                 <span>MOTM</span>
@@ -1831,8 +1852,8 @@ export const FullTimeMatchStage: React.FC<{
 
           {/* 6. เรตติ้ง */}
           <div className="flex items-center justify-start">
-            <span className={`px-1.5 py-[1px] rounded-md text-[10px] mland:text-[8.5px] font-extrabold tabular shrink-0 ${rtTone}`}>
-              {rt != null ? `⭐ ${rt.toFixed(1)}` : '—'}
+            <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${rtColorCls}`}>
+              {rt != null ? rt.toFixed(1) : '—'}
             </span>
           </div>
         </button>
@@ -1863,6 +1884,7 @@ export const FullTimeMatchStage: React.FC<{
                 <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
               </span>
               <span className="truncate">{homeOrig.name}</span>
+              {homeId === state.me && <MyTeamBadge size="2xs" />}
               <span className={`text-[9px] mland:text-[7.5px] px-1 rounded tabular shrink-0 ${ftRosterTeam === 'H' ? 'bg-white/20 text-white' : 'bg-black/6 dark:bg-white/10 text-[var(--mut)]'}`}>
                 เหย้า
               </span>
@@ -1885,6 +1907,7 @@ export const FullTimeMatchStage: React.FC<{
                 <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
               </span>
               <span className="truncate">{awayOrig.name}</span>
+              {awayId === state.me && <MyTeamBadge size="2xs" />}
               <span className={`text-[9px] mland:text-[7.5px] px-1 rounded tabular shrink-0 ${ftRosterTeam === 'A' ? 'bg-white/20 text-white' : 'bg-black/6 dark:bg-white/10 text-[var(--mut)]'}`}>
                 เยือน
               </span>
@@ -1892,7 +1915,10 @@ export const FullTimeMatchStage: React.FC<{
           </div>
 
           <div ref={ftPlayersScrollRef} className="flex-1 min-h-0 overflow-y-auto">
-            <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--g-soft)] border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]">
+            <div
+              className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+              style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+            >
               <span>ตัวจริง</span>
               <span className="tabular">{starterRows.length} คน</span>
             </div>
@@ -1949,26 +1975,28 @@ export const FullTimeMatchStage: React.FC<{
                   title={homeOrig.name}
                   aria-label={homeOrig.name}
                   onClick={() => setFtPitchMode('H')}
-                  className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                  className={`relative h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                     ftPitchMode === 'H'
                       ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
                       : 'opacity-80 hover:opacity-100 hover:bg-white/10'
                   }`}
                 >
                   <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                  {homeOrig.id === state.me && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
                 </button>
                 <button
                   type="button"
                   title={awayOrig.name}
                   aria-label={awayOrig.name}
                   onClick={() => setFtPitchMode('A')}
-                  className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                  className={`relative h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                     ftPitchMode === 'A'
                       ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
                       : 'opacity-80 hover:opacity-100 hover:bg-white/10'
                   }`}
                 >
                   <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                  {awayOrig.id === state.me && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
                 </button>
               </div>
 
@@ -1994,14 +2022,14 @@ export const FullTimeMatchStage: React.FC<{
                         <PositionBadge role={pickedInfo.role} size="2xs" />
                         <span className="truncate">{pickedInfo.name}</span>
                         {pickedInfo.isMotm && (
-                          <span className="px-1.5 py-0.2 rounded bg-[#facc15] text-[#1c1300] text-[9px] font-black shrink-0">
+                          <span className="px-1.5 py-[1px] rounded bg-[#111418] border border-amber-400/60 text-[#fde047] text-[9px] font-black shrink-0">
                             👑 MOTM
                           </span>
                         )}
                       </div>
                       <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular mt-0.5">
                         <span>{pickedInfo.team.name}</span>
-                        <span className="px-1.5 rounded bg-[#facc15]/20 text-[#facc15] font-extrabold">⭐ {pickedInfo.rt.toFixed(1)}</span>
+                        <span className={`font-extrabold ${ftRatingDarkTextColor(pickedInfo.rt)}`}>{pickedInfo.rt.toFixed(1)}</span>
                         {pickedInfo.gl > 0 && <StatIconBadge kind="goal" count={pickedInfo.gl} size="sm" />}
                         {pickedInfo.as > 0 && <StatIconBadge kind="assist" count={pickedInfo.as} size="sm" />}
                         {pickedInfo.cleanSheet && <StatIconBadge kind="cleansheet" count={1} size="xs" title={pickedInfo.saves > 0 ? `คลีนชีต · เซฟ ${pickedInfo.saves} ครั้ง` : 'คลีนชีต'} />}
@@ -2108,13 +2136,7 @@ export const FullTimeMatchStage: React.FC<{
                   const subAs = evs.filter((e) => !e.og && e.t === subTeam.id && e.as === sb.inPlayer).length;
                   const subCards = fullTimeAnalysis.cards.filter((c) => c.t === subTeam.id && c.who === sb.inPlayer);
                   const subTeamKit = subTeam.id === homeId ? homeKit : awayKit;
-                  const rtPillCls = isSubMotm
-                    ? 'bg-[#1c1300] text-[#facc15]'
-                    : subRt >= 7.5
-                      ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/35'
-                      : subRt >= 6.8
-                        ? 'bg-black/45 text-emerald-300 border border-white/10'
-                        : 'bg-black/45 text-amber-200 border border-white/10';
+                  const subRtColorCls = ftRatingDarkTextColor(subRt);
                   return (
                     <button
                       key={idx}
@@ -2122,7 +2144,7 @@ export const FullTimeMatchStage: React.FC<{
                       onClick={() => setFtPickedPlayer((prev) => (prev === sb.inPlayer ? null : sb.inPlayer))}
                       className={`shrink-0 inline-flex items-center gap-2 mland:gap-1.5 pl-1.5 pr-2 py-1.5 mland:pl-1 mland:pr-1.5 mland:py-1 rounded-xl border text-left tabular cursor-pointer transition-all whitespace-nowrap ${
                         isSubMotm
-                          ? 'bg-gradient-to-r from-[#facc15] to-[#eab308] text-[#1c1300] border-white shadow-md font-extrabold'
+                          ? 'bg-[#111418] text-white border-amber-400/80 shadow-md font-extrabold'
                           : isPicked
                             ? 'bg-sky-500/24 border-sky-400 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.35)]'
                             : 'bg-white/7 border-white/14 hover:bg-white/13 hover:border-white/25 text-white/95'
@@ -2130,7 +2152,7 @@ export const FullTimeMatchStage: React.FC<{
                     >
                       <span
                         className="w-1 self-stretch rounded-full shrink-0"
-                        style={{ backgroundColor: isSubMotm ? '#1c1300' : subTeamKit }}
+                        style={{ backgroundColor: isSubMotm ? '#facc15' : subTeamKit }}
                       />
                       {subPl && (
                         <MatchPlayerThumb
@@ -2140,8 +2162,8 @@ export const FullTimeMatchStage: React.FC<{
                           kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
                           trimColor={subPl.pos === 'GK' ? undefined : (subTeam.id === homeId ? homeTrim : awayTrim)}
                           size="sm"
-                          dark={!isSubMotm}
-                          ringClassName={isSubMotm ? 'ring-[#1c1300]/50' : 'ring-white/25'}
+                          dark={true}
+                          ringClassName={isSubMotm ? 'ring-amber-400' : 'ring-white/25'}
                         />
                       )}
                       <div className="min-w-0 flex flex-col justify-center gap-1 mland:gap-0.5">
@@ -2155,18 +2177,26 @@ export const FullTimeMatchStage: React.FC<{
                           <span className="font-extrabold text-[11px] mland:text-[9px] max-w-[90px] truncate">
                             {sb.inPlayer.split(' ')[0]}
                           </span>
-                          <span className={`text-[9px] mland:text-[7.5px] font-semibold shrink-0 ${isSubMotm ? 'text-[#1c1300]/75' : 'text-white/55'}`}>
+                          <span className="text-[9px] mland:text-[7.5px] font-semibold shrink-0 text-white/55">
                             #{subNo}
                           </span>
-                          {isSubMotm && <span className="text-[10px] leading-none shrink-0" title="Man of the Match">👑</span>}
+                          {isSubMotm && (
+                            <span
+                              title="Man of the Match"
+                              className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded bg-[#111418] border border-amber-400/60 text-[#fde047] text-[8px] font-black leading-none shrink-0"
+                            >
+                              <span>👑</span>
+                              <span>MOTM</span>
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-1.5 text-[9px] mland:text-[7.5px] leading-none">
-                          <span className={`inline-flex items-center gap-0.5 font-bold ${isSubMotm ? 'text-emerald-950' : 'text-emerald-300'}`}>
+                          <span className="inline-flex items-center gap-0.5 font-bold text-emerald-300">
                             <StatIconBadge kind="subIn" size="xs" />
                             <span>{sb.m}&apos;</span>
                           </span>
                           <span
-                            className={`inline-flex items-center gap-0.5 font-medium ${isSubMotm ? 'text-rose-950/85' : 'text-rose-300/85'}`}
+                            className="inline-flex items-center gap-0.5 font-medium text-rose-300/85"
                             title={`เปลี่ยนออก: ${sb.outPlayer}`}
                           >
                             <StatIconBadge kind="subOut" size="xs" />
@@ -2183,7 +2213,7 @@ export const FullTimeMatchStage: React.FC<{
                           )}
                         </div>
                       </div>
-                      <span className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8px] font-black shrink-0 ${rtPillCls}`}>
+                      <span className={`ml-0.5 text-[11px] mland:text-[9px] font-black tabular leading-none shrink-0 ${subRtColorCls}`}>
                         {subRt.toFixed(1)}
                       </span>
                     </button>

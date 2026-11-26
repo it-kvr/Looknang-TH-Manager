@@ -35,13 +35,15 @@ import {
 import { getMatchBroadcastChannel } from '../engine/liveStreamChat';
 import { buildMatchEnvironment, getStadiumDisplayName, type MatchFixtureKind } from '../engine/matchEnv';
 import { buildAssistantCoachNotes, recommendMatchPlanAndLineup, type AssistantAppliedPlanResult } from '../engine/assistantNotes';
-import { ovColor } from '../engine/missions';
+import { ovColor, ovTextColorClass } from '../engine/missions';
 import { ClubCrest, FormationPitch, PlayerFace } from '../components/SvgVisuals';
+import { MatchPlayerThumb } from './MatchSharedComponents';
 import { FacilityUpgradeSvg, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
 
 interface PreMatchModalProps {
   state: GameState;
@@ -495,10 +497,24 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const canEditRow = isMgr && team.id === state.me && viewMode !== 'compare' && !unavailable;
     const isPicked = swapPickName === pl.n;
     const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
-    const starterWarnCls = isStarter && !unavailable ? stMeta.rowTint : '';
+    const isHomeSide = team.id === homeId;
+    const kitColor = pl.pos === 'GK' ? (isHomeSide ? homeGkKit : awayGkKit) : (isHomeSide ? homeKit : awayKit);
+    const trimColor = pl.pos === 'GK' ? undefined : (isHomeSide ? homeTrim : awayTrim);
+    const rowStaminaTint =
+      isStarter && !unavailable
+        ? fit < 65
+          ? 'bg-rose-500/[0.08] hover:bg-rose-500/[0.13]'
+          : fit < 75
+            ? 'bg-amber-500/[0.06] hover:bg-amber-500/[0.11]'
+            : ''
+        : '';
 
     const pickedIsStarter = swapPickName ? myXiNameSet.has(swapPickName) : false;
     const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
+    const showSwapCol = canEditRow && !compact;
+    const gridColsCls = showSwapCol
+      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_24px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_22px_auto]'
+      : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_54px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_24px]';
 
     return (
       <div
@@ -512,73 +528,81 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
             handleQuickSwap(pl.n);
           }
         }}
-        className={`w-full flex items-center gap-1 px-1.5 py-1 mland:py-0.5 rounded-lg border text-left select-none transition-all ${
+        className={`w-full grid ${gridColsCls} items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
           isPicked
-            ? 'bg-[var(--g-soft)] border-[var(--g)] ring-2 ring-[var(--g)]/55'
+            ? 'bg-[var(--g-soft)] ring-1 ring-inset ring-[var(--g)]'
             : isMePlayer
-              ? 'bg-[var(--lamp-soft)]/75 border-[var(--lamp)] ring-1 ring-[var(--lamp)]/45'
-              : starterWarnCls || 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'
-        } ${unavailable ? 'opacity-70' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
+              ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70'
+              : rowStaminaTint || 'hover:bg-[var(--surface-2)]/65'
+        } ${unavailable ? 'opacity-72' : ''} ${canEditRow ? 'cursor-pointer' : 'cursor-default'}`}
       >
-        <span className="flex items-center gap-0.5 sm:gap-1 shrink-0 py-0.5 pr-0.5 rounded [&_svg]:w-5 [&_svg]:h-auto mland:[&_svg]:w-4 mland:[&_svg]:h-auto">
-          <PlayerFace player={pl} team={team} state={state} size={22} />
-          <PositionBadge role={slotLabel} size="xs" />
-          <span className="text-[9.5px] mland:text-[8.5px] font-bold tabular text-[var(--mut)] w-[22px] mland:w-[19px] text-left shrink-0 whitespace-nowrap">
-            #{no}
-          </span>
-        </span>
+        <div className="flex items-center justify-start">
+          <MatchPlayerThumb
+            player={pl}
+            team={team}
+            state={state}
+            kitColor={kitColor}
+            trimColor={trimColor}
+            size="xs"
+          />
+        </div>
 
-        <span className="flex-1 min-w-0 flex items-center gap-1 text-[10.5px] mland:text-[9.5px] leading-tight font-semibold">
-          <span className="truncate">{pl.n}</span>
+        <div className="flex items-center justify-start">
+          <PositionBadge role={slotLabel} size="2xs" />
+        </div>
+
+        <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+          #{no}
+        </div>
+
+        <div className="flex items-center justify-start gap-1 min-w-0">
+          <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">{pl.n}</span>
           {isCap && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
           {isMePlayer && (
             <span
               title="ตัวคุณ"
               aria-label="ตัวคุณ"
-              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
+              className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8px] font-black shrink-0"
             >
               ★
             </span>
           )}
-          {(pl.hg || pl.customCreated) ? <span title="เด็กปั้นสโมสร" className="shrink-0">🌱</span> : null}
+          {(pl.hg || pl.customCreated) ? <span title="เด็กปั้นสโมสร" className="text-[10px] mland:text-[8.5px] shrink-0">🌱</span> : null}
           {isStarter && slotLabel !== pl.ro && (
-            <span className="text-[8.5px] text-[var(--mut)] shrink-0">
+            <span className="text-[8.5px] mland:text-[7.5px] text-[var(--mut)] shrink-0">
               ({pl.ro}{pen === 2 ? ' ⚠️' : ''})
             </span>
           )}
-        </span>
+        </div>
 
-        {(pl.sus || 0) > 0 ? (
-          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[46px] sm:w-[52px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}`}>
-            <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
+        <div className="flex items-center justify-start min-w-0">
+          {(pl.sus || 0) > 0 ? (
+            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
               <StatIconBadge kind="red" count={pl.sus} size="xs" />
               {(pl.sus || 0) <= 1 && <span>แบน</span>}
             </span>
-          </div>
-        ) : pl.inj > 0 ? (
-          <div className={`flex flex-col items-stretch justify-center shrink-0 ${compact ? 'w-[46px] sm:w-[52px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}`}>
-            <span className="inline-flex items-center justify-end gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
+          ) : pl.inj > 0 ? (
+            <span className="inline-flex items-center gap-0.5 text-[9.5px] mland:text-[8px] font-bold text-[var(--red)] tabular">
               <StatIconBadge kind="injury" size="xs" />
               <span>พัก {pl.inj}น</span>
             </span>
-          </div>
-        ) : (
-          <StaminaBar
-            value={fit}
-            variant="compact"
-            showStatusLabel
-            className={compact ? 'w-[46px] sm:w-[52px] mland:w-[44px]' : 'w-[52px] sm:w-[58px] mland:w-[46px]'}
-          />
-        )}
+          ) : (
+            <StaminaBar
+              value={fit}
+              variant="compact"
+              showStatusLabel
+              className="w-full"
+            />
+          )}
+        </div>
 
-        <span
-          className="px-1.5 py-0.2 rounded-md text-white text-[10px] mland:text-[9px] font-bold tabular shrink-0"
-          style={{ background: ovColor(pl.ov) }}
-        >
-          {pl.ov}
-        </span>
+        <div className="flex items-center justify-start">
+          <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(pl.ov)}`}>
+            {pl.ov}
+          </span>
+        </div>
 
-        {canEditRow && !compact && (
+        {showSwapCol && (
           <button
             type="button"
             onClick={(e) => {
@@ -599,7 +623,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   ? 'bg-[var(--g-soft)] border-[var(--g)]/60 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
                   : swapPickName
                     ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/60 text-[#8a5b00] dark:text-[var(--lamp)] hover:bg-[var(--lamp)] hover:text-[#261900]'
-                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)]'
+                    : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)]'
             }`}
           >
             {isPicked ? 'ยกเลิก' : isCrossGroupSwap ? '↔ เปลี่ยน' : swapPickName ? '↔ สลับ' : 'สลับ'}
@@ -642,12 +666,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               }`}
             >
               <div className="text-right min-w-0 flex-1">
-                <div className="flex items-center justify-end gap-1 min-w-0">
-                  {meIsHome && (
-                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7px] font-black shrink-0">
-                      คุณ
-                    </span>
-                  )}
+                <div className="flex items-center justify-end gap-1.5 min-w-0">
+                  {meIsHome && <MyTeamBadge size="sm" />}
                   <span
                     className={`font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] truncate font-display ${
                       meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'
@@ -694,7 +714,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 <ClubCrest name={awayTeam.name} size={44} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1 min-w-0">
+                <div className="flex items-center gap-1.5 min-w-0">
                   <span
                     className={`font-extrabold text-xs sm:text-[13px] mland:text-[10.5px] truncate font-display ${
                       !meIsHome ? 'text-[var(--g)]' : 'text-[var(--ink)]'
@@ -702,11 +722,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   >
                     {awayTeam.name}
                   </span>
-                  {!meIsHome && (
-                    <span className="px-1 py-[1px] rounded bg-[var(--g)] text-white text-[8.5px] mland:text-[7px] font-black shrink-0">
-                      คุณ
-                    </span>
-                  )}
+                  {!meIsHome && <MyTeamBadge size="sm" />}
                 </div>
                 <div className="mt-0.5 text-[9.5px] mland:text-[7.5px] text-[var(--mut)] flex items-center gap-1 tabular">
                   <span className="font-bold text-[var(--ink)]">XI {awayXiOv}</span>
@@ -796,9 +812,11 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                         setSwapPickName(null);
                         setViewMode('H');
                       }}
-                      className="seg-btn truncate"
+                      className="seg-btn inline-flex items-center justify-center gap-1 truncate"
                     >
-                      {isNeutralVenue ? '🏟️' : '🏠'} {homeTeam.name}
+                      <span>{isNeutralVenue ? '🏟️' : '🏠'}</span>
+                      <span className="truncate">{homeTeam.name}</span>
+                      {meIsHome && <MyTeamBadge size="2xs" />}
                     </button>
                     <button
                       type="button"
@@ -807,9 +825,11 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                         setSwapPickName(null);
                         setViewMode('A');
                       }}
-                      className="seg-btn truncate"
+                      className="seg-btn inline-flex items-center justify-center gap-1 truncate"
                     >
-                      {isNeutralVenue ? '🏟️' : '✈️'} {awayTeam.name}
+                      <span>{isNeutralVenue ? '🏟️' : '✈️'}</span>
+                      <span className="truncate">{awayTeam.name}</span>
+                      {!meIsHome && <MyTeamBadge size="2xs" />}
                     </button>
                     <button
                       type="button"
@@ -830,32 +850,41 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   { side: 'H' as const, team: homeTeam, list: homeXi, slots: homeSlots, bench: homeBench, cap: homeCap, ov: homeXiOv },
                   { side: 'A' as const, team: awayTeam, list: awayXi, slots: awaySlots, bench: awayBench, cap: awayCap, ov: awayXiOv }
                 ].map((col) => (
-                  <div key={col.side} className="space-y-2 mland:space-y-1.5 min-w-0">
-                    <div className="pb-1.5 border-b border-[var(--line)] flex items-center justify-between gap-2">
+                  <div key={col.side} className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex flex-col min-w-0">
+                    <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)]/85 border-b border-[var(--line)] flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <ClubCrest name={col.team.name} size={20} team={col.team} club={state.club} isMyClub={col.team.id === state.me && isMgr} />
                         <span className="font-extrabold text-xs mland:text-[10.5px] truncate">{col.team.name}</span>
+                        {col.team.id === state.me && <MyTeamBadge size="2xs" />}
                       </div>
                       <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-bold tabular shrink-0">
                         {col.team.cf ? 'กำหนดเอง' : col.team.form} · {AR_T[col.team.tac]} · XI {col.ov}
                       </span>
                     </div>
-                    <div className="space-y-1">
+                    <div
+                      className="px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+                    >
+                      <span>ตัวจริง</span>
+                      <span className="tabular">{col.list.length} คน</span>
+                    </div>
+                    <div className="divide-y divide-[var(--line)]/50">
                       {col.list.map((pl, idx) =>
                         renderPlayerRow(pl, col.slots[idx]?.sp || pl.ro, col.team, true, pl.n === col.cap, { compact: true })
                       )}
                     </div>
                     {col.bench.length > 0 && (
-                      <div className="pt-1.5 border-t border-[var(--line)]/60 space-y-1">
-                        <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">
-                          ตัวสำรอง ({col.bench.length})
+                      <>
+                        <div className="px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+                          <span>ตัวสำรอง</span>
+                          <span className="tabular text-[var(--mut)]">{col.bench.length} คน</span>
                         </div>
-                        <div className="space-y-1">
+                        <div className="divide-y divide-[var(--line)]/50">
                           {col.bench.slice(0, 7).map((pl) =>
                             renderPlayerRow(pl, pl.ro, col.team, false, false, { compact: true })
                           )}
                         </div>
-                      </div>
+                      </>
                     )}
                   </div>
                 ))}
@@ -876,13 +905,14 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       }}
                       title={homeTeam.name}
                       aria-label={homeTeam.name}
-                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                      className={`relative h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                         viewMode === 'H'
                           ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
                           : 'opacity-80 hover:opacity-100 hover:bg-white/10'
                       }`}
                     >
                       <ClubCrest name={homeTeam.name} size={32} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+                      {meIsHome && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
                     </button>
                     <button
                       type="button"
@@ -893,13 +923,14 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       }}
                       title={awayTeam.name}
                       aria-label={awayTeam.name}
-                      className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                      className={`relative h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                         viewMode === 'A'
                           ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
                           : 'opacity-80 hover:opacity-100 hover:bg-white/10'
                       }`}
                     >
                       <ClubCrest name={awayTeam.name} size={32} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+                      {!meIsHome && <MyTeamBadge size="2xs" className="absolute -top-0.5 -right-0.5 ring-1 ring-[#05180e]" />}
                     </button>
                     <button
                       type="button"
@@ -1043,106 +1074,120 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                     )}
                   </div>
 
-                  {/* Squad Panel (matching SquadTacticsView) */}
-                  <div className="flex-1 min-h-[240px] sm:min-h-0 p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden">
-                    {/* Single Compact Header Row: "👥 รายชื่อทีม" + Filter Tabs + Rest/Auto Buttons */}
-                    <div className="flex items-center justify-between gap-1.5 mland:gap-1 mb-1.5 mland:mb-1 shrink-0 min-w-0">
-                      <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0">
-                        👥 รายชื่อทีม
-                      </span>
+                  {/* Squad Panel (matching Post-Match Lineup Style) */}
+                  <div className="flex-1 min-h-[240px] sm:min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+                    <div className="shrink-0 px-2.5 pt-2 pb-1.5 mland:px-2 mland:pt-1.5 mland:pb-1 bg-[var(--surface-2)]/55 border-b border-[var(--line)] space-y-1">
+                      <div className="flex items-center justify-between gap-1.5 mland:gap-1 min-w-0">
+                        <span className="font-bold text-xs mland:text-[10px] text-[var(--ink)] whitespace-nowrap shrink-0 flex items-center gap-1">
+                          <span>👥 รายชื่อทีม</span>
+                          {activeTeam.id === state.me && <MyTeamBadge size="2xs" />}
+                        </span>
 
-                      <div className="flex items-center justify-end gap-1 min-w-0 overflow-x-auto no-scrollbar">
-                        <div className="seg-bar shrink-0 !p-[2px]">
-                          {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${activeBench.length}`, 2]] as const).map(([l, k]) => (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                setLuTab(k);
-                              }}
-                              className={`seg-btn !px-1.5 !py-0.5 mland:!px-1 mland:!py-[1px] !text-[10px] mland:!text-[8.5px] whitespace-nowrap ${
-                                luTab === k ? 'seg-btn-active' : ''
-                              }`}
-                            >
-                              {l}
-                            </button>
-                          ))}
-                        </div>
-
-                        {canEditActiveTeam && (
-                          <div className="flex items-center gap-1 shrink-0">
-                            {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                        <div className="flex items-center justify-end gap-1 min-w-0 overflow-x-auto no-scrollbar">
+                          <div className="seg-bar shrink-0 !p-[2px]">
+                            {([['ทั้งหมด', 0], ['ตัวจริง', 1], [`สำรอง ${activeBench.length}`, 2]] as const).map(([l, k]) => (
                               <button
+                                key={k}
                                 type="button"
-                                onClick={handleRestTiredStarters}
-                                title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
-                                className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                                  restNeededStarters.length > 0
-                                    ? 'bg-[var(--red)] border-[var(--red)] text-white hover:brightness-110'
-                                    : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                                onClick={() => {
+                                  SFX.tap();
+                                  setLuTab(k);
+                                }}
+                                className={`seg-btn !px-1.5 !py-0.5 mland:!px-1 mland:!py-[1px] !text-[10px] mland:!text-[8.5px] whitespace-nowrap ${
+                                  luTab === k ? 'seg-btn-active' : ''
                                 }`}
                               >
-                                🛌 พักล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                                {l}
                               </button>
-                            )}
-                            <button
-                              type="button"
-                              title={activeTeam.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
-                              onClick={() => {
-                                SFX.tap();
-                                setSwapPickName(null);
-                                onUpdateState((d) => {
-                                  d.teams[d.me].lu = null;
-                                });
-                                onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
-                              }}
-                              className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
-                                !activeTeam.lu
-                                  ? 'bg-[var(--g-soft)] border-[var(--g)]/45 text-[var(--g)]'
-                                  : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
-                              }`}
-                            >
-                              {activeTeam.lu ? '⚡ อัตโนมัติ' : '✓ อัตโนมัติ'}
-                            </button>
+                            ))}
                           </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Compact Stamina Spectrum Legend */}
-                    {canEditActiveTeam && (
-                      <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 mb-1 rounded-md bg-[var(--surface-2)]/70 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px] shrink-0">
-                        <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
-                        <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
-                          <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
-                            <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold">
-                            <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
-                          </span>
-                          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
-                            <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> ≥75% พร้อม
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Player Rows */}
-                    <div className="flex-1 min-h-0 overflow-y-auto space-y-1 mland:space-y-0.5 pr-0.5">
-                      {luTab !== 2 &&
-                        activeXi.map((pl, idx) =>
-                          renderPlayerRow(pl, activeSlots[idx]?.sp || pl.ro, activeTeam, true, pl.n === activeCap)
-                        )}
-                      {luTab !== 1 && (
-                        <>
-                          {luTab === 0 && (
-                            <div className="flex items-center justify-between px-0.5 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--mut)] pt-1.5 mland:pt-1">
-                              <span>ตัวสำรอง ({activeBench.length} คน)</span>
+                          {canEditActiveTeam && (
+                            <div className="flex items-center gap-1 shrink-0">
+                              {(restNeededStarters.length > 0 || tiredWarningStarters.length > 0) && (
+                                <button
+                                  type="button"
+                                  onClick={handleRestTiredStarters}
+                                  title="สลับตัวจริงที่อ่อนล้าไปพักที่ม้านั่งสำรองและส่งตัวฟิตลงแทน"
+                                  className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                                    restNeededStarters.length > 0
+                                      ? 'bg-[var(--red)] border-[var(--red)] text-white hover:brightness-110'
+                                      : 'bg-amber-500/15 border-amber-500/45 text-[#b45309] dark:text-[#fcd34d] hover:bg-amber-500 hover:text-white'
+                                  }`}
+                                >
+                                  🛌 พักล้า ({restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length})
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                title={activeTeam.lu ? 'รีเซ็ตเป็นจัด 11 ตัวจริงอัตโนมัติ' : 'กำลังใช้ระบบจัดตัวจริงอัตโนมัติ'}
+                                onClick={() => {
+                                  SFX.tap();
+                                  setSwapPickName(null);
+                                  onUpdateState((d) => {
+                                    d.teams[d.me].lu = null;
+                                  });
+                                  onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
+                                }}
+                                className={`h-[24px] mland:h-[20px] px-1.5 mland:px-1 rounded-lg border text-[10px] mland:text-[8.5px] font-bold inline-flex items-center gap-0.5 whitespace-nowrap shrink-0 cursor-pointer transition-colors ${
+                                  !activeTeam.lu
+                                    ? 'bg-[var(--g-soft)] border-[var(--g)]/45 text-[var(--g)]'
+                                    : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)]'
+                                }`}
+                              >
+                                {activeTeam.lu ? '⚡ อัตโนมัติ' : '✓ อัตโนมัติ'}
+                              </button>
                             </div>
                           )}
+                        </div>
+                      </div>
+
+                      {canEditActiveTeam && (
+                        <div className="flex items-center justify-between gap-2 px-1.5 py-0.5 rounded-md bg-[var(--surface)]/80 border border-[var(--line)]/60 text-[9.5px] mland:text-[7.5px]">
+                          <span className="font-semibold text-[var(--mut)] shrink-0">ความฟิต:</span>
+                          <div className="flex items-center gap-2 mland:gap-1.5 tabular truncate">
+                            <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400 font-bold">
+                              <span className="w-2 h-2 rounded-full bg-[#ef4444]" /> &lt;65% ควรพัก
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-300 font-bold">
+                              <span className="w-2 h-2 rounded-full bg-[#f59e0b]" /> 65-74% เริ่มล้า
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-bold">
+                              <span className="w-2 h-2 rounded-full bg-[#22c55e]" /> ≥75% พร้อม
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Player Rows */}
+                    <div className="flex-1 min-h-0 overflow-y-auto">
+                      {luTab !== 2 && (
+                        <>
+                          <div
+                            className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+                            style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+                          >
+                            <span>ตัวจริง</span>
+                            <span className="tabular">{activeXi.length} คน</span>
+                          </div>
+                          <div className="divide-y divide-[var(--line)]/50">
+                            {activeXi.map((pl, idx) =>
+                              renderPlayerRow(pl, activeSlots[idx]?.sp || pl.ro, activeTeam, true, pl.n === activeCap)
+                            )}
+                          </div>
+                        </>
+                      )}
+                      {luTab !== 1 && (
+                        <>
+                          <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+                            <span>ตัวสำรอง</span>
+                            <span className="tabular text-[var(--mut)]">{activeBench.length} คน</span>
+                          </div>
                           {activeBench.length > 0 ? (
-                            activeBench.map((pl) => renderPlayerRow(pl, pl.ro, activeTeam, false, false))
+                            <div className="divide-y divide-[var(--line)]/50">
+                              {activeBench.map((pl) => renderPlayerRow(pl, pl.ro, activeTeam, false, false))}
+                            </div>
                           ) : (
                             <div className="text-center py-3 text-[10.5px] mland:text-[9px] text-[var(--mut)]">
                               ไม่มีนักเตะสำรองในทีม

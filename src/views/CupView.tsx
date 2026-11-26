@@ -9,6 +9,7 @@ import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
 
 type CupTabId = 'fa' | 'lc' | 'dc' | 'sc' | 'asia';
 type CupStatCat = 'sg' | 'sa' | 'cs' | 'motm' | 'rt' | 'sp';
@@ -410,8 +411,9 @@ export const CupView: React.FC<{
                           <ClubCrest name={h.name} size={24} team={h} club={state.club} isMyClub={h.id === state.me && state.mode === 'm'} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className={`text-xs mland:text-[10px] truncate leading-tight group-hover:text-[var(--g)] ${h.id === state.me ? 'font-extrabold text-[var(--ink)]' : 'font-semibold text-[var(--ink)]'}`}>
-                            {h.name}{h.id === state.me ? ' ★' : ''}
+                          <div className={`text-xs mland:text-[10px] flex items-center gap-1 min-w-0 leading-tight group-hover:text-[var(--g)] ${h.id === state.me ? 'font-extrabold text-[var(--ink)]' : 'font-semibold text-[var(--ink)]'}`}>
+                            <span className="truncate">{h.name}</span>
+                            {h.id === state.me && <MyTeamBadge size="2xs" />}
                           </div>
                           <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate tabular leading-tight">
                             {tierLabelOf(h)} · OVR {hOvr}
@@ -431,8 +433,9 @@ export const CupView: React.FC<{
                         className="flex items-center justify-end gap-2 mland:gap-1.5 min-w-0 flex-1 text-right cursor-pointer group"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className={`text-xs mland:text-[10px] truncate leading-tight group-hover:text-[var(--g)] ${a.id === state.me ? 'font-extrabold text-[var(--ink)]' : 'font-semibold text-[var(--ink)]'}`}>
-                            {a.id === state.me ? '★ ' : ''}{a.name}
+                          <div className={`text-xs mland:text-[10px] flex items-center justify-end gap-1 min-w-0 leading-tight group-hover:text-[var(--g)] ${a.id === state.me ? 'font-extrabold text-[var(--ink)]' : 'font-semibold text-[var(--ink)]'}`}>
+                            {a.id === state.me && <MyTeamBadge size="2xs" />}
+                            <span className="truncate">{a.name}</span>
                           </div>
                           <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate tabular leading-tight">
                             OVR {aOvr} · {tierLabelOf(a)}
@@ -457,8 +460,9 @@ export const CupView: React.FC<{
                   <div className="text-[11px] mland:text-[9px] font-bold text-[#9a6700] dark:text-[var(--lamp)]">
                     แชมป์{activeComp.short} · ซีซั่น {state.season}
                   </div>
-                  <h4 className="font-display font-extrabold text-lg sm:text-xl mland:text-sm text-[var(--ink)]">
-                    {champ.name}
+                  <h4 className="font-display font-extrabold text-lg sm:text-xl mland:text-sm text-[var(--ink)] flex items-center justify-center gap-1.5">
+                    <span>{champ.name}</span>
+                    {champ.id === state.me && <MyTeamBadge size="md" />}
                   </h4>
                   <p className="text-xs mland:text-[9.5px] text-[var(--mut)] tabular">
                     {tierLabelOf(champ)} · พลัง 11 ตัวจริง {teamOvrQuick(champ)} · รางวัลแชมป์ {fmtMoney(activeComp.prize)}
@@ -581,7 +585,8 @@ export const CupView: React.FC<{
                       }}
                       className={`seg-btn py-0.5 px-2 text-[10px] mland:text-[8.5px] ${teamFilter === 'me' ? 'seg-btn-active' : ''}`}
                     >
-                      ทีมฉัน ★
+                      <MyTeamBadge size="2xs" />
+                      <span>ทีมฉัน</span>
                     </button>
                   </div>
                 </div>
@@ -679,6 +684,7 @@ export const CupView: React.FC<{
                             <span className={`text-xs mland:text-[9.5px] truncate ${homeWon || ht?.id === state.me ? 'font-bold text-[var(--ink)]' : 'text-[var(--ink)]/80'}`}>
                               {p.homeName}
                             </span>
+                            {ht?.id === state.me && <MyTeamBadge size="2xs" />}
                           </button>
 
                           {matchedCupLog && onOpenMatchReport ? (
@@ -706,6 +712,7 @@ export const CupView: React.FC<{
                             onClick={() => at && onInspectTeam(at.id)}
                             className={`flex items-center justify-end gap-1.5 min-w-0 flex-1 text-right ${at ? 'cursor-pointer hover:text-[var(--g)]' : 'cursor-default'}`}
                           >
+                            {at?.id === state.me && <MyTeamBadge size="2xs" />}
                             <span className={`text-xs mland:text-[9.5px] truncate ${awayWon || at?.id === state.me ? 'font-bold text-[var(--ink)]' : 'text-[var(--ink)]/80'}`}>
                               {p.awayName}
                             </span>
@@ -864,8 +871,9 @@ export const CupView: React.FC<{
                               <div className="text-[9.5px] mland:text-[7.5px] font-bold text-[var(--mut)] truncate">
                                 {box.title}
                               </div>
-                              <div className="font-bold text-[11px] mland:text-[9px] text-[var(--ink)] truncate mt-0.5">
-                                {box.entry ? `${box.entry.t.id === state.me ? '★ ' : ''}${box.entry.q.n}` : 'รอสถิติ'}
+                              <div className="font-bold text-[11px] mland:text-[9px] text-[var(--ink)] flex items-center gap-1 min-w-0 mt-0.5">
+                                {box.entry && box.entry.t.id === state.me && <MyTeamBadge size="2xs" />}
+                                <span className="truncate">{box.entry ? box.entry.q.n : 'รอสถิติ'}</span>
                               </div>
                               <div className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--g)] tabular truncate">
                                 {box.val}
@@ -909,11 +917,11 @@ export const CupView: React.FC<{
                                     <div className="text-xs mland:text-[9.5px] font-bold text-[var(--ink)] flex items-center gap-1 min-w-0">
                                       <PositionBadge role={item.q.ro} size="2xs" />
                                       <span className="truncate">{item.q.n}</span>
-                                      {isMine && <span className="text-[var(--lamp)] shrink-0">★</span>}
                                     </div>
                                     <div className="text-[9.5px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 tabular mt-0.5">
                                       <ClubCrest name={item.t.name} size={12} team={item.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                                       <span className="truncate">{item.t.name}</span>
+                                      {isMine && <MyTeamBadge size="2xs" />}
                                       <span aria-hidden="true">·</span>
                                       <span className="shrink-0">{item.st.sp}น</span>
                                     </div>

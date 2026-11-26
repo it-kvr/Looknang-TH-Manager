@@ -31,6 +31,7 @@ import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 import { VarReplayModal, type VarReplayRecord } from './VarReplayModal';
@@ -392,6 +393,10 @@ export const MatchModal: React.FC<{
   useScrollTopOnChange(rightStageScrollRef, [mlandMatchTab, done, matchPhaseUi], { includeAncestors: false });
   useScrollTopOnChange(rightChatScrollRef, [mlandMatchTab, done], { includeAncestors: false });
   useScrollTopOnChange(rightTacticsScrollRef, [mlandMatchTab, matchPhaseUi], { includeAncestors: false });
+
+  useEffect(() => {
+    if (done) setMlandMatchTab('players');
+  }, [done]);
   const triggeredRulesRef = useRef<number[]>([]);
   const lastGoalSoundMsRef = useRef(0);
   const alertLoggedRef = useRef<Set<string>>(new Set());
@@ -10876,9 +10881,11 @@ export const MatchModal: React.FC<{
               <ClubCrest name={homeOrig.name} size={20} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
             </div>
             <span className="leading-tight break-words text-[var(--ink)]">{homeOrig.name}</span>
+            {homeId === state.me && <MyTeamBadge size="2xs" />}
           </div>
           <span className="text-[10px] mland:text-[9px] text-[var(--mut)] font-extrabold uppercase tracking-wider shrink-0">📊 สถิติ</span>
           <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 text-right">
+            {awayId === state.me && <MyTeamBadge size="2xs" />}
             <span className="leading-tight break-words text-[var(--ink)]">{awayOrig.name}</span>
             <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
               <ClubCrest name={awayOrig.name} size={20} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />

@@ -10,6 +10,7 @@ import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActi
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -635,15 +636,7 @@ export const LeagueView: React.FC<{
                       <span className={`truncate text-[11px] sm:text-[12px] mland:text-[9px] leading-tight ${isMe ? 'font-bold text-[var(--ink)]' : ''}`}>
                         {t.name}
                       </span>
-                      {isMe && (
-                        <span
-                          title="ทีมของคุณ"
-                          aria-label="ทีมของคุณ"
-                          className="inline-flex items-center justify-center w-3.5 h-3.5 mland:w-2.5 mland:h-2.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] mland:text-[6.5px] font-black shrink-0"
-                        >
-                          ★
-                        </span>
-                      )}
+                      {isMe && <MyTeamBadge size="sm" />}
                     </div>
                   </div>
                   <div className="flex items-center justify-center">
@@ -803,7 +796,10 @@ export const LeagueView: React.FC<{
                 <span className="text-xs mland:text-[10px] font-bold text-center text-[var(--mut)] tabular">{idx + 1}</span>
                 <ClubCrest name={t.name} size={20} team={t} club={state.club} isMyClub={state.mode === 'm' && isMe} />
                 <div className="min-w-0">
-                  <div className="font-bold text-xs mland:text-[10.5px] whitespace-normal break-words leading-tight">{t.name} {isMe && <span className="text-[var(--lamp)]">★</span>}</div>
+                  <div className="font-bold text-xs mland:text-[10.5px] whitespace-normal break-words leading-tight flex items-center gap-1 flex-wrap">
+                    <span>{t.name}</span>
+                    {isMe && <MyTeamBadge size="xs" />}
+                  </div>
                   <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate">ตัวจริง {st.ovXi} · หน้า {st.f} กลาง {st.m} หลัง {st.d} · 👥 {fmtFansShort(ensureTeamFans(t))}</div>
                 </div>
                 <div className="hidden sm:block mland:hidden">
@@ -1016,6 +1012,7 @@ export const LeagueView: React.FC<{
                       <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
                         <ClubCrest name={x.t.name} size={12} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                         <span className="truncate">{x.t.name}</span>
+                        {isMine && <MyTeamBadge size="2xs" />}
                       </div>
                     </div>
                     <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center shrink-0">{fmt(x.q)}</span>
@@ -1117,14 +1114,7 @@ export const LeagueView: React.FC<{
                             <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1">
                                 <span>อันดับ 1</span>
-                                {leaderIsMe && (
-                                  <span
-                                    title="ทีมของคุณ"
-                                    className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black"
-                                  >
-                                    ★
-                                  </span>
-                                )}
+                                {leaderIsMe && <MyTeamBadge size="sm" />}
                               </span>
                               <span className={`text-sm sm:text-base mland:text-xs font-extrabold tabular-nums shrink-0 ${aw.accentText}`}>
                                 {leader.primaryValue}
@@ -1136,6 +1126,7 @@ export const LeagueView: React.FC<{
                             <div className="flex items-center gap-1.5 mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] min-w-0">
                               <ClubCrest name={leader.t.name} size={14} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
                               <span className="truncate font-medium text-[var(--ink)]/85">{leader.t.name}</span>
+                              {leaderIsMe && <MyTeamBadge size="2xs" />}
                               <PositionBadge role={leader.q.ro} size="2xs" />
                             </div>
                           </div>
@@ -1191,6 +1182,7 @@ export const LeagueView: React.FC<{
                                 <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
                                   <ClubCrest name={entry.t.name} size={12} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                                   <span className="truncate">{entry.t.name}</span>
+                                  {isMine && <MyTeamBadge size="2xs" />}
                                 </div>
                               </div>
                               <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">
@@ -1315,7 +1307,8 @@ export const LeagueView: React.FC<{
                 className="btn btn-sm btn-gold shrink-0"
               >
                 <span>↩</span>
-                <span>กลับลีกฉัน ★</span>
+                <span>กลับลีกฉัน</span>
+                <MyTeamBadge size="xs" title="ลีกของคุณ" />
               </button>
             )}
           </div>
@@ -1341,14 +1334,7 @@ export const LeagueView: React.FC<{
                   }`}
                 >
                   <span className="truncate">{lbl}</span>
-                  {isMyTier && (
-                    <span
-                      aria-label="ลีกของคุณ"
-                      className={`text-[10px] mland:text-[9px] leading-none shrink-0 ${active ? 'text-[var(--lamp)]' : 'text-[#c98a00] dark:text-[var(--lamp)]'}`}
-                    >
-                      ★
-                    </span>
-                  )}
+                  {isMyTier && <MyTeamBadge size="2xs" title="ลีกของคุณ" />}
                 </button>
               );
             })}
@@ -1420,9 +1406,10 @@ export const LeagueView: React.FC<{
                     key={tierIdx}
                     type="button"
                     onClick={() => { SFX.tap(); setPrizeModalTier(tierIdx); }}
-                    className={`seg-btn py-1 mland:py-0.5 truncate ${prizeModalTier === tierIdx ? 'seg-btn-active' : ''}`}
+                    className={`seg-btn py-1 mland:py-0.5 inline-flex items-center justify-center gap-1 truncate ${prizeModalTier === tierIdx ? 'seg-btn-active' : ''}`}
                   >
-                    {TN[tierIdx]}{tierIdx === me.tier ? ' ★' : ''}
+                    <span className="truncate">{TN[tierIdx]}</span>
+                    {tierIdx === me.tier && <MyTeamBadge size="2xs" />}
                   </button>
                 ))}
               </div>
@@ -1454,8 +1441,8 @@ export const LeagueView: React.FC<{
                       <span>{rank === 1 ? '🏆' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}`}</span>
                       <span className="truncate text-[var(--ink)]">
                         {rank === 1 ? 'แชมป์ลีก' : `อันดับ ${rank}`}
-                        {isMyCurRank ? ' ★' : ''}
                       </span>
+                      {isMyCurRank && <MyTeamBadge size="2xs" />}
                     </span>
                     <span className="font-extrabold tabular text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
                       +{fmtMoney(amount)}
@@ -1761,6 +1748,7 @@ export const ScheduleCalendarView: React.FC<{
                         onClick={() => onInspectTeam(hid)}
                         className="min-w-0 flex items-center justify-end gap-1.5 text-right hover:text-[var(--g)] cursor-pointer transition-colors"
                       >
+                        {hid === state.me && <MyTeamBadge size="2xs" />}
                         <span className={`truncate ${hid === state.me ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : ''}`}>
                           {ht.name}
                         </span>
@@ -1808,6 +1796,7 @@ export const ScheduleCalendarView: React.FC<{
                         <span className={`truncate ${aid === state.me ? 'text-[#8a5b00] dark:text-[var(--lamp)]' : ''}`}>
                           {at.name}
                         </span>
+                        {aid === state.me && <MyTeamBadge size="2xs" />}
                       </button>
                     </div>
                   );
@@ -1843,8 +1832,12 @@ export const ScheduleCalendarView: React.FC<{
                               {compLabel}
                               {cl.penText ? ` · ${cl.penText}` : ''}
                             </div>
-                            <div className="font-semibold text-[var(--ink)] truncate tabular">
-                              {ht?.name} <b className="mx-1">{cl.gh} - {cl.ga}</b> {at?.name}
+                            <div className="font-semibold text-[var(--ink)] flex items-center gap-1 min-w-0 tabular">
+                              {ht?.id === state.me && <MyTeamBadge size="2xs" />}
+                              <span className="truncate">{ht?.name}</span>
+                              <b className="mx-0.5 shrink-0">{cl.gh} - {cl.ga}</b>
+                              <span className="truncate">{at?.name}</span>
+                              {at?.id === state.me && <MyTeamBadge size="2xs" />}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">

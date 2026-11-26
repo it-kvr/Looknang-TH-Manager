@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import type {
   ArchivedMatchReport,
@@ -52,6 +52,10 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
   onInspectPlayer
 }) => {
   const [rightTab, setRightTab] = useState<'players' | 'stats' | 'chat'>('players');
+
+  useEffect(() => {
+    setRightTab('players');
+  }, [report]);
 
   const hTeam = state.teams[report.h];
   const aTeam = state.teams[report.a];

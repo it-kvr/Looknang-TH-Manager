@@ -309,8 +309,15 @@ export const SeasonEndModal: React.FC<{
                 </div>
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <h2 className="font-bold text-base sm:text-xl mland:text-sm font-display truncate">
-                      {me.name}
+                    <h2 className="font-bold text-base sm:text-xl mland:text-sm font-display truncate inline-flex items-center gap-1.5">
+                      <span className="truncate">{me.name}</span>
+                      <span
+                        title="ทีมของคุณ"
+                        aria-label="ทีมของคุณ"
+                        className="inline-flex items-center justify-center w-4 h-4 mland:w-3 mland:h-3 rounded-full bg-[var(--lamp)] text-[#261900] text-[9.5px] mland:text-[7.5px] font-black leading-none shrink-0"
+                      >
+                        ★
+                      </span>
                     </h2>
                     <span
                       className={`text-xs mland:text-[10px] font-bold tabular ${

@@ -42,8 +42,6 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
   const fitVal = fitMeta.f;
   const injCount = player.inj ?? careerProfile?.inj ?? 0;
   const susCount = player.sus ?? careerProfile?.sus ?? 0;
-  const ycCount = player.yc ?? careerProfile?.yc ?? 0;
-  const rcCount = player.rc ?? careerProfile?.rc ?? 0;
 
   const isInjuredStatus = !isRetired && susCount === 0 && injCount > 0;
   const statusText = isRetired
@@ -158,7 +156,7 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
 
   return (
     <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
-      {/* Status & Discipline Row */}
+      {/* Status Row */}
       <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${statusToneCls}`}>
         <div className="flex items-center justify-between font-bold gap-1">
           <span className="truncate tabular inline-flex items-center gap-1" style={{ color: fitCol }}>
@@ -167,9 +165,6 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
               {statusText}
               {!isRetired && ` · ⚡${fitVal}%`}
             </span>
-          </span>
-          <span className="tabular text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
-            🟨{ycCount}/3 · 🟥{rcCount}
           </span>
         </div>
 

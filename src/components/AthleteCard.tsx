@@ -5,8 +5,9 @@ import { statBarColor, statTierMeta } from '../engine/missions';
 import { PlayerFace, resolveGkKitPalette } from './SvgVisuals';
 import { TalentBadge } from './TalentBadge';
 import { PotentialBadge } from './PotentialBadge';
-import { PlayerBioStrip } from './PlayerBioStrip';
+import { FootPairIcon, getFootColorMeta } from './PlayerBioStrip';
 import { PositionBadge } from './PositionBadge';
+import { StatIconBadge } from './StatIconBadge';
 import {
   CardStudioToggleButton,
   getAthleteCardPalette,
@@ -35,6 +36,11 @@ export interface AthleteCardProps {
   clubCrest?: React.ReactNode;
   subtitle: string;
   bio: PlayerBio;
+  discipline?: {
+    yc?: number;
+    rc?: number;
+    inj?: number;
+  };
   categories: StatCategorySummary[];
   stretchStage?: boolean;
   className?: string;
@@ -60,6 +66,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   clubCrest,
   subtitle,
   bio,
+  discipline,
   categories,
   stretchStage = false,
   className = ''
@@ -77,6 +84,10 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   const gkPalette = isCardGK ? resolveGkKitPalette(kit1, kit2, faceProps.kitColor) : null;
   const cardShirtKit = faceProps.kitColor ?? (gkPalette ? gkPalette.kit : kit1);
   const cardShirtTrim = faceProps.trimColor ?? (gkPalette ? gkPalette.trim : kit2);
+  const footMeta = getFootColorMeta(bio.foot);
+  const ycCount = discipline?.yc ?? faceProps.player?.yc ?? faceProps.careerProfile?.yc ?? 0;
+  const rcCount = discipline?.rc ?? faceProps.player?.rc ?? faceProps.careerProfile?.rc ?? 0;
+  const injCount = discipline?.inj ?? faceProps.player?.inj ?? faceProps.careerProfile?.inj ?? 0;
 
   return (
     <div
@@ -143,8 +154,8 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
 
       {/* Neutral Studio Spotlight Portrait Stage */}
       <div
-        className={`relative mx-2.5 mb-1 mland:mx-1.5 mland:mb-0.5 rounded-xl mland:rounded-lg border pt-3.5 mland:pt-2.5 flex items-end justify-center overflow-hidden ${
-          stretchStage ? 'flex-1 min-h-[84px] mland:min-h-[56px]' : 'min-h-[88px] mland:min-h-[58px]'
+        className={`relative mx-2.5 mb-1 mland:mx-1.5 mland:mb-0.5 rounded-xl mland:rounded-lg border pt-4 mland:pt-3 flex items-end justify-center overflow-hidden ${
+          stretchStage ? 'flex-1 min-h-[96px] mland:min-h-[68px]' : 'min-h-[96px] mland:min-h-[68px]'
         } ${cardPalette.stageBox}`}
       >
         {resolvedStageTopLeft && (
@@ -156,6 +167,29 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           {stageTopRightNode}
           <CardStudioToggleButton tone={cardTone} onToggle={toggleCardTone} />
         </div>
+
+        {/* Bottom-Left Inside Portrait: Height, Weight, Preferred Foot Stacked Vertically */}
+        <div
+          className="absolute bottom-1.5 left-1.5 mland:bottom-1 mland:left-1 z-20 flex flex-col items-start gap-[2px] mland:gap-[1px] pointer-events-none select-none"
+          title={`ส่วนสูง ${bio.heightCm} ซม. · น้ำหนัก ${bio.weightKg} กก. · ${footMeta.titleText}`}
+        >
+          <div className="inline-flex items-baseline gap-0.5 text-[8.5px] mland:text-[7px] leading-tight tabular whitespace-nowrap">
+            <span className={`font-semibold ${isLight ? 'text-slate-600' : 'text-white/65'}`}>สูง</span>
+            <span className={`font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>{bio.heightCm}</span>
+            <span className={`text-[7.5px] mland:text-[6px] font-semibold ${isLight ? 'text-slate-600' : 'text-white/65'}`}>ซม.</span>
+          </div>
+          <div className="inline-flex items-baseline gap-0.5 text-[8.5px] mland:text-[7px] leading-tight tabular whitespace-nowrap">
+            <span className={`font-semibold ${isLight ? 'text-slate-600' : 'text-white/65'}`}>หนัก</span>
+            <span className={`font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>{bio.weightKg}</span>
+            <span className={`text-[7.5px] mland:text-[6px] font-semibold ${isLight ? 'text-slate-600' : 'text-white/65'}`}>กก.</span>
+          </div>
+          <div className="inline-flex items-center gap-1 text-[8.5px] mland:text-[7px] leading-tight font-extrabold whitespace-nowrap">
+            <FootPairIcon foot={bio.foot} size="xs" className="!w-[13px] !h-[10px] mland:!w-[11px] mland:!h-[8.5px]" />
+            <span className={isLight ? 'text-emerald-700' : 'text-emerald-300'}>{footMeta.shortLabel}</span>
+          </div>
+        </div>
+
+        {/* Centered Player Portrait */}
         <div
           className={`relative z-10 [&>svg]:block ${
             stretchStage
@@ -172,10 +206,71 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
             bare
           />
         </div>
+
+        {/* Bottom-Right Inside Portrait: Yellow Card, Red Card, Injury Stacked Vertically */}
+        <div
+          className="absolute bottom-1.5 right-1.5 mland:bottom-1 mland:right-1 z-20 flex flex-col items-end gap-[2px] mland:gap-[1px] pointer-events-none select-none"
+          title={`ใบเหลือง ${ycCount}/3 · ใบแดง ${rcCount} · บาดเจ็บ ${injCount > 0 ? `${injCount} นัด` : 'ไม่มี'}`}
+        >
+          <div className="inline-flex items-center justify-end gap-1 text-[8.5px] mland:text-[7px] leading-none tabular whitespace-nowrap">
+            <span
+              className={`font-extrabold ${
+                ycCount > 0
+                  ? isLight
+                    ? 'text-amber-700'
+                    : 'text-amber-300'
+                  : isLight
+                    ? 'text-slate-700'
+                    : 'text-white/75'
+              }`}
+            >
+              {ycCount}/3
+            </span>
+            <span className="inline-flex items-center justify-center [&>span]:!w-[12px] [&>span]:!h-[12px] mland:[&>span]:!w-[10px] mland:[&>span]:!h-[10px] [&>span>svg]:!w-[12px] [&>span>svg]:!h-[12px] mland:[&>span>svg]:!w-[10px] mland:[&>span>svg]:!h-[10px]">
+              <StatIconBadge kind="yellow" count={1} size="xs" />
+            </span>
+          </div>
+          <div className="inline-flex items-center justify-end gap-1 text-[8.5px] mland:text-[7px] leading-none tabular whitespace-nowrap">
+            <span
+              className={`font-extrabold ${
+                rcCount > 0
+                  ? isLight
+                    ? 'text-rose-600'
+                    : 'text-rose-400'
+                  : isLight
+                    ? 'text-slate-700'
+                    : 'text-white/75'
+              }`}
+            >
+              {rcCount}
+            </span>
+            <span className="inline-flex items-center justify-center [&>span]:!w-[12px] [&>span]:!h-[12px] mland:[&>span]:!w-[10px] mland:[&>span]:!h-[10px] [&>span>svg]:!w-[12px] [&>span>svg]:!h-[12px] mland:[&>span>svg]:!w-[10px] mland:[&>span>svg]:!h-[10px]">
+              <StatIconBadge kind="red" count={1} size="xs" />
+            </span>
+          </div>
+          <div className="inline-flex items-center justify-end gap-1 text-[8.5px] mland:text-[7px] leading-none tabular whitespace-nowrap">
+            <span
+              className={`font-extrabold ${
+                injCount > 0
+                  ? isLight
+                    ? 'text-rose-600'
+                    : 'text-rose-400'
+                  : isLight
+                    ? 'text-slate-700'
+                    : 'text-white/75'
+              }`}
+            >
+              {injCount > 0 ? `${injCount} นัด` : '0'}
+            </span>
+            <span className="inline-flex items-center justify-center [&>span]:!w-[12px] [&>span]:!h-[12px] mland:[&>span]:!w-[10px] mland:[&>span]:!h-[10px] [&>span>svg]:!w-[12px] [&>span>svg]:!h-[12px] mland:[&>span>svg]:!w-[10px] mland:[&>span>svg]:!h-[10px]">
+              <StatIconBadge kind="injury" count={1} size="xs" />
+            </span>
+          </div>
+        </div>
       </div>
 
-      {/* Athlete Identity + Compact Physical Bio Bar */}
-      <div className="px-2.5 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-1 mland:space-y-0.5 shrink-0">
+      {/* Athlete Identity */}
+      <div className="px-2.5 pb-1.5 mland:px-2 mland:pb-1 text-center space-y-0.5 shrink-0">
         <div
           className={`font-display font-extrabold text-[13px] mland:text-[10.5px] truncate leading-tight ${cardPalette.nameText}`}
         >
@@ -191,7 +286,6 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           )}
           <span className="truncate">{subtitle}</span>
         </div>
-        <PlayerBioStrip bio={bio} variant="card" tone={cardTone} />
       </div>
 
       {/* Bottom Status Category Boxes Strip (6 categories outfield / 4 categories GK) */}

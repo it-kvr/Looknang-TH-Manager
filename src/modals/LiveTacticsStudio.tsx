@@ -15,13 +15,15 @@ import { AR_T } from '../data/thaiFootballData';
 import { SFX, vibrate } from '../utils/audioTheme';
 import { getFormationSlots, getShirtNo, playerPen } from '../engine/playerCore';
 import { fmtFansShort } from '../engine/simulation';
-import { ovColor } from '../engine/missions';
+import { ovColor, ovTextColorClass } from '../engine/missions';
 import { Check } from 'lucide-react';
 import { FormationPitch, PlayerFace, ClubCrest, type PitchPlayerMeta } from '../components/SvgVisuals';
+import { MatchPlayerThumb } from './MatchSharedComponents';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { PositionBadge } from '../components/PositionBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
 
 export type ManagerHalftimeTalk = 'attack' | 'press' | 'balanced' | 'counter' | 'defend';
 
@@ -741,11 +743,12 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   SFX.tap();
                   setPitchTeamView('me');
                 }}
-                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[96px] truncate ${
+                className={`px-2 mland:px-1.5 py-0.5 rounded-md font-bold cursor-pointer whitespace-nowrap max-w-[116px] inline-flex items-center gap-1 ${
                   isMeView ? 'bg-[var(--g)] text-white shadow-xs' : 'text-[var(--mut)] hover:text-[var(--ink)]'
                 }`}
               >
-                {meTeamOrig.name}
+                <span className="truncate">{meTeamOrig.name}</span>
+                <MyTeamBadge size="2xs" />
               </button>
               <button
                 type="button"
@@ -1014,7 +1017,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             {benchList.length === 0 ? (
               <div className="py-3 text-center text-[11px] text-[var(--mut)]">ไม่มีตัวสำรองที่พร้อมลงสนาม</div>
             ) : (
-              <div className="space-y-1">
+              <div className="rounded-xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden divide-y divide-[var(--line)]/50">
                 {benchList.map((pl) => {
                   const f = Math.round(pl.fit ?? 100);
                   const no = getShirtNo(meTeamOrig, pl);
@@ -1023,6 +1026,11 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   const isAutoRecommended = subsUsed.length < 5 && smartAutoSub?.inPlayer.n === pl.n;
                   const compatPen = selectedPitchOutSlot ? playerPen(pl, selectedPitchOutSlot) : selectedPitchOutObj ? playerPen(pl, selectedPitchOutObj.ro) : null;
                   const canQuickSub = subsUsed.length < 5 && Boolean(selectedPitchOut);
+                  const meKitColor = pl.pos === 'GK' ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? homeKit : awayKit);
+                  const meTrimColor = pl.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
+                  const rowCols = canQuickSub
+                    ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_48px_24px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_22px_auto]'
+                    : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_48px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_24px]';
 
                   return (
                     <div
@@ -1040,19 +1048,19 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                         }
                       }}
                       style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
-                      className={`w-full flex items-center gap-1.5 px-1.5 py-1 mland:py-0.5 rounded-lg border text-left select-none transition-all ${
+                      className={`w-full grid ${rowCols} items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
                         isBenchDropTarget
-                          ? 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)]/50 scale-[1.01]'
+                          ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
                           : isDraggingThis
-                            ? 'opacity-40 border-dashed border-[var(--lamp)] bg-[var(--surface)]'
+                            ? 'opacity-40 bg-[var(--surface-2)]'
                             : isAutoRecommended
-                              ? 'bg-[var(--g-soft)]/45 border-[var(--g)]/70'
+                              ? 'bg-[var(--g-soft)]/45 hover:bg-[var(--g-soft)]/65'
                               : compatPen === 0
-                                ? 'bg-[var(--surface)] border-[var(--g)]/55'
-                                : 'bg-[var(--surface)] border-[var(--line)] hover:border-[var(--g)]'
+                                ? 'bg-emerald-500/[0.04] hover:bg-emerald-500/[0.09]'
+                                : 'hover:bg-[var(--surface-2)]/65'
                       } ${subsUsed.length < 5 ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer opacity-75'}`}
                     >
-                      <span
+                      <div
                         data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
                         style={
                           subsUsed.length < 5
@@ -1060,49 +1068,74 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                             : undefined
                         }
                         title={subsUsed.length < 5 ? 'ลากลงสนามเพื่อเปลี่ยนตัว' : 'ใช้โควต้าครบแล้ว'}
-                        className="flex items-center gap-1 shrink-0 py-0.5 pr-0.5 [&_svg]:w-4 [&_svg]:h-4"
+                        className="flex items-center justify-start"
                       >
-                        <PlayerFace player={pl} team={meTeamOrig} state={state} careerProfile={state.p} size={20} />
-                        <PositionBadge role={pl.ro} size="2xs" />
-                        <span className="text-[9.5px] font-bold tabular text-[var(--mut)] w-[22px] text-left shrink-0">#{no}</span>
-                      </span>
+                        <MatchPlayerThumb
+                          player={pl}
+                          team={meTeamOrig}
+                          state={state}
+                          kitColor={meKitColor}
+                          trimColor={meTrimColor}
+                          size="xs"
+                        />
+                      </div>
 
-                      <div className="flex-1 min-w-0 flex items-center gap-1">
-                        <span className="text-[10.5px] mland:text-[9.5px] font-semibold truncate">{pl.n}</span>
+                      <div
+                        data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
+                        style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
+                        className="flex items-center justify-start"
+                      >
+                        <PositionBadge role={pl.ro} size="2xs" />
+                      </div>
+
+                      <div
+                        data-drag-grip={subsUsed.length < 5 ? '1' : undefined}
+                        style={subsUsed.length < 5 ? { touchAction: 'none' } : undefined}
+                        className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap"
+                      >
+                        #{no}
+                      </div>
+
+                      <div className="flex items-center justify-start gap-1 min-w-0">
+                        <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">{pl.n}</span>
                         {meTeamOrig.cap === pl.n && (
                           <CaptainBadge team={meTeamOrig} state={state} size="xs" className="shrink-0" />
                         )}
                         {(pl.hg || pl.customCreated) && (
-                          <span title="เด็กปั้นสโมสร" className="text-[9.5px] shrink-0">🌱</span>
+                          <span title="เด็กปั้นสโมสร" className="text-[10px] mland:text-[8.5px] shrink-0">🌱</span>
                         )}
                         {compatPen === 0 && (
-                          <span className="px-1 py-0.2 rounded bg-[var(--g-soft)] text-[var(--g)] text-[8.5px] font-extrabold shrink-0 whitespace-nowrap">
+                          <span className="px-1 py-0.2 rounded bg-[var(--g-soft)] text-[var(--g)] text-[8px] font-extrabold shrink-0 whitespace-nowrap">
                             ตรงตำแหน่ง
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1.5 shrink-0 tabular">
-                        <StaminaBar value={f} variant="compact" restThreshold={subAlertFitTh} className="w-11 mland:w-9" />
-                        <span className="px-1.5 py-0.2 rounded-md text-white text-[10px] mland:text-[9px] font-bold" style={{ background: ovColor(pl.ov) }}>
+                      <div className="flex items-center justify-start">
+                        <StaminaBar value={f} variant="compact" restThreshold={subAlertFitTh} className="w-full" />
+                      </div>
+
+                      <div className="flex items-center justify-start">
+                        <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(pl.ov)}`}>
                           {pl.ov}
                         </span>
-                        {canQuickSub && (
-                          <button
-                            type="button"
-                            data-no-drag="1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onSubstitute(selectedPitchOut!, pl);
-                            }}
-                            title={`ส่ง ${pl.n} ลงแทน ${selectedPitchOut!.split(' ')[0]}`}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--g)] text-white text-[9px] font-extrabold cursor-pointer hover:brightness-110 shrink-0 whitespace-nowrap"
-                          >
-                            <StatIconBadge kind="subIn" size="xs" />
-                            <span>ส่งลง</span>
-                          </button>
-                        )}
                       </div>
+
+                      {canQuickSub && (
+                        <button
+                          type="button"
+                          data-no-drag="1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSubstitute(selectedPitchOut!, pl);
+                          }}
+                          title={`ส่ง ${pl.n} ลงแทน ${selectedPitchOut!.split(' ')[0]}`}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--g)] text-white text-[9px] font-extrabold cursor-pointer hover:brightness-110 shrink-0 whitespace-nowrap"
+                        >
+                          <StatIconBadge kind="subIn" size="xs" />
+                          <span>ส่งลง</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })}

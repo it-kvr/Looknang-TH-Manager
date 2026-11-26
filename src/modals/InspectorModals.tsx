@@ -4,10 +4,11 @@ import type { Position, Player, Team, GameState } from '../types/game';
 import { fmtMoney } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc } from '../engine/playerCore';
-import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
+import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc, teamKits, pickGK } from '../engine/playerCore';
+import { ovColor, ovTextColorClass, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
 import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
+import { MatchPlayerThumb } from './MatchSharedComponents';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
 import { PlayerHistoryPanel } from '../components/PlayerHistoryPanel';
@@ -23,6 +24,7 @@ import { TalentBadge } from '../components/TalentBadge';
 import { StaminaBar, getStaminaMeta } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
+import { MyTeamBadge } from '../components/MyTeamBadge';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -437,15 +439,7 @@ export const TeamInspectorModal: React.FC<{
             <div className="min-w-0">
               <div className="text-sm sm:text-base mland:text-xs font-extrabold font-display truncate flex items-center gap-1.5 text-[var(--ink)]">
                 <span className="truncate">{team.name}</span>
-                {isMeTeam && (
-                  <span
-                    title="ทีมของคุณ"
-                    aria-label="ทีมของคุณ"
-                    className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-[var(--lamp)] text-[#261900] text-[9.5px] font-black shrink-0"
-                  >
-                    ★
-                  </span>
-                )}
+                {isMeTeam && <MyTeamBadge size="md" />}
               </div>
               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular">
                 <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
@@ -731,83 +725,139 @@ export const TeamInspectorModal: React.FC<{
                   </div>
                 </div>
 
-                <div className="divide-y divide-[var(--line)]/60 flex-1 min-h-0 overflow-y-auto">
-                  {filteredSquad.map((q) => {
-                    const isStarter = starterNames.has(q.n);
-                    const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
-                    const qBio = getPlayerBio(q, isMe ? state.p : null);
-                    const f = Math.round(q.fit ?? 100);
+                <div className="flex-1 min-h-0 overflow-y-auto">
+                  {(() => {
+                    const [teamKit, teamTrim] = teamKits(team, state);
+                    const teamGkKit = pickGK(teamKit, '#111827');
+                    const teamSlots = getFormationSlots(team);
+                    const starterSlotByName = new Map<string, string>();
+                    starters.forEach((sqPl, i) => {
+                      starterSlotByName.set(sqPl.n, teamSlots[i]?.sp || sqPl.ro);
+                    });
+                    const starterRows = filteredSquad.filter((q) => starterNames.has(q.n));
+                    const benchRows = filteredSquad.filter((q) => !starterNames.has(q.n));
+
+                    const renderTeamSquadRow = (q: Player) => {
+                      const isStarter = starterNames.has(q.n);
+                      const slotRole = isStarter ? starterSlotByName.get(q.n) || q.ro : q.ro;
+                      const isMe = !!q.me || (state.mode === 'p' && state.p?.name === q.n);
+                      const f = Math.round(q.fit ?? 100);
+                      const hasCardOrStat =
+                        (q.sg || 0) > 0 ||
+                        (q.sa || 0) > 0 ||
+                        (q.sus || 0) > 0 ||
+                        q.inj > 0 ||
+                        (q.yc || 0) > 0;
+
+                      return (
+                        <button
+                          key={q.n}
+                          type="button"
+                          onClick={() => onInspectPlayer(q, team)}
+                          className={`w-full text-left grid grid-cols-[22px_34px_26px_minmax(0,1fr)_58px_52px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_48px_46px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
+                            isMe ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/70' : 'hover:bg-[var(--surface-2)]/65'
+                          }`}
+                        >
+                          <div className="flex items-center justify-start">
+                            <MatchPlayerThumb
+                              player={q}
+                              team={team}
+                              state={state}
+                              kitColor={q.pos === 'GK' ? teamGkKit : teamKit}
+                              trimColor={q.pos === 'GK' ? undefined : teamTrim}
+                              size="xs"
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-start">
+                            <PositionBadge role={slotRole as any} size="2xs" />
+                          </div>
+
+                          <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+                            #{getShirtNo(team, q)}
+                          </div>
+
+                          <div className="flex items-center justify-start gap-1 min-w-0">
+                            <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
+                              {q.n}
+                            </span>
+                            {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+                            {isMe && (
+                              <span
+                                title="ตัวคุณ"
+                                aria-label="ตัวคุณ"
+                                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8px] font-black shrink-0"
+                              >
+                                ★
+                              </span>
+                            )}
+                            {(q.hg || q.customCreated) ? <span title="เด็กปั้นสโมสร" className="text-[10px] mland:text-[8.5px] shrink-0">🌱</span> : null}
+                            <span className="hidden sm:inline text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular shrink-0">
+                              · {q.age}ป
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-start flex-wrap gap-0.5 text-[10px] mland:text-[8.5px] tabular">
+                            {hasCardOrStat ? (
+                              <>
+                                {(q.sg || 0) > 0 && <StatIconBadge kind="goal" count={q.sg} size="xs" />}
+                                {(q.sa || 0) > 0 && <StatIconBadge kind="assist" count={q.sa} size="xs" />}
+                                {(q.sus || 0) > 0 ? (
+                                  <StatIconBadge kind="red" count={q.sus} size="xs" title="ติดโทษแบน" />
+                                ) : q.inj > 0 ? (
+                                  <StatIconBadge kind="injury" size="xs" title={`เจ็บ ${q.inj} นัด`} />
+                                ) : (q.yc || 0) > 0 ? (
+                                  <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />
+                                ) : null}
+                              </>
+                            ) : (
+                              <span className="text-[var(--mut)]/55">—</span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-start">
+                            <StaminaBar value={f} variant="compact" className="w-full" />
+                          </div>
+
+                          <div className="flex items-center justify-start">
+                            <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${ovTextColorClass(q.ov)}`}>
+                              {q.ov}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    };
+
                     return (
-                      <button
-                        key={q.n}
-                        type="button"
-                        onClick={() => onInspectPlayer(q, team)}
-                        className={`w-full flex items-center justify-between gap-2 px-3 mland:px-2 py-1.5 mland:py-1 hover:bg-[var(--surface-2)]/65 text-left text-xs mland:text-[10px] cursor-pointer transition-colors ${
-                          isMe ? 'bg-[var(--lamp-soft)]/50' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
-                          <div className="shrink-0 mland:[&_svg]:w-6 mland:[&_svg]:h-6">
-                            <PlayerFace player={q} team={team} state={state} careerProfile={isMe ? state.p : null} size={28} />
-                          </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold flex items-center gap-1 leading-tight min-w-0">
-                              <PositionBadge role={q.ro} size="2xs" />
-                              <span className="text-[var(--mut)] tabular w-[24px] mland:w-[21px] text-left shrink-0">#{getShirtNo(team, q)}</span>
-                              <span className="truncate">{q.n}</span>
-                              {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
-                              {isStarter && <span className="text-[var(--g)] shrink-0" title="ตัวจริง">★</span>}
-                              {isMe && (
-                                <span
-                                  title="ตัวคุณ"
-                                  aria-label="ตัวคุณ"
-                                  className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0"
-                                >
-                                  ★
-                                </span>
-                              )}
+                      <>
+                        {starterRows.length > 0 && (
+                          <>
+                            <div
+                              className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+                              style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+                            >
+                              <span>ตัวจริง</span>
+                              <span className="tabular">{starterRows.length} คน</span>
                             </div>
-                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 flex-wrap">
-                              <span>อายุ {q.age}</span>
-                              <PlayerBioStrip bio={qBio} variant="inline" className="hidden sm:inline-flex" />
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-0.5 tabular">
-                                {(q.sg || 0) <= 1 && <span>{q.sg || 0}</span>}
-                                <StatIconBadge kind="goal" count={Math.max(1, q.sg || 0)} size="xs" />
-                              </span>
-                              <span>·</span>
-                              <span className="inline-flex items-center gap-0.5 tabular">
-                                {(q.sa || 0) <= 1 && <span>{q.sa || 0}</span>}
-                                <StatIconBadge kind="assist" count={Math.max(1, q.sa || 0)} size="xs" />
-                              </span>
-                              {(q.sus || 0) > 0 ? (
-                                <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
-                                  · <StatIconBadge kind="red" count={q.sus} size="xs" /> แบน
-                                </span>
-                              ) : q.inj > 0 ? (
-                                <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-bold">
-                                  · <StatIconBadge kind="injury" size="xs" /> {q.inj}
-                                </span>
-                              ) : (q.yc || 0) > 0 ? (
-                                <span className="inline-flex items-center gap-0.5">
-                                  · <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" /> {q.yc}/3
-                                </span>
-                              ) : null}
+                            <div className="divide-y divide-[var(--line)]/50">
+                              {starterRows.map(renderTeamSquadRow)}
                             </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <StaminaBar value={f} variant="compact" className="w-12 mland:w-10" />
-                          <span
-                            className="w-7 text-center py-0.5 rounded-lg text-white font-bold tabular shrink-0 text-[11px] mland:text-[9.5px]"
-                            style={{ background: ovColor(q.ov) }}
-                          >
-                            {q.ov}
-                          </span>
-                        </div>
-                      </button>
+                          </>
+                        )}
+                        {benchRows.length > 0 && (
+                          <>
+                            <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+                              <span>ตัวสำรอง</span>
+                              <span className="tabular text-[var(--mut)]">{benchRows.length} คน</span>
+                            </div>
+                            <div className="divide-y divide-[var(--line)]/50">
+                              {benchRows.map(renderTeamSquadRow)}
+                            </div>
+                          </>
+                        )}
+                      </>
                     );
-                  })}
+                  })()}
                 </div>
               </section>
             </div>
