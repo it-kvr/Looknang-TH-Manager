@@ -26,7 +26,8 @@ import type {
   ClubMegastoreState,
   MegastoreSeasonArchive,
   PlayerJerseySaleRecord,
-  StadiumStyleId
+  StadiumStyleId,
+  LiveStreamPlanId
 } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { CREST_SHAPES, CREST_PATTERNS, CREST_IC, CREST_IC_NAMES, KIT_PATTERNS, KIT_COLLARS, AWAY_KIT_PAIRINGS, getTurfGradeForLevel, STADIUM_STYLE_SPECS, getStadiumStyleSpec } from '../data/crestAndKitData';
@@ -149,6 +150,14 @@ export const FinanceClubView: React.FC<{
     founded: '2568'
   });
   const [identityDraft, setIdentityDraft] = useState<ClubIdentity | null>(null);
+  const [financeDraft, setFinanceDraft] = useState<{
+    winBonus: number;
+    sp: number;
+    ticketPlan: string;
+    tp: number;
+    liveStream: LiveStreamPlanId;
+    stockTier: number;
+  } | null>(null);
   const [crestStudioTab, setCrestStudioTab] = useState<'shape' | 'icon'>('shape');
   const [identityMobilePane, setIdentityMobilePane] = useState<'crest' | 'kit'>('crest');
   const [kitColorTarget, setKitColorTarget] = useState<'c1' | 'c2' | 'c3'>('c1');
@@ -203,19 +212,88 @@ export const FinanceClubView: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, clubTab]);
 
+  useEffect(() => {
+    if (tab === 'f') {
+      const tpResolved = resolveTicketPlan(state);
+      const streamResolved = resolveLiveStreamPlan(state);
+      const msSnap = state.megastore || ensureMegastoreState({ ...state });
+      setFinanceDraft({
+        winBonus: state.winBonus || 0,
+        sp: state.sp ?? 0,
+        ticketPlan: tpResolved.id,
+        tp: tpResolved.legacyIdx,
+        liveStream: streamResolved.id,
+        stockTier: msSnap.stockTier ?? 1
+      });
+    } else {
+      setFinanceDraft(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
   const me = state.teams[state.me];
-  const est = calcMatchdayFinanceEstimate(state, me);
   const stf = getStaffState(state);
   const megastoreSnap = useMemo<ClubMegastoreState>(() => {
     if (state.megastore) return state.megastore;
     const temp: GameState = { ...state };
     return ensureMegastoreState(temp);
   }, [state]);
-  const megastoreProj = useMemo(() => getMegastoreProjection(state, me), [state, me]);
+
+  const committedTicketPlan = resolveTicketPlan(state);
+  const committedStreamPlan = resolveLiveStreamPlan(state);
+  const committedFinance = {
+    winBonus: state.winBonus || 0,
+    sp: state.sp ?? 0,
+    ticketPlan: committedTicketPlan.id,
+    tp: committedTicketPlan.legacyIdx,
+    liveStream: committedStreamPlan.id,
+    stockTier: megastoreSnap.stockTier ?? 1
+  };
+  const activeFinanceValues = tab === 'f' && financeDraft ? financeDraft : committedFinance;
+  const changedFinItems = {
+    winBonus: activeFinanceValues.winBonus !== committedFinance.winBonus,
+    sp: activeFinanceValues.sp !== committedFinance.sp,
+    ticket:
+      activeFinanceValues.ticketPlan !== committedFinance.ticketPlan ||
+      activeFinanceValues.tp !== committedFinance.tp,
+    liveStream: activeFinanceValues.liveStream !== committedFinance.liveStream,
+    stockTier: activeFinanceValues.stockTier !== committedFinance.stockTier
+  };
+  const changedFinCount = Object.values(changedFinItems).filter(Boolean).length;
+  const hasFinanceChanges = tab === 'f' && changedFinCount > 0;
+
+  const finPreviewState: GameState = useMemo(() => {
+    if (tab !== 'f' || !financeDraft) return state;
+    return {
+      ...state,
+      winBonus: financeDraft.winBonus,
+      sp: financeDraft.sp,
+      ticketPlan: financeDraft.ticketPlan,
+      tp: financeDraft.tp,
+      liveStream: financeDraft.liveStream,
+      megastore: {
+        ...megastoreSnap,
+        stockTier: financeDraft.stockTier
+      }
+    };
+  }, [tab, financeDraft, state, megastoreSnap]);
+
+  const est = calcMatchdayFinanceEstimate(finPreviewState, me);
+  const megastoreProj = useMemo(() => getMegastoreProjection(finPreviewState, me), [finPreviewState, me]);
   const chartData = useMemo(
-    () => getClubFinanceChartData(state, est, true),
+    () => getClubFinanceChartData(finPreviewState, est, true),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.season, state.md, state.money, state.finHist, state.finPendIn, state.finPendOut, est.homeIn, est.awayIn, est.totalOut]
+    [
+      finPreviewState.season,
+      finPreviewState.md,
+      finPreviewState.money,
+      finPreviewState.finHist,
+      finPreviewState.finPendIn,
+      finPreviewState.finPendOut,
+      est.homeIn,
+      est.awayIn,
+      est.totalOut
+    ]
   );
   const chartLatestProj = chartData.length ? (chartData[chartData.length - 1].projBal ?? chartData[chartData.length - 1].bal ?? Math.round(state.money)) : Math.round(state.money);
   const seasonStartBal = chartData[0]?.bal ?? Math.round(state.money);
@@ -438,7 +516,45 @@ export const FinanceClubView: React.FC<{
       if (partnerFilter === 'merch') return d.merchBoost > 0;
       return true;
     });
-    const currentTicketPlan = resolveTicketPlan(state);
+    const currentTicketPlan = resolveTicketPlan(finPreviewState);
+
+    const patchFinanceDraft = (
+      fn: (draft: {
+        winBonus: number;
+        sp: number;
+        ticketPlan: string;
+        tp: number;
+        liveStream: LiveStreamPlanId;
+        stockTier: number;
+      }) => void
+    ) => {
+      SFX.tap();
+      setFinanceDraft((prev) => {
+        const next = { ...(prev || committedFinance) };
+        fn(next);
+        return next;
+      });
+    };
+
+    const saveFinanceDraft = () => {
+      if (!financeDraft || !hasFinanceChanges) return;
+      SFX.confirm();
+      onUpdateState((d) => {
+        d.winBonus = financeDraft.winBonus;
+        d.sp = financeDraft.sp;
+        d.ticketPlan = financeDraft.ticketPlan;
+        d.tp = financeDraft.tp;
+        d.liveStream = financeDraft.liveStream;
+        ensureMegastoreState(d).stockTier = financeDraft.stockTier;
+      });
+      onToast('บันทึกการตั้งค่าการเงินเรียบร้อยแล้ว!');
+    };
+
+    const resetFinanceDraft = () => {
+      SFX.tap();
+      setFinanceDraft({ ...committedFinance });
+      onToast('คืนค่าการตั้งค่าการเงินเดิมแล้ว');
+    };
 
     const loanPackages = [
       { id: 'short', title: 'สินเชื่อหมุนเวียนระยะสั้น', amount: 80, per: 9, left: 10, desc: 'ดอกเบี้ยต่ำ เหมาะอุดงบขาดมือชั่วคราว' },
@@ -474,7 +590,10 @@ export const FinanceClubView: React.FC<{
           </div>
 
           <div className="p-3.5 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)]">
-            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)]">คาดการณ์สุทธิ / นัดเหย้า</div>
+            <div className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--mut)] flex items-center justify-between gap-1">
+              <span className="truncate">คาดการณ์สุทธิ / นัดเหย้า</span>
+              {hasFinanceChanges && <span className="text-[9.5px] mland:text-[8px] text-[#b47b00] dark:text-[var(--lamp)] shrink-0">จำลอง</span>}
+            </div>
             <div className={`font-bold text-xl sm:text-2xl mland:text-xs tabular mt-0.5 mland:mt-0 ${est.homeNet >= 0 ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
               {est.homeNet >= 0 ? `+${fmtMoneyNum(est.homeNet)}` : fmtMoneyNum(est.homeNet)}
             </div>
@@ -504,27 +623,53 @@ export const FinanceClubView: React.FC<{
           </div>
         </div>
 
-        {/* Finance Sub-navigation (4 Focused Commercial, Megastore & Cashflow Tabs) */}
-        <div className="seg-bar grid grid-cols-4 w-full bg-[var(--surface)] shrink-0">
-          {(
-            [
-              ['overview', '📊 กระแสเงิน & แคมเปญ'],
-              ['commercial', '💼 สปอนเซอร์ & ไลฟ์สด'],
-              ['megastore', '🛍️ เมกะสโตร์ & ยอดขาย'],
-              ['ledger', '📒 ธนาคาร & บัญชี']
-            ] as const
-          ).map(([id, label]) => (
+        {/* Finance Sub-navigation + Save / Reset Controls */}
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 mland:gap-1.5 shrink-0">
+          <div className="seg-bar grid grid-cols-4 flex-1 min-w-0 bg-[var(--surface)]">
+            {(
+              [
+                ['overview', '📊 กระแสเงิน & แคมเปญ'],
+                ['commercial', '💼 สปอนเซอร์ & ลิขสิทธิ์ถ่ายทอด'],
+                ['megastore', '🛍️ เมกะสโตร์ & ยอดขาย'],
+                ['ledger', '📒 ธนาคาร & บัญชี']
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setFinTab(id)}
+                className={`seg-btn truncate whitespace-nowrap ${
+                  finTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            {hasFinanceChanges && (
+              <button
+                type="button"
+                onClick={resetFinanceDraft}
+                className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>คืนค่าเดิม</span>
+              </button>
+            )}
             <button
-              key={id}
               type="button"
-              onClick={() => setFinTab(id)}
-              className={`seg-btn truncate whitespace-nowrap ${
-                finTab === id ? 'seg-btn-active' : 'hover:bg-[var(--surface-2)]'
+              disabled={!hasFinanceChanges}
+              onClick={saveFinanceDraft}
+              className={`btn btn-xs sm:btn-sm whitespace-nowrap shrink-0 ${
+                hasFinanceChanges ? 'btn-primary' : 'btn-surface'
               }`}
             >
-              {label}
+              <Check className="w-3.5 h-3.5" />
+              <span>{hasFinanceChanges ? `บันทึก (${changedFinCount})` : 'บันทึกแล้ว'}</span>
             </button>
-          ))}
+          </div>
         </div>
 
         {/* Sub-tab 1: Cashflow & Matchday Boosters */}
@@ -543,11 +688,11 @@ export const FinanceClubView: React.FC<{
                     <div className="flex justify-between text-[var(--mut)]"><span>เมกะสโตร์สโมสร (Lv.{state.merchLv ?? 1})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estMerch)}</b></div>
                     <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์ ({est.activeDealsCount})</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
                     <div className="flex justify-between text-[var(--mut)]">
-                      <span>ไลฟ์สด ({est.streamPlan.id === 'off' ? 'ปิด' : `~${fmtFansShort(est.estStreamViewers)} ดู`})</span>
+                      <span>ขายลิขสิทธิ์ถ่ายทอดสด ({est.streamPlan.id === 'off' ? 'ไม่ขาย' : `~${fmtFansShort(est.estStreamViewers)} ดู`})</span>
                       <b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estStreamIn)}</b>
                     </div>
                     <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60">
-                      <span>รายจ่ายรวม (รวมทีมงาน/ลิขสิทธิ์ไลฟ์ {fmtMoneyNum(est.estStreamOut)})</span>
+                      <span>รายจ่ายรวม (รวมส่วนแบ่งแพลตฟอร์ม {fmtMoneyNum(est.estStreamOut)})</span>
                       <b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.totalOut)}</b>
                     </div>
                   </div>
@@ -559,11 +704,11 @@ export const FinanceClubView: React.FC<{
                     </div>
                     <div className="flex justify-between text-[var(--mut)]"><span>สปอนเซอร์หลัก + พาร์ทเนอร์</span><b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estSponsor + est.dealIncome)}</b></div>
                     <div className="flex justify-between text-[var(--mut)]">
-                      <span>ไลฟ์สดออนไลน์ ({est.streamPlan.short})</span>
+                      <span>ลิขสิทธิ์ถ่ายทอดสดออนไลน์ ({est.streamPlan.short})</span>
                       <b className="text-[var(--g)] tabular">+{fmtMoneyNum(est.estStreamIn)}</b>
                     </div>
                     <div className="flex justify-between text-[var(--mut)]"><span>ค่าเหนื่อยนักเตะ + สตาฟฟ์</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.wageCost + est.staffCost)}</b></div>
-                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าทีมงาน/อุปกรณ์/ลิขสิทธิ์ไลฟ์</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.estStreamOut)}</b></div>
+                    <div className="flex justify-between text-[var(--mut)]"><span>ค่าธรรมเนียม/ส่วนแบ่งแพลตฟอร์ม</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.estStreamOut)}</b></div>
                     <div className="flex justify-between text-[var(--mut)] pt-1 border-t border-[var(--line)]/60"><span>ผ่อนเงินกู้ธนาคาร</span><b className="text-[var(--red)] tabular">-{fmtMoneyNum(est.loanCost)}</b></div>
                   </div>
                 </div>
@@ -758,7 +903,12 @@ export const FinanceClubView: React.FC<{
                 </div>
               <div className="space-y-2.5">
                 <div className="p-3 rounded-xl bg-[var(--surface-2)] space-y-2">
-                  <div className="font-bold text-xs">🏆 โบนัสอัดฉีดชัยชนะ (จ่ายเฉพาะเมื่อชนะ)</div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-bold text-xs">🏆 โบนัสอัดฉีดชัยชนะ (จ่ายเฉพาะเมื่อชนะ)</div>
+                    {changedFinItems.winBonus && (
+                      <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)] shrink-0">รอการบันทึก</span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-[var(--mut)]">เพิ่มความมุ่งมั่นและโอกาสทำผลงานดีในนัดสำคัญ</div>
                   <div className="flex flex-wrap gap-1.5">
                     {([
@@ -769,9 +919,9 @@ export const FinanceClubView: React.FC<{
                       <button
                         key={v}
                         type="button"
-                        onClick={() => onUpdateState((d) => { d.winBonus = v; })}
+                        onClick={() => patchFinanceDraft((d) => { d.winBonus = v; })}
                         className={`btn btn-sm flex-1 ${
-                          (state.winBonus || 0) === v ? 'btn-primary' : 'btn-surface'
+                          activeFinanceValues.winBonus === v ? 'btn-primary' : 'btn-surface'
                         }`}
                       >
                         {l}
@@ -838,13 +988,18 @@ export const FinanceClubView: React.FC<{
               <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-bold text-sm mland:text-xs">🤝 สปอนเซอร์หลักคาดอกเสื้อ ({MAIN_SPONSOR_PACKAGES.length} แพ็กเกจ)</h3>
-                  <span className="text-[10.5px] font-bold text-[var(--g)] tabular shrink-0">
-                    รับปัจจุบัน {fmtMoneyNum(est.estSponsor)}/นัด
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {changedFinItems.sp && (
+                      <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
+                    )}
+                    <span className="text-[10.5px] font-bold text-[var(--g)] tabular">
+                      รับปัจจุบัน {fmtMoneyNum(est.estSponsor)}/นัด
+                    </span>
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   {MAIN_SPONSOR_PACKAGES.map((pkg) => {
-                    const active = (state.sp ?? 0) === pkg.idx;
+                    const active = activeFinanceValues.sp === pkg.idx;
                     const elig = evaluateMainSponsorEligibility(pkg.idx, state, me);
                     const preview = calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me);
                     return (
@@ -853,11 +1008,9 @@ export const FinanceClubView: React.FC<{
                         type="button"
                         disabled={!elig.ok}
                         onClick={() => {
-                          SFX.tap();
-                          onUpdateState((d) => {
+                          patchFinanceDraft((d) => {
                             d.sp = pkg.idx;
                           });
-                          onToast(`เปลี่ยนสปอนเซอร์หลักเป็น ${pkg.brand} แล้ว`);
                         }}
                         className={`w-full p-2.5 mland:p-2 rounded-xl border text-left transition-colors ${
                           !elig.ok
@@ -876,7 +1029,7 @@ export const FinanceClubView: React.FC<{
                         <div className="flex items-center justify-between gap-2 text-[10.5px] text-[var(--mut)] mt-0.5">
                           <span className="truncate">{pkg.desc}</span>
                           <span className={`shrink-0 font-semibold ${elig.ok ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
-                            {active ? 'ใช้งานอยู่' : elig.ok ? pkg.tag : elig.reqText}
+                            {active ? (committedFinance.sp === pkg.idx ? 'ใช้งานอยู่' : 'เลือกไว้ (รอบันทึก)') : elig.ok ? pkg.tag : elig.reqText}
                           </span>
                         </div>
                       </button>
@@ -1011,9 +1164,14 @@ export const FinanceClubView: React.FC<{
               <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <h3 className="font-bold text-sm mland:text-xs">🎫 นโยบายราคาตั๋วเข้าชม ({TICKET_PRICING_PLANS.length} ระดับ)</h3>
-                  <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
-                    ~{est.estAtt.toLocaleString()} / {est.cap.toLocaleString()} ({est.attPct}%)
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {changedFinItems.ticket && (
+                      <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
+                    )}
+                    <span className="text-xs font-bold text-[var(--g)] tabular">
+                      ~{est.estAtt.toLocaleString()} / {est.cap.toLocaleString()} ({est.attPct}%)
+                    </span>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
                   {TICKET_PRICING_PLANS.map((plan) => {
@@ -1026,12 +1184,10 @@ export const FinanceClubView: React.FC<{
                         type="button"
                         disabled={locked}
                         onClick={() => {
-                          SFX.tap();
-                          onUpdateState((d) => {
+                          patchFinanceDraft((d) => {
                             d.ticketPlan = plan.id;
                             d.tp = plan.legacyIdx;
                           });
-                          onToast(`ตั้งราคาตั๋วเป็น ${plan.label} (${plan.priceBaht}฿/ใบ) แล้ว`);
                         }}
                         className={`p-2.5 mland:p-2 rounded-xl text-left border transition-colors ${
                           locked
@@ -1057,7 +1213,8 @@ export const FinanceClubView: React.FC<{
                 </div>
                 <div className="p-2.5 rounded-xl bg-[var(--surface-2)] flex items-center justify-between gap-2 text-xs">
                   <span className="text-[var(--mut)]">
-                    ใช้งาน: <b className="text-[var(--ink)]">{currentTicketPlan.label} ({currentTicketPlan.priceBaht}฿)</b>
+                    {changedFinItems.ticket ? 'ที่เลือกไว้:' : 'ใช้งาน:'}{' '}
+                    <b className="text-[var(--ink)]">{currentTicketPlan.label} ({currentTicketPlan.priceBaht}฿)</b>
                   </span>
                   <b className="text-[var(--g)] tabular shrink-0">+{fmtMoney(est.estTicket)} / นัดเหย้า</b>
                 </div>
@@ -1065,7 +1222,7 @@ export const FinanceClubView: React.FC<{
 
               {/* Online Live Streaming & Broadcast Rights Card */}
               {(() => {
-                const curStreamPlan = resolveLiveStreamPlan(state);
+                const curStreamPlan = resolveLiveStreamPlan(finPreviewState);
                 const nxtRound = state.fx?.[state.md];
                 const nxtPair = nxtRound?.find(([x, y]) => x === state.me || y === state.me);
                 const oppId = nxtPair ? (nxtPair[0] === state.me ? nxtPair[1] : nxtPair[0]) : state.me;
@@ -1075,17 +1232,22 @@ export const FinanceClubView: React.FC<{
                     <div className="flex items-center justify-between gap-2">
                       <h3 className="font-bold text-sm mland:text-xs flex items-center gap-1.5">
                         <Radio className="w-4 h-4 text-[var(--red)] shrink-0" />
-                        <span>ช่องผู้ถือลิขสิทธิ์ถ่ายทอดสด &amp; สตรีมมิ่ง</span>
+                        <span>ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์</span>
                       </h3>
-                      <span className="text-xs font-bold text-[var(--g)] tabular shrink-0">
-                        {curStreamPlan.id === 'off' ? 'ช่องกลางลีก' : `~${est.estStreamViewers.toLocaleString()} คนดู`}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {changedFinItems.liveStream && (
+                          <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
+                        )}
+                        <span className="text-xs font-bold text-[var(--g)] tabular">
+                          {curStreamPlan.id === 'off' ? 'ช่องกลางลีก' : `~${est.estStreamViewers.toLocaleString()} คนดู`}
+                        </span>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                       {LIVE_STREAM_PLANS.map((plan) => {
                         const active = curStreamPlan.id === plan.id;
-                        const proj = computeMatchStreamProjection(me, oppTeam, state, {
+                        const proj = computeMatchStreamProjection(me, oppTeam, finPreviewState, {
                           kind: 'league',
                           derby: !!state.derby,
                           planOverride: plan
@@ -1095,11 +1257,9 @@ export const FinanceClubView: React.FC<{
                             key={plan.id}
                             type="button"
                             onClick={() => {
-                              SFX.tap();
-                              onUpdateState((d) => {
+                              patchFinanceDraft((d) => {
                                 d.liveStream = plan.id;
                               });
-                              onToast(`ตั้งค่าแพ็กเกจถ่ายทอดสดช่องลิขสิทธิ์เป็น "${plan.short}" แล้ว`);
                             }}
                             className={`p-2.5 mland:p-2 rounded-xl text-left border transition-colors cursor-pointer ${
                               active
@@ -1133,10 +1293,10 @@ export const FinanceClubView: React.FC<{
                               <>
                                 <div className={`text-[10px] mt-0.5 tabular flex items-center justify-between gap-1 ${active ? 'text-white/90' : 'text-[var(--ink)]'}`}>
                                   <span>คนดู ~{fmtFansShort(proj.baseViewers)}</span>
-                                  <span>รับ +{fmtMoneyNum(proj.estIn)} · จ่าย -{fmtMoneyNum(proj.estOut)}</span>
+                                  <span>รับ +{fmtMoneyNum(proj.estIn)} · หัก -{fmtMoneyNum(proj.estOut)}</span>
                                 </div>
                                 <div className={`text-[9.5px] mt-0.5 tabular truncate ${active ? 'text-white/80' : 'text-[var(--mut)]'}`}>
-                                  ทีมงาน {plan.crewCost}k · อุปกรณ์ {plan.gearCost}k · ลิขสิทธิ์ {plan.rightsCost}k
+                                  ค่าประสานงาน {plan.crewCost}k · ค่าสัญญาณ {plan.gearCost}k · ส่วนแบ่งแพลตฟอร์ม {plan.rightsCost}k
                                 </div>
                               </>
                             )}
@@ -1148,7 +1308,7 @@ export const FinanceClubView: React.FC<{
                     {state.streamStats && state.streamStats.matches > 0 && (
                       <div className="p-2.5 rounded-xl bg-[var(--surface-2)] flex flex-wrap items-center justify-between gap-2 text-[11px] tabular">
                         <span className="text-[var(--mut)]">
-                          ไลฟ์ล่าสุด <b className="text-[var(--ink)]">{state.streamStats.lastPeakViewers.toLocaleString()}</b> คนดู · รวม {state.streamStats.matches} นัด
+                          ถ่ายทอดสดล่าสุด <b className="text-[var(--ink)]">{state.streamStats.lastPeakViewers.toLocaleString()}</b> คนดู · รวม {state.streamStats.matches} นัด
                         </span>
                         <span className="font-bold">
                           <span className="text-[var(--g)]">+{fmtMoneyNum(state.streamStats.totalIn)}</span>
@@ -1435,20 +1595,23 @@ export const FinanceClubView: React.FC<{
                     </div>
 
                     <div className="space-y-1.5">
-                      <div className="text-[11px] font-bold text-[var(--mut)]">เกรดสต็อกเสื้อ &amp; ราคาจำหน่ายหน้าร้าน</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] font-bold text-[var(--mut)]">เกรดสต็อกเสื้อ &amp; ราคาจำหน่ายหน้าร้าน</div>
+                        {changedFinItems.stockTier && (
+                          <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">รอการบันทึก</span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-3 gap-1.5">
                         {MEGASTORE_STOCK_TIERS.map((tier) => {
-                          const active = (megastoreSnap.stockTier ?? 1) === tier.idx;
+                          const active = activeFinanceValues.stockTier === tier.idx;
                           return (
                             <button
                               key={tier.idx}
                               type="button"
                               onClick={() => {
-                                SFX.tap();
-                                onUpdateState((d) => {
-                                  ensureMegastoreState(d).stockTier = tier.idx;
+                                patchFinanceDraft((d) => {
+                                  d.stockTier = tier.idx;
                                 });
-                                onToast(`เปลี่ยนเกรดสต็อกเป็น ${tier.label} แล้ว`);
                               }}
                               className={`p-2 rounded-xl border text-left transition-colors cursor-pointer ${
                                 active
@@ -2013,8 +2176,8 @@ export const FinanceClubView: React.FC<{
           style={{ background: `linear-gradient(90deg, ${dk.c1}, ${dk.c2})` }}
         />
         <div className="flex flex-col gap-2 mland:gap-1.5">
-          {/* Row 1: Tall Crest + Jerseys & Full Club Name / Details */}
-          <div className="flex items-center gap-3 sm:gap-4 mland:gap-2.5 text-left min-w-0">
+          {/* Row 1: Tall Crest + Jerseys, Full Club Name / Details, and Identity Action Buttons */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 mland:gap-2.5 text-left min-w-0">
             <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 px-2.5 py-2 sm:px-3.5 sm:py-2.5 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0 shadow-2xs">
               <div className="shrink-0 [&>svg]:w-15 [&>svg]:h-15 sm:[&>svg]:w-[74px] sm:[&>svg]:h-[74px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
                 <ClubCrest name={me.name} size={74} team={me} club={dk} isMyClub />
@@ -2119,64 +2282,61 @@ export const FinanceClubView: React.FC<{
                 </p>
               )}
             </div>
+
+            {clubTab === 'identity' && (
+              <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const kp = P(KIT_P);
+                    const icons = Object.keys(CREST_IC);
+                    patchIdentityDraft((cl) => {
+                      cl.c1 = kp[0];
+                      cl.c2 = kp[1];
+                      cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
+                      cl.shape = R(0, CREST_SHAPES.length - 1);
+                      cl.pat = R(0, CREST_PATTERNS.length - 1);
+                      cl.crestBorder = R(0, 3);
+                      cl.kit = R(0, KIT_PATTERNS.length - 1);
+                      const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
+                      cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
+                      cl.collar = R(0, KIT_COLLARS.length - 1);
+                      cl.cuffTrim = Math.random() < 0.75;
+                      cl.icon = P(icons);
+                      cl.iconColor = '';
+                    });
+                  }}
+                  className="btn btn-xs sm:btn-sm btn-gold whitespace-nowrap shrink-0"
+                >
+                  <Dices className="w-3.5 h-3.5" />
+                  <span>สุ่มดีไซน์</span>
+                </button>
+                {hasIdentityChanges && (
+                  <button
+                    type="button"
+                    onClick={resetIdentityDraft}
+                    className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>คืนค่าเดิม</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={!hasIdentityChanges}
+                  onClick={saveIdentityDraft}
+                  className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Row 2: Action controls (identity tab) OR Compact 4-column Club Metrics */}
-          <div className="pt-1.5 mland:pt-1 border-t border-[var(--line)]/55">
-            {clubTab === 'identity' ? (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--mut)]">
-                  {hasIdentityChanges ? 'กด “บันทึก” เพื่อนำตราและชุดแข่งใหม่ไปใช้ทั่วทั้งสโมสร' : 'แตะตราหรือเสื้อด้านบนเพื่อสลับปรับแต่งได้ทันที'}
-                </span>
-                <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const kp = P(KIT_P);
-                      const icons = Object.keys(CREST_IC);
-                      patchIdentityDraft((cl) => {
-                        cl.c1 = kp[0];
-                        cl.c2 = kp[1];
-                        cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
-                        cl.shape = R(0, CREST_SHAPES.length - 1);
-                        cl.pat = R(0, CREST_PATTERNS.length - 1);
-                        cl.crestBorder = R(0, 3);
-                        cl.kit = R(0, KIT_PATTERNS.length - 1);
-                        const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
-                        cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
-                        cl.collar = R(0, KIT_COLLARS.length - 1);
-                        cl.cuffTrim = Math.random() < 0.75;
-                        cl.icon = P(icons);
-                        cl.iconColor = '';
-                      });
-                    }}
-                    className="btn btn-xs sm:btn-sm btn-gold whitespace-nowrap shrink-0"
-                  >
-                    <Dices className="w-3.5 h-3.5" />
-                    <span>สุ่มดีไซน์</span>
-                  </button>
-                  {hasIdentityChanges && (
-                    <button
-                      type="button"
-                      onClick={resetIdentityDraft}
-                      className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>คืนค่าเดิม</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    disabled={!hasIdentityChanges}
-                    onClick={saveIdentityDraft}
-                    className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
+          {/* Row 2: Compact 4-column Club Metrics (hidden on identity tab) */}
+          {clubTab !== 'identity' && (
+            <div className="pt-1.5 mland:pt-1 border-t border-[var(--line)]/55">
               <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 w-full text-center">
                 <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
                   <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</span>
@@ -2214,8 +2374,8 @@ export const FinanceClubView: React.FC<{
                   </b>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

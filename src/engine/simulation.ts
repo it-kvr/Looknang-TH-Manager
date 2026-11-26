@@ -2506,9 +2506,9 @@ export interface LiveStreamPlanDef {
 export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
   {
     id: 'off',
-    name: 'ช่องกลางผู้ถือลิขสิทธิ์ (แพ็กเกจพื้นฐานลีก)',
-    short: 'ช่องกลางลิขสิทธิ์',
-    desc: 'ถ่ายทอดผ่านช่องกลางของผู้ถือลิขสิทธิ์ลีกโดยไม่เพิ่มงบผลิตพิเศษ (ไม่มีรายรับ/รายจ่ายเพิ่ม)',
+    name: 'ช่องกลางผู้ถือลิขสิทธิ์ลีก (ไม่ขายเพิ่ม)',
+    short: 'ช่องกลางลีก',
+    desc: 'ปล่อยให้ลีกถ่ายทอดผ่านช่องกลางตามปกติ ไม่ได้ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์เพิ่มเติม',
     crewCost: 0,
     gearCost: 0,
     rightsCost: 0,
@@ -2520,9 +2520,9 @@ export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
   },
   {
     id: 'basic',
-    name: 'ร่วมถ่ายทอดสดช่องลิขสิทธิ์ (แพ็กเกจมาตรฐาน)',
+    name: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ (มาตรฐาน)',
     short: 'ลิขสิทธิ์มาตรฐาน',
-    desc: 'ออกอากาศผ่านช่องผู้ถือลิขสิทธิ์ระดับพื้นฐาน ต้นทุนต่ำ ได้ส่วนแบ่งผู้ชมสม่ำเสมอ',
+    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ให้แพลตฟอร์มสตรีมมิ่งทั่วไป ได้ค่าลิขสิทธิ์สม่ำเสมอ',
     crewCost: 1,
     gearCost: 1,
     rightsCost: 1,
@@ -2534,9 +2534,9 @@ export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
   },
   {
     id: 'pro',
-    name: 'ช่องลิขสิทธิ์ถ่ายทอด HD (หลายมุมกล้อง)',
-    short: 'ช่องลิขสิทธิ์ HD',
-    desc: 'ส่งสัญญาณขึ้นช่องทีวีและสตรีมมิ่งผู้ถือลิขสิทธิ์ HD พร้อมผู้บรรยาย ดึงดูดยอดดูสูงขึ้น',
+    name: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ HD',
+    short: 'ลิขสิทธิ์ HD',
+    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ความคมชัดสูงให้ผู้ให้บริการรายใหญ่ ยอดผู้ชมและรายได้สูงขึ้น',
     crewCost: 4,
     gearCost: 3,
     rightsCost: 3,
@@ -2548,9 +2548,9 @@ export const LIVE_STREAM_PLANS: readonly LiveStreamPlanDef[] = [
   },
   {
     id: 'studio',
-    name: 'ช่องลิขสิทธิ์หลักระดับพรีเมียม (Full Broadcast)',
+    name: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์หลัก (Exclusive)',
     short: 'ลิขสิทธิ์พรีเมียม',
-    desc: 'ถ่ายทอดสดคู่เอกบนเครือข่ายช่องลิขสิทธิ์หลักระดับประเทศ ยอดผู้ชมและฐานแฟนพุ่งสูงสุด',
+    desc: 'ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์คู่เอกให้เครือข่ายแพลตฟอร์มระดับประเทศ ค่าลิขสิทธิ์และยอดผู้ชมสูงสุด',
     crewCost: 8,
     gearCost: 7,
     rightsCost: 7,
@@ -2646,9 +2646,9 @@ export function applyLiveStreamMatchSettlement(
   const streamOut = plan.totalCost;
 
   d.money += streamIn;
-  logFin(d, `รายได้ไลฟ์สดออนไลน์ (${plan.short} · ${fmtFansShort(peakViewers)} ดู)`, streamIn);
+  logFin(d, `รายได้ขายลิขสิทธิ์ถ่ายทอดสดออนไลน์ (${plan.short} · ${fmtFansShort(peakViewers)} ดู)`, streamIn);
   d.money -= streamOut;
-  logFin(d, `ค่าถ่ายทอดสด (ทีมงาน ${plan.crewCost}k · อุปกรณ์ ${plan.gearCost}k · ลิขสิทธิ์ ${plan.rightsCost}k)`, -streamOut);
+  logFin(d, `ค่าดำเนินการ & ส่วนแบ่งแพลตฟอร์ม (${plan.short})`, -streamOut);
 
   if (plan.fanGainBonus > 0) {
     const bonusFans = Math.round(plan.fanGainBonus * (opts.myGoals >= opts.oppGoals ? 1.2 : 0.85));
