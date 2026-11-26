@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2 } from 'lucide-react';
+import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2, ChevronRight } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -2496,34 +2496,65 @@ export const FinanceClubView: React.FC<{
               ? 'text-[#9a6700] dark:text-[var(--lamp)]'
               : 'text-[var(--g)]';
 
-        const leaderRows: Array<{
-          label: string;
+        const morVal = clamp(state.mor ?? 55, 0, 100);
+        const tacFamVal = clamp(me.tacFam ?? 65, 0, 100);
+        const avgFit = Math.round(me.sq.reduce((a, q) => a + clamp(q.fit ?? 100, 0, 100), 0) / Math.max(1, me.sq.length));
+        const injCount = me.sq.filter((q) => q.inj > 0).length;
+        const susCount = me.sq.filter((q) => (q.sus || 0) > 0).length;
+        const readyCount = Math.max(0, me.sq.length - me.sq.filter((q) => q.inj > 0 || (q.sus || 0) > 0).length);
+        const morCls = morVal >= 70 ? 'text-[var(--g)]' : morVal < 45 ? 'text-[var(--red)]' : 'text-[var(--ink)]';
+        const tacCls = tacFamVal >= 75 ? 'text-[var(--g)]' : tacFamVal < 50 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--ink)]';
+        const fitCls = avgFit >= 80 ? 'text-[var(--g)]' : avgFit < 65 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--ink)]';
+        const moodLabel =
+          morVal >= 75 ? 'ห้องแต่งตัวคึกคัก' : morVal >= 55 ? 'สปิริตมั่นคง' : morVal >= 40 ? 'บรรยากาศทรงตัว' : 'ต้องปลุกใจทีม';
+        const moodCls =
+          morVal >= 75 ? 'text-[var(--g)]' : morVal < 40 ? 'text-[var(--red)]' : 'text-[var(--mut)]';
+
+        const coreLeaders: Array<{
+          key: string;
+          roleLabel: string;
           player: Player | undefined;
-          valueText: string;
+          metricText: string;
+          metricAccent?: boolean;
+          isCaptain?: boolean;
           emptyText: string;
         }> = [
           {
-            label: 'ดาวเด่นพลังสูงสุด',
+            key: 'captain',
+            roleLabel: 'กัปตันทีม',
+            player: capPlayer,
+            metricText: capPlayer ? `OVR ${capPlayer.ov}` : '-',
+            isCaptain: true,
+            emptyText: 'ยังไม่มีกัปตัน'
+          },
+          {
+            key: 'topOvr',
+            roleLabel: 'ดาวเด่นพลังสูงสุด',
             player: topO,
-            valueText: topO ? `${topO.n} (${topO.ro} · พลัง ${topO.ov})` : '-',
+            metricText: topO ? `OVR ${topO.ov}` : '-',
+            metricAccent: true,
             emptyText: '-'
           },
           {
-            label: 'ดาวซัลโวซีซั่นนี้',
+            key: 'topScorer',
+            roleLabel: 'ดาวซัลโวซีซั่นนี้',
             player: bs && bs.sg ? bs : undefined,
-            valueText: bs && bs.sg ? `${bs.n} (${bs.sg} ประตู)` : 'ยังไม่มีประตู',
+            metricText: bs && bs.sg ? `${bs.sg} ประตู` : '',
+            metricAccent: true,
             emptyText: 'ยังไม่มีประตู'
           },
           {
-            label: 'จอมแอสซิสต์ซีซั่นนี้',
+            key: 'topAssist',
+            roleLabel: 'จอมแอสซิสต์ซีซั่นนี้',
             player: ba && ba.sa ? ba : undefined,
-            valueText: ba && ba.sa ? `${ba.n} (${ba.sa} ครั้ง)` : 'ยังไม่มีข้อมูล',
+            metricText: ba && ba.sa ? `${ba.sa} แอสซิสต์` : '',
             emptyText: 'ยังไม่มีข้อมูล'
           },
           {
-            label: 'ลงสนามมากที่สุด',
+            key: 'topApps',
+            roleLabel: 'ลงสนามมากที่สุด',
             player: bm && bm.ap ? bm : undefined,
-            valueText: bm && bm.ap ? `${bm.n} (${bm.ap} นัด)` : 'ยังไม่มีข้อมูล',
+            metricText: bm && bm.ap ? `${bm.ap} นัด` : '',
             emptyText: 'ยังไม่มีข้อมูล'
           }
         ];
@@ -2793,8 +2824,8 @@ export const FinanceClubView: React.FC<{
                             ? `ผลงานตามเป้า (อันดับ ${curRank}/${tierTbl.length} · เป้า ${targetRank}+)`
                             : `ต่ำกว่าเป้า (ตอนนี้ #${curRank} · ต้องติดอันดับ ${targetRank}+)`}
                       </span>
-                      <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)] shrink-0 tabular">
-                        เครดิต {rep}
+                      <span className="font-bold text-[var(--ink)] shrink-0 tabular">
+                        เป้า 1–{targetRank}
                       </span>
                     </div>
                   </div>
@@ -2885,90 +2916,124 @@ export const FinanceClubView: React.FC<{
                   </div>
                 </div>
 
-                {/* Panel 2: Dressing Room & Key Leaders */}
-                <div className="p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
+                {/* Panel 2: Dressing Room & Key Core (Read-only captain & leaders; captain assignment lives in Gameplan) */}
+                <div className="p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">ห้องแต่งตัว &amp; แกนหลักทีม</h3>
-                    <span className="text-[10px] text-[var(--mut)]">แตะชื่อเพื่อดูนักเตะ</span>
+                    <span className={`text-[10.5px] mland:text-[9px] font-semibold tabular truncate ${moodCls}`}>
+                      {moodLabel} · พร้อมลง {readyCount}/{me.sq.length}
+                      {injCount > 0 ? ` · เจ็บ ${injCount}` : ''}
+                      {susCount > 0 ? ` · แบน ${susCount}` : ''}
+                    </span>
                   </div>
 
                   <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center">
                     <div className="px-1">
-                      <div className="text-[9.5px] text-[var(--mut)]">ขวัญทีม</div>
-                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{state.mor ?? 55}%</div>
+                      <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">ขวัญทีม</div>
+                      <div className={`font-bold text-xs sm:text-sm mland:text-xs tabular ${morCls}`}>{morVal}%</div>
                     </div>
                     <div className="px-1">
-                      <div className="text-[9.5px] text-[var(--mut)]">เข้าใจแผน</div>
-                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{me.tacFam ?? 65}%</div>
+                      <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">เข้าใจแผน</div>
+                      <div className={`font-bold text-xs sm:text-sm mland:text-xs tabular ${tacCls}`}>{tacFamVal}%</div>
                     </div>
                     <div className="px-1">
-                      <div className="text-[9.5px] text-[var(--mut)]">อายุเฉลี่ย</div>
+                      <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">ความฟิตเฉลี่ย</div>
+                      <div className={`font-bold text-xs sm:text-sm mland:text-xs tabular ${fitCls}`}>{avgFit}%</div>
+                    </div>
+                    <div className="px-1">
+                      <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">อายุเฉลี่ย</div>
                       <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{avgAge} ปี</div>
-                    </div>
-                    <div className="px-1">
-                      <div className="text-[9.5px] text-[var(--mut)]">ขุมกำลัง</div>
-                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{me.sq.length} คน</div>
                     </div>
                   </div>
 
-                  <div className="divide-y divide-[var(--line)]/50 text-xs">
-                    {/* Captain Row (Read-only inspect; captain assignment lives in Gameplan) */}
-                    <div className="flex items-center justify-between gap-2 py-1.5">
-                      <span className="text-[var(--mut)] shrink-0">กัปตันทีม</span>
-                      <div className="flex items-center gap-1.5 min-w-0 justify-end">
-                        {capPlayer && (
-                          <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
-                            <PlayerFace player={capPlayer} team={me} state={state} club={k} isMyClub size={20} />
-                          </div>
-                        )}
-                        {capPlayer && onInspectPlayer ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                      <span className="font-bold text-[var(--ink)]/85">แกนหลักทีม</span>
+                      <span>แตะชื่อเพื่อดูข้อมูลนักเตะ</span>
+                    </div>
+
+                    <div className="divide-y divide-[var(--line)]/50">
+                      {coreLeaders.map((row) => {
+                        const pl = row.player;
+                        const canInspect = Boolean(pl && onInspectPlayer);
+                        if (!pl) {
+                          return (
+                            <div
+                              key={row.key}
+                              className="flex items-center justify-between gap-2 py-1.5 mland:py-1 text-[11px] mland:text-[9.5px]"
+                            >
+                              <span className="text-[var(--mut)]">{row.roleLabel}</span>
+                              <span className="text-[var(--mut)]/80 tabular">{row.emptyText}</span>
+                            </div>
+                          );
+                        }
+
+                        const rowShirtNo = getShirtNo(me, pl);
+                        const rowBody = (
+                          <>
+                            <div className="flex items-center gap-2.5 mland:gap-2 min-w-0 flex-1">
+                              <div className="shrink-0 w-8 h-8 mland:w-7 mland:h-7 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/70 flex items-end justify-center overflow-hidden [&>svg]:w-7 [&>svg]:h-7 mland:[&>svg]:w-6 mland:[&>svg]:h-6">
+                                <PlayerFace player={{ ...pl, no: rowShirtNo }} team={me} state={state} club={k} isMyClub size={28} />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-[10px] mland:text-[8.5px] font-medium text-[var(--mut)] truncate leading-tight">
+                                  {row.roleLabel}
+                                </div>
+                                <div className="flex items-center gap-1 min-w-0 leading-tight mt-0.5">
+                                  {row.isCaptain && (
+                                    <span
+                                      title="กัปตันทีม"
+                                      className="text-[10px] mland:text-[9px] font-extrabold text-[#9a6700] dark:text-[var(--lamp)] shrink-0"
+                                    >
+                                      ©
+                                    </span>
+                                  )}
+                                  <span className="text-xs mland:text-[10.5px] font-bold text-[var(--ink)] group-hover:text-[var(--g)] truncate">
+                                    {pl.n}
+                                  </span>
+                                  <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] shrink-0 tabular">
+                                    · {pl.ro} #{rowShirtNo}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span
+                                className={`text-[11px] mland:text-[9.5px] font-extrabold tabular ${
+                                  row.metricAccent ? 'text-[var(--g)]' : 'text-[var(--ink)]'
+                                }`}
+                              >
+                                {row.metricText}
+                              </span>
+                              {canInspect && (
+                                <ChevronRight className="w-3.5 h-3.5 text-[var(--mut)] opacity-45 group-hover:opacity-100 group-hover:text-[var(--g)] transition-opacity" />
+                              )}
+                            </div>
+                          </>
+                        );
+
+                        return canInspect ? (
                           <button
+                            key={row.key}
                             type="button"
                             onClick={() => {
                               SFX.tap();
-                              onInspectPlayer(capPlayer, me);
+                              onInspectPlayer?.(pl, me);
                             }}
-                            className="font-bold text-[var(--ink)] hover:text-[var(--g)] truncate cursor-pointer text-right tabular"
+                            className="w-full flex items-center justify-between gap-2 py-1.5 mland:py-1 px-1.5 -mx-1.5 rounded-xl hover:bg-[var(--surface-2)]/65 transition-colors cursor-pointer text-left group"
                           >
-                            {capPlayer.n} ({capPlayer.ro} · {capPlayer.ov})
+                            {rowBody}
                           </button>
                         ) : (
-                          <b className="truncate text-right">{me.cap || topO?.n || '-'}</b>
-                        )}
-                      </div>
+                          <div
+                            key={row.key}
+                            className="w-full flex items-center justify-between gap-2 py-1.5 mland:py-1 text-left"
+                          >
+                            {rowBody}
+                          </div>
+                        );
+                      })}
                     </div>
-
-                    {leaderRows.map((row) => {
-                      const canInspect = Boolean(row.player && onInspectPlayer);
-                      return (
-                        <div key={row.label} className="flex items-center justify-between gap-2 py-1.5">
-                          <span className="text-[var(--mut)] shrink-0">{row.label}</span>
-                          {row.player ? (
-                            <div className="flex items-center gap-1.5 min-w-0 justify-end">
-                              <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
-                                <PlayerFace player={row.player} team={me} state={state} club={k} isMyClub size={20} />
-                              </div>
-                              {canInspect ? (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    SFX.tap();
-                                    onInspectPlayer?.(row.player!, me);
-                                  }}
-                                  className="font-bold text-[var(--ink)] hover:text-[var(--g)] truncate cursor-pointer text-right tabular"
-                                >
-                                  {row.valueText}
-                                </button>
-                              ) : (
-                                <b className="truncate text-right tabular text-[var(--ink)]">{row.valueText}</b>
-                              )}
-                            </div>
-                          ) : (
-                            <b className="truncate text-right tabular text-[var(--ink)]">{row.valueText || row.emptyText}</b>
-                          )}
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
               </div>

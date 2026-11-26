@@ -154,7 +154,7 @@ export const LockerRoomPanel: React.FC<{
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5 mland:gap-1">
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+          <div className="seg-bar">
             {([
               ['ALL', 'ทั้งหมด'],
               ['XI', 'ตัวจริง'],
@@ -170,29 +170,21 @@ export const LockerRoomPanel: React.FC<{
                   SFX.tap();
                   setPosFilter(key);
                 }}
-                className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-md text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                  posFilter === key
-                    ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                    : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                }`}
+                className={`seg-btn whitespace-nowrap ${posFilter === key ? 'seg-btn-active' : ''}`}
               >
                 {label}
               </button>
             ))}
           </div>
 
-          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+          <div className="seg-bar">
             <button
               type="button"
               onClick={() => {
                 SFX.tap();
                 setKitSide('home');
               }}
-              className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-md text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                kitSide === 'home'
-                  ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
-              }`}
+              className={`seg-btn whitespace-nowrap ${kitSide === 'home' ? 'seg-btn-active' : ''}`}
             >
               ชุดเหย้า
             </button>
@@ -202,11 +194,7 @@ export const LockerRoomPanel: React.FC<{
                 SFX.tap();
                 setKitSide('away');
               }}
-              className={`px-2 mland:px-1.5 py-1 mland:py-0.5 rounded-md text-[10.5px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap ${
-                kitSide === 'away'
-                  ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
-              }`}
+              className={`seg-btn whitespace-nowrap ${kitSide === 'away' ? 'seg-btn-active' : ''}`}
             >
               ชุดเยือน
             </button>
@@ -279,8 +267,8 @@ export const LockerRoomPanel: React.FC<{
                   {/* Locker Nameplate */}
                   <div className="flex items-center justify-between gap-1.5 min-w-0">
                     <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
-                      {isMe ? '★ ' : ''}
-                      {isCap ? '(C) ' : ''}
+                      {isMe ? <span className="text-[#9a6700] dark:text-[var(--lamp)] mr-1">★</span> : null}
+                      {isCap ? <span title="กัปตันทีม" className="text-[#9a6700] dark:text-[var(--lamp)] font-extrabold mr-1">©</span> : null}
                       {q.n}
                     </span>
                     <span className="text-xs mland:text-[10px] font-extrabold font-display tabular text-[var(--g)] shrink-0">
@@ -315,104 +303,109 @@ export const LockerRoomPanel: React.FC<{
                   />
                 </div>
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="flex items-center justify-between gap-1.5">
-                    <span className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate">
-                      {team.cap === selectedPlayer.n ? '(C) ' : ''}{selectedPlayer.n}
-                    </span>
-                    <span className="text-base mland:text-xs font-extrabold font-display tabular text-[var(--g)] shrink-0">
-                      #{selectedNo}
-                    </span>
-                  </div>
-                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular">
-                    {selectedPlayer.ro} · อายุ {selectedPlayer.age} · OVR {selectedPlayer.ov}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      SFX.tap();
-                      onInspectPlayer(selectedPlayer, team);
-                    }}
-                    className="inline-flex items-center gap-1 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer"
-                  >
-                    <span>เปิดการ์ดข้อมูลนักเตะ</span>
-                    <ExternalLink className="w-2.5 h-2.5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* 3-Page 1–99 Number Board (1–33 / 34–66 / 67–99) */}
-              <div className="space-y-2 mland:space-y-1.5 flex-1 flex flex-col min-h-0">
                 <div className="flex items-center justify-between gap-1.5">
-                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] whitespace-nowrap">
-                    เบอร์เสื้อ (1–99)
+                  <span className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate">
+                    {team.cap === selectedPlayer.n ? (
+                      <span title="กัปตันทีม" className="text-[#9a6700] dark:text-[var(--lamp)] font-extrabold mr-1">©</span>
+                    ) : null}
+                    {selectedPlayer.n}
                   </span>
-                  <div className="seg-bar grid grid-cols-3 flex-1 max-w-[192px]">
-                    {NUMBER_PAGES.map((pg, idx) => {
-                      const active = numPage === idx;
-                      const containsCurrent = selectedNo >= pg.start && selectedNo <= pg.end;
-                      return (
-                        <button
-                          key={pg.label}
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setNumPage(idx);
-                          }}
-                          className={`seg-btn px-1! py-0.5! text-[10px] mland:text-[8.5px] tabular whitespace-nowrap ${
-                            active ? 'seg-btn-active' : ''
-                          }`}
-                          title={`หน้า ${idx + 1}: เบอร์ ${pg.label}`}
-                        >
-                          {pg.label}{containsCurrent && !active ? '•' : ''}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <span className="text-base mland:text-xs font-extrabold font-display tabular text-[var(--g)] shrink-0">
+                    #{selectedNo}
+                  </span>
                 </div>
+                <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate tabular">
+                  {selectedPlayer.ro} · อายุ {selectedPlayer.age} · OVR {selectedPlayer.ov}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    onInspectPlayer(selectedPlayer, team);
+                  }}
+                  className="inline-flex items-center gap-1 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer"
+                >
+                  <span>เปิดการ์ดข้อมูลนักเตะ</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </button>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-6 gap-1.5 mland:gap-1">
-                  {activePageSpec.nums.map((num) => {
-                    const holder = numberHolderMap.get(num);
-                    const isCurrent = holder?.n === selectedPlayer.n;
-                    const isTaken = Boolean(holder && !isCurrent);
-
+            {/* 3-Page 1–99 Number Board (1–33 / 34–66 / 67–99) */}
+            <div className="space-y-2 mland:space-y-1.5 flex-1 flex flex-col min-h-0">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] whitespace-nowrap">
+                  เบอร์เสื้อ (1–99)
+                </span>
+                <div className="seg-bar grid grid-cols-3 flex-1 max-w-[196px]">
+                  {NUMBER_PAGES.map((pg, idx) => {
+                    const active = numPage === idx;
+                    const containsCurrent = selectedNo >= pg.start && selectedNo <= pg.end;
                     return (
                       <button
-                        key={num}
+                        key={pg.label}
                         type="button"
-                        disabled={!canEditSelected || isCurrent}
-                        onClick={() => handleAssignNumber(selectedPlayer, num)}
-                        title={
-                          isCurrent
-                            ? `เบอร์ปัจจุบันของ ${selectedPlayer.n}`
-                            : isTaken
-                              ? `เบอร์ #${num} เป็นของ ${holder!.n} (แตะเพื่อสลับ)`
-                              : `เบอร์ #${num} ว่าง (แตะเพื่อเลือก)`
-                        }
-                        className={`relative h-8 mland:h-6 rounded-lg border text-xs mland:text-[9.5px] font-extrabold tabular transition-colors cursor-pointer disabled:cursor-default flex items-center justify-center leading-none ${
-                          isCurrent
-                            ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
-                            : isTaken
-                              ? 'bg-[var(--lamp-soft)]/50 border-dashed border-[var(--lamp)]/60 text-[var(--ink)] hover:border-[var(--lamp)] hover:bg-[var(--lamp-soft)]/85 disabled:opacity-45'
-                              : 'bg-[var(--surface-2)]/40 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)] disabled:opacity-45'
+                        onClick={() => {
+                          SFX.tap();
+                          setNumPage(idx);
+                        }}
+                        className={`seg-btn px-1! py-0.5! text-[10px] mland:text-[8.5px] tabular whitespace-nowrap ${
+                          active ? 'seg-btn-active' : containsCurrent ? 'text-[var(--g)]! font-extrabold!' : ''
                         }`}
+                        title={`หน้า ${idx + 1}: เบอร์ ${pg.label}${containsCurrent ? ' (เบอร์ปัจจุบันอยู่ในหน้านี้)' : ''}`}
                       >
-                        <span>{num}</span>
-                        {isTaken && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--lamp)]"
-                          />
-                        )}
+                        {pg.label}
                       </button>
                     );
                   })}
                 </div>
+              </div>
 
-                <div className="flex items-center justify-between gap-2 pt-0.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                  <span className="truncate">
-                    หน้า {numPage + 1}/3 ({activePageSpec.label}) · จุดเหลือง = มีคนใช้ (แตะเพื่อสลับ)
-                  </span>
+              <div className="grid grid-cols-6 gap-1.5 mland:gap-1">
+                {activePageSpec.nums.map((num) => {
+                  const holder = numberHolderMap.get(num);
+                  const isCurrent = holder?.n === selectedPlayer.n;
+                  const isTaken = Boolean(holder && !isCurrent);
+
+                  return (
+                    <button
+                      key={num}
+                      type="button"
+                      disabled={!canEditSelected || isCurrent}
+                      onClick={() => handleAssignNumber(selectedPlayer, num)}
+                      title={
+                        isCurrent
+                          ? `เบอร์ปัจจุบันของ ${selectedPlayer.n}`
+                          : isTaken
+                            ? `เบอร์ #${num} เป็นของ ${holder!.n} (แตะเพื่อสลับ)`
+                            : `เบอร์ #${num} ว่าง (แตะเพื่อเลือก)`
+                      }
+                      className={`relative h-8 mland:h-6 rounded-lg border text-xs mland:text-[9.5px] font-extrabold tabular transition-colors cursor-pointer disabled:cursor-default flex items-center justify-center leading-none ${
+                        isCurrent
+                          ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
+                          : isTaken
+                            ? 'bg-[var(--lamp-soft)]/50 border-dashed border-[var(--lamp)]/60 text-[var(--ink)] hover:border-[var(--lamp)] hover:bg-[var(--lamp-soft)]/85 disabled:opacity-45'
+                            : 'bg-[var(--surface-2)]/40 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)] disabled:opacity-45'
+                      }`}
+                    >
+                      <span>{num}</span>
+                      {isTaken && (
+                        <span
+                          aria-hidden="true"
+                          className="absolute top-[1px] right-[2px] text-[7.5px] leading-none font-bold text-[#9a6700] dark:text-[var(--lamp)]"
+                        >
+                          ⇄
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-0.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                <span className="truncate">
+                  หน้า {numPage + 1}/3 ({activePageSpec.label}) · ⇄ มีคนใช้อยู่ (แตะเพื่อสลับ)
+                </span>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       type="button"
