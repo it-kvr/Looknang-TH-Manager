@@ -1593,11 +1593,31 @@ export const drawLivePitchToCanvas = (
       ctx.setLineDash([]);
     }
 
-    // Ground shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.32)';
+    // Ground shadow (scales smaller & softens slightly during aerial leaps for crisp 3D depth)
+    const isJumpAcrobat =
+      (ag.acrobatTimer ?? 0) > 0 &&
+      (ag.acrobatType === 'header' || ag.acrobatType === 'bicycle' || ag.acrobatType === 'diving_header' || ag.acrobatType === 'volley');
+    const jumpProg = isJumpAcrobat ? clamp(1 - (ag.acrobatTimer ?? 0) / Math.max(0.2, ag.acrobatMax || 0.72), 0, 1) : 0;
+    const jumpArc = isJumpAcrobat ? Math.sin(jumpProg * Math.PI) : 0;
+    const shadowScale = 1 - 0.24 * jumpArc;
+    ctx.fillStyle = `rgba(0, 0, 0, ${(0.32 - 0.11 * jumpArc).toFixed(2)})`;
     ctx.beginPath();
-    ctx.ellipse(0, playerRadius * 0.82, playerRadius * 0.92, playerRadius * 0.36, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, playerRadius * (0.82 + 0.12 * jumpArc), playerRadius * 0.92 * shadowScale, playerRadius * 0.36 * shadowScale, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Sprint turf wake specks behind fast-running players
+    const cosF = Math.cos(ag.facing);
+    const sinF = Math.sin(ag.facing);
+    if (speed > 13.5 && ag.intent !== 'DIVE' && ag.acrobatType !== 'slip') {
+      const dustPhase = (ag.stride * 0.7) % 1;
+      const d1 = playerRadius * (0.88 + dustPhase * 0.65);
+      const d2 = playerRadius * (1.2 + ((dustPhase + 0.5) % 1) * 0.55);
+      ctx.fillStyle = 'rgba(220, 252, 231, 0.36)';
+      ctx.beginPath();
+      ctx.arc(-cosF * d1 + sinF * 2.2, -sinF * d1 - cosF * 2.2 + playerRadius * 0.38, 1.7, 0, Math.PI * 2);
+      ctx.arc(-cosF * d2 - sinF * 2.4, -sinF * d2 + cosF * 2.4 + playerRadius * 0.38, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // GK diving stretch offset & extended gloves
     if (ag.intent === 'DIVE' && ag.diveProgress > 0) {
@@ -1857,9 +1877,7 @@ export const drawLivePitchToCanvas = (
       }
     }
 
-    // Animated running feet / boots oriented along facing direction (with extended striking boot on shots)
-    const cosF = Math.cos(ag.facing);
-    const sinF = Math.sin(ag.facing);
+    // Animated directional cleated boots oriented along facing direction (with extended striking boot on shots)
     const perpX = -sinF;
     const perpY = cosF;
     const isKickingNow =
@@ -1871,17 +1889,48 @@ export const drawLivePitchToCanvas = (
         ag.acrobatType === 'volley');
     const kickProg = isKickingNow ? clamp(1 - (ag.acrobatTimer ?? 0) / Math.max(0.1, ag.acrobatMax || 0.45), 0, 1) : 0;
     const kickSwing = isKickingNow ? (kickProg < 0.25 ? -0.45 : Math.sin(((kickProg - 0.25) / 0.75) * Math.PI) * 1.15) : 0;
-    const legSwing = isKickingNow ? kickSwing * (playerRadius * 0.85) : strideSin * (playerRadius * 0.52);
+    const legSwing = isKickingNow ? kickSwing * (playerRadius * 0.9) : strideSin * (playerRadius * 0.58);
+    const backSwing = isKickingNow ? -playerRadius * 0.28 : -legSwing;
 
-    ctx.fillStyle = '#111827';
+    const bootLen = playerRadius * (isKickingNow ? 0.36 : 0.32);
+    const bootWid = playerRadius * 0.2;
+    const foot1X = perpX * (playerRadius * 0.4) + cosF * legSwing;
+    const foot1Y = perpY * (playerRadius * 0.4) + sinF * legSwing + playerRadius * 0.36;
+    const foot2X = -perpX * (playerRadius * 0.4) + cosF * backSwing;
+    const foot2Y = -perpY * (playerRadius * 0.4) + sinF * backSwing + playerRadius * 0.36;
+
+    ctx.fillStyle = '#0f172a';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 0.7;
     ctx.beginPath();
-    ctx.arc(perpX * (playerRadius * 0.42) + cosF * legSwing, perpY * (playerRadius * 0.42) + sinF * legSwing + playerRadius * 0.35, playerRadius * (isKickingNow ? 0.31 : 0.28), 0, Math.PI * 2);
-    ctx.arc(-perpX * (playerRadius * 0.42) - cosF * (isKickingNow ? playerRadius * 0.25 : legSwing), -perpY * (playerRadius * 0.42) - sinF * (isKickingNow ? playerRadius * 0.25 : legSwing) + playerRadius * 0.35, playerRadius * 0.28, 0, Math.PI * 2);
+    ctx.ellipse(foot1X, foot1Y, bootLen, bootWid, ag.facing, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(foot2X, foot2Y, bootLen * 0.94, bootWid, ag.facing, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
 
-    // Shoulders sway & facing indicator
-    const bobY = -Math.abs(strideSin) * 1.5;
+    // Subtle body bob & running shoulder sway
+    const bobY = -Math.abs(strideSin) * 1.65;
     ctx.translate(0, bobY);
+    if (speed > 2.5 && ag.intent !== 'DIVE') {
+      ctx.rotate(strideSin * 0.075);
+    }
+
+    // GK ready-stance padded gloves slightly out in front when not mid-dive
+    if (ag.pos === 'GK' && ag.intent !== 'DIVE') {
+      ctx.fillStyle = '#f8fafc';
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 0.95;
+      const gFwd = playerRadius * 0.72;
+      const gSpread = playerRadius * 0.68;
+      ctx.beginPath();
+      ctx.arc(cosF * gFwd + perpX * gSpread, sinF * gFwd + perpY * gSpread, playerRadius * 0.25, 0, Math.PI * 2);
+      ctx.arc(cosF * gFwd - perpX * gSpread, sinF * gFwd - perpY * gSpread, playerRadius * 0.25, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    }
 
     // Direction nose/shoulder cue
     ctx.fillStyle = 'rgba(255,255,255,0.85)';

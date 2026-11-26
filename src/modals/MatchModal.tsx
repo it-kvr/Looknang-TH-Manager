@@ -2417,7 +2417,11 @@ export const MatchModal: React.FC<{
     );
     const attMids = (centralMids.length ? centralMids : activeAgents.filter((a) => a.side === b.possessionSide && a.pos === 'MF' && a.id !== carrier?.id && a.role !== 'LM' && a.role !== 'RM'))
       .sort((u, v) => Math.hypot(u.x - b.x, u.y - b.y) - Math.hypot(v.x - b.x, v.y - b.y))
-      .slice(0, 2);
+      .slice(0, 2)
+      .sort((u, v) => {
+        const uAttRight = isAttackRight(w, u.side);
+        return uAttRight ? u.slotX - v.slotX : v.slotX - u.slotX;
+      });
 
     const setPiece = w.pendingSetPiece;
     const lockedTargetIds = new Set<string>();
@@ -2768,18 +2772,17 @@ export const MatchModal: React.FC<{
               [56.0, 62]   // Outlet right
             ];
             const [znX, znY] = defZones[defIdx] || [64, 50];
-            // Defending team attacks opposite of cornerRight unless cfg.tac === 'Z'
-            const defNormX = 100 - znX;
+            // Defending team pushes counter outlets forward toward midfield on Counter ('Z')
             const outShift = cfg.tac === 'Z' && defIdx >= 7 ? -10 : 0;
             ag.intent = defIdx < 7 ? 'MARK' : 'SUPPORT';
-            ag.tx = clamp(toCornerX(clamp(100 - (defNormX + outShift), 46, 94.5)), 5, 95);
+            ag.tx = clamp(toCornerX(clamp(znX + outShift, 44, 94.5)), 5, 95);
             ag.ty = clamp(setPiece.y > 50 ? 100 - znY : znY, 10, 90);
             return;
           }
         }
       }
 
-      // Goalkeeper AI (signature 'cl' rushes further to close angles; preserve active DIVE!)
+      // Goalkeeper AI (bisector angle-narrowing when defending; smart sweeper push when in possession; preserve active DIVE!)
       if (ag.pos === 'GK') {
         if (ag.intent === 'DIVE' && ag.intentTimer > 0 && ag.diveTargetY != null) {
           ag.ty = ag.diveTargetY;
@@ -2788,12 +2791,17 @@ export const MatchModal: React.FC<{
           lockedTargetIds.add(ag.id);
           return;
         }
-        const goalX = attRight ? 2.4 : 97.6;
-        const ballThreat = attRight ? clamp((30 - b.x) / 30, 0, 1) : clamp((b.x - 70) / 30, 0, 1);
-        const sweepBonus = ag.sig === 'cl' ? 1.1 : 0;
-        const sweepPush = (ag.d.cl > 68 ? 2.2 : 1.1 + sweepBonus) * (inPoss ? 1.35 : ballThreat);
-        ag.tx = clamp(goalX + dir * (0.8 + sweepPush), 2.0, 98.0);
-        ag.ty = clamp(50 + (b.y - 50) * 0.24, 42.5, 57.5);
+        const goalX = attRight ? 2.2 : 97.8;
+        const ballDistGoal = Math.hypot(b.x - goalX, b.y - 50);
+        const ballThreat = attRight ? clamp((36 - b.x) / 34, 0, 1) : clamp((b.x - 64) / 34, 0, 1);
+        const oppProgress = attRight ? b.x : 100 - b.x;
+        const sweepBonus = ag.sig === 'cl' ? 1.5 : 0;
+        const sweeperDrive = inPoss
+          ? clamp((oppProgress - 35) / 55, 0.25, 1) * ((ag.d.cl > 68 ? 5.8 : 3.4) + sweepBonus + (cfg.line === 2 ? 2.0 : 0))
+          : ballThreat * ((ag.d.cl > 68 ? 3.2 : 1.8) + sweepBonus) * (ballDistGoal < 14 ? 1.2 : 0.85);
+        ag.tx = clamp(goalX + dir * (0.7 + sweeperDrive), 2.0, 98.0);
+        const angleFactor = inPoss ? 0.18 : ballThreat > 0.35 ? 0.28 : 0.22;
+        ag.ty = clamp(50 + (b.y - 50) * angleFactor, 43.2, 56.8);
         ag.intent = 'SUPPORT';
         ag.runToX = undefined;
         ag.runToY = undefined;
@@ -2843,9 +2851,23 @@ export const MatchModal: React.FC<{
 
         // ROLE-DISTINCT OFF-BALL INTELLIGENCE (anchored faithfully to each player's formation lane & line)
         if (ag.role === 'ST' || (ag.sig === 'run' && ag.pos === 'FW' && ag.role !== 'LW' && ag.role !== 'RW' && ag.role !== 'CF')) {
-          const shoulderNorm = Math.min(88.0, oppDefNorm - 2.0);
+          const shoulderNorm = Math.min(88.5, oppDefNorm - 1.8);
           const readyToSprint = ballNormX > 52 && carrier && carrier.side === ag.side && (cfg.pass >= 2 || cfg.tempo === 2 || cfg.tac === 'A' || cfg.tac === 'X');
-          const stLaneY = clamp(widenedY * 0.78 + 50 * 0.22 + (b.y - 50) * 0.14 + Math.sin(w.minuteFloat * 0.9 + ag.slotIndex) * 4.5, 16, 84);
+          const wideCrossSituation = ballNormX > 66 && Math.abs(b.y - 50) > 20;
+          let stLaneY = clamp(widenedY * 0.78 + 50 * 0.22 + (b.y - 50) * 0.14 + Math.sin(w.minuteFloat * 0.9 + ag.slotIndex) * 4.0, 18, 82);
+          if (wideCrossSituation) {
+            const boxStrikers = activeAgents
+              .filter((z) => z.side === ag.side && z.id !== carrier?.id && (z.role === 'ST' || z.role === 'CF'))
+              .sort((u, v) => (attRight ? u.slotX - v.slotX : v.slotX - u.slotX));
+            const sIdx = boxStrikers.findIndex((z) => z.id === ag.id);
+            const ballTopSide = b.y < 50;
+            if (boxStrikers.length >= 2 && sIdx >= 0) {
+              const targetBoxY = sIdx === 0 ? (ballTopSide ? 43 : 57) : sIdx === 1 ? (ballTopSide ? 57 : 43) : 50;
+              stLaneY = clamp(targetBoxY, 37, 63);
+            } else {
+              stLaneY = clamp(ballTopSide ? 46 : 54, 40, 60);
+            }
+          }
           if (readyToSprint && normX < 88.8) {
             normX = clamp(Math.min(oppDefNorm - 1.1, Math.max(normX, shoulderNorm)), 18, 89.2);
             ty = stLaneY;
@@ -2972,11 +2994,13 @@ export const MatchModal: React.FC<{
       } else {
         // OUT OF POSSESSION: Strictly reflects Mentality (tac), Defensive Line (line), Pressing (press), Width (wid), and slot structure
         const tacBackDrop = cfg.tac === 'Z' ? -6.5 : cfg.tac === 'D' ? -3.0 : cfg.tac === 'X' ? 7.5 : cfg.tac === 'A' ? 3.5 : 0;
-        const lineHeightFloor = (cfg.line === 2 ? 20.5 : cfg.line === 0 ? 10.0 : 14.5) + tacBackDrop;
+        const baseLineFloor = (cfg.line === 2 ? 20.5 : cfg.line === 0 ? 10.0 : 14.5) + tacBackDrop;
+        // Emergency box drop: when opponent penetrates own defensive third, even High Line drops into the box to defend goal!
+        const lineHeightFloor = ballNormX < 34 ? Math.min(baseLineFloor, Math.max(6.8, ballNormX - 5.2)) : baseLineFloor;
         const lineCeiling = cfg.tac === 'X' ? 56 : cfg.tac === 'Z' ? 28 : cfg.line === 2 ? 48 : cfg.line === 0 ? 32 : 41;
         const backLineNorm = clamp(
-          Math.min(ballNormX - 7.5, 31 + (cfg.line - 1) * 8.5 + tacBackDrop),
-          Math.max(9.0, lineHeightFloor),
+          Math.min(ballNormX - 7.0, 31 + (cfg.line - 1) * 8.5 + tacBackDrop),
+          Math.max(6.8, lineHeightFloor),
           lineCeiling
         );
         const pressTriggerLimit = cfg.tac === 'X' ? 98 : cfg.tac === 'Z' ? 42 : cfg.press === 2 ? 95 : cfg.press === 1 ? 68 : 49;
@@ -2986,7 +3010,7 @@ export const MatchModal: React.FC<{
           if (shouldEngagePress) {
             ag.intent = 'PRESS';
             const stepX = cfg.press === 2 ? ballNormX - 0.8 : ballNormX - 2.2;
-            normX = clamp(stepX, 8.2, 92);
+            normX = clamp(stepX, 7.2, 92);
             ty = clamp(b.y, 7, 93);
           } else {
             ag.intent = 'MARK';
@@ -2996,7 +3020,7 @@ export const MatchModal: React.FC<{
         } else if (ag.id === secondaryCoverId) {
           ag.intent = cfg.press === 2 && shouldEngagePress ? 'PRESS' : 'MARK';
           const coverGap = cfg.press === 2 ? 3.5 : cfg.press === 0 ? 8.5 : 6.0;
-          normX = clamp(Math.max(backLineNorm + 2.5, ballNormX - coverGap), 11.2, 88);
+          normX = clamp(Math.max(backLineNorm + 2.0, ballNormX - coverGap), 8.2, 88);
           ty = clamp(widenedY * 0.35 + (b.y + (50 - b.y) * (cfg.press === 2 ? 0.22 : 0.36)) * 0.65, 12, 88);
         } else if (ag.id === thirdTrapPresserId && shouldEngagePress && ballNormX > 36) {
           ag.intent = 'PRESS';
@@ -3010,13 +3034,14 @@ export const MatchModal: React.FC<{
             const fbSideY = attRight ? (isLeftFb ? 50 - defFbSpread : 50 + defFbSpread) : isLeftFb ? 50 + defFbSpread : 50 - defFbSpread;
             const targetFbY = widenedY * 0.5 + fbSideY * 0.5;
             const ballOnFlank = Math.abs(b.y - targetFbY) < 30;
-            normX = clamp(normX * 0.26 + (backLineNorm + (ballOnFlank && cfg.tac !== 'Z' ? 2.2 : 0.6)) * 0.74, Math.max(10.5, backLineNorm), lineCeiling + 3);
+            const farSideTuck = cfg.wid === 0 ? 0.44 : cfg.wid === 2 ? 0.64 : 0.54;
+            normX = clamp(normX * 0.24 + (backLineNorm + (ballOnFlank && cfg.tac !== 'Z' ? 2.0 : 0.4)) * 0.76, Math.max(7.8, backLineNorm), lineCeiling + 3);
             ty = ballOnFlank
-              ? clamp(targetFbY * 0.72 + b.y * 0.28, 10, 90)
-              : clamp(50 + (targetFbY - 50) * (cfg.wid === 0 ? 0.62 : 0.78), 12, 88);
+              ? clamp(targetFbY * 0.66 + b.y * 0.34, 9, 91)
+              : clamp(50 + (targetFbY - 50) * farSideTuck + (b.y - 50) * 0.14, 16, 84);
           } else {
-            normX = clamp(normX * 0.18 + backLineNorm * 0.82, Math.max(9.8, backLineNorm - 0.5), lineCeiling + 1);
-            ty = clamp(50 + (widenedY - 50) * (cfg.wid === 0 ? 0.62 : 0.78) + (b.y - 50) * 0.14, 24, 76);
+            normX = clamp(normX * 0.16 + backLineNorm * 0.84, Math.max(7.2, backLineNorm - 0.5), lineCeiling + 1);
+            ty = clamp(50 + (widenedY - 50) * (cfg.wid === 0 ? 0.6 : 0.74) + (b.y - 50) * 0.18, 22, 78);
           }
         } else if (ag.role === 'CDM' || ag.role === 'LDM' || ag.role === 'RDM') {
           const dmGap = cfg.tac === 'Z' ? 6.5 : cfg.tac === 'D' ? 8.0 : 10.0;
@@ -4830,7 +4855,7 @@ export const MatchModal: React.FC<{
             b.shotStyle = undefined;
             w.phaseLabel = `💥 ${nearestDef.shortName} เข้าปะทะเบียดแย่งบอลสำเร็จ!`;
             w.phaseTone = 'normal';
-            SFX.foul();
+            SFX.tackle(false);
             if (Math.random() < 0.35) {
               pushLog(curMin, `💥 จังหวะปะทะหนัก! ${nearestDef.id} เบียดชนะ ${carrier.id} ตัดบอลคืนให้ ${defTeam.name}`);
             }
@@ -4902,7 +4927,7 @@ export const MatchModal: React.FC<{
             };
             w.phaseLabel = `⚡ ${nearestDef.shortName} สกัดบอลออกข้างสนาม!`;
             w.phaseTone = 'normal';
-            SFX.pass();
+            SFX.tackle(isSlideTackle);
             return;
           }
 
@@ -4923,7 +4948,7 @@ export const MatchModal: React.FC<{
             ? `⚡ ${nearestDef.shortName}${agentHasTrait(nearestDef, 'slide_tackler') ? ' [จอมสไลด์]' : ''} พุ่งสไลด์กวาดบอลสะอาด!`
             : `🛡️ ${nearestDef.shortName}${agentHasTrait(nearestDef, 'man_marker') ? ' [ตัวประกบติด]' : agentHasTrait(nearestDef, 'interception_hawk') ? ' [เหยี่ยวดักบอล]' : ''} เข้าสกัดแย่งบอลสำเร็จ!`;
           w.phaseTone = 'normal';
-          SFX.pass();
+          SFX.tackle(isSlideTackle);
           if (isSlideTackle && Math.random() < 0.48) {
             pushLog(curMin, `⚡ สไลด์สุดคม! ${nearestDef.id} (${defTeam.name}) กวาดบอลจากเท้า ${carrier.id} ได้อย่างแม่นยำ`);
           }
@@ -5706,12 +5731,12 @@ export const MatchModal: React.FC<{
         goalSide: side
       });
     }
+    const isMyTeamGoal = (side === 'H') === meIsHome;
     if (lastSoundMinRef.current !== curMin) {
       lastSoundMinRef.current = curMin;
-      SFX.goal();
+      SFX.goal(!isOwnGoal && isMyTeamGoal);
       vibrate([50, 40, 80]);
     }
-    const isMyTeamGoal = (side === 'H') === meIsHome;
     const isMeScorer = !isOwnGoal && isPlayerMode && scorerName === myPlayerName;
     const scoringKit = side === 'H' ? homeKit : awayKit;
     const sparkCols = isOwnGoal ? [scoringKit, '#fb7185', '#fde047', '#ffffff'] : [scoringKit, '#facc15', '#ffffff', '#4ade80'];
@@ -6105,7 +6130,7 @@ export const MatchModal: React.FC<{
           sh.aScore++;
         }
         w.goalNetRippleRight = 1.0;
-        SFX.goal();
+        SFX.goal((sh.turn === 'H') === meIsHome);
         sh.lastMsg = `⚽ ${kicker?.shortName || sh.kickerName} ยิงเข้า! (${sh.hScore}-${sh.aScore})`;
         addWorldFx(w, { type: 'goal', x: 99, y: b.toY, label: `⚽ เข้า! ${kicker?.shortName || ''}`, color: '#22c55e', ttl: 2.2, maxTtl: 2.2 });
         triggerDramaSlow(w, 1.4, `⚽ ยิงเข้า! ${kicker?.shortName || ''}`);
@@ -8913,7 +8938,7 @@ export const MatchModal: React.FC<{
         const isKickoffResetting = w.pendingSetPiece?.type === 'kickoff' && w.celebrateTimer <= 0;
         const baseMoveScale = speedMul > 2.6 ? 1.85 : speedMul > 2.0 ? 1.55 : speedMul > 1.0 ? 1.05 : speedMul < 0.22 ? 0.24 : speedMul < 0.5 ? 0.44 : 0.74;
         const moveScale = isKickoffResetting
-          ? Math.max(1.9, baseMoveScale * 1.9)
+          ? Math.max(2.6, baseMoveScale * 2.4)
           : slowActive
             ? (speedMul < 0.22 ? 0.16 : speedMul < 0.5 ? 0.22 : 0.34)
             : baseMoveScale;
@@ -8962,30 +8987,60 @@ export const MatchModal: React.FC<{
             ((ag.blessedMins ?? 0) > 0 ? 1.14 : 1.0) *
             (w.miracle?.side === ag.side && w.miracle.minsLeft > 0 ? (w.miracle.maxDeficit >= 3 ? 1.2 : 1.16) : 1.0) *
             moveScale;
+          const isUrgent = ag.intent === 'PASS_TARGET' || ag.intent === 'PRESS' || ag.intent === 'RESET' || ag.intent === 'MAKE_RUN';
+          const accelRate = Math.min(1, rawDt * (isUrgent ? 14.5 : 9.2));
           const stepSpd = Math.min(dist * 6.5 * moveScale, maxSpd);
-          if (dist > 0.15) {
-            ag.vx = (dx / dist) * stepSpd;
-            ag.vy = (dy / dist) * stepSpd;
+          if (dist > 0.16) {
+            const desiredVx = (dx / dist) * stepSpd;
+            const desiredVy = (dy / dist) * stepSpd;
+            ag.vx += (desiredVx - ag.vx) * accelRate;
+            ag.vy += (desiredVy - ag.vy) * accelRate;
+          } else {
+            const damp = Math.pow(0.04, rawDt);
+            ag.vx *= damp;
+            ag.vy *= damp;
+          }
+          const curSpd = Math.hypot(ag.vx, ag.vy);
+          if (curSpd > 0.12) {
             const minX = ag.pos === 'GK' ? 1.6 : 3;
             const maxX = ag.pos === 'GK' ? 98.4 : 97;
             ag.x = clamp(ag.x + ag.vx * rawDt, minX, maxX);
             ag.y = clamp(ag.y + ag.vy * rawDt, 4, 96);
-            const targetAngle = Math.atan2(ag.vy, ag.vx);
-            let angleDiff = targetAngle - ag.facing;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            ag.facing += angleDiff * Math.min(1, rawDt * 10);
-            ag.stride += stepSpd * rawDt * 0.85;
-          } else {
-            ag.vx *= 0.8;
-            ag.vy *= 0.8;
-            const bAngle = Math.atan2(w.ball.y - ag.y, w.ball.x - ag.x);
-            let angleDiff = bAngle - ag.facing;
-            while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-            while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-            ag.facing += angleDiff * Math.min(1, rawDt * 6);
+            ag.stride += curSpd * rawDt * 0.85;
           }
+          const targetAngle =
+            dist > 0.38 && curSpd > 1.2
+              ? Math.atan2(ag.vy, ag.vx)
+              : Math.atan2(w.ball.y - ag.y, w.ball.x - ag.x);
+          let angleDiff = targetAngle - ag.facing;
+          while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+          while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+          ag.facing += angleDiff * Math.min(1, rawDt * (dist > 0.38 && curSpd > 1.2 ? 10.5 : 6.5));
         });
+
+        // Soft physical body separation so players never visually stack identically on top of each other
+        const agLen = w.agents.length;
+        for (let i = 0; i < agLen; i++) {
+          const a = w.agents[i];
+          if (a.sentOff || a.intent === 'WALL' || a.intent === 'DIVE' || a.intent === 'CELEBRATE') continue;
+          for (let j = i + 1; j < agLen; j++) {
+            const o = w.agents[j];
+            if (o.sentOff || o.intent === 'WALL' || o.intent === 'DIVE' || o.intent === 'CELEBRATE') continue;
+            const sdx = a.x - o.x;
+            const sdy = a.y - o.y;
+            const sdSq = sdx * sdx + sdy * sdy;
+            if (sdSq > 0.0004 && sdSq < 3.61) {
+              const sd = Math.sqrt(sdSq);
+              const push = (1.9 - sd) * 0.28;
+              const nx = sdx / sd;
+              const ny = sdy / sd;
+              a.x = clamp(a.x + nx * push, 2.5, 97.5);
+              a.y = clamp(a.y + ny * push, 4, 96);
+              o.x = clamp(o.x - nx * push, 2.5, 97.5);
+              o.y = clamp(o.y - ny * push, 4, 96);
+            }
+          }
+        }
 
         // VAR Review countdown, Set-piece wait countdown, or Ball physics progression
         if (w.varReview) {
@@ -9056,9 +9111,15 @@ export const MatchModal: React.FC<{
           if (b.carrierId && b.flightType === 'carry') {
             const car = w.agents.find((a) => a.id === b.carrierId && !a.sentOff);
             if (car) {
-              b.x = clamp(car.x + Math.cos(car.facing) * 1.4, 2, 98);
-              b.y = clamp(car.y + Math.sin(car.facing) * 1.4, 3, 97);
-              b.z = 0;
+              const carSpd = Math.hypot(car.vx, car.vy);
+              const movingScale = clamp(carSpd / 10, 0, 1);
+              const tapFwd = 1.15 + Math.abs(Math.sin(car.stride * 0.52)) * 0.42 * movingScale;
+              const tapLat = Math.sin(car.stride * 0.5) * 0.18 * movingScale;
+              const cosC = Math.cos(car.facing);
+              const sinC = Math.sin(car.facing);
+              b.x = clamp(car.x + cosC * tapFwd - sinC * tapLat, 2, 98);
+              b.y = clamp(car.y + sinC * tapFwd + cosC * tapLat, 3, 97);
+              b.z = Math.abs(Math.sin(car.stride * 0.52)) * 0.35 * movingScale;
             }
           } else {
             const t = b.progress;
