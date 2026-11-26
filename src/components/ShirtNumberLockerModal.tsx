@@ -11,6 +11,11 @@ import {
 import { KitJersey } from './SvgVisuals';
 
 const ALL_SHIRT_NUMBERS = Array.from({ length: 99 }, (_, i) => i + 1);
+const NUMBER_PAGES: ReadonlyArray<{ label: string; start: number; end: number }> = [
+  { label: '1–33', start: 1, end: 33 },
+  { label: '34–66', start: 34, end: 66 },
+  { label: '67–99', start: 67, end: 99 }
+];
 
 export const ShirtNumberLockerModal: React.FC<{
   player: Player;
@@ -20,8 +25,10 @@ export const ShirtNumberLockerModal: React.FC<{
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
 }> = ({ player, team, state, onClose, onUpdateState, onToast }) => {
-  const [filter, setFilter] = useState<'all' | 'recommended' | 'free' | 'taken'>('all');
   const currentNo = getShirtNo(team, player);
+  const [filter, setFilter] = useState<'all' | 'recommended' | 'free' | 'taken'>('all');
+  const [pageIdx, setPageIdx] = useState<number>(() => clamp(Math.floor((currentNo - 1) / 33), 0, 2));
+
   const clubIdentity = useMemo(() => getTeamClubIdentity(team, state), [team, state]);
   const shirtGuide = useMemo(() => getPositionShirtGuide(player.ro, player.pos), [player.ro, player.pos]);
   const primarySet = useMemo(() => new Set(shirtGuide.primary), [shirtGuide.primary]);
@@ -46,8 +53,12 @@ export const ShirtNumberLockerModal: React.FC<{
     return { free, taken, recommended: new Set([...shirtGuide.primary, ...shirtGuide.alt]).size };
   }, [holderMap, player.n, shirtGuide]);
 
+  const activeRange = NUMBER_PAGES[pageIdx] || NUMBER_PAGES[0];
+
   const visibleNumbers = useMemo(() => {
-    if (filter === 'all') return ALL_SHIRT_NUMBERS;
+    if (filter === 'all') {
+      return ALL_SHIRT_NUMBERS.filter((num) => num >= activeRange.start && num <= activeRange.end);
+    }
     if (filter === 'recommended') {
       return [...shirtGuide.primary, ...shirtGuide.alt.filter((n) => !primarySet.has(n))];
     }
@@ -56,7 +67,7 @@ export const ShirtNumberLockerModal: React.FC<{
       if (filter === 'free') return !h || h.n === player.n;
       return Boolean(h && h.n !== player.n);
     });
-  }, [filter, holderMap, player.n, shirtGuide, primarySet]);
+  }, [filter, activeRange, holderMap, player.n, shirtGuide, primarySet]);
 
   const handleSelectNumber = (rawNum: number) => {
     const nextNo = clamp(Math.round(rawNum) || 1, 1, 99);
@@ -170,7 +181,7 @@ export const ShirtNumberLockerModal: React.FC<{
           <div className="text-[var(--mut)] leading-snug">{shirtGuide.reason}</div>
         </div>
 
-        {/* Filter & Legend Strip */}
+        {/* Filter & 3-Page Switcher */}
         <div className="shrink-0 px-3 py-2 mland:px-2.5 mland:py-1 bg-[var(--surface)]/70 border-b border-[var(--line)]/70 flex flex-wrap items-center justify-between gap-2">
           <div className="seg-bar">
             {([
@@ -193,20 +204,38 @@ export const ShirtNumberLockerModal: React.FC<{
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded bg-[var(--g)] inline-block" />
-              <span>ใช้อยู่</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded bg-[var(--surface)] border-2 border-[var(--g)] inline-block" />
-              <span>เบอร์หลักตำแหน่ง</span>
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)] inline-block" />
-              <span>สลับกับเพื่อน</span>
-            </span>
-          </div>
+          {filter === 'all' ? (
+            <div className="seg-bar grid grid-cols-3">
+              {NUMBER_PAGES.map((pg, idx) => {
+                const active = pageIdx === idx;
+                const hasCurrent = currentNo >= pg.start && currentNo <= pg.end;
+                return (
+                  <button
+                    key={pg.label}
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setPageIdx(idx);
+                    }}
+                    className={`seg-btn tabular whitespace-nowrap ${active ? 'seg-btn-active' : ''}`}
+                  >
+                    หน้า {idx + 1}: {pg.label}{hasCurrent && !active ? ' •' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 text-[10px] mland:text-[8.5px] text-[var(--mut)] font-semibold">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-[var(--g)] inline-block" />
+                <span>ใช้อยู่</span>
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded bg-[var(--lamp-soft)] border border-[var(--lamp)] inline-block" />
+                <span>สลับกับเพื่อน</span>
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Number Locker Grid */}
@@ -233,7 +262,7 @@ export const ShirtNumberLockerModal: React.FC<{
                         ? `เบอร์ #${num} เป็นของ ${holder!.n} (${holder!.ro}) — แตะเพื่อสลับ`
                         : `เบอร์ #${num} ว่าง${isPrimaryPos ? ' (เบอร์หลักประจำตำแหน่ง)' : isAltPos ? ' (เบอร์ยอดนิยมประจำตำแหน่ง)' : ''} — แตะเพื่อเลือก`
                   }
-                  className={`relative rounded-xl mland:rounded-lg border px-1.5 py-2 mland:py-1 text-center transition-all flex flex-col items-center justify-center gap-0.5 min-h-[52px] mland:min-h-[42px] ${
+                  className={`relative rounded-xl mland:rounded-lg border px-1.5 py-2 mland:py-1 text-center transition-all flex flex-col items-center justify-center gap-0.5 min-h-[50px] mland:min-h-[40px] ${
                     isCurrent
                       ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs cursor-default'
                       : isTaken

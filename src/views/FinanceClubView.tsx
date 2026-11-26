@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, UserCheck, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2 } from 'lucide-react';
+import { Pencil, Check, X, Dices, ArrowUpRight, ArrowLeftRight, RotateCcw, Trash2, AlertTriangle, Hammer, Shuffle, Shirt, Radio, Wand2, Link2 } from 'lucide-react';
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -139,7 +139,6 @@ export const FinanceClubView: React.FC<{
   const [showCoachEditor, setShowCoachEditor] = useState(false);
   const [editingClubInfo, setEditingClubInfo] = useState(false);
   const [clubEditFocusField, setClubEditFocusField] = useState<'name' | 'nick' | 'std' | 'managerName' | 'motto' | 'founded'>('name');
-  const [editingCaptain, setEditingCaptain] = useState(false);
   const [autoSyncStadium, setAutoSyncStadium] = useState(true);
   const [clubDraft, setClubDraft] = useState({
     name: '',
@@ -197,7 +196,6 @@ export const FinanceClubView: React.FC<{
   useEffect(() => {
     if (clubTab !== 'info') {
       setEditingClubInfo(false);
-      setEditingCaptain(false);
       setShowCoachEditor(false);
       setCoachDraft(null);
     }
@@ -2161,13 +2159,13 @@ export const FinanceClubView: React.FC<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      {/* Club Hero Identity Banner — 2-row layout so full club name & tall crest/kits stand out */}
+      {/* Sleek Single-Row Club Identity Strip (zero duplication with Top HUD Board% & Fans) */}
       <div
-        className={`relative px-3.5 py-2.5 mland:px-2.5 mland:py-2 rounded-2xl mland:rounded-xl border shrink-0 overflow-hidden ${
+        className={`relative px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl border shrink-0 overflow-hidden ${
           clubTab === 'identity' ? 'border-[var(--g)]/40 shadow-sm' : 'border-[var(--line)]'
         }`}
         style={{
-          background: `linear-gradient(135deg, color-mix(in srgb, ${dk.c1} 14%, var(--surface)), var(--surface) 54%, color-mix(in srgb, ${dk.c2} 7%, var(--surface)))`
+          background: `linear-gradient(135deg, color-mix(in srgb, ${dk.c1} 13%, var(--surface)), var(--surface) 56%, color-mix(in srgb, ${dk.c2} 7%, var(--surface)))`
         }}
       >
         <div
@@ -2175,203 +2173,176 @@ export const FinanceClubView: React.FC<{
           className="pointer-events-none absolute inset-x-0 top-0 h-[2.5px]"
           style={{ background: `linear-gradient(90deg, ${dk.c1}, ${dk.c2})` }}
         />
-        <div className="flex flex-col gap-2 mland:gap-1.5">
-          {/* Row 1: Tall Crest + Jerseys, Full Club Name / Details, and Identity Action Buttons */}
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 sm:gap-4 mland:gap-2.5 text-left min-w-0">
-            <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 px-2.5 py-2 sm:px-3.5 sm:py-2.5 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0 shadow-2xs">
-              <div className="shrink-0 [&>svg]:w-15 [&>svg]:h-15 sm:[&>svg]:w-[74px] sm:[&>svg]:h-[74px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
-                <ClubCrest name={me.name} size={74} team={me} club={dk} isMyClub />
-              </div>
-              <div className="w-px h-12 sm:h-15 mland:h-10 bg-[var(--line)]/75 mx-0.5" aria-hidden="true" />
-              {clubTab === 'identity' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIdentityMobilePane('kit');
-                      setKitPatternTarget('home');
-                      setKitColorTarget('c1');
-                    }}
-                    title="คลิกเพื่อแก้ไขชุดเหย้า"
-                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
-                      kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
-                    }`}
-                  >
-                    <div className="[&>svg]:w-13 [&>svg]:h-13 sm:[&>svg]:w-15 sm:[&>svg]:h-15 mland:[&>svg]:w-11 mland:[&>svg]:h-11 flex items-center justify-center">
-                      <KitJersey club={dk} away={false} size={62} />
-                    </div>
-                    <span className={`text-[9px] mland:text-[8px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                      เหย้า
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIdentityMobilePane('kit');
-                      setKitPatternTarget('away');
-                      setKitColorTarget('c2');
-                    }}
-                    title="คลิกเพื่อแก้ไขชุดเยือน"
-                    className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
-                      kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
-                    }`}
-                  >
-                    <div className="[&>svg]:w-13 [&>svg]:h-13 sm:[&>svg]:w-15 sm:[&>svg]:h-15 mland:[&>svg]:w-11 mland:[&>svg]:h-11 flex items-center justify-center">
-                      <KitJersey club={dk} away={true} size={62} />
-                    </div>
-                    <span className={`text-[9px] mland:text-[8px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
-                      เยือน
-                    </span>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <div className="shrink-0 [&>svg]:w-14 [&>svg]:h-14 sm:[&>svg]:w-[68px] sm:[&>svg]:h-[68px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
-                    <KitJersey club={dk} away={false} size={68} />
-                  </div>
-                  <div className="shrink-0 [&>svg]:w-14 [&>svg]:h-14 sm:[&>svg]:w-[68px] sm:[&>svg]:h-[68px] mland:[&>svg]:w-12 mland:[&>svg]:h-12 flex items-center justify-center">
-                    <KitJersey club={dk} away={true} size={68} />
-                  </div>
-                </>
-              )}
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 text-left min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 mland:gap-1.5 px-2 py-1.5 sm:px-2.5 sm:py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
+            <div className="shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-13 sm:[&>svg]:h-13 mland:[&>svg]:w-10 mland:[&>svg]:h-10 flex items-center justify-center">
+              <ClubCrest name={me.name} size={52} team={me} club={dk} isMyClub />
             </div>
-
-            <div className="space-y-1 mland:space-y-0.5 min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10.5px] mland:text-[9px] font-bold leading-tight">
-                {clubTab === 'identity' ? (
-                  <span className={hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}>
-                    {hasIdentityChanges
-                      ? 'ตัวอย่างตรา & ชุดแข่ง (มีรายการแก้ไขที่ยังไม่บันทึก)'
-                      : 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์'}
-                  </span>
-                ) : (
-                  <>
-                    <span className="text-[var(--g)] shrink-0">{TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}</span>
-                    {k.motto && (
-                      <span className="hidden sm:inline text-[var(--mut)] font-medium italic truncate">
-                        · &ldquo;{k.motto}&rdquo;
-                      </span>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <h2 className="font-bold text-base sm:text-xl mland:text-sm font-display leading-snug text-[var(--ink)] break-words">
-                {me.name}
-                {k.nick ? (
-                  <span className="ml-1.5 text-xs sm:text-sm mland:text-[11px] font-semibold text-[var(--mut)] whitespace-nowrap">«{k.nick}»</span>
-                ) : null}
-              </h2>
-
-              {clubTab === 'identity' ? (
-                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-tight">
-                  ตรา: <b className="text-[var(--ink)]">{CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}</b> ·{' '}
-                  <b className="text-[var(--ink)]">{CREST_PATTERNS[dk.pat] || 'แถบขวาง'}</b> · เสื้อ:{' '}
-                  <b className="text-[var(--ink)]">{KIT_PATTERNS[dk.kit || 0]}</b> / เยือน{' '}
-                  <b className="text-[var(--ink)]">{KIT_PATTERNS[(dk.awayKit ?? dk.kit) || 0]}</b> ·{' '}
-                  <b className="text-[var(--ink)]">{KIT_COLLARS[(dk.collar ?? 0) % 4]}</b>
-                </p>
-              ) : (
-                <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-tight">
-                  <span>🏟️ {k.std} ({cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
-                  <span aria-hidden="true" className="opacity-45">·</span>
-                  <span className="font-semibold text-[var(--ink)]">
-                    👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'} ({COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.icon}{' '}
-                    {COACH_STYLES.find((s) => s.id === (k.managerStyle || 'balanced'))?.name})
-                  </span>
-                </p>
-              )}
-            </div>
-
-            {clubTab === 'identity' && (
-              <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 ml-auto">
+            <div className="w-px h-9 sm:h-10 mland:h-8 bg-[var(--line)]/75" aria-hidden="true" />
+            {clubTab === 'identity' ? (
+              <>
                 <button
                   type="button"
                   onClick={() => {
-                    const kp = P(KIT_P);
-                    const icons = Object.keys(CREST_IC);
-                    patchIdentityDraft((cl) => {
-                      cl.c1 = kp[0];
-                      cl.c2 = kp[1];
-                      cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
-                      cl.shape = R(0, CREST_SHAPES.length - 1);
-                      cl.pat = R(0, CREST_PATTERNS.length - 1);
-                      cl.crestBorder = R(0, 3);
-                      cl.kit = R(0, KIT_PATTERNS.length - 1);
-                      const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
-                      cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
-                      cl.collar = R(0, KIT_COLLARS.length - 1);
-                      cl.cuffTrim = Math.random() < 0.75;
-                      cl.icon = P(icons);
-                      cl.iconColor = '';
-                    });
+                    setIdentityMobilePane('kit');
+                    setKitPatternTarget('home');
+                    setKitColorTarget('c1');
                   }}
-                  className="btn btn-xs sm:btn-sm btn-gold whitespace-nowrap shrink-0"
+                  title="คลิกเพื่อแก้ไขชุดเหย้า"
+                  className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                    kitPatternTarget === 'home' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
+                  }`}
                 >
-                  <Dices className="w-3.5 h-3.5" />
-                  <span>สุ่มดีไซน์</span>
+                  <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                    <KitJersey club={dk} away={false} size={44} />
+                  </div>
+                  <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'home' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                    เหย้า
+                  </span>
                 </button>
-                {hasIdentityChanges && (
-                  <button
-                    type="button"
-                    onClick={resetIdentityDraft}
-                    className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>คืนค่าเดิม</span>
-                  </button>
-                )}
                 <button
                   type="button"
-                  disabled={!hasIdentityChanges}
-                  onClick={saveIdentityDraft}
-                  className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
+                  onClick={() => {
+                    setIdentityMobilePane('kit');
+                    setKitPatternTarget('away');
+                    setKitColorTarget('c2');
+                  }}
+                  title="คลิกเพื่อแก้ไขชุดเยือน"
+                  className={`shrink-0 flex flex-col items-center px-1 py-0.5 rounded-lg cursor-pointer transition-colors ${
+                    kitPatternTarget === 'away' ? 'bg-[var(--g-soft)] ring-1 ring-[var(--g)]/60' : 'hover:bg-[var(--surface-2)]/60'
+                  }`}
                 >
-                  <Check className="w-3.5 h-3.5" />
-                  <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
+                  <div className="[&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                    <KitJersey club={dk} away={true} size={44} />
+                  </div>
+                  <span className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${kitPatternTarget === 'away' ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                    เยือน
+                  </span>
                 </button>
-              </div>
+              </>
+            ) : (
+              <>
+                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                  <KitJersey club={dk} away={false} size={48} />
+                </div>
+                <div className="shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-9 mland:[&>svg]:h-9 flex items-center justify-center">
+                  <KitJersey club={dk} away={true} size={48} />
+                </div>
+              </>
             )}
           </div>
 
-          {/* Row 2: Compact 4-column Club Metrics (hidden on identity tab) */}
-          {clubTab !== 'identity' && (
-            <div className="pt-1.5 mland:pt-1 border-t border-[var(--line)]/55">
-              <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 w-full text-center">
-                <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
-                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</span>
-                  <b className="text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight">
-                    {ts.ovXi}/{ts.ovSq}
-                  </b>
-                </div>
-                <div
-                  className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5"
-                  title={`แฟนบอลสโมสร ${fmtFans(ensureTeamFans(me))} คน`}
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 min-w-0 text-[10px] mland:text-[8.5px] font-bold leading-tight">
+              {clubTab === 'identity' ? (
+                <span className={hasIdentityChanges ? 'text-[#b47b00] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}>
+                  {hasIdentityChanges
+                    ? 'ตัวอย่างตรา & ชุดแข่ง (มีรายการแก้ไขที่ยังไม่บันทึก)'
+                    : 'ตัวอย่างตรา & ชุดแข่งแบบเรียลไทม์'}
+                </span>
+              ) : (
+                <>
+                  <span className="text-[var(--g)] shrink-0">{TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}</span>
+                  {k.motto && (
+                    <span className="hidden sm:inline text-[var(--mut)] font-medium italic truncate">
+                      · &ldquo;{k.motto}&rdquo;
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+
+            <h2 className="font-bold text-sm sm:text-lg mland:text-sm font-display leading-snug text-[var(--ink)] truncate">
+              {me.name}
+              {k.nick ? (
+                <span className="ml-1.5 text-[11px] sm:text-xs mland:text-[10px] font-semibold text-[var(--mut)] whitespace-nowrap">«{k.nick}»</span>
+              ) : null}
+            </h2>
+
+            {clubTab === 'identity' ? (
+              <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-tight truncate">
+                ตรา: <b className="text-[var(--ink)]">{CREST_SHAPES[dk.shape]?.label || 'โล่คลาสสิก'}</b> ·{' '}
+                <b className="text-[var(--ink)]">{CREST_PATTERNS[dk.pat] || 'แถบขวาง'}</b> · เสื้อ:{' '}
+                <b className="text-[var(--ink)]">{KIT_PATTERNS[dk.kit || 0]}</b> / เยือน{' '}
+                <b className="text-[var(--ink)]">{KIT_PATTERNS[(dk.awayKit ?? dk.kit) || 0]}</b>
+              </p>
+            ) : (
+              <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)] flex flex-wrap items-center gap-x-1.5 gap-y-0.5 leading-tight truncate">
+                <span>🏟️ {k.std} (จุ {cap.toLocaleString()} · Lv.{state.st ?? 1})</span>
+                <span aria-hidden="true" className="opacity-45">·</span>
+                <span className="font-semibold text-[var(--ink)]">
+                  👔 {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+                </span>
+              </p>
+            )}
+          </div>
+
+          {clubTab === 'identity' ? (
+            <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 ml-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  const kp = P(KIT_P);
+                  const icons = Object.keys(CREST_IC);
+                  patchIdentityDraft((cl) => {
+                    cl.c1 = kp[0];
+                    cl.c2 = kp[1];
+                    cl.c3 = P(['', '#f4c63d', '#ffffff', '#0ea5e9', '#111111']);
+                    cl.shape = R(0, CREST_SHAPES.length - 1);
+                    cl.pat = R(0, CREST_PATTERNS.length - 1);
+                    cl.crestBorder = R(0, 3);
+                    cl.kit = R(0, KIT_PATTERNS.length - 1);
+                    const rndPairs = AWAY_KIT_PAIRINGS[cl.kit] || [0];
+                    cl.awayKit = Math.random() < 0.45 ? undefined : P([...rndPairs]);
+                    cl.collar = R(0, KIT_COLLARS.length - 1);
+                    cl.cuffTrim = Math.random() < 0.75;
+                    cl.icon = P(icons);
+                    cl.iconColor = '';
+                  });
+                }}
+                className="btn btn-xs sm:btn-sm btn-gold whitespace-nowrap shrink-0"
+              >
+                <Dices className="w-3.5 h-3.5" />
+                <span>สุ่มดีไซน์</span>
+              </button>
+              {hasIdentityChanges && (
+                <button
+                  type="button"
+                  onClick={resetIdentityDraft}
+                  className="btn btn-xs sm:btn-sm btn-secondary whitespace-nowrap shrink-0"
                 >
-                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">แฟนบอล</span>
-                  <b className="text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight">
-                    {fmtFansShort(ensureTeamFans(me))}
-                  </b>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>คืนค่าเดิม</span>
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!hasIdentityChanges}
+                onClick={saveIdentityDraft}
+                className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap shrink-0"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{hasIdentityChanges ? 'บันทึก' : 'บันทึกแล้ว'}</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/70 shrink-0 w-full sm:w-auto mland:w-auto text-center">
+              <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap">พลัง XI/ทีม</div>
+                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)]">
+                  {ts.ovXi}/{ts.ovSq}
                 </div>
-                <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
-                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">บอร์ด</span>
-                  <b
-                    className={`text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular leading-tight ${
-                      (state.bd ?? 50) < 30
-                        ? 'text-[var(--red)]'
-                        : (state.bd ?? 50) >= 75
-                          ? 'text-[var(--g)]'
-                          : 'text-[var(--ink)]'
-                    }`}
-                  >
-                    {state.bd ?? 50}%
-                  </b>
+              </div>
+              <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap">มูลค่าทีม</div>
+                <div className="text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)]">
+                  {fmtMoneyNum(totV)}
                 </div>
-                <div className="flex flex-col sm:flex-row mland:flex-row items-center justify-center gap-0.5 sm:gap-1.5 px-1.5 py-1 mland:py-0.5">
-                  <span className="text-[9.5px] mland:text-[8.5px] font-medium text-[var(--mut)] whitespace-nowrap">มูลค่าทีม</span>
-                  <b className="text-[11px] sm:text-xs mland:text-[10.5px] font-extrabold tabular text-[var(--ink)] leading-tight">
-                    {fmtMoneyNum(totV)}
-                  </b>
+              </div>
+              <div className="px-2.5 sm:px-3 py-1 mland:py-0.5">
+                <div className="text-[9px] mland:text-[8px] text-[var(--mut)] whitespace-nowrap">อันดับ / เป้า</div>
+                <div className={`text-[11px] sm:text-xs mland:text-[10px] font-extrabold tabular ${curRank <= targetRank ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
+                  #{curRank}<span className="text-[9.5px] font-semibold text-[var(--mut)]">/{targetRank}+</span>
                 </div>
               </div>
             </div>
@@ -2408,9 +2379,6 @@ export const FinanceClubView: React.FC<{
         const coachVis = k.managerVis && k.managerVis.length >= 8 ? k.managerVis : getDefaultCoachVis(k.managerName || k.name || 'coach');
         const curOutfit = (k.managerOutfit || 'suit_navy') as CoachOutfitId;
         const capPlayer = me.sq.find((q) => q.n === me.cap) || topO;
-        const captainCandidates = me.sq
-          .slice()
-          .sort((a, b) => (b.n === me.cap ? 1 : 0) - (a.n === me.cap ? 1 : 0) || b.ov - a.ov || b.age - a.age);
 
         const openClubEdit = (focusField: 'name' | 'nick' | 'std' | 'managerName' | 'motto' | 'founded' = 'name') => {
           SFX.tap();
@@ -2562,17 +2530,14 @@ export const FinanceClubView: React.FC<{
 
         return (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
-              {/* Left Column: Club Dossier & Head Coach Hub */}
-              <div className="p-4 mland:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-4 mland:space-y-3 h-full overflow-y-auto">
-                {/* Section 1: Club Dossier & Easy Editing */}
-                <section className="space-y-3 mland:space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
+              {/* Left Column: Compact Club Dossier & Head Coach Hub */}
+              <div className="p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2 h-full overflow-y-auto">
+                {/* Section 1: Club Dossier (No duplicate Manager row since Coach hub is below) */}
+                <section className="space-y-2 mland:space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)]">ข้อมูลสโมสร</h3>
-                      <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
-                        {TN[me.tier]} · ก่อตั้ง พ.ศ. {k.founded || 2568}
-                      </p>
+                      <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">ข้อมูลสโมสร</h3>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
@@ -2583,40 +2548,40 @@ export const FinanceClubView: React.FC<{
                         }}
                         className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
                       >
-                        <span>ตรา & ชุดแข่ง</span>
+                        <span>ตรา &amp; ชุดแข่ง</span>
                         <ArrowUpRight className="w-3 h-3" />
                       </button>
                       <button type="button" onClick={() => openClubEdit('name')} className="btn btn-xs btn-primary whitespace-nowrap shrink-0">
                         <Pencil className="w-3 h-3" />
-                        <span>แก้ไขข้อมูล</span>
+                        <span>แก้ไข</span>
                       </button>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 pt-1">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 pt-0.5">
                     <button
                       type="button"
                       onClick={() => openClubEdit('name')}
                       title="แตะเพื่อแก้ไขชื่อสโมสร"
-                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-1.5 text-left rounded-lg px-1.5 -mx-1.5 py-0.5 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
                     >
-                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                      <div className="text-[10px] text-[var(--mut)] flex items-center justify-between gap-1">
                         <span>ชื่อสโมสร</span>
-                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
+                        <Pencil className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                       </div>
-                      <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate mt-0.5">{me.name}</div>
+                      <div className="text-xs font-bold text-[var(--ink)] truncate">{me.name}</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => openClubEdit('nick')}
                       title="แตะเพื่อแก้ไขฉายาสโมสร"
-                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-1.5 text-left rounded-lg px-1.5 -mx-1.5 py-0.5 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
                     >
-                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                      <div className="text-[10px] text-[var(--mut)] flex items-center justify-between gap-1">
                         <span>ฉายาสโมสร</span>
-                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
+                        <Pencil className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                       </div>
-                      <div className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate mt-0.5">
+                      <div className="text-xs font-bold text-[var(--ink)] truncate">
                         {k.nick || <span className="font-normal text-[var(--mut)]">แตะเพื่อตั้งฉายา</span>}
                       </div>
                     </button>
@@ -2624,105 +2589,107 @@ export const FinanceClubView: React.FC<{
                       type="button"
                       onClick={() => openClubEdit('std')}
                       title="แตะเพื่อแก้ไขชื่อสนามเหย้า"
-                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-1.5 text-left rounded-lg px-1.5 -mx-1.5 py-0.5 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
                     >
-                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
+                      <div className="text-[10px] text-[var(--mut)] flex items-center justify-between gap-1">
                         <span>สนามเหย้า</span>
-                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
+                        <Pencil className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                       </div>
-                      <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">{k.std}</div>
-                      <div className="text-[10px] text-[var(--mut)] tabular truncate">
-                        {getStadiumStyleSpec(k.stadiumStyle).shortName} · จุ {cap.toLocaleString()} · Lv.{state.st ?? 1}
+                      <div className="text-xs font-bold text-[var(--ink)] truncate">{k.std}</div>
+                      <div className="text-[9.5px] text-[var(--mut)] tabular truncate">
+                        {getStadiumStyleSpec(k.stadiumStyle).shortName} · จุ {cap.toLocaleString()}
                       </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openClubEdit('managerName')}
-                      title="แตะเพื่อแก้ไขชื่อผู้จัดการทีม"
-                      className="min-w-0 border-b border-[var(--line)]/50 pb-2 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
-                    >
-                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
-                        <span>ผู้จัดการทีม</span>
-                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
-                      </div>
-                      <div className="text-xs font-bold text-[var(--ink)] truncate mt-0.5">
-                        {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
-                      </div>
-                      <div className="text-[10px] text-[var(--mut)] truncate">{repRank}</div>
                     </button>
                     <button
                       type="button"
                       onClick={() => openClubEdit('motto')}
-                      title="แตะเพื่อแก้ไขคำขวัญสโมสร"
-                      className="col-span-2 min-w-0 text-left rounded-lg px-1.5 -mx-1.5 py-1 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
+                      title="แตะเพื่อแก้ไขคำขวัญหรือปีที่ก่อตั้ง"
+                      className="min-w-0 border-b border-[var(--line)]/50 pb-1.5 text-left rounded-lg px-1.5 -mx-1.5 py-0.5 hover:bg-[var(--surface-2)]/55 transition-colors cursor-pointer group"
                     >
-                      <div className="text-[10.5px] text-[var(--mut)] flex items-center justify-between gap-1">
-                        <span>คำขวัญสโมสร</span>
-                        <Pencil className="w-2.5 h-2.5 opacity-45 group-hover:opacity-100" />
+                      <div className="text-[10px] text-[var(--mut)] flex items-center justify-between gap-1">
+                        <span>คำขวัญ &amp; ก่อตั้ง</span>
+                        <Pencil className="w-2.5 h-2.5 opacity-40 group-hover:opacity-100" />
                       </div>
-                      <div className="text-xs font-semibold text-[var(--ink)] truncate mt-0.5">
-                        {k.motto ? `“${k.motto}”` : <span className="font-normal text-[var(--mut)]">แตะเพื่อเพิ่มคำขวัญประจำทีม</span>}
+                      <div className="text-xs font-semibold text-[var(--ink)] truncate">
+                        {k.motto ? `“${k.motto}”` : <span className="font-normal text-[var(--mut)]">เพิ่มคำขวัญ</span>}
                       </div>
+                      <div className="text-[9.5px] text-[var(--mut)] tabular truncate">พ.ศ. {k.founded || 2568}</div>
                     </button>
                   </div>
                 </section>
 
                 {/* Section 2: Head Coach & Tactical Style */}
-                <section className="pt-3.5 mland:pt-2.5 border-t border-[var(--line)]/65 space-y-3 mland:space-y-2.5">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setCoachDraft({
-                              name: k.managerName || '',
-                              vis: [...displayCoachVis],
-                              style: displayCoachStyleId,
-                              outfit: displayCoachOutfitId,
-                              randomOutfitPerMatch: displayRandomOutfit
-                            });
-                            setCoachEditorTab('look');
-                            setShowCoachEditor(true);
-                          }}
-                          title="คลิกเพื่อปรับแต่งโค้ช"
-                          className="relative shrink-0 w-14 h-14 mland:w-13 mland:h-13 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#eef5f1] via-[#dce9e2] to-[#c7dad0] dark:from-[#324d40] dark:via-[#24392f] dark:to-[#182820] border border-[var(--line)] hover:border-[var(--g)] flex items-end justify-center overflow-hidden cursor-pointer transition-colors shadow-inner"
-                        >
-                          <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_38%,rgba(255,255,255,0.65),transparent_70%)] dark:bg-[radial-gradient(circle_at_50%_40%,rgba(232,248,240,0.22),transparent_72%)]"
+                <section className="pt-2.5 mland:pt-2 border-t border-[var(--line)]/65 space-y-2.5 mland:space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setCoachDraft({
+                            name: k.managerName || '',
+                            vis: [...displayCoachVis],
+                            style: displayCoachStyleId,
+                            outfit: displayCoachOutfitId,
+                            randomOutfitPerMatch: displayRandomOutfit
+                          });
+                          setCoachEditorTab('look');
+                          setShowCoachEditor(true);
+                        }}
+                        title="คลิกเพื่อปรับแต่งโค้ช"
+                        className="relative shrink-0 w-12 h-12 mland:w-11 mland:h-11 rounded-xl mland:rounded-lg bg-gradient-to-b from-[#eef5f1] via-[#dce9e2] to-[#c7dad0] dark:from-[#324d40] dark:via-[#24392f] dark:to-[#182820] border border-[var(--line)] hover:border-[var(--g)] flex items-end justify-center overflow-hidden cursor-pointer transition-colors shadow-inner"
+                      >
+                        <div className="relative z-10 w-full h-full pt-0.5 flex items-end justify-center [&>svg]:w-full [&>svg]:h-full">
+                          <PlayerFace
+                            player={coachFacePlayer}
+                            team={me}
+                            state={state}
+                            club={k}
+                            isMyClub
+                            kitColor="#1e293b"
+                            trimColor={k.c2 || '#facc15'}
+                            coachOutfit={displayCoachOutfitId}
+                            coachClubKit={k.c1 || me.kc[0]}
+                            size={48}
+                            bare
+                            isCoach
                           />
-                          <div className="relative z-10 w-full h-full pt-0.5 flex items-end justify-center [&>svg]:w-full [&>svg]:h-full">
-                            <PlayerFace
-                              player={coachFacePlayer}
-                              team={me}
-                              state={state}
-                              club={k}
-                              isMyClub
-                              kitColor="#1e293b"
-                              trimColor={k.c2 || '#facc15'}
-                              coachOutfit={displayCoachOutfitId}
-                              coachClubKit={k.c1 || me.kc[0]}
-                              size={54}
-                              bare
-                              isCoach
-                            />
-                          </div>
-                        </button>
-                        <div className="min-w-0">
-                          <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
-                            {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
-                          </div>
-                          <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular">
-                            {repRank} · {displayCoachOutfit.name}
-                            {displayRandomOutfit ? ' (เปลี่ยนอัตโนมัติทุกนัด)' : ''}
-                          </div>
-                          <div className="text-[10.5px] mland:text-[9.5px] font-semibold text-[var(--g)] truncate">
-                            {displayCoachStyle.icon} {displayCoachStyle.name} · {displayCoachStyle.effectDesc}
-                          </div>
+                        </div>
+                      </button>
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
+                          {k.managerName || 'หัวหน้าผู้ฝึกสอน'}
+                        </div>
+                        <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate tabular">
+                          {repRank} (เครดิต {rep}) · {displayCoachOutfit.name}
+                        </div>
+                        <div className="text-[10px] mland:text-[9px] font-semibold text-[var(--g)] truncate">
+                          {displayCoachStyle.icon} {displayCoachStyle.name} · {displayCoachStyle.effectDesc}
                         </div>
                       </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={randomizeInlineCoachOutfit}
+                        title={`สุ่มเปลี่ยนชุดโค้ช (ปัจจุบัน: ${displayCoachOutfit.name})`}
+                        className="btn btn-xs btn-secondary px-2 whitespace-nowrap"
+                      >
+                        <Shirt className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={toggleInlineRandomOutfit}
+                        title="เปิด/ปิด สุ่มชุดโค้ชอัตโนมัติทุกนัด"
+                        className={`btn btn-xs px-2 whitespace-nowrap ${
+                          displayRandomOutfit
+                            ? 'bg-[var(--g)] text-white border border-emerald-400/30 hover:brightness-110'
+                            : 'btn-secondary'
+                        }`}
+                      >
+                        <Shuffle className="w-3 h-3" />
+                        <span>อัตโนมัติ</span>
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -2740,44 +2707,18 @@ export const FinanceClubView: React.FC<{
                         className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
                       >
                         <Pencil className="w-3 h-3" />
-                        <span>ปรับแต่งโค้ช</span>
-                      </button>
-                    </div>
-
-                    {/* Quick Coach Actions: Randomize Outfit / Auto Per-Match Outfit */}
-                    <div className="grid grid-cols-2 gap-1.5">
-                      <button
-                        type="button"
-                        onClick={randomizeInlineCoachOutfit}
-                        title={`สุ่มเปลี่ยนชุดโค้ช (ปัจจุบัน: ${displayCoachOutfit.name})`}
-                        className="btn btn-xs btn-secondary justify-center w-full whitespace-nowrap"
-                      >
-                        <Shirt className="w-3.5 h-3.5 shrink-0" />
-                        <span>สุ่มชุด</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={toggleInlineRandomOutfit}
-                        title="เปิด/ปิด การสุ่มเปลี่ยนชุดโค้ชอัตโนมัติทุกนัดที่แข่งขัน"
-                        className={`btn btn-xs justify-center w-full whitespace-nowrap ${
-                          displayRandomOutfit
-                            ? 'bg-[var(--g)] text-white border border-emerald-400/30 shadow-xs hover:brightness-110'
-                            : 'btn-secondary'
-                        }`}
-                      >
-                        <Shuffle className="w-3 h-3 shrink-0" />
-                        <span>อัตโนมัติ{displayRandomOutfit ? ' ✓' : ''}</span>
+                        <span>แต่งโค้ช</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Coaching Style Selector — Clean Symmetrical Structured List */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 text-[11px]">
+                  {/* Coaching Style Selector — Compact Structured List */}
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2 text-[10.5px]">
                       <span className="font-bold text-[var(--ink)]">แนวทางการคุมทีม</span>
-                      <span className="text-[10.5px] text-[var(--mut)] truncate">มีผลทั้งในสนามและตอนซ้อม</span>
+                      <span className="text-[10px] text-[var(--mut)] truncate">มีผลทั้งในสนามและตอนซ้อม</span>
                     </div>
-                    <div className="rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]/60 overflow-hidden bg-[var(--surface-2)]/35">
+                    <div className="rounded-xl border border-[var(--line)] divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/30">
                       {COACH_STYLES.map((st) => {
                         const active = displayCoachStyleId === st.id;
                         return (
@@ -2785,35 +2726,27 @@ export const FinanceClubView: React.FC<{
                             key={st.id}
                             type="button"
                             onClick={() => selectInlineCoachStyle(st.id)}
-                            className={`w-full px-3 py-2 mland:py-1.5 flex items-center justify-between gap-2.5 text-left cursor-pointer transition-colors ${
+                            className={`w-full px-2.5 py-1.5 mland:py-1 flex items-center justify-between gap-2 text-left cursor-pointer transition-colors ${
                               active ? 'bg-[var(--g-soft)]' : 'hover:bg-[var(--surface-2)]/80'
                             }`}
                           >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                className={`w-7 h-7 mland:w-6 mland:h-6 rounded-lg flex items-center justify-center text-sm shrink-0 border ${
-                                  active
-                                    ? 'bg-[var(--surface)] border-[var(--g)]/50'
-                                    : 'bg-[var(--surface)] border-[var(--line)]/70'
-                                }`}
-                              >
-                                {st.icon}
-                              </span>
-                              <div className="min-w-0">
-                                <div className="text-xs mland:text-[11px] font-bold text-[var(--ink)] truncate">{st.name}</div>
-                                <div className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] truncate">{st.shortDesc}</div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="text-sm mland:text-xs shrink-0">{st.icon}</span>
+                              <div className="min-w-0 flex items-baseline gap-1.5 truncate">
+                                <span className="text-[11.5px] mland:text-[10.5px] font-bold text-[var(--ink)] shrink-0">{st.name}</span>
+                                <span className="text-[10px] mland:text-[9px] text-[var(--mut)] truncate hidden sm:inline">· {st.shortDesc}</span>
                               </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <span
-                                className={`text-[10.5px] mland:text-[9.5px] font-bold whitespace-nowrap ${
+                                className={`text-[10px] mland:text-[9px] font-bold whitespace-nowrap ${
                                   active ? 'text-[var(--g)]' : 'text-[var(--mut)]'
                                 }`}
                               >
                                 {st.effectDesc}
                               </span>
                               <span
-                                className={`w-4 h-4 rounded-full flex items-center justify-center border ${
+                                className={`w-3.5 h-3.5 rounded-full flex items-center justify-center border ${
                                   active
                                     ? 'bg-[var(--g)] border-[var(--g)] text-white'
                                     : 'border-[var(--line)] bg-[var(--surface)]'
@@ -2830,39 +2763,20 @@ export const FinanceClubView: React.FC<{
                 </section>
               </div>
 
-              {/* Right Column: Board Executive Summary & Dressing Room Leaders */}
-              <div className="space-y-3 mland:space-y-2 h-full overflow-y-auto pr-0.5">
-                {/* Panel 1: Board Confidence & Directives */}
-                <div className="p-4 mland:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-3 mland:space-y-2">
+              {/* Right Column: Season Target & Board + Dressing Room Leaders */}
+              <div className="space-y-2.5 mland:space-y-2 h-full overflow-y-auto pr-0.5">
+                {/* Panel 1: Season Target & Board Status (no giant duplicate Board % card) */}
+                <div className="p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)]">บอร์ดบริหาร &amp; เป้าหมายซีซั่น</h3>
-                    <span className={`text-[11px] font-bold ${bdStatusCls}`}>{bdStatusText}</span>
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">เป้าหมายซีซั่น &amp; บอร์ดบริหาร</h3>
+                    <span className={`text-[11px] font-bold tabular ${bdStatusCls}`}>
+                      เชื่อมั่น {bd}% · {bdStatusText}
+                    </span>
                   </div>
 
-                  {/* 3-Metric Hairline Strip */}
-                  <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-2 border-y border-[var(--line)]/65">
-                    <div className="pr-2">
-                      <div className="text-[10.5px] text-[var(--mut)]">ความเชื่อมั่นบอร์ด</div>
-                      <div className={`text-base mland:text-sm font-bold tabular mt-0.5 ${bdStatusCls}`}>{bd}%</div>
-                    </div>
-                    <div className="px-2.5">
-                      <div className="text-[10.5px] text-[var(--mut)]">อันดับ / เป้าหมาย</div>
-                      <div className="text-base mland:text-sm font-bold tabular text-[var(--ink)] mt-0.5">
-                        #{curRank}
-                        <span className="text-[11px] font-semibold text-[var(--mut)]"> / {targetRank}+</span>
-                      </div>
-                    </div>
-                    <div className="pl-2.5">
-                      <div className="text-[10.5px] text-[var(--mut)]">เครดิตกุนซือ</div>
-                      <div className="text-base mland:text-sm font-bold tabular text-[#9a6700] dark:text-[var(--lamp)] mt-0.5">
-                        {rep}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Confidence Gauge */}
+                  {/* Slim Confidence Bar + 1-Line Target Evaluation */}
                   <div className="space-y-1.5">
-                    <div className="h-2 rounded-full bg-[var(--surface-2)] overflow-hidden">
+                    <div className="h-1.5 rounded-full bg-[var(--surface-2)] overflow-hidden">
                       <div
                         className="h-full rounded-full transition-all"
                         style={{
@@ -2871,37 +2785,22 @@ export const FinanceClubView: React.FC<{
                         }}
                       />
                     </div>
-                    <div className="text-[11px] text-[var(--mut)]">
-                      {bd < 30
-                        ? 'ความเชื่อมั่นอยู่ในระดับวิกฤติ ควรเร่งเก็บแต้มและรักษางบไม่ให้ติดลบ'
-                        : curRank <= targetRank
-                          ? `ผลงานอยู่ในเกณฑ์เป้าหมายบอร์ดบริหาร (อันดับ ${curRank} จาก ${tierTbl.length} ทีม)`
-                          : `อันดับปัจจุบัน (#${curRank}) ยังต่ำกว่าเป้าหมาย (อันดับ ${targetRank}+) ต้องเร่งทำคะแนนในลีก`}
+                    <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[10px]">
+                      <span className="text-[var(--mut)] truncate">
+                        {bd < 30
+                          ? 'ความเชื่อมั่นวิกฤติ เร่งเก็บแต้มและรักษางบ'
+                          : curRank <= targetRank
+                            ? `ผลงานตามเป้า (อันดับ ${curRank}/${tierTbl.length} · เป้า ${targetRank}+)`
+                            : `ต่ำกว่าเป้า (ตอนนี้ #${curRank} · ต้องติดอันดับ ${targetRank}+)`}
+                      </span>
+                      <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)] shrink-0 tabular">
+                        เครดิต {rep}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Board Directive Section */}
-                  <div className="pt-2.5 border-t border-[var(--line)]/65 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-[var(--ink)]">คำสั่ง &amp; ภารกิจจากบอร์ด</span>
-                      {(!state.boardDirective || state.boardDirective.status !== 'active') &&
-                        (state.md ?? 0) < (state.fx?.length || 30) - 2 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              onUpdateState((d) => {
-                                issueBoardDirective(d);
-                              });
-                              onToast('รับคำสั่งประเมินรอบใหม่จากบอร์ดบริหารแล้ว');
-                            }}
-                            className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
-                          >
-                            + ขอคำสั่งบอร์ด
-                          </button>
-                        )}
-                    </div>
-
+                  {/* Streamlined Optional Board Directive Strip */}
+                  <div className="pt-2 border-t border-[var(--line)]/60 space-y-1.5">
                     {state.boardDirective ? (() => {
                       const dir = state.boardDirective;
                       const prog = getBoardDirectiveProgress(state, dir);
@@ -2911,195 +2810,132 @@ export const FinanceClubView: React.FC<{
                           ? 'border-[var(--g)]/40 bg-[var(--g-soft)]'
                           : dir.status === 'failed'
                             ? 'border-[var(--red)]/40 bg-[var(--red-soft)]'
-                            : 'border-[var(--line)] bg-[var(--surface-2)]/70';
+                            : 'border-[var(--line)] bg-[var(--surface-2)]/65';
                       const statusLabel =
                         dir.status === 'active'
-                          ? `ครบกำหนด น.${dir.dueMd} (อีก ${remMd} นัด)`
+                          ? `น.${dir.dueMd} (อีก ${remMd} นัด)`
                           : dir.status === 'passed'
                             ? 'ผ่านภารกิจ'
                             : 'ไม่ผ่านเกณฑ์';
 
                       return (
-                        <div className={`p-3 rounded-xl border space-y-1.5 ${directiveBg}`}>
+                        <div className={`p-2.5 rounded-xl border space-y-1 ${directiveBg}`}>
                           <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                            <span className="truncate text-[var(--ink)]">{dir.title}</span>
-                            <span className="text-[10.5px] tabular shrink-0 text-[var(--mut)]">{statusLabel}</span>
+                            <span className="truncate text-[var(--ink)]">📋 {dir.title}</span>
+                            <span className="text-[10px] tabular shrink-0 text-[var(--mut)]">{statusLabel}</span>
                           </div>
-                          <p className="text-[11px] text-[var(--mut)] leading-snug">{dir.feedback}</p>
-                          <div className="text-[11px] font-semibold text-[var(--ink)]">เป้าหมาย: {dir.targetLabel}</div>
+                          <div className="text-[10.5px] font-semibold text-[var(--ink)]/90 truncate">{dir.targetLabel}</div>
                           {dir.status === 'active' && (
-                            <div className="space-y-1 pt-0.5">
-                              <div className="flex justify-between text-[10.5px] text-[var(--mut)] tabular">
-                                <span>{prog.progressText}</span>
-                                <b className={prog.isComplete ? 'text-[var(--g)]' : 'text-[var(--ink)]'}>
-                                  {Math.round(prog.ratio * 100)}%
-                                </b>
-                              </div>
-                              <div className="h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
+                            <div className="flex items-center gap-2 pt-0.5">
+                              <div className="flex-1 h-1.5 rounded-full bg-[var(--surface)] overflow-hidden">
                                 <div
                                   className="h-full rounded-full transition-all"
                                   style={{
-                                    width: `${Math.max(4, Math.round(prog.ratio * 100))}%`,
+                                    width: `${Math.max(5, Math.round(prog.ratio * 100))}%`,
                                     backgroundColor: prog.isComplete ? 'var(--g)' : 'var(--lamp)'
                                   }}
                                 />
                               </div>
+                              <span className={`text-[10px] font-bold tabular shrink-0 ${prog.isComplete ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
+                                {prog.progressText}
+                              </span>
                             </div>
                           )}
-                          <div className="grid grid-cols-2 gap-2 text-[10.5px] pt-0.5">
-                            <div className="text-[var(--g)] truncate" title={dir.rewardText}>
-                              สำเร็จ: {dir.rewardText}
-                            </div>
-                            <div className="text-[var(--red)] truncate text-right" title={dir.penaltyText}>
-                              พลาด: {dir.penaltyText}
-                            </div>
+                          <div className="flex items-center justify-between gap-2 text-[9.5px] pt-0.5">
+                            <span className="text-[var(--g)] truncate" title={dir.rewardText}>✓ {dir.rewardText}</span>
+                            <span className="text-[var(--red)] truncate text-right" title={dir.penaltyText}>✕ {dir.penaltyText}</span>
                           </div>
                         </div>
                       );
                     })() : (
-                      <div className="py-2 text-[11px] text-[var(--mut)]">
-                        ยังไม่มีคำสั่งพิเศษในขณะนี้ บอร์ดจะประเมินผลงานและส่งภารกิจตามสถานการณ์ของทีม
+                      <div className="flex items-center justify-between gap-2 text-[10.5px]">
+                        <span className="text-[var(--mut)] truncate">
+                          ภารกิจเสริมจากบอร์ด: ว่างอยู่ (รับเพื่อลุ้นบัฟทีมชั่วคราว)
+                        </span>
+                        {(state.md ?? 0) < (state.fx?.length || 30) - 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              SFX.tap();
+                              onUpdateState((d) => {
+                                issueBoardDirective(d);
+                              });
+                              onToast('รับภารกิจเสริมจากบอร์ดแล้ว');
+                            }}
+                            className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                          >
+                            + รับภารกิจ
+                          </button>
+                        )}
                       </div>
                     )}
 
                     {activeBoardEffects.length > 0 && (
-                      <div className="space-y-1 pt-1">
-                        <div className="text-[10.5px] font-bold text-[var(--mut)]">ผลกระทบบอร์ดที่มีผลขณะนี้</div>
-                        <div className="divide-y divide-[var(--line)]/50">
-                          {activeBoardEffects.map((ef) => {
-                            const rem = Math.max(1, ef.expiresMd - (state.md ?? 0));
-                            const isBonus = ef.tone === 'bonus';
-                            return (
-                              <div
-                                key={ef.id}
-                                className={`flex items-center justify-between gap-2 py-1.5 text-[11px] ${
-                                  isBonus ? 'text-[var(--g)]' : 'text-[var(--red)]'
-                                }`}
-                              >
-                                <span className="font-semibold truncate">{ef.label}</span>
-                                <span className="text-[10px] font-bold tabular shrink-0">เหลือ {rem} นัด</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {(state.boardFeedbackLog || []).length > 0 && (
-                      <div className="space-y-1 pt-1">
-                        <div className="text-[10.5px] font-bold text-[var(--mut)]">ความเห็นล่าสุดจากบอร์ด</div>
-                        <div className="divide-y divide-[var(--line)]/45 max-h-24 overflow-y-auto pr-0.5">
-                          {(state.boardFeedbackLog || []).slice(0, 3).map((fb, idx) => (
-                            <div key={idx} className="flex items-start justify-between gap-2 text-[10.5px] py-1">
-                              <span
-                                className={
-                                  fb.tone === 'ok'
-                                    ? 'text-[var(--g)]'
-                                    : fb.tone === 'urg'
-                                      ? 'text-[var(--red)]'
-                                      : 'text-[var(--ink)]'
-                                }
-                              >
-                                {fb.msg}
-                              </span>
-                              <span className="text-[9.5px] text-[var(--mut)] tabular shrink-0">น.{fb.md}</span>
-                            </div>
-                          ))}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] pt-0.5">
+                        {activeBoardEffects.map((ef) => (
+                          <span
+                            key={ef.id}
+                            className={`font-semibold tabular ${ef.tone === 'bonus' ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}
+                          >
+                            {ef.tone === 'bonus' ? '✦' : '⚠'} {ef.label} ({Math.max(1, ef.expiresMd - (state.md ?? 0))} นัด)
+                          </span>
+                        ))}
                       </div>
                     )}
                   </div>
                 </div>
 
                 {/* Panel 2: Dressing Room & Key Leaders */}
-                <div className="p-4 mland:p-3 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
+                <div className="p-3 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-bold text-sm mland:text-xs text-[var(--ink)]">ห้องแต่งตัว &amp; แกนหลักทีม</h3>
-                    <span className="text-[10.5px] text-[var(--mut)]">แตะที่ชื่อเพื่อดูข้อมูลนักเตะ</span>
+                    <h3 className="font-bold text-xs sm:text-sm mland:text-xs text-[var(--ink)]">ห้องแต่งตัว &amp; แกนหลักทีม</h3>
+                    <span className="text-[10px] text-[var(--mut)]">แตะชื่อเพื่อดูนักเตะ</span>
                   </div>
 
-                  <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 py-2 border-y border-[var(--line)]/65 text-center">
+                  <div className="grid grid-cols-4 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center">
                     <div className="px-1">
-                      <div className="text-[10px] text-[var(--mut)]">ขวัญทีม</div>
-                      <div className="font-bold text-sm mland:text-xs tabular text-[var(--ink)] mt-0.5">{state.mor ?? 55}%</div>
+                      <div className="text-[9.5px] text-[var(--mut)]">ขวัญทีม</div>
+                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{state.mor ?? 55}%</div>
                     </div>
                     <div className="px-1">
-                      <div className="text-[10px] text-[var(--mut)]">เข้าใจแผน</div>
-                      <div className="font-bold text-sm mland:text-xs tabular text-[var(--ink)] mt-0.5">{me.tacFam ?? 65}%</div>
+                      <div className="text-[9.5px] text-[var(--mut)]">เข้าใจแผน</div>
+                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{me.tacFam ?? 65}%</div>
                     </div>
                     <div className="px-1">
-                      <div className="text-[10px] text-[var(--mut)]">อายุเฉลี่ย</div>
-                      <div className="font-bold text-sm mland:text-xs tabular text-[var(--ink)] mt-0.5">{avgAge} ปี</div>
+                      <div className="text-[9.5px] text-[var(--mut)]">อายุเฉลี่ย</div>
+                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{avgAge} ปี</div>
                     </div>
                     <div className="px-1">
-                      <div className="text-[10px] text-[var(--mut)]">ขุมกำลัง</div>
-                      <div className="font-bold text-sm mland:text-xs tabular text-[var(--ink)] mt-0.5">{me.sq.length} คน</div>
+                      <div className="text-[9.5px] text-[var(--mut)]">ขุมกำลัง</div>
+                      <div className="font-bold text-xs sm:text-sm mland:text-xs tabular text-[var(--ink)]">{me.sq.length} คน</div>
                     </div>
                   </div>
 
-                  <div className="divide-y divide-[var(--line)]/55 text-xs">
-                    {/* Captain Row with Inline Quick Change */}
-                    <div className="py-1.5 space-y-1.5">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[var(--mut)] shrink-0">กัปตันทีม</span>
-                        <div className="flex items-center gap-2 min-w-0">
-                          {capPlayer && (
-                            <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
-                              <PlayerFace player={capPlayer} team={me} state={state} club={k} isMyClub size={24} />
-                            </div>
-                          )}
-                          {capPlayer && onInspectPlayer ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                onInspectPlayer(capPlayer, me);
-                              }}
-                              className="font-bold text-[var(--ink)] hover:text-[var(--g)] truncate cursor-pointer text-right"
-                            >
-                              {capPlayer.n}
-                            </button>
-                          ) : (
-                            <b className="truncate">{me.cap || topO?.n || '-'}</b>
-                          )}
+                  <div className="divide-y divide-[var(--line)]/50 text-xs">
+                    {/* Captain Row (Read-only inspect; captain assignment lives in Gameplan) */}
+                    <div className="flex items-center justify-between gap-2 py-1.5">
+                      <span className="text-[var(--mut)] shrink-0">กัปตันทีม</span>
+                      <div className="flex items-center gap-1.5 min-w-0 justify-end">
+                        {capPlayer && (
+                          <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
+                            <PlayerFace player={capPlayer} team={me} state={state} club={k} isMyClub size={20} />
+                          </div>
+                        )}
+                        {capPlayer && onInspectPlayer ? (
                           <button
                             type="button"
                             onClick={() => {
                               SFX.tap();
-                              setEditingCaptain((v) => !v);
+                              onInspectPlayer(capPlayer, me);
                             }}
-                            className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                            className="font-bold text-[var(--ink)] hover:text-[var(--g)] truncate cursor-pointer text-right tabular"
                           >
-                            <UserCheck className="w-3 h-3" />
-                            <span>{editingCaptain ? 'ปิด' : 'เปลี่ยน'}</span>
+                            {capPlayer.n} ({capPlayer.ro} · {capPlayer.ov})
                           </button>
-                        </div>
+                        ) : (
+                          <b className="truncate text-right">{me.cap || topO?.n || '-'}</b>
+                        )}
                       </div>
-
-                      {editingCaptain && (
-                        <div className="flex items-center gap-2 pt-0.5">
-                          <select
-                            value={me.cap || capPlayer?.n || ''}
-                            onChange={(e) => {
-                              const nextCap = e.target.value;
-                              if (!nextCap) return;
-                              SFX.tap();
-                              onUpdateState((d) => {
-                                d.teams[d.me].cap = nextCap;
-                              });
-                              setEditingCaptain(false);
-                              onToast(`แต่งตั้ง ${nextCap} เป็นกัปตันทีมแล้ว`);
-                            }}
-                            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg border border-[var(--line)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--ink)]"
-                          >
-                            {captainCandidates.map((q) => (
-                              <option key={q.n} value={q.n}>
-                                {q.n} ({q.ro} · พลัง {q.ov} · {q.age} ปี)
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
                     </div>
 
                     {leaderRows.map((row) => {
@@ -3109,8 +2945,8 @@ export const FinanceClubView: React.FC<{
                           <span className="text-[var(--mut)] shrink-0">{row.label}</span>
                           {row.player ? (
                             <div className="flex items-center gap-1.5 min-w-0 justify-end">
-                              <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
-                                <PlayerFace player={row.player} team={me} state={state} club={k} isMyClub size={24} />
+                              <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
+                                <PlayerFace player={row.player} team={me} state={state} club={k} isMyClub size={20} />
                               </div>
                               {canInspect ? (
                                 <button
@@ -4010,51 +3846,29 @@ export const FinanceClubView: React.FC<{
         const homeReadinessLv = Math.round(((clamp(state.st ?? 1, 1, 10) + clamp(state.turfLv ?? 1, 0, 10)) / 2) * 10) / 10;
 
         return (
-          <div className="grid grid-cols-2 mland:grid-cols-2 gap-3 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            {/* Left Column: 8 Unique Facilities Lv.10 + Readiness Summary + Renovation + Demolition */}
-            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 mland:grid-cols-2 gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
+            {/* Left Column: 8 Unique Facilities Lv.10 + Compact Readiness Strip */}
+            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 h-full overflow-y-auto">
               <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60">
-                <div>
-                  <h3 className="font-bold text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวก &amp; ความพร้อมสโมสร ({infraFacilityDefs.length} แห่ง · Lv.{MAX_FACILITY_LV})</h3>
-                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">อัปเกรดความพร้อมทั้งเหย้า-เยือนได้สูงสุด Lv.{MAX_FACILITY_LV} พร้อมบำรุงรักษาหรือรื้อถอน</div>
+                <div className="min-w-0">
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-xs">🏟️ สิ่งอำนวยความสะดวก ({infraFacilityDefs.length} แห่ง · Lv.{MAX_FACILITY_LV})</h3>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                    เฉลี่ย Lv.{avgFacLv} · สภาพ {avgFacCond}% · เหย้า Lv.{homeReadinessLv} · เยือน Lv.{travelLvCur}
+                  </div>
                 </div>
                 {wornCount > 0 && (
                   <button
                     type="button"
                     disabled={state.money < totalRenovateAll}
                     onClick={() => renovateAllFacs(infraFacilityDefs)}
-                    className="btn btn-xs btn-gold"
+                    className="btn btn-xs btn-gold whitespace-nowrap shrink-0"
                   >
                     🔧 ปรับปรุงทั้งหมด ({wornCount}) · {fmtMoneyNum(totalRenovateAll)}
                   </button>
                 )}
               </div>
 
-              {/* Clean 4-Card Club Readiness Summary Strip */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mland:gap-1">
-                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
-                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">ความพร้อมเฉลี่ย</div>
-                  <div className="text-xs font-extrabold text-[var(--g)] tabular">Lv.{avgFacLv}/{MAX_FACILITY_LV}</div>
-                </div>
-                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
-                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">สภาพอาคารรวม</div>
-                  <div className={`text-xs font-extrabold tabular ${avgFacCond < 75 ? 'text-[var(--red)]' : avgFacCond < 90 ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--ink)]'}`}>
-                    {avgFacCond}%
-                  </div>
-                </div>
-                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
-                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">🏠 พร้อมเกมเหย้า</div>
-                  <div className="text-xs font-extrabold text-[var(--ink)] tabular">Lv.{homeReadinessLv}/{MAX_FACILITY_LV}</div>
-                </div>
-                <div className="px-2.5 py-1.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]/70">
-                  <div className="text-[9.5px] text-[var(--mut)] font-semibold truncate">🚌 พร้อมเกมเยือน</div>
-                  <div className={`text-xs font-extrabold tabular ${travelLvCur <= 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                    Lv.{travelLvCur}/{MAX_FACILITY_LV}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {infraFacilityDefs.map(({ key, title, desc, perkLine, baseCost }) => {
                   const minLv = key === 'st' ? 1 : 0;
                   const lv = clamp(state[key] ?? 1, minLv, MAX_FACILITY_LV);
@@ -4063,26 +3877,24 @@ export const FinanceClubView: React.FC<{
                   const renCost = getFacilityRenovateCost(baseCost, lv, cond);
                   const canDemolish = lv > minLv;
                   const isMaxLv = lv >= MAX_FACILITY_LV;
-                  const condBadgeCls =
-                    lv <= 0
-                      ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/40'
-                      : cond < 75
-                        ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/35'
-                        : cond < 90
-                          ? 'text-[#9a6700] dark:text-[var(--lamp)] bg-[var(--lamp-soft)] border-[var(--lamp)]/40'
-                          : 'text-[var(--g)] bg-[var(--g-soft)] border-[var(--g)]/35';
+                  const condToneCls =
+                    lv <= 0 || cond < 75
+                      ? 'text-[var(--red)]'
+                      : cond < 90
+                        ? 'text-[#9a6700] dark:text-[var(--lamp)]'
+                        : 'text-[var(--g)]';
 
                   return (
                     <div
                       key={key}
-                      className={`p-2.5 mland:p-2 rounded-2xl border space-y-2 transition-colors ${
+                      className={`p-2.5 mland:p-2 rounded-xl border space-y-1.5 transition-colors ${
                         lv <= 0
                           ? 'bg-[var(--red-soft)]/20 border-[var(--red)]/35'
                           : isMaxLv
-                            ? 'bg-gradient-to-br from-[var(--g-soft)]/55 to-[var(--surface-2)]/50 border-[var(--g)]/45'
+                            ? 'bg-gradient-to-br from-[var(--g-soft)]/50 to-[var(--surface-2)]/45 border-[var(--g)]/45'
                             : cond < 75
                               ? 'bg-[var(--surface-2)]/70 border-[var(--red)]/35'
-                              : 'bg-[var(--surface-2)]/55 border-[var(--line)]/80'
+                              : 'bg-[var(--surface-2)]/45 border-[var(--line)]/75'
                       }`}
                     >
                       <div className="flex items-start gap-2.5">
@@ -4093,45 +3905,46 @@ export const FinanceClubView: React.FC<{
                           c1={me.kc[0]}
                           c2={me.kc[1]}
                           stadiumStyle={key === 'st' ? curStadiumStyle : undefined}
-                          className="w-[104px] h-[66px] mland:w-[88px] mland:h-[56px]"
+                          className="w-[88px] h-[56px] mland:w-[76px] mland:h-[48px] shrink-0"
                         />
-                        <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-0.5">
                           <div className="flex items-center justify-between gap-1.5">
                             <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
                             <span
-                              className={`px-1.5 py-0.5 rounded-md font-extrabold text-[10.5px] tabular shrink-0 ${
+                              className={`font-extrabold text-[10.5px] tabular shrink-0 ${
                                 lv <= 0
-                                  ? 'bg-[var(--red-soft)] text-[var(--red)]'
+                                  ? 'text-[var(--red)]'
                                   : isMaxLv
-                                    ? 'bg-[var(--lamp-soft)] text-[#8a5b00] dark:text-[var(--lamp)] border border-[var(--lamp)]/45'
-                                    : 'bg-[var(--g-soft)] text-[var(--g)]'
+                                    ? 'text-[#8a5b00] dark:text-[var(--lamp)]'
+                                    : 'text-[var(--g)]'
                               }`}
                             >
                               {isMaxLv ? `★ Lv.${lv}/${MAX_FACILITY_LV}` : `Lv.${lv}/${MAX_FACILITY_LV}`}
                             </span>
                           </div>
-                          <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
+                          <div className="flex items-center gap-1.5 text-[10px] truncate">
                             <span className={`font-semibold ${lv <= 0 ? 'text-[var(--red)]' : 'text-[var(--ink)]/85'}`}>
                               {key === 'travelLv' ? getTravelTierLabel(lv) : getFacilityTierLabel(lv)}
                             </span>
-                            <span className={`px-1.5 py-0.5 rounded-md border font-bold tabular text-[9.5px] ${condBadgeCls}`}>
+                            <span className="opacity-40">·</span>
+                            <span className={`font-bold tabular ${condToneCls}`}>
                               {lv <= 0
-                                ? 'ถูกทำลาย · ไม่มีโบนัส'
+                                ? 'ถูกทำลาย'
                                 : cond < 55
-                                  ? `สภาพ ${cond}% · ชำรุดหนัก`
+                                  ? `สภาพ ${cond}% (ชำรุด)`
                                   : cond < 75
-                                    ? `สภาพ ${cond}% · ควรปรับปรุง`
+                                    ? `สภาพ ${cond}% (ควรซ่อม)`
                                     : `สภาพ ${cond}%`}
                             </span>
                           </div>
-                          <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{desc}</div>
                           <div className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--g)] tabular truncate">
                             ✦ {perkLine}
                           </div>
                           {key === 'st' && (
                             <div className="pt-0.5 flex flex-wrap items-center justify-between gap-1.5">
                               <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] truncate">
-                                🏛️ รูปแบบสนาม: {curStadiumStyleSpec.name} ({builtStadiumStyles.length}/{STADIUM_STYLE_SPECS.length})
+                                🏛️ {curStadiumStyleSpec.name} ({builtStadiumStyles.length}/{STADIUM_STYLE_SPECS.length})
                               </span>
                               <button
                                 type="button"
@@ -4141,7 +3954,7 @@ export const FinanceClubView: React.FC<{
                                 }}
                                 className={`btn btn-xs ${showStadiumPicker ? 'btn-surface border-[var(--g)] text-[var(--g)]' : 'btn-secondary'}`}
                               >
-                                {showStadiumPicker ? 'ซ่อนรูปแบบสนาม' : `เลือกรูปแบบ (${STADIUM_STYLE_SPECS.length} แบบ)`}
+                                {showStadiumPicker ? 'ซ่อนแบบสนาม' : `เปลี่ยนแบบ (${STADIUM_STYLE_SPECS.length})`}
                               </button>
                             </div>
                           )}
@@ -4152,7 +3965,7 @@ export const FinanceClubView: React.FC<{
                         {Array.from({ length: MAX_FACILITY_LV }, (_, idx) => idx + 1).map((step) => (
                           <span
                             key={step}
-                            className={`h-1.5 rounded-full transition-colors ${
+                            className={`h-1 rounded-full transition-colors ${
                               step <= lv
                                 ? isMaxLv
                                   ? 'bg-[var(--lamp)]'
@@ -4163,9 +3976,9 @@ export const FinanceClubView: React.FC<{
                         ))}
                       </div>
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
                         {lv > 0 ? (
-                          <div className="flex-1 min-w-[60px] h-1.5 rounded-full bg-[var(--surface)] overflow-hidden border border-[var(--line)]/50">
+                          <div className="flex-1 min-w-[50px] h-1.5 rounded-full bg-[var(--surface)] overflow-hidden border border-[var(--line)]/50">
                             <div
                               className={`h-full transition-all ${cond < 75 ? 'bg-[var(--red)]' : cond < 90 ? 'bg-[var(--lamp)]' : 'bg-emerald-500'}`}
                               style={{ width: `${cond}%` }}
@@ -4173,10 +3986,10 @@ export const FinanceClubView: React.FC<{
                           </div>
                         ) : (
                           <span className="flex-1 text-[10px] mland:text-[9px] font-semibold text-[var(--mut)]">
-                            พื้นที่ว่าง · สามารถก่อสร้างใหม่ได้ทันที
+                            พื้นที่ว่าง · สร้างใหม่ได้
                           </span>
                         )}
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           {canDemolish && (
                             <button
                               type="button"
@@ -4185,7 +3998,7 @@ export const FinanceClubView: React.FC<{
                               title={`รื้อถอน/ทำลาย${title}`}
                             >
                               <Trash2 className="w-3 h-3" />
-                              <span>ทำลาย</span>
+                              <span>รื้อ</span>
                             </button>
                           )}
                           {lv > 0 && cond < 100 && (
@@ -4195,7 +4008,7 @@ export const FinanceClubView: React.FC<{
                               onClick={() => renovateFac(key, title, baseCost)}
                               className="btn btn-xs btn-surface hover:border-[var(--lamp)]"
                             >
-                              🔧 ปรับปรุง {fmtMoneyNum(renCost)}
+                              🔧 ซ่อม {fmtMoneyNum(renCost)}
                             </button>
                           )}
                           <button
@@ -4205,10 +4018,10 @@ export const FinanceClubView: React.FC<{
                             className="btn btn-xs btn-primary"
                           >
                             {lv >= MAX_FACILITY_LV
-                              ? `★ Lv.${MAX_FACILITY_LV} สูงสุด`
+                              ? `★ Lv.${MAX_FACILITY_LV} เต็ม`
                               : lv <= 0
-                                ? `🏗️ สร้างใหม่ ${fmtMoneyNum(upgCost)}`
-                                : `⬆️ อัป Lv.${lv + 1} · ${fmtMoneyNum(upgCost)}`}
+                                ? `🏗️ สร้าง ${fmtMoneyNum(upgCost)}`
+                                : `⬆️ Lv.${lv + 1} · ${fmtMoneyNum(upgCost)}`}
                           </button>
                         </div>
                       </div>
@@ -4309,23 +4122,23 @@ export const FinanceClubView: React.FC<{
             </div>
 
             {/* Right Column: 6 Unique Staff Roles Lv.6 */}
-            <div className="p-3 mland:p-2 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 h-full overflow-y-auto">
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-[var(--line)]/60">
+            <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2 mland:space-y-1.5 h-full overflow-y-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60">
                 <div>
-                  <h3 className="font-bold text-sm mland:text-xs">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช ({staffDefs.length} ตำแหน่ง · สูงสุด Lv.{MAX_STAFF_LV})</h3>
-                  <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ทีมงานเฉพาะทางแต่ละสายช่วยยกระดับทีมอย่างต่อเนื่อง</div>
+                  <h3 className="font-bold text-xs sm:text-sm mland:text-xs">🧑‍🏫 ทีมงานสตาฟฟ์โค้ช ({staffDefs.length} ตำแหน่ง · Lv.{MAX_STAFF_LV})</h3>
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">ทีมงานเฉพาะทางแต่ละสายช่วยยกระดับทีมอย่างต่อเนื่อง</div>
                 </div>
-                <span className="text-xs mland:text-[10.5px] font-bold text-[var(--red)] tabular">ค่าจ้างรวม -{fmtMoneyNum(est.staffCost)}/นัด</span>
+                <span className="text-xs mland:text-[10px] font-bold text-[var(--red)] tabular">-{fmtMoneyNum(est.staffCost)}/นัด</span>
               </div>
 
-              <div className="space-y-2.5">
+              <div className="space-y-2">
                 {staffDefs.map(({ role, title, desc }) => {
                   const lv = clamp(stf[role], 0, MAX_STAFF_LV);
                   const nextCost = STAFF_HIRE_COSTS[lv] ?? 0;
                   return (
                     <div
                       key={role}
-                      className="p-2.5 mland:p-2 rounded-2xl bg-[var(--surface-2)]/55 border border-[var(--line)]/80 space-y-2"
+                      className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/75 space-y-1.5"
                     >
                       <div className="flex items-start gap-2.5">
                         <StaffRoleSvg
@@ -4333,21 +4146,21 @@ export const FinanceClubView: React.FC<{
                           level={lv}
                           c1={me.kc[0]}
                           c2={me.kc[1]}
-                          className="w-[78px] h-[64px] mland:w-[68px] mland:h-[56px]"
+                          className="w-[68px] h-[56px] mland:w-[58px] mland:h-[48px] shrink-0"
                         />
-                        <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-0.5">
                           <div className="flex items-center justify-between gap-1.5">
                             <span className="font-bold text-xs mland:text-[10.5px] truncate">{title}</span>
-                            <span className={`px-1.5 py-0.5 rounded-md font-extrabold text-[10.5px] tabular shrink-0 ${lv > 0 ? 'bg-[var(--g-soft)] text-[var(--g)]' : 'bg-[var(--surface)] text-[var(--mut)]'}`}>
+                            <span className={`font-extrabold text-[10.5px] tabular shrink-0 ${lv > 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                               Lv.{lv}/{MAX_STAFF_LV}
                             </span>
                           </div>
-                          <div className="flex items-center gap-2 text-[10px] text-[var(--mut)]">
+                          <div className="flex items-center gap-1.5 text-[10px] text-[var(--mut)]">
                             <span className="font-semibold text-[var(--ink)]/85">{getStaffTierLabel(lv)}</span>
                             <span>·</span>
-                            <span className="tabular">ค่าจ้าง {(lv * 1.2).toFixed(1)} ล./นัด</span>
+                            <span className="tabular">{(lv * 1.2).toFixed(1)} ล./นัด</span>
                           </div>
-                          <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] leading-snug">{desc}</div>
+                          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug line-clamp-2">{desc}</div>
                         </div>
                       </div>
 
@@ -4356,11 +4169,11 @@ export const FinanceClubView: React.FC<{
                           {Array.from({ length: MAX_STAFF_LV }, (_, idx) => idx + 1).map((step) => (
                             <span
                               key={step}
-                              className={`h-1.5 rounded-full transition-colors ${step <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface)] border border-[var(--line)]/60'}`}
+                              className={`h-1 rounded-full transition-colors ${step <= lv ? 'bg-[var(--g)]' : 'bg-[var(--surface)] border border-[var(--line)]/60'}`}
                             />
                           ))}
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           {lv > 0 && (
                             <button
                               type="button"
@@ -4967,20 +4780,22 @@ export const FinanceClubView: React.FC<{
         </div>
       )}
 
-      {/* Club Tab 3: Club Activities */}
+      {/* Club Tab 3: Club Activities (Compact & Responsive) */}
       {clubTab === 'activities' && (
-        <div className="p-3.5 mland:p-2.5 rounded-2xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2 flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-            <div>
-              <h3 className="font-bold text-sm mland:text-xs">🤝 กิจกรรมสโมสร &amp; มวลชนสัมพันธ์</h3>
-              <p className="text-xs mland:text-[10px] text-[var(--mut)]">จัดกิจกรรมเพื่อปลุกขวัญนักเตะ ดึงดูดแฟนบอล และเสริมความเชื่อมั่นบอร์ด (คูลดาวน์ 3 นัดต่อครั้ง)</p>
+        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-1.5 flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-1.5 border-b border-[var(--line)]/60 shrink-0">
+            <div className="min-w-0">
+              <h3 className="font-bold text-xs sm:text-sm mland:text-xs">🤝 กิจกรรมสโมสร &amp; มวลชนสัมพันธ์</h3>
+              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate">
+                ขวัญทีม {state.mor ?? 55}% · เข้าใจแผน {me.tacFam ?? 65}% · คูลดาวน์ 3 นัดต่อครั้ง
+              </p>
             </div>
-            <span className={`text-xs mland:text-[11px] font-bold ${actCool ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
+            <span className={`text-xs mland:text-[10.5px] font-bold shrink-0 ${actCool ? 'text-[#9a6700] dark:text-[var(--lamp)]' : 'text-[var(--g)]'}`}>
               {actCool ? `⏳ รออีก ${remCd} นัด` : '✅ พร้อมจัดกิจกรรม'}
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2.5 mland:gap-2 flex-1 min-h-0 overflow-y-auto pr-0.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mland:grid-cols-3 gap-2 mland:gap-1.5 flex-1 min-h-0 overflow-y-auto content-start pr-0.5">
             <button
               type="button"
               disabled={actCool}
@@ -4994,13 +4809,13 @@ export const FinanceClubView: React.FC<{
                 });
                 onToast(`แฟนบอลประทับใจ! ผู้ติดตามสโมสร +${fmtFans(gained)} คน`);
               }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
-              <div className="flex justify-between font-bold text-xs">
-                <span>📣 พบปะแฟนบอล</span>
-                <span className="text-[var(--g)]">ฟรี</span>
+              <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
+                <span className="truncate">📣 พบปะแฟนบอล</span>
+                <span className="text-[var(--g)] shrink-0">ฟรี</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">เพิ่มแฟนบอล +2.5% และความคึกคักเข้าสนาม</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">เพิ่มแฟนบอล +2.5% และความคึกคักเข้าสนาม</div>
             </button>
 
             <button
@@ -5020,13 +4835,13 @@ export const FinanceClubView: React.FC<{
                 });
                 onToast(`Open House สำเร็จ! แฟนบอล +${fmtFans(gained)} คน · ขวัญ +5% · บอร์ด +3%`);
               }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
-              <div className="flex justify-between font-bold text-xs">
-                <span>🎉 Open House สโมสร</span>
-                <span className="tabular">20k</span>
+              <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
+                <span className="truncate">🎉 Open House สโมสร</span>
+                <span className="tabular shrink-0 text-[var(--ink)]">20k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">แฟนบอล +4% · ขวัญ +5% · บอร์ด +3%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">แฟนบอล +4% · ขวัญ +5% · บอร์ด +3%</div>
             </button>
 
             <button
@@ -5044,13 +4859,13 @@ export const FinanceClubView: React.FC<{
                 });
                 onToast('เข้าแคมป์สำเร็จ! ขวัญทีม +8% ความฟิต +6%');
               }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
-              <div className="flex justify-between font-bold text-xs">
-                <span>🏃 แคมป์กระชับทีม</span>
-                <span className="tabular">25k</span>
+              <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
+                <span className="truncate">🏃 แคมป์กระชับทีม</span>
+                <span className="tabular shrink-0 text-[var(--ink)]">25k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">ขวัญทีม +8% · ฟิตทั้งทีม +6%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">ขวัญทีม +8% · ฟิตทั้งทีม +6%</div>
             </button>
 
             <button
@@ -5066,13 +4881,13 @@ export const FinanceClubView: React.FC<{
                 });
                 onToast('ติวเข้มแท็กติกสำเร็จ! ความคุ้นเคยแผน +10% · ขวัญ +3%');
               }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
-              <div className="flex justify-between font-bold text-xs">
-                <span>🎯 ติวเข้มแท็กติก</span>
-                <span className="tabular">15k</span>
+              <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
+                <span className="truncate">🎯 ติวเข้มแท็กติก</span>
+                <span className="tabular shrink-0 text-[var(--ink)]">15k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">ความคุ้นเคยแผน +10% · ขวัญ +3%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">ความคุ้นเคยแผน +10% · ขวัญ +3%</div>
             </button>
 
             <button
@@ -5092,13 +4907,13 @@ export const FinanceClubView: React.FC<{
                 });
                 onToast(`แมตช์การกุศลสุดประทับใจ! แฟนบอล +${fmtFans(gained)} คน · ชื่อเสียง +4`);
               }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
-              <div className="flex justify-between font-bold text-xs">
-                <span>⚽ แมตช์การกุศล</span>
-                <span className="tabular">10k</span>
+              <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
+                <span className="truncate">⚽ แมตช์การกุศล</span>
+                <span className="tabular shrink-0 text-[var(--ink)]">10k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">แฟนบอล +5% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">แฟนบอล +5% · ชื่อเสียงกุนซือ +4 · บอร์ด +2%</div>
             </button>
 
             <button
@@ -5127,13 +4942,13 @@ export const FinanceClubView: React.FC<{
                     : `แคมเปญโซเชียลปังมาก! ยอดผู้ติดตามสโมสร +${fmtFans(gained)} คน`
                 );
               }}
-              className="p-3.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] space-y-1"
+              className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-left disabled:opacity-45 cursor-pointer hover:border-[var(--g)] transition-colors space-y-1"
             >
-              <div className="flex justify-between font-bold text-xs">
-                <span>📱 แคมเปญโซเชียล</span>
-                <span className="tabular">12k</span>
+              <div className="flex items-center justify-between gap-2 font-bold text-xs mland:text-[11px]">
+                <span className="truncate">📱 แคมเปญโซเชียล</span>
+                <span className="tabular shrink-0 text-[var(--ink)]">12k</span>
               </div>
-              <div className="text-[11px] text-[var(--mut)]">ยอดผู้ติดตาม +4.5% · กระตุ้นดาวรุ่งในทีม</div>
+              <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">ยอดผู้ติดตาม +4.5% · กระตุ้นดาวรุ่งในทีม</div>
             </button>
           </div>
         </div>

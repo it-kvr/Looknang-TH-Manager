@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
 import type { GameState, Player, Position, Team } from '../types/game';
 import { clamp } from '../utils/math';
 import { POS } from '../data/thaiFootballData';
@@ -13,7 +14,11 @@ import { ClubCrest, KitJersey, PlayerFace } from './SvgVisuals';
 
 type LockerFilter = 'ALL' | 'XI' | Position;
 
-const QUICK_NUMBERS = Array.from({ length: 36 }, (_, i) => i + 1);
+const NUMBER_PAGES: ReadonlyArray<{ label: string; start: number; end: number; nums: number[] }> = [
+  { label: '1–33', start: 1, end: 33, nums: Array.from({ length: 33 }, (_, i) => i + 1) },
+  { label: '34–66', start: 34, end: 66, nums: Array.from({ length: 33 }, (_, i) => i + 34) },
+  { label: '67–99', start: 67, end: 99, nums: Array.from({ length: 33 }, (_, i) => i + 67) }
+];
 
 export const LockerRoomPanel: React.FC<{
   state: GameState;
@@ -59,13 +64,14 @@ export const LockerRoomPanel: React.FC<{
   );
 
   const selectedNo = selectedPlayer ? getShirtNo(team, selectedPlayer) : 10;
-  const [customNo, setCustomNo] = useState<string>(String(selectedNo));
+  const [numPage, setNumPage] = useState<number>(() => clamp(Math.floor((selectedNo - 1) / 33), 0, 2));
 
   useEffect(() => {
     if (selectedPlayer) {
-      setCustomNo(String(getShirtNo(team, selectedPlayer)));
+      const no = getShirtNo(team, selectedPlayer);
+      setNumPage(clamp(Math.floor((no - 1) / 33), 0, 2));
     }
-  }, [selectedPlayer, team]);
+  }, [selectedPlayer?.n, team]);
 
   const numberHolderMap = useMemo(() => {
     const map = new Map<number, Player>();
@@ -77,7 +83,6 @@ export const LockerRoomPanel: React.FC<{
 
   const isSelectedMe = Boolean(selectedPlayer && (selectedPlayer.me || (!isMgr && state.p?.name === selectedPlayer.n)));
   const canEditSelected = Boolean(selectedPlayer && (isMgr || isSelectedMe));
-  const isSelectedCap = Boolean(selectedPlayer && team.cap === selectedPlayer.n);
 
   const handleAssignNumber = (targetPlayer: Player, rawNum: number) => {
     const nextNo = clamp(Math.round(rawNum) || 1, 1, 99);
@@ -101,7 +106,7 @@ export const LockerRoomPanel: React.FC<{
       if (Array.isArray(pl.vis) && pl.vis.length >= 6) pl.vis[5] = nextNo;
       if (pl.me && d.p) d.p.no = nextNo;
     });
-    setCustomNo(String(nextNo));
+    setNumPage(clamp(Math.floor((nextNo - 1) / 33), 0, 2));
 
     if (currentHolder) {
       onToast(`สลับเบอร์ #${nextNo} (${targetPlayer.n.split(' ')[0]}) ↔ #${oldNo} (${currentHolder.n.split(' ')[0]}) แล้ว`);
@@ -123,6 +128,8 @@ export const LockerRoomPanel: React.FC<{
       onToast('เบอร์เสื้อทั้งทีมจัดเรียงตามตำแหน่งเหมาะสมครบแล้ว');
     }
   };
+
+  const activePageSpec = NUMBER_PAGES[numPage] || NUMBER_PAGES[0];
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
@@ -208,17 +215,17 @@ export const LockerRoomPanel: React.FC<{
           <button
             type="button"
             onClick={handleAutoAssignAll}
-            className="px-3 mland:px-2.5 py-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold hover:brightness-110 active:scale-[0.99] transition-all cursor-pointer shadow-xs whitespace-nowrap"
+            className="btn btn-xs sm:btn-sm btn-primary whitespace-nowrap"
           >
-            เปลี่ยนเบอร์เสื้อออโต้ทั้งทีม
+            จัดเบอร์ออโต้ทั้งทีม
           </button>
         </div>
       </div>
 
       {/* Main 2-Column Locker Stage */}
-      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[1fr_276px] mland:grid-cols-[1fr_230px] gap-2.5 mland:gap-2 overflow-hidden">
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[1fr_308px] mland:grid-cols-[1fr_260px] gap-2.5 mland:gap-2 overflow-y-auto md:overflow-hidden mland:overflow-hidden">
         {/* Left: Locker Stalls Grid */}
-        <div className="min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-1.5">
+        <div className="min-h-[220px] md:min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-2.5 mland:p-1.5">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mland:gap-1.5">
             {filteredPlayers.map((q) => {
               const no = getShirtNo(team, q);
@@ -241,7 +248,7 @@ export const LockerRoomPanel: React.FC<{
                       : 'bg-[var(--surface-2)]/60 border-[var(--line)] hover:border-[var(--g)]/60'
                   }`}
                 >
-                  {/* Locker Header Meta (Unboxed Clean Typography) */}
+                  {/* Locker Header Meta */}
                   <div className="flex items-center justify-between gap-1 text-[10px] mland:text-[8.5px] tabular">
                     <span className="font-bold text-[var(--ink)] truncate">
                       {q.ro}
@@ -291,25 +298,26 @@ export const LockerRoomPanel: React.FC<{
           )}
         </div>
 
-        {/* Right: Selected Locker Inspector & Number Board */}
+        {/* Right: Selected Locker Inspector + 3-Page 1–99 Board */}
         <div className="min-h-0 overflow-y-auto rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] p-3 mland:p-2 flex flex-col gap-2.5 mland:gap-1.5">
           {selectedPlayer ? (
             <>
-              <div className="flex items-center gap-2.5 mland:gap-2 pb-2 mland:pb-1.5 border-b border-[var(--line)]">
-                <div className="shrink-0 rounded-xl bg-gradient-to-b from-[#17231e] to-[#0c1411] border border-white/10 p-1.5 flex items-center justify-center [&>svg]:w-[52px] [&>svg]:h-[52px] mland:[&>svg]:w-[42px] mland:[&>svg]:h-[42px]">
+              {/* Selected Player Identity */}
+              <div className="flex items-center gap-2.5 mland:gap-2 pb-2.5 mland:pb-1.5 border-b border-[var(--line)]">
+                <div className="shrink-0 rounded-xl bg-gradient-to-b from-[#17231e] to-[#0c1411] border border-white/10 p-1.5 flex items-center justify-center [&>svg]:w-[50px] [&>svg]:h-[50px] mland:[&>svg]:w-[40px] mland:[&>svg]:h-[40px]">
                   <KitJersey
                     club={clubIdentity}
                     away={kitSide === 'away'}
-                    size={52}
+                    size={50}
                     team={team}
                     shirtNo={selectedNo}
                     isGK={selectedPlayer.pos === 'GK'}
                   />
                 </div>
                 <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center justify-between gap-1.5">
                     <span className="text-xs sm:text-sm mland:text-[11px] font-extrabold font-display text-[var(--ink)] truncate">
-                      {selectedPlayer.n}
+                      {team.cap === selectedPlayer.n ? '(C) ' : ''}{selectedPlayer.n}
                     </span>
                     <span className="text-base mland:text-xs font-extrabold font-display tabular text-[var(--g)] shrink-0">
                       #{selectedNo}
@@ -324,21 +332,46 @@ export const LockerRoomPanel: React.FC<{
                       SFX.tap();
                       onInspectPlayer(selectedPlayer, team);
                     }}
-                    className="text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1 text-[10.5px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer"
                   >
-                    เปิดการ์ดข้อมูลนักเตะ →
+                    <span>เปิดการ์ดข้อมูลนักเตะ</span>
+                    <ExternalLink className="w-2.5 h-2.5" />
                   </button>
                 </div>
               </div>
 
-              {/* Number Board 1-36 */}
-              <div className="space-y-1.5 mland:space-y-1">
-                <div className="flex items-center justify-between gap-1 text-[10.5px] mland:text-[9px]">
-                  <span className="font-bold text-[var(--ink)]">กระดานเบอร์เสื้อ (1–36)</span>
-                  <span className="text-[var(--mut)]">คลิกเพื่อเปลี่ยน/สลับ</span>
+              {/* 3-Page 1–99 Number Board (1–33 / 34–66 / 67–99) */}
+              <div className="space-y-2 mland:space-y-1.5 flex-1 flex flex-col min-h-0">
+                <div className="flex items-center justify-between gap-1.5">
+                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] whitespace-nowrap">
+                    เบอร์เสื้อ (1–99)
+                  </span>
+                  <div className="seg-bar grid grid-cols-3 flex-1 max-w-[192px]">
+                    {NUMBER_PAGES.map((pg, idx) => {
+                      const active = numPage === idx;
+                      const containsCurrent = selectedNo >= pg.start && selectedNo <= pg.end;
+                      return (
+                        <button
+                          key={pg.label}
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            setNumPage(idx);
+                          }}
+                          className={`seg-btn px-1! py-0.5! text-[10px] mland:text-[8.5px] tabular whitespace-nowrap ${
+                            active ? 'seg-btn-active' : ''
+                          }`}
+                          title={`หน้า ${idx + 1}: เบอร์ ${pg.label}`}
+                        >
+                          {pg.label}{containsCurrent && !active ? '•' : ''}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div className="grid grid-cols-6 gap-1">
-                  {QUICK_NUMBERS.map((num) => {
+
+                <div className="grid grid-cols-6 gap-1.5 mland:gap-1">
+                  {activePageSpec.nums.map((num) => {
                     const holder = numberHolderMap.get(num);
                     const isCurrent = holder?.n === selectedPlayer.n;
                     const isTaken = Boolean(holder && !isCurrent);
@@ -347,87 +380,71 @@ export const LockerRoomPanel: React.FC<{
                       <button
                         key={num}
                         type="button"
-                        disabled={!canEditSelected}
+                        disabled={!canEditSelected || isCurrent}
                         onClick={() => handleAssignNumber(selectedPlayer, num)}
                         title={
                           isCurrent
                             ? `เบอร์ปัจจุบันของ ${selectedPlayer.n}`
                             : isTaken
-                              ? `เบอร์ #${num} เป็นของ ${holder!.n} (คลิกเพื่อสลับ)`
-                              : `เบอร์ #${num} ว่าง (คลิกเพื่อเลือก)`
+                              ? `เบอร์ #${num} เป็นของ ${holder!.n} (แตะเพื่อสลับ)`
+                              : `เบอร์ #${num} ว่าง (แตะเพื่อเลือก)`
                         }
-                        className={`h-7 mland:h-6 rounded-lg border text-[11px] mland:text-[9.5px] font-extrabold tabular transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed flex flex-col items-center justify-center leading-none ${
+                        className={`relative h-8 mland:h-6 rounded-lg border text-xs mland:text-[9.5px] font-extrabold tabular transition-colors cursor-pointer disabled:cursor-default flex items-center justify-center leading-none ${
                           isCurrent
                             ? 'bg-[var(--g)] border-[var(--g)] text-white shadow-xs'
                             : isTaken
-                              ? 'bg-[var(--surface-2)]/70 border-dashed border-[var(--line)] text-[var(--mut)] hover:border-[var(--lamp)] hover:text-[var(--ink)]'
-                              : 'bg-[var(--surface)] border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)]'
+                              ? 'bg-[var(--lamp-soft)]/50 border-dashed border-[var(--lamp)]/60 text-[var(--ink)] hover:border-[var(--lamp)] hover:bg-[var(--lamp-soft)]/85 disabled:opacity-45'
+                              : 'bg-[var(--surface-2)]/40 border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)] hover:text-[var(--g)] disabled:opacity-45'
                         }`}
                       >
                         <span>{num}</span>
+                        {isTaken && (
+                          <span
+                            aria-hidden="true"
+                            className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--lamp)]"
+                          />
+                        )}
                       </button>
                     );
                   })}
                 </div>
-              </div>
 
-              {/* Custom Number Input 1-99 */}
-              <div className="space-y-1 pt-1 border-t border-[var(--line)]">
-                <label className="block text-[10.5px] mland:text-[9px] font-bold text-[var(--ink)]">
-                  กำหนดเบอร์เอง (1–99)
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    disabled={!canEditSelected}
-                    value={customNo}
-                    onChange={(e) => setCustomNo(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && canEditSelected) {
-                        e.preventDefault();
-                        handleAssignNumber(selectedPlayer, parseInt(customNo, 10) || selectedNo);
-                      }
-                    }}
-                    className="w-20 px-2 py-1.5 mland:py-1 rounded-lg bg-[var(--surface-2)] border border-[var(--line)] text-xs mland:text-[10px] font-extrabold text-center tabular disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    disabled={!canEditSelected}
-                    onClick={() => handleAssignNumber(selectedPlayer, parseInt(customNo, 10) || selectedNo)}
-                    className="flex-1 py-1.5 mland:py-1 rounded-lg bg-[var(--g)] text-white text-xs mland:text-[10px] font-bold cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed"
-                  >
-                    บันทึกเบอร์
-                  </button>
+                <div className="flex items-center justify-between gap-2 pt-0.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+                  <span className="truncate">
+                    หน้า {numPage + 1}/3 ({activePageSpec.label}) · จุดเหลือง = มีคนใช้ (แตะเพื่อสลับ)
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setNumPage((p) => (p + 2) % 3);
+                      }}
+                      className="px-2 py-0.5 rounded border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] text-[var(--ink)] font-bold cursor-pointer"
+                      aria-label="หน้าก่อนหน้า"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        SFX.tap();
+                        setNumPage((p) => (p + 1) % 3);
+                      }}
+                      className="px-2 py-0.5 rounded border border-[var(--line)] bg-[var(--surface-2)] hover:border-[var(--g)] text-[var(--ink)] font-bold cursor-pointer"
+                      aria-label="หน้าถัดไป"
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
+
                 {!canEditSelected && (
                   <p className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">
-                    ในโหมดนักเตะอาชีพ สามารถปรับเบอร์ของตัวเองได้ หรือใช้ปุ่มเปลี่ยนเบอร์ออโต้ทั้งทีมด้านบน
+                    ในโหมดนักเตะอาชีพ สามารถปรับเบอร์ของตัวเองได้ หรือใช้ปุ่มจัดเบอร์ออโต้ทั้งทีมด้านบน
                   </p>
                 )}
               </div>
-
-              {/* Captain Toggle (Manager Mode) */}
-              {isMgr && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    onUpdateState((d) => {
-                      d.teams[d.me].cap = selectedPlayer.n;
-                    });
-                    onToast(`แต่งตั้ง ${selectedPlayer.n} เป็นกัปตันทีมแล้ว`);
-                  }}
-                  className={`mt-auto w-full py-2 mland:py-1.5 rounded-xl mland:rounded-lg text-xs mland:text-[10px] font-bold cursor-pointer transition-colors ${
-                    isSelectedCap
-                      ? 'bg-[var(--lamp)] text-[#261900]'
-                      : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]'
-                  }`}
-                >
-                  {isSelectedCap ? 'กัปตันทีมปัจจุบัน' : 'แต่งตั้งเป็นกัปตันทีม'}
-                </button>
-              )}
             </>
           ) : (
             <div className="py-8 text-center text-xs text-[var(--mut)]">
