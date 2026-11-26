@@ -1367,7 +1367,26 @@ export const FormationPitch: React.FC<{
             )}
             <ellipse cx={cx} cy={cy + 16} rx="13" ry="3.8" fill="#0005" />
 
-            {/* Top Center: Role Badge (matches roster PositionBadge height/ratio, lowered to clear upper names) */}
+            {/* Player Avatar Circle */}
+            <circle cx={cx} cy={cy} r={rad} fill={kc} stroke={ed} strokeWidth="2.8" />
+            <g
+              transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
+              clipPath={`url(#fc-${uid})`}
+              dangerouslySetInnerHTML={{
+                __html: faceBodySvg(
+                  visOf(q, state.p),
+                  kc,
+                  slotTrim,
+                  32,
+                  '#10281d',
+                  true,
+                  false,
+                  resolveKitVisualForFace(team, state, null, undefined, kc, slotTrim, slotIsGK, `${uid}-p-${i}`, q.n)
+                )
+              }}
+            />
+
+            {/* Top Center: Role Badge (in front of avatar, raised cleanly onto top rim to clear hair) */}
             {(() => {
               const posPal = getPositionCanvasPalette(z.sp);
               const badgeW = isMe ? (z.sp.length >= 3 ? 34 : 30) : z.sp.length >= 3 ? 28 : 25;
@@ -1380,7 +1399,7 @@ export const FormationPitch: React.FC<{
                     ? '#f59e0b'
                     : 'rgba(6, 20, 13, 0.88)';
               return (
-                <g transform={`translate(${cx},${cy - (isTarget ? 16.5 : 13.8)})`}>
+                <g transform={`translate(${cx},${cy - (isTarget ? 20.5 : 17.5)})`}>
                   <rect
                     x={-badgeW / 2}
                     y="-8.5"
@@ -1407,25 +1426,6 @@ export const FormationPitch: React.FC<{
                 </g>
               );
             })()}
-
-            {/* Player Avatar Circle */}
-            <circle cx={cx} cy={cy} r={rad} fill={kc} stroke={ed} strokeWidth="2.8" />
-            <g
-              transform={`translate(${(cx - 30 * sc).toFixed(1)},${(cy - 31 * sc).toFixed(1)}) scale(${sc})`}
-              clipPath={`url(#fc-${uid})`}
-              dangerouslySetInnerHTML={{
-                __html: faceBodySvg(
-                  visOf(q, state.p),
-                  kc,
-                  slotTrim,
-                  32,
-                  '#10281d',
-                  true,
-                  false,
-                  resolveKitVisualForFace(team, state, null, undefined, kc, slotTrim, slotIsGK, `${uid}-p-${i}`, q.n)
-                )
-              }}
-            />
 
             {/* Bottom-Left: Shirt Number */}
             <rect x={cx - 23} y={cy + 5.5} width="19" height="12.5" rx="4.5" fill="#0b2018" stroke={ed} strokeWidth="1.1" />

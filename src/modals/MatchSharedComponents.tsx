@@ -1197,7 +1197,7 @@ export const MatchBroadcastHeader: React.FC<{
               </div>
               <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
                 {goalFlashInfo?.side === 'H' && (
-                  <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
+                  <span className={`font-black tracking-wide goal-tag-blink ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
                     {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
                   </span>
                 )}
@@ -1241,8 +1241,8 @@ export const MatchBroadcastHeader: React.FC<{
               className={`relative overflow-hidden px-2.5 sm:px-3.5 md:px-4 mland:px-2 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[84px] sm:min-w-[106px] md:min-w-[118px] mland:min-w-[74px] transition-colors duration-200 shadow-xs ${
                 goalFlashInfo
                   ? goalFlashInfo.isOwnGoal
-                    ? 'bg-gradient-to-b from-rose-50 to-rose-100/80 dark:from-[#2c0d17] dark:to-[#1b080e] border-rose-400 ring-2 ring-rose-400/55'
-                    : 'bg-gradient-to-b from-amber-50 to-amber-100/80 dark:from-[#261d06] dark:to-[#181204] border-amber-400 dark:border-[var(--lamp)] ring-2 ring-amber-400/55 dark:ring-[var(--lamp)]/60'
+                    ? 'bg-gradient-to-b from-rose-50 to-rose-100/80 dark:from-[#2c0d17] dark:to-[#1b080e] border-rose-400 ring-2 ring-rose-400/55 goal-board-blink-og'
+                    : 'bg-gradient-to-b from-amber-50 to-amber-100/80 dark:from-[#261d06] dark:to-[#181204] border-amber-400 dark:border-[var(--lamp)] ring-2 ring-amber-400/55 dark:ring-[var(--lamp)]/60 goal-board-blink'
                   : 'bg-[var(--surface)] border-[var(--line)]'
               }`}
             >
@@ -1268,8 +1268,8 @@ export const MatchBroadcastHeader: React.FC<{
                   className={`inline-flex items-center justify-center min-w-[1.65rem] sm:min-w-[2.1rem] md:min-w-[2.3rem] mland:min-w-[1.35rem] px-1 py-0.5 mland:py-0 rounded-lg mland:rounded-md font-display font-bold tabular text-[24px] sm:text-[29px] md:text-[32px] mland:text-[19px] leading-none transition-colors duration-200 ${
                     goalFlashInfo?.side === 'H'
                       ? goalFlashInfo.isOwnGoal
-                        ? 'bg-rose-500 text-white shadow-xs goal-score-pop'
-                        : 'bg-amber-400 text-[#1d1400] shadow-xs ring-1 ring-amber-500/35 goal-score-pop'
+                        ? 'bg-rose-500 text-white shadow-xs goal-digit-blink'
+                        : 'bg-amber-400 text-[#1d1400] shadow-xs ring-1 ring-amber-500/35 goal-digit-blink'
                       : goalFlashInfo
                         ? 'text-[var(--ink)]/75'
                         : 'text-[var(--ink)]'
@@ -1285,8 +1285,8 @@ export const MatchBroadcastHeader: React.FC<{
                   className={`inline-flex items-center justify-center min-w-[1.65rem] sm:min-w-[2.1rem] md:min-w-[2.3rem] mland:min-w-[1.35rem] px-1 py-0.5 mland:py-0 rounded-lg mland:rounded-md font-display font-bold tabular text-[24px] sm:text-[29px] md:text-[32px] mland:text-[19px] leading-none transition-colors duration-200 ${
                     goalFlashInfo?.side === 'A'
                       ? goalFlashInfo.isOwnGoal
-                        ? 'bg-rose-500 text-white shadow-xs goal-score-pop'
-                        : 'bg-amber-400 text-[#1d1400] shadow-xs ring-1 ring-amber-500/35 goal-score-pop'
+                        ? 'bg-rose-500 text-white shadow-xs goal-digit-blink'
+                        : 'bg-amber-400 text-[#1d1400] shadow-xs ring-1 ring-amber-500/35 goal-digit-blink'
                       : goalFlashInfo
                         ? 'text-[var(--ink)]/75'
                         : 'text-[var(--ink)]'
@@ -1360,7 +1360,7 @@ export const MatchBroadcastHeader: React.FC<{
                 <span className="text-[var(--mut)]">เยือน</span>
                 {goalFlashInfo?.side === 'A' && <span className="text-[var(--mut)]/50">·</span>}
                 {goalFlashInfo?.side === 'A' && (
-                  <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
+                  <span className={`font-black tracking-wide goal-tag-blink ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
                     {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
                   </span>
                 )}

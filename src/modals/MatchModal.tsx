@@ -375,7 +375,12 @@ export const MatchModal: React.FC<{
   const lastMiracleSigRef = useRef<string>('');
   const lastBlessedSigRef = useRef<string>('');
 
+  const prevMatchTabBeforeTacticsRef = useRef<'stats' | 'chat'>('stats');
+
   const openTacticsStudio = (pickOutName?: string) => {
+    if (mlandMatchTab === 'stats' || mlandMatchTab === 'chat') {
+      prevMatchTabBeforeTacticsRef.current = mlandMatchTab;
+    }
     if (pickOutName) setSubPickOut(pickOutName);
     setLivePlayerStatsUi({ ...simRef.current.playerStats });
     setInjuredNamesUi(simRef.current.injuredNames.slice());
@@ -11554,7 +11559,14 @@ export const MatchModal: React.FC<{
                         type="button"
                         title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
                         aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
-                        onClick={() => setPaused((p) => !p)}
+                        onClick={() => {
+                          if (state.mode === 'm' && !done && mlandMatchTab === 'tactics') {
+                            setMlandMatchTab(prevMatchTabBeforeTacticsRef.current);
+                            setPaused(false);
+                            return;
+                          }
+                          setPaused((p) => !p);
+                        }}
                         className={`h-full w-9 sm:w-10 lg:w-[92px] mland:w-[34px] px-0 lg:px-2.5 mland:px-0 rounded-lg mland:rounded-md inline-flex items-center justify-center gap-1.5 text-xs sm:text-[13px] mland:text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                           paused
                             ? 'bg-[var(--g)] text-white shadow-2xs'
@@ -11692,10 +11704,18 @@ export const MatchModal: React.FC<{
               onSwapStarters={performOnPitchSwap}
               findBestSubFor={findBestSubFor}
               onCloseToStats={() => {
+                SFX.tap();
                 setMlandMatchTab('stats');
+                if (!done && matchPhaseUi !== 'halftime') {
+                  setPaused(false);
+                }
               }}
               onCloseToChat={() => {
+                SFX.tap();
                 setMlandMatchTab('chat');
+                if (!done && matchPhaseUi !== 'halftime') {
+                  setPaused(false);
+                }
               }}
               liveViewers={liveViewers}
               autoSubEnabled={autoSubEnabled}

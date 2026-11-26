@@ -3565,25 +3565,23 @@ export const drawLivePitchToCanvas = (
       ctx.arc(0, 0, cr, 0, Math.PI * 2);
       ctx.stroke();
 
-      // User coach star badge ("★ ฉัน") anchored neatly below the coach without clipping or colliding with bubbles above
+      // User coach circular star badge ("★") matching MyTeamBadge, anchored at the bottom-left corner
       if (c.isUserCoach) {
-        const badgeLabel = '★ ฉัน';
-        ctx.font = '800 8px Sarabun, sans-serif';
-        const bw = measureTextCached(ctx, badgeLabel) + 7;
-        const bh = 10.5;
-        const bx = clamp(0, -cx + bw / 2 + 4, cssW - cx - bw / 2 - 4);
-        const by = Math.min(cr + 4.8, cssH - cy - bh / 2 - 1.5);
-        ctx.fillStyle = 'rgba(250, 204, 21, 0.96)';
-        ctx.strokeStyle = 'rgba(26, 18, 0, 0.55)';
-        ctx.lineWidth = 0.75;
+        const starR = clamp(cr * 0.42, 4.4, 6.0);
+        const bx = Math.max(-cx + starR + 2, -cr * 0.74);
+        const by = Math.min(cssH - cy - starR - 1.5, cr * 0.74);
+        ctx.fillStyle = '#f5c242';
+        ctx.strokeStyle = '#05180e';
+        ctx.lineWidth = 1.1;
         ctx.beginPath();
-        ctx.roundRect(bx - bw / 2, by - bh / 2, bw, bh, 3.5);
+        ctx.arc(bx, by, starR, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
-        ctx.fillStyle = '#1a1200';
+        ctx.fillStyle = '#261900';
+        ctx.font = `900 ${Math.max(7, Math.round(starR * 1.48))}px Sarabun, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(badgeLabel, bx, by + 0.3);
+        ctx.fillText('★', bx, by + 0.45);
       }
 
       // Tactical shout callout bubble or emotion emoji bubble with clean pointer tail

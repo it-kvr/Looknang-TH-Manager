@@ -954,7 +954,7 @@ export const LeagueView: React.FC<{
     }[] = [
       {
         id: 'golden-boot',
-        icon: '👟',
+        icon: '⚽',
         title: 'รองเท้าทองคำ',
         enTitle: 'Golden Boot',
         criteria: 'ผู้ทำประตูสูงสุดประจำลีก (วัดอัตราส่วนต่อนัดเมื่อเท่ากัน)',
@@ -976,7 +976,7 @@ export const LeagueView: React.FC<{
       },
       {
         id: 'poy',
-        icon: '👑',
+        icon: '🌟',
         title: 'นักเตะยอดเยี่ยมประจำฤดูกาล',
         enTitle: 'Player of the Season',
         criteria: 'คะแนนรวมจากประตู แอสซิสต์ คลีนชีต วินัย และอันดับทีม',
@@ -1219,9 +1219,9 @@ export const LeagueView: React.FC<{
           <div className="grid grid-cols-3 gap-2 mland:gap-1.5 content-start">
             {board('👟', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
             {board('🔥', 'มีส่วนร่วมประตู (G+A)', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
-            {board('🌟', 'แมนออฟเดอะแมตช์ (MOTM)', (q) => q.motm || 0, (q) => `${q.motm || 0} ครั้ง`)}
+            {board('👑', 'แมนออฟเดอะแมตช์ (MOTM)', (q) => q.motm || 0, (q) => `${q.motm || 0} ครั้ง`)}
             {board(
-              '📈',
+              '⭐',
               'เรตติ้งเฉลี่ยสูงสุด',
               (q) => ((q.sra || 0) >= 1 ? Math.round(((q.srs || 0) / q.sra!) * 100) / 100 : 0),
               (q) => `${((q.srs || 0) / Math.max(1, q.sra || 1)).toFixed(2)}`,

@@ -1014,7 +1014,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
               </div>
             </div>
 
-            {/* Interactive Fitness / Substitution Recommendation Button */}
+            {/* Interactive Fitness / Substitution Recommendation Button (Single-Row Compact) */}
             {subsUsed.length < 5 && smartAutoSub ? (
               <div className="px-2 py-1.5 mland:px-1.5 mland:py-1 bg-[var(--surface-2)]/40 border-b border-[var(--line)] flex items-center gap-1.5">
                 <button
@@ -1023,25 +1023,27 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                     const rep = onAutoSubstitute(smartAutoSub.outName);
                     if (rep) setSubPickOut(null);
                   }}
-                  title={`กดเพื่อเปลี่ยนตัวตามคำแนะนำ: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName}`}
-                  className="flex-1 min-w-0 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] hover:brightness-110 active:scale-[0.99] text-white shadow-xs transition-all cursor-pointer flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px]"
+                  title={`${smartAutoSub.isExplicitPick ? 'เปลี่ยนตัวที่เลือก' : smartAutoSub.isInjured ? 'แนะนำเปลี่ยนตัวบาดเจ็บ' : 'แนะนำเปลี่ยนตัวตามความฟิต'}: ส่ง ${smartAutoSub.inPlayer.n} (${smartAutoSub.inPlayer.ro} · ${smartAutoSub.inPlayer.ov}) ลงแทน ${smartAutoSub.outName} (${smartAutoSub.outFit}%)`}
+                  className="flex-1 min-w-0 px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--g)] hover:brightness-110 active:scale-[0.99] text-white shadow-xs transition-all cursor-pointer flex items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px] overflow-hidden whitespace-nowrap"
                 >
-                  <div className="min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-left">
-                    <span className="font-black shrink-0">
-                      {smartAutoSub.isExplicitPick ? '⚡ เปลี่ยนที่เลือก:' : smartAutoSub.isInjured ? '🩺 แนะนำเปลี่ยนเจ็บ:' : '⚡ แนะนำความฟิต:'}
+                  <div className="flex-1 min-w-0 flex items-center gap-1 overflow-hidden whitespace-nowrap text-left">
+                    <span className="shrink-0 px-1.5 py-[1px] rounded-md bg-black/20 font-black text-[9.5px] mland:text-[8px]">
+                      {smartAutoSub.isExplicitPick ? '⚡ เลือก' : smartAutoSub.isInjured ? '🩺 เจ็บ' : '⚡ ฟิต'}
                     </span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-black/25 font-bold">
+                    <span className="min-w-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-black/25 font-bold overflow-hidden">
                       <StatIconBadge kind="subOut" size="xs" />
-                      <span>{smartAutoSub.outShort} ({smartAutoSub.outFit}%)</span>
+                      <span className="truncate">{smartAutoSub.outShort}</span>
+                      <span className="opacity-85 tabular shrink-0">{smartAutoSub.outFit}%</span>
                     </span>
-                    <span className="opacity-85 font-bold">→</span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded bg-white/20 font-extrabold">
+                    <span className="opacity-80 font-bold shrink-0">→</span>
+                    <span className="min-w-0 inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-white/20 font-extrabold overflow-hidden">
                       <StatIconBadge kind="subIn" size="xs" />
-                      <span>{smartAutoSub.inPlayer.n.split(' ')[0]} ({smartAutoSub.inPlayer.ro} · {smartAutoSub.inPlayer.ov})</span>
+                      <span className="truncate">{smartAutoSub.inPlayer.n.split(' ')[0]}</span>
+                      <span className="opacity-90 tabular shrink-0">{smartAutoSub.inPlayer.ov}</span>
                     </span>
                   </div>
-                  <span className="px-2 py-0.5 rounded-md bg-white text-[var(--g)] font-black text-[9.5px] mland:text-[8px] shrink-0 whitespace-nowrap shadow-2xs">
-                    เปลี่ยนเลย
+                  <span className="px-2 py-0.5 mland:px-1.5 rounded-md bg-white text-[var(--g)] font-black text-[9.5px] mland:text-[8px] shrink-0 whitespace-nowrap shadow-2xs">
+                    เปลี่ยน
                   </span>
                 </button>
                 {smartAutoSub.isExplicitPick && (
@@ -1050,9 +1052,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                     onClick={() => setSubPickOut(null)}
                     title="ยกเลิกการเลือกตัวผู้เล่น"
                     aria-label="ยกเลิกการเลือก"
-                    className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 whitespace-nowrap"
+                    className="px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 leading-none"
                   >
-                    ✕ ยกเลิก
+                    ✕
                   </button>
                 )}
               </div>
