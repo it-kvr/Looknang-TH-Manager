@@ -867,10 +867,10 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
               </div>
             ) : (
               <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.95fr_1.05fr] mland:grid-cols-[0.9fr_1.1fr] overflow-y-auto sm:overflow-hidden mland:overflow-hidden">
-                {/* Formation Pitch Visual */}
-                <div className="p-2 sm:p-2.5 mland:p-1.5 bg-[#092818] flex flex-col items-center justify-center min-h-[280px] sm:min-h-0 relative overflow-hidden">
-                  {/* Team & Compare Toggle inside Pitch */}
-                  <div className="w-full grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-1 p-0.5 mb-1.5 mland:mb-1 rounded-xl mland:rounded-lg bg-black/35 border border-white/15 shrink-0">
+                {/* Formation Pitch Visual + Equal-Height Side Buttons */}
+                <div className="p-2 sm:p-2.5 mland:p-1.5 bg-[#092818] grid grid-cols-[66px_minmax(0,1fr)] sm:grid-cols-[74px_minmax(0,1fr)] mland:grid-cols-[56px_minmax(0,1fr)] items-stretch gap-1.5 sm:gap-2 mland:gap-1.5 h-[320px] sm:h-full mland:h-full min-h-0 relative overflow-hidden">
+                  {/* Side Buttons (Matched to Pitch Height) */}
+                  <div className="h-full min-h-0 flex flex-col gap-1.5 mland:gap-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -879,15 +879,23 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                         setViewMode('H');
                       }}
                       title={homeTeam.name}
-                      className={`h-6 mland:h-5 px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
+                      className={`flex-1 min-h-0 w-full px-1 py-1 rounded-xl mland:rounded-lg border flex flex-col items-center justify-center gap-1 mland:gap-0.5 text-center cursor-pointer transition-colors ${
                         viewMode === 'H'
-                          ? 'bg-emerald-500 text-white shadow-xs'
-                          : 'text-white/75 hover:text-white hover:bg-white/10'
+                          ? 'bg-emerald-500 border-emerald-400 text-white shadow-sm'
+                          : 'bg-black/30 border-white/15 text-white/80 hover:text-white hover:bg-white/10'
                       }`}
                     >
-                      <span className="shrink-0">{isNeutralVenue ? '🏟️' : '🏠'}</span>
-                      <span className="truncate">{homeTeam.name}</span>
+                      <div className="shrink-0 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
+                        <ClubCrest name={homeTeam.name} size={22} team={homeTeam} club={state.club} isMyClub={meIsHome && isMgr} />
+                      </div>
+                      <span className="text-[8.5px] mland:text-[7px] font-bold opacity-85 leading-none">
+                        {isNeutralVenue ? 'กลาง' : 'เหย้า'}
+                      </span>
+                      <span className="w-full truncate text-[9.5px] mland:text-[8px] font-extrabold leading-tight">
+                        {homeTeam.name}
+                      </span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -896,15 +904,23 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                         setViewMode('A');
                       }}
                       title={awayTeam.name}
-                      className={`h-6 mland:h-5 px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold flex items-center justify-center gap-1 min-w-0 cursor-pointer transition-colors ${
+                      className={`flex-1 min-h-0 w-full px-1 py-1 rounded-xl mland:rounded-lg border flex flex-col items-center justify-center gap-1 mland:gap-0.5 text-center cursor-pointer transition-colors ${
                         viewMode === 'A'
-                          ? 'bg-emerald-500 text-white shadow-xs'
-                          : 'text-white/75 hover:text-white hover:bg-white/10'
+                          ? 'bg-emerald-500 border-emerald-400 text-white shadow-sm'
+                          : 'bg-black/30 border-white/15 text-white/80 hover:text-white hover:bg-white/10'
                       }`}
                     >
-                      <span className="shrink-0">{isNeutralVenue ? '🏟️' : '✈️'}</span>
-                      <span className="truncate">{awayTeam.name}</span>
+                      <div className="shrink-0 mland:[&>svg]:w-4 mland:[&>svg]:h-4">
+                        <ClubCrest name={awayTeam.name} size={22} team={awayTeam} club={state.club} isMyClub={!meIsHome && isMgr} />
+                      </div>
+                      <span className="text-[8.5px] mland:text-[7px] font-bold opacity-85 leading-none">
+                        {isNeutralVenue ? 'กลาง' : 'เยือน'}
+                      </span>
+                      <span className="w-full truncate text-[9.5px] mland:text-[8px] font-extrabold leading-tight">
+                        {awayTeam.name}
+                      </span>
                     </button>
+
                     <button
                       type="button"
                       onClick={() => {
@@ -913,22 +929,19 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                         setViewMode('compare');
                       }}
                       title="เทียบ 2 ทีม"
-                      className="h-6 mland:h-5 px-2 mland:px-1.5 rounded-lg mland:rounded-md text-[10px] mland:text-[8.5px] font-bold inline-flex items-center justify-center gap-1 text-white/80 hover:text-white hover:bg-white/10 shrink-0 cursor-pointer transition-colors whitespace-nowrap"
+                      className="flex-1 min-h-0 w-full px-1 py-1 rounded-xl mland:rounded-lg border bg-black/30 border-white/15 text-white/85 hover:text-white hover:bg-white/10 flex flex-col items-center justify-center gap-1 mland:gap-0.5 text-center cursor-pointer transition-colors"
                     >
-                      <ArrowLeftRight className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
-                      <span>เทียบ</span>
+                      <ArrowLeftRight className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                      <span className="text-[9.5px] mland:text-[8px] font-extrabold leading-tight">
+                        เทียบ
+                        <br />
+                        2 ทีม
+                      </span>
                     </button>
                   </div>
 
-                  <div className="w-full flex items-center justify-between gap-2 text-[10.5px] mland:text-[8.5px] text-white/90 font-bold mb-1.5 mland:mb-1 px-1 shrink-0">
-                    <span className="truncate">
-                      แผน {activeTeam.cf ? 'กำหนดเอง' : activeTeam.form} · {AR_T[activeTeam.tac]}
-                    </span>
-                    <span className="tabular text-emerald-300 shrink-0">
-                      รุก {Math.round(activeRate.at)} · รับ {Math.round(activeRate.df)} · XI {activeXiOv}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-h-0 w-full flex items-center justify-center">
+                  {/* Formation Pitch */}
+                  <div className="h-full min-h-0 w-full flex items-center justify-center">
                     <FormationPitch
                       team={activeTeam}
                       state={state}
@@ -939,16 +952,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                       showFitBar={true}
                       selectedPlayerName={swapPickName}
                       onPlayerClick={canEditActiveTeam ? (pl) => handleQuickSwap(pl.n) : undefined}
-                      className="aspect-[300/380] h-full max-h-[340px] sm:max-h-full w-auto max-w-full mx-auto rounded-xl block select-none"
+                      className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
                     />
                   </div>
-                  {canEditActiveTeam && (
-                    <div className="mt-1 text-[10px] mland:text-[8px] text-emerald-100/75 text-center shrink-0">
-                      {swapPickName
-                        ? `กำลังเลือก ${swapPickName.split(' ')[0]} · แตะอีกคนเพื่อสลับตำแหน่ง`
-                        : 'แตะนักเตะในสนามหรือสำรองเพื่อสลับตัวก่อนแข่งได้ทันที'}
-                    </div>
-                  )}
                 </div>
 
                 {/* Tactics Summary + Squad Lineup Panel (matching SquadTacticsView) */}
