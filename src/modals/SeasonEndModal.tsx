@@ -20,8 +20,6 @@ import { fmtMoney } from '../utils/math';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { TrophySvg } from '../components/ClubHistoryPanel';
 import { StatIconBadge } from '../components/StatIconBadge';
-import { StatIconBadge } from '../components/StatIconBadge';
-import { StatIconBadge } from '../components/StatIconBadge';
 
 export type SeasonSummaryData = ReturnType<typeof finishSeasonComputation>;
 

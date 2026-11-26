@@ -5,8 +5,6 @@ import { SFX } from '../utils/audioTheme';
 import { getPlayerCareerSummary } from '../engine/history';
 import { ovColor } from '../engine/missions';
 import { StatIconBadge } from './StatIconBadge';
-import { StatIconBadge } from './StatIconBadge';
-import { StatIconBadge } from './StatIconBadge';
 
 interface PlayerHistoryPanelProps {
   player: Player;

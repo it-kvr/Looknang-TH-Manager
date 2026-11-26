@@ -6,8 +6,6 @@ import { ClubCrest } from '../components/SvgVisuals';
 import { ovColor } from '../engine/missions';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
-import { StatIconBadge } from '../components/StatIconBadge';
-import { StatIconBadge } from '../components/StatIconBadge';
 
 type SortKey = 'avgRating' | 'sg' | 'sa' | 'sp' | 'motm' | 'ov';
 

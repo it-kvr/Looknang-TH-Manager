@@ -9,7 +9,6 @@ import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
-import { StatIconBadge } from '../components/StatIconBadge';
 
 type CupTabId = 'fa' | 'lc' | 'dc' | 'sc' | 'asia';
 type CupStatCat = 'sg' | 'sa' | 'cs' | 'motm' | 'rt' | 'sp';

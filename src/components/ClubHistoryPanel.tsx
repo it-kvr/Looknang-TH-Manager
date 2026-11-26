@@ -7,7 +7,6 @@ import { getClubLegacySummary, resolveClubLegendProfile } from '../engine/histor
 import { sortTable, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { PlayerFace } from './SvgVisuals';
 import { StatIconBadge } from './StatIconBadge';
-import { StatIconBadge } from './StatIconBadge';
 
 interface ClubHistoryPanelProps {
   team: Team;
