@@ -778,6 +778,52 @@ export interface ClubMegastoreState {
   seasonHistory: MegastoreSeasonArchive[];
 }
 
+export interface ArchivedMatchLog {
+  id: string;
+  m: number;
+  text: string;
+  tone: 'goal' | 'card' | 'sub' | 'sys' | 'norm';
+  varReplayId?: string;
+  subInfo?: {
+    teamId: number;
+    inName: string;
+    outName: string;
+    badge?: string;
+    isInjury?: boolean;
+  };
+}
+
+export interface ArchivedMatchReport {
+  kind?: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+  roundLabel?: string;
+  h: number;
+  a: number;
+  gh: number;
+  ga: number;
+  pen?: boolean;
+  penText?: string;
+  xgH?: number;
+  xgA?: number;
+  possH?: number;
+  shotsH?: number;
+  shotsA?: number;
+  onTargetH?: number;
+  onTargetA?: number;
+  passesH?: number;
+  passesA?: number;
+  att?: number;
+  cap?: number;
+  motm?: string;
+  ratings?: Record<string, number>;
+  evs?: MatchEvent[];
+  cards?: MatchCardEvent[];
+  subs?: MatchSubEvent[];
+  playedNames?: Record<number, string[]>;
+  playedSlots?: Record<number, Record<string, SubRole>>;
+  logs?: ArchivedMatchLog[];
+  varReplays?: VarReplayRecord[];
+}
+
 export interface GameState {
   ver: number;
   mode: GameMode;
@@ -857,8 +903,9 @@ export interface GameState {
   boardDirectiveCd?: number;
   boardEffects?: BoardTempEffect[];
   boardFeedbackLog?: BoardFeedbackEntry[];
-  schedRes?: Record<number, { h: number; a: number; gh: number; ga: number; varReplays?: VarReplayRecord[] }>;
-  cupLog?: { md: number; comp: 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; r: number; h: number; a: number; gh: number; ga: number; penText?: string; varReplays?: VarReplayRecord[] }[];
+  schedRes?: Record<number, ArchivedMatchReport>;
+  schedRoundRes?: Record<number, ArchivedMatchReport[]>;
+  cupLog?: (ArchivedMatchReport & { md: number; comp: 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; r: number })[];
   med?: number;
   merchLv?: number;
   turfLv?: number;
@@ -1017,8 +1064,16 @@ export interface FinishedMatchPayload {
   playerActions?: Record<string, Partial<Record<PersonalMissionMetric, number>>>;
   att?: number;
   cap?: number;
+  possH?: number;
+  shotsH?: number;
+  shotsA?: number;
+  onTargetH?: number;
+  onTargetA?: number;
+  passesH?: number;
+  passesA?: number;
   streamViewers?: number;
   streamPeakViewers?: number;
+  logs?: ArchivedMatchLog[];
   varReplays?: VarReplayRecord[];
 }
 
@@ -1289,6 +1344,10 @@ export interface VarReplaySnapshot {
   incidentX: number;
   incidentY: number;
   defLineX: number;
+  defY?: number;
+  gkX?: number;
+  gkY?: number;
+  shotTargetY?: number;
   offsideMarginCm?: number;
   goalLineMm?: number;
   foulKind?: string;

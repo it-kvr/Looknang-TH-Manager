@@ -307,11 +307,11 @@ const renderVarMonitorPanel = (
   let baseSpanX = 28;
   if (vr.kind === 'goal') {
     if (sc === 'goal_line_tech') {
-      baseCamX = attRight ? 96.8 : 3.2;
+      baseCamX = attRight ? 97.4 : 2.6;
       baseCamY = clamp(rawIncY, 41, 59);
-      startCamX = attRight ? 94.0 : 6.0;
+      startCamX = attRight ? 94.6 : 5.4;
       startCamY = baseCamY;
-      baseSpanX = 16.5;
+      baseSpanX = 16.0;
     } else if (sc === 'foul_buildup') {
       baseCamX = attRight ? clamp(rawIncX + 2.5, 74, 91) : clamp(rawIncX - 2.5, 9, 26);
       baseCamY = clamp(rawIncY, 28, 72);
@@ -333,9 +333,9 @@ const renderVarMonitorPanel = (
       startCamY = baseCamY;
       baseSpanX = 22.5;
     } else {
-      const boxEdge = attRight ? 83 : 17;
-      baseCamX = attRight ? clamp(boxEdge + 2.2, 78, 92) : clamp(boxEdge - 2.2, 8, 22);
-      baseCamY = clamp(rawIncY, 26, 74);
+      const boxEdge = attRight ? 83.5 : 16.5;
+      baseCamX = attRight ? clamp(boxEdge + 2.0, 78, 92) : clamp(boxEdge - 2.0, 8, 22);
+      baseCamY = clamp(rawIncY, 24, 76);
       startCamX = rep?.passFromX != null ? (baseCamX * 0.78 + rep.passFromX * 0.22) : baseCamX;
       startCamY = baseCamY;
       baseSpanX = 24;
@@ -360,65 +360,116 @@ const renderVarMonitorPanel = (
   const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
   const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
 
-  // Pitch turf + mowed bands
+  // Pitch turf + mowed bands (matching main pitch 12-band layout)
   ctx.fillStyle = '#0f3823';
   ctx.fillRect(scrX, scrY, scrW, scrH);
-  const stripeStep = 5.5;
-  const firstStripe = Math.floor(minFX / stripeStep) * stripeStep;
-  for (let sx = firstStripe; sx < minFX + spanX + stripeStep; sx += stripeStep * 2) {
-    const rx0 = mx(sx);
-    const rx1 = mx(sx + stripeStep);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.048)';
-    ctx.fillRect(rx0, scrY, rx1 - rx0, scrH);
+  const stripeStep = 100 / 12;
+  const firstStripeIdx = Math.floor(Math.max(0, minFX) / stripeStep);
+  const lastStripeIdx = Math.min(11, Math.floor((minFX + spanX) / stripeStep));
+  for (let si = firstStripeIdx; si <= lastStripeIdx; si++) {
+    if (si % 2 === 0) {
+      const rx0 = mx(si * stripeStep);
+      const rx1 = mx((si + 1) * stripeStep);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.048)';
+      ctx.fillRect(rx0, scrY, rx1 - rx0, scrH);
+    }
   }
 
-  // Pitch chalk markings
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.74)';
-  ctx.lineWidth = isStandalone ? 1.8 : 1.25;
-  ctx.strokeRect(mx(0), my(0), mx(100) - mx(0), my(100) - my(0));
+  // Pitch chalk markings (exact 1:1 field coordinates with live match pitch)
+  const fullPitchW = mx(100) - mx(0);
+  const fullPitchH = my(100) - my(0);
+  ctx.strokeStyle = 'rgba(242, 249, 242, 0.78)';
+  ctx.lineWidth = isStandalone ? 1.85 : 1.3;
+  ctx.strokeRect(mx(0), my(0), fullPitchW, fullPitchH);
+
+  // Halfway line & center circle
   ctx.beginPath();
   ctx.moveTo(mx(50), my(0));
   ctx.lineTo(mx(50), my(100));
   ctx.stroke();
 
+  const centerCircleR = fullPitchH * 0.155;
+  ctx.beginPath();
+  ctx.arc(mx(50), my(50), centerCircleR, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(242, 249, 242, 0.88)';
+  ctx.beginPath();
+  ctx.arc(mx(50), my(50), isStandalone ? 2.6 : 1.7, 0, Math.PI * 2);
+  ctx.fill();
+
   const boxLineHighlight = vr.kind === 'penalty' && pct >= 0.36 && sc !== 'gk_clash_box';
+  // Right penalty box (83.5..100, y 21..79) & 6-yard box (94.5..100, y 36.5..63.5)
   ctx.save();
   if (boxLineHighlight && attRight) {
     ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
     ctx.lineWidth = isStandalone ? 3.2 : 2.2;
   }
-  ctx.strokeRect(mx(83), my(21), mx(100) - mx(83), my(79) - my(21));
+  ctx.strokeRect(mx(83.5), my(21), mx(100) - mx(83.5), my(79) - my(21));
   ctx.restore();
   ctx.strokeRect(mx(94.5), my(36.5), mx(100) - mx(94.5), my(63.5) - my(36.5));
 
+  // Left penalty box (0..16.5, y 21..79) & 6-yard box (0..5.5, y 36.5..63.5)
   ctx.save();
   if (boxLineHighlight && !attRight) {
     ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
     ctx.lineWidth = isStandalone ? 3.2 : 2.2;
   }
-  ctx.strokeRect(mx(0), my(21), mx(17) - mx(0), my(79) - my(21));
+  ctx.strokeRect(mx(0), my(21), mx(16.5) - mx(0), my(79) - my(21));
   ctx.restore();
   ctx.strokeRect(mx(0), my(36.5), mx(5.5) - mx(0), my(63.5) - my(36.5));
 
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  // Penalty spots (11 / 89) & D-arcs strictly outside 16.5 / 83.5 box line
+  ctx.fillStyle = 'rgba(242, 249, 242, 0.9)';
   ctx.beginPath();
-  ctx.arc(mx(88.5), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
-  ctx.arc(mx(11.5), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
+  ctx.arc(mx(89), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
+  ctx.arc(mx(11), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
   ctx.fill();
 
-  const mGoalD = Math.max(5, mx(100) - mx(97.2));
+  const spotToBoxDx = Math.max(4, mx(16.5) - mx(11));
+  const penArcR = Math.max(spotToBoxDx * 1.44, fullPitchH * 0.145);
+  const penArcAng = Math.acos(clamp(spotToBoxDx / penArcR, -0.96, 0.96));
+  ctx.beginPath();
+  ctx.arc(mx(11), my(50), penArcR, -penArcAng, penArcAng);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(mx(89), my(50), penArcR, Math.PI - penArcAng, Math.PI + penArcAng);
+  ctx.stroke();
+
+  // Corner arcs
+  const cornerR = Math.max(4, fullPitchH * 0.032);
+  [
+    [mx(0), my(0), 0, Math.PI / 2],
+    [mx(100), my(0), Math.PI / 2, Math.PI],
+    [mx(100), my(100), Math.PI, Math.PI * 1.5],
+    [mx(0), my(100), Math.PI * 1.5, Math.PI * 2]
+  ].forEach(([cx, cy, sa, ea]) => {
+    ctx.beginPath();
+    ctx.arc(cx, cy, cornerR, sa, ea);
+    ctx.stroke();
+  });
+
+  const mGoalD = Math.max(6, mx(100) - mx(97.4));
   const mGoalTop = my(42);
-  const mGoalH = my(58) - mGoalTop;
+  const mGoalBot = my(58);
+  const mGoalH = mGoalBot - mGoalTop;
   const drawVarGoalNet = (gx: number, rippleProg = 0, rippleY = 50, frameFlashColor?: string) => {
     const waveAmp = rippleProg > 0 && rippleProg < 1 ? Math.sin(rippleProg * Math.PI) * (isStandalone ? 4.5 : 2.8) : 0;
     const waveFreq = rippleProg * Math.PI * 6;
+    const postX = attRight ? mx(100) : mx(0);
+    const backX = attRight ? gx + mGoalD : gx;
+    const taper = isStandalone ? 2.2 : 1.4;
     ctx.save();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-    ctx.fillRect(gx, mGoalTop, mGoalD, mGoalH);
+    ctx.fillStyle = rippleProg > 0 ? 'rgba(245, 194, 66, 0.22)' : 'rgba(255, 255, 255, 0.14)';
     ctx.beginPath();
-    ctx.rect(gx - 2, mGoalTop - 2, mGoalD + 4, mGoalH + 4);
+    ctx.moveTo(postX, mGoalTop);
+    ctx.lineTo(backX, mGoalTop + taper);
+    ctx.lineTo(backX, mGoalBot - taper);
+    ctx.lineTo(postX, mGoalBot);
+    ctx.closePath();
+    ctx.fill();
     ctx.clip();
-    ctx.strokeStyle = waveAmp > 0.2 ? 'rgba(255, 255, 255, 0.42)' : 'rgba(255, 255, 255, 0.22)';
+
+    ctx.strokeStyle = waveAmp > 0.2 ? 'rgba(255, 255, 255, 0.44)' : 'rgba(255, 255, 255, 0.24)';
     ctx.lineWidth = 0.75;
     const step = Math.max(3.5, mGoalD / 4);
     const impactScreenY = my(rippleY);
@@ -426,15 +477,15 @@ const renderVarMonitorPanel = (
       ctx.beginPath();
       ctx.moveTo(nx, mGoalTop);
       if (waveAmp > 0) {
-        const midY = clamp(impactScreenY, mGoalTop + 3, mGoalTop + mGoalH - 3);
+        const midY = clamp(impactScreenY, mGoalTop + 3, mGoalBot - 3);
         const bulge = Math.sin(waveFreq + (nx - gx) * 0.2) * waveAmp;
-        ctx.quadraticCurveTo(nx + (attRight ? Math.abs(bulge) : -Math.abs(bulge)), midY, nx, mGoalTop + mGoalH);
+        ctx.quadraticCurveTo(nx + (attRight ? Math.abs(bulge) : -Math.abs(bulge)), midY, nx, mGoalBot);
       } else {
-        ctx.lineTo(nx, mGoalTop + mGoalH);
+        ctx.lineTo(nx, mGoalBot);
       }
       ctx.stroke();
     }
-    for (let ny = mGoalTop; ny <= mGoalTop + mGoalH; ny += step) {
+    for (let ny = mGoalTop; ny <= mGoalBot; ny += step) {
       ctx.beginPath();
       ctx.moveTo(gx, ny);
       const distFactor = Math.max(0, 1 - Math.abs(ny - impactScreenY) / Math.max(10, mGoalH * 0.6));
@@ -443,9 +494,29 @@ const renderVarMonitorPanel = (
       ctx.stroke();
     }
     ctx.restore();
+
+    ctx.save();
     ctx.strokeStyle = frameFlashColor || '#ffffff';
     ctx.lineWidth = frameFlashColor ? (isStandalone ? 2.6 : 1.8) : isStandalone ? 2.1 : 1.5;
-    ctx.strokeRect(gx, mGoalTop, mGoalD, mGoalH);
+    ctx.beginPath();
+    ctx.moveTo(postX, mGoalTop);
+    ctx.lineTo(backX, mGoalTop + taper);
+    ctx.lineTo(backX, mGoalBot - taper);
+    ctx.lineTo(postX, mGoalBot);
+    ctx.stroke();
+
+    // Exact circular goalposts anchored right on goal line (x = 0 or 100, y = 42 & 58)
+    const postR = isStandalone ? 3.2 : 2.1;
+    ctx.fillStyle = frameFlashColor || '#ffffff';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1;
+    [mGoalTop, mGoalBot].forEach((pyPost) => {
+      ctx.beginPath();
+      ctx.arc(postX, pyPost, postR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
   };
 
   const drawVarTurfTrack = (
@@ -1046,19 +1117,30 @@ const renderVarMonitorPanel = (
   const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
   const postT = clamp((simT - 0.51) / 0.49, 0, 1);
   const dirSign = attRight ? 1 : -1;
+  const pxPerFx = scrW / Math.max(1, spanX);
+  const pxPerFy = scrH / Math.max(1, spanY);
+  const agentPixR = isStandalone ? clamp(scrH * 0.078, 9, 14) : clamp(scrH * 0.082, 5.8, 8.2);
+  const agentFxR = agentPixR / pxPerFx;
+  const agentFyR = agentPixR / pxPerFy;
+  const baseBallPixR = isStandalone ? 5.6 : smallText ? 3.5 : 4.2;
+  const ballFxR = baseBallPixR / pxPerFx;
+  const ballFyR = baseBallPixR / pxPerFy;
 
   if (vr.kind === 'goal') {
     if (sc === 'goal_line_tech') {
-      // GOAL-LINE TECHNOLOGY SCENARIO (Shot -> Freeze on line -> Ripple net or GK Push-away Save!)
+      // GOAL-LINE TECHNOLOGY SCENARIO (Shot -> Freeze on exact goal-line plane -> Ripple net or GK Push-away Save!)
       const goalLineX = attRight ? 100 : 0;
-      const incY = clamp(rep?.incidentY ?? 50, 44, 56);
-      const startX = rep?.passFromX ?? (attRight ? 91.5 : 8.5);
-      const startY = rep?.passFromY ?? clamp(incY + 3, 42, 58);
+      const incY = clamp(rep?.shotTargetY ?? rep?.incidentY ?? 50, 43.4, 56.6);
+      const startX = attRight ? clamp(rep?.passFromX ?? 90.5, 78, 95.5) : clamp(rep?.passFromX ?? 9.5, 4.5, 22);
+      const startY = clamp(rep?.passFromY ?? (incY + (incY < 50 ? 2.5 : -2.5)), 34, 66);
+      // Exact visual calibration with chalk goal line & ball radius:
+      // - Overturn (not wholly over): back edge overlaps/remains before goalLineX
+      // - Confirm (wholly over): full circumference completely crosses goalLineX inside net
       const apexX = vr.overturn
-        ? attRight ? 99.65 : 0.35
-        : attRight ? 100.85 : -0.85;
-      const clearX = attRight ? 97.2 : 2.8;
-      const netSettleX = attRight ? 101.6 : -1.6;
+        ? attRight ? 100 - ballFxR * 0.25 : ballFxR * 0.25
+        : attRight ? 100 + ballFxR * 1.28 : -ballFxR * 1.28;
+      const clearX = attRight ? 96.4 : 3.6;
+      const netSettleX = attRight ? 101.8 : -1.8;
 
       const ballPhase = rawPlayT;
       const easeBall = 1 - Math.pow(1 - ballPhase, 1.9);
@@ -1066,36 +1148,38 @@ const renderVarMonitorPanel = (
         postT > 0
           ? vr.overturn
             ? apexX + (clearX - apexX) * postT
-            : apexX + (netSettleX - apexX) * clamp(postT * 1.4, 0, 1)
+            : apexX + (netSettleX - apexX) * clamp(postT * 1.35, 0, 1)
           : startX + (apexX - startX) * easeBall;
-      const byNow = startY + (incY - startY) * easeBall + (vr.overturn ? postT * (incY < 50 ? 2.6 : -2.6) : 0);
-      const bzNow = Math.sin(easeBall * Math.PI) * 5.0 + (vr.overturn ? postT * 1.8 : (1 - postT) * 1.2);
+      const byNow = startY + (incY - startY) * easeBall + (vr.overturn ? postT * (incY < 50 ? 2.4 : -2.4) : 0);
+      const bzNow = Math.sin(easeBall * Math.PI) * 3.8 + (vr.overturn ? postT * 1.6 : (1 - postT) * 1.0);
 
       // Draw goal net with live ripple when ball hits back of net
       const netRipple = !vr.overturn && postT > 0 ? clamp(postT * 1.35, 0, 1) : 0;
       const postFlash = pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : undefined;
       drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, incY, postFlash);
 
-      const gkStartY = incY < 50 ? 55.0 : 45.0;
-      const gkDiveT = clamp((simT - 0.14) / 0.62, 0, 1);
-      const gkX = attRight ? 98.7 - (1 - rawPlayT) * 1.6 : 1.3 + (1 - rawPlayT) * 1.6;
+      const gkStartX = rep?.gkX != null ? clamp(rep.gkX, attRight ? 94 : 1.5, attRight ? 98.5 : 6) : (attRight ? 97.8 : 2.2);
+      const gkStartY = rep?.gkY != null ? clamp(rep.gkY, 43.2, 56.8) : (incY < 50 ? 54.5 : 45.5);
+      const gkDiveT = clamp((simT - 0.14) / 0.56, 0, 1);
+      const gkEndX = attRight ? 99.1 : 0.9;
+      const gkX = gkStartX + (gkEndX - gkStartX) * gkDiveT;
       const gkY = gkStartY + (incY - gkStartY) * (1 - Math.pow(1 - gkDiveT, 1.75));
       const gkDiveDir = incY < gkStartY ? -1 : 1;
-      const attXNow = clamp(startX - dirSign * (1 - playT) * 2.6 + postT * dirSign * 0.8, 6, 94);
-      const attYNow = startY + (1 - playT) * 1.5;
+      const attXNow = clamp(startX - dirSign * (1 - playT) * 2.4 + postT * dirSign * 0.7, 6, 94);
+      const attYNow = startY + (1 - playT) * 1.2;
 
       // Supporting center-back lunging to block late
-      const cbX = startX + dirSign * (1.8 - playT * 0.5);
-      const cbY = clamp(incY + (incY < 50 ? 5.6 : -5.6), 36, 64);
+      const cbX = clamp(startX + dirSign * (2.0 - playT * 0.5), 4, 96);
+      const cbY = clamp(rep?.defY ?? (incY + (incY < 50 ? 5.2 : -5.2)), 34, 66);
 
-      // Glowing Goal-Line Laser Plane
+      // Glowing Goal-Line Laser Plane strictly across the goalmouth (between/just beyond goalposts)
       const glScreenX = mx(goalLineX);
       ctx.save();
       ctx.strokeStyle = pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#38bdf8';
-      ctx.lineWidth = isStandalone ? 3.2 : 2.2;
+      ctx.lineWidth = isStandalone ? 2.8 : 2.0;
       ctx.beginPath();
-      ctx.moveTo(glScreenX, scrY);
-      ctx.lineTo(glScreenX, scrY + scrH);
+      ctx.moveTo(glScreenX, my(40.8));
+      ctx.lineTo(glScreenX, my(59.2));
       ctx.stroke();
       ctx.restore();
 
@@ -1104,7 +1188,7 @@ const renderVarMonitorPanel = (
         return {
           x: startX + (apexX - startX) * t,
           y: startY + (incY - startY) * t,
-          z: Math.sin(t * Math.PI) * 5.0
+          z: Math.sin(t * Math.PI) * 3.8
         };
       });
 
@@ -1213,15 +1297,18 @@ const renderVarMonitorPanel = (
       // BUILDUP FOUL / HANDBALL BEFORE GOAL SCENARIO
       const incX = rep?.incidentX ?? (attRight ? 80 : 20);
       const incY = rep?.incidentY ?? 48;
-      const goalX = attRight ? 100.8 : -0.8;
-      const goalY = 50;
+      const goalX = attRight ? 101.4 : -1.4;
+      const goalY = clamp(rep?.shotTargetY ?? 50, 43.8, 56.2);
+      const defSideSign = rep?.defY != null ? (rep.defY < incY ? -1 : 1) : (incY < 50 ? 1 : -1);
 
       const attXNow = incX - dirSign * (1 - playT) * 4.5 + postT * dirSign * 4.8;
-      const attYNow = incY + (1 - playT) * 2.0;
-      const defXNow = incX + dirSign * (1.1 - playT * 0.5);
-      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.2 : -4.2) + (incY < 50 ? 1.1 : -1.1);
+      const attYNow = incY + (1 - playT) * 1.8;
+      const defStartY = clamp(incY + defSideSign * 5.0, 10, 90);
+      const defXNow = incX + dirSign * (1.0 - playT * 0.45);
+      const defYNow = incY + (1 - playT) * defSideSign * 4.0 + defSideSign * 1.0;
       const gkDiveT = clamp((simT - 0.56) / 0.36, 0, 1);
-      const gkBaseY = clamp(50 + (incY - 50) * 0.25, 43, 57);
+      const gkStartX = rep?.gkX != null ? clamp(rep.gkX, attRight ? 94 : 1.5, attRight ? 98.5 : 6) : (attRight ? 97.6 : 2.4);
+      const gkBaseY = rep?.gkY != null ? clamp(rep.gkY, 43, 57) : clamp(50 + (incY - 50) * 0.25, 43.5, 56.5);
       const gkY = gkBaseY + (goalY - gkBaseY) * gkDiveT;
       const gkDiveDir = goalY >= gkBaseY ? 1 : -1;
 
@@ -1231,7 +1318,7 @@ const renderVarMonitorPanel = (
       if (playT > 0.28) {
         drawVarTurfTrack(
           incX + dirSign * 1.0,
-          incY + (incY < 50 ? 4.4 : -4.4),
+          defStartY,
           defXNow,
           defYNow,
           clamp((simT - 0.16) / 0.38, 0, 1)
@@ -1270,7 +1357,7 @@ const renderVarMonitorPanel = (
         );
       }
 
-      drawMiniAgent(attRight ? 97.2 : 2.8, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
+      drawMiniAgent(gkStartX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
         role: rep?.gkRole || 'GK',
         facing: attRight ? Math.PI : 0,
         stride: simT * 14,
@@ -1324,8 +1411,8 @@ const renderVarMonitorPanel = (
       );
 
       const shotProg = postT;
-      const bxNow = shotProg > 0 ? incX + (goalX - incX) * shotProg : incX - dirSign * (1 - playT) * 3.0;
-      const byNow = shotProg > 0 ? incY + (goalY - incY) * shotProg : incY;
+      const bxNow = shotProg > 0 ? incX + (goalX - incX) * shotProg : incX + dirSign * (agentFxR + ballFxR * 0.4) * playT;
+      const byNow = shotProg > 0 ? incY + (goalY - incY) * shotProg : incY + agentFyR * 0.22;
       const trailPts =
         shotProg > 0.05
           ? Array.from({ length: 6 }, (_, i) => {
@@ -1339,39 +1426,42 @@ const renderVarMonitorPanel = (
         trailColor: 'rgba(250, 204, 21, 0.55)'
       });
     } else {
-      // OFFSIDE CALIBRATION LINE SCENARIO (Freeze at pass release + Semi-Automated Drop-Lines + Follow-through Goal/Save!)
+      // OFFSIDE CALIBRATION LINE SCENARIO (Freeze at exact pass release + Leading-Edge Drop-Lines + Follow-through Goal!)
       const incX = rep?.incidentX ?? (attRight ? 86 : 14);
       const incY = rep?.incidentY ?? 48;
       const defLineX = rep?.defLineX ?? (attRight ? 84 : 16);
-      const goalX = attRight ? 100.8 : -0.8;
+      const goalX = attRight ? 101.4 : -1.4;
+      const targetGoalY = clamp(rep?.shotTargetY ?? 50, 43.8, 56.2);
 
-      const attXNow = incX - dirSign * (1 - playT) * 5.8 + postT * dirSign * 4.5;
-      const attYNow = incY + (1 - playT) * 2.0 + postT * (50 - incY) * 0.28;
-      const defXNow = defLineX + dirSign * (1 - playT) * 1.4 - postT * dirSign * 0.6;
-      const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
+      const attXNow = incX - dirSign * (1 - playT) * 5.2 + postT * dirSign * 4.5;
+      const attYNow = incY + (1 - playT) * 1.8 + postT * (targetGoalY - incY) * 0.24;
+      const defSideSign = rep?.defY != null ? (rep.defY < incY ? -1 : 1) : (incY < 50 ? 1 : -1);
+      const defXNow = defLineX + dirSign * (1 - playT) * 1.3 - postT * dirSign * 0.6;
+      const defYNow = clamp(rep?.defY ?? (incY + defSideSign * 4.2), 20, 80);
 
       const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
-      const passStartY = rep?.passFromY ?? clamp(incY + 7, 22, 78);
+      const passStartY = rep?.passFromY ?? clamp(incY + 7, 18, 82);
 
-      // Ball travels from passer -> reaches receiver after freeze -> finished at goal
-      const passTravelT = simT < 0.49 ? rawPlayT * 0.42 : clamp(0.42 + (postT / 0.42) * 0.58, 0.42, 1);
-      const finishT = postT > 0.42 ? clamp((postT - 0.42) / 0.52, 0, 1) : 0;
+      // Ball stays right at passer's boot at pass-release freeze (pct 0.36..0.64 -> passTravelT ~ 0.06),
+      // then travels during postT (0..0.46) to receiver before finishing into goal
+      const passTravelT = simT < 0.49 ? rawPlayT * 0.06 : clamp(0.06 + (postT / 0.46) * 0.94, 0.06, 1);
+      const finishT = postT > 0.46 ? clamp((postT - 0.46) / 0.50, 0, 1) : 0;
       const bxNow =
         finishT > 0
           ? attXNow + (goalX - attXNow) * finishT
-          : passStartX + (incX - passStartX) * passTravelT;
+          : passStartX + (attXNow - passStartX) * passTravelT;
       const byNow =
         finishT > 0
-          ? attYNow + (50 - attYNow) * finishT
-          : passStartY + (incY - passStartY) * passTravelT;
-      const bzNow = finishT > 0 ? Math.sin(finishT * Math.PI) * 3.5 : Math.sin(passTravelT * Math.PI) * 2.8;
+          ? attYNow + (targetGoalY - attYNow) * finishT
+          : passStartY + (attYNow - passStartY) * passTravelT;
+      const bzNow = finishT > 0 ? Math.sin(finishT * Math.PI) * 3.4 : Math.sin(passTravelT * Math.PI) * 2.5;
 
       const netRipple = finishT > 0.65 ? clamp((finishT - 0.65) / 0.35, 0, 1) : 0;
-      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, 50);
+      drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, netRipple, targetGoalY);
 
-      const gkX = attRight ? 97.2 : 2.8;
-      const gkReadyY = clamp(50 + (incY - 50) * 0.28, 43, 57);
-      const gkY = finishT > 0 ? gkReadyY + (50 - gkReadyY) * finishT * 0.78 : gkReadyY + Math.sin(simT * 8) * 0.7;
+      const gkX = rep?.gkX != null ? clamp(rep.gkX, attRight ? 94 : 1.5, attRight ? 98.5 : 6) : (attRight ? 97.6 : 2.4);
+      const gkReadyY = rep?.gkY != null ? clamp(rep.gkY, 43, 57) : clamp(50 + (incY - 50) * 0.28, 43.5, 56.5);
+      const gkY = finishT > 0 ? gkReadyY + (targetGoalY - gkReadyY) * finishT * 0.78 : gkReadyY + Math.sin(simT * 8) * 0.6;
       drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
         role: rep?.gkRole || 'GK',
         facing: attRight ? Math.PI : 0,
@@ -1379,13 +1469,13 @@ const renderVarMonitorPanel = (
         isGk: true,
         action: finishT > 0.14 ? 'gk_dive' : 'gk_ready',
         actionProg: finishT,
-        diveDir: 50 >= gkReadyY ? 1 : -1
+        diveDir: targetGoalY >= gkReadyY ? 1 : -1
       });
 
       // Supporting 2nd defender tracking central channel
       drawMiniAgent(
         defXNow - dirSign * 2.2,
-        clamp(incY + (incY < 50 ? 11.5 : -11.5), 22, 78),
+        clamp(defYNow + defSideSign * 7.5, 18, 82),
         defKit,
         defTrim,
         rep?.supportDefNo ?? 5,
@@ -1396,9 +1486,9 @@ const renderVarMonitorPanel = (
         { role: rep?.supportDefRole || 'CB', facing: attRight ? Math.PI * 0.94 : 0.06, stride: simT * 14, action: 'run', dimmed: true }
       );
 
-      // Animated passer teammate kicking the through-ball (freezes right after follow-through)
+      // Animated passer teammate kicking the through-ball (freezes right at foot impact!)
       drawMiniAgent(
-        passStartX - dirSign * (1 - playT) * 1.8,
+        passStartX - dirSign * (1 - playT) * 1.6,
         passStartY,
         attKit,
         attTrim,
@@ -1411,8 +1501,8 @@ const renderVarMonitorPanel = (
           role: rep?.passerRole || 'CM',
           facing: Math.atan2(incY - passStartY, incX - passStartX),
           stride: simT * 12,
-          action: simT <= 0.56 ? 'kick' : 'run',
-          actionProg: clamp(simT / 0.56, 0, 1)
+          action: simT >= 0.3 && simT <= 0.68 ? 'kick' : 'run',
+          actionProg: clamp((simT - 0.3) / 0.38, 0, 1)
         }
       );
 
@@ -1422,15 +1512,19 @@ const renderVarMonitorPanel = (
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.moveTo(mx(passStartX), my(passStartY));
-      ctx.lineTo(mx(incX), my(incY));
+      ctx.lineTo(mx(attXNow), my(attYNow));
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.restore();
 
+      // Calibration offside lines aligned strictly to leading shoulder/boot edge toward goal
+      const leadEdgeOffset = dirSign * agentFxR * 0.68;
       if (pct >= 0.36) {
         const lineAlpha = clamp((pct - 0.36) / 0.1, 0, 1);
-        const defScreenX = mx(defLineX);
-        const attScreenX = mx(incX);
+        const defEdgeFx = defLineX + leadEdgeOffset;
+        const attEdgeFx = incX + leadEdgeOffset;
+        const defScreenX = mx(defEdgeFx);
+        const attScreenX = mx(attEdgeFx);
         const offsideClr = vr.overturn ? '#ef4444' : '#22c55e';
 
         ctx.save();
@@ -1440,7 +1534,7 @@ const renderVarMonitorPanel = (
         const bandW = Math.max(2, Math.abs(attScreenX - defScreenX));
         ctx.fillRect(bandX, scrY, bandW, scrH);
 
-        // Calibrated Blue Defender Line + Shoulder/Boot Projection Drop
+        // Calibrated Blue Defender Line + Leading Edge Projection Drop
         ctx.strokeStyle = '#3b82f6';
         ctx.lineWidth = isStandalone ? 2.6 : 1.8;
         ctx.beginPath();
@@ -1448,12 +1542,11 @@ const renderVarMonitorPanel = (
         ctx.lineTo(defScreenX, scrY + scrH);
         ctx.stroke();
 
-        // Semi-automated vertical drop cues onto grass line
         ctx.strokeStyle = 'rgba(96, 165, 250, 0.9)';
         ctx.lineWidth = 1.1;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        ctx.moveTo(mx(defXNow), my(defYNow));
+        ctx.moveTo(mx(defXNow) + (dirSign * agentPixR * 0.68), my(defYNow));
         ctx.lineTo(defScreenX, my(defYNow));
         ctx.stroke();
 
@@ -1468,7 +1561,7 @@ const renderVarMonitorPanel = (
 
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
-        ctx.moveTo(mx(attXNow), my(attYNow));
+        ctx.moveTo(mx(attXNow) + (dirSign * agentPixR * 0.68), my(attYNow));
         ctx.lineTo(attScreenX, my(attYNow));
         ctx.stroke();
         ctx.setLineDash([]);
@@ -1508,7 +1601,7 @@ const renderVarMonitorPanel = (
         pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047',
         {
           role: rep?.attRole || 'ST',
-          facing: Math.atan2(50 - incY, goalX - incX),
+          facing: Math.atan2(targetGoalY - incY, goalX - incX),
           stride: simT * 17,
           action: finishT > 0 && finishT < 0.58 ? 'kick' : 'run',
           actionProg: clamp(finishT / 0.58, 0, 1)
@@ -1516,11 +1609,11 @@ const renderVarMonitorPanel = (
       );
 
       const trailPts = Array.from({ length: 6 }, (_, i) => {
-        const t = Math.max(0, passTravelT - (5 - i) * 0.06);
+        const t = Math.max(0, passTravelT - (5 - i) * 0.04);
         return {
-          x: passStartX + (incX - passStartX) * t,
-          y: passStartY + (incY - passStartY) * t,
-          z: Math.sin(t * Math.PI) * 2.8
+          x: passStartX + (attXNow - passStartX) * t,
+          y: passStartY + (attYNow - passStartY) * t,
+          z: Math.sin(t * Math.PI) * 2.5
         };
       });
       drawVarSoccerBall(bxNow, byNow, simT * 15, {
@@ -1532,9 +1625,10 @@ const renderVarMonitorPanel = (
   } else if (vr.kind === 'penalty') {
     const incX = rep?.incidentX ?? (attRight ? 86 : 14);
     const incY = rep?.incidentY ?? 48;
-    const boxLineX = rep?.defLineX ?? (attRight ? 83 : 17);
+    const boxLineX = rep?.defLineX ?? (attRight ? 83.5 : 16.5);
     const inBox = rep?.inBox ?? !vr.overturn;
     const bxScreen = mx(boxLineX);
+    const defSideSign = rep?.defY != null ? (rep.defY < incY ? -1 : 1) : (incY < 50 ? 1 : -1);
 
     drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, 0, 50);
 
@@ -1542,10 +1636,16 @@ const renderVarMonitorPanel = (
       // HANDBALL IN THE PENALTY BOX SCENARIO (Freeze on arm-ball impact + deflection!)
       const crossFromX = rep?.passFromX ?? (incX - dirSign * 9.5);
       const crossFromY = rep?.passFromY ?? clamp(incY + (incY < 50 ? 10 : -10), 14, 86);
-      const defXNow = incX + dirSign * (1 - playT) * 1.4;
-      const defYNow = incY + (1 - playT) * (incY < 50 ? -2.2 : 2.2);
-      const attXNow = crossFromX - dirSign * (1 - playT) * 2.4;
-      const attYNow = crossFromY + (1 - playT) * 1.2;
+      const defFacing = Math.atan2(crossFromY - incY, crossFromX - incX);
+      const handDir = crossFromY < incY ? -1 : 1;
+      const armAng = defFacing + handDir * 1.15;
+      // Offset defender body so outstretched hand lands directly on (incX, incY) at contact!
+      const defTargetX = incX - Math.cos(armAng) * agentFxR * 1.32;
+      const defTargetY = incY - Math.sin(armAng) * agentFyR * 1.32;
+      const defXNow = defTargetX + dirSign * (1 - playT) * 1.2;
+      const defYNow = defTargetY + (1 - playT) * defSideSign * 1.8;
+      const attXNow = crossFromX - dirSign * (1 - playT) * 2.2;
+      const attYNow = crossFromY + (1 - playT) * 1.0;
 
       const hitT = rawPlayT;
       const deflectT = postT;
@@ -1553,7 +1653,7 @@ const renderVarMonitorPanel = (
       const deflY = incY + (incY < 50 ? 6.2 : -6.2);
       const bxNow = deflectT > 0 ? incX + (deflX - incX) * deflectT : crossFromX + (incX - crossFromX) * hitT;
       const byNow = deflectT > 0 ? incY + (deflY - incY) * deflectT : crossFromY + (incY - crossFromY) * hitT;
-      const bzNow = deflectT > 0 ? 4.4 * (1 - deflectT * 0.6) : 2.0 + hitT * 2.4;
+      const bzNow = deflectT > 0 ? 4.0 * (1 - deflectT * 0.6) : 1.8 + hitT * 2.2;
 
       const gkTrackY = clamp(50 + (byNow - 50) * 0.32, 43, 57);
       drawMiniAgent(attRight ? 97 : 3, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
@@ -1637,17 +1737,17 @@ const renderVarMonitorPanel = (
         '#fca5a5',
         {
           role: rep?.defRole || 'CB',
-          facing: Math.atan2(crossFromY - incY, crossFromX - incX),
+          facing: defFacing,
           stride: simT * 12,
           action: simT >= 0.22 ? 'handball' : 'run',
           actionProg: clamp((simT - 0.22) / 0.42, 0, 1),
-          handDir: crossFromY < incY ? -1 : 1
+          handDir
         }
       );
 
       const trailPts = Array.from({ length: 6 }, (_, i) => {
         const t = Math.max(0, hitT - (5 - i) * 0.06);
-        return { x: crossFromX + (incX - crossFromX) * t, y: crossFromY + (incY - crossFromY) * t, z: 2.0 + t * 2.4 };
+        return { x: crossFromX + (incX - crossFromX) * t, y: crossFromY + (incY - crossFromY) * t, z: 1.8 + t * 2.2 };
       });
       drawVarSoccerBall(bxNow, byNow, simT * 16, {
         z: bzNow,
@@ -1736,11 +1836,12 @@ const renderVarMonitorPanel = (
       drawVarSoccerBall(bxNow, byNow, simT * 14, { z: 0.8 + Math.sin(postT * Math.PI) * 1.4 });
     } else {
       // BOX-EDGE FOUL CHECK SCENARIO
+      const attFacing = Math.atan2(50 - incY, (attRight ? 96 : 4) - incX);
       const attXNow = incX - dirSign * (1 - playT) * 4.4 + postT * dirSign * 0.8;
       const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
-      const defXNow = incX + dirSign * (1.2 - playT * 0.4);
-      const defStartY = incY + (incY < 50 ? 5.8 : -5.8);
-      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.8 : -4.8) + (incY < 50 ? 1.0 : -1.0);
+      const defXNow = incX + dirSign * (1.05 - playT * 0.35);
+      const defStartY = clamp(incY + defSideSign * 5.6, 8, 92);
+      const defYNow = incY + (1 - playT) * defSideSign * 4.6 + defSideSign * 0.95;
 
       const gkTrackY = clamp(50 + (attYNow - 50) * 0.35, 42, 58);
       drawMiniAgent(attRight ? 97 : 3, gkTrackY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis, undefined, '#bae6fd', {
@@ -1800,7 +1901,7 @@ const renderVarMonitorPanel = (
         '#fde047',
         {
           role: rep?.attRole || 'CAM',
-          facing: Math.atan2(50 - incY, (attRight ? 96 : 4) - incX),
+          facing: attFacing,
           stride: simT * 16,
           action: simT >= 0.49 ? 'fall' : 'run',
           actionProg: clamp((simT - 0.49) / 0.44, 0, 1)
@@ -1825,26 +1926,27 @@ const renderVarMonitorPanel = (
         }
       );
 
-      const bxNow = attXNow + dirSign * (1.3 + postT * 2.4);
-      const byNow = attYNow - 0.5 + postT * (incY < 50 ? 1.4 : -1.4);
-      drawVarSoccerBall(bxNow, byNow, simT * 13, { z: 0.6 + postT * 0.4 });
+      const bxNow = attXNow + Math.cos(attFacing) * (agentFxR + ballFxR * 0.55) + postT * dirSign * 2.2;
+      const byNow = attYNow + Math.sin(attFacing) * (agentFyR + ballFyR * 0.55) + agentFyR * 0.24 + postT * (incY < 50 ? 1.2 : -1.2);
+      drawVarSoccerBall(bxNow, byNow, simT * 13, { z: 0.5 + postT * 0.4 });
     }
   } else {
     // FOUL / RED CARD VAR SCENARIOS
     const incX = rep?.incidentX ?? vr.x;
     const incY = rep?.incidentY ?? vr.y;
+    const defSideSign = rep?.defY != null ? (rep.defY < incY ? -1 : 1) : 1;
 
     const attXNow = incX - dirSign * (1 - playT) * 3.8 + postT * dirSign * 0.6;
     const attYNow = incY;
-    const defXNow = incX + dirSign * (1.1 - playT * 0.25);
-    const defStartY = incY + 5.8;
-    const defYNow = incY + (1 - playT) * 5.2 + 0.9;
+    const defXNow = incX + dirSign * (1.05 - playT * 0.25);
+    const defStartY = clamp(incY + defSideSign * 5.6, 6, 94);
+    const defYNow = clamp(incY + (1 - playT) * defSideSign * 4.8 + defSideSign * 0.9, 6, 94);
 
     const isDogso = sc === 'dogso' || rep?.foulKind === 'dogso';
     const isReckless = sc === 'reckless_duel';
 
     if (isDogso) {
-      const gX = attRight ? 99 : 1;
+      const gLineX = attRight ? 100 : 0;
       drawVarGoalNet(attRight ? mx(100) : mx(0) - mGoalD, 0, 50);
       ctx.save();
       ctx.fillStyle = 'rgba(239, 68, 68, 0.14)';
@@ -1853,8 +1955,8 @@ const renderVarMonitorPanel = (
       ctx.setLineDash([4, 3]);
       ctx.beginPath();
       ctx.moveTo(mx(incX), my(incY));
-      ctx.lineTo(mx(gX), my(42));
-      ctx.lineTo(mx(gX), my(58));
+      ctx.lineTo(mx(gLineX), my(42));
+      ctx.lineTo(mx(gLineX), my(58));
       ctx.closePath();
       ctx.fill();
       ctx.stroke();
@@ -1984,9 +2086,9 @@ const renderVarMonitorPanel = (
       }
     );
 
-    const bxNow = attXNow + dirSign * (1.4 + postT * 2.4);
-    const byNow = attYNow - 0.6 + (isReckless ? Math.sin(simT * Math.PI) * 1.2 : 0);
-    const bzNow = isReckless ? Math.abs(Math.sin(simT * Math.PI * 1.8)) * 5.2 : 0.7;
+    const bxNow = attXNow + dirSign * (agentFxR + ballFxR * 0.45 + postT * 2.2);
+    const byNow = attYNow + agentFyR * 0.28 + (isReckless ? Math.sin(simT * Math.PI) * 1.1 : 0);
+    const bzNow = isReckless ? Math.abs(Math.sin(simT * Math.PI * 1.8)) * 5.0 : 0.6;
     drawVarSoccerBall(bxNow, byNow, simT * 14, { z: bzNow });
 
     if (pct >= 0.36) {
@@ -2164,7 +2266,7 @@ export const drawVarReplayToCanvas = (
     1,
     cssW - 2,
     cssH - 2,
-    1.95,
+    2.05,
     homeKit,
     awayKit,
     homeGkKit,

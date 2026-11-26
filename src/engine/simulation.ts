@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
@@ -3098,6 +3098,7 @@ export function startSeason(s: GameState) {
   initExtraCups(s);
   mkMarket(s);
   s.schedRes = {};
+  s.schedRoundRes = {};
   s.cupLog = [];
   setBoardObjective(s);
   if (s.mode === 'm') {
@@ -7172,12 +7173,65 @@ export function simulateInstantMatchPayload(
 
   const attInfo = computeMatchAttendance(H, A, s, { kind, derby: !!s.derby });
   const streamProj = computeMatchStreamProjection(H, A, s, { kind, derby: !!s.derby });
+  const rH = rate(H, s);
+  const rA = rate(A, s);
+  const possH = clamp(Math.round(50 + (rH.at + rH.df - (rA.at + rA.df)) * 0.45 + R(-5, 5)), 32, 68);
+  const xgHVal = Math.max(0.15, Number((r.xgH || 1.1).toFixed(2)));
+  const xgAVal = Math.max(0.15, Number((r.xgA || 1.0).toFixed(2)));
+  const shotsH = Math.max(r.gh + 1, Math.round(xgHVal * R(5, 8) + R(1, 4)));
+  const shotsA = Math.max(r.ga + 1, Math.round(xgAVal * R(5, 8) + R(1, 4)));
+  const onTargetH = clamp(Math.max(r.gh, Math.round(shotsH * 0.42) + (r.gh > 0 ? 1 : 0)), r.gh, shotsH);
+  const onTargetA = clamp(Math.max(r.ga, Math.round(shotsA * 0.42) + (r.ga > 0 ? 1 : 0)), r.ga, shotsA);
+  const passesH = Math.round(possH * R(6, 8));
+  const passesA = Math.round((100 - possH) * R(6, 8));
+  const simLogs: ArchivedMatchLog[] = [
+    { m: 90, text: penText ? `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name} (${penText})` : `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name}`, tone: 'sys' },
+    ...[
+      ...r.evs.map((e) => {
+        const scTeam = e.t === H.id ? H.name : A.name;
+        const txt = e.og
+          ? `🤦 นาที ${e.m}': ${e.who} สกัดเข้าประตูตัวเอง (${scTeam} ได้ประตู)`
+          : e.as
+            ? `⚽ นาที ${e.m}': โกล!! ${e.who} (${scTeam}) ซัดประตู (👟 ${e.as})`
+            : `⚽ นาที ${e.m}': โกล!! ${e.who} (${scTeam}) ยิงประตู!`;
+        return { m: e.m, item: { m: e.m, text: txt, tone: 'goal' as const } };
+      }),
+      ...(r.cards || []).map((c) => {
+        const tmName = c.t === H.id ? H.name : A.name;
+        const cardEmoji = c.type === 'Y' ? '🟨 ใบเหลือง' : c.type === 'Y2R' ? '🟨➡🟥 เหลืองแดง' : '🟥 ใบแดง';
+        return { m: c.m, item: { m: c.m, text: `${cardEmoji} นาที ${c.m}': ${c.who} (${tmName})${c.reason ? ` — ${c.reason}` : ''}`, tone: 'card' as const } };
+      }),
+      ...(r.subs || []).map((sb) => {
+        const tmName = sb.t === H.id ? H.name : A.name;
+        return {
+          m: sb.m,
+          item: {
+            m: sb.m,
+            text: `🔄 นาที ${sb.m}' เปลี่ยนตัว (${tmName}): 🔼 เข้า ${sb.inPlayer} · 🔽 ออก ${sb.outPlayer}`,
+            tone: 'sub' as const,
+            subInfo: { teamId: sb.t, inName: sb.inPlayer, outName: sb.outPlayer }
+          }
+        };
+      })
+    ]
+      .sort((u, v) => v.m - u.m)
+      .map((x) => x.item),
+    { m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${H.name} พบ ${A.name}`, tone: 'sys' }
+  ];
+
   return {
     gh: r.gh,
     ga: r.ga,
     evs: r.evs,
-    xgH: r.xgH || 1.1,
-    xgA: r.xgA || 1.0,
+    xgH: xgHVal,
+    xgA: xgAVal,
+    possH,
+    shotsH,
+    shotsA,
+    onTargetH,
+    onTargetA,
+    passesH,
+    passesA,
     att: attInfo.att,
     cap: attInfo.cap,
     streamViewers: streamProj.baseViewers,
@@ -7193,6 +7247,7 @@ export function simulateInstantMatchPayload(
     subs: r.subs || [],
     playedNames: r.playedNames || {},
     playedSlots: r.playedSlots || {},
-    playerActions
+    playerActions,
+    logs: simLogs
   };
 }

@@ -13,11 +13,12 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
 import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
+import { useScrollTopOnChange } from '../utils/scrollReset';
 
 type TimelineKind =
   | 'kickoff'
@@ -939,6 +940,16 @@ export const MatchModal: React.FC<{
   const [done, setDone] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const leftStageScrollRef = useRef<HTMLDivElement | null>(null);
+  const rightStageScrollRef = useRef<HTMLDivElement | null>(null);
+  const ftPlayersScrollRef = useRef<HTMLDivElement | null>(null);
+  const rightChatScrollRef = useRef<HTMLDivElement | null>(null);
+  const rightTacticsScrollRef = useRef<HTMLDivElement | null>(null);
+  useScrollTopOnChange(leftStageScrollRef, [done, matchPhaseUi === 'halftime'], { includeAncestors: false });
+  useScrollTopOnChange(rightStageScrollRef, [mlandMatchTab, done, matchPhaseUi], { includeAncestors: false });
+  useScrollTopOnChange(ftPlayersScrollRef, [mlandMatchTab, ftRosterTeam, done], { includeAncestors: false });
+  useScrollTopOnChange(rightChatScrollRef, [mlandMatchTab, done], { includeAncestors: false });
+  useScrollTopOnChange(rightTacticsScrollRef, [mlandMatchTab, matchPhaseUi], { includeAncestors: false });
   const triggeredRulesRef = useRef<number[]>([]);
   const lastGoalSoundMsRef = useRef(0);
   const alertLoggedRef = useRef<Set<string>>(new Set());
@@ -5380,7 +5391,7 @@ export const MatchModal: React.FC<{
           const overturn = inBoxNow ? Math.random() < 0.22 : Math.random() < 0.45;
           const willAwardPen = !overturn;
           const gkPen = defPool.find((d) => !d.sentOff && d.pos === 'GK');
-          const boxLineX = attRight ? 83 : 17;
+          const boxLineX = attRight ? 83.5 : 16.5;
           const penRoll = Math.random();
           const penScenario: 'box_edge_foul' | 'handball_box' | 'gk_clash_box' =
             penRoll < 0.28 && distToGoal < 16
@@ -5392,8 +5403,8 @@ export const MatchModal: React.FC<{
             penScenario === 'gk_clash_box'
               ? attRight ? clamp(carrier.x, 89.5, 95.5) : clamp(carrier.x, 4.5, 10.5)
               : willAwardPen
-                ? attRight ? clamp(carrier.x, 84.5, 93.5) : clamp(carrier.x, 6.5, 15.5)
-                : attRight ? clamp(Math.min(carrier.x, 81.4), 76.5, 81.6) : clamp(Math.max(carrier.x, 18.6), 18.4, 23.5);
+                ? attRight ? clamp(carrier.x, 84.6, 94.0) : clamp(carrier.x, 6.0, 15.4)
+                : attRight ? clamp(Math.min(carrier.x, 82.0), 76.5, 82.4) : clamp(Math.max(carrier.x, 18.0), 17.6, 23.5);
           const replayIncidentY = penScenario === 'gk_clash_box' ? clamp(carrier.y, 38, 62) : clamp(carrier.y, 26, 74);
           const penReason =
             penScenario === 'handball_box'
@@ -5433,9 +5444,12 @@ export const MatchModal: React.FC<{
               defNo: nearestDef.no,
               defRole: nearestDef.role,
               defVis: nearestDef.vis,
+              defY: nearestDef.y,
               gkNo: gkPen?.no,
               gkRole: gkPen?.role || 'GK',
               gkVis: gkPen?.vis,
+              gkX: gkPen?.x,
+              gkY: gkPen?.y,
               passFromX: clamp(replayIncidentX + (attRight ? -7.5 : 7.5), 4, 96),
               passFromY: clamp(replayIncidentY + (replayIncidentY < 50 ? 8.5 : -8.5), 14, 86),
               incidentX: replayIncidentX,
@@ -5510,9 +5524,12 @@ export const MatchModal: React.FC<{
               defNo: nearestDef.no,
               defRole: nearestDef.role,
               defVis: nearestDef.vis,
+              defY: nearestDef.y,
               gkNo: gkFoul?.no,
               gkRole: gkFoul?.role || 'GK',
               gkVis: gkFoul?.vis,
+              gkX: gkFoul?.x,
+              gkY: gkFoul?.y,
               passerNo: supMfFoul?.no,
               passerRole: supMfFoul?.role,
               passerVis: supMfFoul?.vis,
@@ -6982,7 +6999,7 @@ export const MatchModal: React.FC<{
           if (vr.side === 'H') w.offsidesH++;
           else w.offsidesA++;
         }
-        const offX = isAttackRight(w, vr.side) ? 84 : 16;
+        const offX = clamp(vr.replay?.incidentX ?? vr.replay?.defLineX ?? (isAttackRight(w, vr.side) ? 84 : 16), 8, 92);
         addWorldFx(w, {
           type: 'offside',
           x: offX,
@@ -7141,7 +7158,7 @@ export const MatchModal: React.FC<{
       SFX.var();
       if (vr.side === 'H') w.freeKicksH++;
       else w.freeKicksA++;
-      const edgeX = penRightVar ? 80.5 : 19.5;
+      const edgeX = penRightVar ? 81.8 : 18.2;
       const edgeGoalX = penRightVar ? 100 : 0;
       const edgeAng = Math.atan2(50 - vr.y, edgeGoalX - edgeX);
       const edgeWall: { x: number; y: number }[] = [];
@@ -7952,7 +7969,7 @@ export const MatchModal: React.FC<{
             .slice()
             .sort((a, d2) => (attRightNow ? d2.x - a.x : a.x - d2.x));
           const lastDef = sortedOutfieldDefs[0] || defPool[0];
-          const baseShotY = shooter?.y ?? b.fromY;
+          const baseShotY = goalScenario === 'goal_line_tech' ? clamp(b.toY, 43.2, 56.8) : (shooter?.y ?? b.fromY);
           const rawDefLineX = lastDef
             ? attRightNow
               ? clamp(lastDef.x, 73, 92.5)
@@ -7964,7 +7981,7 @@ export const MatchModal: React.FC<{
           const goalLineMm = Math.round(8 + Math.random() * 44);
           const replayAttX =
             goalScenario === 'goal_line_tech'
-              ? attRightNow ? 91.5 : 8.5
+              ? attRightNow ? clamp(shooter?.x ?? b.fromX, 78, 95.5) : clamp(shooter?.x ?? b.fromX, 4.5, 22)
               : goalScenario === 'foul_buildup'
                 ? attRightNow ? clamp(rawDefLineX - 1.5, 72, 89) : clamp(rawDefLineX + 1.5, 11, 28)
                 : overturn
@@ -7974,15 +7991,28 @@ export const MatchModal: React.FC<{
                   : attRightNow
                     ? clamp(rawDefLineX - 1.9, 71, 91.5)
                     : clamp(rawDefLineX + 1.9, 8.5, 29);
-          const replayAttY = goalScenario === 'goal_line_tech' ? clamp(baseShotY, 43, 57) : clamp(baseShotY, 26, 74);
+          const replayAttY =
+            goalScenario === 'goal_line_tech'
+              ? clamp(shooter?.y ?? b.fromY, 34, 66)
+              : clamp(baseShotY, 26, 74);
+          const passerAg = assisterName
+            ? attPool.find((a) => a.id === assisterName)
+            : attPool.find((a) => !a.sentOff && a.id !== scorerName && a.pos === 'MF');
+          const supDefAg = sortedOutfieldDefs[1];
           const passerX =
             goalScenario === 'goal_line_tech'
-              ? attRightNow ? 91.5 : 8.5
-              : clamp(replayAttX + (attRightNow ? -11 : 11), 28, 72);
+              ? replayAttX
+              : goalScenario === 'offside_line' && passerAg
+                ? attRightNow
+                  ? clamp(passerAg.x, 28, Math.max(28, replayAttX - 6))
+                  : clamp(passerAg.x, Math.min(72, replayAttX + 6), 72)
+                : clamp(replayAttX + (attRightNow ? -11 : 11), 28, 72);
           const passerY =
             goalScenario === 'goal_line_tech'
-              ? clamp(replayAttY + (replayAttY < 50 ? 3.5 : -3.5), 41, 59)
-              : clamp(replayAttY + (replayAttY < 50 ? 9 : -9), 18, 82);
+              ? replayAttY
+              : goalScenario === 'offside_line' && passerAg
+                ? clamp(passerAg.y, 14, 86)
+                : clamp(replayAttY + (replayAttY < 50 ? 9 : -9), 18, 82);
 
           const goalReason =
             goalScenario === 'goal_line_tech'
@@ -8003,10 +8033,6 @@ export const MatchModal: React.FC<{
                 ? `🖥 บอลเข้าประตูไปแล้ว แต่ VAR เรียกเช็กจังหวะปะทะก่อนยิงของ ${scorerName}!`
                 : `🖥 บอลตุงตาข่ายแล้ว แต่ VAR เรียกเช็กจังหวะล้ำหน้าของ ${scorerName}!`;
 
-          const passerAg = assisterName
-            ? attPool.find((a) => a.id === assisterName)
-            : attPool.find((a) => !a.sentOff && a.id !== scorerName && a.pos === 'MF');
-          const supDefAg = sortedOutfieldDefs[1];
           w.varReview = {
             kind: 'goal',
             side,
@@ -8033,9 +8059,12 @@ export const MatchModal: React.FC<{
               defNo: lastDef?.no ?? 4,
               defRole: lastDef?.role,
               defVis: lastDef?.vis,
+              defY: lastDef?.y,
               gkNo: gk?.no ?? 1,
               gkRole: gk?.role || 'GK',
               gkVis: gk?.vis,
+              gkX: gk?.x,
+              gkY: gk?.y,
               passerNo: passerAg?.no,
               passerRole: passerAg?.role,
               passerVis: passerAg?.vis,
@@ -8046,6 +8075,7 @@ export const MatchModal: React.FC<{
               passFromY: passerY,
               incidentX: replayAttX,
               incidentY: replayAttY,
+              shotTargetY: clamp(b.toY, 43.2, 56.8),
               defLineX: rawDefLineX,
               offsideMarginCm: marginCm,
               goalLineMm
@@ -11260,6 +11290,23 @@ export const MatchModal: React.FC<{
         headers: st.headers || 0
       };
     });
+    const compactLogs: ArchivedMatchLog[] = logs.map((l) => ({
+      m: l.m,
+      text: l.text,
+      tone: l.tone,
+      ...(l.varReplayId ? { varReplayId: l.varReplayId } : {}),
+      ...(l.subInfo
+        ? {
+            subInfo: {
+              teamId: l.subInfo.teamId,
+              inName: l.subInfo.inName,
+              outName: l.subInfo.outName,
+              ...(l.subInfo.badge ? { badge: l.subInfo.badge } : {}),
+              ...(l.subInfo.isInjury ? { isInjury: l.subInfo.isInjury } : {})
+            }
+          }
+        : {})
+    }));
     SFX.tap();
     onFinish({
       gh: srDone.gh,
@@ -11267,6 +11314,13 @@ export const MatchModal: React.FC<{
       evs: srDone.evs,
       xgH: fullTimeAnalysis.xgH,
       xgA: fullTimeAnalysis.xgA,
+      possH: matchStats.possH,
+      shotsH: matchStats.shotsH,
+      shotsA: matchStats.shotsA,
+      onTargetH: matchStats.onTargetH,
+      onTargetA: matchStats.onTargetA,
+      passesH: matchStats.passesH,
+      passesA: matchStats.passesA,
       att: matchAttendance.att,
       cap: matchAttendance.cap,
       streamViewers: liveViewersRef.current,
@@ -11283,6 +11337,7 @@ export const MatchModal: React.FC<{
       playedNames: fullTimeAnalysis.playedNames,
       injuries: srDone.injuries.slice(),
       playerActions,
+      logs: compactLogs,
       ...(srDone.varHistory.length ? { varReplays: srDone.varHistory.slice() } : {})
     });
   };
@@ -11555,17 +11610,6 @@ export const MatchModal: React.FC<{
                             <span className="truncate">{shortWho}</span>
                           </div>
                           <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center justify-end gap-1">
-                            {item.varReplayId && (
-                              <button
-                                type="button"
-                                onClick={() => openVarReplayById(item.varReplayId!)}
-                                className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded bg-sky-500/15 hover:bg-sky-500/28 border border-sky-400/45 text-sky-700 dark:text-sky-300 font-extrabold cursor-pointer shrink-0"
-                                title="ดูภาพช้า VAR ย้อนหลัง"
-                              >
-                                <span>🖥</span>
-                                <span>ดูซ้ำ</span>
-                              </button>
-                            )}
                             {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
                             <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
                           </div>
@@ -11624,17 +11668,6 @@ export const MatchModal: React.FC<{
                           <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
                             {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
                             <span className={`truncate ${item.kind === 'sub' ? 'text-[var(--red)] font-semibold' : ''}`}>{subText}</span>
-                            {item.varReplayId && (
-                              <button
-                                type="button"
-                                onClick={() => openVarReplayById(item.varReplayId!)}
-                                className="inline-flex items-center gap-0.5 px-1 py-[1px] rounded bg-sky-500/15 hover:bg-sky-500/28 border border-sky-400/45 text-sky-700 dark:text-sky-300 font-extrabold cursor-pointer shrink-0"
-                                title="ดูภาพช้า VAR ย้อนหลัง"
-                              >
-                                <span>🖥</span>
-                                <span>ดูซ้ำ</span>
-                              </button>
-                            )}
                           </div>
                         </div>
                       </>
@@ -11786,7 +11819,7 @@ export const MatchModal: React.FC<{
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/55">
+        <div ref={ftPlayersScrollRef} className="flex-1 min-h-0 overflow-y-auto divide-y divide-[var(--line)]/55">
           {entries.map((item) => {
             const isPicked = ftPickedPlayer === item.name;
             const hasHighlight = item.goals > 0 || item.assists > 0 || item.cleanSheet || item.isMotm || item.saves > 0;
@@ -12575,7 +12608,7 @@ export const MatchModal: React.FC<{
           ) : (
             <div className="grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
             {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + Events Feed Below */}
-            <div className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
+            <div ref={leftStageScrollRef} className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
               {!(done && fullTimeAnalysis) ? (
                 <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
 
@@ -13739,57 +13772,6 @@ export const MatchModal: React.FC<{
                       </div>
                     );
                   })()}
-                  {varHistory.length > 0 && (eventFilter === 'all' || eventFilter === 'card') && (
-                    <div className="rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
-                      <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-sky-700 dark:text-sky-300">
-                          <span>🖥</span>
-                          <span>ภาพช้า VAR ({varHistory.length})</span>
-                        </span>
-                        <span className="text-[9.5px] mland:text-[8px] font-semibold text-[var(--mut)]">
-                          กดดูรีเพลย์ได้
-                        </span>
-                      </div>
-                      <div className="divide-y divide-[var(--line)]/55">
-                        {varHistory.map((rec) => {
-                          const toneCls =
-                            rec.verdictTone === 'goal'
-                              ? 'bg-emerald-500/16 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
-                              : rec.verdictTone === 'no_goal' || rec.verdictTone === 'penalty' || rec.verdictTone === 'red'
-                                ? 'bg-rose-500/16 border-rose-500/40 text-rose-700 dark:text-rose-300'
-                                : rec.verdictTone === 'freekick'
-                                  ? 'bg-sky-500/16 border-sky-500/40 text-sky-700 dark:text-sky-300'
-                                  : 'bg-amber-500/16 border-amber-500/40 text-amber-700 dark:text-amber-300';
-                          return (
-                            <button
-                              key={rec.id}
-                              type="button"
-                              onClick={() => openVarReplayById(rec.id)}
-                              className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 hover:bg-sky-500/10 transition-colors flex items-center justify-between gap-2 cursor-pointer"
-                              title={rec.varState.reasonText}
-                            >
-                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                <span className="min-w-[28px] h-5 px-1 rounded-md bg-sky-500/18 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0">
-                                  {rec.minute}&apos;
-                                </span>
-                                <span className="text-[10.5px] mland:text-[9px] font-semibold text-[var(--ink)] truncate">
-                                  {rec.varState.reasonText}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className={`px-1.5 py-0.5 rounded-md border text-[9.5px] mland:text-[8px] font-extrabold whitespace-nowrap ${toneCls}`}>
-                                  {rec.verdictShort}
-                                </span>
-                                <span className="px-1.5 py-0.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-300 text-[9.5px] mland:text-[8px] font-extrabold whitespace-nowrap">
-                                  ▶ ดูซ้ำ
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
                   {eventFilter === 'sub' ? (
                     subLog.length === 0 ? (
@@ -13829,7 +13811,7 @@ export const MatchModal: React.FC<{
                   ) : (() => {
                     const filteredLogs = logs.filter((l) => {
                       if (eventFilter === 'goal') return l.tone === 'goal';
-                      if (eventFilter === 'card') return l.tone === 'card' || l.text.includes('VAR') || l.text.includes('จุดโทษ');
+                      if (eventFilter === 'card') return Boolean(l.varReplayId) || l.tone === 'card' || l.text.includes('VAR') || l.text.includes('จุดโทษ');
                       return true;
                     });
                     if (!filteredLogs.length) {
@@ -14042,7 +14024,7 @@ export const MatchModal: React.FC<{
                           </div>
                         </div>
 
-                        <div className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
+                        <div ref={rightTacticsScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
                           {matchPhaseUi === 'halftime' && (
                             <div className="rounded-xl mland:rounded-lg bg-amber-500/10 border border-amber-500/40 p-2.5 mland:p-2 space-y-1.5 mland:space-y-1">
                               <div className="flex items-center justify-between gap-2">
@@ -14276,7 +14258,7 @@ export const MatchModal: React.FC<{
                         </div>
 
                         {/* Live Chat Messages Stream */}
-                        <div className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
+                        <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
                           {liveComments.map((cm) => (
                             <div
                               key={cm.id}
@@ -14321,7 +14303,7 @@ export const MatchModal: React.FC<{
                     );
                   })()
                 ) : (
-                  <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
+                  <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
                     {/* Compact Live Stream Ticker Strip (always visible alongside stats) */}
                     <button
                       type="button"
