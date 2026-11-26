@@ -1,4 +1,4 @@
-import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId } from '../types/game';
+import type { Team, PlayerCareerProfile, LivePitchAgent, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, CoachOutfitId, VarReviewState } from '../types/game';
 import { COACH_OUTFITS } from '../data/thaiFootballData';
 import { getTurfGradeSpec } from '../data/crestAndKitData';
 import { clamp } from '../utils/math';
@@ -142,6 +142,649 @@ const measureTextCached = (ctx: CanvasRenderingContext2D, text: string): number 
   }
   TEXT_WIDTH_CACHE.set(key, w);
   return w;
+};
+
+const renderVarMonitorPanel = (
+  ctx: CanvasRenderingContext2D,
+  vr: VarReviewState,
+  pct: number,
+  monX: number,
+  monY: number,
+  monW: number,
+  monH: number,
+  pitchAspect: number,
+  homeKit: string,
+  awayKit: string,
+  homeGkKit: string,
+  awayGkKit: string,
+  homeTrim: string,
+  awayTrim: string,
+  isStandalone = false
+) => {
+  const rep = vr.replay;
+  const accent = vr.kind === 'foul_card' ? '#f59e0b' : '#38bdf8';
+  const verdictPositiveForCall =
+    vr.kind === 'goal'
+      ? !vr.overturn
+      : vr.kind === 'penalty'
+        ? !vr.overturn
+        : vr.pendingCardUpgrade !== 'R';
+  const verdictColor =
+    vr.kind === 'goal'
+      ? vr.overturn
+        ? '#ef4444'
+        : '#22c55e'
+      : vr.kind === 'penalty'
+        ? vr.overturn
+          ? '#38bdf8'
+          : '#ef4444'
+        : vr.pendingCardUpgrade === 'R'
+          ? '#ef4444'
+          : '#facc15';
+  const showVerdict = pct >= 0.72;
+  const frameAccent = showVerdict ? verdictColor : accent;
+  const smallText = !isStandalone && monW < 185;
+
+  ctx.save();
+  if (!isStandalone) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.beginPath();
+    ctx.roundRect(monX + 2, monY + 3, monW, monH, 9);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = 'rgba(8, 14, 26, 0.98)';
+  ctx.strokeStyle = frameAccent;
+  ctx.lineWidth = isStandalone ? 2.2 : 1.8;
+  ctx.beginPath();
+  ctx.roundRect(monX, monY, monW, monH, isStandalone ? 12 : 9);
+  ctx.fill();
+  ctx.stroke();
+
+  const hdrH = isStandalone ? clamp(monH * 0.105, 22, 28) : smallText ? 15 : 17;
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.98)';
+  ctx.beginPath();
+  ctx.roundRect(monX + 1.5, monY + 1.5, monW - 3, hdrH, isStandalone ? [10, 10, 0, 0] : [7.5, 7.5, 0, 0]);
+  ctx.fill();
+
+  const recBlink = pct < 0.72 ? 0.55 + 0.45 * Math.sin(pct * Math.PI * 14) : 1;
+  ctx.fillStyle = showVerdict ? frameAccent : `rgba(239, 68, 68, ${recBlink.toFixed(2)})`;
+  ctx.beginPath();
+  ctx.arc(monX + (isStandalone ? 13 : 9), monY + hdrH / 2 + 0.5, isStandalone ? 3.5 : 2.6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = `800 ${isStandalone ? 11.5 : smallText ? 7.5 : 8.5}px Sarabun, sans-serif`;
+  ctx.fillText(isStandalone ? '🖥 จอภาพช้า VAR · รีเพลย์มุมซูม' : 'จอภาพช้า VAR', monX + (isStandalone ? 22 : 15), monY + hdrH / 2 + 0.8);
+
+  const statusTag = showVerdict
+    ? verdictPositiveForCall && vr.kind === 'goal'
+      ? 'ยืนยันประตู'
+      : vr.kind === 'goal'
+        ? 'ล้ำหน้า!'
+        : vr.kind === 'penalty'
+          ? vr.overturn
+            ? 'นอกเขตโทษ'
+            : 'จุดโทษ!'
+          : vr.pendingCardUpgrade === 'R'
+            ? 'ใบแดง!'
+            : 'ใบเหลือง'
+    : pct >= 0.48
+      ? 'หยุดภาพตรวจจุด'
+      : 'สโลว์โมชัน';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = frameAccent;
+  ctx.font = `800 ${isStandalone ? 11 : smallText ? 7.2 : 8}px Sarabun, sans-serif`;
+  ctx.fillText(statusTag, monX + monW - (isStandalone ? 11 : 7), monY + hdrH / 2 + 0.8);
+
+  const scrPad = isStandalone ? 5 : 3.5;
+  const scrX = monX + scrPad;
+  const scrY = monY + hdrH + 2;
+  const scrW = monW - scrPad * 2;
+  const scrH = monH - hdrH - scrPad - 2;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(scrX, scrY, scrW, scrH, isStandalone ? 8 : 5.5);
+  ctx.clip();
+
+  const attRight = rep?.attRight ?? (vr.x >= 50);
+  const attSide = vr.side;
+  const defSide: 'H' | 'A' = attSide === 'H' ? 'A' : 'H';
+  const attKit = attSide === 'H' ? homeKit : awayKit;
+  const attTrim = attSide === 'H' ? homeTrim : awayTrim;
+  const defKit = defSide === 'H' ? homeKit : awayKit;
+  const defTrim = defSide === 'H' ? homeTrim : awayTrim;
+  const defGkKit = defSide === 'H' ? homeGkKit : awayGkKit;
+
+  let camCenterX = rep?.incidentX ?? vr.x;
+  let camCenterY = rep?.incidentY ?? 50;
+  let spanX = 28;
+  if (vr.kind === 'goal') {
+    camCenterX = attRight ? 88 : 12;
+    camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
+    spanX = 30;
+  } else if (vr.kind === 'penalty') {
+    const boxEdge = attRight ? 83 : 17;
+    camCenterX = attRight ? clamp(boxEdge + 2, 78, 92) : clamp(boxEdge - 2, 8, 22);
+    camCenterY = clamp(rep?.incidentY ?? 50, 26, 74);
+    spanX = 24;
+  } else {
+    camCenterX = clamp(rep?.incidentX ?? vr.x, 12, 88);
+    camCenterY = clamp(rep?.incidentY ?? vr.y, 16, 84);
+    spanX = 21;
+  }
+  const spanY = spanX * (scrH / Math.max(1, scrW)) * pitchAspect;
+  const minFX = camCenterX - spanX / 2;
+  const minFY = camCenterY - spanY / 2;
+  const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
+  const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
+
+  ctx.fillStyle = '#0f3823';
+  ctx.fillRect(scrX, scrY, scrW, scrH);
+  const stripeStep = 5.5;
+  const firstStripe = Math.floor(minFX / stripeStep) * stripeStep;
+  for (let sx = firstStripe; sx < minFX + spanX + stripeStep; sx += stripeStep * 2) {
+    const rx0 = mx(sx);
+    const rx1 = mx(sx + stripeStep);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.045)';
+    ctx.fillRect(rx0, scrY, rx1 - rx0, scrH);
+  }
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
+  ctx.lineWidth = isStandalone ? 1.8 : 1.25;
+  ctx.strokeRect(mx(0), my(0), mx(100) - mx(0), my(100) - my(0));
+  ctx.beginPath();
+  ctx.moveTo(mx(50), my(0));
+  ctx.lineTo(mx(50), my(100));
+  ctx.stroke();
+
+  const boxLineHighlight = vr.kind === 'penalty' && pct >= 0.36;
+  ctx.save();
+  if (boxLineHighlight && attRight) {
+    ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
+    ctx.lineWidth = isStandalone ? 3.2 : 2.2;
+  }
+  ctx.strokeRect(mx(83), my(21), mx(100) - mx(83), my(79) - my(21));
+  ctx.restore();
+  ctx.strokeRect(mx(94.5), my(36.5), mx(100) - mx(94.5), my(63.5) - my(36.5));
+
+  ctx.save();
+  if (boxLineHighlight && !attRight) {
+    ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
+    ctx.lineWidth = isStandalone ? 3.2 : 2.2;
+  }
+  ctx.strokeRect(mx(0), my(21), mx(17) - mx(0), my(79) - my(21));
+  ctx.restore();
+  ctx.strokeRect(mx(0), my(36.5), mx(5.5) - mx(0), my(63.5) - my(36.5));
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.beginPath();
+  ctx.arc(mx(88.5), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
+  ctx.arc(mx(11.5), my(50), isStandalone ? 2.8 : 1.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  const mGoalD = Math.max(4, mx(100) - mx(97.2));
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = isStandalone ? 2 : 1.5;
+  if (attRight) {
+    ctx.fillRect(mx(100), my(42), mGoalD, my(58) - my(42));
+    ctx.strokeRect(mx(100), my(42), mGoalD, my(58) - my(42));
+  } else {
+    ctx.fillRect(mx(0) - mGoalD, my(42), mGoalD, my(58) - my(42));
+    ctx.strokeRect(mx(0) - mGoalD, my(42), mGoalD, my(58) - my(42));
+  }
+
+  const drawMiniAgent = (
+    fx: number,
+    fy: number,
+    kit: string,
+    trim: string,
+    no: number,
+    shortName: string,
+    vis?: number[],
+    ringColor?: string,
+    labelColor = '#f8fafc'
+  ) => {
+    const x = mx(fx);
+    const y = my(fy);
+    const r = isStandalone ? clamp(scrH * 0.078, 9, 14) : clamp(scrH * 0.082, 5.8, 8.2);
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + r * 0.85, r * 0.88, r * 0.34, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = kit;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    const faceC = vis ? getPitchFaceCanvas(vis, kit, trim) : null;
+    if (faceC) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(1, r - 0.6), 0, Math.PI * 2);
+      ctx.clip();
+      const fw = r * 2.1;
+      const fh = (fw * 68) / 64;
+      ctx.drawImage(faceC, x - fw / 2, y - fh * 0.45, fw, fh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
+      ctx.font = `800 ${Math.round(r * 1.05)}px Sarabun, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(no), x, y + 0.3);
+    }
+
+    ctx.strokeStyle = ringColor || '#ffffff';
+    ctx.lineWidth = ringColor ? (isStandalone ? 2.4 : 1.8) : isStandalone ? 1.5 : 1.1;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    if (shortName) {
+      const fSize = isStandalone ? 10 : smallText ? 6.5 : 7.2;
+      const pillH = isStandalone ? 13 : 8.5;
+      ctx.font = `700 ${fSize}px Sarabun, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(6, 12, 22, 0.84)';
+      const lbl = `#${no} ${shortName}`;
+      const lw = measureTextCached(ctx, lbl) + (isStandalone ? 9 : 5);
+      ctx.beginPath();
+      ctx.roundRect(x - lw / 2, y + r + 2, lw, pillH, 3);
+      ctx.fill();
+      ctx.fillStyle = labelColor;
+      ctx.fillText(lbl, x, y + r + 2 + pillH / 2 + 0.3);
+    }
+    ctx.restore();
+  };
+
+  const rawPlayT = clamp(pct / 0.48, 0, 1);
+  const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
+
+  if (vr.kind === 'goal') {
+    const incX = rep?.incidentX ?? (attRight ? 86 : 14);
+    const incY = rep?.incidentY ?? 48;
+    const defLineX = rep?.defLineX ?? (attRight ? 84 : 16);
+    const dirSign = attRight ? 1 : -1;
+    const attXNow = incX - dirSign * (1 - playT) * 5.8;
+    const attYNow = incY + (1 - playT) * 2.2;
+    const defXNow = defLineX + dirSign * (1 - playT) * 1.6;
+    const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
+
+    const gkX = attRight ? 97.2 : 2.8;
+    const gkY = clamp(50 + (incY - 50) * 0.28, 43, 57);
+    drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+
+    const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
+    const passStartY = rep?.passFromY ?? clamp(incY + 7, 22, 78);
+    const bxNow = passStartX + (attXNow - passStartX) * clamp(playT * 1.05, 0, 1);
+    const byNow = passStartY + (attYNow - passStartY) * clamp(playT * 1.05, 0, 1);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.48)';
+    ctx.lineWidth = isStandalone ? 1.6 : 1.1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(mx(passStartX), my(passStartY));
+    ctx.lineTo(mx(incX), my(incY));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    if (pct >= 0.36) {
+      const lineAlpha = clamp((pct - 0.36) / 0.12, 0, 1);
+      const defScreenX = mx(defLineX);
+      const attScreenX = mx(incX);
+      const offsideClr = vr.overturn ? '#ef4444' : '#22c55e';
+
+      ctx.save();
+      ctx.globalAlpha = lineAlpha;
+      ctx.fillStyle = vr.overturn ? 'rgba(239, 68, 68, 0.22)' : 'rgba(34, 197, 94, 0.2)';
+      const bandX = Math.min(defScreenX, attScreenX);
+      const bandW = Math.max(2, Math.abs(attScreenX - defScreenX));
+      ctx.fillRect(bandX, scrY, bandW, scrH);
+
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = isStandalone ? 2.6 : 1.8;
+      ctx.beginPath();
+      ctx.moveTo(defScreenX, scrY);
+      ctx.lineTo(defScreenX, scrY + scrH);
+      ctx.stroke();
+
+      ctx.strokeStyle = offsideClr;
+      ctx.lineWidth = isStandalone ? 2.6 : 1.8;
+      ctx.setLineDash([5, 3]);
+      ctx.beginPath();
+      ctx.moveTo(attScreenX, scrY);
+      ctx.lineTo(attScreenX, scrY + scrH);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const cm = rep?.offsideMarginCm ?? 18;
+      const calText = vr.overturn ? `ล้ำหน้า +${cm} ซม.` : `ไม่ล้ำหน้า (${cm} ซม.)`;
+      ctx.font = `800 ${isStandalone ? 10.5 : smallText ? 7 : 7.8}px Sarabun, sans-serif`;
+      const calW = measureTextCached(ctx, calText) + (isStandalone ? 14 : 8);
+      const calH = isStandalone ? 18 : 12;
+      const calX = clamp((defScreenX + attScreenX) / 2, scrX + calW / 2 + 6, scrX + scrW - calW / 2 - 6);
+      ctx.fillStyle = 'rgba(8, 15, 28, 0.92)';
+      ctx.strokeStyle = offsideClr;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(calX - calW / 2, scrY + 6, calW, calH, 4);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = offsideClr;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(calText, calX, scrY + 6 + calH / 2 + 0.3);
+      ctx.restore();
+    }
+
+    drawMiniAgent(
+      defXNow,
+      defYNow,
+      defKit,
+      defTrim,
+      rep?.defNo ?? 4,
+      rep?.defShort || 'กองหลัง',
+      rep?.defVis,
+      pct >= 0.36 ? '#3b82f6' : undefined,
+      '#93c5fd'
+    );
+    drawMiniAgent(
+      attXNow,
+      attYNow,
+      attKit,
+      attTrim,
+      rep?.attNo ?? 9,
+      rep?.attShort || vr.shooterShort || 'ผู้ยิง',
+      rep?.attVis,
+      pct >= 0.36 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
+      pct >= 0.36 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
+    );
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(mx(bxNow), my(byNow), isStandalone ? 4.4 : 3.1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else if (vr.kind === 'penalty') {
+    const incX = rep?.incidentX ?? (attRight ? 86 : 14);
+    const incY = rep?.incidentY ?? 48;
+    const boxLineX = rep?.defLineX ?? (attRight ? 83 : 17);
+    const inBox = rep?.inBox ?? !vr.overturn;
+    const dirSign = attRight ? 1 : -1;
+
+    const attXNow = incX - dirSign * (1 - playT) * 4.2;
+    const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
+    const defXNow = incX + dirSign * (1.2 - playT * 0.4);
+    const defYNow = incY + (1 - playT) * (incY < 50 ? 4.8 : -4.8) + (incY < 50 ? 1.0 : -1.0);
+
+    drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
+
+    ctx.save();
+    const bxScreen = mx(boxLineX);
+    ctx.font = `700 ${isStandalone ? 10 : smallText ? 6.5 : 7.2}px Sarabun, sans-serif`;
+    const edgeLbl = 'เส้นเขตโทษ';
+    const elw = measureTextCached(ctx, edgeLbl) + (isStandalone ? 12 : 6);
+    const elh = isStandalone ? 17 : 11;
+    ctx.fillStyle = 'rgba(8, 15, 28, 0.86)';
+    ctx.beginPath();
+    ctx.roundRect(clamp(bxScreen - elw / 2, scrX + 4, scrX + scrW - elw - 4), scrY + 6, elw, elh, 3.5);
+    ctx.fill();
+    ctx.fillStyle = '#bae6fd';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(edgeLbl, clamp(bxScreen, scrX + elw / 2 + 4, scrX + scrW - elw / 2 - 4), scrY + 6 + elh / 2 + 0.3);
+    ctx.restore();
+
+    if (pct >= 0.36) {
+      const contactClr = inBox ? '#ef4444' : '#38bdf8';
+      const cX = mx(incX);
+      const cY = my(incY);
+      const ringR = (isStandalone ? 12 : 8) + Math.sin(pct * Math.PI * 10) * 1.8;
+      ctx.save();
+      ctx.strokeStyle = contactClr;
+      ctx.lineWidth = isStandalone ? 2.2 : 1.6;
+      ctx.beginPath();
+      ctx.arc(cX, cY, ringR, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([3, 2.5]);
+      ctx.beginPath();
+      ctx.moveTo(cX, cY);
+      ctx.lineTo(bxScreen, cY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = contactClr;
+      ctx.beginPath();
+      ctx.arc(cX, cY, isStandalone ? 3.5 : 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    drawMiniAgent(
+      attXNow,
+      attYNow,
+      attKit,
+      attTrim,
+      rep?.attNo ?? 10,
+      rep?.attShort || 'ตัวรุก',
+      rep?.attVis,
+      '#facc15',
+      '#fde047'
+    );
+    drawMiniAgent(
+      defXNow,
+      defYNow,
+      defKit,
+      defTrim,
+      rep?.defNo ?? 4,
+      rep?.defShort || vr.culpritShort || 'ตัวสกัด',
+      rep?.defVis,
+      pct >= 0.36 ? '#ef4444' : undefined,
+      '#fca5a5'
+    );
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(mx(attXNow + dirSign * 1.3), my(attYNow - 0.5), isStandalone ? 4.2 : 2.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    const incX = rep?.incidentX ?? vr.x;
+    const incY = rep?.incidentY ?? vr.y;
+    const dirSign = attRight ? 1 : -1;
+
+    const attXNow = incX - dirSign * (1 - playT) * 3.6;
+    const attYNow = incY;
+    const defXNow = incX + dirSign * (1.1 - playT * 0.25);
+    const defYNow = incY + (1 - playT) * 5.2 + 0.9;
+
+    if (playT > 0.25) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+      ctx.lineWidth = isStandalone ? 3.4 : 2.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(mx(incX + dirSign * 0.8), my(incY + 5.8));
+      ctx.lineTo(mx(defXNow), my(defYNow));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    if (pct >= 0.36) {
+      const isRedVerdict = vr.pendingCardUpgrade === 'R';
+      const spotClr = showVerdict ? (isRedVerdict ? '#ef4444' : '#facc15') : '#f59e0b';
+      const cxSpot = mx((attXNow + defXNow) * 0.5);
+      const cySpot = my((attYNow + defYNow) * 0.5);
+      ctx.save();
+      ctx.fillStyle = isRedVerdict && showVerdict ? 'rgba(239, 68, 68, 0.16)' : 'rgba(245, 158, 11, 0.15)';
+      ctx.strokeStyle = spotClr;
+      ctx.lineWidth = isStandalone ? 2.4 : 1.8;
+      ctx.beginPath();
+      ctx.arc(cxSpot, cySpot, (isStandalone ? 21 : 14) + Math.sin(pct * Math.PI * 10) * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    drawMiniAgent(
+      attXNow,
+      attYNow,
+      attKit,
+      attTrim,
+      rep?.attNo ?? 10,
+      rep?.attShort || 'ผู้ถูกสกัด',
+      rep?.attVis,
+      '#ffffff'
+    );
+    drawMiniAgent(
+      defXNow,
+      defYNow,
+      defKit,
+      defTrim,
+      rep?.defNo ?? 5,
+      rep?.defShort || vr.culpritShort || 'ผู้ทำฟาวล์',
+      rep?.defVis,
+      pct >= 0.36 ? '#f59e0b' : undefined,
+      '#fde047'
+    );
+
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#0f172a';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(mx(attXNow + dirSign * 1.4), my(attYNow - 0.6), isStandalone ? 4.2 : 2.9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (pct >= 0.36) {
+      const fTag = rep?.foulKind === 'dogso' ? 'เช็กตัวสุดท้าย (DOGSO)' : 'เช็กจังหวะเปิดปุ่ม / รุนแรง';
+      ctx.font = `700 ${isStandalone ? 10 : smallText ? 6.6 : 7.3}px Sarabun, sans-serif`;
+      const fw = measureTextCached(ctx, fTag) + (isStandalone ? 14 : 8);
+      const fh = isStandalone ? 17 : 11.5;
+      ctx.fillStyle = 'rgba(8, 15, 28, 0.88)';
+      ctx.beginPath();
+      ctx.roundRect(scrX + scrW / 2 - fw / 2, scrY + 6, fw, fh, 3.5);
+      ctx.fill();
+      ctx.fillStyle = '#fcd34d';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(fTag, scrX + scrW / 2, scrY + 6 + fh / 2 + 0.3);
+    }
+  }
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+  ctx.lineWidth = 1;
+  for (let sy = scrY + 3; sy < scrY + scrH; sy += 4) {
+    ctx.beginPath();
+    ctx.moveTo(scrX, sy);
+    ctx.lineTo(scrX + scrW, sy);
+    ctx.stroke();
+  }
+
+  const br = isStandalone ? 10 : 7;
+  const bp = isStandalone ? 8 : 5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
+  ctx.lineWidth = isStandalone ? 1.6 : 1.2;
+  ctx.beginPath();
+  ctx.moveTo(scrX + bp, scrY + bp + br);
+  ctx.lineTo(scrX + bp, scrY + bp);
+  ctx.lineTo(scrX + bp + br, scrY + bp);
+  ctx.moveTo(scrX + scrW - bp - br, scrY + bp);
+  ctx.lineTo(scrX + scrW - bp, scrY + bp);
+  ctx.lineTo(scrX + scrW - bp, scrY + bp + br);
+  ctx.moveTo(scrX + bp, scrY + scrH - bp - br);
+  ctx.lineTo(scrX + bp, scrY + scrH - bp);
+  ctx.lineTo(scrX + bp + br, scrY + scrH - bp);
+  ctx.moveTo(scrX + scrW - bp - br, scrY + scrH - bp);
+  ctx.lineTo(scrX + scrW - bp, scrY + scrH - bp);
+  ctx.lineTo(scrX + scrW - bp, scrY + scrH - bp - br);
+  ctx.stroke();
+
+  if (showVerdict) {
+    const verdictBannerText =
+      vr.kind === 'goal'
+        ? vr.overturn
+          ? '❌ ล้ำหน้า · ริบประตู!'
+          : '✅ ไม่ล้ำหน้า · ให้ประตู!'
+        : vr.kind === 'penalty'
+          ? vr.overturn
+            ? 'นอกกรอบ · ได้ฟรีคิก'
+            : '🚨 ฟาวล์ในเขต · จุดโทษ!'
+          : vr.pendingCardUpgrade === 'R'
+            ? '🟥 ยกระดับเป็นใบแดง!'
+            : '🟨 ให้แค่ใบเหลือง';
+    const vbH = isStandalone ? 24 : smallText ? 15 : 17;
+    ctx.fillStyle = 'rgba(6, 12, 24, 0.93)';
+    ctx.fillRect(scrX, scrY + scrH - vbH, scrW, vbH);
+    ctx.fillStyle = verdictColor;
+    ctx.fillRect(scrX, scrY + scrH - vbH, scrW, 2);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `800 ${isStandalone ? 12 : smallText ? 7.8 : 8.8}px Sarabun, sans-serif`;
+    ctx.fillText(verdictBannerText, scrX + scrW / 2, scrY + scrH - vbH / 2 + 0.5);
+  }
+
+  ctx.restore();
+  ctx.restore();
+};
+
+export const drawVarReplayToCanvas = (
+  canvas: HTMLCanvasElement,
+  vr: VarReviewState,
+  pct: number,
+  homeKit: string,
+  awayKit: string,
+  homeGkKit = '#16a34a',
+  awayGkKit = '#ea580c',
+  homeTrim = '#ffffff',
+  awayTrim = '#ffffff'
+) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const cw = canvas.clientWidth;
+  const ch = canvas.clientHeight;
+  const rect = cw > 0 && ch > 0 ? null : canvas.getBoundingClientRect();
+  const cssW = Math.max(280, Math.round((cw > 0 ? cw : rect?.width) || 480));
+  const cssH = Math.max(160, Math.round((ch > 0 ? ch : rect?.height) || 270));
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const pxW = Math.round(cssW * dpr);
+  const pxH = Math.round(cssH * dpr);
+  if (canvas.width !== pxW || canvas.height !== pxH) {
+    canvas.width = pxW;
+    canvas.height = pxH;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssW, cssH);
+  renderVarMonitorPanel(
+    ctx,
+    vr,
+    clamp(pct, 0, 1),
+    1,
+    1,
+    cssW - 2,
+    cssH - 2,
+    1.95,
+    homeKit,
+    awayKit,
+    homeGkKit,
+    awayGkKit,
+    homeTrim,
+    awayTrim,
+    true
+  );
 };
 
 export const drawLivePitchToCanvas = (
@@ -2826,7 +3469,7 @@ export const drawLivePitchToCanvas = (
           : vr.pendingCardUpgrade === 'R'
             ? '#ef4444'
             : '#facc15';
-    const showVerdict = pct >= 0.76;
+    const showVerdict = pct >= 0.72;
     const frameAccent = showVerdict ? verdictColor : accent;
 
     // 9a. Subtle VAR Incident Spotlight Ring on Main Pitch
@@ -2886,602 +3529,28 @@ export const drawLivePitchToCanvas = (
     ctx.restore();
 
     // 9c. Mini Picture-in-Picture VAR Replay Monitor Screen (placed opposite the incident side)
-    ctx.save();
     const monW = clamp(pw * 0.335, 148, 242);
     const monH = clamp(ph * 0.49, 86, 134);
     const incidentOnRight = (rep?.incidentX ?? vr.x) >= 50;
     const monX = incidentOnRight ? Math.round(padX + 10) : Math.round(padX + pw - monW - 10);
     const monY = Math.round(padY + ph - monH - 8);
-
-    // Monitor drop shadow + housing bezel
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    ctx.beginPath();
-    ctx.roundRect(monX + 2, monY + 3, monW, monH, 9);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(8, 14, 26, 0.96)';
-    ctx.strokeStyle = frameAccent;
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.roundRect(monX, monY, monW, monH, 9);
-    ctx.fill();
-    ctx.stroke();
-
-    // Top Monitor Chrome Strip
-    const hdrH = cssW < 520 ? 15 : 17;
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.98)';
-    ctx.beginPath();
-    ctx.roundRect(monX + 1.5, monY + 1.5, monW - 3, hdrH, [7.5, 7.5, 0, 0]);
-    ctx.fill();
-
-    // Live REC dot & label
-    const recBlink = pct < 0.76 ? 0.55 + 0.45 * Math.sin(pct * Math.PI * 12) : 1;
-    ctx.fillStyle = showVerdict ? frameAccent : `rgba(239, 68, 68, ${recBlink.toFixed(2)})`;
-    ctx.beginPath();
-    ctx.arc(monX + 9, monY + hdrH / 2 + 0.5, 2.6, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = `800 ${cssW < 520 ? 7.5 : 8.5}px Sarabun, sans-serif`;
-    ctx.fillText('จอภาพช้า VAR', monX + 15, monY + hdrH / 2 + 0.8);
-
-    const statusTag = showVerdict
-      ? verdictPositiveForCall && vr.kind === 'goal'
-        ? 'ยืนยันประตู'
-        : vr.kind === 'goal'
-          ? 'ล้ำหน้า!'
-          : vr.kind === 'penalty'
-            ? vr.overturn
-              ? 'นอกเขตโทษ'
-              : 'จุดโทษ!'
-            : vr.pendingCardUpgrade === 'R'
-              ? 'ใบแดง!'
-              : 'ใบเหลือง'
-      : pct >= 0.4
-        ? 'หยุดภาพ'
-        : 'สโลว์โมชัน';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = frameAccent;
-    ctx.font = `800 ${cssW < 520 ? 7.2 : 8}px Sarabun, sans-serif`;
-    ctx.fillText(statusTag, monX + monW - 7, monY + hdrH / 2 + 0.8);
-
-    // Replay Viewport Area
-    const scrPad = 3.5;
-    const scrX = monX + scrPad;
-    const scrY = monY + hdrH + 2;
-    const scrW = monW - scrPad * 2;
-    const scrH = monH - hdrH - scrPad - 2;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.roundRect(scrX, scrY, scrW, scrH, 5.5);
-    ctx.clip();
-
-    // Determine Zoom Camera Window in 0..100 pitch coordinates
-    const attRight = rep?.attRight ?? (vr.x >= 50);
-    const attSide = vr.side;
-    const defSide: 'H' | 'A' = attSide === 'H' ? 'A' : 'H';
-    const attKit = attSide === 'H' ? homeKit : awayKit;
-    const attTrim = attSide === 'H' ? homeTrim : awayTrim;
-    const defKit = defSide === 'H' ? homeKit : awayKit;
-    const defTrim = defSide === 'H' ? homeTrim : awayTrim;
-    const defGkKit = defSide === 'H' ? homeGkKit : awayGkKit;
-
-    let camCenterX = rep?.incidentX ?? vr.x;
-    let camCenterY = rep?.incidentY ?? 50;
-    let spanX = 28;
-    if (vr.kind === 'goal') {
-      camCenterX = attRight ? 88 : 12;
-      camCenterY = clamp(rep?.incidentY ?? 50, 32, 68);
-      spanX = 30;
-    } else if (vr.kind === 'penalty') {
-      const boxEdge = attRight ? 83 : 17;
-      camCenterX = attRight ? clamp(boxEdge + 2, 78, 92) : clamp(boxEdge - 2, 8, 22);
-      camCenterY = clamp(rep?.incidentY ?? 50, 26, 74);
-      spanX = 24;
-    } else {
-      camCenterX = clamp(rep?.incidentX ?? vr.x, 12, 88);
-      camCenterY = clamp(rep?.incidentY ?? vr.y, 16, 84);
-      spanX = 21;
-    }
-    const spanY = spanX * (scrH / Math.max(1, scrW)) * (pw / Math.max(1, ph));
-    const minFX = camCenterX - spanX / 2;
-    const minFY = camCenterY - spanY / 2;
-    const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
-    const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
-
-    // Dark-broadcast turf stripes inside mini monitor
-    ctx.fillStyle = '#0f3823';
-    ctx.fillRect(scrX, scrY, scrW, scrH);
-    const stripeStep = 5.5;
-    const firstStripe = Math.floor(minFX / stripeStep) * stripeStep;
-    for (let sx = firstStripe; sx < minFX + spanX + stripeStep; sx += stripeStep * 2) {
-      const rx0 = mx(sx);
-      const rx1 = mx(sx + stripeStep);
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.045)';
-      ctx.fillRect(rx0, scrY, rx1 - rx0, scrH);
-    }
-
-    // Zoomed Pitch Markings inside Mini Monitor
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
-    ctx.lineWidth = 1.25;
-    // Outer pitch lines
-    ctx.strokeRect(mx(0), my(0), mx(100) - mx(0), my(100) - my(0));
-    // Halfway line
-    ctx.beginPath();
-    ctx.moveTo(mx(50), my(0));
-    ctx.lineTo(mx(50), my(100));
-    ctx.stroke();
-    // Left & Right 18-yard & 6-yard boxes
-    const boxLineHighlight = vr.kind === 'penalty' && pct >= 0.38;
-    // Right Penalty Area (x=83..100, y=21..79)
-    ctx.save();
-    if (boxLineHighlight && attRight) {
-      ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
-      ctx.lineWidth = 2.2;
-    }
-    ctx.strokeRect(mx(83), my(21), mx(100) - mx(83), my(79) - my(21));
-    ctx.restore();
-    ctx.strokeRect(mx(94.5), my(36.5), mx(100) - mx(94.5), my(63.5) - my(36.5));
-    // Left Penalty Area (x=0..17, y=21..79)
-    ctx.save();
-    if (boxLineHighlight && !attRight) {
-      ctx.strokeStyle = showVerdict ? verdictColor : '#38bdf8';
-      ctx.lineWidth = 2.2;
-    }
-    ctx.strokeRect(mx(0), my(21), mx(17) - mx(0), my(79) - my(21));
-    ctx.restore();
-    ctx.strokeRect(mx(0), my(36.5), mx(5.5) - mx(0), my(63.5) - my(36.5));
-
-    // Penalty spots
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.beginPath();
-    ctx.arc(mx(88.5), my(50), 1.8, 0, Math.PI * 2);
-    ctx.arc(mx(11.5), my(50), 1.8, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Goal frames inside monitor
-    const mGoalD = Math.max(4, (mx(100) - mx(97.2)));
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.14)';
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 1.5;
-    if (attRight) {
-      ctx.fillRect(mx(100), my(42), mGoalD, my(58) - my(42));
-      ctx.strokeRect(mx(100), my(42), mGoalD, my(58) - my(42));
-    } else {
-      ctx.fillRect(mx(0) - mGoalD, my(42), mGoalD, my(58) - my(42));
-      ctx.strokeRect(mx(0) - mGoalD, my(42), mGoalD, my(58) - my(42));
-    }
-
-    // Mini Player Renderer
-    const drawMiniAgent = (
-      fx: number,
-      fy: number,
-      kit: string,
-      trim: string,
-      no: number,
-      shortName: string,
-      vis?: number[],
-      ringColor?: string,
-      labelColor = '#f8fafc'
-    ) => {
-      const x = mx(fx);
-      const y = my(fy);
-      const r = clamp(scrH * 0.082, 5.8, 8.2);
-      ctx.save();
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.beginPath();
-      ctx.ellipse(x, y + r * 0.85, r * 0.88, r * 0.34, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = kit;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fill();
-
-      const faceC = vis ? getPitchFaceCanvas(vis, kit, trim) : null;
-      if (faceC) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(x, y, Math.max(1, r - 0.6), 0, Math.PI * 2);
-        ctx.clip();
-        const fw = r * 2.1;
-        const fh = (fw * 68) / 64;
-        ctx.drawImage(faceC, x - fw / 2, y - fh * 0.45, fw, fh);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = colDist(kit, '#ffffff') < 110 ? '#111827' : '#ffffff';
-        ctx.font = `800 ${Math.round(r * 1.05)}px Sarabun, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(no), x, y + 0.3);
-      }
-
-      ctx.strokeStyle = ringColor || '#ffffff';
-      ctx.lineWidth = ringColor ? 1.8 : 1.1;
-      ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.stroke();
-
-      // Compact shirt number + name tag below mini player
-      if (shortName) {
-        ctx.font = `700 ${cssW < 520 ? 6.5 : 7.2}px Sarabun, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = 'rgba(6, 12, 22, 0.8)';
-        const lbl = `#${no} ${shortName}`;
-        const lw = measureTextCached(ctx, lbl) + 5;
-        ctx.beginPath();
-        ctx.roundRect(x - lw / 2, y + r + 1.5, lw, 8.5, 2.5);
-        ctx.fill();
-        ctx.fillStyle = labelColor;
-        ctx.fillText(lbl, x, y + r + 2.2);
-      }
-      ctx.restore();
-    };
-
-    // Slow-motion progress (0..1 up to freeze frame at pct=0.40)
-    const rawPlayT = clamp(pct / 0.4, 0, 1);
-    const playT = 1 - Math.pow(1 - rawPlayT, 2.1);
-
-    if (vr.kind === 'goal') {
-      const incX = rep?.incidentX ?? (attRight ? 86 : 14);
-      const incY = rep?.incidentY ?? 48;
-      const defLineX = rep?.defLineX ?? (attRight ? 84 : 16);
-      const dirSign = attRight ? 1 : -1;
-      // Attacker runs across line up to freeze moment
-      const attXNow = incX - dirSign * (1 - playT) * 5.8;
-      const attYNow = incY + (1 - playT) * 2.2;
-      // Defender steps slightly back/across
-      const defXNow = defLineX + dirSign * (1 - playT) * 1.6;
-      const defYNow = clamp(incY + (incY < 50 ? 4.2 : -4.2), 26, 74);
-
-      // Goalkeeper inside 6-yard area
-      const gkX = attRight ? 97.2 : 2.8;
-      const gkY = clamp(50 + (incY - 50) * 0.28, 43, 57);
-      drawMiniAgent(gkX, gkY, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
-
-      // Animated pass + shot trajectory arrow
-      const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
-      const passStartY = rep?.passFromY ?? clamp(incY + 7, 22, 78);
-      const bxNow = passStartX + (attXNow - passStartX) * clamp(playT * 1.05, 0, 1);
-      const byNow = passStartY + (attYNow - passStartY) * clamp(playT * 1.05, 0, 1);
-
-      ctx.save();
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.48)';
-      ctx.lineWidth = 1.1;
-      ctx.setLineDash([3, 2.5]);
-      ctx.beginPath();
-      ctx.moveTo(mx(passStartX), my(passStartY));
-      ctx.lineTo(mx(incX), my(incY));
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-
-      // VAR Offside Calibration Lines (appear right before freeze frame)
-      if (pct >= 0.32) {
-        const lineAlpha = clamp((pct - 0.32) / 0.14, 0, 1);
-        const defScreenX = mx(defLineX);
-        const attScreenX = mx(incX);
-        const offsideClr = vr.overturn ? '#ef4444' : '#22c55e';
-
-        ctx.save();
-        ctx.globalAlpha = lineAlpha;
-        // Shaded margin strip between defender & attacker lines
-        ctx.fillStyle = vr.overturn ? 'rgba(239, 68, 68, 0.22)' : 'rgba(34, 197, 94, 0.2)';
-        const bandX = Math.min(defScreenX, attScreenX);
-        const bandW = Math.max(1.5, Math.abs(attScreenX - defScreenX));
-        ctx.fillRect(bandX, scrY, bandW, scrH);
-
-        // Blue defender offside line
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.moveTo(defScreenX, scrY);
-        ctx.lineTo(defScreenX, scrY + scrH);
-        ctx.stroke();
-
-        // Red or Green attacker line
-        ctx.strokeStyle = offsideClr;
-        ctx.lineWidth = 1.8;
-        ctx.setLineDash([4, 2.5]);
-        ctx.beginPath();
-        ctx.moveTo(attScreenX, scrY);
-        ctx.lineTo(attScreenX, scrY + scrH);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        // Calibration tag at top of lines
-        const cm = rep?.offsideMarginCm ?? 18;
-        const calText = vr.overturn ? `ล้ำหน้า +${cm} ซม.` : `ไม่ล้ำหน้า (${cm} ซม.)`;
-        ctx.font = `800 ${cssW < 520 ? 7 : 7.8}px Sarabun, sans-serif`;
-        const calW = measureTextCached(ctx, calText) + 8;
-        const calX = clamp((defScreenX + attScreenX) / 2, scrX + calW / 2 + 4, scrX + scrW - calW / 2 - 4);
-        ctx.fillStyle = 'rgba(8, 15, 28, 0.92)';
-        ctx.strokeStyle = offsideClr;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(calX - calW / 2, scrY + 4, calW, 12, 3);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = offsideClr;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(calText, calX, scrY + 10.2);
-        ctx.restore();
-      }
-
-      // Draw Defender, Attacker & Mini Ball
-      drawMiniAgent(
-        defXNow,
-        defYNow,
-        defKit,
-        defTrim,
-        rep?.defNo ?? 4,
-        rep?.defShort || 'กองหลัง',
-        rep?.defVis,
-        pct >= 0.34 ? '#3b82f6' : undefined,
-        '#93c5fd'
-      );
-      drawMiniAgent(
-        attXNow,
-        attYNow,
-        attKit,
-        attTrim,
-        rep?.attNo ?? 9,
-        rep?.attShort || vr.shooterShort || 'ผู้ยิง',
-        rep?.attVis,
-        pct >= 0.34 ? (vr.overturn ? '#ef4444' : '#22c55e') : '#facc15',
-        pct >= 0.34 ? (vr.overturn ? '#fca5a5' : '#86efac') : '#fde047'
-      );
-
-      // Ball dot
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(mx(bxNow), my(byNow), 3.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else if (vr.kind === 'penalty') {
-      const incX = rep?.incidentX ?? (attRight ? 86 : 14);
-      const incY = rep?.incidentY ?? 48;
-      const boxLineX = rep?.defLineX ?? (attRight ? 83 : 17);
-      const inBox = rep?.inBox ?? !vr.overturn;
-      const dirSign = attRight ? 1 : -1;
-
-      // Dribble & Defender slide-in up to impact frame
-      const attXNow = incX - dirSign * (1 - playT) * 4.2;
-      const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
-      const defXNow = incX + dirSign * (1.2 - playT * 0.4);
-      const defYNow = incY + (1 - playT) * (incY < 50 ? 4.8 : -4.8) + (incY < 50 ? 1.0 : -1.0);
-
-      // GK watching the incident
-      drawMiniAgent(attRight ? 97 : 3, 50, defGkKit, '#ffffff', rep?.gkNo ?? 1, '', rep?.gkVis);
-
-      // Box boundary label ("เส้นกรอบเขตโทษ")
-      ctx.save();
-      const bxScreen = mx(boxLineX);
-      ctx.font = `700 ${cssW < 520 ? 6.5 : 7.2}px Sarabun, sans-serif`;
-      const edgeLbl = 'เส้นเขตโทษ';
-      const elw = measureTextCached(ctx, edgeLbl) + 6;
-      ctx.fillStyle = 'rgba(8, 15, 28, 0.85)';
-      ctx.beginPath();
-      ctx.roundRect(clamp(bxScreen - elw / 2, scrX + 3, scrX + scrW - elw - 3), scrY + 4, elw, 11, 3);
-      ctx.fill();
-      ctx.fillStyle = '#bae6fd';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(edgeLbl, clamp(bxScreen, scrX + elw / 2 + 3, scrX + scrW - elw / 2 - 3), scrY + 9.8);
-      ctx.restore();
-
-      // Contact Halo & Drop Pin onto Pitch
-      if (pct >= 0.34) {
-        const contactClr = inBox ? '#ef4444' : '#38bdf8';
-        const cX = mx(incX);
-        const cY = my(incY);
-        const ringR = 8 + Math.sin(pct * Math.PI * 10) * 1.8;
-        ctx.save();
-        ctx.strokeStyle = contactClr;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.arc(cX, cY, ringR, 0, Math.PI * 2);
-        ctx.stroke();
-        // Horizontal connector from contact dot to 18-yard box line
-        ctx.setLineDash([2.5, 2]);
-        ctx.beginPath();
-        ctx.moveTo(cX, cY);
-        ctx.lineTo(bxScreen, cY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = contactClr;
-        ctx.beginPath();
-        ctx.arc(cX, cY, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      drawMiniAgent(
-        attXNow,
-        attYNow,
-        attKit,
-        attTrim,
-        rep?.attNo ?? 10,
-        rep?.attShort || 'ตัวรุก',
-        rep?.attVis,
-        '#facc15',
-        '#fde047'
-      );
-      drawMiniAgent(
-        defXNow,
-        defYNow,
-        defKit,
-        defTrim,
-        rep?.defNo ?? 4,
-        rep?.defShort || vr.culpritShort || 'ตัวสกัด',
-        rep?.defVis,
-        pct >= 0.36 ? '#ef4444' : undefined,
-        '#fca5a5'
-      );
-
-      // Loose ball near feet
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(mx(attXNow + dirSign * 1.3), my(attYNow - 0.5), 2.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-    } else {
-      // Serious Foul / Red Card Replay
-      const incX = rep?.incidentX ?? vr.x;
-      const incY = rep?.incidentY ?? vr.y;
-      const dirSign = attRight ? 1 : -1;
-
-      const attXNow = incX - dirSign * (1 - playT) * 3.6;
-      const attYNow = incY;
-      const defXNow = incX + dirSign * (1.1 - playT * 0.25);
-      const defYNow = incY + (1 - playT) * 5.2 + 0.9;
-
-      // Slide skid trail
-      if (playT > 0.25) {
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-        ctx.lineWidth = 2.4;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(mx(incX + dirSign * 0.8), my(incY + 5.8));
-        ctx.lineTo(mx(defXNow), my(defYNow));
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // Magnifying foul impact reticle
-      if (pct >= 0.34) {
-        const isRedVerdict = vr.pendingCardUpgrade === 'R';
-        const spotClr = showVerdict ? (isRedVerdict ? '#ef4444' : '#facc15') : '#f59e0b';
-        const cxSpot = mx((attXNow + defXNow) * 0.5);
-        const cySpot = my((attYNow + defYNow) * 0.5);
-        ctx.save();
-        ctx.fillStyle = isRedVerdict && showVerdict ? 'rgba(239, 68, 68, 0.16)' : 'rgba(245, 158, 11, 0.15)';
-        ctx.strokeStyle = spotClr;
-        ctx.lineWidth = 1.8;
-        ctx.beginPath();
-        ctx.arc(cxSpot, cySpot, 14 + Math.sin(pct * Math.PI * 10) * 1.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      drawMiniAgent(
-        attXNow,
-        attYNow,
-        attKit,
-        attTrim,
-        rep?.attNo ?? 10,
-        rep?.attShort || 'ผู้ถูกสกัด',
-        rep?.attVis,
-        '#ffffff'
-      );
-      drawMiniAgent(
-        defXNow,
-        defYNow,
-        defKit,
-        defTrim,
-        rep?.defNo ?? 5,
-        rep?.defShort || vr.culpritShort || 'ผู้ทำฟาวล์',
-        rep?.defVis,
-        pct >= 0.34 ? '#f59e0b' : undefined,
-        '#fde047'
-      );
-
-      // Loose ball near tackled attacker
-      ctx.fillStyle = '#ffffff';
-      ctx.strokeStyle = '#0f172a';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(mx(attXNow + dirSign * 1.4), my(attYNow - 0.6), 2.9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Foul tag at top of mini screen
-      if (pct >= 0.34) {
-        const fTag = rep?.foulKind === 'dogso' ? 'เช็กตัวสุดท้าย (DOGSO)' : 'เช็กจังหวะเปิดปุ่ม / รุนแรง';
-        ctx.font = `700 ${cssW < 520 ? 6.6 : 7.3}px Sarabun, sans-serif`;
-        const fw = measureTextCached(ctx, fTag) + 8;
-        ctx.fillStyle = 'rgba(8, 15, 28, 0.88)';
-        ctx.beginPath();
-        ctx.roundRect(scrX + scrW / 2 - fw / 2, scrY + 4, fw, 11.5, 3);
-        ctx.fill();
-        ctx.fillStyle = '#fcd34d';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(fTag, scrX + scrW / 2, scrY + 10);
-      }
-    }
-
-    // Broadcast Scanlines + Viewfinder Corner Brackets
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
-    ctx.lineWidth = 1;
-    for (let sy = scrY + 3; sy < scrY + scrH; sy += 4) {
-      ctx.beginPath();
-      ctx.moveTo(scrX, sy);
-      ctx.lineTo(scrX + scrW, sy);
-      ctx.stroke();
-    }
-
-    const br = 7;
-    const bp = 5;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.48)';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    // Top-left
-    ctx.moveTo(scrX + bp, scrY + bp + br);
-    ctx.lineTo(scrX + bp, scrY + bp);
-    ctx.lineTo(scrX + bp + br, scrY + bp);
-    // Top-right
-    ctx.moveTo(scrX + scrW - bp - br, scrY + bp);
-    ctx.lineTo(scrX + scrW - bp, scrY + bp);
-    ctx.lineTo(scrX + scrW - bp, scrY + bp + br);
-    // Bottom-left
-    ctx.moveTo(scrX + bp, scrY + scrH - bp - br);
-    ctx.lineTo(scrX + bp, scrY + scrH - bp);
-    ctx.lineTo(scrX + bp + br, scrY + scrH - bp);
-    // Bottom-right
-    ctx.moveTo(scrX + scrW - bp - br, scrY + scrH - bp);
-    ctx.lineTo(scrX + scrW - bp, scrY + scrH - bp);
-    ctx.lineTo(scrX + scrW - bp, scrY + scrH - bp - br);
-    ctx.stroke();
-
-    // Bottom Verdict Banner inside Mini Monitor during Final Reveal Phase
-    if (showVerdict) {
-      const verdictBannerText =
-        vr.kind === 'goal'
-          ? vr.overturn
-            ? '❌ ล้ำหน้า · ริบประตู!'
-            : '✅ ไม่ล้ำหน้า · ให้ประตู!'
-          : vr.kind === 'penalty'
-            ? vr.overturn
-              ? 'นอกกรอบ · ได้ฟรีคิก'
-              : '🚨 ฟาวล์ในเขต · จุดโทษ!'
-            : vr.pendingCardUpgrade === 'R'
-              ? '🟥 ยกระดับเป็นใบแดง!'
-              : '🟨 ให้แค่ใบเหลือง';
-      const vbH = cssW < 520 ? 15 : 17;
-      ctx.fillStyle = 'rgba(6, 12, 24, 0.92)';
-      ctx.fillRect(scrX, scrY + scrH - vbH, scrW, vbH);
-      ctx.fillStyle = verdictColor;
-      ctx.fillRect(scrX, scrY + scrH - vbH, scrW, 1.5);
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `800 ${cssW < 520 ? 7.8 : 8.8}px Sarabun, sans-serif`;
-      ctx.fillText(verdictBannerText, scrX + scrW / 2, scrY + scrH - vbH / 2 + 0.5);
-    }
-
-    ctx.restore(); // end clip
-    ctx.restore(); // end monitor
+    renderVarMonitorPanel(
+      ctx,
+      vr,
+      pct,
+      monX,
+      monY,
+      monW,
+      monH,
+      pw / Math.max(1, ph),
+      homeKit,
+      awayKit,
+      homeGkKit,
+      awayGkKit,
+      homeTrim,
+      awayTrim,
+      false
+    );
   }
 
 };

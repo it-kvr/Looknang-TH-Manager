@@ -13,7 +13,7 @@ export function resolvePositionLine(roleOrPos?: string | null): Position {
 export function getPositionBadgeClass(roleOrPos?: string | null): string {
   const line = resolvePositionLine(roleOrPos);
   if (line === 'GK') return 'bg-green-600 text-white';
-  if (line === 'DF') return 'bg-amber-500 text-[#1c1200]';
+  if (line === 'DF') return 'bg-purple-600 text-white';
   if (line === 'MF') return 'bg-blue-600 text-white';
   return 'bg-red-600 text-white';
 }
@@ -21,7 +21,7 @@ export function getPositionBadgeClass(roleOrPos?: string | null): string {
 export function getPositionCanvasPalette(roleOrPos?: string | null): { bg: string; text: string } {
   const line = resolvePositionLine(roleOrPos);
   if (line === 'GK') return { bg: '#16a34a', text: '#ffffff' };
-  if (line === 'DF') return { bg: '#f59e0b', text: '#1c1200' };
+  if (line === 'DF') return { bg: '#9333ea', text: '#ffffff' };
   if (line === 'MF') return { bg: '#2563eb', text: '#ffffff' };
   return { bg: '#dc2626', text: '#ffffff' };
 }
