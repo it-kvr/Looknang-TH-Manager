@@ -1507,7 +1507,7 @@ export const drawLivePitchToCanvas = (
           ctx.restore();
         }
 
-        ctx.strokeStyle = seat.isMe ? '#facc15' : seat.subbedOut ? '#fb923c' : '#ffffff';
+        ctx.strokeStyle = seat.isMe ? '#facc15' : seat.subbedOut ? '#f43f5e' : '#ffffff';
         ctx.lineWidth = seat.isMe ? 1.5 : 1.0;
         ctx.beginPath();
         ctx.arc(sx, seatY, seatR, 0, Math.PI * 2);
@@ -1526,17 +1526,35 @@ export const drawLivePitchToCanvas = (
           const nx0 = clamp(sx + seatR * 0.1, sx - seatR, bx + bw - nW - 1.5);
           const ny0 = Math.min(seatY + seatR * 0.28, by + bh - nH - 1.2);
           ctx.fillStyle = 'rgba(9, 24, 17, 0.94)';
-          ctx.strokeStyle = seat.subbedOut ? '#fb923c' : kit;
+          ctx.strokeStyle = seat.subbedOut ? '#f43f5e' : kit;
           ctx.lineWidth = 0.7;
           ctx.beginPath();
           ctx.roundRect(nx0, ny0, nW, nH, 1.8);
           ctx.fill();
           ctx.stroke();
-          ctx.fillStyle = seat.subbedOut ? '#fdba74' : '#ffd75e';
+          ctx.fillStyle = seat.subbedOut ? '#fda4af' : '#ffd75e';
           ctx.font = '800 5.2px Sarabun, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(noStr, nx0 + nW / 2, ny0 + nH / 2 + 0.2);
+        }
+        if (seat.subbedOut) {
+          const bxSub = sx - seatR * 0.72;
+          const bySub = seatY - seatR * 0.72;
+          ctx.fillStyle = '#f43f5e';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 0.65;
+          ctx.beginPath();
+          ctx.arc(bxSub, bySub, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(bxSub, bySub + 1.25);
+          ctx.lineTo(bxSub - 1.25, bySub - 0.85);
+          ctx.lineTo(bxSub + 1.25, bySub - 0.85);
+          ctx.closePath();
+          ctx.fill();
         }
         ctx.restore();
       }

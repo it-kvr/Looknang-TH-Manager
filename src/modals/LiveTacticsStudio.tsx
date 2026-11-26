@@ -544,7 +544,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       const fitLabel = pn === 0 ? '✅ ตรงตำแหน่ง' : pn === 1 ? '🟡 เล่นแทนได้' : '⚠️ ต่างตำแหน่ง';
       return {
         tone: pn === 0 ? 'emerald' : pn === 1 ? 'amber' : 'rose',
-        text: `🟢 ${dragUi.player.n.split(' ')[0]} (${dragUi.player.ro} · ${dragUi.player.ov}) แทน 🔴 ${outNode.shortName} (${slotSp}) · ${fitLabel} · ⚡${fitDiff >= 0 ? `+${fitDiff}` : fitDiff}%`
+        text: `🔼 เข้า ${dragUi.player.n.split(' ')[0]} (${dragUi.player.ro} · ${dragUi.player.ov}) · 🔽 ออก ${outNode.shortName} (${slotSp}) · ${fitLabel} · ⚡${fitDiff >= 0 ? `+${fitDiff}` : fitDiff}%`
       };
     }
     if (dragUi.source === 'pitch' && dropTarget.kind === 'bench') {
@@ -555,7 +555,7 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       const fitLabel = pn === 0 ? '✅ ตรงตำแหน่ง' : pn === 1 ? '🟡 เล่นแทนได้' : '⚠️ ต่างตำแหน่ง';
       return {
         tone: pn === 0 ? 'emerald' : pn === 1 ? 'amber' : 'rose',
-        text: `🟢 ${benchObj.n.split(' ')[0]} (${benchObj.ro} · ${benchObj.ov}) แทน 🔴 ${outNode.shortName} (${outNode.slot.sp}) · ${fitLabel}`
+        text: `🔼 เข้า ${benchObj.n.split(' ')[0]} (${benchObj.ro} · ${benchObj.ov}) · 🔽 ออก ${outNode.shortName} (${outNode.slot.sp}) · ${fitLabel}`
       };
     }
     if (dragUi.source === 'pitch' && dropTarget.kind === 'pitch') {
@@ -694,9 +694,9 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
               {dropTarget
                 ? dropTarget.kind === 'pitch'
                   ? dragUi.source === 'bench'
-                    ? `🟢 ลงแทน ${dropTarget.name.split(' ')[0]}`
+                    ? `🔼 เข้าแทน ${dropTarget.name.split(' ')[0]}`
                     : `🔀 สลับกับ ${dropTarget.name.split(' ')[0]}`
-                  : `🔴 ออกแทนด้วย ${dropTarget.name.split(' ')[0]}`
+                  : `🔽 ออก · 🔼 ${dropTarget.name.split(' ')[0]} เข้า`
                 : dragUi.source === 'bench'
                   ? 'ลากไปวางบนนักเตะในแผนผัง'
                   : 'ลากสลับตำแหน่ง หรือวางบนสำรอง'}
@@ -907,31 +907,31 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             </div>
 
             {subsUsed.length < 5 && smartAutoSub && (
-              <div className="px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px]">
-                <span className="truncate text-[var(--mut)]">
-                  <b className="text-[var(--ink)]">
+              <div className="px-2 py-1.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)]/80 flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px]">
+                <div className="min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  <span className="font-extrabold text-[var(--ink)] shrink-0">
                     {smartAutoSub.isExplicitPick ? 'ที่เลือก:' : smartAutoSub.isInjured ? 'บาดเจ็บ:' : 'แนะนำ:'}
-                  </b>{' '}
-                  <span className="text-[var(--red)] font-bold inline-flex items-center gap-0.5 align-middle">
-                    <span>{smartAutoSub.outShort} ({smartAutoSub.outFit}%</span>
-                    {smartAutoSub.isInjured && <StatIconBadge kind="injury" size="xs" />}
-                    <span>)</span>
-                  </span>{' '}
-                  ⇄{' '}
-                  <span className="text-[var(--g)] font-bold">
-                    {smartAutoSub.inPlayer.n.split(' ')[0]} ({smartAutoSub.inPlayer.ro} · {smartAutoSub.inPlayer.ov})
                   </span>
-                </span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-rose-500/10 border border-rose-500/25 text-[var(--red)] font-bold">
+                    <StatIconBadge kind="subOut" size="xs" />
+                    <span>ออก {smartAutoSub.outShort} ({smartAutoSub.outFit}%)</span>
+                    {smartAutoSub.isInjured && <StatIconBadge kind="injury" size="xs" />}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-[1px] rounded-md bg-emerald-500/10 border border-emerald-500/25 text-[var(--g)] font-bold">
+                    <StatIconBadge kind="subIn" size="xs" />
+                    <span>เข้า {smartAutoSub.inPlayer.n.split(' ')[0]} ({smartAutoSub.inPlayer.ro} · {smartAutoSub.inPlayer.ov})</span>
+                  </span>
+                </div>
                 {smartAutoSub.isExplicitPick ? (
                   <button
                     type="button"
                     onClick={() => setSubPickOut(null)}
-                    className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0"
+                    className="text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] hover:text-[var(--ink)] cursor-pointer shrink-0 whitespace-nowrap"
                   >
-                    ✕ ยกเลิกเลือก
+                    ✕ ยกเลิก
                   </button>
                 ) : (
-                  <span className="text-[9px] mland:text-[8px] text-[var(--mut)] shrink-0 hidden sm:inline">หรือลากเปลี่ยนเอง</span>
+                  <span className="text-[9px] mland:text-[8px] text-[var(--mut)] shrink-0 hidden sm:inline whitespace-nowrap">หรือลากเปลี่ยนเอง</span>
                 )}
               </div>
             )}
@@ -1021,9 +1021,10 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                               onSubstitute(selectedPitchOut!, pl);
                             }}
                             title={`ส่ง ${pl.n} ลงแทน ${selectedPitchOut!.split(' ')[0]}`}
-                            className="px-1.5 py-0.5 rounded bg-[var(--g)] text-white text-[9px] font-extrabold cursor-pointer hover:brightness-110 shrink-0"
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--g)] text-white text-[9px] font-extrabold cursor-pointer hover:brightness-110 shrink-0 whitespace-nowrap"
                           >
-                            ส่งลง
+                            <StatIconBadge kind="subIn" size="xs" />
+                            <span>ส่งลง</span>
                           </button>
                         )}
                       </div>
@@ -1034,13 +1035,32 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             )}
 
             {mySubsList.length > 0 && (
-              <div className="pt-1 border-t border-[var(--line)] flex flex-wrap items-center gap-1 text-[10px] mland:text-[8.5px]">
-                <span className="font-bold text-[var(--mut)]">เปลี่ยนแล้ว:</span>
-                {mySubsList.map((sb, i) => (
-                  <span key={i} className="px-1.5 py-0.2 rounded bg-[var(--surface)] border border-[var(--line)] tabular">
-                    {sb.m}&apos; 🟢{sb.inPlayer.split(' ')[0]} ↔ 🔴{sb.outPlayer.split(' ')[0]}
-                  </span>
-                ))}
+              <div className="pt-1.5 border-t border-[var(--line)] space-y-1 text-[10px] mland:text-[8.5px]">
+                <div className="font-bold text-[var(--mut)] flex items-center justify-between">
+                  <span>🔄 เปลี่ยนตัวแล้ว</span>
+                  <span className="tabular font-extrabold">{mySubsList.length}/5</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  {mySubsList.map((sb, i) => (
+                    <span
+                      key={i}
+                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] tabular"
+                    >
+                      <span className="px-1 rounded bg-sky-500/15 text-sky-700 dark:text-sky-300 font-extrabold text-[9px] mland:text-[8px]">
+                        {sb.m}&apos;
+                      </span>
+                      <span className="inline-flex items-center gap-0.5 text-[var(--g)] font-bold">
+                        <StatIconBadge kind="subIn" size="xs" />
+                        <span>{sb.inPlayer.split(' ')[0]}</span>
+                      </span>
+                      <span className="text-[var(--mut)]/50">/</span>
+                      <span className="inline-flex items-center gap-0.5 text-[var(--red)] font-semibold">
+                        <StatIconBadge kind="subOut" size="xs" />
+                        <span>{sb.outPlayer.split(' ')[0]}</span>
+                      </span>
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>

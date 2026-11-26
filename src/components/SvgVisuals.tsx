@@ -1498,7 +1498,7 @@ export const FormationPitch: React.FC<{
             )}
             {hasSubOut && (
               <g transform={`translate(${cx - 19.5},${cy - 2.5})`}>
-                <circle r="5.2" fill="#f97316" stroke="#fff" strokeWidth="0.9" />
+                <circle r="5.2" fill="#f43f5e" stroke="#fff" strokeWidth="0.9" />
                 <path d="M0 2.5 L2.7 -2 L-2.7 -2 Z" fill="#fff" />
               </g>
             )}
