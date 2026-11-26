@@ -4962,11 +4962,17 @@ export const MatchModal: React.FC<{
           const spotX = attRight ? 88.5 : 11.5;
           const overturn = inBoxNow ? Math.random() < 0.22 : Math.random() < 0.45;
           const willAwardPen = !overturn;
+          const gkPen = defPool.find((d) => !d.sentOff && d.pos === 'GK');
+          const boxLineX = attRight ? 83 : 17;
+          const replayIncidentX = willAwardPen
+            ? attRight ? clamp(carrier.x, 84.5, 93.5) : clamp(carrier.x, 6.5, 15.5)
+            : attRight ? clamp(Math.min(carrier.x, 81.4), 76.5, 81.6) : clamp(Math.max(carrier.x, 18.6), 18.4, 23.5);
+          const replayIncidentY = clamp(carrier.y, 26, 74);
           w.varReview = {
             kind: 'penalty',
             side,
-            waitSec: 3.4,
-            totalSec: 3.4,
+            waitSec: 3.8,
+            totalSec: 3.8,
             x: willAwardPen ? spotX : carrier.x,
             y: willAwardPen ? 50 : carrier.y,
             culpritId: nearestDef.id,
@@ -4974,7 +4980,27 @@ export const MatchModal: React.FC<{
             culpritSide: defSide,
             overturn: !willAwardPen,
             distToGoal,
-            reasonText: `เช็กจุดโทษ & ใบเหลือง/แดงของ ${nearestDef.shortName}`
+            reasonText: `เช็กจุดโทษ & ใบเหลือง/แดงของ ${nearestDef.shortName}`,
+            replay: {
+              attRight,
+              attId: carrier.id,
+              attShort: carrier.shortName,
+              attNo: carrier.no,
+              attVis: carrier.vis,
+              defId: nearestDef.id,
+              defShort: nearestDef.shortName,
+              defNo: nearestDef.no,
+              defVis: nearestDef.vis,
+              gkNo: gkPen?.no,
+              gkVis: gkPen?.vis,
+              passFromX: clamp(replayIncidentX + (attRight ? -5.5 : 5.5), 4, 96),
+              passFromY: clamp(replayIncidentY + (replayIncidentY < 50 ? -2.2 : 2.2), 18, 82),
+              incidentX: replayIncidentX,
+              incidentY: replayIncidentY,
+              defLineX: boxLineX,
+              foulKind,
+              inBox: willAwardPen
+            }
           };
           addWorldFx(w, {
             type: 'var',
@@ -4982,10 +5008,10 @@ export const MatchModal: React.FC<{
             y: carrier.y,
             label: '🖥 VAR เช็กจุดโทษ!',
             color: '#38bdf8',
-            ttl: 3.4,
-            maxTtl: 3.4
+            ttl: 3.8,
+            maxTtl: 3.8
           });
-          triggerDramaSlow(w, 3.4, '🖥 VAR เช็กจุดโทษ');
+          triggerDramaSlow(w, 3.8, '🖥 VAR เช็กจุดโทษ');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
@@ -5001,11 +5027,13 @@ export const MatchModal: React.FC<{
         if (shouldVarFoulCard) {
           w.varChecks++;
           const upgradeRed = Math.random() < (foulKind === 'dogso' ? 0.56 : defVolatile ? 0.28 : 0.18);
+          const replayIncX = clamp(carrier.x, 12, 88);
+          const replayIncY = clamp(carrier.y, 14, 86);
           w.varReview = {
             kind: 'foul_card',
             side,
-            waitSec: 3.3,
-            totalSec: 3.3,
+            waitSec: 3.6,
+            totalSec: 3.6,
             x: carrier.x,
             y: carrier.y,
             culpritId: nearestDef.id,
@@ -5017,7 +5045,24 @@ export const MatchModal: React.FC<{
             reasonText:
               foulKind === 'dogso'
                 ? `เช็กจังหวะตัดเกมหลุดเดี่ยวของ ${nearestDef.shortName} (DOGSO)`
-                : `เช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName} (ลุ้นใบแดง)`
+                : `เช็กจังหวะฟาวล์รุนแรงของ ${nearestDef.shortName} (ลุ้นใบแดง)`,
+            replay: {
+              attRight,
+              attId: carrier.id,
+              attShort: carrier.shortName,
+              attNo: carrier.no,
+              attVis: carrier.vis,
+              defId: nearestDef.id,
+              defShort: nearestDef.shortName,
+              defNo: nearestDef.no,
+              defVis: nearestDef.vis,
+              passFromX: clamp(replayIncX + (attRight ? -5.0 : 5.0), 4, 96),
+              passFromY: clamp(replayIncY + (replayIncY < 50 ? -2.0 : 2.0), 10, 90),
+              incidentX: replayIncX,
+              incidentY: replayIncY,
+              defLineX: nearestDef.x,
+              foulKind
+            }
           };
           addWorldFx(w, {
             type: 'var',
@@ -5025,10 +5070,10 @@ export const MatchModal: React.FC<{
             y: carrier.y,
             label: '🖥 VAR เช็กฟาวล์/ใบแดง!',
             color: '#f59e0b',
-            ttl: 3.3,
-            maxTtl: 3.3
+            ttl: 3.6,
+            maxTtl: 3.6
           });
-          triggerDramaSlow(w, 3.3, '🖥 VAR เช็กใบแดง');
+          triggerDramaSlow(w, 3.6, '🖥 VAR เช็กใบแดง');
           SFX.var();
           b.carrierId = null;
           b.targetId = null;
@@ -7084,11 +7129,37 @@ export const MatchModal: React.FC<{
         if (b.flightType === 'shot' && !plan?.ownGoalCulpritId && w.varChecks < 2 && Math.random() < 0.15) {
           w.varChecks++;
           const overturn = Math.random() < 0.34;
+          const sortedOutfieldDefs = defPool
+            .filter((d) => !d.sentOff && d.pos !== 'GK')
+            .slice()
+            .sort((a, d2) => (attRightNow ? d2.x - a.x : a.x - d2.x));
+          const lastDef = sortedOutfieldDefs[0] || defPool[0];
+          const baseShotX = shooter?.x ?? b.fromX;
+          const baseShotY = shooter?.y ?? b.fromY;
+          const rawDefLineX = lastDef
+            ? attRightNow
+              ? clamp(lastDef.x, 73, 92.5)
+              : clamp(lastDef.x, 7.5, 27)
+            : attRightNow
+              ? 84
+              : 16;
+          const marginCm = Math.round(10 + Math.random() * 34);
+          const replayAttX = overturn
+            ? attRightNow
+              ? clamp(rawDefLineX + 2.3, 74, 94.5)
+              : clamp(rawDefLineX - 2.3, 5.5, 26)
+            : attRightNow
+              ? clamp(rawDefLineX - 1.9, 71, 91.5)
+              : clamp(rawDefLineX + 1.9, 8.5, 29);
+          const replayAttY = clamp(baseShotY, 26, 74);
+          const passerX = clamp(replayAttX + (attRightNow ? -11 : 11), 28, 72);
+          const passerY = clamp(replayAttY + (replayAttY < 50 ? 9 : -9), 18, 82);
+
           w.varReview = {
             kind: 'goal',
             side,
-            waitSec: 3.5,
-            totalSec: 3.5,
+            waitSec: 3.9,
+            totalSec: 3.9,
             shooterId: scorerName,
             shooterShort: scorerShort,
             assisterName,
@@ -7096,7 +7167,26 @@ export const MatchModal: React.FC<{
             x: b.toX,
             y: b.toY,
             overturn,
-            reasonText: `กำลังตีเส้นเช็กจังหวะล้ำหน้าของ ${scorerShort}`
+            reasonText: `กำลังตีเส้นเช็กจังหวะล้ำหน้าของ ${scorerShort}`,
+            replay: {
+              attRight: attRightNow,
+              attId: scorerName,
+              attShort: scorerShort,
+              attNo: shooter?.no ?? 9,
+              attVis: shooter?.vis,
+              defId: lastDef?.id,
+              defShort: lastDef?.shortName || 'กองหลัง',
+              defNo: lastDef?.no ?? 4,
+              defVis: lastDef?.vis,
+              gkNo: gk?.no ?? 1,
+              gkVis: gk?.vis,
+              passFromX: passerX,
+              passFromY: passerY,
+              incidentX: replayAttX,
+              incidentY: replayAttY,
+              defLineX: rawDefLineX,
+              offsideMarginCm: marginCm
+            }
           };
           addWorldFx(w, {
             type: 'var',
@@ -7104,10 +7194,10 @@ export const MatchModal: React.FC<{
             y: b.toY,
             label: '🖥 VAR เช็กประตู!',
             color: '#38bdf8',
-            ttl: 3.5,
-            maxTtl: 3.5
+            ttl: 3.9,
+            maxTtl: 3.9
           });
-          triggerDramaSlow(w, 3.5, `🖥 VAR เช็กประตู · ${scorerShort}`);
+          triggerDramaSlow(w, 3.9, `🖥 VAR เช็กประตู · ${scorerShort}`);
           SFX.var();
           b.shotStyle = undefined;
           w.phaseLabel = `🖥 VAR กำลังตรวจสอบประตูของ ${attTeam.name}!`;

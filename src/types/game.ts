@@ -1241,6 +1241,28 @@ export interface PendingSetPiece {
   setupElapsed?: number;
 }
 
+export interface VarReplaySnapshot {
+  attRight: boolean;
+  attId?: string;
+  attShort: string;
+  attNo: number;
+  attVis?: number[];
+  defId?: string;
+  defShort: string;
+  defNo: number;
+  defVis?: number[];
+  gkNo?: number;
+  gkVis?: number[];
+  passFromX: number;
+  passFromY: number;
+  incidentX: number;
+  incidentY: number;
+  defLineX: number;
+  offsideMarginCm?: number;
+  foulKind?: string;
+  inBox?: boolean;
+}
+
 export interface VarReviewState {
   kind: 'goal' | 'penalty' | 'foul_card';
   side: 'H' | 'A';
@@ -1260,6 +1282,7 @@ export interface VarReviewState {
   pendingCardUpgrade?: 'Y' | 'R' | null;
   distToGoal?: number;
   reasonText: string;
+  replay?: VarReplaySnapshot;
 }
 
 export interface ShootoutState {
