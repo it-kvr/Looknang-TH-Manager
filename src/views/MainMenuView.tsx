@@ -15,6 +15,7 @@ import { FootPairIcon, getFootColorMeta } from '../components/PlayerBioStrip';
 import { TalentBadge, TalentTierIcon } from '../components/TalentBadge';
 import { PotentialBadge } from '../components/PotentialBadge';
 import { AthleteCard } from '../components/AthleteCard';
+import { CaptainBadge } from '../components/CaptainBadge';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { enterAutoMobileFullscreen } from '../utils/fullscreen';
 import stadiumHeroBg from '../assets/images/thai_stadium_hero_1795511663761.jpg';
@@ -33,6 +34,7 @@ interface StarPosterCard {
   clubName: string;
   sourceLabel: string;
   archLabel: string;
+  archName?: string;
   categories: StatCategorySummary[];
   kit1: string;
   kit2: string;
@@ -124,18 +126,19 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
         talent,
         age: ps.p.age || 18,
         bio: getPlayerBio(playerObj, ps.p),
-        clubName: meT?.name || 'ทีมชาติไทย',
-        sourceLabel: `เซฟอาชีพ #${k}`,
-        archLabel: ps.p.archName || SPN[ps.p.sp] || ps.p.sp,
-        categories: summarizeStatGroups(dtInfo(playerObj, ps.p).G),
-        kit1: pKit1,
-        kit2: pKit2,
-        player: playerObj,
-        team: meT || null,
-        profile: ps.p
-      });
+          clubName: meT?.name || 'ทีมชาติไทย',
+          sourceLabel: `เซฟอาชีพ #${k}`,
+          archLabel: ps.p.archName || SPN[ps.p.sp] || ps.p.sp,
+          archName: ps.p.archName,
+          categories: summarizeStatGroups(dtInfo(playerObj, ps.p).G),
+          kit1: pKit1,
+          kit2: pKit2,
+          player: playerObj,
+          team: meT || null,
+          profile: ps.p
+        });
+      }
     }
-  }
 
   // Add randomized Thai League Division 1 stars from in-game archetypes & clubs
   STAR_CLUB_PRESETS.forEach((preset, idx) => {
@@ -202,6 +205,7 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
       clubName: preset.name,
       sourceLabel: 'ลีกสูงสุด',
       archLabel: `${arch.icon} ${arch.name}`,
+      archName: arch.name,
       categories: summarizeStatGroups(dtInfo(starPlayerObj).G),
       kit1: preset.kit[0],
       kit2: preset.kit[1],
@@ -1374,9 +1378,9 @@ export const MainMenu: React.FC<{
           </header>
 
           {/* Responsive Studio Grid */}
-          <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[245px_1fr] md:grid-cols-[270px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[210px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-2.5 sm:gap-3 mland:gap-2">
+          <div className="flex-1 min-h-0 w-full mx-auto px-2.5 sm:px-4 mland:px-2.5 py-2 sm:py-2.5 mland:py-1.5 overflow-y-auto sm:overflow-hidden mland:overflow-hidden grid grid-cols-1 sm:grid-cols-[240px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[214px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-2.5 sm:gap-3 mland:gap-2">
           {/* Left Column: Athlete Card Preview + Active Traits */}
-          <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto shrink-0">
+          <div className="flex flex-col gap-1.5 mland:gap-1 min-h-0 sm:h-full mland:h-full sm:overflow-y-auto mland:overflow-y-auto shrink-0 pr-0.5 pb-2">
             <AthleteCard
               ov={ov}
               pot={estPot}
@@ -1392,7 +1396,7 @@ export const MainMenu: React.FC<{
                 trimColor: '#fad05a'
               }}
               name={previewName}
-              subtitle={`อายุ ${cAge} ปี · ${curArch.icon} ${curArch.name}`}
+              subtitle={`นักเตะใหม่ · อายุ ${cAge} ปี`}
               bio={previewBio}
               categories={summarizeStatGroups(subStats)}
               renderStageTopLeft={(palette) => (
@@ -2275,14 +2279,15 @@ export const MainMenu: React.FC<{
         </header>
 
         {/* Main 2 Columns: Col 1 = In-Game Collector Athlete Card | Col 2 = 2-Column Save & Mode Hub */}
-        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[0.76fr_1.44fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[0.74fr_1.46fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
+        <div className="flex-1 min-h-0 grid grid-cols-1 sm:grid-cols-[240px_1fr] md:grid-cols-[252px_1fr] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[214px_1fr] mland:grid-rows-[minmax(0,1fr)] gap-3 sm:gap-4 mland:gap-3 overflow-y-auto sm:overflow-hidden mland:overflow-hidden items-stretch">
           {/* Column 1: Signature In-Game Athlete Card + Bottom Traits & Insights Strip */}
-          <aside className="min-h-0 flex flex-col gap-1.5 mland:gap-1 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
+          <aside className="min-h-0 flex flex-col gap-1.5 mland:gap-1 sm:overflow-y-auto mland:overflow-y-auto pr-0.5 pb-2">
             <AthleteCard
               ov={activeStar.ov}
               pot={activeStar.pot}
               talent={activeStar.talent}
               roleLabel={activeStar.pos}
+              altRolesCount={activeStar.player.altRoles?.length || 0}
               shirtNo={activeStar.no}
               kit1={activeStar.kit1}
               kit2={activeStar.kit2}
@@ -2294,18 +2299,27 @@ export const MainMenu: React.FC<{
                 careerProfile: activeStar.profile
               }}
               name={activeStar.name}
-              subtitle={`อายุ ${activeStar.age} ปี · ${activeStar.archLabel} · ${activeStar.sourceLabel}`}
+              clubCrest={
+                <ClubCrest
+                  name={activeStar.clubName}
+                  size={14}
+                  team={activeStar.team}
+                  club={activeStar.club}
+                  isMyClub={!!activeStar.club}
+                />
+              }
+              subtitle={`${activeStar.clubName} · อายุ ${activeStar.age} ปี`}
               bio={activeStar.bio}
               categories={activeStar.categories}
               className="shadow-[0_18px_42px_rgba(0,0,0,0.65)]"
               renderStageTopLeft={(palette) => (
-                <div title={activeStar.clubName} className="flex items-center gap-1 min-w-0">
-                  <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-                    <ClubCrest name={activeStar.clubName} size={16} team={activeStar.team} club={activeStar.club} isMyClub={!!activeStar.club} />
-                  </div>
-                  <span className={`text-[9.5px] mland:text-[7.5px] font-bold truncate ${palette.clubText}`}>
-                    {activeStar.clubName}
+                <div className="flex items-center gap-1 min-w-0">
+                  <span className={`text-[9px] mland:text-[7.5px] font-bold truncate ${palette.clubText}`}>
+                    {activeStar.sourceLabel}
                   </span>
+                  {activeStar.team?.cap === activeStar.player.n && (
+                    <CaptainBadge team={activeStar.team} size="sm" />
+                  )}
                 </div>
               )}
               renderStageTopRight={(_palette, tone) => (
@@ -2337,7 +2351,7 @@ export const MainMenu: React.FC<{
               growthStage={activeStarDetails.gro}
               peakAge={activeStarDetails.D0.pk}
               sigKey={activeStarDetails.D0.sig}
-              archName={activeStar.profile?.archName}
+              archName={activeStar.archName}
             />
           </aside>
 

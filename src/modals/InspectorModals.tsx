@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { Scissors } from 'lucide-react';
-import type { Position, Player, Team, GameState, CupCompKey } from '../types/game';
-import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
+import type { Position, Player, Team, GameState } from '../types/game';
+import { fmtMoney } from '../utils/math';
 import { TN, SPN, AR_T } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, wagOf, ensureCon, logFin, tc } from '../engine/playerCore';
+import { getShirtNo, xi, getFormationSlots, dtInfo, summarizeStatGroups, getPlayerBio, vlu, tc } from '../engine/playerCore';
 import { ovColor, getPlayerTalent, getPlayerMissionView } from '../engine/missions';
-import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans, CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
+import { sortTable, teamStats, getTeamSeasonObjectiveInfo, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { ClubCrest, PlayerFace, FormationPitch } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StatBarRow, PlayerMissionsPanel } from '../components/PlayerMissionsPanel';
@@ -15,6 +15,7 @@ import { ClubHistoryPanel } from '../components/ClubHistoryPanel';
 import { PlayerSeasonProgressionCard } from '../components/PlayerSeasonProgressionCard';
 import { PlayerTraitsStrip } from '../components/PlayerTraitsStrip';
 import { PlayerBioStrip } from '../components/PlayerBioStrip';
+import { PlayerCardOverviewBox } from '../components/PlayerCardOverviewBox';
 import { ShirtNumberLockerModal } from '../components/ShirtNumberLockerModal';
 import { PlayerAppearanceModal } from './PlayerAppearanceModal';
 import { AthleteCard } from '../components/AthleteCard';
@@ -42,14 +43,12 @@ export const PlayerInspectorModal: React.FC<{
   const [showLockerPicker, setShowLockerPicker] = useState(false);
   const [showAppearanceModal, setShowAppearanceModal] = useState(false);
   const [inspectMode, setInspectMode] = useState<'info' | 'history' | 'missions'>(initialTab);
-  const [statCompScope, setStatCompScope] = useState<'league' | 'cup' | 'total'>('league');
   const isRetired = Boolean(livePlayer.retired);
   const effectiveMode = inspectMode === 'missions' && isRetired ? 'info' : inspectMode;
   const canDoMissions = !isRetired;
   const canEditShirtNo = !isRetired && Boolean(liveTeam && isMyTeam && (state.mode === 'm' || isMePlayer));
   const playerTalent = getPlayerTalent(livePlayer, isMePlayer ? state.p : null);
   const isCap = !isRetired && !!liveTeam && liveTeam.cap === livePlayer.n;
-  const con = !isRetired && liveTeam ? ensureCon(livePlayer) : null;
   const staminaMeta = getStaminaMeta(livePlayer.fit);
   const fitVal = staminaMeta.f;
   const fitCol = isRetired
@@ -212,6 +211,17 @@ export const PlayerInspectorModal: React.FC<{
                   careerProfile: isMePlayer ? state.p : null
                 }}
                 name={livePlayer.n}
+                clubCrest={
+                  liveTeam ? (
+                    <ClubCrest
+                      name={liveTeam.name}
+                      size={14}
+                      team={liveTeam}
+                      club={state.club}
+                      isMyClub={isMyTeam && state.mode === 'm'}
+                    />
+                  ) : undefined
+                }
                 subtitle={`${
                   liveTeam
                     ? liveTeam.name
@@ -226,19 +236,8 @@ export const PlayerInspectorModal: React.FC<{
                 bio={info.bio}
                 categories={summarizeStatGroups(info.G)}
                 renderStageTopLeft={(palette) =>
-                  liveTeam || isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
+                  isMePlayer || livePlayer.blessed || livePlayer.hg || livePlayer.customCreated || isCap ? (
                     <div className="flex items-center gap-1 min-w-0">
-                      {liveTeam && (
-                        <div className="shrink-0 [&>svg]:w-4 [&>svg]:h-4 mland:[&>svg]:w-3.5 mland:[&>svg]:h-3.5">
-                          <ClubCrest
-                            name={liveTeam.name}
-                            size={16}
-                            team={liveTeam}
-                            club={state.club}
-                            isMyClub={isMyTeam && state.mode === 'm'}
-                          />
-                        </div>
-                      )}
                       {isMePlayer && (
                         <span
                           title="ตัวคุณ"
@@ -294,166 +293,19 @@ export const PlayerInspectorModal: React.FC<{
                 }
               />
 
-              {/* Personal Info Box below Portrait Card (Unified with Career Mode) */}
-              <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
-
-                {(() => {
-                  const curTurn = state.season * 40 + state.md;
-                  const medLv = state.med ?? 1;
-                  const physioLv = state.staff?.physio ?? 0;
-                  const treatCost = Math.max(4, 14 - Math.floor(medLv * 1.1) - physioLv);
-                  const alreadyTreated = livePlayer.treatedMd === curTurn;
-                  return (
-                    <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${isRetired ? 'bg-amber-500/10 border-amber-500/35' : livePlayer.inj > 0 || (livePlayer.sus || 0) > 0 ? 'bg-[var(--red-soft)] border-[var(--red)]/40' : fitVal < 65 ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45' : 'bg-[var(--g-soft)] border-[var(--g)]/35'}`}>
-                      <div className="flex items-center justify-between font-bold gap-1">
-                        <span className="truncate tabular" style={{ color: fitCol }}>
-                          {isRetired ? `👋 ${statusBadgeText}` : `${statusBadgeText} · ⚡${fitVal}%`}
-                        </span>
-                        <span className="tabular text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0">
-                          🟨{livePlayer.yc || 0}/3 · 🟥{livePlayer.rc || 0}
-                        </span>
-                      </div>
-                      {!isRetired && livePlayer.inj > 0 && isMyTeam && state.mode === 'm' && (
-                        <button
-                          type="button"
-                          disabled={alreadyTreated || state.money < treatCost}
-                          onClick={() => {
-                            SFX.tap();
-                            onUpdateState((d) => {
-                              const sq = d.teams[d.me].sq;
-                              const pl = sq.find((q) => q.n === livePlayer.n);
-                              if (!pl || pl.inj <= 0 || pl.treatedMd === curTurn || d.money < treatCost) return;
-                              d.money -= treatCost;
-                              logFin(d, `กายภาพบำบัด ${pl.n}`, -treatCost);
-                              pl.inj = Math.max(0, pl.inj - 1);
-                              pl.fit = clamp((pl.fit ?? 70) + 10, 40, 100);
-                              pl.treatedMd = curTurn;
-                            });
-                            onToast(livePlayer.inj - 1 <= 0 ? `💉 รักษา ${livePlayer.n} หายเจ็บพร้อมลงสนามแล้ว!` : `💉 ทำกายภาพ ${livePlayer.n} ลดวันพักเหลือ ${livePlayer.inj - 1} นัด (+10% ฟิต)`);
-                          }}
-                          className="w-full py-1 mland:py-0.5 rounded-lg bg-[var(--g)] text-white text-[10px] mland:text-[8px] font-bold cursor-pointer disabled:opacity-45"
-                        >
-                          {alreadyTreated
-                            ? '✅ ทำกายภาพรอบนี้แล้ว'
-                            : `💉 กายภาพด่วน (-1 นัด · ${fmtMoney(treatCost)})`}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {(() => {
-                  const cupT = getPlayerCupTotals(livePlayer, 'all');
-                  const lgSp = livePlayer.sp || 0;
-                  const lgSg = livePlayer.sg || 0;
-                  const lgSa = livePlayer.sa || 0;
-                  const lgCs = livePlayer.cs || 0;
-                  const lgRt = (livePlayer.sra || 0) > 0 ? ((livePlayer.srs || 0) / Math.max(1, livePlayer.sra || 1)).toFixed(1) : '-';
-                  const totSp = lgSp + cupT.sp;
-                  const totSg = lgSg + cupT.sg;
-                  const totSa = lgSa + cupT.sa;
-                  const totCs = lgCs + cupT.cs;
-                  const totSra = (livePlayer.sra || 0) + cupT.sra;
-                  const totRt = totSra > 0 ? (((livePlayer.srs || 0) + cupT.srs) / totSra).toFixed(1) : '-';
-                  const cupRt = cupT.sra > 0 ? cupT.avgRating.toFixed(1) : '-';
-
-                  const dispSp = statCompScope === 'cup' ? cupT.sp : statCompScope === 'total' ? totSp : lgSp;
-                  const dispSg = statCompScope === 'cup' ? cupT.sg : statCompScope === 'total' ? totSg : lgSg;
-                  const disp3 =
-                    livePlayer.pos === 'GK'
-                      ? statCompScope === 'cup'
-                        ? cupT.cs
-                        : statCompScope === 'total'
-                          ? totCs
-                          : lgCs
-                      : statCompScope === 'cup'
-                        ? cupT.sa
-                        : statCompScope === 'total'
-                          ? totSa
-                          : lgSa;
-                  const dispRt = statCompScope === 'cup' ? cupRt : statCompScope === 'total' ? totRt : lgRt;
-
-                  const playedCups = (['cup', 'lc', 'dc', 'sc', 'asia'] as CupCompKey[]).filter(
-                    (k) => (livePlayer.cupStats?.[k]?.sp || 0) > 0
-                  );
-
-                  return (
-                    <div className="space-y-1">
-                      <div className="seg-bar w-full grid grid-cols-3">
-                        {(
-                          [
-                            ['league', '⚽ บอลลีก'],
-                            ['cup', `🏆 บอลถ้วย${cupT.sp > 0 ? ` (${cupT.sp})` : ''}`],
-                            ['total', '📊 รวม']
-                          ] as const
-                        ).map(([id, lbl]) => (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              setStatCompScope(id);
-                            }}
-                            className={`seg-btn py-0.5 px-1 text-[9.5px] mland:text-[7.5px] justify-center ${
-                              statCompScope === id ? 'seg-btn-active' : ''
-                            }`}
-                          >
-                            {lbl}
-                          </button>
-                        ))}
-                      </div>
-
-                      <div className="grid grid-cols-4 gap-1 text-center">
-                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">👕 ลง</div>
-                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSp}</div>
-                        </div>
-                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⚽ ยิง</div>
-                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
-                        </div>
-                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">{livePlayer.pos === 'GK' ? '🧤 คลีน' : '👟 จ่าย'}</div>
-                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
-                        </div>
-                        <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-                          <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">⭐ เรต</div>
-                          <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none text-[#8a5b00] dark:text-[#fde047]">
-                            {dispRt}
-                          </div>
-                        </div>
-                      </div>
-
-                      {statCompScope === 'cup' && playedCups.length > 0 && (
-                        <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/70 text-[9px] mland:text-[7.5px] text-[var(--mut)] tabular leading-snug">
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5">
-                            {playedCups.map((ck) => {
-                              const m = CUP_COMP_META[ck];
-                              const st = livePlayer.cupStats![ck]!;
-                              return (
-                                <span key={ck} className="whitespace-nowrap">
-                                  {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
-                                  {st.sg > 0 ? `·${st.sg}⚽` : ''}
-                                  {livePlayer.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}👟` : ''}
-                                  {st.motm > 0 ? `·${st.motm}👑` : ''}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                <div className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1.5 text-[10px] mland:text-[8px]">
-                  <span className="font-bold text-[var(--g)] tabular truncate">💎 {fmtMoney(vlu(livePlayer))}</span>
-                  <span className="text-[var(--mut)] tabular shrink-0">
-                    {con ? `${con.yr} ปี · ` : livePlayer.free ? 'ฟรี · ' : ''}
-                    <b className="text-[var(--ink)]">{fmtMoneyNum(con ? con.wg : wagOf(livePlayer))}</b>/นัด
-                  </span>
-                </div>
-                </div>
+              {/* Unified Personal Info Box below Portrait Card */}
+              <PlayerCardOverviewBox
+                player={livePlayer}
+                state={state}
+                team={liveTeam}
+                careerProfile={isMePlayer ? state.p : null}
+                isMePlayer={isMePlayer}
+                isMyTeam={isMyTeam}
+                isRetired={isRetired}
+                starterSlot={pitchSlotSp}
+                onUpdateState={onUpdateState}
+                onToast={onToast}
+              />
 
               {/* Personality, Style & Insights Strip below Athlete Card */}
               <PlayerTraitsStrip

@@ -1113,7 +1113,7 @@ export default function App() {
                 }
               }}
               aria-label="ตราสโมสร"
-              className="shrink-0 p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform shadow-2xs"
+              className="shrink-0 w-10 h-10 mland:w-8 mland:h-8 p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 flex items-center justify-center [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform shadow-2xs"
             >
               <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
             </button>
@@ -1126,7 +1126,7 @@ export default function App() {
                 }}
                 aria-label="ข้อมูลนักเตะ"
                 title={state.p.name}
-                className="shrink-0 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 [&>svg]:w-[32px] [&>svg]:h-[32px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform overflow-hidden shadow-2xs"
+                className="shrink-0 w-10 h-10 mland:w-8 mland:h-8 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 flex items-center justify-center [&>svg]:w-[32px] [&>svg]:h-[32px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform overflow-hidden shadow-2xs"
               >
                 <PlayerFace player={mePlayer} team={me} state={state} careerProfile={state.p} size={32} bare />
               </button>
@@ -1158,14 +1158,14 @@ export default function App() {
 
           {/* Zone 2: Center Club / Player Telemetry Strip */}
           <div className="hidden sm:flex items-center justify-center shrink-0">
-            <div className="flex items-center rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)]/85 divide-x divide-[var(--line)]/80 overflow-hidden">
+            <div className="flex items-stretch h-10 mland:h-8 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)]/85 divide-x divide-[var(--line)]/80 overflow-hidden">
               {state.mode === 'm' ? (
                 <>
                   <button
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('f'); }}
                     title="ไปหน้าการเงิน"
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">งบสโมสร</div>
                     <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
@@ -1176,7 +1176,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('t'); }}
                     title="ดูตารางคะแนน"
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">อันดับ</div>
                     <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
@@ -1187,7 +1187,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('u'); }}
                     title="ความเชื่อมั่นบอร์ดบริหาร"
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">บอร์ด</div>
                     <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${boardToneCls}`}>
@@ -1198,7 +1198,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('u'); }}
                     title={`แฟนบอลสโมสร ${fmtFans(myFansCount)} คน`}
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">แฟนบอล</div>
                     <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
@@ -1212,7 +1212,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('p'); }}
                     title="ข้อมูลนักเตะ"
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">OVR</div>
                     <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--g)] leading-tight mt-0.5">
@@ -1223,7 +1223,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('t'); }}
                     title="ดูตารางคะแนนทีม"
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">อันดับทีม</div>
                     <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
@@ -1234,7 +1234,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('p'); }}
                     title={`พลังกาย ${myStaminaVal}%`}
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">พลังกาย</div>
                     <div className="mt-0.5">
@@ -1250,7 +1250,7 @@ export default function App() {
                     type="button"
                     onClick={() => { SFX.tap(); navigateToTab('p'); }}
                     title={`แฟนบอลสโมสร ${fmtFans(myFansCount)} คน`}
-                    className="px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
+                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
                   >
                     <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ชื่อเสียง</div>
                     <div className="text-xs mland:text-[10px] font-extrabold tabular text-[#b47b00] dark:text-[var(--lamp)] leading-tight mt-0.5">
@@ -1273,7 +1273,7 @@ export default function App() {
                   ? `นัดถัดไป: พบ ${nextOppTeam.name} (${nextIsHome ? 'เหย้า' : 'เยือน'})`
                   : 'สรุปผลฤดูกาล'
               }
-              className="btn btn-md btn-gold sm:px-4 text-xs sm:text-sm mland:text-[10.5px]"
+              className="btn btn-gold h-10 mland:h-8 px-3.5 sm:px-4.5 mland:px-3 text-xs sm:text-sm mland:text-[10.5px]"
             >
               {nextMatchInfo
                 ? appSettings.autoSkipMatch
@@ -1306,7 +1306,7 @@ export default function App() {
               onClick={() => { SFX.tap(); setShowSettings(true); }}
               aria-label="ตั้งค่า"
               title="ตั้งค่าเกม"
-              className="btn-icon w-9 h-9 mland:w-7.5 mland:h-7.5"
+              className="btn-icon w-10 h-10 mland:w-8 mland:h-8"
             >
               <Settings className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
             </button>

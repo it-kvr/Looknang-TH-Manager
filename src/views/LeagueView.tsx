@@ -1475,7 +1475,7 @@ export const ScheduleCalendarView: React.FC<{
               <button
                 type="button"
                 onClick={onOpenMarket}
-                className={`btn btn-xs ${
+                className={`btn btn-sm ${
                   tw.open
                     ? 'bg-[var(--g-soft)] border border-[var(--g)]/50 text-[var(--g)] hover:border-[var(--g)]'
                     : 'btn-secondary text-[var(--mut)]'
@@ -1485,7 +1485,7 @@ export const ScheduleCalendarView: React.FC<{
               </button>
             ) : (
               <span
-                className={`px-3 mland:px-1.5 py-1.5 mland:py-0.5 rounded-xl text-xs mland:text-[9.5px] font-bold border ${
+                className={`h-8 mland:h-6.5 px-2.5 mland:px-2 inline-flex items-center rounded-lg text-[11px] mland:text-[9.5px] font-bold border whitespace-nowrap ${
                   tw.open
                     ? 'bg-[var(--g-soft)] border-[var(--g)]/50 text-[var(--g)]'
                     : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)]'
@@ -1498,7 +1498,7 @@ export const ScheduleCalendarView: React.FC<{
               <button
                 type="button"
                 onClick={onPlayNext}
-                className="btn btn-xs btn-gold"
+                className="btn btn-sm btn-gold px-3.5 mland:px-2.5"
               >
                 {state.md >= totalMd
                   ? '🏁 สรุปจบฤดูกาล'

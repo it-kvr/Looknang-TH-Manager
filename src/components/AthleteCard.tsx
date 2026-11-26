@@ -31,6 +31,7 @@ export interface AthleteCardProps {
   kit2: string;
   faceProps: Omit<React.ComponentProps<typeof PlayerFace>, 'size' | 'bare'>;
   name: string;
+  clubCrest?: React.ReactNode;
   subtitle: string;
   bio: PlayerBio;
   categories: StatCategorySummary[];
@@ -55,6 +56,7 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
   kit2,
   faceProps,
   name,
+  clubCrest,
   subtitle,
   bio,
   categories,
@@ -179,9 +181,14 @@ export const AthleteCard: React.FC<AthleteCardProps> = ({
           {name}
         </div>
         <div
-          className={`text-[9.5px] mland:text-[7.5px] truncate tabular leading-tight ${cardPalette.metaText}`}
+          className={`flex items-center justify-center gap-1 text-[9.5px] mland:text-[7.5px] tabular leading-tight min-w-0 ${cardPalette.metaText}`}
         >
-          {subtitle}
+          {clubCrest && (
+            <span className="shrink-0 inline-flex items-center [&>svg]:w-3.5 [&>svg]:h-3.5 mland:[&>svg]:w-3 mland:[&>svg]:h-3">
+              {clubCrest}
+            </span>
+          )}
+          <span className="truncate">{subtitle}</span>
         </div>
         <PlayerBioStrip bio={bio} variant="card" tone={cardTone} />
       </div>
