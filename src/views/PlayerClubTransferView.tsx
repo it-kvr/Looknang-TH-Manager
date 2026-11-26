@@ -18,7 +18,7 @@ import {
 } from '../engine/playerCore';
 import { statTierMeta } from '../engine/missions';
 import { evaluateNationalTeamCallup } from '../engine/simulation';
-import { ClubCrest } from '../components/SvgVisuals';
+import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 
 export const PlayerClubTransferView: React.FC<{
   state: GameState;
@@ -383,7 +383,10 @@ export const PlayerClubTransferView: React.FC<{
                       className={`p-2 mland:p-1.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition-colors ${isMe ? 'bg-[var(--g-soft)] border-[var(--g)]' : 'bg-[var(--surface-2)]/70 border-[var(--line)] hover:border-[var(--g)]'}`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 text-center font-bold text-xs mland:text-[10px] tabular text-[var(--mut)]">#{idx + 1}</span>
+                        <span className="w-5 text-center font-bold text-xs mland:text-[10px] tabular text-[var(--mut)] shrink-0">#{idx + 1}</span>
+                        <div className="shrink-0 mland:[&_svg]:w-6 mland:[&_svg]:h-6">
+                          <PlayerFace player={q} team={meTeam} state={state} careerProfile={isMe ? state.p : null} size={28} />
+                        </div>
                         <div className="min-w-0">
                           <div className="font-bold text-xs mland:text-[10px] truncate flex items-center gap-1">
                             <span className="truncate">{q.n}</span>
@@ -521,6 +524,9 @@ export const PlayerClubTransferView: React.FC<{
                           >
                             #{row.rank}
                           </span>
+                          <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
+                            <PlayerFace player={row.player} team={row.team} state={state} careerProfile={row.isMe ? state.p : null} size={24} />
+                          </div>
                           <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
                             <ClubCrest name={row.team.name} size={20} team={row.team} />
                           </div>
@@ -559,7 +565,10 @@ export const PlayerClubTransferView: React.FC<{
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-extrabold text-[var(--mut)] w-4 text-center tabular">{idx + 1}</span>
+                        <span className="font-extrabold text-[var(--mut)] w-4 text-center tabular shrink-0">{idx + 1}</span>
+                        <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
+                          <PlayerFace player={q} team={t} state={state} careerProfile={q.me || q.n === p.name ? state.p : null} size={24} />
+                        </div>
                         <span className="font-bold truncate">{q.n}</span>
                         <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">({t.name})</span>
                       </div>

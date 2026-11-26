@@ -1618,6 +1618,11 @@ export const FinanceClubView: React.FC<{
                                 <span className={`w-5 text-center font-extrabold text-xs tabular shrink-0 ${idx === 0 ? 'text-[var(--g)]' : 'text-[var(--mut)]'}`}>
                                   {idx + 1}
                                 </span>
+                                {squadPl && (
+                                  <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
+                                    <PlayerFace player={squadPl} team={me} state={state} club={state.club} isMyClub size={24} />
+                                  </div>
+                                )}
                                 <span
                                   className="w-7 h-7 rounded-lg font-extrabold text-[11px] flex items-center justify-center tabular shrink-0 border border-[var(--line)]/60"
                                   style={{ background: me.kc[0], color: me.kc[1] }}
@@ -1831,9 +1836,14 @@ export const FinanceClubView: React.FC<{
                 <div className="pt-1 space-y-1">
                   <div className="text-[11px] font-bold text-[var(--mut)]">นักเตะค่าเหนื่อยสูงสุด 3 อันดับ</div>
                   {topEarners.map((q) => (
-                    <div key={q.n} className="flex justify-between text-xs py-1 border-b border-[var(--line)]/50 last:border-0">
-                      <span className="truncate">{q.ro} · {q.n}</span>
-                      <b className="tabular text-[var(--mut)]">{fmtMoneyNum(wagOf(q))}/นัด</b>
+                    <div key={q.n} className="flex items-center justify-between gap-2 text-xs py-1 border-b border-[var(--line)]/50 last:border-0">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="shrink-0 [&>svg]:w-5 [&>svg]:h-5">
+                          <PlayerFace player={q} team={me} state={state} club={state.club} isMyClub size={22} />
+                        </div>
+                        <span className="truncate">{q.ro} · {q.n}</span>
+                      </div>
+                      <b className="tabular text-[var(--mut)] shrink-0">{fmtMoneyNum(wagOf(q))}/นัด</b>
                     </div>
                   ))}
                 </div>
@@ -2873,6 +2883,11 @@ export const FinanceClubView: React.FC<{
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[var(--mut)] shrink-0">กัปตันทีม</span>
                         <div className="flex items-center gap-2 min-w-0">
+                          {capPlayer && (
+                            <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
+                              <PlayerFace player={capPlayer} team={me} state={state} club={k} isMyClub size={24} />
+                            </div>
+                          )}
                           {capPlayer && onInspectPlayer ? (
                             <button
                               type="button"
@@ -2932,17 +2947,26 @@ export const FinanceClubView: React.FC<{
                       return (
                         <div key={row.label} className="flex items-center justify-between gap-2 py-1.5">
                           <span className="text-[var(--mut)] shrink-0">{row.label}</span>
-                          {canInspect && row.player ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                SFX.tap();
-                                onInspectPlayer?.(row.player!, me);
-                              }}
-                              className="font-bold text-[var(--ink)] hover:text-[var(--g)] truncate cursor-pointer text-right tabular"
-                            >
-                              {row.valueText}
-                            </button>
+                          {row.player ? (
+                            <div className="flex items-center gap-1.5 min-w-0 justify-end">
+                              <div className="shrink-0 [&>svg]:w-6 [&>svg]:h-6">
+                                <PlayerFace player={row.player} team={me} state={state} club={k} isMyClub size={24} />
+                              </div>
+                              {canInspect ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    SFX.tap();
+                                    onInspectPlayer?.(row.player!, me);
+                                  }}
+                                  className="font-bold text-[var(--ink)] hover:text-[var(--g)] truncate cursor-pointer text-right tabular"
+                                >
+                                  {row.valueText}
+                                </button>
+                              ) : (
+                                <b className="truncate text-right tabular text-[var(--ink)]">{row.valueText}</b>
+                              )}
+                            </div>
                           ) : (
                             <b className="truncate text-right tabular text-[var(--ink)]">{row.valueText || row.emptyText}</b>
                           )}

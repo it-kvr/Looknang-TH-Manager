@@ -607,7 +607,6 @@ export const MatchModal: React.FC<{
   const [coachChatCount, setCoachChatCount] = useState<number>(0);
   const coachChatCountRef = useRef<number>(0);
   const coachDisagreeCountRef = useRef<number>(0);
-  const coachTalkNotifiedWindowRef = useRef<number>(-1);
   const [userPitchStatus, setUserPitchStatus] = useState<'on' | 'bench' | 'subbed_out' | 'sent_off'>(() => {
     if (state.mode !== 'p' || !myPlayerName) return 'on';
     if (myInitialBanned) return 'bench';
@@ -615,7 +614,6 @@ export const MatchModal: React.FC<{
     return myXiNow.includes(myPlayerName) ? 'on' : 'bench';
   });
   const lastUserPitchStatusRef = useRef<'on' | 'bench' | 'subbed_out' | 'sent_off'>(userPitchStatus);
-  const [coachTalkNotice, setCoachTalkNotice] = useState<{ reason: string; minute: number } | null>(null);
   const [coachChatReplies, setCoachChatReplies] = useState<{
     id: number;
     m: number;
@@ -1583,7 +1581,6 @@ export const MatchModal: React.FC<{
     const curMin = Math.max(1, minute);
     const meOnPitch = curMeOnPitch(w);
     if (!meOnPitch || sr.userSubOutMin != null || sr.sentOff.includes(myPlayerName)) {
-      setCoachTalkNotice(null);
       return;
     }
     if (coachChatCountRef.current >= 2) return;
@@ -1625,7 +1622,6 @@ export const MatchModal: React.FC<{
     setCoachChatCount(coachChatCountRef.current);
     coachChatCooldownRef.current = minute;
     setCoachChatCooldownMin(minute);
-    setCoachTalkNotice(null);
 
     let userMsg = '';
     let coachMsg = '';
@@ -8568,27 +8564,6 @@ export const MatchModal: React.FC<{
           lastUserPitchStatusRef.current = nextPitchStatus;
           setUserPitchStatus(nextPitchStatus);
         }
-        if (nextPitchStatus !== 'on') {
-          setCoachTalkNotice(null);
-        } else if (
-          w.phase !== 'halftime' &&
-          w.phase !== 'ft' &&
-          w.phase !== 'shootout' &&
-          coachChatCountRef.current < 2
-        ) {
-          const lastTalkMin = coachChatCooldownRef.current;
-          const curWin = coachChatCountRef.current;
-          if (nextMin >= 10 && nextMin - lastTalkMin >= 20 && coachTalkNotifiedWindowRef.current < curWin) {
-            coachTalkNotifiedWindowRef.current = curWin;
-            setCoachTalkNotice({
-              reason:
-                curWin === 0
-                  ? 'โอกาสคุยโค้ชเปิดแล้ว (1/2) — สื่อสารข้างสนามได้หากจำเป็น (มีทั้งผลดี/ผลเสีย)'
-                  : 'โอกาสคุยโค้ชครั้งสุดท้ายเปิดแล้ว (2/2) — เลือกจังหวะสำคัญเพื่อช่วยทีม',
-              minute: nextMin
-            });
-          }
-        }
       }
     }
   };
@@ -9007,7 +8982,6 @@ export const MatchModal: React.FC<{
     if (sr.done) return;
     sr.done = true;
     setInjuryAlert(null);
-    setCoachTalkNotice(null);
     const w = worldRef.current!;
 
     // Ensure any injured players still on pitch without manual sub get auto-replaced if bench allows
@@ -11222,35 +11196,6 @@ export const MatchModal: React.FC<{
                       </div>
                     </div>
                   )}
-                  {isPlayerMode && !done && coachTalkNotice && mlandMatchTab !== 'tactics' && matchPhaseUi !== 'halftime' && (
-                    <div className="px-2.5 sm:px-3 py-1.5 mland:px-2 mland:py-1 bg-emerald-950/95 border-b border-emerald-400/45 flex items-center justify-between gap-2 text-white shrink-0">
-                      <span className="text-[11px] sm:text-xs mland:text-[10px] font-bold text-emerald-200 flex items-center gap-1.5 min-w-0">
-                        <span className="shrink-0">🗣️</span>
-                        <span className="truncate">{coachTalkNotice.reason}</span>
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            SFX.tap();
-                            setCoachTalkNotice(null);
-                            setMlandMatchTab('tactics');
-                          }}
-                          className="btn btn-xs btn-gold font-extrabold"
-                        >
-                          คุยโค้ชเลย
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCoachTalkNotice(null)}
-                          aria-label="ปิดการแจ้งเตือนคุยโค้ช"
-                          className="w-6 h-6 rounded-md bg-white/10 text-white/80 text-[10px] font-bold cursor-pointer hover:bg-white/20"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  )}
                   <div
                     className="relative"
                     style={{
@@ -12357,7 +12302,6 @@ export const MatchModal: React.FC<{
                           type="button"
                           onClick={() => {
                             SFX.tap();
-                            setCoachTalkNotice(null);
                             setMlandMatchTab('tactics');
                           }}
                           className={`seg-btn w-full whitespace-nowrap ${
