@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   Check,
+  ChevronDown,
+  ChevronUp,
   FastForward,
   Film,
   Flag,
@@ -13,50 +15,21 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, VarNearbyAgent } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, VarNearbyAgent, TimelineKind, MatchTimelineItem, ArchivedStreamComment } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
 import { getSettings, saveSettings, getDefaultMatchSpeed, SFX, setCrowdAudio, setSfxSuppressed, vibrate, triggerConfetti, unlockAudio } from '../utils/audioTheme';
 import { useScrollTopOnChange } from '../utils/scrollReset';
 
-type TimelineKind =
-  | 'kickoff'
-  | 'first_half'
-  | 'second_half'
-  | 'full_time'
-  | 'goal'
-  | 'own_goal'
-  | 'pen_goal'
-  | 'pen_awarded'
-  | 'pen_miss'
-  | 'yellow'
-  | 'red'
-  | 'injury'
-  | 'miss'
-  | 'var_no_goal'
-  | 'miracle'
-  | 'blessed'
-  | 'sub';
-
 type HalftimeTalkTone = 'attack' | 'press' | 'balanced' | 'counter' | 'defend' | 'fit' | 'follow_coach' | 'ask_attack' | 'ask_defend';
 
-interface MatchTimelineItem {
-  id: string;
-  seq: number;
-  m: number;
-  side: 'H' | 'A' | 'N';
-  kind: TimelineKind;
-  who: string;
-  detail?: string;
-  varReplayId?: string;
-}
 import { getShirtNo, visOf, xi, DT, injD, matchKits, teamKits, pickGK, getDefaultCoachVis, getFormationSlots, playerPen, pickBestCaptain, scoreSetPieceCandidate } from '../engine/playerCore';
 import { rate, computePlayerRatings, calcPlayerPerf, computeMatchAttendance, computeMatchStreamProjection, fmtFansShort, EXTRA_CUP_META, computeTeamFacilityMatchModifiers, combineMatchStatDeltas } from '../engine/simulation';
 import { buildMatchEnvironment } from '../engine/matchEnv';
 import { generateLiveStreamComment, getMatchBroadcastChannel, getStreamViewerTier, getViewerTierMeta, type LiveCommentItem, type LiveCommentKind } from '../engine/liveStreamChat';
 import { getPlayerTalent } from '../engine/missions';
-import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
+import { ClubCrest, FormationPitch, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
@@ -64,526 +37,19 @@ import { PositionBadge } from '../components/PositionBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 import { VarReplayModal, type VarReplayRecord } from './VarReplayModal';
+import {
+  buildMatchVisualIndex,
+  FullTimeMatchStage,
+  MatchBroadcastHeader,
+  MatchLogRow,
+  MatchPlayerThumb,
+  MatchStatsPanel,
+  MatchTimelinePanel,
+  SubEventCard,
+  type MatchLogItem
+} from './MatchSharedComponents';
 
-interface MatchSubLogInfo {
-  teamId: number;
-  inName: string;
-  outName: string;
-  badge?: string;
-  isInjury?: boolean;
-  isMeIn?: boolean;
-  isMeOut?: boolean;
-}
 
-interface MatchLogItem {
-  id: number;
-  m: number;
-  text: string;
-  tone?: 'goal' | 'card' | 'sys' | 'sub';
-  varReplayId?: string;
-  subInfo?: MatchSubLogInfo;
-}
-
-interface MatchVisualEntry {
-  team: Team;
-  player: Player;
-  no: number;
-  shortName: string;
-}
-
-interface MatchVisualIndex {
-  teamsSorted: Team[];
-  entries: MatchVisualEntry[];
-  byFullLen: MatchVisualEntry[];
-  byShortLen: MatchVisualEntry[];
-}
-
-function resolveLogVisual(
-  text: string,
-  idxData: MatchVisualIndex,
-  isPlayerMode: boolean,
-  myPlayerSquadObj: Player | undefined,
-  meTeamOrig: Team
-) {
-  let matchedTeam: Team | null = null;
-  let isBothTeams = false;
-  let rem = text;
-  for (const t of idxData.teamsSorted) {
-    if (t.name && rem.includes(t.name)) {
-      if (matchedTeam && matchedTeam.id !== t.id) {
-        isBothTeams = true;
-        break;
-      }
-      matchedTeam = t;
-      rem = rem.split(t.name).join(' ');
-    }
-  }
-
-  let bestEntry: MatchVisualEntry | null = null;
-  let bestIdx = Number.MAX_SAFE_INTEGER;
-  const scanEntries = (pool: MatchVisualEntry[], useShort: boolean, teamFilter: Team | null) => {
-    for (const e of pool) {
-      if (teamFilter && e.team.id !== teamFilter.id) continue;
-      const needle = useShort ? e.shortName : e.player.n;
-      if (!needle || (useShort && needle.length < 3)) continue;
-      const idx = text.indexOf(needle);
-      if (idx >= 0 && idx < bestIdx) {
-        bestIdx = idx;
-        bestEntry = e;
-      }
-    }
-  };
-
-  if (matchedTeam) {
-    scanEntries(idxData.byFullLen, false, matchedTeam);
-    if (!bestEntry) scanEntries(idxData.byFullLen, false, null);
-    if (!bestEntry) scanEntries(idxData.byShortLen, true, matchedTeam);
-  } else if (!isBothTeams) {
-    scanEntries(idxData.byFullLen, false, null);
-    if (!bestEntry) scanEntries(idxData.byShortLen, true, null);
-  }
-
-  if (!bestEntry && !isBothTeams && isPlayerMode && myPlayerSquadObj && text.includes('คุณ')) {
-    bestEntry = {
-      team: meTeamOrig,
-      player: myPlayerSquadObj,
-      no: getShirtNo(meTeamOrig, myPlayerSquadObj),
-      shortName: myPlayerSquadObj.n.split(' ')[0] || myPlayerSquadObj.n
-    };
-    if (!matchedTeam) matchedTeam = meTeamOrig;
-  }
-
-  const finalTeam = isBothTeams ? null : matchedTeam || bestEntry?.team || null;
-  return { team: finalTeam, playerEntry: bestEntry, isBothTeams };
-}
-
-const MATCH_THUMB_SIZE_CLS: Record<'xs' | 'sm' | 'md', string> = {
-  xs: 'w-[20px] h-[21px] mland:w-[17px] mland:h-[18px]',
-  sm: 'w-[24px] h-[25px] mland:w-[20px] mland:h-[21px]',
-  md: 'w-[28px] h-[30px]'
-};
-
-const MATCH_THUMB_PX: Record<'xs' | 'sm' | 'md', number> = {
-  xs: 20,
-  sm: 24,
-  md: 28
-};
-
-const MatchPlayerThumb: React.FC<{
-  player: Player;
-  team: Team;
-  state: GameState;
-  kitColor: string;
-  trimColor?: string;
-  size?: 'xs' | 'sm' | 'md';
-  dark?: boolean;
-  ringClassName?: string;
-}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName }) => {
-  const isMeClub = team.id === state.me && state.mode === 'm';
-  const effKit = kitColor || '#15803d';
-  const effTrim = player.pos === 'GK' ? undefined : trimColor;
-  const bgStyle = dark
-    ? `linear-gradient(155deg, color-mix(in srgb, ${effKit} 36%, #0f172a), color-mix(in srgb, ${effTrim || '#fad05a'} 16%, #1e293b))`
-    : `linear-gradient(155deg, color-mix(in srgb, ${effKit} 28%, var(--surface-2)), color-mix(in srgb, ${effTrim || '#fad05a'} 14%, var(--surface)))`;
-  const ringCls = ringClassName || (dark ? 'ring-white/30' : 'ring-black/14 dark:ring-white/22');
-
-  return (
-    <span
-      className={`shrink-0 ${MATCH_THUMB_SIZE_CLS[size]} rounded-lg overflow-hidden ring-1 ${ringCls} inline-flex items-end justify-center shadow-2xs [&>svg]:w-full [&>svg]:h-full [&>svg]:block`}
-      style={{ background: bgStyle }}
-    >
-      <PlayerFace
-        player={player}
-        team={team}
-        state={state}
-        careerProfile={player.me ? state.p : null}
-        club={isMeClub ? state.club : null}
-        isMyClub={isMeClub}
-        kitColor={effKit}
-        trimColor={effTrim}
-        size={MATCH_THUMB_PX[size]}
-        bare
-      />
-    </span>
-  );
-};
-
-const SubEventCard: React.FC<{
-  minute: number;
-  team: Team;
-  inName: string;
-  outName: string;
-  badge?: string;
-  isInjury?: boolean;
-  isMeIn?: boolean;
-  isMeOut?: boolean;
-  homeId: number;
-  homeKit: string;
-  awayKit: string;
-  homeGkKit: string;
-  awayGkKit: string;
-  homeTrim: string;
-  awayTrim: string;
-  state: GameState;
-}> = ({
-  minute,
-  team,
-  inName,
-  outName,
-  badge,
-  isInjury,
-  isMeIn,
-  isMeOut,
-  homeId,
-  homeKit,
-  awayKit,
-  homeGkKit,
-  awayGkKit,
-  homeTrim,
-  awayTrim,
-  state
-}) => {
-  const isTMe = team.id === state.me && state.mode === 'm';
-  const isTeamHome = team.id === homeId;
-  const tKit = isTeamHome ? homeKit : awayKit;
-  const tGkKit = isTeamHome ? homeGkKit : awayGkKit;
-  const tTrim = isTeamHome ? homeTrim : awayTrim;
-  const inPl = team.sq.find((q) => q.n === inName);
-  const outPl = team.sq.find((q) => q.n === outName);
-  const inNo = inPl ? getShirtNo(team, inPl) : null;
-  const outNo = outPl ? getShirtNo(team, outPl) : null;
-
-  return (
-    <div className="rounded-xl bg-sky-500/7 border border-sky-500/22 px-2.5 py-2 mland:px-2 mland:py-1.5 space-y-1.5 mland:space-y-1">
-      <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px]">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="px-1.5 py-[1px] rounded bg-sky-500/18 text-sky-700 dark:text-sky-300 font-extrabold tabular shrink-0">
-            {minute}&apos;
-          </span>
-          <span className="shrink-0 inline-flex">
-            <ClubCrest name={team.name} size={14} team={team} club={state.club} isMyClub={isTMe} />
-          </span>
-          <span className="font-bold text-[var(--ink)] truncate">{team.name}</span>
-          <span className="text-[var(--mut)] font-semibold shrink-0 hidden sm:inline">· เปลี่ยนตัว</span>
-        </div>
-        {badge && (
-          <span className="px-1.5 py-[1px] rounded-md bg-[var(--surface)] border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 truncate max-w-[165px]">
-            {badge}
-          </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-1.5 mland:gap-1">
-        {/* Player Coming IN */}
-        <div className="flex items-center gap-1.5 min-w-0 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/28">
-          <StatIconBadge kind="subIn" size="xs" title="เปลี่ยนตัวลงสนาม" />
-          <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[var(--g)] shrink-0">เข้า</span>
-          {inPl && (
-            <MatchPlayerThumb
-              player={inPl}
-              team={team}
-              state={state}
-              kitColor={inPl.pos === 'GK' ? tGkKit : tKit}
-              trimColor={inPl.pos === 'GK' ? undefined : tTrim}
-              size="xs"
-              ringClassName="ring-[var(--g)]/55"
-            />
-          )}
-          {inNo != null && (
-            <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
-              #{inNo}
-            </span>
-          )}
-          {inPl?.ro && <PositionBadge role={inPl.ro} size="2xs" />}
-          <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate min-w-0 flex-1">
-            {inName}
-          </span>
-          {isMeIn && (
-            <span className="px-1 py-[1px] rounded bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black shrink-0">
-              ★ คุณ
-            </span>
-          )}
-        </div>
-
-        {/* Player Going OUT */}
-        <div className="flex items-center gap-1.5 min-w-0 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-rose-500/10 border border-rose-500/25">
-          <StatIconBadge kind="subOut" size="xs" title="ถูกเปลี่ยนตัวออก" />
-          <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[var(--red)] shrink-0">ออก</span>
-          {outPl && (
-            <MatchPlayerThumb
-              player={outPl}
-              team={team}
-              state={state}
-              kitColor={outPl.pos === 'GK' ? tGkKit : tKit}
-              trimColor={outPl.pos === 'GK' ? undefined : tTrim}
-              size="xs"
-              ringClassName="ring-[var(--red)]/50"
-            />
-          )}
-          {outNo != null && (
-            <span className="text-[9.5px] mland:text-[8px] font-bold tabular text-[var(--mut)] shrink-0">
-              #{outNo}
-            </span>
-          )}
-          {outPl?.ro && <PositionBadge role={outPl.ro} size="2xs" />}
-          <span className="text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)]/90 truncate min-w-0 flex-1">
-            {outName}
-          </span>
-          {isInjury && <StatIconBadge kind="injury" size="xs" title="บาดเจ็บ" />}
-          {isMeOut && (
-            <span className="px-1 py-[1px] rounded bg-[var(--lamp)]/85 text-[#261900] text-[8.5px] font-black shrink-0">
-              ★ คุณ
-            </span>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const MatchLogRow = React.memo<{
-  l: MatchLogItem;
-  matchVisualIndex: MatchVisualIndex;
-  homeOrig: Team;
-  awayOrig: Team;
-  meTeamOrig: Team;
-  homeId: number;
-  awayId: number;
-  homeKit: string;
-  awayKit: string;
-  homeGkKit: string;
-  awayGkKit: string;
-  homeTrim: string;
-  awayTrim: string;
-  state: GameState;
-  isPlayerMode: boolean;
-  myPlayerSquadObj: Player | undefined;
-  onOpenVarReplay?: (varId: string) => void;
-}>(({
-  l,
-  matchVisualIndex,
-  homeOrig,
-  awayOrig,
-  meTeamOrig,
-  homeId,
-  awayId,
-  homeKit,
-  awayKit,
-  homeGkKit,
-  awayGkKit,
-  homeTrim,
-  awayTrim,
-  state,
-  isPlayerMode,
-  myPlayerSquadObj,
-  onOpenVarReplay
-}) => {
-  if (l.tone === 'sub' && l.subInfo) {
-    const subTeam = l.subInfo.teamId === homeOrig.id ? homeOrig : awayOrig;
-    return (
-      <SubEventCard
-        minute={l.m}
-        team={subTeam}
-        inName={l.subInfo.inName}
-        outName={l.subInfo.outName}
-        badge={l.subInfo.badge}
-        isInjury={l.subInfo.isInjury}
-        isMeIn={l.subInfo.isMeIn}
-        isMeOut={l.subInfo.isMeOut}
-        homeId={homeId}
-        homeKit={homeKit}
-        awayKit={awayKit}
-        homeGkKit={homeGkKit}
-        awayGkKit={awayGkKit}
-        homeTrim={homeTrim}
-        awayTrim={awayTrim}
-        state={state}
-      />
-    );
-  }
-  const vis = resolveLogVisual(l.text, matchVisualIndex, isPlayerMode, myPlayerSquadObj, meTeamOrig);
-  const vTeam = vis.team;
-  const vPlayer = vis.playerEntry;
-  const vIsHome = vTeam?.id === homeId;
-  const vKit = vIsHome ? homeKit : awayKit;
-  const vGkKit = vIsHome ? homeGkKit : awayGkKit;
-  const vTrim = vIsHome ? homeTrim : awayTrim;
-  const vIsMe = Boolean(vTeam && vTeam.id === state.me && state.mode === 'm');
-
-  type Hit = { start: number; end: number; entry: MatchVisualEntry };
-  const hits: Hit[] = [];
-  for (const entry of matchVisualIndex.byFullLen) {
-    const name = entry.player.n;
-    if (!name) continue;
-    let from = 0;
-    while (from < l.text.length) {
-      const idx = l.text.indexOf(name, from);
-      if (idx < 0) break;
-      const end = idx + name.length;
-      const overlaps = hits.some((h) => !(end <= h.start || idx >= h.end));
-      if (!overlaps) hits.push({ start: idx, end, entry });
-      from = end;
-    }
-  }
-  if (hits.length === 0 && vPlayer) {
-    const short = vPlayer.shortName;
-    const idx = short && short.length >= 2 ? l.text.indexOf(short) : -1;
-    if (idx >= 0) {
-      hits.push({ start: idx, end: idx + short.length, entry: vPlayer });
-    }
-  }
-
-  const shownCrestTeamIds = new Set<number>();
-
-  const renderTextSeg = (seg: string, keyPrefix: string) => {
-    const tokens = seg.split(/(✚|🔼|🔽)/);
-    if (tokens.length === 1) return seg;
-    return tokens.map((tok, i) => {
-      if (tok === '✚') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="injury" size="xs" />;
-      if (tok === '🔼') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="subIn" size="xs" />;
-      if (tok === '🔽') return <StatIconBadge key={`${keyPrefix}-${i}`} kind="subOut" size="xs" />;
-      return <React.Fragment key={`${keyPrefix}-${i}`}>{tok}</React.Fragment>;
-    });
-  };
-
-  const renderInlineEventText = () => {
-    if (hits.length > 0) {
-      hits.sort((a, b) => a.start - b.start);
-      const nodes: React.ReactNode[] = [];
-      let cursor = 0;
-      hits.forEach((h, hIdx) => {
-        if (h.start > cursor) {
-          nodes.push(<span key={`t-${hIdx}`}>{renderTextSeg(l.text.slice(cursor, h.start), `t-${hIdx}`)}</span>);
-        }
-        const htTeam = h.entry.team;
-        const htPlayer = h.entry.player;
-        const htIsHome = htTeam.id === homeId;
-        const htKit = htIsHome ? homeKit : awayKit;
-        const htGkKit = htIsHome ? homeGkKit : awayGkKit;
-        const htTrim = htIsHome ? homeTrim : awayTrim;
-        const htIsMe = htTeam.id === state.me && state.mode === 'm';
-        const showHitCrest = !shownCrestTeamIds.has(htTeam.id);
-        if (showHitCrest) shownCrestTeamIds.add(htTeam.id);
-        nodes.push(
-          <span key={`p-${hIdx}`} className="inline-flex items-center gap-1 align-middle mx-0.5 px-1.5 py-0.5 rounded-lg bg-black/5 dark:bg-white/8 border border-black/8 dark:border-white/10">
-            {showHitCrest && (
-              <span className="shrink-0 inline-flex">
-                <ClubCrest name={htTeam.name} size={13} team={htTeam} club={state.club} isMyClub={htIsMe} />
-              </span>
-            )}
-            <MatchPlayerThumb
-              player={htPlayer}
-              team={htTeam}
-              state={state}
-              kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
-              trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
-              size="sm"
-            />
-            <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
-              #{h.entry.no}
-            </span>
-            <span className="font-bold">{l.text.slice(h.start, h.end)}</span>
-          </span>
-        );
-        cursor = h.end;
-      });
-      if (cursor < l.text.length) {
-        nodes.push(<span key="tail">{renderTextSeg(l.text.slice(cursor), 'tail')}</span>);
-      }
-      return nodes;
-    }
-
-    if (vTeam) {
-      const tIdx = l.text.indexOf(vTeam.name);
-      if (tIdx >= 0) {
-        return (
-          <>
-            <span>{renderTextSeg(l.text.slice(0, tIdx), 'team-pre')}</span>
-            <span className="inline-flex items-center mr-1 align-middle">
-              <ClubCrest name={vTeam.name} size={14} team={vTeam} club={state.club} isMyClub={vIsMe} />
-            </span>
-            <span>{vTeam.name}</span>
-            <span>{renderTextSeg(l.text.slice(tIdx + vTeam.name.length), 'team-post')}</span>
-          </>
-        );
-      }
-    }
-
-    return renderTextSeg(l.text, 'plain');
-  };
-
-  const hasInlinePlayer = hits.length > 0;
-  const hasInlineTeam = hasInlinePlayer || Boolean(vTeam && l.text.includes(vTeam.name));
-
-  return (
-    <div
-      className={`text-xs mland:text-[10.5px] flex items-center gap-1.5 rounded-xl transition-colors leading-snug ${
-        l.tone === 'goal'
-          ? 'px-2.5 py-1.5 bg-[var(--g-soft)] border border-[var(--g)]/25 font-bold text-[var(--g)]'
-          : l.tone === 'card'
-            ? 'px-2.5 py-1.5 bg-[var(--red-soft)] border border-[var(--red)]/25 font-semibold text-[var(--red)]'
-            : l.tone === 'sub'
-              ? 'px-2.5 py-1 bg-sky-500/8 border border-sky-500/20 font-semibold text-sky-700 dark:text-sky-300'
-              : l.tone === 'sys'
-                ? 'px-2 py-1 bg-[var(--surface-2)]/70 font-semibold text-[var(--ink)]'
-                : 'px-2 py-1 text-[var(--mut)]'
-      }`}
-    >
-      <span className={`px-1.5 py-0.2 rounded tabular font-bold text-[10.5px] shrink-0 ${
-        l.tone === 'goal'
-          ? 'bg-[var(--g)] text-white'
-          : l.tone === 'card'
-            ? 'bg-[var(--red)] text-white'
-            : 'bg-black/8 dark:bg-white/10'
-      }`}>
-        {l.m}&apos;
-      </span>
-
-      {vis.isBothTeams && !hasInlinePlayer ? (
-        <span className="inline-flex items-center gap-0.5 shrink-0">
-          <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-          <ClubCrest name={awayOrig.name} size={15} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-        </span>
-      ) : !hasInlineTeam && vTeam ? (
-        <span className="shrink-0 inline-flex">
-          <ClubCrest name={vTeam.name} size={16} team={vTeam} club={state.club} isMyClub={vIsMe} />
-        </span>
-      ) : null}
-
-      {vPlayer && !hasInlinePlayer && (
-        <span className="inline-flex items-center gap-1 shrink-0">
-          <MatchPlayerThumb
-            player={vPlayer.player}
-            team={vPlayer.team}
-            state={state}
-            kitColor={vPlayer.player.pos === 'GK' ? vGkKit : vKit}
-            trimColor={vPlayer.player.pos === 'GK' ? undefined : vTrim}
-            size="sm"
-          />
-          <span className="px-1 py-0.2 rounded bg-black/10 dark:bg-white/12 text-[10px] mland:text-[8.5px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)]">
-            #{vPlayer.no}
-          </span>
-        </span>
-      )}
-
-      <span className="min-w-0 flex-1">{renderInlineEventText()}</span>
-      {l.varReplayId && onOpenVarReplay && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onOpenVarReplay(l.varReplayId!);
-          }}
-          className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/28 border border-sky-400/50 text-sky-700 dark:text-sky-300 text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer transition-colors whitespace-nowrap"
-          title="เปิดจอดูภาพช้า VAR ย้อนหลัง"
-        >
-          <span>🖥</span>
-          <span>ดูภาพช้า</span>
-        </button>
-      )}
-    </div>
-  );
-});
 
 export const MatchModal: React.FC<{
   state: GameState;
@@ -635,23 +101,7 @@ export const MatchModal: React.FC<{
   const initialMeXi = meIsHome ? initialHomeXi : initialAwayXi;
   const myInitialStarted = isPlayerMode && !myInitialBanned && initialMeXi.includes(myPlayerName);
 
-  const matchVisualIndex = useMemo(() => {
-    const teamsSorted = [homeOrig, awayOrig].sort((a, b) => b.name.length - a.name.length);
-    const entries: { team: Team; player: Player; no: number; shortName: string }[] = [];
-    [homeOrig, awayOrig].forEach((team) => {
-      team.sq.forEach((player) => {
-        entries.push({
-          team,
-          player,
-          no: getShirtNo(team, player),
-          shortName: player.n.split(' ')[0] || player.n
-        });
-      });
-    });
-    const byFullLen = entries.slice().sort((a, b) => b.player.n.length - a.player.n.length);
-    const byShortLen = entries.slice().sort((a, b) => b.shortName.length - a.shortName.length);
-    return { teamsSorted, entries, byFullLen, byShortLen };
-  }, [homeOrig, awayOrig]);
+  const matchVisualIndex = useMemo(() => buildMatchVisualIndex(homeOrig, awayOrig), [homeOrig, awayOrig]);
 
   const matchAttendance = useMemo(
     () => computeMatchAttendance(homeOrig, awayOrig, state, { kind, derby: isDerby }),
@@ -687,7 +137,6 @@ export const MatchModal: React.FC<{
     [turfMatchMods.statDeltas, awayFacMods.statDeltas]
   );
   const getSideFacMods = (side: 'H' | 'A') => (side === 'H' ? homeFacMods : awayFacMods);
-  const [showEnvModsPopover, setShowEnvModsPopover] = useState(false);
 
   const [minute, setMinute] = useState(0);
   const [clockLabel, setClockLabel] = useState("0'");
@@ -925,10 +374,8 @@ export const MatchModal: React.FC<{
   };
   const [eventFilter, setEventFilter] = useState<'all' | 'goal' | 'card' | 'sub'>('all');
   const [htPitchMode, setHtPitchMode] = useState<'all' | 'H' | 'A'>(() => (meIsHome ? 'H' : 'A'));
+  const [htTalkCollapsed, setHtTalkCollapsed] = useState(false);
   const [htPickedPlayer, setHtPickedPlayer] = useState<string | null>(null);
-  const [ftPitchMode, setFtPitchMode] = useState<'all' | 'H' | 'A'>('all');
-  const [ftPickedPlayer, setFtPickedPlayer] = useState<string | null>(null);
-  const [ftRosterTeam, setFtRosterTeam] = useState<'all' | 'H' | 'A'>('all');
 
   const [varHistory, setVarHistory] = useState<VarReplayRecord[]>([]);
   const [liveVarActive, setLiveVarActive] = useState(false);
@@ -942,12 +389,10 @@ export const MatchModal: React.FC<{
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const leftStageScrollRef = useRef<HTMLDivElement | null>(null);
   const rightStageScrollRef = useRef<HTMLDivElement | null>(null);
-  const ftPlayersScrollRef = useRef<HTMLDivElement | null>(null);
   const rightChatScrollRef = useRef<HTMLDivElement | null>(null);
   const rightTacticsScrollRef = useRef<HTMLDivElement | null>(null);
   useScrollTopOnChange(leftStageScrollRef, [done, matchPhaseUi === 'halftime'], { includeAncestors: false });
   useScrollTopOnChange(rightStageScrollRef, [mlandMatchTab, done, matchPhaseUi], { includeAncestors: false });
-  useScrollTopOnChange(ftPlayersScrollRef, [mlandMatchTab, ftRosterTeam, done], { includeAncestors: false });
   useScrollTopOnChange(rightChatScrollRef, [mlandMatchTab, done], { includeAncestors: false });
   useScrollTopOnChange(rightTacticsScrollRef, [mlandMatchTab, matchPhaseUi], { includeAncestors: false });
   const triggeredRulesRef = useRef<number[]>([]);
@@ -12356,326 +11801,73 @@ export const MatchModal: React.FC<{
   return (
     <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
       <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
-        {/* Pinned Top Broadcast Scoreboard: Responsive Row (Full Team Names Never Truncated) */}
-        <div className="relative z-20 shrink-0 px-2.5 py-2 sm:px-3.5 sm:py-2 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]">
-          <div className="flex flex-wrap sm:flex-nowrap mland:flex-nowrap items-center justify-between gap-x-2.5 gap-y-1.5">
-            {/* Left: Unified Match Info Capsule (Full Competition Name · Weather · Attendance · Live) */}
-            <div className="order-1 inline-flex flex-col items-start justify-center xl:flex-row xl:items-center gap-0.5 xl:gap-1.5 px-2 mland:px-1.5 py-1 xl:py-0 min-h-8 sm:min-h-9 mland:min-h-7 xl:h-9 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs min-w-0 shrink-0 max-w-[calc(100%-205px)] sm:max-w-[195px] md:max-w-[235px] lg:max-w-[285px] xl:max-w-none">
-              <span
-                className="text-[10.5px] mland:text-[8.5px] font-extrabold text-[var(--ink)] leading-tight whitespace-normal xl:whitespace-nowrap"
-                title={compTitle}
-              >
-                <span className="md:hidden">{compShortTitle}</span>
-                <span className="hidden md:inline">{compTitle}</span>
-              </span>
-              <span className="hidden xl:inline w-px h-3.5 bg-[var(--line)] shrink-0" />
-              <div className="inline-flex items-center gap-1.5 flex-wrap xl:flex-nowrap">
-                <div className="relative shrink-0">
+        {/* Pinned Top Broadcast Scoreboard */}
+        <MatchBroadcastHeader
+          compTitle={compTitle}
+          compShortTitle={compShortTitle}
+          matchEnv={matchEnv}
+          turfMatchMods={turfMatchMods}
+          isNeutralVenue={isNeutralVenue}
+          homeFacMods={homeFacMods}
+          awayFacMods={awayFacMods}
+          matchAttendance={matchAttendance}
+          broadcastChannel={broadcastChannel}
+          streamPlanId={streamProj.plan.id}
+          liveViewers={liveViewers}
+          peakViewers={peakViewers}
+          homeOrig={homeOrig}
+          awayOrig={awayOrig}
+          state={state}
+          gh={gh}
+          ga={ga}
+          done={done}
+          matchPhaseUi={matchPhaseUi}
+          paused={paused}
+          clockLabel={clockLabel}
+          stoppageBadge={stoppageBadge}
+          penText={penResult?.text}
+          goalFlashInfo={goalFlashInfo}
+          rightControls={
+            !done ? (
+              <>
+                {state.mode === 'm' && (
                   <button
                     type="button"
-                    onClick={() => setShowEnvModsPopover((v) => !v)}
-                    className={`inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold shrink-0 cursor-pointer rounded px-0.5 py-0 transition-colors hover:bg-[var(--surface-2)] ${
-                      matchEnv.timeOfDay === 'night'
-                        ? matchEnv.season === 'rainy'
-                          ? 'text-sky-600 dark:text-sky-300'
-                          : 'text-amber-600 dark:text-amber-300'
-                        : matchEnv.season === 'rainy'
-                          ? 'text-sky-600 dark:text-sky-300'
-                          : 'text-amber-700 dark:text-amber-300'
-                    }`}
-                    title="ดูผลกระทบสภาพสนามหญ้า & สิ่งอำนวยความสะดวกต่อนักเตะในนัดนี้"
-                  >
-                    <span>
-                      {matchEnv.timeOfDay === 'night'
-                        ? matchEnv.season === 'rainy'
-                          ? '🌙💧'
-                          : '🌙'
-                        : matchEnv.season === 'rainy'
-                          ? '💧'
-                          : '☀️'}
-                    </span>
-                    <span className="hidden xl:inline">
-                      {matchEnv.season === 'rainy' ? 'หน้าฝน' : 'หน้าร้อน'} · {matchEnv.timeOfDay === 'night' ? 'กลางคืน' : matchEnv.season === 'summer' ? 'แดดออก' : 'กลางวัน'}
-                    </span>
-                  </button>
-                {showEnvModsPopover && (
-                  <div className="absolute left-0 top-full mt-1.5 z-50 w-[305px] sm:w-[360px] rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl p-2.5 text-[10.5px] space-y-2">
-                    <div className="flex items-center justify-between gap-2 border-b border-[var(--line)] pb-1">
-                      <span className="font-extrabold text-[var(--ink)]">🌱 สภาพพื้นสนาม & โบนัสสิ่งอำนวยความสะดวก</span>
-                      <button
-                        type="button"
-                        onClick={() => setShowEnvModsPopover(false)}
-                        className="text-[var(--mut)] hover:text-[var(--ink)] font-bold px-1 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/60 p-1.5 space-y-1">
-                      <div className="font-bold text-[10px] text-[var(--ink)] flex items-center justify-between gap-1">
-                        <span>{turfMatchMods.gradeName}</span>
-                        <span className="text-[var(--mut)] tabular">
-                          สภาพ {matchEnv.turfCond}% · หญ้า{matchEnv.grassLength === 'short' ? 'สั้น' : matchEnv.grassLength === 'long' ? 'ยาว' : 'กลาง'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-1 text-[9.5px]">
-                        {turfMatchMods.effectsSummary.map((line, idx) => (
-                          <div key={idx} className="text-[var(--mut)] truncate">
-                            • {line}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {[
-                        {
-                          title: isNeutralVenue ? `${homeOrig.name} (สนามกลาง)` : `${homeOrig.name} (เหย้า)`,
-                          mods: homeFacMods
-                        },
-                        {
-                          title: isNeutralVenue ? `${awayOrig.name} (สนามกลาง)` : `${awayOrig.name} (เยือน)`,
-                          mods: awayFacMods
+                    title={
+                      autoSubEnabled
+                        ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
+                        : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
+                    }
+                    aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
+                    onClick={() => {
+                      SFX.tap();
+                      setAutoSubEnabled((v) => {
+                        const next = !v;
+                        saveSettings({ ...getSettings(), autoSubMatch: next });
+                        if (next && worldRef.current && !simRef.current.done) {
+                          runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
                         }
-                      ].map((sideBox, sIdx) => (
-                        <div key={sIdx} className="rounded-lg bg-[var(--surface-2)]/60 border border-[var(--line)]/60 p-1.5 space-y-1">
-                          <div className="font-bold text-[9.5px] text-[var(--ink)] truncate">{sideBox.title}</div>
-                          <div className="space-y-0.5 text-[9px]">
-                            {sideBox.mods.breakdown.map((b) => (
-                              <div key={b.key} className="flex items-center justify-between gap-1">
-                                <span className="text-[var(--mut)] truncate">{b.label}</span>
-                                <span
-                                  className={`font-bold shrink-0 tabular ${
-                                    b.tone === 'pos'
-                                      ? 'text-[var(--g)]'
-                                      : b.tone === 'neg'
-                                        ? 'text-[var(--red)]'
-                                        : 'text-[var(--mut)]'
-                                  }`}
-                                >
-                                  {b.deltaText}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                </div>
-                <span className="w-px h-3 bg-[var(--line)] shrink-0" />
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold text-[var(--ink)] tabular shrink-0"
-                  title={`ผู้ชมเข้าสนามนัดนี้ ${matchAttendance.att.toLocaleString()} / ความจุสนาม ${matchAttendance.cap.toLocaleString()} ที่นั่ง (${matchAttendance.pct}%)`}
-                >
-                  <span className="leading-none shrink-0">🏟</span>
-                  <span>{matchAttendance.att.toLocaleString()}</span>
-                  <span className="hidden md:inline mland:hidden text-[var(--mut)] font-normal">/ {matchAttendance.cap.toLocaleString()}</span>
-                  <span className="text-[var(--g)] font-extrabold">({matchAttendance.pct}%)</span>
-                </span>
-                <span className="w-px h-3 bg-[var(--line)] shrink-0" />
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold tabular shrink-0"
-                  title={
-                    streamProj.plan.id === 'off'
-                      ? `ถ่ายทอดผ่าน ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-                      : `ถ่ายทอดสดทาง ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
-                  }
-                >
-                  <span className={`leading-none shrink-0 text-[9px] mland:text-[7.5px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
-                  <span className={streamProj.plan.id === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
-                    {liveViewers.toLocaleString()}
-                  </span>
-                  <span className="hidden xl:inline text-[var(--mut)] font-medium truncate max-w-[110px]">
-                    {broadcastChannel.short}
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            {/* Center: Home + (Clock above Score) + Away */}
-            <div className="order-3 w-full sm:order-2 sm:w-auto sm:flex-1 mland:order-2 mland:w-auto mland:flex-1 min-w-0 flex items-center justify-center gap-2.5 sm:gap-3.5 md:gap-4 mland:gap-2">
-              {/* Home Team */}
-              <div className="flex items-center justify-end gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
-                <div className="text-right min-w-0 flex-1">
-                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center justify-end gap-1.5 transition-colors duration-200 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 dark:text-rose-300' : 'text-[#8a5b00] dark:text-[var(--lamp)]') : homeId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                    <span className="break-words">{homeOrig.name}</span>
-                  </div>
-                  <div className="mt-0.5 flex items-center justify-end gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
-                    {goalFlashInfo?.side === 'H' && (
-                      <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
-                        {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
-                      </span>
-                    )}
-                    {goalFlashInfo?.side === 'H' && <span className="text-[var(--mut)]/50">·</span>}
-                    {homeId === state.me && (
-                      <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
-                    )}
-                    {homeId === state.me && <span className="text-[var(--mut)]/50">·</span>}
-                    <span className="text-[var(--mut)]">เหย้า</span>
-                  </div>
-                </div>
-                <div className={`shrink-0 rounded-full transition-transform duration-200 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'ring-2 ring-rose-400 scale-105' : 'ring-2 ring-[var(--lamp)] scale-105') : ''}`}>
-                  <ClubCrest name={homeOrig.name} size={54} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-                </div>
-              </div>
-
-              {/* Center Match Time Above Score Box */}
-              <div className="relative flex flex-col items-center justify-center gap-1 mland:gap-0.5 shrink-0">
-                <div className="flex items-center justify-center leading-none">
-                  {done ? (
-                    <span className="px-2.5 py-0.5 rounded-md bg-[var(--g)] text-white font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] tracking-wide shadow-2xs">
-                      FT
-                    </span>
-                  ) : matchPhaseUi === 'halftime' ? (
-                    <span className="px-2.5 py-0.5 rounded-md bg-[var(--lamp)] text-[#261900] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
-                      HT
-                    </span>
-                  ) : paused ? (
-                    <span className="px-2 sm:px-2.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
-                      ⏸ {clockLabel}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 rounded-md bg-[var(--g-soft)] border border-[var(--g)]/35 text-[var(--g)] font-extrabold tabular text-[11px] sm:text-xs mland:text-[10px] shadow-2xs">
-                      <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-full bg-[var(--g)] animate-pulse" />
-                      <span>{clockLabel}</span>
-                      {stoppageBadge > 0 && <span className="opacity-75">(+{stoppageBadge}&apos;)</span>}
-                    </span>
-                  )}
-                </div>
-                <div
-                  className={`relative overflow-hidden px-3.5 sm:px-5 md:px-6 mland:px-3 py-1 sm:py-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-center min-w-[78px] sm:min-w-[98px] md:min-w-[110px] mland:min-w-[70px] transition-colors duration-200 shadow-xs ${
-                    goalFlashInfo
-                      ? goalFlashInfo.isOwnGoal
-                        ? 'bg-rose-500/12 border-rose-400 ring-2 ring-rose-400/70'
-                        : 'bg-[var(--lamp-soft)] border-[var(--lamp)] ring-2 ring-[var(--lamp)]/80'
-                      : 'bg-[var(--surface)] border-[var(--line)]'
-                  }`}
-                >
-                  {goalFlashInfo && (
-                    <div
-                      className="absolute inset-y-0 w-1.5"
-                      style={{
-                        backgroundColor: goalFlashInfo.kit || 'var(--lamp)',
-                        left: goalFlashInfo.side === 'H' ? 0 : undefined,
-                        right: goalFlashInfo.side === 'A' ? 0 : undefined
-                      }}
-                    />
-                  )}
-                  <div className="text-2xl sm:text-3xl md:text-[34px] mland:text-xl font-extrabold font-display tabular leading-none tracking-tight flex items-center justify-center">
-                    <span className={`transition-transform duration-200 ${goalFlashInfo?.side === 'H' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 scale-110' : 'text-[#8a5b00] dark:text-[var(--lamp)] scale-110') : ''}`}>
-                      {gh}
-                    </span>
-                    <span className="text-[var(--mut)]/45 mx-1.5">:</span>
-                    <span className={`transition-transform duration-200 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 scale-110' : 'text-[#8a5b00] dark:text-[var(--lamp)] scale-110') : ''}`}>
-                      {ga}
-                    </span>
-                  </div>
-                  {penResult && <div className="text-[9.5px] sm:text-[10px] mland:text-[8.5px] font-bold text-[#8a5b00] dark:text-[var(--lamp)] mt-0.5 truncate">{penResult.text}</div>}
-                </div>
-
-                {/* Floating Broadcast Goal Scorer Toast (Zero Layout Shift) */}
-                {goalFlashInfo && (
-                  <div
-                    className={`pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-30 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 mland:py-0.5 rounded-full border shadow-lg whitespace-nowrap ${
-                      goalFlashInfo.isOwnGoal
-                        ? 'bg-[#2b0e16] border-rose-400/80 text-rose-100'
-                        : goalFlashInfo.isMeScorer
-                          ? 'bg-[#1f1603] border-[var(--lamp)] text-amber-100'
-                          : 'bg-[#0c1b13] border-[var(--lamp)]/75 text-white'
+                        pushLog(
+                          minute,
+                          next
+                            ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
+                            : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
+                          'sys'
+                        );
+                        return next;
+                      });
+                    }}
+                    className={`btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 ${
+                      autoSubEnabled
+                        ? 'btn-primary'
+                        : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] shadow-2xs'
                     }`}
                   >
-                    <span
-                      className="w-2 h-2 rounded-full shrink-0 ring-1 ring-white/50"
-                      style={{ backgroundColor: goalFlashInfo.kit || '#facc15' }}
-                    />
-                    <span className={`text-[10px] sm:text-[11px] mland:text-[8.5px] font-black tracking-wide uppercase ${goalFlashInfo.isOwnGoal ? 'text-rose-300' : 'text-[var(--lamp)]'}`}>
-                      {goalFlashInfo.isOwnGoal ? 'OG' : 'GOAL'} {goalFlashInfo.minute}&apos;
-                    </span>
-                    <span className="text-[11px] sm:text-xs mland:text-[9px] font-extrabold text-white max-w-[140px] sm:max-w-[190px] truncate">
-                      {goalFlashInfo.scorer}
-                    </span>
-                    {goalFlashInfo.assister && !goalFlashInfo.isOwnGoal && (
-                      <span className="hidden sm:inline mland:hidden text-[10px] text-white/70 font-semibold max-w-[115px] truncate">
-                        (👟 {goalFlashInfo.assister.split(' ')[0]})
-                      </span>
-                    )}
-                    {goalFlashInfo.isMeScorer && (
-                      <span className="px-1.5 py-[1px] rounded-full bg-[var(--lamp)] text-[#261900] text-[9px] font-black shrink-0">
-                        ★ คุณยิง!
-                      </span>
-                    )}
-                  </div>
+                    <Bot className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                    <span className="hidden sm:inline mland:inline">ออโต้</span>
+                  </button>
                 )}
-              </div>
-
-              {/* Away Team */}
-              <div className="flex items-center gap-2 sm:gap-3 mland:gap-2 min-w-0 flex-1">
-                <div className={`shrink-0 rounded-full transition-transform duration-200 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 md:[&>svg]:w-[50px] md:[&>svg]:h-[50px] lg:[&>svg]:w-[54px] lg:[&>svg]:h-[54px] mland:[&>svg]:w-9 mland:[&>svg]:h-9 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'ring-2 ring-rose-400 scale-105' : 'ring-2 ring-[var(--lamp)] scale-105') : ''}`}>
-                  <ClubCrest name={awayOrig.name} size={54} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className={`font-extrabold text-[15px] sm:text-[17px] md:text-[19px] lg:text-[21px] mland:text-[14px] leading-[1.15] tracking-tight flex items-center gap-1.5 transition-colors duration-200 ${goalFlashInfo?.side === 'A' ? (goalFlashInfo.isOwnGoal ? 'text-rose-500 dark:text-rose-300' : 'text-[#8a5b00] dark:text-[var(--lamp)]') : awayId === state.me ? 'text-[var(--g)]' : 'text-[var(--ink)]'}`}>
-                    <span className="break-words">{awayOrig.name}</span>
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-1 leading-none text-[10px] sm:text-[10.5px] mland:text-[8.5px] font-bold">
-                    <span className="text-[var(--mut)]">เยือน</span>
-                    {awayId === state.me && <span className="text-[var(--mut)]/50">·</span>}
-                    {awayId === state.me && (
-                      <span className="text-[var(--g)] font-extrabold">★ คุณ</span>
-                    )}
-                    {goalFlashInfo?.side === 'A' && <span className="text-[var(--mut)]/50">·</span>}
-                    {goalFlashInfo?.side === 'A' && (
-                      <span className={`font-black tracking-wide ${goalFlashInfo.isOwnGoal ? 'text-rose-500' : 'text-[#a16207] dark:text-[var(--lamp)]'}`}>
-                        {goalFlashInfo.isOwnGoal ? '🤦 OG' : '⚽ GOAL!'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Tall, Prominent Uniform-Height Playback Control Dock (Live, Halftime & Post-Match) */}
-            <div className="order-2 sm:order-3 mland:order-3 flex items-center justify-end gap-1.5 mland:gap-1 shrink-0 ml-auto sm:ml-0 mland:ml-0">
-              {!done ? (
-                <>
-                  {state.mode === 'm' && (
-                    <button
-                      type="button"
-                      title={
-                        autoSubEnabled
-                          ? 'เปิดอยู่: ออโต้ปรับตำแหน่งในสนาม & เปลี่ยนตัวตามความฟิต/พรสวรรค์ — กดเพื่อปิด'
-                          : 'ปิดอยู่: กดเพื่อเปิดระบบออโต้ปรับตำแหน่ง & เปลี่ยนตัวอัตโนมัติ'
-                      }
-                      aria-label="เปิด/ปิด ระบบออโต้ปรับตำแหน่งและเปลี่ยนตัว"
-                      onClick={() => {
-                        SFX.tap();
-                        setAutoSubEnabled((v) => {
-                          const next = !v;
-                          saveSettings({ ...getSettings(), autoSubMatch: next });
-                          if (next && worldRef.current && !simRef.current.done) {
-                            runAutoOnPitchRebalance(worldRef.current, simRef.current, minute);
-                          }
-                          pushLog(
-                            minute,
-                            next
-                              ? '🤖 เปิดระบบออโต้ (ปรับตำแหน่งในสนามให้ตรงบทบาท & เปลี่ยนตัวอัตโนมัติ)'
-                              : '🤖 ปิดระบบออโต้ (คุมจัดตำแหน่งและเปลี่ยนตัวด้วยตนเอง)',
-                            'sys'
-                          );
-                          return next;
-                        });
-                      }}
-                      className={`btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 ${
-                        autoSubEnabled
-                          ? 'btn-primary'
-                          : 'bg-[var(--surface)] border border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)] shadow-2xs'
-                      }`}
-                    >
-                      <Bot className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-                      <span className="hidden sm:inline mland:inline">ออโต้</span>
-                    </button>
-                  )}
-                  {matchPhaseUi === 'halftime' ? (
+                {matchPhaseUi === 'halftime' ? (
                   <>
                     <button
                       type="button"
@@ -12740,22 +11932,21 @@ export const MatchModal: React.FC<{
                     </button>
                   </>
                 )}
-                </>
-              ) : (
-                <button
-                  type="button"
-                  title="จบเกมและดำเนินการต่อ"
-                  aria-label="จบเกมและดำเนินการต่อ"
-                  onClick={handleConfirmFinish}
-                  className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-4 sm:px-5 mland:px-3.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
-                >
-                  <Flag className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
-                  <span>จบเกม</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+              </>
+            ) : (
+              <button
+                type="button"
+                title="จบเกมและดำเนินการต่อ"
+                aria-label="จบเกมและดำเนินการต่อ"
+                onClick={handleConfirmFinish}
+                className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-4 sm:px-5 mland:px-3.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
+              >
+                <Flag className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
+                <span>จบเกม</span>
+              </button>
+            )
+          }
+        />
 
         {/* Horizontal Landscape Broadcast Stage OR Live Tactical Formation & Drag-Drop Sub Studio */}
         <div className="flex-1 min-h-0 overflow-hidden p-2.5 mland:p-1.5 flex flex-col">
@@ -12873,48 +12064,57 @@ export const MatchModal: React.FC<{
                 });
               }}
             />
+          ) : done && fullTimeAnalysis ? (
+            <FullTimeMatchStage
+              state={state}
+              homeOrig={homeOrig}
+              awayOrig={awayOrig}
+              liveHome={liveHome}
+              liveAway={liveAway}
+              meTeamOrig={meTeamOrig}
+              homeKit={homeKit}
+              awayKit={awayKit}
+              homeGkKit={homeGkKit}
+              awayGkKit={awayGkKit}
+              homeTrim={homeTrim}
+              awayTrim={awayTrim}
+              initialHomeXi={initialHomeXi}
+              initialAwayXi={initialAwayXi}
+              captains={liveCaptains}
+              gh={gh}
+              ga={ga}
+              evs={evs}
+              matchCards={matchCards}
+              subLog={subLog}
+              matchStats={matchStats}
+              fullTimeAnalysis={fullTimeAnalysis}
+              playerSavesMap={Object.fromEntries(
+                Object.entries(livePlayerStatsUi).map(([name, st]) => [name, st.saves || 0])
+              )}
+              injuredNames={injuredNamesUi}
+              shootoutUi={shootoutUi}
+              logs={logs}
+              timelineEvents={timelineEvents}
+              matchVisualIndex={matchVisualIndex}
+              liveViewers={liveViewers}
+              peakViewers={peakViewers}
+              liveComments={liveComments}
+              broadcastChannel={broadcastChannel}
+              streamProj={streamProj}
+              isDerby={isDerby}
+              isPlayerMode={isPlayerMode}
+              myPlayerName={myPlayerName}
+              myPlayerSquadObj={myPlayerSquadObj}
+              myInitialBanned={myInitialBanned}
+              rightTab={mlandMatchTab === 'tactics' ? 'stats' : mlandMatchTab}
+              onChangeRightTab={(t) => setMlandMatchTab(t)}
+              onOpenVarReplay={openVarReplayById}
+            />
           ) : (
             <div className="grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
-            {/* Left Stage: Live 2D Pitch / Full-Time Pitch Ratings + Events Feed Below */}
+            {/* Left Stage: Live 2D Pitch + Events Feed Below */}
             <div ref={leftStageScrollRef} className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
-              {!(done && fullTimeAnalysis) ? (
-                <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
-
-                  {injuryAlert && !done && (
-                    <div className="px-2.5 sm:px-3 py-1.5 mland:px-2 mland:py-1 bg-rose-950/95 border-b border-rose-400/50 flex flex-wrap items-center justify-between gap-2 text-white shrink-0">
-                      <span className="text-[11px] sm:text-xs mland:text-[10px] font-bold text-rose-200 flex items-center gap-1.5 min-w-0">
-                        <span className="animate-pulse shrink-0 inline-flex"><StatIconBadge kind="injury" size="sm" /></span>
-                        <span className="truncate">
-                          ด่วน น.{injuryAlert.minute}&apos;: #{injuryAlert.no} {injuryAlert.role} {injuryAlert.name} บาดเจ็บ (พัก {injuryAlert.games} นัด)
-                        </span>
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {benchList.length > 0 && subsUsed.length < 5 && (
-                          <button
-                            type="button"
-                            onClick={handleQuickSubInjured}
-                            className="btn btn-xs btn-primary"
-                          >
-                            ⚡ เปลี่ยนตัวด่วนแทนผู้เจ็บ
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => openTacticsStudio(injuryAlert.name)}
-                          className="btn btn-xs bg-white/15 border border-white/25 text-white hover:bg-white/25"
-                        >
-                          🔄 เลือกเอง
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setInjuryAlert(null)}
-                          className="w-6 h-6 rounded-md bg-white/10 text-white/80 text-[10px] font-bold cursor-pointer hover:bg-white/20"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    </div>
-                  )}
+              <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
                   <div
                     className="relative"
                     style={{
@@ -13088,10 +12288,20 @@ export const MatchModal: React.FC<{
                           })()
                         : null;
 
+                      const htTalkOptions = [
+                        { id: 'attack' as const, icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
+                        { id: 'press' as const, icon: '⚡', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
+                        { id: 'balanced' as const, icon: '⚖️', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
+                        { id: 'counter' as const, icon: '🚀', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
+                        { id: 'defend' as const, icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
+                      ];
+                      const activeHtTalkOpt = htTalkOptions.find((o) => o.id === selectedHalftimeTalk) || htTalkOptions[2];
+                      const showHtTalkSidebar = state.mode === 'm' && !htTalkCollapsed;
+
                       return (
                         <div className="flex flex-col bg-[#092818] text-[var(--ink)]">
                           {/* Halftime Stage: Full-Height Pitch + Compact Right-Side Tactical Panel */}
-                          <div className={`grid ${state.mode === 'm' ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_240px] mland:grid-cols-[minmax(0,1fr)_190px]' : 'grid-cols-1'} bg-[#092818]`}>
+                          <div className={`grid ${showHtTalkSidebar ? 'grid-cols-1 sm:grid-cols-[minmax(0,1fr)_220px] lg:grid-cols-[minmax(0,1fr)_240px] mland:grid-cols-[minmax(0,1fr)_190px]' : 'grid-cols-1'} bg-[#092818]`}>
                             <div className="flex flex-col min-w-0">
                               {/* Full-Height SVG Formation Pitch Container with Inside Logo Switcher & Pitch Crest */}
                               <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex items-center justify-center">
@@ -13101,7 +12311,10 @@ export const MatchModal: React.FC<{
                                     type="button"
                                     title="แสดงแผนทั้งสองทีม"
                                     aria-label="แสดงแผนทั้งสองทีม"
-                                    onClick={() => setHtPitchMode('all')}
+                                    onClick={() => {
+                                      setHtPitchMode('all');
+                                      setHtTalkCollapsed(true);
+                                    }}
                                     className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
                                       htPitchMode === 'all'
                                         ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
@@ -13117,7 +12330,10 @@ export const MatchModal: React.FC<{
                                     type="button"
                                     title={homeOrig.name}
                                     aria-label={homeOrig.name}
-                                    onClick={() => setHtPitchMode('H')}
+                                    onClick={() => {
+                                      setHtPitchMode('H');
+                                      setHtTalkCollapsed(false);
+                                    }}
                                     className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                                       htPitchMode === 'H'
                                         ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
@@ -13130,7 +12346,10 @@ export const MatchModal: React.FC<{
                                     type="button"
                                     title={awayOrig.name}
                                     aria-label={awayOrig.name}
-                                    onClick={() => setHtPitchMode('A')}
+                                    onClick={() => {
+                                      setHtPitchMode('A');
+                                      setHtTalkCollapsed(false);
+                                    }}
                                     className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
                                       htPitchMode === 'A'
                                         ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
@@ -13263,10 +12482,36 @@ export const MatchModal: React.FC<{
                                   <span>xG <b className="text-white">{matchStats.xgH.toFixed(2)} - {matchStats.xgA.toFixed(2)}</b></span>
                                 </div>
                               </div>
+
+                              {/* Collapsed Halftime Tactical Orders Bar (when viewing both clubs or minimized) */}
+                              {state.mode === 'm' && htTalkCollapsed && (
+                                <div className="bg-[#051b0f]/95 border-t border-white/15 px-2.5 py-1.5 mland:px-2 mland:py-1 flex items-center justify-between gap-2 text-white">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="font-extrabold text-[11px] mland:text-[9.5px] text-[#fde047] shrink-0">
+                                      🗣️ สั่งการครึ่งหลัง
+                                    </span>
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-400/50 text-[10.5px] mland:text-[9px] font-bold text-emerald-100 truncate">
+                                      <span>{activeHtTalkOpt.icon}</span>
+                                      <span className="truncate">{activeHtTalkOpt.title}</span>
+                                    </span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      SFX.tap();
+                                      setHtTalkCollapsed(false);
+                                    }}
+                                    className="px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-[10.5px] mland:text-[9px] font-bold text-white inline-flex items-center gap-1 cursor-pointer shrink-0 transition-colors"
+                                  >
+                                    <span>ขยาย</span>
+                                    <ChevronDown className="w-3.5 h-3.5 mland:w-3 mland:h-3" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
 
                             {/* Right Side Inside Stadium: Tactical Orders (Manager Mode only — Player Mode shows in แผนโค้ช panel) */}
-                            {state.mode === 'm' && (
+                            {showHtTalkSidebar && (
                               <div className="bg-[#082414]/92 border-t sm:border-t-0 sm:border-l mland:border-t-0 mland:border-l border-white/15 p-2.5 sm:p-3 mland:p-2 flex flex-col gap-2.5 mland:gap-1.5">
                                 <div className="space-y-2 mland:space-y-1 flex-1 min-h-0 flex flex-col">
                                   <div className="flex items-start justify-between gap-2">
@@ -13278,23 +12523,32 @@ export const MatchModal: React.FC<{
                                         เลือกคำสั่งปลุกใจ/แท็กติกทีม แล้วกดเริ่มครึ่งหลังด้านบน
                                       </p>
                                     </div>
-                                    <ClubCrest
-                                      name={meTeamOrig.name}
-                                      size={22}
-                                      team={meTeamOrig}
-                                      club={state.club}
-                                      isMyClub={true}
-                                    />
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <ClubCrest
+                                        name={meTeamOrig.name}
+                                        size={22}
+                                        team={meTeamOrig}
+                                        club={state.club}
+                                        isMyClub={true}
+                                      />
+                                      <button
+                                        type="button"
+                                        title="ย่อสั่งการครึ่งหลัง"
+                                        aria-label="ย่อสั่งการครึ่งหลัง"
+                                        onClick={() => {
+                                          SFX.tap();
+                                          setHtTalkCollapsed(true);
+                                        }}
+                                        className="px-1.5 py-1 mland:px-1 mland:py-0.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 text-[10px] mland:text-[8.5px] font-bold text-white/90 inline-flex items-center gap-0.5 cursor-pointer transition-colors"
+                                      >
+                                        <span>ย่อ</span>
+                                        <ChevronUp className="w-3 h-3 mland:w-2.5 mland:h-2.5" />
+                                      </button>
+                                    </div>
                                   </div>
 
                                   <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-1.5 mland:gap-1 pr-0.5">
-                                    {[
-                                      { id: 'attack' as const, icon: '🔥', title: 'เปิดเกมรุกบุกแหลก', desc: 'ดันไลน์สูง ปลุกเกมบุก & กองหน้า' },
-                                      { id: 'press' as const, icon: '⚡', title: 'เพรสซิ่งสูงบีบพื้นที่', desc: 'เร่งจังหวะ ไล่บีบแย่งบอลทันที' },
-                                      { id: 'balanced' as const, icon: '⚖️', title: 'รักษาทรงคุมจังหวะ', desc: 'นิ่งและสม่ำเสมอ รอจังหวะเจาะ' },
-                                      { id: 'counter' as const, icon: '🚀', title: 'ตั้งรับรอโต้กลับเร็ว', desc: 'รัดกุมหลังแล้ววางบอลสวนฉับพลัน' },
-                                      { id: 'defend' as const, icon: '🛡️', title: 'ขันเกมรับให้แน่น', desc: 'ปิดพื้นที่คุมโซน ลดความเสี่ยงเสียประตู' }
-                                    ].map((opt) => {
+                                    {htTalkOptions.map((opt) => {
                                       const active = selectedHalftimeTalk === opt.id;
                                       return (
                                         <button
@@ -13336,315 +12590,7 @@ export const MatchModal: React.FC<{
                       );
                     })()}
                   </div>
-                </div>
-              ) : (() => {
-                const buildFtMeta = (team: Team, xiNames: string[]): Record<string, PitchPlayerMeta> => {
-                  const out: Record<string, PitchPlayerMeta> = {};
-                  xiNames.forEach((name) => {
-                    const rt = fullTimeAnalysis.ratings[name] ?? 6.5;
-                    const goals = evs.filter((e) => !e.og && e.t === team.id && e.who === name).length;
-                    const assists = evs.filter((e) => !e.og && e.t === team.id && e.as === name).length;
-                    const pCards = fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name);
-                    const isRed = pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
-                    const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
-                    const subOutEv = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name);
-                    const isMotm = fullTimeAnalysis.motm === name;
-                    out[name] = {
-                      rating: rt,
-                      goals,
-                      assists,
-                      isRed,
-                      yellowCards,
-                      isInjured: injuredNamesUi.includes(name),
-                      subOutMin: subOutEv?.m,
-                      isMotm
-                    };
-                  });
-                  return out;
-                };
-
-                const homeFtMeta = buildFtMeta(liveHome, initialHomeXi);
-                const awayFtMeta = buildFtMeta(liveAway, initialAwayXi);
-
-                const pickedInfo = ftPickedPlayer
-                  ? (() => {
-                      const t = homeOrig.sq.find((q) => q.n === ftPickedPlayer) ? homeOrig : awayOrig;
-                      const p = t.sq.find((q) => q.n === ftPickedPlayer);
-                      const no = p ? getShirtNo(t, p) : 0;
-                      const rt = fullTimeAnalysis.ratings[ftPickedPlayer] ?? 6.5;
-                      const gl = evs.filter((e) => !e.og && e.t === t.id && e.who === ftPickedPlayer).length;
-                      const as = evs.filter((e) => !e.og && e.t === t.id && e.as === ftPickedPlayer).length;
-                      const subIn = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.inPlayer === ftPickedPlayer);
-                      const subOut = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.outPlayer === ftPickedPlayer);
-                      const cards = fullTimeAnalysis.cards.filter((c) => c.t === t.id && c.who === ftPickedPlayer);
-                      const isMotm = fullTimeAnalysis.motm === ftPickedPlayer;
-                      return { name: ftPickedPlayer, team: t, role: p?.ro || 'CM', no, rt, gl, as, subIn, subOut, cards, isMotm };
-                    })()
-                  : null;
-
-                const visibleFtSubs = fullTimeAnalysis.subs.filter(
-                  (sb) => ftPitchMode === 'all' || (ftPitchMode === 'H' ? sb.t === homeOrig.id : sb.t === awayOrig.id)
-                );
-
-                return (
-                  <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#092818] shadow-xs w-full flex flex-col">
-                    {/* Full-Time Full-Height SVG Formation Pitch Stage with Inside Logo Switcher */}
-                    <div className="w-full h-[495px] sm:h-[575px] lg:h-[635px] mland:h-[calc(var(--app-dvh,1dvh)*97-95px)] mland:min-h-[215px] flex items-stretch overflow-hidden bg-[#092818]">
-                      <div className="relative flex-1 min-w-0 p-1.5 sm:p-2 mland:p-1 select-none overflow-hidden flex items-center justify-center">
-                        {/* Compact Logo-Only Team Switcher Inside Pitch */}
-                        <div className="absolute top-2 left-2 z-20 flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/88 border border-white/25 shadow-lg shrink-0">
-                          <button
-                            type="button"
-                            title="แสดงเรตติ้งทั้งสองทีม"
-                            aria-label="แสดงเรตติ้งทั้งสองทีม"
-                            onClick={() => setFtPitchMode('all')}
-                            className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
-                              ftPitchMode === 'all'
-                                ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                            }`}
-                          >
-                            <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
-                              <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                              <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                            </span>
-                          </button>
-                          <button
-                            type="button"
-                            title={homeOrig.name}
-                            aria-label={homeOrig.name}
-                            onClick={() => setFtPitchMode('H')}
-                            className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
-                              ftPitchMode === 'H'
-                                ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                            }`}
-                          >
-                            <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
-                          </button>
-                          <button
-                            type="button"
-                            title={awayOrig.name}
-                            aria-label={awayOrig.name}
-                            onClick={() => setFtPitchMode('A')}
-                            className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
-                              ftPitchMode === 'A'
-                                ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
-                                : 'opacity-80 hover:opacity-100 hover:bg-white/10'
-                            }`}
-                          >
-                            <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
-                          </button>
-                        </div>
-
-                        {/* Selected Player Detail Inspector Popover */}
-                        {pickedInfo && (() => {
-                          const pkPl = pickedInfo.team.sq.find((q) => q.n === pickedInfo.name);
-                          const pkIsHome = pickedInfo.team.id === homeId;
-                          return (
-                            <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[300px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="font-bold truncate flex items-center gap-1.5">
-                                  {pkPl && (
-                                    <MatchPlayerThumb
-                                      player={pkPl}
-                                      team={pickedInfo.team}
-                                      state={state}
-                                      kitColor={pkIsHome ? (pkPl.pos === 'GK' ? homeGkKit : homeKit) : (pkPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                      trimColor={pkPl.pos === 'GK' ? undefined : (pkIsHome ? homeTrim : awayTrim)}
-                                      size="md"
-                                      dark
-                                    />
-                                  )}
-                                  <span className="text-[#facc15] tabular">#{pickedInfo.no}</span>
-                                  <PositionBadge role={pickedInfo.role} size="2xs" />
-                                  <span className="truncate">{pickedInfo.name}</span>
-                                  {pickedInfo.isMotm && (
-                                    <span className="px-1.5 py-0.2 rounded bg-[#facc15] text-[#1c1300] text-[9px] font-black shrink-0">
-                                      👑 MOTM
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular mt-0.5">
-                                  <span>{pickedInfo.team.name}</span>
-                                  <span className="px-1.5 rounded bg-[#facc15]/20 text-[#facc15] font-extrabold">⭐ {pickedInfo.rt.toFixed(1)}</span>
-                                  {pickedInfo.gl > 0 && <StatIconBadge kind="goal" count={pickedInfo.gl} size="sm" />}
-                                  {pickedInfo.as > 0 && <StatIconBadge kind="assist" count={pickedInfo.as} size="sm" />}
-                                  {pickedInfo.cards.map((c, idx) => (
-                                    <StatIconBadge key={idx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
-                                  ))}
-                                  {pickedInfo.subOut && <span className="inline-flex items-center gap-0.5 text-rose-300 font-bold"><StatIconBadge kind="subOut" size="xs" />ออก {pickedInfo.subOut.m}&apos;</span>}
-                                  {pickedInfo.subIn && <span className="inline-flex items-center gap-0.5 text-emerald-300 font-bold"><StatIconBadge kind="subIn" size="xs" />เข้า {pickedInfo.subIn.m}&apos;</span>}
-                                </div>
-                              </div>
-                              <button type="button" onClick={() => setFtPickedPlayer(null)} className="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 font-bold cursor-pointer shrink-0">
-                                ✕
-                              </button>
-                            </div>
-                          );
-                        })()}
-
-                        <div className="h-full min-h-0 w-full flex items-center justify-center overflow-hidden">
-                          {ftPitchMode === 'all' ? (
-                            <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1.5 items-stretch">
-                              <div className="h-full min-h-0 w-full flex items-center justify-center">
-                                <FormationPitch
-                                  team={liveHome}
-                                  state={state}
-                                  lineupNames={initialHomeXi}
-                                  kitOverride={homeKit}
-                                  gkKitOverride={homeGkKit}
-                                  trimOverride={homeTrim}
-                                  matchMeta={homeFtMeta}
-                                  statMode="rating"
-                                  showFitBar={false}
-                                  showPitchCrest={true}
-                                  selectedPlayerName={ftPickedPlayer}
-                                  onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                  className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
-                                />
-                              </div>
-                              <div className="h-full min-h-0 w-full flex items-center justify-center">
-                                <FormationPitch
-                                  team={liveAway}
-                                  state={state}
-                                  lineupNames={initialAwayXi}
-                                  kitOverride={awayKit}
-                                  gkKitOverride={awayGkKit}
-                                  trimOverride={awayTrim}
-                                  matchMeta={awayFtMeta}
-                                  statMode="rating"
-                                  showFitBar={false}
-                                  showPitchCrest={true}
-                                  selectedPlayerName={ftPickedPlayer}
-                                  onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                                  className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <FormationPitch
-                              team={ftPitchMode === 'H' ? liveHome : liveAway}
-                              state={state}
-                              lineupNames={ftPitchMode === 'H' ? initialHomeXi : initialAwayXi}
-                              kitOverride={ftPitchMode === 'H' ? homeKit : awayKit}
-                              gkKitOverride={ftPitchMode === 'H' ? homeGkKit : awayGkKit}
-                              trimOverride={ftPitchMode === 'H' ? homeTrim : awayTrim}
-                              matchMeta={ftPitchMode === 'H' ? homeFtMeta : awayFtMeta}
-                              statMode="rating"
-                              showFitBar={false}
-                              showPitchCrest={true}
-                              selectedPlayerName={ftPickedPlayer}
-                              onPlayerClick={(pl) => setFtPickedPlayer((prev) => (prev === pl.n ? null : pl.n))}
-                              className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Bottom Substitutes Strip (Neat 2-row cards with Position before Name) */}
-                    {visibleFtSubs.length > 0 && (
-                      <div className="bg-[#05180e] border-t border-white/12 px-2.5 py-2 mland:px-2 mland:py-1 text-white">
-                        <div className="flex flex-nowrap items-stretch gap-2 mland:gap-1.5 overflow-x-auto pb-0.5">
-                          {visibleFtSubs.map((sb, idx) => {
-                            const subTeam = sb.t === homeOrig.id ? homeOrig : awayOrig;
-                            const subPl = subTeam.sq.find((q) => q.n === sb.inPlayer);
-                            const subNo = subPl ? getShirtNo(subTeam, subPl) : 0;
-                            const subRt = fullTimeAnalysis.ratings[sb.inPlayer] ?? 6.5;
-                            const isSubMotm = fullTimeAnalysis.motm === sb.inPlayer;
-                            const isPicked = ftPickedPlayer === sb.inPlayer;
-                            const subGl = evs.filter((e) => !e.og && e.t === subTeam.id && e.who === sb.inPlayer).length;
-                            const subAs = evs.filter((e) => !e.og && e.t === subTeam.id && e.as === sb.inPlayer).length;
-                            const subCards = fullTimeAnalysis.cards.filter((c) => c.t === subTeam.id && c.who === sb.inPlayer);
-                            const subTeamKit = subTeam.id === homeId ? homeKit : awayKit;
-                            const rtPillCls = isSubMotm
-                              ? 'bg-[#1c1300] text-[#facc15]'
-                              : subRt >= 7.5
-                                ? 'bg-emerald-500/25 text-emerald-200 border border-emerald-400/35'
-                                : subRt >= 6.8
-                                  ? 'bg-black/45 text-emerald-300 border border-white/10'
-                                  : 'bg-black/45 text-amber-200 border border-white/10';
-                            return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => setFtPickedPlayer((prev) => (prev === sb.inPlayer ? null : sb.inPlayer))}
-                                className={`shrink-0 inline-flex items-center gap-2 mland:gap-1.5 pl-1.5 pr-2 py-1.5 mland:pl-1 mland:pr-1.5 mland:py-1 rounded-xl border text-left tabular cursor-pointer transition-all whitespace-nowrap ${
-                                  isSubMotm
-                                    ? 'bg-gradient-to-r from-[#facc15] to-[#eab308] text-[#1c1300] border-white shadow-md font-extrabold'
-                                    : isPicked
-                                      ? 'bg-sky-500/24 border-sky-400 text-white shadow-[0_0_0_1px_rgba(56,189,248,0.35)]'
-                                      : 'bg-white/7 border-white/14 hover:bg-white/13 hover:border-white/25 text-white/95'
-                                }`}
-                              >
-                                <span
-                                  className="w-1 self-stretch rounded-full shrink-0"
-                                  style={{ backgroundColor: isSubMotm ? '#1c1300' : subTeamKit }}
-                                />
-                                {subPl && (
-                                  <MatchPlayerThumb
-                                    player={subPl}
-                                    team={subTeam}
-                                    state={state}
-                                    kitColor={subTeam.id === homeId ? (subPl.pos === 'GK' ? homeGkKit : homeKit) : (subPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                    trimColor={subPl.pos === 'GK' ? undefined : (subTeam.id === homeId ? homeTrim : awayTrim)}
-                                    size="sm"
-                                    dark={!isSubMotm}
-                                    ringClassName={isSubMotm ? 'ring-[#1c1300]/50' : 'ring-white/25'}
-                                  />
-                                )}
-                                <div className="min-w-0 flex flex-col justify-center gap-1 mland:gap-0.5">
-                                  <div className="flex items-center gap-1 leading-none">
-                                    {ftPitchMode === 'all' && (
-                                      <span className="shrink-0 inline-flex">
-                                        <ClubCrest name={subTeam.name} size={11} team={subTeam} club={state.club} isMyClub={subTeam.id === state.me && state.mode === 'm'} />
-                                      </span>
-                                    )}
-                                    {subPl?.ro && <PositionBadge role={subPl.ro} size="2xs" />}
-                                    <span className="font-extrabold text-[11px] mland:text-[9px] max-w-[90px] truncate">
-                                      {sb.inPlayer.split(' ')[0]}
-                                    </span>
-                                    <span className={`text-[9px] mland:text-[7.5px] font-semibold shrink-0 ${isSubMotm ? 'text-[#1c1300]/75' : 'text-white/55'}`}>
-                                      #{subNo}
-                                    </span>
-                                    {isSubMotm && <span className="text-[10px] leading-none shrink-0" title="Man of the Match">👑</span>}
-                                  </div>
-                                  <div className="flex items-center gap-1.5 text-[9px] mland:text-[7.5px] leading-none">
-                                    <span className={`inline-flex items-center gap-0.5 font-bold ${isSubMotm ? 'text-emerald-950' : 'text-emerald-300'}`}>
-                                      <StatIconBadge kind="subIn" size="xs" />
-                                      <span>{sb.m}&apos;</span>
-                                    </span>
-                                    <span
-                                      className={`inline-flex items-center gap-0.5 font-medium ${isSubMotm ? 'text-rose-950/85' : 'text-rose-300/85'}`}
-                                      title={`เปลี่ยนออก: ${sb.outPlayer}`}
-                                    >
-                                      <StatIconBadge kind="subOut" size="xs" />
-                                      <span className="max-w-[56px] truncate">{sb.outPlayer.split(' ')[0]}</span>
-                                    </span>
-                                    {(subGl > 0 || subAs > 0 || subCards.length > 0) && (
-                                      <span className="inline-flex items-center gap-0.5 shrink-0">
-                                        {subGl > 0 && <StatIconBadge kind="goal" count={subGl} size="xs" />}
-                                        {subAs > 0 && <StatIconBadge kind="assist" count={subAs} size="xs" />}
-                                        {subCards.map((c, cIdx) => (
-                                          <StatIconBadge key={cIdx} kind={c.type === 'Y' ? 'yellow' : 'red'} size="xs" />
-                                        ))}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <span className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] mland:text-[8px] font-black shrink-0 ${rtPillCls}`}>
-                                  {subRt.toFixed(1)}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              </div>
 
               {/* Live Penalty Shootout Strip */}
               {shootoutUi && (
@@ -13860,110 +12806,6 @@ export const MatchModal: React.FC<{
                 </div>
 
                 <div className="p-2.5 sm:p-3 mland:p-2 space-y-1.5 mland:space-y-1">
-                  {done && (eventFilter === 'all' || eventFilter === 'goal') && (() => {
-                    const sortedGoals = evs.slice().sort((a, b) => a.m - b.m);
-                    return (
-                      <div className="rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] overflow-hidden">
-                        <div className="px-2.5 py-1.5 mland:px-2 mland:py-1 bg-[var(--surface-2)] border-b border-[var(--line)]/75 flex items-center justify-between gap-2">
-                          <span className="inline-flex items-center gap-1.5 text-[11px] mland:text-[9.5px] font-extrabold text-[var(--ink)]">
-                            <span>⚽</span>
-                            <span>สรุปผู้ทำประตู</span>
-                          </span>
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)] text-[10.5px] mland:text-[9px] font-extrabold tabular text-[var(--ink)]">
-                            <ClubCrest name={homeOrig.name} size={13} team={homeOrig} club={state.club} isMyClub={homeId === state.me && state.mode === 'm'} />
-                            <span>{gh} - {ga}</span>
-                            <ClubCrest name={awayOrig.name} size={13} team={awayOrig} club={state.club} isMyClub={awayId === state.me && state.mode === 'm'} />
-                          </span>
-                        </div>
-                        {sortedGoals.length === 0 ? (
-                          <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 text-[10.5px] mland:text-[9px] text-[var(--mut)] text-center">
-                            ไม่มีประตูในเวลาปกติ ({gh} - {ga})
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-[var(--line)]/55">
-                            {sortedGoals.map((ev, gIdx) => {
-                              const isHomeScore = ev.t === homeOrig.id;
-                              const scoringTeam = isHomeScore ? homeOrig : awayOrig;
-                              const culpritTeam = ev.og ? (isHomeScore ? awayOrig : homeOrig) : scoringTeam;
-                              const scorerPl = culpritTeam.sq.find((q) => q.n === ev.who) || null;
-                              const scorerNo = scorerPl ? getShirtNo(culpritTeam, scorerPl) : null;
-                              const assisterPl = !ev.og && ev.as ? scoringTeam.sq.find((q) => q.n === ev.as) || null : null;
-                              const isPenGoal = !ev.og && (ev.style === 'penalty' || ev.style === 'panenka');
-                              return (
-                                <button
-                                  key={`${ev.m}-${ev.t}-${ev.who}-${gIdx}`}
-                                  type="button"
-                                  onClick={() => {
-                                    setFtPickedPlayer((prev) => (prev === ev.who ? null : ev.who));
-                                    if (ftPitchMode !== 'all') {
-                                      setFtPitchMode(culpritTeam.id === homeOrig.id ? 'H' : 'A');
-                                    }
-                                  }}
-                                  className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 hover:bg-[var(--surface)]/85 transition-colors flex items-center justify-between gap-2 cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                    <span
-                                      className={`min-w-[28px] h-5 px-1 rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
-                                        ev.og
-                                          ? 'bg-rose-500/18 text-rose-600 dark:text-rose-300'
-                                          : isHomeScore
-                                            ? 'bg-[var(--g)] text-white'
-                                            : 'bg-amber-500 text-white'
-                                      }`}
-                                    >
-                                      {ev.m}&apos;
-                                    </span>
-                                    <span className="shrink-0 inline-flex">
-                                      <ClubCrest name={scoringTeam.name} size={13} team={scoringTeam} club={state.club} isMyClub={scoringTeam.id === state.me && state.mode === 'm'} />
-                                    </span>
-                                    {scorerPl && (
-                                      <MatchPlayerThumb
-                                        player={scorerPl}
-                                        team={culpritTeam}
-                                        state={state}
-                                        kitColor={culpritTeam.id === homeId ? (scorerPl.pos === 'GK' ? homeGkKit : homeKit) : (scorerPl.pos === 'GK' ? awayGkKit : awayKit)}
-                                        trimColor={scorerPl.pos === 'GK' ? undefined : (culpritTeam.id === homeId ? homeTrim : awayTrim)}
-                                        size="xs"
-                                      />
-                                    )}
-                                    {scorerPl?.ro && <PositionBadge role={scorerPl.ro} size="2xs" />}
-                                    <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate">
-                                      {ev.who}
-                                    </span>
-                                    {scorerNo != null && (
-                                      <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
-                                        #{scorerNo}
-                                      </span>
-                                    )}
-                                    {ev.og && (
-                                      <span className="px-1 py-[1px] rounded bg-rose-500/18 text-rose-600 dark:text-rose-300 text-[9px] mland:text-[7.5px] font-black shrink-0">
-                                        OG
-                                      </span>
-                                    )}
-                                    {isPenGoal && (
-                                      <span className="px-1 py-[1px] rounded bg-amber-500/18 text-amber-700 dark:text-amber-300 text-[9px] mland:text-[7.5px] font-extrabold shrink-0">
-                                        🎯 จุดโทษ
-                                      </span>
-                                    )}
-                                  </div>
-                                  {!ev.og && ev.as && (
-                                    <span
-                                      title={`ผู้จ่ายบอล: ${ev.as}`}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-[var(--line)]/80 text-[10px] mland:text-[8.5px] shrink-0 max-w-[44%]"
-                                    >
-                                      <span className="leading-none shrink-0">👟</span>
-                                      {assisterPl?.ro && <PositionBadge role={assisterPl.ro} size="2xs" />}
-                                      <span className="font-bold text-[var(--ink)] truncate">{ev.as}</span>
-                                    </span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
 
                   {eventFilter === 'sub' ? (
                     subLog.length === 0 ? (
@@ -14036,139 +12878,143 @@ export const MatchModal: React.FC<{
               </div>
             </div>
 
-            {/* Right Stage: Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
+            {/* Right Stage: Injury Alert + Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
-              <div className="seg-bar grid w-full shrink-0 grid-cols-3">
-                {done ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setMlandMatchTab('players')}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'players' ? 'seg-btn-active' : ''}`}
-                    >
-                      <span>👥 รายชื่อ</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMlandMatchTab('stats')}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
-                    >
-                      <span>📊 สถิติ</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMlandMatchTab('chat')}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
-                    >
-                      <span>🔴</span>
-                      <span>ไลฟ์สด</span>
-                      <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
-                        {fmtFansShort(liveViewers)}
+              {injuryAlert && !done && (
+                <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-rose-950/95 border border-rose-400/55 shadow-sm flex flex-col gap-1.5 mland:gap-1 text-white shrink-0">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <span className="text-[11px] sm:text-xs mland:text-[9.5px] font-bold text-rose-200 flex items-center gap-1.5 min-w-0 leading-snug">
+                      <span className="animate-pulse shrink-0 inline-flex"><StatIconBadge kind="injury" size="sm" /></span>
+                      <span className="line-clamp-2">
+                        ด่วน น.{injuryAlert.minute}&apos;: #{injuryAlert.no} {injuryAlert.role} {injuryAlert.name} บาดเจ็บ (พัก {injuryAlert.games} นัด)
                       </span>
-                    </button>
-                  </>
-                ) : (
-                  <>
+                    </span>
                     <button
                       type="button"
-                      onClick={() => setMlandMatchTab('stats')}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                      onClick={() => setInjuryAlert(null)}
+                      className="w-6 h-6 mland:w-5 mland:h-5 rounded-md bg-white/10 text-white/80 text-[10px] font-bold cursor-pointer hover:bg-white/20 shrink-0"
+                      aria-label="ปิดแจ้งเตือนผู้บาดเจ็บ"
                     >
-                      <span>📊 สถิติ</span>
+                      ✕
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setMlandMatchTab('chat')}
-                      className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
-                    >
-                      <span>🔴</span>
-                      <span>ไลฟ์สด</span>
-                      <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
-                        {fmtFansShort(liveViewers)}
-                      </span>
-                    </button>
-                    {state.mode === 'm' ? (
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {benchList.length > 0 && subsUsed.length < 5 && (
                       <button
                         type="button"
-                        onClick={() => openTacticsStudio()}
-                        className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                        onClick={handleQuickSubInjured}
+                        className="btn btn-xs btn-primary flex-1 whitespace-nowrap"
                       >
-                        <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-                          {5 - subsUsed.length}
-                        </span>
-                        <span>📋 แผน</span>
+                        ⚡ เปลี่ยนตัวด่วนแทนผู้เจ็บ
                       </button>
-                    ) : (
-                      (() => {
-                        const canSpeakTab =
-                          userPitchStatus === 'on' &&
-                          coachChatCount < 2 &&
-                          minute >= 10 &&
-                          minute - coachChatCooldownMin >= 20;
-                        const waitTabMins =
-                          minute < 10
-                            ? Math.max(1, 10 - minute)
-                            : Math.max(1, 20 - (minute - coachChatCooldownMin));
-                        const activeTab = mlandMatchTab === 'tactics';
-                        return (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              SFX.tap();
-                              setMlandMatchTab('tactics');
-                            }}
-                            className={`seg-btn w-full whitespace-nowrap ${
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => openTacticsStudio(injuryAlert.name)}
+                      className="btn btn-xs bg-white/15 border border-white/25 text-white hover:bg-white/25 whitespace-nowrap"
+                    >
+                      🔄 เลือกเอง
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="seg-bar grid w-full shrink-0 grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setMlandMatchTab('stats')}
+                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                >
+                  <span>📊 สถิติ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMlandMatchTab('chat')}
+                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
+                >
+                  <span>🔴</span>
+                  <span>ไลฟ์สด</span>
+                  <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                    {fmtFansShort(liveViewers)}
+                  </span>
+                </button>
+                {state.mode === 'm' ? (
+                  <button
+                    type="button"
+                    onClick={() => openTacticsStudio()}
+                    className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'tactics' ? 'seg-btn-active' : ''}`}
+                  >
+                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
+                      {5 - subsUsed.length}
+                    </span>
+                    <span>📋 แผน</span>
+                  </button>
+                ) : (
+                  (() => {
+                    const canSpeakTab =
+                      userPitchStatus === 'on' &&
+                      coachChatCount < 2 &&
+                      minute >= 10 &&
+                      minute - coachChatCooldownMin >= 20;
+                    const waitTabMins =
+                      minute < 10
+                        ? Math.max(1, 10 - minute)
+                        : Math.max(1, 20 - (minute - coachChatCooldownMin));
+                    const activeTab = mlandMatchTab === 'tactics';
+                    return (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          SFX.tap();
+                          setMlandMatchTab('tactics');
+                        }}
+                        className={`seg-btn w-full whitespace-nowrap ${
+                          activeTab
+                            ? 'seg-btn-active'
+                            : canSpeakTab
+                              ? 'border border-[var(--g)]/55 text-[var(--g)] font-extrabold'
+                              : ''
+                        }`}
+                      >
+                        <span>🧠 แผนโค้ช</span>
+                        {matchPhaseUi === 'halftime' ? (
+                          <span
+                            className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
                               activeTab
-                                ? 'seg-btn-active'
-                                : canSpeakTab
-                                  ? 'border border-[var(--g)]/55 text-[var(--g)] font-extrabold'
-                                  : ''
+                                ? 'bg-amber-400/25 text-amber-200'
+                                : 'bg-amber-500 text-white'
                             }`}
                           >
-                            <span>🧠 แผนโค้ช</span>
-                            {matchPhaseUi === 'halftime' ? (
-                              <span
-                                className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
-                                  activeTab
-                                    ? 'bg-amber-400/25 text-amber-200'
-                                    : 'bg-amber-500 text-white'
-                                }`}
-                              >
-                                พักครึ่ง
-                              </span>
-                            ) : userPitchStatus === 'subbed_out' ? (
-                              <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ออกแล้ว</span>
-                            ) : userPitchStatus === 'sent_off' ? (
-                              <span className="text-[9px] mland:text-[8px] text-[var(--red)] shrink-0">ใบแดง</span>
-                            ) : userPitchStatus === 'bench' ? (
-                              <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">สำรอง</span>
-                            ) : coachChatCount >= 2 ? null : canSpeakTab ? (
-                              <span
-                                className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
-                                  activeTab
-                                    ? 'bg-white/20 text-white'
-                                    : 'bg-[var(--g)] text-white'
-                                }`}
-                              >
-                                พร้อม
-                              </span>
-                            ) : (
-                              <span className="tabular text-[9.5px] mland:text-[8px] opacity-75 shrink-0">
-                                {waitTabMins}น.
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })()
-                    )}
-                  </>
+                            พักครึ่ง
+                          </span>
+                        ) : userPitchStatus === 'subbed_out' ? (
+                          <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ออกแล้ว</span>
+                        ) : userPitchStatus === 'sent_off' ? (
+                          <span className="text-[9px] mland:text-[8px] text-[var(--red)] shrink-0">ใบแดง</span>
+                        ) : userPitchStatus === 'bench' ? (
+                          <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">สำรอง</span>
+                        ) : coachChatCount >= 2 ? null : canSpeakTab ? (
+                          <span
+                            className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
+                              activeTab
+                                ? 'bg-white/20 text-white'
+                                : 'bg-[var(--g)] text-white'
+                            }`}
+                          >
+                            พร้อม
+                          </span>
+                        ) : (
+                          <span className="tabular text-[9.5px] mland:text-[8px] opacity-75 shrink-0">
+                            {waitTabMins}น.
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })()
                 )}
               </div>
 
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden space-y-1.5">
-                {mlandMatchTab === 'players' && done ? (
-                  renderFullTimePlayersPanel()
-                ) : mlandMatchTab === 'tactics' && state.mode === 'p' && !done ? (
+                {mlandMatchTab === 'tactics' && state.mode === 'p' && !done ? (
                   (() => {
                     const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
                     const myTeamLive = meIsHome ? liveHome : liveAway;
@@ -14520,47 +13366,26 @@ export const MatchModal: React.FC<{
                     </button>
 
                     <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
-                      {renderMatchStatsPanel()}
-                      {renderMatchTimelinePanel()}
+                      <MatchStatsPanel
+                        homeOrig={homeOrig}
+                        awayOrig={awayOrig}
+                        state={state}
+                        matchStats={matchStats}
+                        matchCards={matchCards}
+                      />
+                      <MatchTimelinePanel
+                        timelineEvents={timelineEvents}
+                        homeOrig={homeOrig}
+                        awayOrig={awayOrig}
+                        state={state}
+                        homeKit={homeKit}
+                        awayKit={awayKit}
+                        homeGkKit={homeGkKit}
+                        awayGkKit={awayGkKit}
+                        homeTrim={homeTrim}
+                        awayTrim={awayTrim}
+                      />
                     </div>
-                  </div>
-                )}
-
-                {done && fullTimeAnalysis?.pf && (
-                  <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/40 flex flex-wrap items-center justify-between gap-2 text-xs mland:text-[11px] shrink-0">
-                    {fullTimeAnalysis.pf.played === false ? (
-                      <span className="font-semibold text-[var(--mut)]">
-                        {myInitialBanned ? '🟥 ไม่ได้ลงสนาม (ติดโทษแบน)' : '🪑 ตัวสำรองไม่ได้ถูกส่งลงสนาม (0 นาที)'}
-                      </span>
-                    ) : (
-                      <>
-                        <span className="inline-flex flex-wrap items-center gap-1.5">
-                          <span>ฟอร์มคุณ ({fullTimeAnalysis.pf.mins} น.): <b>⭐ {fullTimeAnalysis.pf.rt.toFixed(1)}</b> ·</span>
-                          <span className="inline-flex items-center gap-1 tabular font-extrabold">
-                            <span>{fullTimeAnalysis.pf.gl}</span>
-                            <StatIconBadge kind="goal" count={1} size="sm" title={`ทำประตู ${fullTimeAnalysis.pf.gl} ลูก`} />
-                          </span>
-                          <span>·</span>
-                          <span className="inline-flex items-center gap-1 tabular font-extrabold">
-                            <span>{fullTimeAnalysis.pf.as}</span>
-                            <StatIconBadge kind="assist" count={1} size="sm" title={`แอสซิสต์ ${fullTimeAnalysis.pf.as} ครั้ง`} />
-                          </span>
-                          {fullTimeAnalysis.pf.subIn && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subIn" size="xs" /> สำรอง</span>}
-                          {fullTimeAnalysis.pf.subOut && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subOut" size="xs" /> เปลี่ยนออก</span>}
-                          {(fullTimeAnalysis.pf.yc || 0) > 0 && <StatIconBadge kind="yellow" count={fullTimeAnalysis.pf.yc} size="xs" />}
-                          {(fullTimeAnalysis.pf.rc || 0) > 0 && <StatIconBadge kind="red" count={fullTimeAnalysis.pf.rc} size="xs" />}
-                          {fullTimeAnalysis.pf.motm && <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)]">· 🏆 MoM</span>}
-                        </span>
-                        <span className="inline-flex items-center gap-2 tabular">
-                          {(fullTimeAnalysis.pf.repGain ?? 0) > 0 && (
-                            <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)]">+{fullTimeAnalysis.pf.repGain} ★ ชื่อเสียง</span>
-                          )}
-                          {fullTimeAnalysis.pf.pts > 0 && (
-                            <span className="font-bold text-[var(--g)]">+{fullTimeAnalysis.pf.pts} แต้มพัฒนา!</span>
-                          )}
-                        </span>
-                      </>
-                    )}
                   </div>
                 )}
               </div>

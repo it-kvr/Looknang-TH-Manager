@@ -5,6 +5,9 @@ import { SFX } from '../utils/audioTheme';
 import { ClubCrest } from '../components/SvgVisuals';
 import { ovColor } from '../engine/missions';
 import { PositionBadge } from '../components/PositionBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 
 type SortKey = 'avgRating' | 'sg' | 'sa' | 'sp' | 'motm' | 'ov';
 
@@ -360,7 +363,10 @@ export const SeasonStatsModal: React.FC<{
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-0.5">
               {scopedTopCleanSheet ? (
                 <>
-                  <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">🧤 คลีนชีตสูงสุด</div>
+                  <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] inline-flex items-center gap-1">
+                    <StatIconBadge kind="cleansheet" size="xs" />
+                    <span>คลีนชีตสูงสุด</span>
+                  </div>
                   <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
                     {scopedTopCleanSheet.name}
                   </div>
@@ -378,7 +384,10 @@ export const SeasonStatsModal: React.FC<{
                 </>
               ) : (
                 <>
-                  <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)]">🧤 คลีนชีต / MOTM</div>
+                  <div className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] inline-flex items-center gap-1">
+                    <StatIconBadge kind="cleansheet" size="xs" />
+                    <span>คลีนชีต / MOTM</span>
+                  </div>
                   <div className="text-[11px] text-[var(--mut)]">ยังไม่มีบันทึก</div>
                 </>
               )}

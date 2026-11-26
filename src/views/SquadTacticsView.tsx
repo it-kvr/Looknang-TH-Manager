@@ -1925,7 +1925,7 @@ export const SquadTacticsView: React.FC<{
                                 {q.pos === 'GK' ? (
                                   q.cs ? (
                                     <span className="inline-flex items-center gap-0.5 font-bold text-[var(--g)]" title={`คลีนชีต ${q.cs} นัด`}>
-                                      <StatIconBadge kind="save" count={1} size="xs" />
+                                      <StatIconBadge kind="cleansheet" count={1} size="xs" />
                                       <span>{q.cs}</span>
                                     </span>
                                   ) : null

@@ -19,6 +19,9 @@ import { finishSeasonComputation, ensureTeamFans, fmtFans } from '../engine/simu
 import { fmtMoney } from '../utils/math';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { TrophySvg } from '../components/ClubHistoryPanel';
+import { StatIconBadge } from '../components/StatIconBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 
 export type SeasonSummaryData = ReturnType<typeof finishSeasonComputation>;
 
@@ -470,8 +473,9 @@ export const SeasonEndModal: React.FC<{
                   <span>ดาวเด่นประจำทีม ({me.name})</span>
                 </span>
                 {arc.topCleanSheet && (
-                  <span className="text-[11px] mland:text-[9px] text-[var(--mut)] font-semibold">
-                    🧤 คลีนชีตสูงสุด: <b className="text-[var(--ink)]">{arc.topCleanSheet.name} ({arc.topCleanSheet.cs})</b>
+                  <span className="text-[11px] mland:text-[9px] text-[var(--mut)] font-semibold inline-flex items-center gap-1">
+                    <StatIconBadge kind="cleansheet" size="xs" />
+                    <span>คลีนชีตสูงสุด: <b className="text-[var(--ink)]">{arc.topCleanSheet.name} ({arc.topCleanSheet.cs})</b></span>
                   </span>
                 )}
               </div>

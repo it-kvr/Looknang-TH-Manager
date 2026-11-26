@@ -8,6 +8,8 @@ import { xi } from '../engine/playerCore';
 import { SFX } from '../utils/audioTheme';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
+import { StatIconBadge } from '../components/StatIconBadge';
 
 type CupTabId = 'fa' | 'lc' | 'dc' | 'sc' | 'asia';
 type CupStatCat = 'sg' | 'sa' | 'cs' | 'motm' | 'rt' | 'sp';
@@ -772,10 +774,18 @@ export const CupView: React.FC<{
                   })
                   .slice(0, 30);
 
-                const catTabs: { id: CupStatCat; lbl: string }[] = [
+                const catTabs: { id: CupStatCat; lbl: React.ReactNode }[] = [
                   { id: 'sg', lbl: '⚽ ประตู' },
                   { id: 'sa', lbl: '👟 จ่าย' },
-                  { id: 'cs', lbl: '🧤 คลีน' },
+                  {
+                    id: 'cs',
+                    lbl: (
+                      <span className="inline-flex items-center gap-1">
+                        <StatIconBadge kind="cleansheet" size="xs" />
+                        <span>คลีน</span>
+                      </span>
+                    )
+                  },
                   { id: 'motm', lbl: '👑 MOTM' },
                   { id: 'rt', lbl: '⭐ เรตติ้ง' },
                   { id: 'sp', lbl: '👕 ลงเล่น' }

@@ -6,6 +6,8 @@ import { SFX } from '../utils/audioTheme';
 import { getClubLegacySummary, resolveClubLegendProfile } from '../engine/history';
 import { sortTable, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { PlayerFace } from './SvgVisuals';
+import { StatIconBadge } from './StatIconBadge';
+import { StatIconBadge } from './StatIconBadge';
 
 interface ClubHistoryPanelProps {
   team: Team;
@@ -20,7 +22,7 @@ type LegendMetric = 'goals' | 'assists' | 'apps' | 'cleanSheets' | 'motm';
 const METRIC_COLUMNS: {
   key: LegendMetric;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   unit: string;
   accentCls: string;
   headerBgCls: string;
@@ -52,7 +54,7 @@ const METRIC_COLUMNS: {
   {
     key: 'cleanSheets',
     label: 'คลีนชีต',
-    icon: '🧤',
+    icon: <StatIconBadge kind="cleansheet" size="xs" />,
     unit: 'นัด',
     accentCls: 'text-teal-700 dark:text-teal-300',
     headerBgCls: 'bg-teal-500/10'
@@ -692,8 +694,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                       <div
                         className={`px-2 py-1.5 mland:px-1.5 mland:py-1 border-b border-[var(--line)] bg-[var(--surface)] ${col.headerBgCls} flex items-center justify-between gap-1`}
                       >
-                        <span className={`font-extrabold text-[10.5px] mland:text-[9px] ${col.accentCls} truncate`}>
-                          {col.icon} {col.label}
+                        <span className={`font-extrabold text-[10.5px] mland:text-[9px] ${col.accentCls} inline-flex items-center gap-1 min-w-0 truncate`}>
+                          <span className="shrink-0 inline-flex items-center">{col.icon}</span>
+                          <span className="truncate">{col.label}</span>
                         </span>
                         <span className="text-[9px] mland:text-[7.5px] text-[var(--mut)] shrink-0">
                           {col.unit}

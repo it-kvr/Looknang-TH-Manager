@@ -4,6 +4,9 @@ import { TN } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
 import { getPlayerCareerSummary } from '../engine/history';
 import { ovColor } from '../engine/missions';
+import { StatIconBadge } from './StatIconBadge';
+import { StatIconBadge } from './StatIconBadge';
+import { StatIconBadge } from './StatIconBadge';
 
 interface PlayerHistoryPanelProps {
   player: Player;
@@ -135,7 +138,7 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center justify-center gap-1">
-              <span>{isGk ? '🧤' : '👟'}</span> {isGk ? 'คลีนชีต' : 'แอสซิสต์'}
+              {isGk ? <StatIconBadge kind="cleansheet" size="xs" /> : <span>👟</span>} {isGk ? 'คลีนชีต' : 'แอสซิสต์'}
             </div>
             <div className="font-extrabold text-sm mland:text-xs font-display tabular">
               {isGk ? topCs : topAssists}

@@ -3418,9 +3418,9 @@ export const drawLivePitchToCanvas = (
 
     // Animated Head Coaches standing cleanly inside their Technical Areas
     const drawCoach = (c: LiveSidelineCoach, kit: string, trim: string) => {
+      const cr = clamp(Math.min(cssW * 0.0155, zoneH * 0.36), 6.8, 8.6);
       const cx = px(c.x);
-      const cy = zoneTop + techH * 0.5;
-      const cr = clamp(Math.min(cssW * 0.0115, techH * 0.42), 4.4, 7.2);
+      const cy = zoneTop + Math.max(techH * 0.56, zoneH * 0.44);
       const speed = Math.hypot(c.tx - c.x, c.ty - c.y);
       const paceStep = speed > 0.3 ? Math.sin(c.pacePhase) * (cr * 0.34) : 0;
       const coachVis =

@@ -265,8 +265,15 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
             <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{dispSg}</div>
           </div>
           <div className="py-1 px-0.5 mland:py-0.5 rounded-lg bg-[var(--surface-2)]">
-            <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none">
-              {player.pos === 'GK' ? '🧤 คลีน' : '👟 จ่าย'}
+            <div className="text-[9px] mland:text-[7px] text-[var(--mut)] leading-none flex items-center justify-center gap-0.5">
+              {player.pos === 'GK' ? (
+                <>
+                  <StatIconBadge kind="cleansheet" size="xs" />
+                  <span>คลีน</span>
+                </>
+              ) : (
+                '👟 จ่าย'
+              )}
             </div>
             <div className="text-[11px] mland:text-[9px] font-extrabold tabular mt-0.5 leading-none">{disp3}</div>
           </div>
@@ -285,11 +292,16 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
                 const m = CUP_COMP_META[ck];
                 const st = player.cupStats![ck]!;
                 return (
-                  <span key={ck} className="whitespace-nowrap">
-                    {m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น
-                    {st.sg > 0 ? `·${st.sg}⚽` : ''}
-                    {player.pos === 'GK' ? (st.cs > 0 ? `·${st.cs}🧤` : '') : st.sa > 0 ? `·${st.sa}👟` : ''}
-                    {st.motm > 0 ? `·${st.motm}👑` : ''}
+                  <span key={ck} className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                    <span>{m.icon} <b className="text-[var(--ink)]">{m.short}</b> {st.sp}น{st.sg > 0 ? `·${st.sg}⚽` : ''}</span>
+                    {player.pos === 'GK' ? (
+                      st.cs > 0 ? (
+                        <span className="inline-flex items-center gap-0.5">·{st.cs}<StatIconBadge kind="cleansheet" size="xs" /></span>
+                      ) : null
+                    ) : st.sa > 0 ? (
+                      <span>·{st.sa}👟</span>
+                    ) : null}
+                    {st.motm > 0 ? <span>·{st.motm}👑</span> : null}
                   </span>
                 );
               })}

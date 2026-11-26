@@ -794,6 +794,45 @@ export interface ArchivedMatchLog {
   };
 }
 
+export type TimelineKind =
+  | 'kickoff'
+  | 'first_half'
+  | 'second_half'
+  | 'full_time'
+  | 'goal'
+  | 'own_goal'
+  | 'pen_goal'
+  | 'pen_awarded'
+  | 'pen_miss'
+  | 'yellow'
+  | 'red'
+  | 'injury'
+  | 'miss'
+  | 'var_no_goal'
+  | 'miracle'
+  | 'blessed'
+  | 'sub';
+
+export interface MatchTimelineItem {
+  id: string;
+  seq: number;
+  m: number;
+  side: 'H' | 'A' | 'N';
+  kind: TimelineKind;
+  who: string;
+  detail?: string;
+  varReplayId?: string;
+}
+
+export interface ArchivedStreamComment {
+  id: number | string;
+  m: number;
+  user: string;
+  text: string;
+  kind: string;
+  donateBaht?: number;
+}
+
 export interface ArchivedMatchReport {
   kind?: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
   roundLabel?: string;
@@ -803,6 +842,12 @@ export interface ArchivedMatchReport {
   ga: number;
   pen?: boolean;
   penText?: string;
+  shootout?: {
+    hKicks: ('G' | 'M')[];
+    aKicks: ('G' | 'M')[];
+    hScore: number;
+    aScore: number;
+  };
   xgH?: number;
   xgA?: number;
   possH?: number;
@@ -812,16 +857,34 @@ export interface ArchivedMatchReport {
   onTargetA?: number;
   passesH?: number;
   passesA?: number;
+  cornersH?: number;
+  cornersA?: number;
+  foulsH?: number;
+  foulsA?: number;
+  offsidesH?: number;
+  offsidesA?: number;
+  savesH?: number;
+  savesA?: number;
+  playerSaves?: Record<string, number>;
   att?: number;
   cap?: number;
+  streamViewers?: number;
+  streamPeakViewers?: number;
+  streamComments?: ArchivedStreamComment[];
   motm?: string;
   ratings?: Record<string, number>;
+  pf?: PlayerPerfResult;
   evs?: MatchEvent[];
   cards?: MatchCardEvent[];
   subs?: MatchSubEvent[];
   playedNames?: Record<number, string[]>;
   xiNames?: Record<number, string[]>;
   playedSlots?: Record<number, Record<string, SubRole>>;
+  injuries?: { teamId: number; name: string; games: number }[];
+  captains?: { H: string; A: string };
+  formations?: { H: string; A: string };
+  matchEnv?: MatchEnvironment;
+  timeline?: MatchTimelineItem[];
   logs?: ArchivedMatchLog[];
   varReplays?: VarReplayRecord[];
 }
@@ -1053,6 +1116,12 @@ export interface FinishedMatchPayload {
   xgA: number;
   pen?: boolean;
   penText?: string;
+  shootout?: {
+    hKicks: ('G' | 'M')[];
+    aKicks: ('G' | 'M')[];
+    hScore: number;
+    aScore: number;
+  };
   ratings: Record<string, number>;
   motm: string;
   pf?: PlayerPerfResult;
@@ -1074,8 +1143,22 @@ export interface FinishedMatchPayload {
   onTargetA?: number;
   passesH?: number;
   passesA?: number;
+  cornersH?: number;
+  cornersA?: number;
+  foulsH?: number;
+  foulsA?: number;
+  offsidesH?: number;
+  offsidesA?: number;
+  savesH?: number;
+  savesA?: number;
+  playerSaves?: Record<string, number>;
   streamViewers?: number;
   streamPeakViewers?: number;
+  streamComments?: ArchivedStreamComment[];
+  captains?: { H: string; A: string };
+  formations?: { H: string; A: string };
+  matchEnv?: MatchEnvironment;
+  timeline?: MatchTimelineItem[];
   logs?: ArchivedMatchLog[];
   varReplays?: VarReplayRecord[];
 }

@@ -7184,6 +7184,18 @@ export function simulateInstantMatchPayload(
   const onTargetA = clamp(Math.max(r.ga, Math.round(shotsA * 0.42) + (r.ga > 0 ? 1 : 0)), r.ga, shotsA);
   const passesH = Math.round(possH * R(6, 8));
   const passesA = Math.round((100 - possH) * R(6, 8));
+  const cornersH = Math.max(1, Math.round(shotsH * 0.45 + R(0, 2)));
+  const cornersA = Math.max(1, Math.round(shotsA * 0.45 + R(0, 2)));
+  const foulsH = Math.max((r.cards || []).filter((c) => c.t === H.id).length * 2, R(6, 13));
+  const foulsA = Math.max((r.cards || []).filter((c) => c.t === A.id).length * 2, R(6, 13));
+  const offsidesH = R(0, 4);
+  const offsidesA = R(0, 4);
+  const savesH = Math.max(0, onTargetA - r.ga);
+  const savesA = Math.max(0, onTargetH - r.gh);
+  const homeXiNames = xi(H).map((q) => q.n);
+  const awayXiNames = xi(A).map((q) => q.n);
+  const homeCapName = H.cap && homeXiNames.includes(H.cap) ? H.cap : pickBestCaptain(H, homeXiNames, undefined, s.p) || homeXiNames[0] || '';
+  const awayCapName = A.cap && awayXiNames.includes(A.cap) ? A.cap : pickBestCaptain(A, awayXiNames, undefined, s.p) || awayXiNames[0] || '';
   const simLogs: ArchivedMatchLog[] = [
     { id: 'sim-ft', m: 90, text: penText ? `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name} (${penText})` : `🏁 จบเกม! ${H.name} ${r.gh}-${r.ga} ${A.name}`, tone: 'sys' },
     ...[
@@ -7233,6 +7245,14 @@ export function simulateInstantMatchPayload(
     onTargetA,
     passesH,
     passesA,
+    cornersH,
+    cornersA,
+    foulsH,
+    foulsA,
+    offsidesH,
+    offsidesA,
+    savesH,
+    savesA,
     att: attInfo.att,
     cap: attInfo.cap,
     streamViewers: streamProj.baseViewers,
@@ -7248,9 +7268,11 @@ export function simulateInstantMatchPayload(
     subs: r.subs || [],
     playedNames: r.playedNames || {},
     xiNames: {
-      [H.id]: xi(H).map((q) => q.n),
-      [A.id]: xi(A).map((q) => q.n)
+      [H.id]: homeXiNames,
+      [A.id]: awayXiNames
     },
+    captains: { H: homeCapName, A: awayCapName },
+    formations: { H: H.form || '4-4-2', A: A.form || '4-4-2' },
     playedSlots: r.playedSlots || {},
     playerActions,
     logs: simLogs

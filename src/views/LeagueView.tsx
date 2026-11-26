@@ -946,7 +946,7 @@ export const LeagueView: React.FC<{
 
     const awards: {
       id: string;
-      icon: string;
+      icon: React.ReactNode;
       title: string;
       enTitle: string;
       criteria: string;
@@ -968,7 +968,7 @@ export const LeagueView: React.FC<{
       },
       {
         id: 'golden-glove',
-        icon: '🧤',
+        icon: <StatIconBadge kind="cleansheet" size="md" title="ถุงมือทองคำ" />,
         title: 'ถุงมือทองคำ',
         enTitle: 'Golden Glove',
         criteria: 'ผู้รักษาประตูคลีนชีตสูงสุด (วัดประตูเสียทีมเมื่อเท่ากัน)',
