@@ -50,7 +50,7 @@ export const PositionBadge: React.FC<{
   return (
     <span
       title={resolvedTitle}
-      className={`inline-flex items-center justify-center font-extrabold leading-none shrink-0 tabular whitespace-nowrap select-none shadow-[0_1px_0_rgba(0,0,0,0.28)] ${sizeCls} ${getPositionBadgeClass(role)} ${className}`}
+      className={`inline-flex items-center justify-center font-extrabold leading-none shrink-0 tabular whitespace-nowrap select-none ${sizeCls} ${getPositionBadgeClass(role)} ${className}`}
     >
       {role}
     </span>

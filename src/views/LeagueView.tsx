@@ -12,6 +12,7 @@ import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { OvrBadge } from '../components/OvrBadge';
+import { WdlFormStrip, WdlRecordBadges } from '../components/WdlBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -104,8 +105,8 @@ export const LeagueView: React.FC<{
         {chars.map((c, idx) => (
           <span
             key={idx}
-            className={`w-1.5 h-1.5 sm:w-2 sm:h-2 mland:w-1.5 mland:h-1.5 rounded-full shrink-0 ${
-              c === 'W' ? 'bg-emerald-500' : c === 'D' ? 'bg-amber-400' : 'bg-rose-500'
+            className={`w-1.5 h-1.5 sm:w-2 sm:h-2 mland:w-1.5 mland:h-1.5 rounded-full border border-black shrink-0 ${
+              c === 'W' ? 'bg-emerald-600' : c === 'D' ? 'bg-amber-400' : 'bg-red-600'
             }`}
           />
         ))}
@@ -700,7 +701,7 @@ export const LeagueView: React.FC<{
         <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
           <div className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center justify-between">
             <span>📋 ผลล่าสุดของคุณ</span>
-            {me.fm && <div className="flex items-center gap-1">{renderFormDots(me.fm)}</div>}
+            {me.fm && <WdlFormStrip fm={me.fm} size="2xs" />}
           </div>
           {(state.res || []).length ? (
             <div className="space-y-1">
@@ -1634,8 +1635,9 @@ export const ScheduleCalendarView: React.FC<{
                 <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate">
                   ฤดูกาลที่ {state.season} · {TN[me.tier]}
                 </div>
-                <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular truncate">
-                  แข่งแล้ว {playedCount}/{totalMd} นัด ({progressPct}%) · ชนะ {me.w} เสมอ {me.d} แพ้ {me.l}
+                <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex items-center gap-1.5 overflow-x-auto no-scrollbar whitespace-nowrap">
+                  <span>แข่งแล้ว {playedCount}/{totalMd} นัด ({progressPct}%) ·</span>
+                  <WdlRecordBadges w={me.w} d={me.d} l={me.l} size="2xs" />
                 </div>
               </div>
             </div>

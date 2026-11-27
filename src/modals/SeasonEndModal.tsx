@@ -22,6 +22,7 @@ import { fmtMoney } from '../utils/math';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { TrophySvg } from '../components/ClubHistoryPanel';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { WdlRecordBadges } from '../components/WdlBadge';
 
 export type SeasonSummaryData = ReturnType<typeof finishSeasonComputation>;
 
@@ -413,8 +414,8 @@ export const SeasonEndModal: React.FC<{
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] font-semibold">
                 ผลงานลีก ({arc?.played ?? me.p} นัด)
               </div>
-              <div className="font-extrabold text-sm mland:text-xs tabular text-[var(--ink)]">
-                {arc?.won ?? me.w}W · {arc?.drawn ?? me.d}D · {arc?.lost ?? me.l}L
+              <div className="font-extrabold text-sm mland:text-xs tabular text-[var(--ink)] pt-0.5">
+                <WdlRecordBadges w={arc?.won ?? me.w} d={arc?.drawn ?? me.d} l={arc?.lost ?? me.l} size="xs" />
               </div>
               <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular">
                 ยิง {arc?.gf ?? me.gf} เสีย {arc?.ga ?? me.ga} ({gd >= 0 ? `+${gd}` : gd})

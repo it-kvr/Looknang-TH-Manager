@@ -27,6 +27,7 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { OvrBadge } from '../components/OvrBadge';
+import { WdlFormStrip, WdlRecordBadges } from '../components/WdlBadge';
 
 export const PlayerInspectorModal: React.FC<{
   player: Player;
@@ -442,12 +443,14 @@ export const TeamInspectorModal: React.FC<{
                 <span className="truncate">{team.name}</span>
                 {isMeTeam && <MyTeamBadge size="md" />}
               </div>
-              <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular">
+              <div className="text-[11px] mland:text-[9px] text-[var(--mut)] tabular flex items-center gap-1 overflow-x-auto no-scrollbar whitespace-nowrap">
                 <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
-                {rank ? <span> · อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
-                <span> · W {team.w} D {team.d} L {team.l} ({gd >= 0 ? `+${gd}` : gd})</span>
-                <span className="hidden sm:inline mland:inline"> · แฟน {fmtFans(ensureTeamFans(team))} คน</span>
-                <span className="hidden md:inline"> · อายุเฉลี่ย {st.age} ปี</span>
+                {rank ? <span>· อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
+                <span>·</span>
+                <WdlRecordBadges w={team.w} d={team.d} l={team.l} size="2xs" />
+                <span>({gd >= 0 ? `+${gd}` : gd})</span>
+                <span className="hidden sm:inline mland:inline">· แฟน {fmtFans(ensureTeamFans(team))} คน</span>
+                <span className="hidden md:inline">· อายุเฉลี่ย {st.age} ปี</span>
               </div>
             </div>
           </div>
@@ -691,18 +694,7 @@ export const TeamInspectorModal: React.FC<{
                       </span>
                     </div>
                     {formChars.length > 0 && (
-                      <div className="flex items-center gap-0.5 shrink-0" title="ฟอร์ม 5 นัดล่าสุด">
-                        {formChars.map((c, idx) => (
-                          <span
-                            key={idx}
-                            className={`w-4 h-4 mland:w-3.5 mland:h-3.5 rounded text-[9px] mland:text-[7.5px] font-bold flex items-center justify-center text-white ${
-                              c === 'W' ? 'bg-[var(--g)]' : c === 'L' ? 'bg-[var(--red)]' : 'bg-amber-500'
-                            }`}
-                          >
-                            {c}
-                          </span>
-                        ))}
-                      </div>
+                      <WdlFormStrip fm={team.fm} size="xs" />
                     )}
                   </div>
                 </div>

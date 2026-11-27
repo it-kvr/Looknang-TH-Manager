@@ -943,29 +943,21 @@ export const MatchStatsPanel: React.FC<{
             <span className="font-extrabold shrink-0 text-[var(--ink)]">{matchStats.foulsA}/{matchStats.offsidesA}</span>
           </div>
           <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-1 min-w-0">
-            <span className="inline-flex items-center gap-1 font-extrabold shrink-0">
-              <span className={`inline-flex items-center gap-0.5 ${yH === 0 ? 'opacity-45 text-[var(--mut)]' : 'text-[var(--ink)]'}`}>
-                <StatIconBadge kind="yellow" size="xs" />
-                <span>{yH}</span>
+            <span className="inline-flex items-center gap-0.5 font-extrabold shrink-0">
+              <span className={`inline-flex items-center ${yH === 0 ? 'opacity-45' : ''}`}>
+                <StatIconBadge kind="yellow" count={yH} size="sm" alwaysShowCount />
               </span>
               {rH > 0 && (
-                <span className="inline-flex items-center gap-0.5 text-[var(--red)]">
-                  <StatIconBadge kind="red" size="xs" />
-                  <span>{rH}</span>
-                </span>
+                <StatIconBadge kind="red" count={rH} size="sm" alwaysShowCount />
               )}
             </span>
             <span className="text-[var(--mut)] font-semibold shrink-0">ใบ</span>
-            <span className="inline-flex items-center gap-1 font-extrabold shrink-0">
+            <span className="inline-flex items-center gap-0.5 font-extrabold shrink-0">
               {rA > 0 && (
-                <span className="inline-flex items-center gap-0.5 text-[var(--red)]">
-                  <span>{rA}</span>
-                  <StatIconBadge kind="red" size="xs" />
-                </span>
+                <StatIconBadge kind="red" count={rA} size="sm" alwaysShowCount />
               )}
-              <span className={`inline-flex items-center gap-0.5 ${yA === 0 ? 'opacity-45 text-[var(--mut)]' : 'text-[var(--ink)]'}`}>
-                <span>{yA}</span>
-                <StatIconBadge kind="yellow" size="xs" />
+              <span className={`inline-flex items-center ${yA === 0 ? 'opacity-45' : ''}`}>
+                <StatIconBadge kind="yellow" count={yA} size="sm" alwaysShowCount />
               </span>
             </span>
           </div>
@@ -3132,16 +3124,16 @@ export const FullTimeMatchStage: React.FC<{
                         </span>
                         <span className="hidden sm:inline truncate max-w-[90px]">{homeOrig.name}</span>
                         <span className="inline-flex items-center gap-0.5 shrink-0">
-                          {hYTotal > 0 && <StatIconBadge kind="yellow" count={hYTotal} size="xs" />}
-                          {hRTotal > 0 && <StatIconBadge kind="red" count={hRTotal} size="xs" />}
+                          {hYTotal > 0 && <StatIconBadge kind="yellow" count={hYTotal} size="sm" />}
+                          {hRTotal > 0 && <StatIconBadge kind="red" count={hRTotal} size="sm" />}
                           {hYTotal === 0 && hRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
                         </span>
                       </span>
                       <span className="text-[var(--mut)]">-</span>
                       <span className="inline-flex items-center gap-1 min-w-0">
                         <span className="inline-flex items-center gap-0.5 shrink-0">
-                          {aYTotal > 0 && <StatIconBadge kind="yellow" count={aYTotal} size="xs" />}
-                          {aRTotal > 0 && <StatIconBadge kind="red" count={aRTotal} size="xs" />}
+                          {aYTotal > 0 && <StatIconBadge kind="yellow" count={aYTotal} size="sm" />}
+                          {aRTotal > 0 && <StatIconBadge kind="red" count={aRTotal} size="sm" />}
                           {aYTotal === 0 && aRTotal === 0 && <span className="text-[var(--mut)]">0</span>}
                         </span>
                         <span className="hidden sm:inline truncate max-w-[90px]">{awayOrig.name}</span>
@@ -3413,8 +3405,8 @@ export const FullTimeMatchStage: React.FC<{
                     </span>
                     {fullTimeAnalysis.pf.subIn && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subIn" size="xs" /> สำรอง</span>}
                     {fullTimeAnalysis.pf.subOut && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subOut" size="xs" /> เปลี่ยนออก</span>}
-                    {(fullTimeAnalysis.pf.yc || 0) > 0 && <StatIconBadge kind="yellow" count={fullTimeAnalysis.pf.yc} size="xs" />}
-                    {(fullTimeAnalysis.pf.rc || 0) > 0 && <StatIconBadge kind="red" count={fullTimeAnalysis.pf.rc} size="xs" />}
+                    {(fullTimeAnalysis.pf.yc || 0) > 0 && <StatIconBadge kind="yellow" count={fullTimeAnalysis.pf.yc} size="sm" />}
+                    {(fullTimeAnalysis.pf.rc || 0) > 0 && <StatIconBadge kind="red" count={fullTimeAnalysis.pf.rc} size="sm" />}
                     {fullTimeAnalysis.pf.motm && <span className="font-bold text-[#9a6700] dark:text-[var(--lamp)]">· 🏆 MoM</span>}
                   </span>
                   <span className="inline-flex items-center gap-2 tabular">

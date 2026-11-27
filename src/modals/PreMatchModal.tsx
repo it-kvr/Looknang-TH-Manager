@@ -45,6 +45,7 @@ import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
 import { OvrBadge } from '../components/OvrBadge';
+import { WdlFormStrip } from '../components/WdlBadge';
 
 interface PreMatchModalProps {
   state: GameState;
@@ -433,28 +434,9 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     }
   };
 
-  const renderFormDots = (fm?: string) => {
-    const chars = (fm || '').slice(-5).split('');
-    if (!chars.length) return <span className="text-[9px] text-[var(--mut)]">ยังไม่แข่ง</span>;
-    return (
-      <span className="inline-flex items-center gap-0.5">
-        {chars.map((c, idx) => (
-          <span
-            key={idx}
-            className={`w-3.5 h-3.5 mland:w-3 mland:h-3 rounded text-[8px] mland:text-[7px] font-black inline-flex items-center justify-center ${
-              c === 'W'
-                ? 'bg-[var(--g)] text-white'
-                : c === 'D'
-                  ? 'bg-amber-400 text-[#261900]'
-                  : 'bg-[var(--red)] text-white'
-            }`}
-          >
-            {c}
-          </span>
-        ))}
-      </span>
-    );
-  };
+  const renderFormDots = (fm?: string) => (
+    <WdlFormStrip fm={fm} size="2xs" emptyText="ยังไม่แข่ง" />
+  );
 
   const activeSide: 'H' | 'A' = viewMode === 'A' ? 'A' : 'H';
   const activeTeam = activeSide === 'H' ? homeTeam : awayTeam;

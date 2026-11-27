@@ -7,6 +7,7 @@ interface StatIconBadgeProps {
   count?: number;
   size?: '2xs' | 'xs' | 'sm' | 'md' | 'lg';
   title?: string;
+  alwaysShowCount?: boolean;
 }
 
 const SIZE_PX: Record<'2xs' | 'xs' | 'sm' | 'md' | 'lg', number> = {
@@ -21,11 +22,12 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
   kind,
   count = 1,
   size = 'sm',
-  title
+  title,
+  alwaysShowCount = false
 }) => {
   const px = SIZE_PX[size];
   const n = Math.max(0, Math.round(count));
-  const showNum = n > 1;
+  const showNum = alwaysShowCount ? true : n > 1;
   const numText = n > 99 ? '99' : String(n);
   const numFont = n >= 10 ? 8.6 : 11.2;
 

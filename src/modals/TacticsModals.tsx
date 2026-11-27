@@ -126,11 +126,11 @@ export const CustomFormationModal: React.FC<{
                       }}
                       className={`px-2 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
                         isSel
-                          ? `${getPositionBadgeClass(p)} ring-2 ring-[#f5c242] shadow-xs`
+                          ? `${getPositionBadgeClass(p)} ring-2 ring-[#f5c242]`
                           : 'bg-[var(--surface-2)] hover:brightness-95 inline-flex items-center gap-1'
                       }`}
                     >
-                      {!isSel && <span className={`w-2 h-2 rounded-full border border-black/80 ${getPositionBadgeClass(p).split(' ')[0]}`} />}
+                      {!isSel && <span className={`w-2 h-2 rounded-full border border-black ${getPositionBadgeClass(p).split(' ')[0]}`} />}
                       <span>{p}</span>
                     </button>
                   );

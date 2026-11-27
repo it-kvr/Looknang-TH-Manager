@@ -7,6 +7,7 @@ import { getClubLegacySummary, resolveClubLegendProfile } from '../engine/histor
 import { sortTable, ensureTeamFans, fmtFans } from '../engine/simulation';
 import { PlayerFace } from './SvgVisuals';
 import { StatIconBadge } from './StatIconBadge';
+import { WdlRecordBadges } from './WdlBadge';
 
 interface ClubHistoryPanelProps {
   team: Team;
@@ -452,11 +453,9 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">แข่งรวม</div>
             <div className="font-extrabold text-sm mland:text-xs font-display tabular text-[var(--ink)]">{legacy.totalPlayed}</div>
           </div>
-          <div className="py-1.5 mland:py-1 px-1 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/50">
-            <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">W-D-L</div>
-            <div className="font-extrabold text-xs mland:text-[10px] font-display tabular text-[var(--ink)]">
-              {legacy.totalWon}-{legacy.totalDrawn}-{legacy.totalLost}
-            </div>
+          <div className="py-1.5 mland:py-1 px-1 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/50 flex flex-col items-center justify-center">
+            <div className="text-[10px] mland:text-[8px] text-[var(--mut)] mb-0.5">W-D-L</div>
+            <WdlRecordBadges w={legacy.totalWon} d={legacy.totalDrawn} l={legacy.totalLost} size="2xs" className="text-xs mland:text-[10px]" />
           </div>
           <div className="py-1.5 mland:py-1 px-1 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/50">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">อัตราชนะ</div>
@@ -933,7 +932,10 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                         {r.rank}/{r.totalTeams}
                       </td>
                       <td className="py-1.5 px-1.5 text-center tabular whitespace-nowrap">
-                        {r.played} ({r.won}-{r.drawn}-{r.lost})
+                        <span className="inline-flex items-center justify-center gap-1.5">
+                          <span className="font-semibold">{r.played}</span>
+                          <WdlRecordBadges w={r.won} d={r.drawn} l={r.lost} size="2xs" />
+                        </span>
                       </td>
                       <td className="py-1.5 px-1.5 text-center tabular whitespace-nowrap">
                         {r.gf}-{r.ga}

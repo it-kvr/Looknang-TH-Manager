@@ -42,6 +42,7 @@ import {
 import { ClubCrest } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
+import { WdlRecordBadges } from '../components/WdlBadge';
 
 interface ManagerCareerModalProps {
   state: GameState;
@@ -336,8 +337,8 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                   <div className="font-extrabold text-xs sm:text-sm tabular text-[var(--ink)]">
                     {careerTotals.matches} นัด
                   </div>
-                  <div className="text-[10px] text-[var(--mut)] tabular">
-                    ชนะ {careerTotals.wins} · เสมอ {careerTotals.draws} · แพ้ {careerTotals.losses}
+                  <div className="text-[10px] text-[var(--mut)] tabular pt-0.5">
+                    <WdlRecordBadges w={careerTotals.wins} d={careerTotals.draws} l={careerTotals.losses} size="2xs" />
                   </div>
                 </div>
                 <div className="p-2.5 rounded-xl bg-[var(--surface-2)]/70 border border-[var(--line)]">
@@ -510,9 +511,13 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                           ) : null}
                           <div className="min-w-0">
                             <div className="font-bold text-[var(--ink)] truncate">{st.teamName}</div>
-                            <div className="text-[10.5px] text-[var(--mut)] tabular">
-                              {TN[st.tier]} · ซีซั่น {st.fromSeason}
-                              {st.toSeason && st.toSeason !== st.fromSeason ? `–${st.toSeason}` : ''} · {st.matches} นัด ({st.wins}W {st.draws}D {st.losses}L · ชนะ {wr}%)
+                            <div className="text-[10.5px] text-[var(--mut)] tabular flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                              <span>
+                                {TN[st.tier]} · ซีซั่น {st.fromSeason}
+                                {st.toSeason && st.toSeason !== st.fromSeason ? `–${st.toSeason}` : ''} · {st.matches} นัด
+                              </span>
+                              <WdlRecordBadges w={st.wins} d={st.draws} l={st.losses} size="2xs" />
+                              <span>· ชนะ {wr}%</span>
                             </div>
                             {st.trophies.length > 0 && (
                               <div className="text-[10px] font-semibold text-[#b47b00] dark:text-[var(--lamp)] truncate">
@@ -600,8 +605,10 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                             {ntState.formCode || '4-2-3-1'}
                           </span>
                         </div>
-                        <div className="text-[11px] text-white/85 tabular">
-                          {ntState.matches} นัด ({ntState.wins}W {ntState.draws}D {ntState.losses}L) · ยิง {ntState.gf} เสีย {ntState.ga} · แชมป์ {ntState.trophies.length} รายการ
+                        <div className="text-[11px] text-white/85 tabular flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span>{ntState.matches} นัด</span>
+                          <WdlRecordBadges w={ntState.wins} d={ntState.draws} l={ntState.losses} size="2xs" countClassName="text-white" />
+                          <span>· ยิง {ntState.gf} เสีย {ntState.ga} · แชมป์ {ntState.trophies.length} รายการ</span>
                         </div>
                       </div>
                     </div>
