@@ -396,7 +396,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
   {
     id: 'assist_king',
     icon: '👟',
-    name: 'แอสซิสต์ปลิดวิญญาณ',
+    name: 'จ่ายปลิดวิญญาณ',
     desc: 'ส่งบอลจังหวะสุดท้ายให้เพื่อนร่วมทีมซัดตุงตาข่ายโดยตรง',
     category: 'playmaking',
     metric: 'assists',
@@ -792,7 +792,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
     id: 'clutch_finisher',
     icon: '⏱️',
     name: 'มัจจุราชท้ายเกม (75\'+)',
-    desc: 'มีส่วนร่วมยิงประตูหรือแอสซิสต์ตัดสินเกมในช่วง 15 นาทีสุดท้าย (นาทีที่ 75 ขึ้นไป)',
+    desc: 'มีส่วนร่วมยิงประตูหรือ 👟 ตัดสินเกมในช่วง 15 นาทีสุดท้าย (นาทีที่ 75 ขึ้นไป)',
     category: 'attack',
     metric: 'clutchActions',
     unit: 'ครั้ง',

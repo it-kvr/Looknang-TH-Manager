@@ -1401,6 +1401,7 @@ export interface LiveBallState {
     gkDiveTargetY?: number;
     gkDiveDir?: number;
     gkDiveStartProg?: number;
+    gkDiveStartX?: number;
     gkDiveStartY?: number;
     gkSaveX?: number;
   };
@@ -1414,6 +1415,19 @@ export interface LiveBallState {
     phaseLabel?: string;
     phaseTone?: LiveMatchWorld['phaseTone'];
     trailLog?: string;
+    bounceHops?: number;
+    pendingShot?: {
+      side: 'H' | 'A';
+      shooterId: string;
+      destX: number;
+      destY: number;
+      shotStyle: LiveBallState['shotStyle'];
+      curveAmt: number;
+      maxZAmt: number;
+      shotLabel: string;
+      dramaLabel: string;
+      logLine: string;
+    };
     goalPayload?: {
       side: 'H' | 'A';
       scorerName: string;

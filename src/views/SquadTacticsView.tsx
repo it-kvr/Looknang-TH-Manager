@@ -1943,7 +1943,7 @@ export const SquadTacticsView: React.FC<{
                                     </span>
                                   ) : null
                                 ) : q.sa ? (
-                                  <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`แอสซิสต์ ${q.sa} ครั้ง`}>
+                                  <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`👟 ${q.sa}`}>
                                     <span>{q.sa}</span>
                                     <StatIconBadge kind="assist" count={1} size="xs" />
                                   </span>

@@ -3409,7 +3409,7 @@ export const FullTimeMatchStage: React.FC<{
                     <span>·</span>
                     <span className="inline-flex items-center gap-1 tabular font-extrabold">
                       <span>{fullTimeAnalysis.pf.as}</span>
-                      <StatIconBadge kind="assist" count={1} size="sm" title={`แอสซิสต์ ${fullTimeAnalysis.pf.as} ครั้ง`} />
+                      <StatIconBadge kind="assist" count={1} size="sm" title={`👟 ${fullTimeAnalysis.pf.as}`} />
                     </span>
                     {fullTimeAnalysis.pf.subIn && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subIn" size="xs" /> สำรอง</span>}
                     {fullTimeAnalysis.pf.subOut && <span className="inline-flex items-center gap-0.5">· <StatIconBadge kind="subOut" size="xs" /> เปลี่ยนออก</span>}

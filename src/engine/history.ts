@@ -786,7 +786,7 @@ export function resolveClubLegendProfile(
     retired: true,
     retiredSeason,
     careerLog: [
-      `🏟️ ตำนานสโมสร ${clubTeam.name} · รวม ${leg.apps} นัด · ${leg.goals} ประตู · ${leg.assists} แอสซิสต์`,
+      `🏟️ ตำนานสโมสร ${clubTeam.name} · รวม ${leg.apps} นัด · ${leg.goals} ประตู · ${leg.assists} 👟`,
       `👋 อำลาสนาม${retiredSeason ? `หลังจบซีซั่น ${retiredSeason}` : ''} (อายุ ${retiredAge} ปี)`
     ]
   };

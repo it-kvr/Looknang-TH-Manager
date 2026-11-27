@@ -5411,7 +5411,7 @@ export const drawLivePitchToCanvas = (
     const rawSub = gb.isOwnGoal
       ? `${gb.teamName} ได้ประตูส้มหล่น!`
       : gb.assister
-        ? `👟 แอสซิสต์: ${gb.assister}`
+        ? `👟 ${gb.assister}`
         : gb.isMyGoal
           ? '🎉 เฮลั่นสนาม!'
           : '🔥 ตุงตาข่าย!';
@@ -7957,7 +7957,7 @@ export const drawHighlightClipToCanvas = (
     const rawSub = isOwn
       ? `${accentTeamName || 'คู่แข่ง'} ได้ประตูส้มหล่น!`
       : clip.assisterName
-        ? `👟 แอสซิสต์: ${clip.assisterName.split(' ')[0]}`
+        ? `👟 ${clip.assisterName.split(' ')[0]}`
         : goalMoodLine;
     const maxBW = cssW - 24;
     ctx.save();

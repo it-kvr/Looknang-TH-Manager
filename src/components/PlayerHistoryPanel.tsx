@@ -136,7 +136,7 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
           </div>
           <div className="py-1.5 mland:py-1 rounded-xl bg-[var(--surface-2)]/80">
             <div className="text-[10px] mland:text-[8px] text-[var(--mut)] flex items-center justify-center gap-1">
-              {isGk ? <StatIconBadge kind="cleansheet" size="xs" /> : <StatIconBadge kind="assist" size="xs" />} {isGk ? 'คลีนชีต' : 'แอสซิสต์'}
+              {isGk ? <><StatIconBadge kind="cleansheet" size="xs" /> คลีนชีต</> : <StatIconBadge kind="assist" size="xs" />}
             </div>
             <div className="font-extrabold text-sm mland:text-xs font-display tabular">
               {isGk ? topCs : topAssists}

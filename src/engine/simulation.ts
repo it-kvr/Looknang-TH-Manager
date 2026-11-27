@@ -6885,7 +6885,7 @@ export function finishSeasonComputation(s: GameState) {
         const totalAppsLog = sp + cupT.sp;
         const totalGoalsLog = sg + cupT.sg;
         const totalAstLog = sa + cupT.sa;
-        const summaryLine = `📅 จบซีซั่น ${s.season} (${tm.name}): ลง ${totalAppsLog} นัด${cupT.sp > 0 ? ` (ถ้วย ${cupT.sp})` : ''} · ${totalGoalsLog} ประตู · ${totalAstLog} แอสซิสต์${avgRating > 0 ? ` · เฉลี่ย ${avgRating.toFixed(2)}` : ''}${honor ? ` · 🏆 ${honor}` : ''}`;
+        const summaryLine = `📅 จบซีซั่น ${s.season} (${tm.name}): ลง ${totalAppsLog} นัด${cupT.sp > 0 ? ` (ถ้วย ${cupT.sp})` : ''} · ${totalGoalsLog} ประตู · ${totalAstLog} 👟${avgRating > 0 ? ` · เฉลี่ย ${avgRating.toFixed(2)}` : ''}${honor ? ` · 🏆 ${honor}` : ''}`;
         appendPlayerCareerLog(q, summaryLine, s.p);
       } else if (honor && (sp > 0 || cupT.sp > 0)) {
         appendPlayerCareerLog(q, `🏆 ซีซั่น ${s.season}: คว้า${honor}กับ ${tm.name}`, null, tm.id === s.me ? 16 : 6);

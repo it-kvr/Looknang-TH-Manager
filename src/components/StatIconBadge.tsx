@@ -51,7 +51,7 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
   if (kind === 'assist') {
     return (
       <span
-        title={title || (n > 1 ? `แอสซิสต์ ${n} ครั้ง` : 'แอสซิสต์')}
+        title={title || (n > 1 ? `👟 ${n}` : '👟')}
         className="inline-flex items-center justify-center gap-0.5 shrink-0 select-none leading-none align-middle tabular bg-transparent"
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >

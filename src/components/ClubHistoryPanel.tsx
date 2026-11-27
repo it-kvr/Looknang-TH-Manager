@@ -36,7 +36,7 @@ const METRIC_COLUMNS: {
   },
   {
     key: 'assists',
-    label: 'แอสซิสต์',
+    label: '',
     icon: <StatIconBadge kind="assist" size="xs" />,
     unit: 'ครั้ง',
     accentCls: 'text-sky-700 dark:text-sky-300',
@@ -846,7 +846,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
               </b>
             </div>
             <div className="py-1.5 flex justify-between gap-2">
-              <span className="text-[var(--mut)]">แอสซิสต์ซีซั่นเดียว</span>
+              <span className="text-[var(--mut)] inline-flex items-center gap-1"><StatIconBadge kind="assist" size="xs" /><span>ซีซั่นเดียว</span></span>
               <b className="truncate tabular">
                 {rec?.topSeasonAssist ? `${rec.topSeasonAssist.n} (${rec.topSeasonAssist.a} · S${rec.topSeasonAssist.s})` : '-'}
               </b>

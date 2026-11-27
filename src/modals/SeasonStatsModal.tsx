@@ -166,9 +166,8 @@ export const SeasonStatsModal: React.FC<{
     {
       key: 'sa',
       label: (
-        <span className="inline-flex items-center gap-1">
-          <StatIconBadge kind="assist" size="xs" />
-          <span>แอสซิสต์</span>
+        <span className="inline-flex items-center">
+          <StatIconBadge kind="assist" size="xs" title="👟" />
         </span>
       )
     },
@@ -254,7 +253,7 @@ export const SeasonStatsModal: React.FC<{
               </div>
               <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular">
                 ค่าเฉลี่ยเรตติ้งทีม: <b className="text-[var(--ink)]">{squadAvgRating}</b> · ประตูรวมผู้เล่น{' '}
-                <b className="text-[var(--ink)]">{totalTeamGoals}</b> · แอสซิสต์{' '}
+                <b className="text-[var(--ink)]">{totalTeamGoals}</b> · 👟{' '}
                 <b className="text-[var(--ink)]">{totalTeamAssists}</b>
               </div>
             </div>
@@ -323,7 +322,7 @@ export const SeasonStatsModal: React.FC<{
                 {rec.leagueBestAssist && (
                   <span className="inline-flex items-center gap-1">
                     <StatIconBadge kind="assist" size="xs" />
-                    <span>แอสซิสต์สูงสุดลีก: <b className="text-[var(--ink)]">{rec.leagueBestAssist}</b></span>
+                    <span>สูงสุดลีก: <b className="text-[var(--ink)]">{rec.leagueBestAssist}</b></span>
                   </span>
                 )}
               </div>
@@ -352,7 +351,7 @@ export const SeasonStatsModal: React.FC<{
             <div className="p-2.5 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--g-soft)]/60 border border-[var(--g)]/35 space-y-0.5">
               <div className="text-[11px] mland:text-[9px] font-bold text-[var(--g)] flex items-center gap-1">
                 <StatIconBadge kind="assist" size="xs" />
-                <span>แอสซิสต์สูงสุดในทีม</span>
+                <span>สูงสุดในทีม</span>
               </div>
               {scopedTopAssist ? (
                 <>
@@ -362,7 +361,7 @@ export const SeasonStatsModal: React.FC<{
                   </div>
                 </>
               ) : (
-                <div className="text-[11px] text-[var(--mut)]">ไม่มีผู้ทำแอสซิสต์</div>
+                <div className="text-[11px] text-[var(--mut)]">ไม่มี 👟</div>
               )}
             </div>
 
@@ -478,9 +477,8 @@ export const SeasonStatsModal: React.FC<{
                       </span>
                     </th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">
-                      <span className="inline-flex items-center justify-center gap-0.5">
-                        <StatIconBadge kind="assist" size="xs" />
-                        <span>แอสซิสต์</span>
+                      <span className="inline-flex items-center justify-center">
+                        <StatIconBadge kind="assist" size="xs" title="👟" />
                       </span>
                     </th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">
@@ -525,7 +523,7 @@ export const SeasonStatsModal: React.FC<{
                             {pl.isMe && <span className="text-[var(--lamp)] shrink-0">★</span>}
                             {isTopRt && <span className="shrink-0" title="คะแนนเฉลี่ยสูงสุดในทีม">⭐</span>}
                             {isTopGoal && <StatIconBadge kind="goal" size="xs" title="ดาวซัลโวทีม" />}
-                            {isTopAst && <StatIconBadge kind="assist" size="xs" title="แอสซิสต์สูงสุดทีม" />}
+                            {isTopAst && <StatIconBadge kind="assist" size="xs" title="👟 สูงสุดทีม" />}
                           </div>
                         </td>
                         <td className="py-1.5 mland:py-1 px-1.5 text-center">

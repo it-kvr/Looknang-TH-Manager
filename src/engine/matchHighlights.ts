@@ -383,7 +383,7 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
   if (inp.shotDistM && inp.shotDistM > 0) telemetryParts.push(`📏 ระยะยิง ~${inp.shotDistM} ม.`);
   if (inp.shotSpeedKmh && inp.shotSpeedKmh > 0) telemetryParts.push(`⚡ ${inp.shotSpeedKmh} กม./ชม.`);
   if (assistShort && inp.kind !== 'goal_og' && inp.kind !== 'super_save') {
-    telemetryParts.push(`👟 แอสซิสต์: ${assistShort}`);
+    telemetryParts.push(`👟 ${assistShort}`);
   }
 
   const subtitle =

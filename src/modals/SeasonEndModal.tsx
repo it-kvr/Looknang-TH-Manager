@@ -509,14 +509,9 @@ export const SeasonEndModal: React.FC<{
                   },
                   {
                     id: 'assist',
-                    label: (
-                      <span className="inline-flex items-center gap-1">
-                        <StatIconBadge kind="assist" size="xs" />
-                        <span>จอมแอสซิสต์ทีม</span>
-                      </span>
-                    ),
+                    label: <StatIconBadge kind="assist" size="xs" title="👟" />,
                     name: arc.topAssist?.name,
-                    stat: arc.topAssist ? `${arc.topAssist.sa} แอสซิสต์ (${arc.topAssist.sp} นัด)` : '-',
+                    stat: arc.topAssist ? `${arc.topAssist.sa} 👟 (${arc.topAssist.sp} นัด)` : '-',
                     player: assistPlayer,
                     accent: 'border-sky-500/35'
                   },
@@ -570,7 +565,7 @@ export const SeasonEndModal: React.FC<{
                   {summary.bestAssist && (
                     <div className="truncate text-[var(--ink)] flex items-center gap-1">
                       <StatIconBadge kind="assist" size="xs" />
-                      <span className="truncate">จอมแอสซิสต์: <b>{summary.bestAssist}</b></span>
+                      <b className="truncate">{summary.bestAssist}</b>
                     </div>
                   )}
                 </div>

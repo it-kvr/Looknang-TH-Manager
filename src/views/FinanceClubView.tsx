@@ -2655,9 +2655,9 @@ export const FinanceClubView: React.FC<{
           },
           {
             key: 'topAssist',
-            roleLabel: 'จอมแอสซิสต์ซีซั่นนี้',
+            roleLabel: '👟 ซีซั่นนี้',
             player: ba && ba.sa ? ba : undefined,
-            metricText: ba && ba.sa ? `${ba.sa} แอสซิสต์` : '',
+            metricText: ba && ba.sa ? `${ba.sa} 👟` : '',
             emptyText: 'ยังไม่มีข้อมูล'
           },
           {

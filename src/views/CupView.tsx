@@ -890,12 +890,7 @@ export const CupView: React.FC<{
                             },
                             {
                               id: 'top-ast',
-                              title: (
-                                <span className="inline-flex items-center gap-1">
-                                  <StatIconBadge kind="assist" size="xs" />
-                                  <span>จอมแอสซิสต์</span>
-                                </span>
-                              ),
+                              title: <StatIconBadge kind="assist" size="xs" title="👟" />,
                               entry: topAst,
                               val: topAst ? `${topAst.st.sa} ครั้ง` : '-',
                               tone: 'bg-[var(--g-soft)]/55 border-[var(--g)]/35'
