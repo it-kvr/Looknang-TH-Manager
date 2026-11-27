@@ -1517,14 +1517,14 @@ export const FormationPitch: React.FC<{
               </g>
             )}
 
-            {/* Mid-Right Edge: Goals & Assists Icons (No background box, crisp outline + shadow) */}
+            {/* Mid-Right Edge: Goals & Assists Icons */}
             {(goalsCount > 0 || assistsCount > 0) && (() => {
               const gW = goalsCount > 1 ? 17.5 : goalsCount > 0 ? 10.5 : 0;
-              const aW = assistsCount > 1 ? 17.5 : assistsCount > 0 ? 10.5 : 0;
-              const gap = goalsCount > 0 && assistsCount > 0 ? 1.5 : 0;
+              const aW = assistsCount > 1 ? 19.5 : assistsCount > 0 ? 12 : 0;
+              const gap = goalsCount > 0 && assistsCount > 0 ? 2 : 0;
               const totalW = gW + gap + aW;
               const baseX = Math.min(cx + 16.5, 294 - totalW);
-              const baseY = cy - 1.5;
+              const baseY = cy - 1;
               const gx = baseX + gW / 2;
               const ax = baseX + gW + gap + aW / 2;
               return (
@@ -1562,30 +1562,57 @@ export const FormationPitch: React.FC<{
                   {assistsCount > 0 && (
                     <g transform={`translate(${ax},${baseY})`}>
                       {assistsCount > 1 ? (
-                        <text
-                          x="0"
-                          y="3.2"
-                          textAnchor="middle"
-                          fontSize="8.8"
-                          fontWeight="900"
-                          fontFamily="Kanit, Sarabun, sans-serif"
-                          fill="#ffffff"
-                          stroke="#06140d"
-                          strokeWidth="2.4"
-                          strokeLinejoin="round"
-                          paintOrder="stroke"
-                        >
-                          {assistsCount}👟
-                        </text>
+                        <>
+                          <rect
+                            x="-9.5"
+                            y="-5.7"
+                            width="19"
+                            height="11.4"
+                            rx="5.7"
+                            fill="#0284c7"
+                            stroke="#ffffff"
+                            strokeWidth="1.05"
+                          />
+                          <text
+                            x="-4.4"
+                            y="0.4"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="8.2"
+                            fontWeight="900"
+                            fontFamily="Kanit, Sarabun, sans-serif"
+                            fill="#ffffff"
+                          >
+                            {assistsCount}
+                          </text>
+                          <g transform="translate(3.8, -0.2) scale(0.82)">
+                            <path
+                              d="M-3.3 -2.4 L-1.0 -2.4 L0.4 -0.5 C1.6 -0.2 3.0 0.2 3.6 0.9 C3.9 1.3 3.7 1.8 3.1 1.8 L-3.4 1.8 Z"
+                              fill="#ffffff"
+                            />
+                            <rect x="-3.1" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
+                            <rect x="-0.55" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
+                            <rect x="2.0" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
+                          </g>
+                        </>
                       ) : (
-                        <text
-                          x="0"
-                          y="3.4"
-                          textAnchor="middle"
-                          fontSize="9.6"
-                        >
-                          👟
-                        </text>
+                        <>
+                          <circle
+                            r="5.6"
+                            fill="#0284c7"
+                            stroke="#ffffff"
+                            strokeWidth="1.05"
+                          />
+                          <g transform="translate(0, -0.2)">
+                            <path
+                              d="M-3.3 -2.4 L-1.0 -2.4 L0.4 -0.5 C1.6 -0.2 3.0 0.2 3.6 0.9 C3.9 1.3 3.7 1.8 3.1 1.8 L-3.4 1.8 Z"
+                              fill="#ffffff"
+                            />
+                            <rect x="-3.1" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
+                            <rect x="-0.55" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
+                            <rect x="2.0" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
+                          </g>
+                        </>
                       )}
                     </g>
                   )}

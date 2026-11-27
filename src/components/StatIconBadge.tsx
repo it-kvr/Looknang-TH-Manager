@@ -49,7 +49,16 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
         {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
-        <span aria-hidden="true" className="leading-none inline-block" style={{ fontSize: Math.round(px * 0.94) }}>👟</span>
+        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true" className="shrink-0">
+          <circle cx="10" cy="10" r="8.8" fill="#0284c7" stroke="#e0f2fe" strokeWidth="1.25" />
+          <path
+            d="M4.8 6.3 H8.2 L10.3 9.2 C12.1 9.6 14.3 10.2 15.2 11.3 C15.7 11.9 15.4 12.7 14.4 12.7 H4.7 Z"
+            fill="#ffffff"
+          />
+          <rect x="5.1" y="12.7" width="1.8" height="1.7" rx="0.45" fill="#ffffff" />
+          <rect x="9.1" y="12.7" width="1.8" height="1.7" rx="0.45" fill="#ffffff" />
+          <rect x="13.0" y="12.7" width="1.8" height="1.7" rx="0.45" fill="#ffffff" />
+        </svg>
       </span>
     );
   }
