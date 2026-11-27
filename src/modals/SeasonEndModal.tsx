@@ -16,6 +16,8 @@ import type { GameState, Player, TrophyRecord } from '../types/game';
 import { TN } from '../data/thaiFootballData';
 import { SFX, triggerConfetti } from '../utils/audioTheme';
 import { finishSeasonComputation, ensureTeamFans, fmtFans } from '../engine/simulation';
+import { xi } from '../engine/playerCore';
+import { generateManagerJobOffers } from '../engine/managerCareer';
 import { fmtMoney } from '../utils/math';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { TrophySvg } from '../components/ClubHistoryPanel';
@@ -39,6 +41,11 @@ export const SeasonEndModal: React.FC<{
     if (fromSummary.length > 0) return fromSummary;
     return (state.trophies || []).filter((tr) => tr.season === state.season);
   }, [summary.trophiesWon, state.trophies, state.season]);
+
+  const managerOffers = useMemo(
+    () => (state.mode === 'm' ? generateManagerJobOffers(state, { mode: state.sack === 1 ? 'sacked' : 'season_end' }) : []),
+    [state]
+  );
 
   const wonCup = summary.cupStatus === 'แชมป์ถ้วย';
   const wonAsia = summary.asiaStatus === 'แชมป์ถ้วยทวีป';
@@ -604,6 +611,64 @@ export const SeasonEndModal: React.FC<{
           {state.mode === 'm' && state.sack === 1 && (
             <div className="p-3 mland:p-2 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/45 text-xs mland:text-[10px] font-bold text-[var(--red)]">
               ❌ บอร์ดบริหารมีมติปลดคุณออกจากตำแหน่งหลังผลงานต่ำกว่าเป้าหมาย
+            </div>
+          )}
+
+          {/* MANAGER CAREER OFFERS (POACHING OR SACKED RESCUE) */}
+          {state.mode === 'm' && managerOffers.length > 0 && (
+            <div
+              className={`p-3 mland:p-2 rounded-xl border space-y-2 mland:space-y-1 ${
+                state.sack === 1
+                  ? 'bg-[var(--g-soft)] border-[var(--g)]/55'
+                  : 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-bold text-xs mland:text-[10px] text-[var(--ink)]">
+                  {state.sack === 1
+                    ? '💼 ข้อเสนอกอบกู้ทีมใหม่ (เลือกทีมเพื่อคุมทัพต่อในฤดูกาลหน้า!)'
+                    : '💼 ข้อเสนอทาบทามจากสโมสรอื่น (ย้ายไปคุมทัพฤดูกาลหน้า)'}
+                </div>
+                <span className="text-[10px] text-[var(--mut)] tabular">{managerOffers.length} ทีม</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 mland:grid-cols-2 gap-2 mland:gap-1.5">
+                {managerOffers.map((offer) => {
+                  const club = state.teams[offer.teamId];
+                  const starters = club ? xi(club) : [];
+                  const avgOvr = starters.length
+                    ? Math.round(starters.reduce((sum, p) => sum + p.ov, 0) / starters.length)
+                    : 60;
+                  const badgeText =
+                    offer.reason === 'rescue'
+                      ? 'กอบกู้ทีม'
+                      : offer.reason === 'poach'
+                        ? 'ดึงตัว'
+                        : 'ข้อเสนอใหม่';
+                  return (
+                    <button
+                      key={offer.teamId}
+                      type="button"
+                      onClick={() => onStartNextSeason(offer.teamId)}
+                      className="p-2.5 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] flex items-center justify-between gap-2 mland:gap-1.5 text-left cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2.5 mland:gap-1.5 min-w-0">
+                        <ClubCrest name={offer.teamName} size={28} team={club} />
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
+                            {offer.teamName}
+                          </div>
+                          <div className="text-[10.5px] mland:text-[9px] text-[var(--g)] font-semibold truncate">
+                            {TN[offer.tier]} · OVR {avgOvr} · งบ {fmtMoney(offer.budgetK)}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="px-1.5 py-0.5 rounded bg-[var(--g-soft)] text-[var(--g)] text-[10px] font-bold shrink-0">
+                        {badgeText} ›
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

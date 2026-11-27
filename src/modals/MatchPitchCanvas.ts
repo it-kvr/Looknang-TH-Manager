@@ -3296,7 +3296,7 @@ export const drawLivePitchToCanvas = (
     const apronH = Math.max(26, cssH - touchBot);
     const zoneTop = touchBot + 3;
     const zoneH = clamp(apronH - 5, 22, 31);
-    const techH = Math.max(10, zoneH * 0.5);
+    const techH = zoneH;
 
     // Left (Home) & Right (Away) Technical Areas (FIFA-style dashed coach boxes flanking halfway line)
     const drawTechArea = (xStartPct: number, xEndPct: number, activeKit: string, trim: string) => {
@@ -3617,7 +3617,7 @@ export const drawLivePitchToCanvas = (
     const drawCoach = (c: LiveSidelineCoach, kit: string, trim: string) => {
       const cr = clamp(Math.min(cssW * 0.0155, zoneH * 0.36), 6.8, 8.6);
       const cx = px(c.x);
-      const cy = zoneTop + Math.max(techH * 0.56, zoneH * 0.44);
+      const cy = zoneTop + techH * 0.48;
       const speed = Math.hypot(c.tx - c.x, c.ty - c.y);
       const paceStep = speed > 0.3 ? Math.sin(c.pacePhase) * (cr * 0.34) : 0;
       const coachVis =
@@ -3777,22 +3777,18 @@ export const drawLivePitchToCanvas = (
         const mTimer = c.moodTimer || 0;
         const mAlpha = Math.min(clamp(mTimer / 0.35, 0, 1), 1);
         const bob = Math.sin(sl.warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
+        ctx.save();
         ctx.globalAlpha = mAlpha;
-        const bw = 17;
-        const bh = 14;
-        const bx0 = clamp(-bw / 2, -cx + 6, cssW - cx - bw - 6);
-        const by0 = -cr - 17 + bob;
-        ctx.fillStyle = 'rgba(7, 19, 13, 0.92)';
-        ctx.strokeStyle = c.isUserCoach ? '#facc15' : 'rgba(255, 255, 255, 0.36)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.roundRect(bx0, by0, bw, bh, 7);
-        ctx.fill();
-        ctx.stroke();
-        ctx.font = '10px Sarabun, sans-serif';
+        const emX = clamp(0, -cx + 8, cssW - cx - 8);
+        const emY = -cr - 7.5 + bob;
+        ctx.font = '11px Sarabun, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(c.moodEmoji, bx0 + bw / 2, by0 + bh / 2 + 0.4);
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetY = 1;
+        ctx.fillText(c.moodEmoji, emX, emY);
+        ctx.restore();
       }
 
       ctx.restore();
@@ -5032,59 +5028,6 @@ export const drawLivePitchToCanvas = (
       ctx.fillText(pillStr, rx0 + pillW / 2, ry0 + pillH / 2 + 0.3);
     }
 
-    // Captain 'C' circular badge on left shoulder using clean flat club colors
-    if (ag.isCaptain) {
-      const capPal = getClubCaptainPalette(kit, trim);
-      const capX = -playerRadius * 0.9;
-      const capY = ag.subbedIn ? -playerRadius * 0.72 : -playerRadius * 0.56;
-      ctx.fillStyle = capPal.bg;
-      ctx.strokeStyle = capPal.border;
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      ctx.arc(capX, capY, 4.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = capPal.text;
-      ctx.font = '900 5.8px Sarabun, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('C', capX, capY + 0.35);
-    }
-
-    // Substitute-in circular emerald up-arrow badge on mid-left edge (matches FormationPitch & StatIconBadge)
-    if (ag.subbedIn) {
-      const subX = -playerRadius * 1.12;
-      const subY = ag.isCaptain ? -playerRadius * 0.04 : -playerRadius * 0.22;
-      const srBadge = 4.2;
-      ctx.fillStyle = '#10b981';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.85;
-      ctx.beginPath();
-      ctx.arc(subX, subY, srBadge, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(subX, subY - srBadge * 0.54);
-      ctx.lineTo(subX + srBadge * 0.48, subY + srBadge * 0.05);
-      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.05);
-      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.55);
-      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.55);
-      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.05);
-      ctx.lineTo(subX - srBadge * 0.48, subY + srBadge * 0.05);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Yellow card mini indicator on right shoulder (clear of top position badge)
-    if (ag.hasYellow) {
-      ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#111827';
-      ctx.lineWidth = 0.8;
-      ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
-      ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
-    }
-
     // Crisp position role micro-badge snug on top rim of each player during live play
     if (showPositions && ag.role) {
       const roleStr = String(ag.role);
@@ -5105,6 +5048,59 @@ export const drawLivePitchToCanvas = (
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);
+    }
+
+    // Yellow card mini indicator on right shoulder (clear of top position badge)
+    if (ag.hasYellow) {
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth = 0.8;
+      ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+      ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+    }
+
+    // Substitute-in circular emerald up-arrow badge on mid-left edge (clear of captain & top position badge)
+    if (ag.subbedIn) {
+      const subX = ag.isCaptain ? -playerRadius * 1.22 : -playerRadius * 1.12;
+      const subY = ag.isCaptain ? playerRadius * 0.12 : -playerRadius * 0.18;
+      const srBadge = 4.1;
+      ctx.fillStyle = '#10b981';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.arc(subX, subY, srBadge, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(subX, subY - srBadge * 0.54);
+      ctx.lineTo(subX + srBadge * 0.48, subY + srBadge * 0.05);
+      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.05);
+      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.55);
+      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.55);
+      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.05);
+      ctx.lineTo(subX - srBadge * 0.48, subY + srBadge * 0.05);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Captain 'C' circular badge drawn last on left outer shoulder so position badge never covers it
+    if (ag.isCaptain) {
+      const capPal = getClubCaptainPalette(kit, trim);
+      const capX = -playerRadius * 1.06;
+      const capY = ag.subbedIn ? -playerRadius * 0.44 : -playerRadius * 0.24;
+      ctx.fillStyle = capPal.bg;
+      ctx.strokeStyle = capPal.border;
+      ctx.lineWidth = 1.05;
+      ctx.beginPath();
+      ctx.arc(capX, capY, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = capPal.text;
+      ctx.font = '900 5.9px Sarabun, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('C', capX, capY + 0.35);
     }
 
     // Live stamina micro-bar under every player on the pitch
@@ -7556,59 +7552,6 @@ export const drawHighlightClipToCanvas = (
       ctx.fillText(pillStr, rx0 + pillW / 2, ry0 + pillH / 2 + 0.3);
     }
 
-    // Captain 'C' badge
-    if (meta.cap) {
-      const capPal = getClubCaptainPalette(kit, trim);
-      const capX = -playerRadius * 0.9;
-      const capY = meta.sub ? -playerRadius * 0.72 : -playerRadius * 0.56;
-      ctx.fillStyle = capPal.bg;
-      ctx.strokeStyle = capPal.border;
-      ctx.lineWidth = 1.0;
-      ctx.beginPath();
-      ctx.arc(capX, capY, 4.4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = capPal.text;
-      ctx.font = '900 5.8px Sarabun, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('C', capX, capY + 0.35);
-    }
-
-    // Sub-in upward emerald arrow
-    if (meta.sub) {
-      const subX = -playerRadius * 1.12;
-      const subY = meta.cap ? -playerRadius * 0.04 : -playerRadius * 0.22;
-      const srBadge = 4.2;
-      ctx.fillStyle = '#10b981';
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 0.85;
-      ctx.beginPath();
-      ctx.arc(subX, subY, srBadge, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(subX, subY - srBadge * 0.54);
-      ctx.lineTo(subX + srBadge * 0.48, subY + srBadge * 0.05);
-      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.05);
-      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.55);
-      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.55);
-      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.05);
-      ctx.lineTo(subX - srBadge * 0.48, subY + srBadge * 0.05);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Yellow card mini indicator
-    if (meta.yc) {
-      ctx.fillStyle = '#facc15';
-      ctx.strokeStyle = '#111827';
-      ctx.lineWidth = 0.8;
-      ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
-      ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
-    }
-
     // Position role micro-badge on ALL 22 players (exact live match look!)
     if (meta.ro) {
       const roleStr = String(meta.ro);
@@ -7629,6 +7572,59 @@ export const drawHighlightClipToCanvas = (
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(roleStr, 0, ry + rh / 2 + 0.3);
+    }
+
+    // Yellow card mini indicator
+    if (meta.yc) {
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#111827';
+      ctx.lineWidth = 0.8;
+      ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+      ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+    }
+
+    // Sub-in upward emerald arrow (clear of captain & top position badge)
+    if (meta.sub) {
+      const subX = meta.cap ? -playerRadius * 1.22 : -playerRadius * 1.12;
+      const subY = meta.cap ? playerRadius * 0.12 : -playerRadius * 0.18;
+      const srBadge = 4.1;
+      ctx.fillStyle = '#10b981';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 0.85;
+      ctx.beginPath();
+      ctx.arc(subX, subY, srBadge, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(subX, subY - srBadge * 0.54);
+      ctx.lineTo(subX + srBadge * 0.48, subY + srBadge * 0.05);
+      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.05);
+      ctx.lineTo(subX + srBadge * 0.19, subY + srBadge * 0.55);
+      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.55);
+      ctx.lineTo(subX - srBadge * 0.19, subY + srBadge * 0.05);
+      ctx.lineTo(subX - srBadge * 0.48, subY + srBadge * 0.05);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Captain 'C' badge drawn last on left outer shoulder so position badge never covers it
+    if (meta.cap) {
+      const capPal = getClubCaptainPalette(kit, trim);
+      const capX = -playerRadius * 1.06;
+      const capY = meta.sub ? -playerRadius * 0.44 : -playerRadius * 0.24;
+      ctx.fillStyle = capPal.bg;
+      ctx.strokeStyle = capPal.border;
+      ctx.lineWidth = 1.05;
+      ctx.beginPath();
+      ctx.arc(capX, capY, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = capPal.text;
+      ctx.font = '900 5.9px Sarabun, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('C', capX, capY + 0.35);
     }
 
     // Stamina micro-bar under every player (exact live match look!)

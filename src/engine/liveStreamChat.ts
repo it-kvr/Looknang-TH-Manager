@@ -55,6 +55,9 @@ export function getMatchBroadcastChannel(opts: {
   season?: number;
 }): BroadcastChannelInfo {
   const seed = Math.abs((opts.homeId ?? 1) * 13 + (opts.season ?? 1) * 7 + (opts.tier ?? 0) * 5);
+  if (opts.kind === 'nt') {
+    return { name: 'Thairath & Changsuek HD', short: 'ช้างศึก Live HD', badge: 'ถ่ายทอดสดทีมชาติไทย' };
+  }
   if (opts.kind === 'asia') {
     return { name: 'AsiaFootball Network HD', short: 'AsiaFootball HD', badge: 'ลิขสิทธิ์ถ้วยทวีป' };
   }

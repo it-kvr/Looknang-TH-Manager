@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   FastForward,
   Film,
@@ -65,13 +65,15 @@ import {
 
 export const MatchModal: React.FC<{
   state: GameState;
-  kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+  kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
   homeId: number;
   awayId: number;
   isDerby: boolean;
+  allowDraw?: boolean;
+  compTitleOverride?: string;
   initialMatchEnv?: MatchEnvironment;
   onFinish: (payload: FinishedMatchPayload) => void;
-}> = ({ state, kind, homeId, awayId, isDerby, initialMatchEnv, onFinish }) => {
+}> = ({ state, kind, homeId, awayId, isDerby, allowDraw = false, compTitleOverride, initialMatchEnv, onFinish }) => {
   const settings = useMemo(() => getSettings(), []);
   const homeOrig = state.teams[homeId];
   const awayOrig = state.teams[awayId];
@@ -221,6 +223,11 @@ export const MatchModal: React.FC<{
     actors: [],
     teamSide: 'H'
   });
+  const pitchOverlayBoxRef = useRef<HTMLDivElement | null>(null);
+  const leftCornerBadgeRef = useRef<HTMLDivElement | null>(null);
+  const rightCornerBadgeRef = useRef<HTMLDivElement | null>(null);
+  const actionBannerPillRef = useRef<HTMLSpanElement | null>(null);
+  const [actionBannerScale, setActionBannerScale] = useState<number>(1);
   const logSeqRef = useRef<number>(10);
   const [logs, setLogs] = useState<MatchLogItem[]>(() => {
     const envDesc =
@@ -10107,7 +10114,7 @@ export const MatchModal: React.FC<{
     const finalGh = sr.gh;
     const finalGa = sr.ga;
     let finalPenText: string | undefined = precomputedPenText;
-    if (kind !== 'league' && finalGh === finalGa) {
+    if (kind !== 'league' && !allowDraw && finalGh === finalGa) {
       if (precomputedWinnerHome !== undefined && precomputedPenText) {
         setPenResult({ winnerHome: precomputedWinnerHome, text: precomputedPenText });
       } else {
@@ -10865,7 +10872,7 @@ export const MatchModal: React.FC<{
           w.phaseLabel = `⏱️ ทดเวลาบาดเจ็บครึ่งหลัง +${w.added2} น.`;
           w.phaseTone = 'setpiece';
         } else if (w.phase === 'stop2' && w.stoppageFloat >= w.added2 && !activePlayInFlight) {
-          if (kind !== 'league' && simRef.current.gh === simRef.current.ga) {
+          if (kind !== 'league' && !allowDraw && simRef.current.gh === simRef.current.ga) {
             startLiveShootout(w);
           } else {
             finalizeMatch();
@@ -11336,30 +11343,34 @@ export const MatchModal: React.FC<{
   }, [meTeamOrig.sq, liveLu, sentOff, meIsHome]);
 
   const compTitle =
-    kind === 'asia'
-      ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
-      : kind === 'sc'
-        ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · ชิงชนะเลิศ`
-        : kind === 'lc'
-          ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${RN[state.lc?.r ?? 0] || `รอบ ${(state.lc?.r ?? 0) + 1}`}`
-          : kind === 'dc'
-            ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
-            : kind === 'cup'
-              ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
-              : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
+    kind === 'nt'
+      ? compTitleOverride || '🇹🇭 ช้างศึกทีมชาติไทย · แมตช์นานาชาติ'
+      : kind === 'asia'
+        ? `🌏 บอลถ้วยทวีป · ${RN[state.ac?.r ?? 0] || 'รอบคัดเลือก'}`
+        : kind === 'sc'
+          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.name} · ชิงชนะเลิศ`
+          : kind === 'lc'
+            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.name} · ${RN[state.lc?.r ?? 0] || `รอบ ${(state.lc?.r ?? 0) + 1}`}`
+            : kind === 'dc'
+              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.name} · ${RN[state.dc?.r ?? 0] || `รอบ ${(state.dc?.r ?? 0) + 1}`}`
+              : kind === 'cup'
+                ? `🏆 ถ้วยประชาชน · ${RN[state.cup.r] || `รอบ ${state.cup.r + 1}`}`
+                : `⚽ ${TN[homeOrig.tier]} · นัดที่ ${state.md + 1}${isDerby ? ' 🔥 ดาร์บี้แมตช์' : ''}`;
 
   const compShortTitle =
-    kind === 'asia'
-      ? `🌏 ทวีป · ${RN[state.ac?.r ?? 0] || 'คัดเลือก'}`
-      : kind === 'sc'
-        ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.short}`
-        : kind === 'lc'
-          ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.short} · ${RN[state.lc?.r ?? 0] || `ร.${(state.lc?.r ?? 0) + 1}`}`
-          : kind === 'dc'
-            ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.short} · ${RN[state.dc?.r ?? 0] || `ร.${(state.dc?.r ?? 0) + 1}`}`
-            : kind === 'cup'
-              ? `🏆 ถ้วย · ${RN[state.cup.r] || `ร.${state.cup.r + 1}`}`
-              : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
+    kind === 'nt'
+      ? compTitleOverride || '🇹🇭 ทีมชาติไทย'
+      : kind === 'asia'
+        ? `🌏 ทวีป · ${RN[state.ac?.r ?? 0] || 'คัดเลือก'}`
+        : kind === 'sc'
+          ? `${EXTRA_CUP_META.sc.icon} ${EXTRA_CUP_META.sc.short}`
+          : kind === 'lc'
+            ? `${EXTRA_CUP_META.lc.icon} ${EXTRA_CUP_META.lc.short} · ${RN[state.lc?.r ?? 0] || `ร.${(state.lc?.r ?? 0) + 1}`}`
+            : kind === 'dc'
+              ? `${EXTRA_CUP_META.dc.icon} ${EXTRA_CUP_META.dc.short} · ${RN[state.dc?.r ?? 0] || `ร.${(state.dc?.r ?? 0) + 1}`}`
+              : kind === 'cup'
+                ? `🏆 ถ้วย · ${RN[state.cup.r] || `ร.${state.cup.r + 1}`}`
+                : `⚽ ${TN[homeOrig.tier]} · น.${state.md + 1}${isDerby ? ' 🔥' : ''}`;
 
   const cycleMatchSpeed = () => {
     const order: readonly (0.25 | 0.5 | 1 | 2 | 5)[] = [0.25, 0.5, 1, 2, 5];
@@ -11956,11 +11967,11 @@ export const MatchModal: React.FC<{
       const sideTeam = actionBanner.teamSide === 'A' ? awayOrig : homeOrig;
       const isSideMe = sideTeam.id === state.me && state.mode === 'm';
       return (
-        <span className="inline-flex flex-nowrap items-center justify-center gap-1.5 min-w-0 max-w-full whitespace-nowrap">
+        <span className="inline-flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap leading-none">
           <span className="shrink-0 inline-flex">
             <ClubCrest name={sideTeam.name} size={15} team={sideTeam} club={state.club} isMyClub={isSideMe} />
           </span>
-          <span className="truncate">{label}</span>
+          <span>{label}</span>
         </span>
       );
     }
@@ -11981,11 +11992,10 @@ export const MatchModal: React.FC<{
     hits.forEach((h, idx) => {
       if (h.start > cursor) {
         const segTxt = label.slice(cursor, h.start);
-        const allowTruncate = segTxt.trim().length > 6;
         nodes.push(
           <span
             key={`bt-${idx}`}
-            className={`${allowTruncate ? 'min-w-0 truncate' : 'shrink-0'} whitespace-nowrap inline-flex items-center gap-1`}
+            className="whitespace-nowrap inline-flex flex-nowrap items-center gap-1 shrink-0"
           >
             {renderBannerSeg(segTxt, `bt-${idx}`)}
           </span>
@@ -12022,12 +12032,12 @@ export const MatchModal: React.FC<{
     if (cursor < label.length) {
       const tailTxt = label.slice(cursor);
       nodes.push(
-        <span key="bt-tail" className="min-w-0 truncate whitespace-nowrap inline-flex items-center gap-1">
+        <span key="bt-tail" className="whitespace-nowrap inline-flex flex-nowrap items-center gap-1 shrink-0">
           {renderBannerSeg(tailTxt, 'bt-tail')}
         </span>
       );
     }
-    return <span className="inline-flex flex-nowrap items-center justify-center gap-1.5 min-w-0 max-w-full whitespace-nowrap">{nodes}</span>;
+    return <span className="inline-flex flex-nowrap items-center justify-center gap-x-1.5 whitespace-nowrap leading-none">{nodes}</span>;
   }, [actionBanner, matchVisualIndex, homeId, awayId, homeOrig, awayOrig, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, state]);
 
   const isLivePitchFullscreen =
@@ -12035,6 +12045,38 @@ export const MatchModal: React.FC<{
     !done &&
     matchPhaseUi !== 'halftime' &&
     mlandMatchTab === 'chat';
+
+  useLayoutEffect(() => {
+    const recalc = () => {
+      const box = pitchOverlayBoxRef.current;
+      const pill = actionBannerPillRef.current;
+      if (!box || !pill) {
+        setActionBannerScale(1);
+        return;
+      }
+      const boxW = box.clientWidth;
+      const pillW = pill.scrollWidth;
+      if (boxW <= 0 || pillW <= 0) {
+        setActionBannerScale(1);
+        return;
+      }
+      const leftW = leftCornerBadgeRef.current?.offsetWidth ?? 0;
+      const rightW = rightCornerBadgeRef.current?.offsetWidth ?? 0;
+      const sideReserve = Math.max(leftW, rightW);
+      const availW = sideReserve > 0
+        ? Math.max(120, boxW - sideReserve * 2 - 20)
+        : Math.max(160, boxW - 16);
+      const nextScale = pillW > availW ? clamp(availW / pillW, 0.42, 1) : 1;
+      setActionBannerScale((prev) => (Math.abs(prev - nextScale) < 0.01 ? prev : nextScale));
+    };
+    recalc();
+    const box = pitchOverlayBoxRef.current;
+    if (!box || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(recalc);
+    ro.observe(box);
+    if (actionBannerPillRef.current) ro.observe(actionBannerPillRef.current);
+    return () => ro.disconnect();
+  }, [actionBanner, actionBannerContent, miracleBannerUi, blessedListUi, liveVarActive, matchPhaseUi, done, isLivePitchFullscreen]);
 
   const renderLiveStreamChatPanel = () => {
     const vTier = getStreamViewerTier(liveViewers);
@@ -12296,22 +12338,6 @@ export const MatchModal: React.FC<{
                       </button>
                     </div>
 
-                    {isLivePitchFullscreen && (
-                      <button
-                        type="button"
-                        title="ออกจากโหมดถ่ายทอดสดเต็มจอ"
-                        aria-label="ย่อจอถ่ายทอดสด"
-                        onClick={() => {
-                          SFX.tap();
-                          setBroadcastFullscreen(false);
-                        }}
-                        className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400"
-                      >
-                        <Minimize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-                        <span className="hidden md:inline mland:inline">ย่อจอ</span>
-                      </button>
-                    )}
-
                     <button
                       type="button"
                       title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
@@ -12566,6 +12592,7 @@ export const MatchModal: React.FC<{
                 }
               >
                   <div
+                    ref={pitchOverlayBoxRef}
                     className={`relative ${
                       isLivePitchFullscreen
                         ? 'w-full flex items-center justify-center overflow-hidden sm:flex-1 sm:min-h-0 sm:[container-type:size] mland:flex-1 mland:min-h-0 mland:[container-type:size]'
@@ -12602,7 +12629,6 @@ export const MatchModal: React.FC<{
                       const awayBlessed = blessedListUi.filter((b) => b.side === 'A');
                       const hasLeft = Boolean(homeMiracle || homeBlessed.length > 0);
                       const hasRight = Boolean(awayMiracle || awayBlessed.length > 0);
-                      const hasCornerBadges = hasLeft || hasRight;
                       const getBlessingEmoji = (tag?: string): string => {
                         switch (tag) {
                           case 'พลิกนรก':
@@ -12625,7 +12651,10 @@ export const MatchModal: React.FC<{
                       return (
                         <>
                           {hasLeft && (
-                            <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1.5 sm:left-2 mland:left-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-start gap-0.5">
+                            <div
+                              ref={leftCornerBadgeRef}
+                              className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1.5 sm:left-2 mland:left-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-start gap-0.5"
+                            >
                               {homeMiracle && (
                                 <span
                                   className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] mland:text-[8px] font-extrabold tabular leading-tight ${cornerShadow} ${
@@ -12675,13 +12704,15 @@ export const MatchModal: React.FC<{
                           )}
 
                           {!liveVarActive && actionBanner.label && (
-                            <div
-                              className={`pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1/2 -translate-x-1/2 z-20 ${
-                                hasCornerBadges ? 'max-w-[40%] sm:max-w-[44%]' : 'max-w-[94%]'
-                              } flex items-center justify-center`}
-                            >
+                            <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center">
                               <span
-                                className={`inline-flex items-center justify-center max-w-full px-2.5 sm:px-3.5 mland:px-2 py-0.5 sm:py-1 mland:py-[2px] rounded-lg border text-[11px] sm:text-xs mland:text-[9.5px] leading-tight font-bold whitespace-nowrap overflow-hidden backdrop-blur-[2px] ${bannerCls}`}
+                                ref={actionBannerPillRef}
+                                style={
+                                  actionBannerScale < 0.995
+                                    ? { transform: `scale(${actionBannerScale.toFixed(3)})`, transformOrigin: 'top center' }
+                                    : undefined
+                                }
+                                className={`inline-flex flex-nowrap items-center justify-center w-max px-2.5 sm:px-3.5 mland:px-2 py-0.5 sm:py-1 mland:py-[2px] rounded-lg border text-[10px] sm:text-xs mland:text-[9px] leading-none font-bold whitespace-nowrap backdrop-blur-[2px] ${bannerCls}`}
                                 title={actionBanner.label}
                               >
                                 {actionBannerContent}
@@ -12690,7 +12721,10 @@ export const MatchModal: React.FC<{
                           )}
 
                           {hasRight && (
-                            <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 right-1.5 sm:right-2 mland:right-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-end gap-0.5">
+                            <div
+                              ref={rightCornerBadgeRef}
+                              className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 right-1.5 sm:right-2 mland:right-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-end gap-0.5"
+                            >
                               {awayMiracle && (
                                 <span
                                   className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] mland:text-[8px] font-extrabold tabular leading-tight ${cornerShadow} ${
@@ -13479,15 +13513,6 @@ export const MatchModal: React.FC<{
                     }`}
                   >
                     <span className="truncate">📋 แผน</span>
-                    <span
-                      className={`inline-flex items-center justify-center min-w-[15px] h-[15px] mland:min-w-[13px] mland:h-[13px] px-1 rounded text-[9px] mland:text-[8px] font-black tabular leading-none shrink-0 ${
-                        matchPhaseUi === 'halftime'
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-black/10 dark:bg-white/15'
-                      }`}
-                    >
-                      {5 - subsUsed.length}
-                    </span>
                     <span
                       aria-label={autoSubEnabled ? 'ระบบ AI เปิดอยู่' : 'ระบบ AI ปิดอยู่'}
                       className={`inline-flex items-center justify-center h-[15px] mland:h-[13px] px-1 rounded text-[8.5px] mland:text-[7.5px] font-black tracking-wide leading-none shrink-0 ${

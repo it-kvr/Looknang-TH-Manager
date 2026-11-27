@@ -8,7 +8,7 @@ export type SubRole =
 export type StatKey = 'sh' | 'ps' | 'dr' | 'tk' | 'ph';
 export type Mentality = 'X' | 'A' | 'B' | 'D' | 'Z';
 export type GameMode = 'm' | 'p';
-export type MatchKind = 'league' | 'cup' | 'ac' | 'lc' | 'sc' | 'dc';
+export type MatchKind = 'league' | 'cup' | 'ac' | 'lc' | 'sc' | 'dc' | 'nt';
 export type MainTab = 't' | 's' | 'q' | 'r' | 'k' | 'f' | 'u' | 'c' | 'p';
 export type TrainingFocus = 'FW' | 'MF' | 'DF' | 'F';
 export type TrainingProgramId = 'balanced' | 'attack' | 'defense' | 'tactics' | 'setpiece' | 'fitness' | 'recovery';
@@ -835,7 +835,7 @@ export interface ArchivedStreamComment {
 }
 
 export interface ArchivedMatchReport {
-  kind?: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+  kind?: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
   roundLabel?: string;
   h: number;
   a: number;
@@ -986,6 +986,89 @@ export interface GameState {
   seasonArchives?: SeasonArchiveRecord[];
   liveStream?: LiveStreamPlanId;
   streamStats?: LiveStreamStatsSummary;
+  mgrHistory?: ManagerClubStint[];
+  mgrCareerStats?: { matches: number; wins: number; draws: number; losses: number };
+  sackReason?: string;
+  natTeam?: NationalTeamState | null;
+  clubRecordsByTeam?: Record<number, ClubRecords>;
+}
+
+export interface ManagerClubStint {
+  teamId: number;
+  teamName: string;
+  tier: number;
+  fromSeason: number;
+  toSeason: number;
+  matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  trophies: string[];
+  endReason: 'active' | 'transfer' | 'sacked' | 'resigned';
+}
+
+export interface ManagerJobOffer {
+  id: string;
+  teamId: number;
+  teamName: string;
+  tier: number;
+  reason: 'poach' | 'rescue' | 'open';
+  targetRank: number;
+  budgetK: number;
+  minRep: number;
+  note: string;
+}
+
+export interface NationalTeamCallupMember {
+  teamId: number;
+  playerName: string;
+}
+
+export interface NationalTeamMatchRecord {
+  id: string;
+  season: number;
+  md: number;
+  compName: string;
+  roundLabel: string;
+  isKnockout: boolean;
+  opponentName: string;
+  opponentFlag: string;
+  opponentTier: number;
+  opponentKc: [string, string];
+  opponentOvr: number;
+  home: boolean;
+  played: boolean;
+  gf?: number;
+  ga?: number;
+  penText?: string;
+  report?: ArchivedMatchReport;
+}
+
+export interface NationalTeamState {
+  active: boolean;
+  invitedSeason?: number;
+  declinedSeason?: number;
+  appointedSeason: number;
+  matches: number;
+  wins: number;
+  draws: number;
+  losses: number;
+  gf: number;
+  ga: number;
+  form: string;
+  formCode: string;
+  cf?: CustomSlot[];
+  lu?: string[] | null;
+  cap?: string;
+  tac: Mentality;
+  press?: number;
+  tempo?: number;
+  wid?: number;
+  line?: number;
+  pass?: number;
+  squad: NationalTeamCallupMember[];
+  fixtures: NationalTeamMatchRecord[];
+  trophies: { season: number; title: string }[];
 }
 
 export type LiveStreamPlanId = 'off' | 'basic' | 'pro' | 'studio';

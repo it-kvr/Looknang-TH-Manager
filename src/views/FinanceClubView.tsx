@@ -132,8 +132,9 @@ export const FinanceClubView: React.FC<{
   onToast: (msg: string) => void;
   onInspectPlayer?: (p: Player, t: Team | null) => void;
   onOpenSeasonStats?: (season?: number) => void;
+  onOpenManagerCareer?: (initialTab?: 'career' | 'nt') => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
-}> = ({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, navIntent }) => {
+}> = ({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, onOpenManagerCareer, navIntent }) => {
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'megastore' | 'ledger'>('overview');
   const [merchPeriod, setMerchPeriod] = useState<'season' | 'alltime' | 'seasons'>('season');
   const [partnerFilter, setPartnerFilter] = useState<'all' | 'ready' | 'merch'>('all');
@@ -2889,6 +2890,49 @@ export const FinanceClubView: React.FC<{
                       })}
                     </div>
                   </div>
+
+                  {onOpenManagerCareer && (
+                    <div className="p-2.5 mland:p-2 rounded-xl bg-gradient-to-r from-[var(--g-soft)] via-[var(--surface-2)]/70 to-blue-500/10 border border-[var(--g)]/35 flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-xs mland:text-[10.5px] text-[var(--ink)] flex items-center gap-1.5">
+                          <span>💼 เส้นทางโค้ช · ย้ายทีม &amp; ทีมชาติไทย 🇹🇭</span>
+                          {state.natTeam?.active && (
+                            <span className="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[9px] font-extrabold">
+                              กุนซือช้างศึก
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] mland:text-[9px] text-[var(--mut)] truncate tabular">
+                          {repRank} (เครดิต {rep}) · คุมแล้ว {(state.mgrHistory?.length || 1)} สโมสร ·{' '}
+                          {state.natTeam?.active
+                            ? `ทีมชาติรอแข่ง ${state.natTeam.fixtures.filter((f) => !f.played).length} นัด`
+                            : 'ดูข้อเสนอรับงานใหม่ / ทีมชาติ'}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            onOpenManagerCareer('career');
+                          }}
+                          className="btn btn-xs btn-secondary whitespace-nowrap"
+                        >
+                          💼 ตลาดงานโค้ช
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            SFX.tap();
+                            onOpenManagerCareer('nt');
+                          }}
+                          className="btn btn-xs btn-primary whitespace-nowrap"
+                        >
+                          🇹🇭 ทีมชาติไทย
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
               </div>
 

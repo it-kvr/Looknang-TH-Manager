@@ -1005,9 +1005,6 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             type="button"
             className="seg-btn seg-btn-active w-full whitespace-nowrap px-1.5 mland:px-1 gap-1 mland:gap-0.5"
           >
-            <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-white/20 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-              {5 - subsUsed.length}
-            </span>
             <span>📋 แผน</span>
             {autoSubEnabled !== undefined && (
               <span

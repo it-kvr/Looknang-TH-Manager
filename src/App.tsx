@@ -7,13 +7,14 @@ import {
   enterLandscapeFullscreen,
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
-import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip } from './types/game';
+import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
 import { P, clamp, fmtMoney, capMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
 import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
 import { ClubCrest, PlayerFace } from './components/SvgVisuals';
@@ -43,6 +44,7 @@ import { SettingsModal } from './modals/SettingsModal';
 import { VarReplayModal } from './modals/VarReplayModal';
 import { MatchHighlightModal } from './modals/MatchHighlightModal';
 import { PostMatchReportModal } from './modals/PostMatchReportModal';
+import { ManagerCareerModal } from './modals/ManagerCareerModal';
 
 export default function App() {
   const [enteredGame, setEnteredGame] = useState(false);
@@ -60,11 +62,24 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
+  const [managerCareerModal, setManagerCareerModal] = useState<'career' | 'nt' | null>(null);
+  const [ntPreMatchFixture, setNtPreMatchFixture] = useState<NationalTeamMatchRecord | null>(null);
+  const [ntActiveMatch, setNtActiveMatch] = useState<{
+    fixture: NationalTeamMatchRecord;
+    virtual: ReturnType<typeof buildNationalVirtualMatchState>;
+    matchEnv?: MatchEnvironment;
+  } | null>(null);
+  const [ntReportModal, setNtReportModal] = useState<{
+    report: ArchivedMatchReport;
+    title: string;
+    virtualState: GameState;
+  } | null>(null);
   const [historyVarModal, setHistoryVarModal] = useState<{
     homeId: number;
     awayId: number;
     records: VarReplayRecord[];
     activeId: string;
+    virtualState?: GameState;
   } | null>(null);
   const [historyHighlightModal, setHistoryHighlightModal] = useState<{
     homeId: number;
@@ -73,6 +88,7 @@ export default function App() {
     activeId?: string;
     title?: string;
     scoreSummary?: string;
+    virtualState?: GameState;
   } | null>(null);
   const [matchReportModal, setMatchReportModal] = useState<{
     report: ArchivedMatchReport;
@@ -328,6 +344,11 @@ export default function App() {
     const idx = sorted.findIndex((t) => t.id === state.me);
     return idx >= 0 ? idx + 1 : 1;
   }, [state]);
+
+  const ntPreMatchVirtual = useMemo(() => {
+    if (!state || !ntPreMatchFixture || !state.natTeam?.active) return null;
+    return buildNationalVirtualMatchState(state, ntPreMatchFixture);
+  }, [state, ntPreMatchFixture]);
 
   const applyFinishedMatchToDraft = (
     d: GameState,
@@ -942,12 +963,28 @@ export default function App() {
     d.lg = d.teams[d.me].tier;
   };
 
+  const syncManagerMatchStintStats = (
+    d: GameState,
+    homeId: number,
+    payload: FinishedMatchPayload
+  ) => {
+    if (d.mode !== 'm') return;
+    ensureManagerHistoryInitialized(d);
+    const myG = homeId === d.me ? payload.gh : payload.ga;
+    const oppG = homeId === d.me ? payload.ga : payload.gh;
+    recordManagerClubMatchResult(d, myG, oppG);
+    (d.trophies || [])
+      .filter((tr) => tr.season === d.season && tr.type !== 'nt' && tr.type !== 'award')
+      .forEach((tr) => syncActiveStintTrophy(d, tr.title));
+  };
+
   const handleMatchFinish = (payload: FinishedMatchPayload) => {
     if (!state || !activeMatch) return;
     const finished = activeMatch;
     const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
     const clone = cloneGameState(state);
     const outcome = applyFinishedMatchToDraft(clone, finished, payload);
+    syncManagerMatchStintStats(clone, finished.homeId, payload);
     navigateDraftToLeague(clone);
     setActiveMatch(null);
     setNavIntent(null);
@@ -966,6 +1003,7 @@ export default function App() {
     if (fixture.isDerby) clone.derby = 1;
     const payload = simulateInstantMatchPayload(clone, fixture.kind, fixture.homeId, fixture.awayId);
     const outcome = applyFinishedMatchToDraft(clone, fixture, payload);
+    syncManagerMatchStintStats(clone, fixture.homeId, payload);
     navigateDraftToLeague(clone);
     const H = clone.teams[fixture.homeId];
     const A = clone.teams[fixture.awayId];
@@ -983,8 +1021,64 @@ export default function App() {
     showToast(outcome.missionToast ? `${scoreMsg} · ${outcome.missionToast}` : scoreMsg);
   };
 
+  const launchNationalPreMatch = (fixture: NationalTeamMatchRecord) => {
+    if (!state?.natTeam?.active) return;
+    setManagerCareerModal(null);
+    setNtPreMatchFixture(fixture);
+  };
+
+  const handleQuickSimNationalMatch = (fixture: NationalTeamMatchRecord) => {
+    if (!state?.natTeam?.active) return;
+    const virtual = buildNationalVirtualMatchState(state, fixture);
+    const payload = simulateInstantMatchPayload(
+      virtual.matchState,
+      'nt',
+      virtual.homeId,
+      virtual.awayId,
+      { allowDraw: !fixture.isKnockout }
+    );
+    let ntRes: { trophyWon?: string; wonMatch: boolean } = { wonMatch: false };
+    updateState((d) => {
+      ntRes = applyNationalMatchOutcomeToDraft(d, fixture.id, payload, fixture.home);
+    });
+    if (ntRes.trophyWon) {
+      SFX.celebrate();
+      triggerConfetti(1);
+      showToast(`🏆🇹🇭 ทีมชาติไทยคว้า ${ntRes.trophyWon}!`);
+    } else {
+      if (ntRes.wonMatch) SFX.win();
+      else SFX.confirm();
+      showToast(
+        `🇹🇭 จบเกม: ${fixture.home ? 'ทีมชาติไทย' : fixture.opponentName} ${payload.gh}-${payload.ga} ${fixture.home ? fixture.opponentName : 'ทีมชาติไทย'}${payload.penText ? ` (${payload.penText})` : ''}`
+      );
+    }
+  };
+
+  const handleNationalMatchFinish = (payload: FinishedMatchPayload) => {
+    if (!state || !ntActiveMatch) return;
+    const finishedNt = ntActiveMatch;
+    let ntRes: { trophyWon?: string; wonMatch: boolean } = { wonMatch: false };
+    updateState((d) => {
+      ntRes = applyNationalMatchOutcomeToDraft(d, finishedNt.fixture.id, payload, finishedNt.fixture.home);
+    });
+    setNtActiveMatch(null);
+    setManagerCareerModal('nt');
+    if (ntRes.trophyWon) {
+      SFX.celebrate();
+      triggerConfetti(1);
+      showToast(`🏆🇹🇭 ทีมชาติไทยคว้า ${ntRes.trophyWon}!`);
+    } else if (ntRes.wonMatch) {
+      showToast('🇹🇭 ช้างศึกคว้าชัยชนะได้สำเร็จ!');
+    }
+  };
+
   const handleTriggerNextStep = () => {
     if (!state) return;
+    if (state.mode === 'm' && state.sack === 1 && state.md < state.fx.length) {
+      SFX.tap();
+      showToast('⚠️ คุณถูกปลดจากสโมสรเดิมแล้ว กรุณาเลือกสโมสรใหม่เพื่อคุมทัพต่อ');
+      return;
+    }
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     if (nextMatchInfo) {
@@ -1001,6 +1095,12 @@ export default function App() {
       const clone = cloneGameState(state);
       const summary = finishSeasonComputation(clone);
       clone.money = capMoney(clone.money);
+      if (clone.mode === 'm') {
+        ensureManagerHistoryInitialized(clone);
+        (clone.trophies || [])
+          .filter((tr) => tr.season === clone.season && tr.type !== 'nt' && tr.type !== 'award')
+          .forEach((tr) => syncActiveStintTrophy(clone, tr.title));
+      }
       setState(clone);
       setSeasonSummary(summary);
     }
@@ -1009,16 +1109,22 @@ export default function App() {
   const handleStartNextSeason = (transferToTeamId?: number) => {
     if (!state) return;
     setSeasonStatsTarget(null);
-    if (state.sack === 1) {
+    if (state.sack === 1 && transferToTeamId == null) {
       flushPendingSave();
       setSeasonSummary(null);
       setState(null);
       return;
     }
+    const targetTeamName = transferToTeamId != null ? state.teams[transferToTeamId]?.name : undefined;
     setSeasonSummary(null);
     updateState((d) => {
       growPlayers(d);
-      if (d.mode === 'p' && d.p && transferToTeamId != null && d.teams[transferToTeamId]) {
+      if (d.mode === 'm' && transferToTeamId != null && d.teams[transferToTeamId]) {
+        switchManagerClub(d, transferToTeamId, {
+          reason: d.sack === 1 ? 'sacked' : 'transfer',
+          timing: 'offseason'
+        });
+      } else if (d.mode === 'p' && d.p && transferToTeamId != null && d.teams[transferToTeamId]) {
         const oldT = d.teams[d.me];
         const idx = oldT.sq.findIndex((q) => q.me);
         const mePlayer = idx >= 0 ? oldT.sq.splice(idx, 1)[0] : null;
@@ -1039,10 +1145,15 @@ export default function App() {
       d.season++;
       d.yth = Array.from({ length: 4 }, () => mkPlayer(P(POS), BASE[d.teams[d.me].tier] - 2 + Math.round((d.ya ?? 1) * 1.2), true));
       startSeason(d);
+      refreshNationalCampaignOnNewSeason(d);
       d.lg = d.teams[d.me].tier;
       pushFeed(d, 'ฤดูกาลใหม่', `🚀 เปิดฉากฤดูกาลที่ ${d.season} · ${TN[d.teams[d.me].tier]}`, 'ok');
     });
-    showToast(`เริ่มต้นฤดูกาลที่ ${state.season + 1} แล้ว!`);
+    showToast(
+      targetTeamName
+        ? `✍️ รับตำแหน่งคุมทัพ ${targetTeamName} ลุยฤดูกาลที่ ${state.season + 1} แล้ว!`
+        : `เริ่มต้นฤดูกาลที่ ${state.season + 1} แล้ว!`
+    );
   };
 
   const handleEnterGame = () => {
@@ -1373,6 +1484,24 @@ export default function App() {
           {/* Zone 3: Matchday CTA & Settings */}
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 mland:gap-1 shrink-0 lg:flex-1">
             <PWAInstallButton variant="compact" onToast={showToast} />
+            {state.mode === 'm' && state.natTeam?.active && (() => {
+              const nextNt = state.natTeam.fixtures.find((f) => !f.played);
+              if (!nextNt) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    SFX.tap();
+                    setManagerCareerModal('nt');
+                  }}
+                  title={`ทีมชาติไทย: พบ ${nextNt.opponentName} (${nextNt.roundLabel})`}
+                  className="btn btn-surface h-10 mland:h-8 px-2.5 sm:px-3 mland:px-2 text-xs mland:text-[10px] border-blue-500/45 text-blue-700 dark:text-sky-300 font-extrabold whitespace-nowrap"
+                >
+                  <span>🇹🇭</span>
+                  <span className="hidden md:inline">ทีมชาติ</span>
+                </button>
+              );
+            })()}
             <button
               type="button"
               onClick={handleTriggerNextStep}
@@ -1498,6 +1627,10 @@ export default function App() {
               onOpenSeasonStats={(seasonNum) =>
                 setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
               }
+              onOpenManagerCareer={(initialTab) => {
+                SFX.tap();
+                setManagerCareerModal(initialTab || 'career');
+              }}
               navIntent={navIntent}
             />
           )}
@@ -1755,12 +1888,13 @@ export default function App() {
       )}
 
       {historyVarModal && (() => {
-        const hTeam = state.teams[historyVarModal.homeId];
-        const aTeam = state.teams[historyVarModal.awayId];
+        const targetState = historyVarModal.virtualState || state;
+        const hTeam = targetState.teams[historyVarModal.homeId];
+        const aTeam = targetState.teams[historyVarModal.awayId];
         const activeRec =
           historyVarModal.records.find((r) => r.id === historyVarModal.activeId) || historyVarModal.records[0];
         if (!hTeam || !aTeam || !activeRec) return null;
-        const [homeKit, awayKit, homeTrim, awayTrim] = matchKits(hTeam, aTeam, state);
+        const [homeKit, awayKit, homeTrim, awayTrim] = matchKits(hTeam, aTeam, targetState);
         const homeGkKit = pickGK(homeKit, awayKit, homeTrim);
         const awayGkKit = pickGK(awayKit, homeKit, homeGkKit);
         return (
@@ -1774,7 +1908,7 @@ export default function App() {
             onClose={() => setHistoryVarModal(null)}
             homeOrig={hTeam}
             awayOrig={aTeam}
-            state={state}
+            state={targetState}
             homeKit={homeKit}
             awayKit={awayKit}
             homeGkKit={homeGkKit}
@@ -1786,10 +1920,11 @@ export default function App() {
       })()}
 
       {historyHighlightModal && (() => {
-        const hTeam = state.teams[historyHighlightModal.homeId];
-        const aTeam = state.teams[historyHighlightModal.awayId];
+        const targetState = historyHighlightModal.virtualState || state;
+        const hTeam = targetState.teams[historyHighlightModal.homeId];
+        const aTeam = targetState.teams[historyHighlightModal.awayId];
         if (!hTeam || !aTeam || !historyHighlightModal.clips.length) return null;
-        const [homeKit, awayKit, homeTrim, awayTrim] = matchKits(hTeam, aTeam, state);
+        const [homeKit, awayKit, homeTrim, awayTrim] = matchKits(hTeam, aTeam, targetState);
         const homeGkKit = pickGK(homeKit, awayKit, homeTrim);
         const awayGkKit = pickGK(awayKit, homeKit, homeGkKit);
         return (
@@ -1798,7 +1933,7 @@ export default function App() {
             initialClipId={historyHighlightModal.activeId}
             homeOrig={hTeam}
             awayOrig={aTeam}
-            state={state}
+            state={targetState}
             homeKit={homeKit}
             awayKit={awayKit}
             homeGkKit={homeGkKit}
@@ -1811,6 +1946,165 @@ export default function App() {
           />
         );
       })()}
+
+      {ntPreMatchFixture && ntPreMatchVirtual && !ntActiveMatch && (
+        <PreMatchModal
+          state={ntPreMatchVirtual.matchState}
+          kind="nt"
+          homeId={ntPreMatchVirtual.homeId}
+          awayId={ntPreMatchVirtual.awayId}
+          isDerby={ntPreMatchVirtual.matchState.derby === 1}
+          compSubtitle={`🇹🇭 ${ntPreMatchFixture.compName} · ${ntPreMatchFixture.roundLabel}`}
+          onUpdateState={(updater) => {
+            const activeFix = ntPreMatchFixture;
+            updateState((d) => {
+              if (!d.natTeam) return;
+              const tmp = buildNationalVirtualMatchState(d, activeFix);
+              updater(tmp.matchState);
+              const thUpdated = tmp.matchState.teams[tmp.thailandId];
+              if (thUpdated) {
+                d.natTeam.formCode = thUpdated.form;
+                d.natTeam.tac = thUpdated.tac;
+                d.natTeam.press = thUpdated.press;
+                d.natTeam.tempo = thUpdated.tempo;
+                d.natTeam.wid = thUpdated.wid;
+                d.natTeam.line = thUpdated.line;
+                d.natTeam.pass = thUpdated.pass;
+                d.natTeam.cap = thUpdated.cap;
+                if (thUpdated.lu) {
+                  d.natTeam.lu = [...thUpdated.lu];
+                }
+                const byName = new Map(d.natTeam.squad.map((m) => [m.playerName, m]));
+                d.natTeam.squad = thUpdated.sq
+                  .map((q) => byName.get(q.n))
+                  .filter((x): x is NonNullable<typeof x> => Boolean(x));
+              }
+            });
+          }}
+          onKickOff={(env) => {
+            const targetFixture = ntPreMatchFixture;
+            const targetVirtual = ntPreMatchVirtual;
+            setNtPreMatchFixture(null);
+            enterAutoMobileFullscreen().catch(() => undefined);
+            setNtActiveMatch({
+              fixture: targetFixture,
+              virtual: targetVirtual,
+              matchEnv: env
+            });
+          }}
+          onQuickSim={() => {
+            const target = ntPreMatchFixture;
+            setNtPreMatchFixture(null);
+            handleQuickSimNationalMatch(target);
+          }}
+          onOpenFullTactics={() => {
+            setNtPreMatchFixture(null);
+            setManagerCareerModal('nt');
+          }}
+          onClose={() => setNtPreMatchFixture(null)}
+          onToast={showToast}
+        />
+      )}
+
+      {ntActiveMatch && (
+        <MatchModal
+          state={ntActiveMatch.virtual.matchState}
+          kind="nt"
+          homeId={ntActiveMatch.virtual.homeId}
+          awayId={ntActiveMatch.virtual.awayId}
+          isDerby={ntActiveMatch.virtual.matchState.derby === 1}
+          allowDraw={!ntActiveMatch.fixture.isKnockout}
+          compTitleOverride={`🇹🇭 ${ntActiveMatch.fixture.compName} · ${ntActiveMatch.fixture.roundLabel}`}
+          initialMatchEnv={ntActiveMatch.matchEnv}
+          onFinish={handleNationalMatchFinish}
+        />
+      )}
+
+      {ntReportModal && (
+        <PostMatchReportModal
+          report={ntReportModal.report}
+          title={ntReportModal.title}
+          state={ntReportModal.virtualState}
+          onClose={() => setNtReportModal(null)}
+          onOpenVarReplay={(homeId, awayId, records, activeId) => {
+            if (!records.length) return;
+            setHistoryVarModal({
+              homeId,
+              awayId,
+              records,
+              activeId: activeId || records[0].id,
+              virtualState: ntReportModal.virtualState
+            });
+          }}
+          onOpenHighlights={(homeId, awayId, clips, activeId, hlTitle, scoreSummary) => {
+            if (!clips.length) return;
+            setHistoryHighlightModal({
+              homeId,
+              awayId,
+              clips,
+              activeId: activeId || clips[0].id,
+              title: hlTitle,
+              scoreSummary,
+              virtualState: ntReportModal.virtualState
+            });
+          }}
+        />
+      )}
+
+      {state.mode === 'm' && state.sack === 1 && !seasonSummary && !activeMatch && !preMatch && (
+        <ManagerCareerModal
+          state={state}
+          mode="sacked"
+          onUpdateState={updateState}
+          onPlayNationalMatch={launchNationalPreMatch}
+          onQuickSimNationalMatch={handleQuickSimNationalMatch}
+          onRetireToMenu={() => {
+            flushPendingSave();
+            setManagerCareerModal(null);
+            setState(null);
+          }}
+          onClose={() => setManagerCareerModal(null)}
+          onToast={showToast}
+        />
+      )}
+
+      {state.mode === 'm' && state.sack !== 1 && managerCareerModal && (
+        <ManagerCareerModal
+          state={state}
+          mode={managerCareerModal}
+          onUpdateState={updateState}
+          onPlayNationalMatch={launchNationalPreMatch}
+          onQuickSimNationalMatch={handleQuickSimNationalMatch}
+          onInspectNationalReport={(fx) => {
+            if (!fx.report) return;
+            const v = buildNationalVirtualMatchState(state, fx);
+            const hTm = v.matchState.teams[v.homeId];
+            const aTm = v.matchState.teams[v.awayId];
+            const reportState: GameState = {
+              ...v.matchState,
+              me: v.homeId === v.thailandId ? 0 : 1,
+              teams: [hTm, aTm]
+            };
+            const fixedReport: ArchivedMatchReport = {
+              ...fx.report,
+              h: 0,
+              a: 1
+            };
+            setNtReportModal({
+              report: fixedReport,
+              title: `🇹🇭 ${fx.compName} · ${fx.roundLabel}`,
+              virtualState: reportState
+            });
+          }}
+          onRetireToMenu={() => {
+            flushPendingSave();
+            setManagerCareerModal(null);
+            setState(null);
+          }}
+          onClose={() => setManagerCareerModal(null)}
+          onToast={showToast}
+        />
+      )}
 
       {toast && (
         <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">

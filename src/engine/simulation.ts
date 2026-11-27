@@ -2446,7 +2446,7 @@ export function computeMatchAttendance(
   s?: GameState | null,
   opts?: { kind?: MatchKind | 'asia'; derby?: boolean }
 ): { att: number; cap: number; pct: number } {
-  const cap = getTeamStadiumCapacity(h, s);
+  const cap = opts?.kind === 'nt' ? 51560 : getTeamStadiumCapacity(h, s);
   const homeFans = ensureTeamFans(h);
   const awayFans = ensureTeamFans(a);
   const isUserHome = !!(s && h.id === s.me);
@@ -2457,17 +2457,19 @@ export function computeMatchAttendance(
   const recentWins = (h.fm || '').slice(-4).split('').filter((c) => c === 'W').length;
   const formBoost = recentWins * 0.03;
   const bigMatchBoost =
-    opts?.kind === 'asia' || opts?.kind === 'ac'
-      ? 0.18
-      : opts?.kind === 'sc'
-        ? 0.16
-        : opts?.kind === 'cup' || opts?.kind === 'lc'
-          ? 0.11
-          : opts?.kind === 'dc'
-            ? 0.08
-            : opts?.derby
-              ? 0.15
-              : 0;
+    opts?.kind === 'nt'
+      ? 0.22
+      : opts?.kind === 'asia' || opts?.kind === 'ac'
+        ? 0.18
+        : opts?.kind === 'sc'
+          ? 0.16
+          : opts?.kind === 'cup' || opts?.kind === 'lc'
+            ? 0.11
+            : opts?.kind === 'dc'
+              ? 0.08
+              : opts?.derby
+                ? 0.15
+                : 0;
   const fanbaseDraw = clamp(0.28 + (homeFans / Math.max(10000, cap * 1.85)) * 0.52, 0.28, 0.86);
   const awayTravel = clamp(awayFans / Math.max(60000, cap * 4), 0.02, 0.12);
   const fillRate = clamp(
@@ -2574,7 +2576,19 @@ export function computeMatchStreamProjection(
   const tierMult = maxTier === 0 ? 0.72 : maxTier === 1 ? 1.25 : 2.15;
   const kind = opts?.kind || 'league';
   const kindMult =
-    kind === 'asia' ? 1.9 : kind === 'sc' ? 1.75 : kind === 'cup' ? 1.45 : kind === 'lc' ? 1.32 : kind === 'dc' ? 1.2 : 1;
+    kind === 'nt'
+      ? 2.15
+      : kind === 'asia'
+        ? 1.9
+        : kind === 'sc'
+          ? 1.75
+          : kind === 'cup'
+            ? 1.45
+            : kind === 'lc'
+              ? 1.32
+              : kind === 'dc'
+                ? 1.2
+                : 1;
   const derbyMult = opts?.derby ? 1.42 : 1;
   const moodMul = clamp(0.78 + ((s.fan ?? 55) / 100) * 0.44, 0.75, 1.3);
   const rawBase = Math.round(((hFans * 0.055 + aFans * 0.042) * tierMult * kindMult * derbyMult * moodMul) / 10) * 10;
@@ -5412,7 +5426,12 @@ export function afterMatchDay(
     }
     if (s.money < 0) d--;
     s.bd = clamp((s.bd ?? 50) + d, 0, 100);
-    if (s.bd <= 0 && s.md >= 3) s.sack = 1;
+    if (s.bd <= 0 && s.md >= 3) {
+      s.sack = 1;
+      if (!s.sackReason) {
+        s.sackReason = `ความเชื่อมั่นบอร์ดบริหารลดลงเหลือ 0% หลังผ่านไป ${s.md} นัด`;
+      }
+    }
 
     const tw = getTransferWindowInfo(s);
     if (s.md === 6) {
@@ -6665,7 +6684,12 @@ export function finishSeasonComputation(s: GameState) {
         } else {
           s.hist.push(`บอร์ด: เป้า อันดับ ${s.obj} · จบอันดับ ${pos}`);
         }
-        if (s.bd <= 0) s.sack = 1;
+        if (s.bd <= 0) {
+          s.sack = 1;
+          if (!s.sackReason) {
+            s.sackReason = `พลาดเป้าหมายบอร์ดบริหาร (เป้า 1–${s.obj} แต่จบอันดับ ${pos})`;
+          }
+        }
       }
     }
   } else if (s.p && s.esd !== s.season) {
@@ -7029,7 +7053,8 @@ export function simulateInstantMatchPayload(
   s: GameState,
   kind: MatchKind | 'asia',
   homeId: number,
-  awayId: number
+  awayId: number,
+  opts?: { allowDraw?: boolean }
 ): FinishedMatchPayload {
   const H = s.teams[homeId];
   const A = s.teams[awayId];
@@ -7039,7 +7064,7 @@ export function simulateInstantMatchPayload(
 
   let pen: boolean | undefined = undefined;
   let penText: string | undefined;
-  if (kind !== 'league' && r.gh === r.ga) {
+  if (kind !== 'league' && !opts?.allowDraw && r.gh === r.ga) {
     const hWin = Math.random() < 0.5;
     pen = hWin;
     const wPen = R(4, 5);

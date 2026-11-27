@@ -3,7 +3,7 @@ import { getAiTeamStadiumStyleId, getStadiumStyleSpec, getTurfGradeForLevel } fr
 import type { GameState, MatchEnvironment, MatchPitchPuddle, StadiumStyleId, Team } from '../types/game';
 import { getFacilityCondition } from './simulation';
 
-export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc';
+export type MatchFixtureKind = 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc' | 'nt';
 
 export function buildMatchEnvironment(
   homeOrig: Team,
@@ -18,15 +18,15 @@ export function buildMatchEnvironment(
   let turfCond = 90;
   let effectiveCond = 90;
 
-  if (meIsHome) {
+  if (meIsHome && kind !== 'nt') {
     turfLv = clamp(state.turfLv ?? 1, 0, 10);
     turfCond = turfLv <= 0 ? 40 : getFacilityCondition(state, 'turfLv');
     const deficitPenalty = state.money < -30 ? 14 : state.money < 0 ? 7 : 0;
     effectiveCond = clamp(turfCond - deficitPenalty, 30, 100);
-  } else if (kind === 'asia' || kind === 'sc') {
-    turfLv = homeOrig.tier === 2 ? 9 : 8;
-    turfCond = 95;
-    effectiveCond = 95;
+  } else if (kind === 'asia' || kind === 'sc' || kind === 'nt') {
+    turfLv = homeOrig.tier >= 2 || kind === 'nt' ? 9 : 8;
+    turfCond = 96;
+    effectiveCond = 96;
   } else {
     const avgOv = Math.round(homeOrig.sq.reduce((s, q) => s + q.ov, 0) / Math.max(1, homeOrig.sq.length));
     const budgetBoost =
@@ -74,7 +74,7 @@ export function buildMatchEnvironment(
   const dirtMix = Number(clamp(rawDirtMix + (season === 'rainy' && rawDirtMix > 0 ? 0.08 : 0), 0, 0.92).toFixed(2));
 
   const stadiumStyle: StadiumStyleId =
-    kind === 'sc'
+    kind === 'sc' || kind === 'nt'
       ? 'modern_bowl'
       : meIsHome && state.mode === 'm'
         ? state.club?.stadiumStyle || 'open_track'
@@ -123,6 +123,9 @@ export function getStadiumDisplayName(
   meIsHome: boolean,
   state: GameState
 ): string {
+  if (kind === 'nt') {
+    return meIsHome ? 'ราชมังคลากีฬาสถาน (ทีมชาติไทย)' : `สนามกีฬาแห่งชาติ (${homeOrig.name})`;
+  }
   if (meIsHome && state.mode === 'm' && state.club?.std?.trim()) {
     return state.club.std.trim();
   }
