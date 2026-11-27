@@ -133,11 +133,14 @@ const LiveBroadcastStudioHeader: React.FC<{
       {/* Broadcaster Network Identity */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <BroadcastChannelLogo
-            channel={broadcastChannel}
-            size={compact ? 26 : 30}
-            muted={streamPlanId === 'off'}
-          />
+          <div className="inline-flex items-center gap-1.5 shrink-0">
+            <BroadcastChannelLogo
+              channel={broadcastChannel}
+              size={compact ? 26 : 30}
+              muted={streamPlanId === 'off'}
+            />
+            {!done && <LiveStreamBadge animated={true} />}
+          </div>
           <span
             className={`font-extrabold truncate text-[var(--ink)] tracking-tight ${
               compact ? 'text-[11px] mland:text-[9.5px]' : 'text-xs sm:text-[13px] mland:text-[10.5px]'
@@ -147,12 +150,10 @@ const LiveBroadcastStudioHeader: React.FC<{
           </span>
         </div>
 
-        {done ? (
+        {done && (
           <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface-2)] border border-[var(--line)] font-badge-latin font-extrabold text-[9.5px] mland:text-[8px] text-[var(--mut)] shrink-0 tabular">
             FT
           </span>
-        ) : (
-          <LiveStreamBadge animated={true} />
         )}
       </div>
 
@@ -1583,7 +1584,6 @@ export const MatchBroadcastHeader = React.memo<{
               <span className="md:hidden">{compShortTitle}</span>
               <span className="hidden md:inline">{compTitle}</span>
             </div>
-            {!done && <LiveStreamBadge animated={!paused && matchPhaseUi !== 'halftime'} />}
           </div>
           <div className="w-full min-w-0 flex items-center gap-1.5 mland:gap-1 leading-none">
             <div className="relative shrink-0">
@@ -1690,7 +1690,7 @@ export const MatchBroadcastHeader = React.memo<{
             </span>
             <span className="w-px h-3 bg-[var(--line)] shrink-0" />
             <span
-              className="inline-flex items-center gap-1 text-[10px] mland:text-[8px] font-bold tabular shrink-0"
+              className="inline-flex items-center gap-1 mland:gap-0.5 text-[10px] mland:text-[8px] font-bold tabular shrink-0"
               title={`${broadcastChannel.name} · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`}
             >
               <BroadcastChannelLogo
@@ -1699,6 +1699,7 @@ export const MatchBroadcastHeader = React.memo<{
                 muted={streamPlanId === 'off'}
                 className="rounded-[4px] mland:w-3 mland:h-3"
               />
+              {!done && <LiveStreamBadge animated={!paused && matchPhaseUi !== 'halftime'} />}
               <span className={streamPlanId === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
                 {liveViewers.toLocaleString()}
               </span>
@@ -3602,6 +3603,7 @@ export const MatchHeaderControls = React.memo<{
   paused: boolean;
   speed: 0.25 | 0.5 | 1 | 2 | 5;
   highlightCount: number;
+  allowSkip?: boolean;
   onStartSecondHalf: () => void;
   onSkipToEnd: () => void;
   onTogglePause: () => void;
@@ -3614,6 +3616,7 @@ export const MatchHeaderControls = React.memo<{
   paused,
   speed,
   highlightCount,
+  allowSkip = false,
   onStartSecondHalf,
   onSkipToEnd,
   onTogglePause,
@@ -3635,16 +3638,18 @@ export const MatchHeaderControls = React.memo<{
             <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
             <span>เริ่มครึ่งหลัง</span>
           </button>
-          <button
-            type="button"
-            title="ข้ามครึ่งหลังไปจบเกม"
-            aria-label="ข้ามครึ่งหลังไปจบเกม"
-            onClick={onSkipToEnd}
-            className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px]"
-          >
-            <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-            <span className="hidden sm:inline mland:inline">ข้าม</span>
-          </button>
+          {allowSkip && (
+            <button
+              type="button"
+              title="ข้ามครึ่งหลังไปจบเกม"
+              aria-label="ข้ามครึ่งหลังไปจบเกม"
+              onClick={onSkipToEnd}
+              className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px]"
+            >
+              <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+              <span className="hidden sm:inline mland:inline">ข้าม</span>
+            </button>
+          )}
         </>
       );
     }
@@ -3678,16 +3683,18 @@ export const MatchHeaderControls = React.memo<{
           </button>
         </div>
 
-        <button
-          type="button"
-          title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
-          aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
-          onClick={onSkipToEnd}
-          className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
-        >
-          <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-          <span className="hidden sm:inline mland:inline">ข้าม</span>
-        </button>
+        {allowSkip && (
+          <button
+            type="button"
+            title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
+            aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
+            onClick={onSkipToEnd}
+            className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
+          >
+            <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+            <span className="hidden sm:inline mland:inline">ข้าม</span>
+          </button>
+        )}
       </>
     );
   }

@@ -18,16 +18,28 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
+import { QuickSortSelect, type QuickSortOption } from '../components/QuickSortSelect';
+import { comparePlayerFitnessStatus } from '../utils/playerSort';
 import { FormTrendBadge, buildRecentRatingsMap, getPlayerFormTrend, type PlayerFormTrend } from '../components/FormTrendBadge';
 import {
   getActiveFavBoost,
-  getFavSwitchCooldownRemaining,
   getPlayerMentalScore,
   getPlayerPhysScore,
   getTeamCareQuotaInfo,
-  getWellbeingTierMeta,
-  setTeamFavoritePlayer
+  getWellbeingTierMeta
 } from '../engine/wellbeing';
+
+type SquadSortKey = 'pos' | 'ov' | 'age' | 'fit' | 'form' | 'val' | 'goals';
+
+const SQUAD_SORT_OPTIONS: readonly QuickSortOption<SquadSortKey>[] = [
+  { value: 'pos', label: 'เรียงด่วน: ตำแหน่ง' },
+  { value: 'ov', label: 'เรียงด่วน: OVR สูงสุด' },
+  { value: 'age', label: 'เรียงด่วน: อายุน้อยสุด' },
+  { value: 'fit', label: 'เรียงด่วน: ความฟิต / พร้อมเล่น' },
+  { value: 'form', label: 'เรียงด่วน: ฟอร์มล่าสุด' },
+  { value: 'val', label: 'เรียงด่วน: มูลค่าสูงสุด' },
+  { value: 'goals', label: 'เรียงด่วน: ดาวซัลโว' }
+];
 
 export const SquadTacticsView = React.memo<{
   state: GameState;
@@ -43,7 +55,7 @@ export const SquadTacticsView = React.memo<{
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
-  const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'form' | 'fit' | 'age' | 'val' | 'goals'>('pos');
+  const [squadSort, setSquadSort] = useState<SquadSortKey>('pos');
   const [selectedSquadNames, setSelectedSquadNames] = useState<string[]>([]);
   const [renewTargetName, setRenewTargetName] = useState<string | null>(null);
   const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
@@ -77,13 +89,6 @@ export const SquadTacticsView = React.memo<{
   const r = useMemo(() => rate(me, state), [me, state]);
   const [meKit, meTrim] = useMemo(() => teamKits(me, state), [me, state]);
   const meGkKit = useMemo(() => pickGK(meKit, '#111827'), [meKit]);
-  const bench = useMemo(
-    () =>
-      me.sq
-        .filter((q) => !starters.includes(q))
-        .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov),
-    [me.sq, starters]
-  );
   const recentRatingsMap = useMemo(() => buildRecentRatingsMap(state), [state.schedRes]);
   const formTrendByName = useMemo(() => {
     const map = new Map<string, PlayerFormTrend>();
@@ -92,6 +97,22 @@ export const SquadTacticsView = React.memo<{
     });
     return map;
   }, [me, state, recentRatingsMap]);
+  const compareSquadPlayers = (a: Player, b: Player) => {
+    if (squadSort === 'ov') return b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
+    if (squadSort === 'form') return (formTrendByName.get(b.n)?.score ?? 0) - (formTrendByName.get(a.n)?.score ?? 0) || b.ov - a.ov;
+    if (squadSort === 'fit') return comparePlayerFitnessStatus(a, b);
+    if (squadSort === 'age') return a.age - b.age || b.ov - a.ov;
+    if (squadSort === 'val') return vlu(b) - vlu(a) || b.ov - a.ov;
+    if (squadSort === 'goals') return (b.sg || 0) - (a.sg || 0) || (b.sa || 0) - (a.sa || 0) || b.ov - a.ov;
+    return POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
+  };
+  const bench = useMemo(
+    () =>
+      me.sq
+        .filter((q) => !starters.includes(q))
+        .sort(compareSquadPlayers),
+    [me.sq, starters, squadSort, formTrendByName]
+  );
   const incomingOffers = useMemo(() => (isMgr ? getIncomingOffers(state) : []), [isMgr, state]);
   const incomingOfferCountsByName = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1170,6 +1191,16 @@ export const SquadTacticsView = React.memo<{
                       onUpdateState((d) => { d.teams[d.me].lu = null; });
                       onToast('จัด 11 ตัวจริงอัตโนมัติแล้ว');
                     }}
+                    sortControl={
+                      <QuickSortSelect
+                        value={squadSort}
+                        onChange={setSquadSort}
+                        options={SQUAD_SORT_OPTIONS}
+                        defaultValue="pos"
+                        ariaLabel="เรียงด่วนนักเตะสำรอง"
+                        size="xs"
+                      />
+                    }
                   />
 
                   {/* Player Rows (Scrollable Starters + Bench) */}
@@ -1831,15 +1862,7 @@ export const SquadTacticsView = React.memo<{
             const listRows = me.sq
               .filter((q) => squadPosFilter === 'ALL' || q.pos === squadPosFilter)
               .slice()
-              .sort((a, b) => {
-                if (squadSort === 'ov') return b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
-                if (squadSort === 'form') return (formTrendByName.get(b.n)?.score ?? 0) - (formTrendByName.get(a.n)?.score ?? 0) || b.ov - a.ov;
-                if (squadSort === 'fit') return (b.fit ?? 100) - (a.fit ?? 100) || b.ov - a.ov;
-                if (squadSort === 'age') return a.age - b.age || b.ov - a.ov;
-                if (squadSort === 'val') return vlu(b) - vlu(a) || b.ov - a.ov;
-                if (squadSort === 'goals') return (b.sg || 0) - (a.sg || 0) || (b.sa || 0) - (a.sa || 0) || b.ov - a.ov;
-                return POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov;
-              });
+              .sort(compareSquadPlayers);
 
             const activeSelected = isMgr
               ? selectedSquadNames.filter((name) => me.sq.some((q) => q.n === name && !q.me))
@@ -1902,28 +1925,15 @@ export const SquadTacticsView = React.memo<{
                       </button>
                     ))}
                   </div>
-                  <div className="flex flex-nowrap items-center gap-1 shrink-0">
-                    <span className="text-[10.5px] mland:text-[9.5px] text-[var(--mut)] font-semibold mr-0.5 shrink-0">เรียง:</span>
-                    <div className="seg-bar">
-                      {([
-                        ['pos', 'ตำแหน่ง'],
-                        ['ov', 'OVR'],
-                        ['form', 'ฟอร์ม'],
-                        ['fit', 'ความฟิต'],
-                        ['age', 'อายุ'],
-                        ['val', 'มูลค่า'],
-                        ['goals', 'ประตู']
-                      ] as const).map(([sKey, sLbl]) => (
-                        <button
-                          key={sKey}
-                          type="button"
-                          onClick={() => setSquadSort(sKey)}
-                          className={`seg-btn ${squadSort === sKey ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs' : ''}`}
-                        >
-                          {sLbl}
-                        </button>
-                      ))}
-                    </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <QuickSortSelect
+                      value={squadSort}
+                      onChange={setSquadSort}
+                      options={SQUAD_SORT_OPTIONS}
+                      defaultValue="pos"
+                      ariaLabel="เรียงด่วนรายชื่อนักเตะทั้งทีม"
+                      size="sm"
+                    />
                   </div>
                 </div>
 
@@ -1988,7 +1998,6 @@ export const SquadTacticsView = React.memo<{
                   const favM = favPl ? getPlayerMentalScore(favPl, favCp) : 0;
                   const favP = favPl ? getPlayerPhysScore(favPl, favCp) : 0;
                   const favB = favPl ? getActiveFavBoost(favPl, me, favCp) : 0;
-                  const favCd = getFavSwitchCooldownRemaining(state, me);
                   const quota = getTeamCareQuotaInfo(state, me);
                   return (
                     <div
@@ -2001,7 +2010,7 @@ export const SquadTacticsView = React.memo<{
                       }`}
                     >
                       <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                        <span className="font-extrabold text-[var(--ink)]">💖 ลูกรักประจำทีม:</span>
+                        <span className="font-extrabold text-[var(--ink)]">💖 ลูกรักประจำทีม (เลือกอัตโนมัติ):</span>
                         {favPl ? (
                           <>
                             <span className="font-bold text-[var(--ink)]">{favPl.n}</span>
@@ -2020,13 +2029,12 @@ export const SquadTacticsView = React.memo<{
                           </>
                         ) : (
                           <span className="text-[var(--mut)]">
-                            ยังไม่ได้เลือก — กด 💖 ที่นักเตะ (ถ้าสุขภาพใจ ≥72 และกาย ≥72 จะสุ่ม +5 ถึง +10 OVR ชั่วคราว)
+                            ระบบจะคัดเลือกนักเตะฟอร์มเด่นให้อัตโนมัติ (ใจ/กาย ≥72 รับ +5..+10 OVR ชั่วคราว)
                           </span>
                         )}
                         {isMgr && (
                           <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular">
                             · ดูแลทีม {quota.remaining}/{quota.limit}
-                            {favCd > 0 ? ` · เปลี่ยนลูกรักได้อีก ${favCd} นัด` : ''}
                           </span>
                         )}
                       </div>
@@ -2069,7 +2077,7 @@ export const SquadTacticsView = React.memo<{
                   <div
                     className={
                       isMgr
-                        ? 'grid grid-cols-[24px_minmax(0,1.45fr)_54px_62px_118px] sm:grid-cols-[26px_minmax(0,1.6fr)_32px_64px_74px_74px_148px] lg:grid-cols-[28px_minmax(0,1.65fr)_34px_68px_74px_72px_82px_162px] mland:grid-cols-[24px_minmax(0,1.5fr)_28px_56px_64px_66px_132px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        ? 'grid grid-cols-[24px_minmax(0,1.45fr)_54px_62px_96px] sm:grid-cols-[26px_minmax(0,1.6fr)_32px_64px_74px_74px_124px] lg:grid-cols-[28px_minmax(0,1.65fr)_34px_68px_74px_72px_82px_136px] mland:grid-cols-[24px_minmax(0,1.5fr)_28px_56px_64px_66px_112px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
                         : 'grid grid-cols-[minmax(0,1.7fr)_34px_66px_74px_72px_90px] mland:grid-cols-[minmax(0,1.7fr)_28px_56px_64px_60px_78px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
                     }
                   >
@@ -2123,7 +2131,7 @@ export const SquadTacticsView = React.memo<{
                           key={q.n}
                           className={`px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 items-center gap-1 sm:gap-1.5 mland:gap-1 transition-colors ${
                             isMgr
-                              ? 'grid grid-cols-[24px_minmax(0,1.45fr)_54px_62px_118px] sm:grid-cols-[26px_minmax(0,1.6fr)_32px_64px_74px_74px_148px] lg:grid-cols-[28px_minmax(0,1.65fr)_34px_68px_74px_72px_82px_162px] mland:grid-cols-[24px_minmax(0,1.5fr)_28px_56px_64px_66px_132px]'
+                              ? 'grid grid-cols-[24px_minmax(0,1.45fr)_54px_62px_96px] sm:grid-cols-[26px_minmax(0,1.6fr)_32px_64px_74px_74px_124px] lg:grid-cols-[28px_minmax(0,1.65fr)_34px_68px_74px_72px_82px_136px] mland:grid-cols-[24px_minmax(0,1.5fr)_28px_56px_64px_66px_112px]'
                               : 'grid grid-cols-[minmax(0,1.7fr)_34px_66px_74px_72px_90px] mland:grid-cols-[minmax(0,1.7fr)_28px_56px_64px_60px_78px]'
                           } ${
                             isSelected
@@ -2300,42 +2308,6 @@ export const SquadTacticsView = React.memo<{
 
                           {isMgr && (
                             <div className="flex items-center justify-end gap-1 mland:gap-0.5 shrink-0">
-                              <button
-                                type="button"
-                                title={isFav ? 'ยกเลิกตำแหน่งลูกรัก' : 'ตั้งเป็นลูกรักประจำทีม (+5..+10 เมื่อใจ/กายดี)'}
-                                onClick={() => {
-                                  let res = { changed: false, boost: 0, cooldownRemaining: 0 };
-                                  onUpdateState((d) => {
-                                    const t = d.teams[d.me];
-                                    if (!t) return;
-                                    res = setTeamFavoritePlayer(d, t, isFav ? null : q.n);
-                                  });
-                                  if (!res.changed && !isFav && res.cooldownRemaining > 0) {
-                                    SFX.tap();
-                                    onToast(`⏳ ติดคูลดาวน์เปลี่ยนลูกรัก รออีก ${res.cooldownRemaining} นัด`);
-                                    return;
-                                  }
-                                  if (isFav) {
-                                    SFX.tap();
-                                    onToast(`💔 ยกเลิก ${q.n} จากตำแหน่งลูกรักแล้ว (รอ 3 นัดก่อนตั้งใหม่)`);
-                                  } else {
-                                    if (res.boost > 0) SFX.win();
-                                    else SFX.confirm();
-                                    onToast(
-                                      res.boost > 0
-                                        ? `💖 ตั้ง ${q.n} เป็นลูกรัก! รับพลังชั่วคราว +${res.boost} OVR`
-                                        : `💖 ตั้ง ${q.n} เป็นลูกรักแล้ว (ดูแลใจ/กายให้ ≥72 เพื่อรับ +5..+10)`
-                                    );
-                                  }
-                                }}
-                                className={`btn btn-xs px-1.5 ${
-                                  isFav
-                                    ? 'bg-rose-600 text-white border border-rose-600 shadow-xs'
-                                    : 'btn-secondary opacity-80 hover:opacity-100'
-                                }`}
-                              >
-                                {isFav ? '💖' : '🤍'}
-                              </button>
                               <button
                                 type="button"
                                 disabled={!!q.loan}

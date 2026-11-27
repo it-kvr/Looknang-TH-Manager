@@ -419,6 +419,9 @@ export function ensureTeamWellbeing(team: Team, state?: GameState | null) {
     delete team.favPlayer;
   }
   team.sq.forEach((q) => ensurePlayerWellbeing(q, { team, state }));
+  if (!team.favPlayer) {
+    refreshAiTeamFavoritePlayer(team, state);
+  }
 }
 
 export function syncFavoritePlayerBoost(
@@ -563,10 +566,9 @@ export function setTeamFavoritePlayer(
 
 export function refreshAiTeamFavoritePlayer(team: Team, state?: GameState | null) {
   if (!team?.sq?.length) return;
-  if (state?.mode === 'm' && team.id === state.me) return;
   const curTurn = state ? (state.season ?? 1) * 100 + (state.md ?? 0) : 0;
   const curFav = team.favPlayer ? team.sq.find((q) => q.n === team.favPlayer) : null;
-  // Keep current favorite unless gone, severely injured, or performing poorly (and respect cooldown)
+  // Keep current favorite unless missing, severely injured, or performing poorly (and respect cooldown)
   const onCooldown =
     curFav &&
     team.favChangedTurn != null &&
@@ -579,19 +581,36 @@ export function refreshAiTeamFavoritePlayer(team: Team, state?: GameState | null
     syncFavoritePlayerBoost(team, state, false);
     return;
   }
-  const candidates = team.sq
-    .filter((q) => q.inj === 0 && (q.sus || 0) === 0)
+  const available = team.sq.filter((q) => q.inj === 0 && (q.sus || 0) === 0);
+  const pool = available.length > 0 ? available : team.sq;
+  const candidates = pool
     .slice()
     .sort((a, b) => {
       const aAvg = (a.sra || 0) > 0 ? (a.srs || 0) / Math.max(1, a.sra!) : 6.6;
       const bAvg = (b.sra || 0) > 0 ? (b.srs || 0) / Math.max(1, b.sra!) : 6.6;
-      const aScore = a.ov + aAvg * 4 + (a.me ? 2 : 0) + (a.hg ? 2 : 0) + (team.cap === a.n ? 2 : 0);
-      const bScore = b.ov + bAvg * 4 + (b.me ? 2 : 0) + (b.hg ? 2 : 0) + (team.cap === b.n ? 2 : 0);
+      const aWellbeing = ((a.mental ?? 70) + (a.phys ?? 75)) * 0.05;
+      const bWellbeing = ((b.mental ?? 70) + (b.phys ?? 75)) * 0.05;
+      const aScore = a.ov + aAvg * 4 + aWellbeing + (a.me ? 2 : 0) + (a.hg ? 2 : 0) + (team.cap === a.n ? 2 : 0);
+      const bScore = b.ov + bAvg * 4 + bWellbeing + (b.me ? 2 : 0) + (b.hg ? 2 : 0) + (team.cap === b.n ? 2 : 0);
       return bScore - aScore;
     });
   if (candidates[0]) {
-    if (team.favPlayer !== candidates[0].n && state) {
+    const prevFavName = team.favPlayer;
+    if (prevFavName !== candidates[0].n && state) {
       team.favChangedTurn = curTurn;
+      if (prevFavName && curTurn > 0) {
+        candidates[0].mental = clamp((candidates[0].mental ?? 68) + 4, 18, 99);
+        candidates[0].mentalFactors = [
+          { label: 'ฟอร์มเข้าตา ระบบยกเป็นลูกรักประจำทีม', delta: 4 },
+          ...(candidates[0].mentalFactors || [])
+        ].slice(0, 5);
+        candidates[0].mentalNote = 'ฟอร์มเข้าตา ระบบยกเป็นลูกรักประจำทีม';
+        if (candidates[0].me && state.p) {
+          state.p.mental = candidates[0].mental;
+          state.p.mentalFactors = candidates[0].mentalFactors;
+          state.p.mentalNote = candidates[0].mentalNote;
+        }
+      }
     }
     team.favPlayer = candidates[0].n;
     syncFavoritePlayerBoost(team, state, true);
@@ -907,7 +926,7 @@ export function updateTeamWellbeingAfterMatchday(
         refreshAiTeamFavoritePlayer(team, state);
       }
     }
-  } else if (!isMgrUser) {
+  } else {
     refreshAiTeamFavoritePlayer(team, state);
   }
 

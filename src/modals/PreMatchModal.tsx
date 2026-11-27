@@ -57,6 +57,7 @@ interface PreMatchModalProps {
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onKickOff: (env: MatchEnvironment) => void;
   onQuickSim: () => void;
+  allowSkip?: boolean;
   onOpenFullTactics: () => void;
   onClose: () => void;
   onToast: (msg: string) => void;
@@ -78,6 +79,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   onUpdateState,
   onKickOff,
   onQuickSim,
+  allowSkip = false,
   onOpenFullTactics,
   onClose,
   onToast
@@ -734,19 +736,21 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                 <span className="hidden xl:inline">จัดทัพเต็ม</span>
               </button>
             )}
-            <button
-              type="button"
-              title="จำลองผลเกมนี้ทันที"
-              aria-label="ข้ามเกม"
-              onClick={() => {
-                SFX.tap();
-                onQuickSim();
-              }}
-              className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
-            >
-              <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-              <span className="hidden sm:inline mland:inline">ข้าม</span>
-            </button>
+            {allowSkip && (
+              <button
+                type="button"
+                title="จำลองผลเกมนี้ทันที"
+                aria-label="ข้ามเกม"
+                onClick={() => {
+                  SFX.tap();
+                  onQuickSim();
+                }}
+                className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
+              >
+                <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                <span className="hidden sm:inline mland:inline">ข้าม</span>
+              </button>
+            )}
             <button
               type="button"
               title="เริ่มแข่ง"

@@ -670,112 +670,153 @@ export const LeagueView = React.memo<{
       }
     }
 
-    (state.feed || []).slice(0, 8).forEach((f, idx) => {
+    (state.feed || []).forEach((f, idx) => {
       items.push({
         id: `feed-${idx}-${f.m}`,
         kind: 'feed',
         tone: f.tone === 'urg' ? 'urg' : f.tone === 'offer' ? 'warn' : f.tone === 'ok' ? 'ok' : 'info',
         urgent: f.tone === 'urg' || f.tone === 'offer',
         icon: f.tone === 'urg' ? '🚨' : f.tone === 'offer' ? '💼' : f.tone === 'ok' ? '✨' : '📰',
-        tag: `${f.cat} · นัด ${f.m}`,
+        tag: `${f.cat} · นัด ${f.m}${f.s !== state.season ? ` · S${f.s}` : ''}`,
         title: f.txt.includes('✚')
           ? (
-            <span className="inline-flex items-center gap-1">
+            <span className="inline">
               {f.txt.split('✚').map((part, pIdx) => (
                 <React.Fragment key={pIdx}>
-                  {pIdx > 0 && <StatIconBadge kind="injury" size="xs" />}
+                  {pIdx > 0 && (
+                    <span className="inline-flex align-text-bottom mx-0.5">
+                      <StatIconBadge kind="injury" size="xs" />
+                    </span>
+                  )}
                   {part}
                 </React.Fragment>
               ))}
             </span>
           )
           : f.txt,
-        detail: `S${f.s}`
+        detail: ''
       });
     });
 
-    const urgentCount = items.filter((it) => it.urgent).length;
+    const pendingTasks = items.filter((it) => it.kind !== 'feed' && !!it.urgent);
+    const pendingCount = pendingTasks.length;
     const reqCount = items.filter((it) => it.kind === 'req').length;
     const filteredItems = items.filter((it) => {
       if (newsFilter === 'all') return true;
-      if (newsFilter === 'urg') return !!it.urgent;
+      if (newsFilter === 'urg') return it.kind !== 'feed' && !!it.urgent;
       if (newsFilter === 'req') return it.kind === 'req';
       return it.kind === 'feed';
     });
 
-    const toneCls: Record<NewsTone, string> = {
-      urg: 'bg-[var(--red-soft)]/35 border-[var(--red)]/30',
-      warn: 'bg-[var(--lamp-soft)]/45 border-[var(--lamp)]/40',
-      ok: 'bg-[var(--g-soft)]/35 border-[var(--g)]/30',
-      info: 'bg-[var(--surface-2)]/65 border-[var(--line)]/70'
+    const toneCardCls: Record<NewsTone, string> = {
+      urg: 'bg-[var(--surface-2)]/65 hover:bg-[var(--surface-2)]/90 border-[var(--line)]',
+      warn: 'bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)]/85 border-[var(--line)]',
+      ok: 'bg-[var(--surface-2)]/55 hover:bg-[var(--surface-2)]/85 border-[var(--line)]',
+      info: 'bg-[var(--surface-2)]/35 hover:bg-[var(--surface-2)]/65 border-[var(--line)]/75'
+    };
+
+    const toneIconBoxCls: Record<NewsTone, string> = {
+      urg: 'bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)] border border-[var(--line)] shadow-2xs text-[var(--ink)]',
+      warn: 'bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)] border border-[var(--line)] shadow-2xs text-[var(--ink)]',
+      ok: 'bg-gradient-to-br from-[var(--surface)] to-[var(--surface-2)] border border-[var(--line)] shadow-2xs text-[var(--g)]',
+      info: 'bg-[var(--surface)] border border-[var(--line)]/75 text-[var(--mut)]'
     };
 
     const filterTabs = isMgr
       ? ([
-          ['all', 'ทั้งหมด'],
-          ['urg', `ต้องทำ (${urgentCount})`],
-          ['req', `คำขอ (${reqCount})`],
-          ['feed', 'ข่าวทีม']
+          ['all', 'ทั้งหมด', pendingCount > 0],
+          ['urg', `สำคัญ (${pendingCount})`, pendingCount > 0],
+          ['req', `คำขอ (${reqCount})`, reqCount > 0],
+          ['feed', 'ข่าวทีม', false]
         ] as const)
       : ([
-          ['all', 'ทั้งหมด'],
-          ['urg', `ต้องทำ (${urgentCount})`],
-          ['feed', 'ข่าวทีม']
+          ['all', 'ทั้งหมด', pendingCount > 0],
+          ['urg', `สำคัญ (${pendingCount})`, pendingCount > 0],
+          ['feed', 'ข่าวทีม', false]
         ] as const);
 
     return (
       <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-            📌 งานด่วน &amp; ข่าวทีม
-          </div>
-          <div className="seg-bar shrink-0">
-            {filterTabs.map(([fid, flbl]) => (
+        <div className={`seg-bar w-full grid ${isMgr ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          {filterTabs.map(([fid, flbl, showRedDot]) => {
+            const isActive = newsFilter === fid;
+            return (
               <button
                 key={fid}
                 type="button"
                 onClick={() => { SFX.tap(); setNewsFilter(fid); }}
-                className={`seg-btn ${newsFilter === fid ? 'seg-btn-active hover:text-white!' : ''}`}
+                className={`seg-btn w-full justify-center gap-1 py-1 mland:py-0.5 text-[10.5px] mland:text-[9px] truncate ${
+                  isActive ? 'seg-btn-active hover:text-white!' : ''
+                }`}
               >
-                {flbl}
+                {showRedDot && (
+                  <span
+                    aria-hidden="true"
+                    className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      isActive ? 'bg-red-300 ring-1 ring-white/80' : 'bg-red-500'
+                    }`}
+                  />
+                )}
+                <span className="truncate">{flbl}</span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
 
-        <div className="max-h-[210px] sm:max-h-[240px] mland:max-h-[148px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
+        <div className="max-h-[300px] sm:max-h-[340px] mland:max-h-[210px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
           {filteredItems.length === 0 ? (
-            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-3 text-center">
+            <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-4 text-center bg-[var(--surface-2)]/35 rounded-xl border border-dashed border-[var(--line)]">
               {newsFilter === 'req'
                 ? 'ยังไม่มีคำเรียกร้องในตอนนี้'
-                : 'ไม่มีงานด่วนค้าง ทีมพร้อมลุยนัดถัดไป!'}
+                : 'ไม่มีเรื่องสำคัญค้าง ทีมพร้อมลุยนัดถัดไป!'}
             </div>
           ) : (
-            filteredItems.map((it) => (
-              <div
-                key={it.id}
-                className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 mland:gap-1.5 ${toneCls[it.tone]}`}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate flex items-center gap-1">
-                    <span className="shrink-0">{it.icon}</span>
-                    <span className="truncate">{it.title}</span>
+            filteredItems.map((it) => {
+              const isUnresolvedTask = it.kind !== 'feed' && !!it.urgent;
+              return (
+                <div
+                  key={it.id}
+                  className={`px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2.5 mland:gap-2 transition-colors ${toneCardCls[it.tone]}`}
+                >
+                  <div className={`relative w-7 h-7 mland:w-5.5 mland:h-5.5 rounded-xl mland:rounded-lg flex items-center justify-center text-xs mland:text-[10px] shrink-0 ${toneIconBoxCls[it.tone]}`}>
+                    {it.icon}
+                    {isUnresolvedTask && (
+                      <span
+                        title="ยังมีรายการที่ต้องจัดการให้เสร็จ"
+                        className="absolute -top-0.5 -right-0.5 flex h-2.5 w-2.5 mland:h-2 mland:w-2"
+                      >
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 mland:h-2 mland:w-2 bg-red-500 ring-2 ring-[var(--surface)]" />
+                      </span>
+                    )}
                   </div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug truncate mt-0.5">
-                    {it.tag} · {it.detail}
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-snug break-words">
+                      {it.title}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] mland:text-[8.5px] leading-snug text-[var(--mut)]">
+                      <span className="px-1.5 py-[0.5px] rounded-md bg-[var(--surface)] border border-[var(--line)]/70 font-semibold text-[var(--ink)]/75 shrink-0">
+                        {it.tag}
+                      </span>
+                      {it.detail && (
+                        <span className="break-words">
+                          {it.detail}
+                        </span>
+                      )}
+                    </div>
                   </div>
+                  {it.actionLabel && it.onAction && (
+                    <button
+                      type="button"
+                      onClick={() => { SFX.tap(); it.onAction?.(); }}
+                      className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white hover:border-[var(--g)] shrink-0 whitespace-nowrap"
+                    >
+                      {it.actionLabel}
+                    </button>
+                  )}
                 </div>
-                {it.actionLabel && it.onAction && (
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); it.onAction?.(); }}
-                    className="btn btn-xs btn-surface hover:bg-[var(--g)] hover:text-white shrink-0"
-                  >
-                    {it.actionLabel}
-                  </button>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
@@ -883,37 +924,6 @@ export const LeagueView = React.memo<{
               );
             })}
           </div>
-        </div>
-
-        <div className="flex items-center justify-between gap-2 text-[10px] mland:text-[8.5px] text-[var(--mut)] px-1 shrink-0 whitespace-nowrap">
-          <div className="flex items-center gap-2.5 min-w-0">
-            {vt < 2 && (
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-xs bg-[var(--g)] inline-block shrink-0" />
-                <span>1-3 ขึ้นชั้น</span>
-              </span>
-            )}
-            {vt > 0 && (
-              <span className="inline-flex items-center gap-1">
-                <span className="w-2 h-2 rounded-xs bg-[var(--red)] inline-block shrink-0" />
-                <span>3 ท้ายตกชั้น</span>
-              </span>
-            )}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => { SFX.tap(); setPrizeModalTier(vt); }}
-            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[10px] mland:text-[8.5px] font-bold text-[var(--ink)] cursor-pointer transition-colors shadow-2xs shrink-0"
-          >
-            <Coins className="w-3 h-3 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
-            <span>รางวัล</span>
-            <span className="text-[#9a6700] dark:text-[var(--lamp)] tabular">
-              {myLeaguePos
-                ? fmtMoney(getLeaguePrizeMoney(vt, myLeaguePos, tb.length))
-                : fmtMoney(getLeaguePrizeMoney(vt, 1, tb.length))}
-            </span>
-          </button>
         </div>
 
       </div>
@@ -1469,9 +1479,9 @@ export const LeagueView = React.memo<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-1.5 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 mland:gap-1 shrink-0">
         {/* Competition Sub-Navigation Menu: Single compact horizontal pill strip */}
-        <div className="order-2 w-auto max-w-full seg-bar bg-[var(--surface)] shadow-xs overflow-x-auto">
+        <div className="order-3 w-auto max-w-full seg-bar bg-[var(--surface)] shadow-xs overflow-x-auto">
           {(
             [
               [0, '🏆', 'บอลลีก'],
@@ -1496,17 +1506,51 @@ export const LeagueView = React.memo<{
                   });
                 }
               }}
-              className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2.5 text-xs mland:text-[10.5px] shrink-0 min-w-0 ${
+              className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2 text-xs mland:text-[10px] shrink-0 min-w-0 ${
                 sub === tabIdx
                   ? 'seg-btn-active hover:text-white!'
                   : 'hover:bg-[var(--surface-2)]/70'
               }`}
             >
-              <span className="text-xs mland:text-[10.5px] leading-none">{ic}</span>
+              <span className="text-xs mland:text-[10px] leading-none">{ic}</span>
               <span className="truncate">{fullLbl}</span>
             </button>
           ))}
         </div>
+
+        {/* Middle Empty Space (Standings): Zone Legend & League Prize Money */}
+        {sub === 0 && (
+          <div className="order-2 flex items-center gap-2 mland:gap-1.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] whitespace-nowrap min-w-0">
+            <div className="flex items-center gap-2 mland:gap-1.5">
+              {vt < 2 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--g)] inline-block shrink-0" />
+                  <span>1-3 ขึ้นชั้น</span>
+                </span>
+              )}
+              {vt > 0 && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="w-2 h-2 mland:w-1.5 mland:h-1.5 rounded-xs bg-[var(--red)] inline-block shrink-0" />
+                  <span>3 ท้ายตกชั้น</span>
+                </span>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setPrizeModalTier(vt); }}
+              className="inline-flex items-center gap-1 px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--lamp)] text-[10.5px] mland:text-[8.5px] font-bold text-[var(--ink)] cursor-pointer transition-colors shadow-xs shrink-0"
+            >
+              <Coins className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-[#b47b00] dark:text-[var(--lamp)] shrink-0" />
+              <span>รางวัล</span>
+              <span className="text-[#9a6700] dark:text-[var(--lamp)] tabular">
+                {myLeaguePos
+                  ? fmtMoney(getLeaguePrizeMoney(vt, myLeaguePos, tb.length))
+                  : fmtMoney(getLeaguePrizeMoney(vt, 1, tb.length))}
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Left Header Slot: Direct 1-tap League Switcher for Standings & Stats */}
         {sub === 0 || sub === 2 ? (
@@ -1529,7 +1573,7 @@ export const LeagueView = React.memo<{
                     if (onShallowPatch) onShallowPatch(() => ({ lg: tierIdx }));
                     else onUpdateState((d) => { d.lg = tierIdx; });
                   }}
-                  className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2.5 text-xs mland:text-[10.5px] min-w-0 ${
+                  className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2 text-xs mland:text-[10px] min-w-0 ${
                     active
                       ? 'seg-btn-active hover:text-white!'
                       : 'hover:bg-[var(--surface-2)]/70'

@@ -50,6 +50,7 @@ interface ManagerCareerModalProps {
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onPlayNationalMatch: (fixture: NationalTeamMatchRecord) => void;
   onQuickSimNationalMatch: (fixture: NationalTeamMatchRecord) => void;
+  allowQuickSim?: boolean;
   onInspectNationalReport?: (fixture: NationalTeamMatchRecord) => void;
   onRetireToMenu: () => void;
   onClose: () => void;
@@ -64,6 +65,7 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
   onUpdateState,
   onPlayNationalMatch,
   onQuickSimNationalMatch,
+  allowQuickSim = false,
   onInspectNationalReport,
   onRetireToMenu,
   onClose,
@@ -722,18 +724,20 @@ export const ManagerCareerModal: React.FC<ManagerCareerModalProps> = ({
                                       <Play className="w-3 h-3 fill-current" />
                                       <span>จัดทัพแข่ง 2D</span>
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        SFX.tap();
-                                        onQuickSimNationalMatch(fx);
-                                      }}
-                                      className="btn btn-xs btn-secondary whitespace-nowrap"
-                                      title="จำลองผลการแข่งขันทันที"
-                                    >
-                                      <FastForward className="w-3 h-3" />
-                                      <span>จำลอง</span>
-                                    </button>
+                                    {allowQuickSim && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          SFX.tap();
+                                          onQuickSimNationalMatch(fx);
+                                        }}
+                                        className="btn btn-xs btn-secondary whitespace-nowrap"
+                                        title="จำลองผลการแข่งขันทันที"
+                                      >
+                                        <FastForward className="w-3 h-3" />
+                                        <span>จำลอง</span>
+                                      </button>
+                                    )}
                                   </>
                                 ) : (
                                   <span className="text-[10.5px] font-semibold text-[var(--mut)] px-2">

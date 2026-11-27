@@ -766,6 +766,38 @@ button:not(:disabled):active {
   height: 0;
 }
 
+@keyframes office-scan-beam {
+  0% {
+    top: 8%;
+    opacity: 0.35;
+  }
+  50% {
+    top: 84%;
+    opacity: 0.95;
+  }
+  100% {
+    top: 8%;
+    opacity: 0.35;
+  }
+}
+
+@keyframes office-pin-shake {
+  0%, 100% { transform: translateX(0); }
+  18% { transform: translateX(-7px); }
+  36% { transform: translateX(7px); }
+  54% { transform: translateX(-5px); }
+  72% { transform: translateX(5px); }
+  90% { transform: translateX(-2px); }
+}
+
+.office-scan-beam {
+  animation: office-scan-beam 1.9s ease-in-out infinite;
+}
+
+.office-pin-shake {
+  animation: office-pin-shake 0.38s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .confetti-piece,
   .celebrate-sparkle,

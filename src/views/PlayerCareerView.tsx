@@ -666,12 +666,6 @@ export const PlayerCareerView = React.memo<{
                 onToast={onToast}
                 compact
               />
-              <PlayerSeasonProgressionCard
-                player={fakePlayer}
-                state={state}
-                careerProfile={p}
-                variant="inline"
-              />
               <div
                 className={`grid grid-cols-1 gap-1.5 mland:gap-1 ${
                   details.G.length === 6 ? 'sm:grid-cols-3 mland:grid-cols-3' : 'sm:grid-cols-2 mland:grid-cols-2'
@@ -696,6 +690,12 @@ export const PlayerCareerView = React.memo<{
                   </div>
                 ))}
               </div>
+              <PlayerSeasonProgressionCard
+                player={fakePlayer}
+                state={state}
+                careerProfile={p}
+                variant="inline"
+              />
             </div>
           )}
 

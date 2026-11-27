@@ -153,14 +153,14 @@ export const PlayerInspectorModal: React.FC<{
                       onToast(added ? `⭐ เพิ่ม ${livePlayer.n} เข้ารายชื่อที่สนใจแล้ว` : `นำ ${livePlayer.n} ออกจากรายชื่อที่สนใจแล้ว`);
                     }}
                     title={shortlisted ? 'นำออกจากรายชื่อที่สนใจ' : 'เพิ่มเข้ารายชื่อที่สนใจ'}
-                    className={`h-8 mland:h-6.5 px-2.5 mland:px-2 inline-flex items-center gap-1 rounded-xl mland:rounded-lg border text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                    aria-label={shortlisted ? `นำ ${livePlayer.n} ออกจากรายชื่อที่สนใจ` : `เพิ่ม ${livePlayer.n} เข้ารายชื่อที่สนใจ`}
+                    className={`w-8 h-8 mland:w-6.5 mland:h-6.5 inline-flex items-center justify-center rounded-xl mland:rounded-lg border cursor-pointer transition-all shrink-0 active:scale-95 ${
                       shortlisted
-                        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/55 text-[#8a5b00] dark:text-[var(--lamp)]'
-                        : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
+                        ? 'bg-amber-400/20 border-amber-500/70 text-amber-500 dark:text-amber-300 shadow-[0_1px_6px_rgba(245,158,11,0.22)] hover:bg-amber-400/30'
+                        : 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-amber-500 hover:border-amber-400/60 hover:bg-amber-500/10'
                     }`}
                   >
-                    <Star className={`w-3.5 h-3.5 mland:w-3 mland:h-3 ${shortlisted ? 'fill-current' : ''}`} />
-                    <span className="hidden sm:inline">{shortlisted ? 'สนใจอยู่' : 'ที่สนใจ'}</span>
+                    <Star className={`w-4 h-4 mland:w-3.5 mland:h-3.5 ${shortlisted ? 'fill-amber-400 text-amber-500 dark:text-amber-300' : ''}`} />
                   </button>
                 );
               })()
@@ -378,7 +378,7 @@ export const PlayerInspectorModal: React.FC<{
               />
             </div>
 
-            {/* Right Column: Wellbeing & Favorite Boost -> Season Progression Graph -> Attribute Breakdown */}
+            {/* Right Column: Wellbeing & Favorite Boost -> Attribute Breakdown -> Season Progression Graph */}
             <div className="min-h-0 flex flex-col gap-1.5 mland:gap-1 md:h-full mland:h-full md:overflow-y-auto mland:overflow-y-auto pr-0.5 pb-2">
               <PlayerWellbeingCard
                 player={livePlayer}
@@ -390,13 +390,6 @@ export const PlayerInspectorModal: React.FC<{
                 onUpdateState={onUpdateState}
                 onToast={onToast}
                 compact
-              />
-
-              <PlayerSeasonProgressionCard
-                player={livePlayer}
-                state={state}
-                careerProfile={isMePlayer ? state.p : null}
-                variant="inline"
               />
 
               {/* Balanced 3x2 Attribute Card Grid (Equal rows per box) */}
@@ -426,6 +419,13 @@ export const PlayerInspectorModal: React.FC<{
                   </div>
                 ))}
               </div>
+
+              <PlayerSeasonProgressionCard
+                player={livePlayer}
+                state={state}
+                careerProfile={isMePlayer ? state.p : null}
+                variant="inline"
+              />
             </div>
           </div>
         )}

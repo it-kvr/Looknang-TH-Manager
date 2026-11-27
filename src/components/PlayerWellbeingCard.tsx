@@ -9,14 +9,12 @@ import {
   WELLBEING_FACTOR_GUIDE,
   applyPlayerCareAction,
   getActiveFavBoost,
-  getFavSwitchCooldownRemaining,
   getPlayerMentalScore,
   getPlayerPhysScore,
   getTeamCareQuotaInfo,
   getWellbeingTierMeta,
   isPlayerMentalGood,
-  isPlayerPhysGood,
-  setTeamFavoritePlayer
+  isPlayerPhysGood
 } from '../engine/wellbeing';
 
 interface LocalReplySnapshot {
@@ -74,8 +72,6 @@ export const PlayerWellbeingCard: React.FC<{
   const talkUsed = (isMePlayer && careerP?.careTalkMd != null ? careerP.careTalkMd : player.careTalkMd) === curTurn;
   const physUsed = (isMePlayer && careerP?.carePhysMd != null ? careerP.carePhysMd : player.carePhysMd) === curTurn;
   const careQuota = getTeamCareQuotaInfo(state, team);
-  const favCooldown = getFavSwitchCooldownRemaining(state, team);
-  const canManageFav = state.mode === 'm' && isMyTeam && Boolean(team) && !isRetired;
   const canCare = (isMyTeam || isMePlayer) && !isRetired;
   const topics = state.mode === 'p' ? CAREER_TALK_TOPICS : MANAGER_TALK_TOPICS;
   const activeTopicMeta = topics.find((t) => t.id === selectedTopic) || topics[0];
@@ -162,97 +158,57 @@ export const PlayerWellbeingCard: React.FC<{
         </div>
       )}
 
-      {/* Favorite Player Banner */}
+      {/* Compact Favorite Player Strip */}
       <div
-        className={`px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-xl border flex flex-wrap items-center justify-between gap-2 ${
+        className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl border flex items-center justify-between gap-2 ${
           isFav && favBoost > 0
-            ? 'bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-emerald-500/10 border-rose-500/40'
+            ? 'bg-gradient-to-r from-rose-500/12 via-amber-500/8 to-emerald-500/10 border-rose-500/40'
             : isFav
-              ? 'bg-[var(--lamp-soft)]/60 border-[var(--lamp)]/50'
-              : 'bg-[var(--surface-2)]/55 border-[var(--line)]'
+              ? 'bg-[var(--lamp-soft)]/50 border-[var(--lamp)]/45'
+              : 'bg-[var(--surface-2)]/50 border-[var(--line)]'
         }`}
       >
-        <div className="min-w-0 flex-1 space-y-0.5">
-          <div className="text-[11px] mland:text-[9.5px] font-bold flex items-center gap-1.5 flex-wrap text-[var(--ink)]">
-            {isFav ? (
-              favBoost > 0 ? (
-                <>
-                  <span className="text-rose-600 dark:text-rose-400">💖 ลูกรักประจำทีม · ปลุกพลังทำงาน</span>
-                  <span className="text-[10px] mland:text-[8.5px] font-black text-rose-600 dark:text-rose-400 tabular">
-                    (+{favBoost} OVR ชั่วคราว)
-                  </span>
-                </>
-              ) : (
-                <span className="text-amber-800 dark:text-[var(--lamp)]">
-                  💖 ลูกรักประจำทีม · รอเงื่อนไขใจ/กาย ≥ {GOOD_MENTAL_THRESHOLD}
-                </span>
-              )
-            ) : (
-              <span className="text-[var(--mut)]">
-                {team?.favPlayer ? `ลูกรักปัจจุบัน: ${team.favPlayer}` : 'ยังไม่มีลูกรักประจำทีม (เลือกได้ทีมละ 1 คน)'}
+        <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] mland:text-[9px]">
+          <span className="inline-flex items-center gap-1 font-extrabold text-[var(--ink)] shrink-0">
+            <span>💖</span>
+            <span>{isFav ? 'ลูกรักประจำทีม' : 'ลูกรัก'}</span>
+          </span>
+
+          {isFav ? (
+            <>
+              <span
+                className={`px-1.5 py-[1px] rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0 ${
+                  favBoost > 0
+                    ? 'bg-rose-600 text-white shadow-2xs'
+                    : 'bg-amber-500/15 border border-amber-500/35 text-amber-800 dark:text-[var(--lamp)]'
+                }`}
+              >
+                {favBoost > 0 ? `+${favBoost} OVR ปลุกพลัง` : 'รอปลุกพลัง (+5~10)'}
               </span>
-            )}
-          </div>
-          <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug">
-            {isFav ? (
-              favBoost > 0 ? (
-                <span>จิตใจ {mental} และ กาย {phys} ผ่านเกณฑ์ทั้งคู่ · มีผลในการแข่งจริง</span>
-              ) : (
-                <span className="text-amber-800 dark:text-[var(--lamp)] font-medium">
-                  ขาด:{' '}
-                  {[
-                    !mGood ? `จิตใจ ≥ ${GOOD_MENTAL_THRESHOLD} (ตอนนี้ ${mental})` : null,
-                    injured ? 'กำลังบาดเจ็บ' : suspended ? 'ติดโทษแบน' : !pGood ? `กาย ≥ ${GOOD_PHYS_THRESHOLD} (ตอนนี้ ${phys})` : null
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+              <span className="inline-flex items-center gap-1.5 text-[10px] mland:text-[8px] tabular">
+                <span className={`font-bold ${mGood ? 'text-[var(--g)]' : 'text-amber-700 dark:text-[var(--lamp)]'}`}>
+                  🧠 {mental}/{GOOD_MENTAL_THRESHOLD}{mGood ? '✓' : ''}
                 </span>
-              )
-            ) : (
-              <span>ลูกรักที่สุขภาพใจ &amp; กาย ≥ {GOOD_MENTAL_THRESHOLD} จะสุ่มรับพลัง +5 ถึง +10 OVR ชั่วคราว</span>
-            )}
-          </div>
+                <span className="opacity-30">·</span>
+                <span className={`font-bold ${!injured && !suspended && pGood ? 'text-[var(--g)]' : 'text-amber-700 dark:text-[var(--lamp)]'}`}>
+                  {injured ? '🏥 บาดเจ็บ' : suspended ? '🟥 แบน' : `💪 ${phys}/${GOOD_PHYS_THRESHOLD}${pGood ? '✓' : ''}`}
+                </span>
+              </span>
+            </>
+          ) : (
+            <span className="text-[var(--mut)] truncate flex items-center gap-1.5">
+              <span className="font-semibold text-[var(--ink)]/85 truncate">
+                {team?.favPlayer ? `ปัจจุบัน: ${team.favPlayer}` : 'เลือกอัตโนมัติตามฟอร์ม'}
+              </span>
+              <span className="hidden sm:inline opacity-40">·</span>
+              <span className="hidden sm:inline tabular">ใจ/กาย ≥{GOOD_MENTAL_THRESHOLD} รับ +5~10 OVR</span>
+            </span>
+          )}
         </div>
 
-        {canManageFav && team && (
-          <button
-            type="button"
-            disabled={!isFav && favCooldown > 0}
-            title={!isFav && favCooldown > 0 ? `ติดคูลดาวน์เปลี่ยนลูกรัก รออีก ${favCooldown} นัด` : undefined}
-            onClick={() => {
-              let res = { changed: false, favName: null as string | null, boost: 0, mentalGood: false, physGood: false, cooldownRemaining: 0 };
-              onUpdateState((d) => {
-                const t = d.teams[team.id];
-                if (!t) return;
-                res = setTeamFavoritePlayer(d, t, isFav ? null : player.n);
-              });
-              if (!res.changed && !isFav && res.cooldownRemaining > 0) {
-                SFX.tap();
-                onToast(`⏳ เพิ่งเปลี่ยนลูกรักไป รออีก ${res.cooldownRemaining} นัดจึงจะตั้งคนใหม่ได้`);
-                return;
-              }
-              if (isFav) {
-                SFX.tap();
-                onToast(`💔 ยกเลิก ${player.n} จากลูกรักแล้ว (รอ 3 นัดก่อนตั้งใหม่)`);
-              } else {
-                if (res.boost > 0) SFX.win();
-                else SFX.confirm();
-                onToast(
-                  res.boost > 0
-                    ? `💖 ตั้ง ${player.n} เป็นลูกรัก! รับพลังชั่วคราว +${res.boost} OVR`
-                    : `💖 ตั้ง ${player.n} เป็นลูกรักแล้ว (ดูแลใจ/กาย ≥72 เพื่อปลุกพลัง +5..+10)`
-                );
-              }
-            }}
-            className={`btn btn-xs shrink-0 whitespace-nowrap disabled:opacity-50 ${
-              isFav
-                ? 'bg-rose-500/15 border border-rose-500/45 text-rose-700 dark:text-rose-300 hover:bg-rose-500/25'
-                : 'btn-gold'
-            }`}
-          >
-            {isFav ? '💔 ปลดลูกรัก' : favCooldown > 0 ? `⏳ รอ ${favCooldown} นัด` : '💖 ตั้งเป็นลูกรัก'}
-          </button>
-        )}
+        <span className="px-1.5 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap">
+          เลือกอัตโนมัติ
+        </span>
       </div>
 
       {/* 2-Column Mental & Physical Health Breakdown */}

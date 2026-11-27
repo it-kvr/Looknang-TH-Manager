@@ -3440,11 +3440,7 @@ export function startSeason(s: GameState) {
         delete q.seasonProg;
       }
     });
-    if (!(s.mode === 'm' && t.id === s.me)) {
-      refreshAiTeamFavoritePlayer(t, s);
-    } else {
-      syncFavoritePlayerBoost(t, s, true);
-    }
+    refreshAiTeamFavoritePlayer(t, s);
   });
 
   ensureAiTeamPhilosophies(s, true);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import type { Position, Player, GameState, PlayerCareerProfile } from '../types/game';
 import { SFX } from '../utils/audioTheme';
@@ -73,56 +73,15 @@ export const PlayerSeasonProgressionCard: React.FC<{
   state: Pick<GameState, 'season' | 'md'> & Partial<Pick<GameState, 'teams' | 'seasonArchives' | 'mode' | 'p'>>;
   careerProfile?: PlayerCareerProfile | null;
   variant?: 'overlay' | 'inline';
-  defaultOpen?: boolean;
 }> = ({
   player,
   state,
   careerProfile = null,
-  variant = 'overlay',
-  defaultOpen = false
+  variant = 'inline'
 }) => {
-  const [showProgChart, setShowProgChart] = useState(defaultOpen);
   const [chartMode, setChartMode] = useState<ChartMode>('multi');
   const [chartScope, setChartScope] = useState<'key' | 'all'>('all');
   const [hiddenMetrics, setHiddenMetrics] = useState<Partial<Record<ChartMetricKey, boolean>>>({});
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setShowProgChart(defaultOpen);
-  }, [defaultOpen, player.id, player.n, state.season]);
-
-  useEffect(() => {
-    if (!showProgChart) return;
-    let startX = 0;
-    let startY = 0;
-    let trackingOutside = false;
-
-    const onPointerDown = (e: PointerEvent) => {
-      if (cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        trackingOutside = true;
-        startX = e.clientX;
-        startY = e.clientY;
-      } else {
-        trackingOutside = false;
-      }
-    };
-
-    const onPointerUp = (e: PointerEvent) => {
-      if (!trackingOutside) return;
-      trackingOutside = false;
-      const dist = Math.hypot(e.clientX - startX, e.clientY - startY);
-      if (dist < 10 && cardRef.current && !cardRef.current.contains(e.target as Node)) {
-        setShowProgChart(false);
-      }
-    };
-
-    document.addEventListener('pointerdown', onPointerDown, true);
-    document.addEventListener('pointerup', onPointerUp, true);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown, true);
-      document.removeEventListener('pointerup', onPointerUp, true);
-    };
-  }, [showProgChart]);
 
   const seasonSeries = useMemo(
     () => getPlayerSeasonProgression(player, state, careerProfile),
@@ -176,11 +135,11 @@ export const PlayerSeasonProgressionCard: React.FC<{
     <div
       className={
         isOverlay
-          ? 'absolute inset-x-0 top-full -mt-px z-30 rounded-b-2xl mland:rounded-b-xl bg-[var(--surface)] border border-[var(--line)] border-t-[var(--line)]/70 px-3 py-2 mland:px-2.5 mland:py-1.5 shadow-2xl space-y-1.5 mland:space-y-1'
+          ? 'border-t border-[var(--line)]/70 px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5 mland:space-y-1'
           : 'border-t border-[var(--line)]/70 px-3 py-2 mland:px-2 mland:py-1.5 space-y-1.5 mland:space-y-1'
       }
     >
-      <div className="h-[126px] sm:h-[134px] mland:h-[94px] w-full min-w-0">
+      <div className="h-[132px] sm:h-[142px] mland:h-[104px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={activeSeries} margin={{ top: 6, right: 8, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" opacity={0.45} vertical={false} />
@@ -268,34 +227,9 @@ export const PlayerSeasonProgressionCard: React.FC<{
   );
 
   return (
-    <div
-      ref={cardRef}
-      className={`shrink-0 bg-[var(--surface)] border border-[var(--line)] shadow-xs ${
-        isOverlay ? 'relative' : ''
-      } ${
-        showProgChart && isOverlay
-          ? 'rounded-t-2xl mland:rounded-t-xl z-30'
-          : 'rounded-2xl mland:rounded-xl overflow-hidden'
-      }`}
-    >
-      {/* Unified Compact Header Row */}
-      <div
-        role="button"
-        tabIndex={0}
-        aria-expanded={showProgChart}
-        onClick={() => {
-          SFX.tap();
-          setShowProgChart((v) => !v);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            SFX.tap();
-            setShowProgChart((v) => !v);
-          }
-        }}
-        className="px-3 py-2 mland:px-2.5 mland:py-1 flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none hover:bg-[var(--surface-2)]/40 transition-colors"
-      >
+    <div className="shrink-0 bg-[var(--surface)] border border-[var(--line)] shadow-xs rounded-2xl mland:rounded-xl overflow-hidden">
+      {/* Compact Static Header Row */}
+      <div className="px-3 py-2 mland:px-2.5 mland:py-1 flex flex-wrap items-center justify-between gap-2 bg-[var(--surface-2)]/35">
         <div className="flex items-center gap-2 mland:gap-1.5 min-w-0 flex-1 text-[11px] mland:text-[8.5px] tabular">
           <span className="font-bold text-[var(--ink)] shrink-0 flex items-center gap-1">
             <span>📈</span>
@@ -319,109 +253,61 @@ export const PlayerSeasonProgressionCard: React.FC<{
               </span>
             )}
           </span>
-
-          {!showProgChart && (
-            <div className="hidden sm:flex items-center gap-1.5 mland:gap-1 min-w-0 overflow-hidden">
-              {(KEY_STATS_BY_POS[player.pos] || ['atk', 'ply', 'phy']).map((k) => {
-                const meta = CHART_SERIES_META[k];
-                const curV = activeSeries[activeSeries.length - 1]?.[k] ?? 0;
-                const initV = activeSeries[0]?.[k] ?? curV;
-                const d = curV - initV;
-                return (
-                  <span
-                    key={k}
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 mland:px-1 mland:py-0 rounded-md bg-[var(--surface-2)]/65 border border-[var(--line)]/60 text-[10px] mland:text-[8px] font-semibold shrink-0"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: meta.color }} />
-                    <span className="text-[var(--mut)]">{meta.label}</span>
-                    <b className="text-[var(--ink)] font-extrabold">{curV}</b>
-                    {d !== 0 && (
-                      <span className={d > 0 ? 'text-[var(--g)] font-extrabold' : 'text-[var(--red)] font-extrabold'}>
-                        {d > 0 ? `+${d}` : d}
-                      </span>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
-          )}
         </div>
 
-        <div
-          className="flex items-center gap-1.5 mland:gap-1 shrink-0"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {showProgChart && (
-            <>
-              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
-                <button
-                  type="button"
-                  onClick={() => { SFX.tap(); setChartMode('multi'); }}
-                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    chartMode === 'multi'
-                      ? 'bg-[var(--g)] text-white shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  เทียบรายซีซั่น
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { SFX.tap(); setChartMode('season'); }}
-                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    chartMode === 'season'
-                      ? 'bg-[var(--g)] text-white shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  ในซีซั่นนี้
-                </button>
-              </div>
-              <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
-                <button
-                  type="button"
-                  onClick={() => { SFX.tap(); setChartScope('key'); }}
-                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    chartScope === 'key'
-                      ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  จุดเด่น (4)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { SFX.tap(); setChartScope('all'); }}
-                  className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
-                    chartScope === 'all'
-                      ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)]'
-                  }`}
-                >
-                  {player.pos === 'GK' ? 'ครบ 4 หมวด' : 'ครบ 6 หมวด'}
-                </button>
-              </div>
-            </>
-          )}
-
-          <button
-            type="button"
-            onClick={() => {
-              SFX.tap();
-              setShowProgChart((v) => !v);
-            }}
-            className={`px-2.5 mland:px-1.5 py-0.5 rounded-lg border text-[10px] mland:text-[8px] font-bold whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
-              showProgChart
-                ? 'bg-[var(--surface-2)] border-[var(--line)] text-[var(--mut)] hover:text-[var(--ink)]'
-                : 'bg-[var(--g-soft)]/70 border-[var(--g)]/35 text-[var(--g)] hover:bg-[var(--g)] hover:text-white'
-            }`}
-          >
-            {showProgChart ? 'ย่อกราฟ ▴' : 'ดูกราฟ ▾'}
-          </button>
+        <div className="flex items-center gap-1.5 mland:gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setChartMode('multi'); }}
+              className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                chartMode === 'multi'
+                  ? 'bg-[var(--g)] text-white shadow-xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              เทียบรายซีซั่น
+            </button>
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setChartMode('season'); }}
+              className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                chartMode === 'season'
+                  ? 'bg-[var(--g)] text-white shadow-xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              ในซีซั่นนี้
+            </button>
+          </div>
+          <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-[var(--surface-2)] border border-[var(--line)]">
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setChartScope('key'); }}
+              className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                chartScope === 'key'
+                  ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              จุดเด่น (4)
+            </button>
+            <button
+              type="button"
+              onClick={() => { SFX.tap(); setChartScope('all'); }}
+              className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[7.5px] font-bold whitespace-nowrap cursor-pointer transition-colors ${
+                chartScope === 'all'
+                  ? 'bg-[var(--surface)] text-[var(--ink)] shadow-xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)]'
+              }`}
+            >
+              {player.pos === 'GK' ? 'ครบ 4 หมวด' : 'ครบ 6 หมวด'}
+            </button>
+          </div>
         </div>
       </div>
 
-      {showProgChart && chartBody}
+      {chartBody}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Copy, Folder, FolderInput, Plus, Save, X } from 'lucide-react';
+import { AlertTriangle, Copy, Crown, Folder, FolderInput, LockKeyhole, Plus, Save, Unlock, X } from 'lucide-react';
 import { PWAInstallButton } from '../pwa.tsx';
 import type { GameState, AppSettings } from '../types/game';
 import { getSettings, saveSettings, getDefaultMatchSpeed, applyTheme, SFX, refreshAudioSettings, unlockAudio } from '../utils/audioTheme';
@@ -9,11 +9,10 @@ import { firstEmptySlot, getSlotCount, loadGameFromSlot, MAX_SLOTS, setSlotCount
 import { GAME_AUTO_FOLDER_NAME, saveGameToAutoFolder } from '../engine/saveFolder';
 import { SaveFolderModal } from './SaveFolderModal';
 
-const VIP_UNLOCKED_KEY = 'lk_vip_unlocked';
-
 export const SettingsModal: React.FC<{
   state: GameState;
   slot?: number;
+  vipAuthorized?: boolean;
   onClose: () => void;
   onExitToMenu: () => void;
   onSaveNow?: () => void;
@@ -21,7 +20,7 @@ export const SettingsModal: React.FC<{
   onOpenSecretBoost: () => void;
   onToast: (msg: string) => void;
   onSettingsChange?: (next: AppSettings) => void;
-}> = ({ state, slot = 1, onClose, onExitToMenu, onSaveNow, onLoadSaveFile, onOpenSecretBoost, onToast, onSettingsChange }) => {
+}> = ({ state, slot = 1, vipAuthorized = false, onClose, onExitToMenu, onSaveNow, onLoadSaveFile, onOpenSecretBoost, onToast, onSettingsChange }) => {
   const [st, setSt] = useState<AppSettings>(() => getSettings());
   const [saveCode, setSaveCode] = useState('');
   const [lastSavedFile, setLastSavedFile] = useState('');
@@ -34,14 +33,6 @@ export const SettingsModal: React.FC<{
   const [folderInitialTab, setFolderInitialTab] = useState<'folder' | 'code'>('folder');
   const [savingToFolder, setSavingToFolder] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [vipUnlocked, setVipUnlocked] = useState<boolean>(() => {
-    try {
-      return sessionStorage.getItem(VIP_UNLOCKED_KEY) === '1';
-    } catch {
-      return false;
-    }
-  });
-  const vipTapRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 });
 
   const parsedImport = useMemo(() => (importRaw.trim() ? cleanImportJson(importRaw) : null), [importRaw]);
 
@@ -90,29 +81,6 @@ export const SettingsModal: React.FC<{
     }
   };
 
-  const handleSecretVersionTap = () => {
-    if (vipUnlocked) {
-      SFX.tap();
-      onOpenSecretBoost();
-      return;
-    }
-    const now = Date.now();
-    const ref = vipTapRef.current;
-    ref.count = now - ref.lastTs > 2400 ? 1 : ref.count + 1;
-    ref.lastTs = now;
-    if (ref.count >= 5) {
-      ref.count = 0;
-      SFX.win();
-      setVipUnlocked(true);
-      try {
-        sessionStorage.setItem(VIP_UNLOCKED_KEY, '1');
-      } catch {
-        // ignore
-      }
-      onToast('🔓 ปลดล็อกโหมดลับผู้สนับสนุนแล้ว!');
-      onOpenSecretBoost();
-    }
-  };
 
   const update = (patch: Partial<AppSettings>) => {
     const next = { ...st, ...patch };
@@ -136,14 +104,34 @@ export const SettingsModal: React.FC<{
         <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <h3 className="font-bold text-sm sm:text-base mland:text-xs font-display">⚙️ ตั้งค่าเกม</h3>
-            <span
-              onClick={handleSecretVersionTap}
-              className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]/65 select-none"
-            >
+            <span className="text-[10px] mland:text-[9px] font-medium text-[var(--mut)]/65 select-none">
               v1.2
             </span>
           </div>
-          <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="btn-icon rounded-full!">✕</button>
+          <div className="flex items-center gap-2 mland:gap-1.5 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
+                onOpenSecretBoost();
+              }}
+              title={vipAuthorized ? 'เปิดห้อง VIP (ผ่านเครื่องสแกนแล้ว)' : 'ห้อง VIP ลึกลับ · สแกนรหัสผ่านเข้าออฟฟิศ'}
+              className={`group relative h-8 mland:h-6 px-2.5 mland:px-2 rounded-full border text-[11px] mland:text-[9.5px] font-extrabold inline-flex items-center gap-1.5 cursor-pointer transition-all shadow-sm overflow-hidden ${
+                vipAuthorized
+                  ? 'bg-gradient-to-r from-emerald-950 via-slate-900 to-amber-950 border-emerald-400/60 text-emerald-300 hover:brightness-110'
+                  : 'bg-gradient-to-r from-slate-950 via-[#1a1625] to-slate-900 border-[var(--lamp)]/50 text-[var(--lamp)] hover:border-[var(--lamp)] hover:shadow-[0_0_12px_rgba(245,194,66,0.28)]'
+              }`}
+            >
+              <Crown className="w-3.5 h-3.5 mland:w-3 mland:h-3 shrink-0 text-[var(--lamp)]" />
+              <span className="tracking-wide">VIP ลึกลับ</span>
+              {vipAuthorized ? (
+                <Unlock className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-emerald-400 shrink-0" />
+              ) : (
+                <LockKeyhole className="w-3 h-3 mland:w-2.5 mland:h-2.5 text-amber-300/85 shrink-0" />
+              )}
+            </button>
+            <button type="button" onClick={onClose} aria-label="ปิดตั้งค่า" className="btn-icon rounded-full!">✕</button>
+          </div>
         </div>
 
         {/* Organized Horizontal 2-Column Body */}
@@ -179,22 +167,6 @@ export const SettingsModal: React.FC<{
                   ))}
                 </div>
               </div>
-
-              <button
-                type="button"
-                onClick={() => { SFX.tap(); update({ autoSkipMatch: !st.autoSkipMatch }); }}
-                className={`w-full flex items-center justify-between gap-2.5 p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg border text-left cursor-pointer ${
-                  st.autoSkipMatch ? 'bg-[var(--g-soft)] border-[var(--g)]/50' : 'bg-[var(--surface)] border-[var(--line)]/80'
-                }`}
-              >
-                <div className="min-w-0">
-                  <div className="text-xs mland:text-[10px] font-bold">⏭️ ข้ามแข่งอัตโนมัติ</div>
-                  <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate">จำลองผลทันทีโดยไม่เปิดหน้าต่างสนาม 2D</div>
-                </div>
-                <span className={`px-2.5 mland:px-2 py-0.5 rounded-full text-[10.5px] mland:text-[9px] font-bold shrink-0 ${st.autoSkipMatch ? 'bg-[var(--g)] text-white' : 'bg-[var(--surface-2)] text-[var(--mut)]'}`}>
-                  {st.autoSkipMatch ? 'เปิด' : 'ปิด'}
-                </span>
-              </button>
 
               <div className="p-2.5 mland:p-1.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)]/70 space-y-2 mland:space-y-1.5">
                 <div className="flex items-center justify-between gap-2">

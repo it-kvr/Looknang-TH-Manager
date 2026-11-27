@@ -1226,6 +1226,7 @@ export interface AppSettings {
   quick?: boolean;
   matchSpeed?: 0.25 | 0.5 | 1 | 2 | 5;
   autoSkipMatch?: boolean;
+  vipMatchSkipEnabled?: boolean;
   theme?: 'light' | 'dark' | '';
   nocrowd?: boolean;
   sfxVolume?: number;

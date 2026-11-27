@@ -4,7 +4,6 @@ import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { SFX } from '../utils/audioTheme';
 import { ensureCon, logFin, syncMe, vlu, wagOf } from '../engine/playerCore';
 import { CUP_COMP_META, getPlayerCupTotals } from '../engine/simulation';
-import { getStaminaMeta } from './StaminaBar';
 import { StatIconBadge } from './StatIconBadge';
 
 export interface PlayerCardOverviewBoxProps {
@@ -36,38 +35,25 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
     careerProfile ? 'total' : 'league'
   );
 
-  const fitMeta = getStaminaMeta(careerProfile ? careerProfile.en : player.fit);
-  const fitVal = fitMeta.f;
   const injCount = player.inj ?? careerProfile?.inj ?? 0;
   const susCount = player.sus ?? careerProfile?.sus ?? 0;
 
   const isSuspendedStatus = !isRetired && susCount > 0;
   const isInjuredStatus = !isRetired && susCount === 0 && injCount > 0;
+  const showStatusAlertRow = isRetired || susCount > 0 || injCount > 0;
   const statusText = isRetired
     ? player.retiredSeason
       ? `👋 แขวนสตั๊ดแล้ว (จบ S${player.retiredSeason})`
       : '👋 แขวนสตั๊ดแล้ว'
     : susCount > 0
       ? `ติดโทษแบน ${susCount} นัด`
-      : injCount > 0
-        ? `เจ็บพัก ${injCount} นัด`
-        : fitVal < 65
-          ? '⚠️ ร่างกายอ่อนล้า'
-          : '✅ พร้อมลงสนาม';
+      : `เจ็บพัก ${injCount} นัด`;
 
   const statusToneCls = isRetired
     ? 'bg-amber-500/10 border-amber-500/35'
-    : injCount > 0 || susCount > 0
-      ? 'bg-[var(--red-soft)] border-[var(--red)]/40'
-      : fitVal < 65
-        ? 'bg-[var(--lamp-soft)] border-[var(--lamp)]/45'
-        : 'bg-[var(--g-soft)] border-[var(--g)]/35';
+    : 'bg-[var(--red-soft)] border-[var(--red)]/40';
 
-  const fitCol = isRetired
-    ? '#d97706'
-    : injCount > 0 || susCount > 0
-      ? 'var(--red)'
-      : fitMeta.barColor;
+  const fitCol = isRetired ? '#d97706' : 'var(--red)';
 
   const con = !isRetired && team ? ensureCon(player) : null;
 
@@ -151,71 +137,73 @@ export const PlayerCardOverviewBox: React.FC<PlayerCardOverviewBoxProps> = ({
 
   return (
     <div className="shrink-0 p-2 mland:p-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col gap-1.5 mland:gap-1">
-      {/* Status Row */}
-      <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${statusToneCls}`}>
-        <div className="flex items-center justify-between font-bold gap-1">
-          <span className="truncate tabular inline-flex items-center gap-1" style={{ color: fitCol }}>
-            {isSuspendedStatus && <StatIconBadge kind="red" count={1} size="xs" />}
-            {isInjuredStatus && <StatIconBadge kind="injury" size="xs" />}
-            <span className="truncate">{statusText}</span>
-          </span>
+      {/* Injury / Suspension / Retired Alert & Physio Action (No ready-to-play bar when fit) */}
+      {showStatusAlertRow && (
+        <div className={`px-2 py-1 mland:px-1.5 mland:py-0.5 rounded-xl mland:rounded-lg border text-[10.5px] mland:text-[8.5px] space-y-1 ${statusToneCls}`}>
+          <div className="flex items-center justify-between font-bold gap-1">
+            <span className="truncate tabular inline-flex items-center gap-1" style={{ color: fitCol }}>
+              {isSuspendedStatus && <StatIconBadge kind="red" count={1} size="xs" />}
+              {isInjuredStatus && <StatIconBadge kind="injury" size="xs" />}
+              <span className="truncate">{statusText}</span>
+            </span>
+          </div>
+
+          {canCareerPhysio && (
+            <button
+              type="button"
+              disabled={(careerProfile.rep ?? 10) < 4}
+              onClick={() => {
+                SFX.tap();
+                onUpdateState((d) => {
+                  if (!d.p || (d.p.rep ?? 10) < 4) return;
+                  d.p.rep = (d.p.rep ?? 10) - 4;
+                  d.p.inj = Math.max(0, (d.p.inj ?? injCount) - 1);
+                  d.p.en = clamp((d.p.en ?? 80) + 12, 35, 100);
+                  syncMe(d);
+                });
+                onToast?.(
+                  injCount - 1 <= 0
+                    ? '💆 กายภาพส่วนตัวสำเร็จ! คุณหายเจ็บพร้อมลงสนามแล้ว'
+                    : `💆 กายภาพส่วนตัวสำเร็จ! ลดวันพักเหลือ ${injCount - 1} นัด (+12% ความฟิต)`
+                );
+              }}
+              className="btn btn-xs btn-primary w-full"
+            >
+              💆 กายภาพ (-1 นัด · +12% ฟิต · 4 ★)
+            </button>
+          )}
+
+          {canManagerPhysio && (
+            <button
+              type="button"
+              disabled={alreadyTreated || state.money < treatCost}
+              onClick={() => {
+                SFX.tap();
+                onUpdateState((d) => {
+                  const sq = d.teams[d.me].sq;
+                  const pl = sq.find((q) => q.n === player.n);
+                  if (!pl || pl.inj <= 0 || pl.treatedMd === curTurn || d.money < treatCost) return;
+                  d.money -= treatCost;
+                  logFin(d, `กายภาพบำบัด ${pl.n}`, -treatCost);
+                  pl.inj = Math.max(0, pl.inj - 1);
+                  pl.fit = clamp((pl.fit ?? 70) + 10, 40, 100);
+                  pl.treatedMd = curTurn;
+                });
+                onToast?.(
+                  injCount - 1 <= 0
+                    ? `💉 รักษา ${player.n} หายเจ็บพร้อมลงสนามแล้ว!`
+                    : `💉 ทำกายภาพ ${player.n} ลดวันพักเหลือ ${injCount - 1} นัด (+10% ฟิต)`
+                );
+              }}
+              className="btn btn-xs btn-primary w-full"
+            >
+              {alreadyTreated
+                ? '✅ ทำกายภาพรอบนี้แล้ว'
+                : `💉 กายภาพด่วน (-1 นัด · ${fmtMoney(treatCost)})`}
+            </button>
+          )}
         </div>
-
-        {canCareerPhysio && (
-          <button
-            type="button"
-            disabled={(careerProfile.rep ?? 10) < 4}
-            onClick={() => {
-              SFX.tap();
-              onUpdateState((d) => {
-                if (!d.p || (d.p.rep ?? 10) < 4) return;
-                d.p.rep = (d.p.rep ?? 10) - 4;
-                d.p.inj = Math.max(0, (d.p.inj ?? injCount) - 1);
-                d.p.en = clamp((d.p.en ?? 80) + 12, 35, 100);
-                syncMe(d);
-              });
-              onToast?.(
-                injCount - 1 <= 0
-                  ? '💆 กายภาพส่วนตัวสำเร็จ! คุณหายเจ็บพร้อมลงสนามแล้ว'
-                  : `💆 กายภาพส่วนตัวสำเร็จ! ลดวันพักเหลือ ${injCount - 1} นัด (+12% ความฟิต)`
-              );
-            }}
-            className="btn btn-xs btn-primary w-full"
-          >
-            💆 กายภาพ (-1 นัด · +12% ฟิต · 4 ★)
-          </button>
-        )}
-
-        {canManagerPhysio && (
-          <button
-            type="button"
-            disabled={alreadyTreated || state.money < treatCost}
-            onClick={() => {
-              SFX.tap();
-              onUpdateState((d) => {
-                const sq = d.teams[d.me].sq;
-                const pl = sq.find((q) => q.n === player.n);
-                if (!pl || pl.inj <= 0 || pl.treatedMd === curTurn || d.money < treatCost) return;
-                d.money -= treatCost;
-                logFin(d, `กายภาพบำบัด ${pl.n}`, -treatCost);
-                pl.inj = Math.max(0, pl.inj - 1);
-                pl.fit = clamp((pl.fit ?? 70) + 10, 40, 100);
-                pl.treatedMd = curTurn;
-              });
-              onToast?.(
-                injCount - 1 <= 0
-                  ? `💉 รักษา ${player.n} หายเจ็บพร้อมลงสนามแล้ว!`
-                  : `💉 ทำกายภาพ ${player.n} ลดวันพักเหลือ ${injCount - 1} นัด (+10% ฟิต)`
-              );
-            }}
-            className="btn btn-xs btn-primary w-full"
-          >
-            {alreadyTreated
-              ? '✅ ทำกายภาพรอบนี้แล้ว'
-              : `💉 กายภาพด่วน (-1 นัด · ${fmtMoney(treatCost)})`}
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Unified 3-Scope Stats Strip */}
       <div className="space-y-1">

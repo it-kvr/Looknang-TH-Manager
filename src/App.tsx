@@ -9,7 +9,7 @@ import {
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
 import { P, clamp, capMoney, fmtMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
-import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
+import { getSettings, saveSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { resolveStateSponsorBrand } from './data/sponsorBrands';
@@ -56,6 +56,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSecretBoost, setShowSecretBoost] = useState(false);
   const [showGodBlessing, setShowGodBlessing] = useState(false);
+  const [vipAuthorized, setVipAuthorized] = useState(false);
   const [managerCareerModal, setManagerCareerModal] = useState<'career' | 'nt' | null>(null);
   const [ntPreMatchFixture, setNtPreMatchFixture] = useState<NationalTeamMatchRecord | null>(null);
   const [ntActiveMatch, setNtActiveMatch] = useState<{
@@ -99,10 +100,20 @@ export default function App() {
   stateRef.current = state;
   const appSettingsRef = useRef(appSettings);
   appSettingsRef.current = appSettings;
+  const vipAuthorizedRef = useRef(vipAuthorized);
+  vipAuthorizedRef.current = vipAuthorized;
   const activeMatchRef = useRef(activeMatch);
   activeMatchRef.current = activeMatch;
   const ntActiveMatchRef = useRef(ntActiveMatch);
   ntActiveMatchRef.current = ntActiveMatch;
+
+  const updateAppSettings = useCallback((patch: Partial<AppSettings>) => {
+    setAppSettings((prev) => {
+      const next = { ...prev, ...patch };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const unbindFs = bindAutoLandscapeFullscreen();
@@ -1217,7 +1228,7 @@ export default function App() {
     enterAutoMobileFullscreen().catch(() => undefined);
     const curNextMatch = nextMatchInfoRef.current;
     if (curNextMatch) {
-      if (appSettingsRef.current.autoSkipMatch) {
+      if (vipAuthorizedRef.current && appSettingsRef.current.autoSkipMatch) {
         runInstantNextMatch(curNextMatch);
         return;
       }
@@ -1425,6 +1436,8 @@ export default function App() {
     ? state.teams[nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId]
     : null;
   const nextIsHome = nextMatchInfo ? nextMatchInfo.homeId === state.me : false;
+  const effectiveAutoSkip = vipAuthorized && Boolean(appSettings.autoSkipMatch);
+  const effectiveAllowMatchSkip = vipAuthorized && appSettings.vipMatchSkipEnabled !== false;
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)] safe-all">
@@ -1439,7 +1452,7 @@ export default function App() {
         nextMatchInfo={nextMatchInfo}
         nextOppTeam={nextOppTeam}
         nextIsHome={nextIsHome}
-        autoSkipMatch={Boolean(appSettings.autoSkipMatch)}
+        autoSkipMatch={effectiveAutoSkip}
         onNavigateToTab={navigateToTab}
         onTriggerNextStep={handleTriggerNextStep}
         onOpenNtModal={handleOpenNtModal}
@@ -1562,10 +1575,12 @@ export default function App() {
             setActiveMatch({ ...target, matchEnv: env });
           }}
           onQuickSim={() => {
+            if (!effectiveAllowMatchSkip) return;
             const target = preMatch;
             setPreMatch(null);
             runInstantNextMatch(target);
           }}
+          allowSkip={effectiveAllowMatchSkip}
           onOpenFullTactics={() => {
             setPreMatch(null);
             navigateToTab('q');
@@ -1583,6 +1598,7 @@ export default function App() {
           awayId={activeMatch.awayId}
           isDerby={activeMatch.isDerby}
           initialMatchEnv={activeMatch.matchEnv}
+          allowSkip={effectiveAllowMatchSkip}
           onFinish={handleMatchFinish}
         />
       )}
@@ -1680,6 +1696,7 @@ export default function App() {
         <SettingsModal
           state={state}
           slot={slot}
+          vipAuthorized={vipAuthorized}
           onClose={() => setShowSettings(false)}
           onExitToMenu={() => {
             flushPendingSave();
@@ -1711,8 +1728,34 @@ export default function App() {
       {showSecretBoost && (
         <SecretBoostModal
           state={state}
+          vipAuthorized={vipAuthorized}
+          onUnlockVip={() => setVipAuthorized(true)}
+          onLockVip={() => {
+            setVipAuthorized(false);
+            setShowGodBlessing(false);
+          }}
+          appSettings={appSettings}
+          onUpdateSettings={updateAppSettings}
+          nextMatchLabel={
+            nextMatchInfo && nextOppTeam
+              ? `พบ ${nextOppTeam.name}`
+              : null
+          }
+          onSkipNextMatch={
+            nextMatchInfo
+              ? () => {
+                  const target = nextMatchInfo;
+                  setShowSettings(false);
+                  setPreMatch(null);
+                  runInstantNextMatch(target);
+                }
+              : undefined
+          }
           onClose={() => setShowSecretBoost(false)}
-          onOpenGodBlessing={() => setShowGodBlessing(true)}
+          onOpenGodBlessing={() => {
+            if (vipAuthorized) setShowGodBlessing(true);
+            else setShowSecretBoost(true);
+          }}
           onUpdateState={updateState}
           onToast={showToast}
         />
@@ -1721,7 +1764,9 @@ export default function App() {
       {showGodBlessing && (
         <GodBlessingModal
           state={state}
+          vipAuthorized={vipAuthorized}
           onClose={() => setShowGodBlessing(false)}
+          onRequireAuth={() => setShowSecretBoost(true)}
           onUpdateState={updateState}
           onToast={showToast}
         />
@@ -1833,10 +1878,12 @@ export default function App() {
             });
           }}
           onQuickSim={() => {
+            if (!effectiveAllowMatchSkip) return;
             const target = ntPreMatchFixture;
             setNtPreMatchFixture(null);
             handleQuickSimNationalMatch(target);
           }}
+          allowSkip={effectiveAllowMatchSkip}
           onOpenFullTactics={() => {
             setNtPreMatchFixture(null);
             setManagerCareerModal('nt');
@@ -1856,6 +1903,7 @@ export default function App() {
           allowDraw={!ntActiveMatch.fixture.isKnockout}
           compTitleOverride={`🇹🇭 ${ntActiveMatch.fixture.compName} · ${ntActiveMatch.fixture.roundLabel}`}
           initialMatchEnv={ntActiveMatch.matchEnv}
+          allowSkip={effectiveAllowMatchSkip}
           onFinish={handleNationalMatchFinish}
         />
       )}
@@ -1898,6 +1946,7 @@ export default function App() {
           onUpdateState={updateState}
           onPlayNationalMatch={launchNationalPreMatch}
           onQuickSimNationalMatch={handleQuickSimNationalMatch}
+          allowQuickSim={effectiveAllowMatchSkip}
           onRetireToMenu={handleRetireToMenu}
           onClose={handleCloseManagerCareer}
           onToast={showToast}
@@ -1911,6 +1960,7 @@ export default function App() {
           onUpdateState={updateState}
           onPlayNationalMatch={launchNationalPreMatch}
           onQuickSimNationalMatch={handleQuickSimNationalMatch}
+          allowQuickSim={effectiveAllowMatchSkip}
           onInspectNationalReport={handleInspectNationalReport}
           onRetireToMenu={handleRetireToMenu}
           onClose={handleCloseManagerCareer}

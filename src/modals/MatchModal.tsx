@@ -60,8 +60,9 @@ export const MatchModal = React.memo<{
   allowDraw?: boolean;
   compTitleOverride?: string;
   initialMatchEnv?: MatchEnvironment;
+  allowSkip?: boolean;
   onFinish: (payload: FinishedMatchPayload) => void;
-}>(({ state, kind, homeId, awayId, isDerby, allowDraw = false, compTitleOverride, initialMatchEnv, onFinish }) => {
+}>(({ state, kind, homeId, awayId, isDerby, allowDraw = false, compTitleOverride, initialMatchEnv, allowSkip = false, onFinish }) => {
   const settings = useMemo(() => getSettings(), []);
   const homeOrig = state.teams[homeId];
   const awayOrig = state.teams[awayId];
@@ -13224,6 +13225,7 @@ export const MatchModal = React.memo<{
         paused={paused}
         speed={speed}
         highlightCount={highlightClips.length}
+        allowSkip={allowSkip}
         onStartSecondHalf={handleStartSecondHalfClick}
         onSkipToEnd={skipToEnd}
         onTogglePause={handleTogglePause}
@@ -13238,6 +13240,7 @@ export const MatchModal = React.memo<{
       paused,
       speed,
       highlightClips.length,
+      allowSkip,
       handleStartSecondHalfClick,
       skipToEnd,
       handleTogglePause,

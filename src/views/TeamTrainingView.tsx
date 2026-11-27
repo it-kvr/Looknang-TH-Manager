@@ -37,15 +37,13 @@ import {
   applyPlayerCareAction,
   applyTeamTalkAction,
   getActiveFavBoost,
-  getFavSwitchCooldownRemaining,
   getPlayerMentalScore,
   getPlayerPhysScore,
   getTeamCareQuotaInfo,
   getWellbeingTierMeta,
   isPlayerMentalGood,
   isPlayerPhysGood,
-  resolvePersonalityId,
-  setTeamFavoritePlayer
+  resolvePersonalityId
 } from '../engine/wellbeing';
 
 type RosterFilter = 'all' | 'need_care' | 'starters' | 'youth';
@@ -94,7 +92,6 @@ export const TeamTrainingView = React.memo<{
   const restedIndivCount = Object.values(indMap).filter((v) => v === 'REST').length;
 
   const careQuota = useMemo(() => getTeamCareQuotaInfo(state, me), [state, me]);
-  const favCooldown = useMemo(() => getFavSwitchCooldownRemaining(state, me), [state, me]);
   const favPlayerObj = me.favPlayer ? me.sq.find((q) => q.n === me.favPlayer) || null : null;
   const favActiveBoost = favPlayerObj ? getActiveFavBoost(favPlayerObj, me, null) : 0;
 
@@ -417,7 +414,7 @@ export const TeamTrainingView = React.memo<{
               <div>
                 <h3 className="font-bold text-sm mland:text-xs">🗣️ ห้องพูดคุย &amp; ดูแลรายบุคคล</h3>
                 <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)]">
-                  เลือกนักเตะเพื่อคุยตัวต่อตัว นวดคลายกล้ามเนื้อ หรือตั้งเป็นลูกรักประจำทีม
+                  เลือกนักเตะเพื่อคุยตัวต่อตัวหรือฟื้นฟูกล้ามเนื้อ (ลูกรักประจำทีมคัดเลือกอัตโนมัติจากฟอร์ม)
                 </p>
               </div>
               <div className="text-[11px] mland:text-[9px] font-bold tabular">
@@ -516,90 +513,90 @@ export const TeamTrainingView = React.memo<{
 
                 return (
                   <div className="overflow-y-auto pr-1 space-y-2.5 mland:space-y-1.5 min-h-0">
-                    {/* Player Identity & Favorite Action */}
-                    <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] flex flex-wrap items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onInspectPlayer(q, me)}
-                        className="flex items-center gap-2.5 min-w-0 text-left cursor-pointer group"
-                      >
-                        <PlayerFace player={q} team={me} state={state} size={40} />
-                        <div className="min-w-0">
-                          <div className="text-sm mland:text-xs font-extrabold flex items-center gap-1.5 flex-wrap">
-                            <PositionBadge role={q.ro} size="xs" />
-                            <span className="group-hover:text-[var(--g)] transition-colors">{q.n}</span>
-                            {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" />}
-                            {favBoost > 0 && (
-                              <span className="px-1.5 py-[1px] rounded bg-rose-600 text-white text-[9.5px] font-black tabular">
-                                💖 +{favBoost} OVR
+                    {/* Player Identity + Compact Favorite Bar */}
+                    <div className="rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] overflow-hidden">
+                      <div className="p-2.5 mland:p-2 flex items-center justify-between gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onInspectPlayer(q, me)}
+                          className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer group"
+                        >
+                          <PlayerFace player={q} team={me} state={state} size={38} />
+                          <div className="min-w-0">
+                            <div className="text-sm mland:text-xs font-extrabold flex items-center gap-1.5 flex-wrap">
+                              <PositionBadge role={q.ro} size="xs" />
+                              <span className="group-hover:text-[var(--g)] transition-colors truncate">{q.n}</span>
+                              {me.cap === q.n && <CaptainBadge team={me} state={state} size="xs" />}
+                              {isFav && (
+                                <span
+                                  className={`px-1.5 py-[1px] rounded text-[9.5px] mland:text-[8px] font-black tabular ${
+                                    favBoost > 0
+                                      ? 'bg-rose-600 text-white'
+                                      : 'bg-amber-500/15 border border-amber-500/35 text-amber-800 dark:text-[var(--lamp)]'
+                                  }`}
+                                >
+                                  {favBoost > 0 ? `💖 +${favBoost} OVR` : '💖 ลูกรัก'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular flex items-center gap-1.5 flex-wrap mt-0.5">
+                              <span>
+                                พลังรวม <b className="text-[var(--ink)]">{effOv}</b>
+                                {effOv !== q.ov ? ` (ฐาน ${q.ov})` : ''}
                               </span>
-                            )}
+                              <span>·</span>
+                              <span>บุคลิก: <b className="text-[var(--ink)]">{persName}</b></span>
+                              <span>·</span>
+                              <span>ฟิต <b className={getStaminaMeta(Math.round(q.fit ?? 100)).txtCls}>{Math.round(q.fit ?? 100)}%</b></span>
+                            </div>
                           </div>
-                          <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular flex items-center gap-1.5 flex-wrap mt-0.5">
-                            <span>
-                              พลังรวม <b className="text-[var(--ink)]">{effOv}</b>
-                              {effOv !== q.ov ? ` (ฐาน ${q.ov})` : ''}
-                            </span>
-                            <span>·</span>
-                            <span>บุคลิก: <b className="text-[var(--ink)]">{persName}</b></span>
-                            <span>·</span>
-                            <span>ฟิต <b className={getStaminaMeta(Math.round(q.fit ?? 100)).txtCls}>{Math.round(q.fit ?? 100)}%</b></span>
-                          </div>
-                        </div>
-                      </button>
+                        </button>
 
-                      <button
-                        type="button"
-                        disabled={!isFav && favCooldown > 0}
-                        onClick={() => {
-                          let res = { changed: false, favName: null as string | null, boost: 0, mentalGood: false, physGood: false, cooldownRemaining: 0 };
-                          onUpdateState((d) => {
-                            const t = d.teams[d.me];
-                            if (t) res = setTeamFavoritePlayer(d, t, isFav ? null : q.n);
-                          });
-                          if (!res.changed && !isFav && res.cooldownRemaining > 0) {
-                            SFX.tap();
-                            onToast(`⏳ เพิ่งเปลี่ยนลูกรักไป รออีก ${res.cooldownRemaining} นัด`);
-                            return;
-                          }
-                          if (isFav) {
-                            SFX.tap();
-                            onToast(`💔 ยกเลิก ${q.n} จากตำแหน่งลูกรักแล้ว`);
-                          } else {
-                            if (res.boost > 0) SFX.win();
-                            else SFX.confirm();
-                            onToast(
-                              res.boost > 0
-                                ? `💖 ตั้ง ${q.n} เป็นลูกรัก! รับพลังชั่วคราว +${res.boost} OVR`
-                                : `💖 ตั้ง ${q.n} เป็นลูกรักแล้ว (ดูแลใจ/กาย ≥72 เพื่อปลุกพลัง)`
-                            );
-                          }
-                        }}
-                        className={`btn btn-xs shrink-0 disabled:opacity-50 ${
-                          isFav
-                            ? 'bg-rose-500/15 border border-rose-500/45 text-rose-700 dark:text-rose-300'
-                            : 'btn-gold'
+                        <span className="px-2 py-0.5 rounded-md bg-[var(--surface)]/75 border border-[var(--line)] text-[9.5px] mland:text-[8px] font-bold text-[var(--mut)] shrink-0 whitespace-nowrap">
+                          {isFav ? '💖 ลูกรักอัตโนมัติ' : 'ลูกรักเลือกอัตโนมัติ'}
+                        </span>
+                      </div>
+
+                      {/* Sleek Integrated Favorite Status Strip */}
+                      <div
+                        className={`px-2.5 py-1 mland:px-2 mland:py-0.5 border-t flex flex-wrap items-center justify-between gap-2 text-[10px] mland:text-[8.5px] ${
+                          isFav && favBoost > 0
+                            ? 'bg-rose-500/10 border-rose-500/25 text-rose-700 dark:text-rose-300 font-semibold'
+                            : isFav
+                              ? 'bg-[var(--lamp-soft)]/50 border-[var(--lamp)]/35 text-amber-800 dark:text-[var(--lamp)]'
+                              : 'bg-[var(--surface)]/55 border-[var(--line)]/70 text-[var(--mut)]'
                         }`}
                       >
-                        {isFav ? '💔 ปลดลูกรัก' : favCooldown > 0 ? `⏳ รอ ${favCooldown} นัด` : '💖 ตั้งเป็นลูกรัก'}
-                      </button>
-                    </div>
-
-                    {/* Favorite boost readiness hint if favorite */}
-                    {isFav && (
-                      <div className={`px-2.5 py-1.5 rounded-xl border text-[10.5px] mland:text-[8.5px] ${
-                        favBoost > 0
-                          ? 'bg-rose-500/10 border-rose-500/35 text-rose-700 dark:text-rose-300 font-semibold'
-                          : 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/45 text-amber-800 dark:text-[var(--lamp)]'
-                      }`}>
-                        {favBoost > 0
-                          ? `💖 ปลุกพลังลูกรักทำงาน! รับสุ่ม +${favBoost} OVR ชั่วคราวในสนามจริง (จิตใจ ${m}/100 · กาย ${p}/100)`
-                          : `💖 ลูกรักยังไม่ปลุกพลัง — ขาด: ${[
-                              !mGood ? `จิตใจ ≥ ${GOOD_MENTAL_THRESHOLD} (ตอนนี้ ${m})` : null,
-                              q.inj > 0 ? 'กำลังบาดเจ็บ' : !pGood ? `กาย ≥ ${GOOD_PHYS_THRESHOLD} (ตอนนี้ ${p})` : null
-                            ].filter(Boolean).join(' · ')}`}
+                        {isFav ? (
+                          <>
+                            <span className="font-bold">
+                              {favBoost > 0
+                                ? `✨ ปลุกพลังทำงาน (+${favBoost} OVR ในสนามจริง)`
+                                : '⏳ รอเงื่อนไขปลุกพลัง (+5~10 OVR)'}
+                            </span>
+                            <span className="inline-flex items-center gap-1.5 tabular font-bold">
+                              <span className={mGood ? 'text-[var(--g)]' : ''}>
+                                🧠 {m}/{GOOD_MENTAL_THRESHOLD}{mGood ? '✓' : ''}
+                              </span>
+                              <span className="opacity-35">·</span>
+                              <span className={!q.inj && pGood ? 'text-[var(--g)]' : ''}>
+                                {q.inj > 0 ? `🏥 เจ็บ ${q.inj} นัด` : `💪 ${p}/${GOOD_PHYS_THRESHOLD}${pGood ? '✓' : ''}`}
+                              </span>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="truncate">
+                              💖 ลูกรักทีม:{' '}
+                              <b className="text-[var(--ink)]">{me.favPlayer || 'เลือกอัตโนมัติจากฟอร์ม'}</b>
+                            </span>
+                            <span className="tabular shrink-0">
+                              เงื่อนไข: ใจ/กาย ≥{GOOD_MENTAL_THRESHOLD} รับ +5~10 OVR
+                            </span>
+                          </>
+                        )}
                       </div>
-                    )}
+                    </div>
 
                     {/* Mental & Physical Meters + Top Factors */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mland:gap-1.5">

@@ -11,10 +11,12 @@ import { OvrBadge } from '../components/OvrBadge';
 
 export const GodBlessingModal: React.FC<{
   state: GameState;
+  vipAuthorized: boolean;
   onClose: () => void;
+  onRequireAuth?: () => void;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onClose, onUpdateState, onToast }) => {
+}> = ({ state, vipAuthorized, onClose, onRequireAuth, onUpdateState, onToast }) => {
   const [selectedTeamId, setSelectedTeamId] = useState<number | 'mk' | 'yth'>(state.me);
   const [search, setSearch] = useState('');
   const [posFilter, setPosFilter] = useState<'ALL' | Position>('ALL');
@@ -41,6 +43,33 @@ export const GodBlessingModal: React.FC<{
   }, [roster, search, posFilter]);
 
   const activeItem = roster.find((x) => x.pl.n === editingName) || filteredRoster[0] || roster[0] || null;
+
+  if (!vipAuthorized) {
+    return (
+      <div className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm rounded-2xl bg-[var(--surface)] border border-[var(--line)] p-5 text-center space-y-3 shadow-2xl">
+          <div className="text-2xl">🔒</div>
+          <div className="font-bold text-sm">ต้องสแกนรหัส VIP ก่อนปรับแต่งค่า</div>
+          <p className="text-xs text-[var(--mut)]">กรุณายืนยันรหัสผ่านที่เครื่องสแกนเข้าออฟฟิศ VIP ก่อนใช้งานเครื่องมือนี้</p>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="btn btn-sm btn-secondary flex-1">ปิด</button>
+            {onRequireAuth && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onRequireAuth();
+                }}
+                className="btn btn-sm btn-gold flex-1"
+              >
+                เปิดเครื่องสแกน
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-2 sm:p-4 mland:p-1.5 overflow-hidden">
