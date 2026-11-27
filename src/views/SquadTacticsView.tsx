@@ -18,6 +18,7 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
+import { FormTrendBadge, buildRecentRatingsMap, getPlayerFormTrend, type PlayerFormTrend } from '../components/FormTrendBadge';
 import {
   getActiveFavBoost,
   getFavSwitchCooldownRemaining,
@@ -42,7 +43,7 @@ export const SquadTacticsView = React.memo<{
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
-  const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'fit' | 'age' | 'val' | 'goals'>('pos');
+  const [squadSort, setSquadSort] = useState<'pos' | 'ov' | 'form' | 'fit' | 'age' | 'val' | 'goals'>('pos');
   const [selectedSquadNames, setSelectedSquadNames] = useState<string[]>([]);
   const [renewTargetName, setRenewTargetName] = useState<string | null>(null);
   const [sellModalNames, setSellModalNames] = useState<string[] | null>(null);
@@ -83,6 +84,14 @@ export const SquadTacticsView = React.memo<{
         .sort((a, b) => POS.indexOf(a.pos) - POS.indexOf(b.pos) || b.ov - a.ov),
     [me.sq, starters]
   );
+  const recentRatingsMap = useMemo(() => buildRecentRatingsMap(state), [state.schedRes]);
+  const formTrendByName = useMemo(() => {
+    const map = new Map<string, PlayerFormTrend>();
+    me.sq.forEach((q) => {
+      map.set(q.n, getPlayerFormTrend(q, me, state, recentRatingsMap));
+    });
+    return map;
+  }, [me, state, recentRatingsMap]);
   const incomingOffers = useMemo(() => (isMgr ? getIncomingOffers(state) : []), [isMgr, state]);
   const incomingOfferCountsByName = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -838,6 +847,7 @@ export const SquadTacticsView = React.memo<{
     const pn = slotSp ? playerPen(q, slotSp) : 0;
     const no = getShirtNo(me, q);
     const unavailable = q.inj > 0 || (q.sus || 0) > 0;
+    const formTrend = formTrendByName.get(q.n) || getPlayerFormTrend(q, me, state, recentRatingsMap);
     const rowStaminaTint =
       slotSp && !unavailable
         ? f < 65
@@ -864,7 +874,7 @@ export const SquadTacticsView = React.memo<{
             onInspectPlayer(q, me);
           }
         }}
-        className={`w-full grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_74px_30px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_64px_26px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
+        className={`w-full grid grid-cols-[16px_22px_34px_26px_minmax(0,1fr)_72px_48px] mland:grid-cols-[14px_19px_30px_24px_minmax(0,1fr)_62px_42px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
           isTarget
             ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
             : isSource
@@ -937,7 +947,8 @@ export const SquadTacticsView = React.memo<{
           <PlayerStatusBadge sus={q.sus} inj={q.inj} fit={f} variant="cell" />
         </div>
 
-        <div className="flex items-center justify-start">
+        <div className="flex items-center justify-end gap-0.5">
+          <FormTrendBadge trend={formTrend} size="xs" />
           <OvrBadge ov={q.ov} size="2xs" />
         </div>
       </div>
@@ -1822,6 +1833,7 @@ export const SquadTacticsView = React.memo<{
               .slice()
               .sort((a, b) => {
                 if (squadSort === 'ov') return b.ov - a.ov || (b.pot || b.ov) - (a.pot || a.ov);
+                if (squadSort === 'form') return (formTrendByName.get(b.n)?.score ?? 0) - (formTrendByName.get(a.n)?.score ?? 0) || b.ov - a.ov;
                 if (squadSort === 'fit') return (b.fit ?? 100) - (a.fit ?? 100) || b.ov - a.ov;
                 if (squadSort === 'age') return a.age - b.age || b.ov - a.ov;
                 if (squadSort === 'val') return vlu(b) - vlu(a) || b.ov - a.ov;
@@ -1896,10 +1908,11 @@ export const SquadTacticsView = React.memo<{
                       {([
                         ['pos', 'ตำแหน่ง'],
                         ['ov', 'OVR'],
+                        ['form', 'ฟอร์ม'],
                         ['fit', 'ความฟิต'],
                         ['age', 'อายุ'],
                         ['val', 'มูลค่า'],
-                        ['goals', 'ฟอร์ม/ประตู']
+                        ['goals', 'ประตู']
                       ] as const).map(([sKey, sLbl]) => (
                         <button
                           key={sKey}
@@ -2056,8 +2069,8 @@ export const SquadTacticsView = React.memo<{
                   <div
                     className={
                       isMgr
-                        ? 'grid grid-cols-[24px_minmax(0,1.55fr)_36px_64px_124px] sm:grid-cols-[26px_minmax(0,1.7fr)_32px_46px_74px_78px_154px] lg:grid-cols-[28px_minmax(0,1.75fr)_36px_50px_76px_62px_86px_168px] mland:grid-cols-[24px_minmax(0,1.6fr)_28px_42px_66px_70px_136px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
-                        : 'grid grid-cols-[minmax(0,1.8fr)_36px_54px_76px_72px_94px] mland:grid-cols-[minmax(0,1.8fr)_30px_48px_66px_60px_80px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        ? 'grid grid-cols-[24px_minmax(0,1.45fr)_54px_62px_118px] sm:grid-cols-[26px_minmax(0,1.6fr)_32px_64px_74px_74px_148px] lg:grid-cols-[28px_minmax(0,1.65fr)_34px_68px_74px_72px_82px_162px] mland:grid-cols-[24px_minmax(0,1.5fr)_28px_56px_64px_66px_132px] items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
+                        : 'grid grid-cols-[minmax(0,1.7fr)_34px_66px_74px_72px_90px] mland:grid-cols-[minmax(0,1.7fr)_28px_56px_64px_60px_78px] items-center gap-1.5 mland:gap-1 px-2.5 mland:px-2 py-1.5 mland:py-1 text-[10.5px] mland:text-[9px] font-bold text-[var(--mut)] bg-[var(--surface-2)]/70 border-b border-[var(--line)]'
                     }
                   >
                     {isMgr && (
@@ -2074,7 +2087,7 @@ export const SquadTacticsView = React.memo<{
                     )}
                     <div>นักเตะ</div>
                     <div className={`text-center ${isMgr ? 'hidden sm:block mland:block' : ''}`}>อายุ</div>
-                    <div className="text-center">OVR</div>
+                    <div className="text-center">ฟอร์ม/OVR</div>
                     <div className="text-center">สถานะ/ฟิต</div>
                     <div className={`text-center ${isMgr ? 'hidden lg:block mland:hidden' : ''}`}>ผลงาน</div>
                     <div className={`text-right ${isMgr ? 'hidden sm:block mland:block' : ''}`}>ค่าเหนื่อย / ค่าตัว</div>
@@ -2103,14 +2116,15 @@ export const SquadTacticsView = React.memo<{
                       const pScore = getPlayerPhysScore(q, favCp);
                       const mMeta = getWellbeingTierMeta(mScore, 'mental', false);
                       const pMeta = getWellbeingTierMeta(pScore, 'phys', q.inj > 0);
+                      const formTrend = formTrendByName.get(q.n) || getPlayerFormTrend(q, me, state, recentRatingsMap);
 
                       return (
                         <div
                           key={q.n}
                           className={`px-2 sm:px-2.5 mland:px-2 py-1.5 mland:py-1 items-center gap-1 sm:gap-1.5 mland:gap-1 transition-colors ${
                             isMgr
-                              ? 'grid grid-cols-[24px_minmax(0,1.55fr)_36px_64px_124px] sm:grid-cols-[26px_minmax(0,1.7fr)_32px_46px_74px_78px_154px] lg:grid-cols-[28px_minmax(0,1.75fr)_36px_50px_76px_62px_86px_168px] mland:grid-cols-[24px_minmax(0,1.6fr)_28px_42px_66px_70px_136px]'
-                              : 'grid grid-cols-[minmax(0,1.8fr)_36px_54px_76px_72px_94px] mland:grid-cols-[minmax(0,1.8fr)_30px_48px_66px_60px_80px]'
+                              ? 'grid grid-cols-[24px_minmax(0,1.45fr)_54px_62px_118px] sm:grid-cols-[26px_minmax(0,1.6fr)_32px_64px_74px_74px_148px] lg:grid-cols-[28px_minmax(0,1.65fr)_34px_68px_74px_72px_82px_162px] mland:grid-cols-[24px_minmax(0,1.5fr)_28px_56px_64px_66px_132px]'
+                              : 'grid grid-cols-[minmax(0,1.7fr)_34px_66px_74px_72px_90px] mland:grid-cols-[minmax(0,1.7fr)_28px_56px_64px_60px_78px]'
                           } ${
                             isSelected
                               ? 'bg-[var(--g-soft)]/55'
@@ -2226,13 +2240,14 @@ export const SquadTacticsView = React.memo<{
                           </div>
 
                           <div className="flex items-center justify-center gap-0.5">
+                            <FormTrendBadge trend={formTrend} size="xs" />
                             <OvrBadge ov={q.ov} size="sm" />
                             {favBoost > 0 ? (
                               <span className="text-[9.5px] mland:text-[8px] font-black text-rose-600 dark:text-rose-400 tabular">
                                 +{favBoost}
                               </span>
                             ) : (
-                              <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
+                              <span className="text-[9px] mland:text-[8px] text-[var(--mut)] tabular hidden sm:inline mland:inline">/{q.pot || q.ov}</span>
                             )}
                           </div>
 
@@ -2241,9 +2256,18 @@ export const SquadTacticsView = React.memo<{
                           </div>
 
                           <div className={`text-center text-[10.5px] mland:text-[9px] tabular text-[var(--mut)] items-center justify-center gap-1 ${isMgr ? 'hidden lg:flex mland:hidden' : 'flex'}`}>
-                            {q.sg || q.sa || q.cs || q.sp || q.ap ? (
-                              <span className="inline-flex items-center gap-1.5">
-                                {q.sp || q.ap ? <span className="font-semibold text-[var(--ink)]">{q.sp || q.ap}น</span> : null}
+                            {q.sg || q.sa || q.cs || q.sp || q.ap || formTrend.avgRt != null ? (
+                              <span className="inline-flex items-center gap-1">
+                                {formTrend.avgRt != null ? (
+                                  <span
+                                    className={`font-extrabold ${formTrend.avgRt >= 7.1 ? 'text-[var(--g)]' : formTrend.avgRt < 6.3 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}`}
+                                    title={`เรตติ้งเฉลี่ย ${formTrend.avgRt.toFixed(2)}`}
+                                  >
+                                    {formTrend.avgRt.toFixed(1)}
+                                  </span>
+                                ) : q.sp || q.ap ? (
+                                  <span className="font-semibold text-[var(--ink)]">{q.sp || q.ap}น</span>
+                                ) : null}
                                 {q.sg ? (
                                   <span className="inline-flex items-center gap-0.5 font-bold text-[var(--ink)]" title={`ยิง ${q.sg} ประตู`}>
                                     <span>{q.sg}</span>

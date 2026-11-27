@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coins, Trophy, X } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Coins, Trophy, X } from 'lucide-react';
 import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { fmtMoney, fmtMoneyNum, clamp } from '../utils/math';
+import { fmtMoney, fmtMoneyNum } from '../utils/math';
 import { xi, vlu, ensureCon, logFin } from '../engine/playerCore';
 import {
   sortTable,
@@ -14,12 +14,7 @@ import {
   getBoardDirectiveProgress,
   EXTRA_CUP_META,
   getLeaguePrizeMoney,
-  MAIN_SPONSOR_PACKAGES,
-  evaluateMainSponsorEligibility,
-  calcMainSponsorPayout,
-  PARTNER_DEAL_CATALOG,
   getActivePartnerDeals,
-  getMaxPartnerSlots,
   getLeagueTransferContext,
   getFacilityCondition,
   getFacilityRenovateCost,
@@ -27,7 +22,12 @@ import {
   getActiveClubDemands,
   checkClubDemandsCompletion
 } from '../engine/simulation';
-import { resolveStateSponsorBrand } from '../data/sponsorBrands';
+import {
+  getActiveFavBoost,
+  getPlayerMentalScore,
+  getPlayerPhysScore,
+  getTeamCareQuotaInfo
+} from '../engine/wellbeing';
 import type { FacilityKey } from '../types/game';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
@@ -246,6 +246,7 @@ export const LeagueView = React.memo<{
 
     if (isMgr) {
       const starters = xi(me);
+      const unreadyXi = starters.filter((q) => (q.inj || 0) > 0 || (q.sus || 0) > 0);
       const avgXiFit = Math.round(starters.reduce((sum, q) => sum + (q.fit ?? 100), 0) / Math.max(1, starters.length));
       const tiredStarters = starters.filter((q) => (q.fit ?? 100) < 74);
       const lowFitAll = me.sq.filter((q) => !q.inj && (q.fit ?? 100) < 62);
@@ -257,10 +258,10 @@ export const LeagueView = React.memo<{
       const curPlan = getTeamTrainingPlan(state);
       const tx = getLeagueTransferContext(state, me);
       const activeDeals = getActivePartnerDeals(state);
-      const maxPartnerSlots = getMaxPartnerSlots(state);
-      const tierMult = 1 + me.tier * 0.45;
-      const readyDeals = PARTNER_DEAL_CATALOG.filter(
-        (cat) => !activeDeals.some((d) => d.id === cat.id) && cat.checkReq(state, me).ok
+      const careQuota = getTeamCareQuotaInfo(state, me);
+      const favPl = me.favPlayer ? me.sq.find((q) => q.n === me.favPlayer) || null : null;
+      const avgMental = Math.round(
+        me.sq.reduce((sum, q) => sum + getPlayerMentalScore(q, q.me ? state.p : null), 0) / Math.max(1, me.sq.length)
       );
 
       if (state.dilemma) {
@@ -270,28 +271,46 @@ export const LeagueView = React.memo<{
           tone: 'urg',
           urgent: true,
           icon: '📌',
-          tag: 'เหตุการณ์ด่วน',
+          tag: 'รอตัดสินใจ',
           title: state.dilemma.title,
-          detail: `${state.dilemma.category} · รอการตัดสินใจ`,
+          detail: state.dilemma.category,
         });
       }
 
-      if (state.money < 0 || (state.bd ?? 55) < 35) {
+      if (state.money < 0 || (state.bd ?? 55) < 40) {
         items.push({
           id: 'club-alert-fin-bd',
           kind: 'alert',
           tone: 'urg',
           urgent: true,
           icon: '⚠️',
-          tag: 'แจ้งเตือนด่วน',
-          title: state.money < 0 ? `งบติดลบ (${fmtMoney(state.money)})` : `ความเชื่อมั่นบอร์ดต่ำ (${state.bd ?? 55}%)`,
-          detail: state.money < 0 ? 'ตลาดถูกระงับชั่วคราว ควรปรับสมดุลงบ' : 'เร่งทำผลงานเพื่อเรียกศรัทธาบอร์ด',
+          tag: state.money < 0 ? 'การเงิน' : 'บอร์ดบริหาร',
+          title: state.money < 0 ? `งบติดลบ ${fmtMoney(state.money)}` : `บอร์ดกังวล (${Math.round(state.bd ?? 55)}%)`,
+          detail: state.money < 0 ? 'ตลาดถูกระงับชั่วคราว' : 'เร่งเก็บแต้มเรียกความเชื่อมั่น',
           actionLabel: state.money < 0 ? 'ดูการเงิน' : 'ดูบอร์ด',
           onAction: () => onNavigate?.(state.money < 0 ? 'f' : 'u')
         });
       }
 
-      // Player & Fan Upgrade / Improvement Demands (คำเรียกร้องจากนักเตะ & แฟนบอล)
+      if (unreadyXi.length > 0) {
+        items.push({
+          id: 'xi-unready',
+          kind: 'alert',
+          tone: 'urg',
+          urgent: true,
+          icon: '⚠️',
+          tag: 'จัดทัพ 11 ตัวจริง',
+          title: `ตัวจริงไม่พร้อม ${unreadyXi.length} คน`,
+          detail: unreadyXi
+            .slice(0, 2)
+            .map((q) => `${q.n.split(' ')[0]} (${q.inj > 0 ? 'เจ็บ' : 'แบน'})`)
+            .join(', '),
+          actionLabel: 'จัดทัพ',
+          onAction: () => onNavigate?.('q')
+        });
+      }
+
+      // Player & Fan Demands (คำเรียกร้องจากนักเตะ & แฟนบอล)
       const facBaseCostMap: Record<FacilityKey, number> = {
         st: 100,
         tr: 90,
@@ -305,9 +324,9 @@ export const LeagueView = React.memo<{
       const activeDemands = getActiveClubDemands(state);
       activeDemands.forEach((req) => {
         const remMd = Math.max(0, req.dueMd - (state.md ?? 0));
-        const srcBadge = req.source === 'player' ? '🗣️ นักเตะเรียกร้อง' : '📣 แฟนบอลเรียกร้อง';
-        let actionLabel = 'ดำเนินการ';
-        let detailText = `${req.detail} · รางวัล: ${req.rewardText}`;
+        const srcBadge = req.source === 'player' ? 'นักเตะขอ' : 'แฟนบอลขอ';
+        let actionLabel = 'จัดการ';
+        let detailText = `รางวัล: ${req.rewardText}`;
         let onAction = () => onNavigate?.('u', 'infra');
 
         if (req.kind === 'renovate_fac') {
@@ -330,7 +349,7 @@ export const LeagueView = React.memo<{
                 logFin(d, `ซ่อมบำรุงตามคำเรียกร้อง (${curCond}% → 100%)`, -costNow);
                 done = checkClubDemandsCompletion(d);
               });
-              onToast?.(done.length ? `✅ ซ่อมบำรุงและตอบรับคำเรียกร้องสำเร็จ!` : '🔧 ปรับปรุงสภาพเรียบร้อยแล้ว');
+              onToast?.(done.length ? `✅ ซ่อมบำรุงสำเร็จ!` : '🔧 ปรับปรุงสภาพเรียบร้อยแล้ว');
             };
           } else {
             actionLabel = 'ไปซ่อม';
@@ -340,14 +359,14 @@ export const LeagueView = React.memo<{
           const fk = req.targetKey as FacilityKey;
           const lv = state[fk] ?? 1;
           const upgCost = getFacilityUpgradeCost(facBaseCostMap[fk] ?? 80, lv);
-          detailText = `${req.detail} · งบอัป ~${fmtMoneyNum(upgCost)} · ${req.rewardText}`;
-          actionLabel = 'ไปอัปเกรด';
+          detailText = `งบ ~${fmtMoneyNum(upgCost)} · ${req.rewardText}`;
+          actionLabel = 'อัปเกรด';
           onAction = () => onNavigate?.('u', 'infra');
         } else if (req.kind === 'hire_staff') {
           actionLabel = 'จ้างทีมงาน';
           onAction = () => onNavigate?.('u', 'infra');
         } else if (req.kind === 'ticket_price') {
-          actionLabel = 'ปรับตั๋วมาตรฐาน';
+          actionLabel = 'ปรับตั๋ว';
           onAction = () => {
             let done: string[] = [];
             onUpdateState((d) => {
@@ -355,13 +374,13 @@ export const LeagueView = React.memo<{
               d.tp = 1;
               done = checkClubDemandsCompletion(d);
             });
-            onToast?.(done.length ? '✅ ปรับราคาตั๋วเป็นมาตรฐานตามคำขอแฟนบอลแล้ว!' : 'ปรับราคาตั๋วเรียบร้อย');
+            onToast?.(done.length ? '✅ ปรับราคาตั๋วมาตรฐานแล้ว!' : 'ปรับราคาตั๋วเรียบร้อย');
           };
         } else if (req.kind === 'live_stream') {
-          actionLabel = 'เลือกแพ็กเกจ';
+          actionLabel = 'เปิดสตรีม';
           onAction = () => onNavigate?.('f', 'commercial');
         } else if (req.kind === 'megastore_stock') {
-          actionLabel = 'เติมทุนร้าน';
+          actionLabel = 'เติมร้าน';
           onAction = () => onNavigate?.('f', 'megastore');
         }
 
@@ -371,7 +390,7 @@ export const LeagueView = React.memo<{
           tone: remMd <= 1 ? 'urg' : 'warn',
           urgent: true,
           icon: req.source === 'player' ? '🗣️' : '📣',
-          tag: `${srcBadge} · ${req.requester} · อีก ${remMd} นัด`,
+          tag: `${srcBadge} · อีก ${remMd} นัด`,
           title: req.title,
           detail: detailText,
           actionLabel,
@@ -392,7 +411,7 @@ export const LeagueView = React.memo<{
           tag: `คำสั่งบอร์ด · อีก ${remMd} นัด`,
           title: dir.title,
           detail: `${prog.progressText} (${Math.round(prog.ratio * 100)}%)`,
-          actionLabel: 'ดูรายละเอียด',
+          actionLabel: 'ดูเป้า',
           onAction: () => onNavigate?.('u', 'info')
         });
       } else {
@@ -405,9 +424,9 @@ export const LeagueView = React.memo<{
             tone: topFx.tone === 'bonus' ? 'ok' : 'urg',
             urgent: false,
             icon: topFx.tone === 'bonus' ? '✨' : '📢',
-            tag: 'ผลกระทบบอร์ด',
+            tag: 'ผลบอร์ด',
             title: topFx.label,
-            detail: `มีผลอีก ${Math.max(1, topFx.expiresMd - (state.md ?? 0))} นัด`,
+            detail: `อีก ${Math.max(1, topFx.expiresMd - (state.md ?? 0))} นัด`,
             actionLabel: 'ดูบอร์ด',
             onAction: () => onNavigate?.('u', 'info')
           });
@@ -424,8 +443,8 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: isLoan ? '🤝' : '💼',
           tag: 'ข้อเสนอซื้อ-ยืม',
-          title: `${incomingOffers.length} ข้อเสนอรอพิจารณา`,
-          detail: `${topOff.t} ${isLoan ? 'ยื่นขอยืม' : 'ยื่นซื้อ'} ${topOff.n} (${isLoan ? `ค่ายืม ${fmtMoney(topOff.p)}` : fmtMoney(topOff.p)})`,
+          title: `${incomingOffers.length} ข้อเสนอรอตอบ`,
+          detail: `${topOff.t} ${isLoan ? 'ยืม' : 'ซื้อ'} ${topOff.n} (${fmtMoney(topOff.p)})`,
           actionLabel: 'เปิดดู',
           onAction: () => onNavigate?.('k', 'sell')
         });
@@ -439,9 +458,9 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: '🔍',
           tag: 'แมวมอง',
-          title: `รายงาน "${state.scout.label}" พร้อมแล้ว`,
-          detail: `พบนักเตะเป้าหมาย ${state.scout.results.length} ราย`,
-          actionLabel: 'ดูรายงาน',
+          title: `พบนักเตะ ${state.scout.results.length} ราย`,
+          detail: state.scout.label,
+          actionLabel: 'ดูรายชื่อ',
           onAction: () => onNavigate?.('k', 'scout')
         });
       }
@@ -455,180 +474,11 @@ export const LeagueView = React.memo<{
           tone: expiredCon.length > 0 ? 'urg' : 'warn',
           urgent: true,
           icon: '📄',
-          tag: 'สัญญาการเงิน · นักเตะ',
+          tag: 'สัญญานักเตะ',
           title: expiredCon.length > 0 ? `หมดสัญญา ${expiredCon.length} คน` : `สัญญาเหลือ 1 ปี (${expiringSoon.length} คน)`,
           detail: `${namesPreview}${totalNeed > 2 ? ` +${totalNeed - 2}` : ''}`,
           actionLabel: 'ต่อสัญญา',
           onAction: () => onNavigate?.('k', 'con')
-        });
-      }
-
-      // Financial & Commercial Contract To-Dos (สิ่งที่ต้องทำด้านสัญญาการเงิน)
-      const curSpIdx = clamp(state.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
-      const curSpBase = calcMainSponsorPayout({ sp: curSpIdx, promo: 0 }, me).base;
-      const betterMainPkgs = MAIN_SPONSOR_PACKAGES.filter(
-        (pkg) => pkg.idx !== curSpIdx && evaluateMainSponsorEligibility(pkg.idx, state, me).ok
-      )
-        .map((pkg) => ({
-          pkg,
-          base: calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me).base
-        }))
-        .sort((a, b) => b.base - a.base);
-      const topMainUpgrade = betterMainPkgs[0];
-      if (topMainUpgrade && topMainUpgrade.base >= curSpBase + 2) {
-        const upgBrand = resolveStateSponsorBrand(state, topMainUpgrade.pkg.idx);
-        items.push({
-          id: 'fin-main-sponsor-upgrade',
-          kind: 'alert',
-          tone: 'ok',
-          urgent: true,
-          icon: '👕',
-          tag: 'สัญญาการเงิน · คาดอกเสื้อ',
-          title: `ปลดล็อกดีล ${upgBrand.thName} (+${fmtMoneyNum(topMainUpgrade.base)}/นัด)`,
-          detail: `จ่ายฐานสูงกว่าแพ็กเกจปัจจุบัน (+${fmtMoneyNum(topMainUpgrade.base - curSpBase)}/นัด) และได้โลโก้ใหม่บนเสื้อ`,
-          actionLabel: 'เปลี่ยนดีล',
-          onAction: () => onNavigate?.('f', 'commercial')
-        });
-      }
-
-      if (activeDeals.length === 0) {
-        items.push({
-          id: 'sponsor-unselected',
-          kind: 'alert',
-          tone: 'warn',
-          urgent: true,
-          icon: '🤝',
-          tag: `สัญญาการเงิน · ว่าง ${maxPartnerSlots} ช่อง`,
-          title: 'ยังไม่ได้เซ็นดีลพาร์ทเนอร์ธุรกิจ',
-          detail: readyDeals.length
-            ? `พร้อมเซ็นทันที เช่น ${readyDeals[0].name} (+${fmtMoneyNum(Math.round(readyDeals[0].basePerMatch * tierMult))}/นัด)`
-            : 'เลือกเซ็นสัญญาเพื่อรับรายได้เสริมทุกนัด',
-          actionLabel: 'เลือกดีล',
-          onAction: () => onNavigate?.('f', 'commercial')
-        });
-      } else {
-        const expiringDeal = activeDeals.find((d) => d.left <= 2);
-        if (expiringDeal) {
-          items.push({
-            id: `sponsor-expiring-${expiringDeal.id}`,
-            kind: 'alert',
-            tone: 'warn',
-            urgent: true,
-            icon: '🤝',
-            tag: 'สัญญาการเงิน · พาร์ทเนอร์',
-            title: `ดีล ${expiringDeal.name} เหลือ ${expiringDeal.left} นัด`,
-            detail: 'เตรียมเซ็นสัญญาพาร์ทเนอร์ทดแทนเมื่อครบกำหนด',
-            actionLabel: 'ดูดีล',
-            onAction: () => onNavigate?.('f', 'commercial')
-          });
-        }
-        if (activeDeals.length < maxPartnerSlots && readyDeals.length > 0) {
-          items.push({
-            id: 'partner-slot-open',
-            kind: 'alert',
-            tone: 'ok',
-            urgent: true,
-            icon: '📑',
-            tag: `สัญญาการเงิน · ว่าง ${maxPartnerSlots - activeDeals.length}/${maxPartnerSlots} ช่อง`,
-            title: `เซ็นพาร์ทเนอร์เพิ่มได้ทันที (${readyDeals[0].name})`,
-            detail: `รับเงินเซ็น +${fmtMoneyNum(Math.round(readyDeals[0].baseSignBonus * tierMult))} และ +${fmtMoneyNum(Math.round(readyDeals[0].basePerMatch * tierMult))}/นัด`,
-            actionLabel: 'เซ็นเพิ่ม',
-            onAction: () => onNavigate?.('f', 'commercial')
-          });
-        }
-      }
-
-      if ((state.liveStream || 'off') === 'off') {
-        items.push({
-          id: 'fin-livestream-off',
-          kind: 'alert',
-          tone: 'info',
-          urgent: true,
-          icon: '📺',
-          tag: 'สัญญาการเงิน · ถ่ายทอดสด',
-          title: 'ยังไม่ได้เปิดสัญญาถ่ายทอดสดสโมสร',
-          detail: 'เปิดสตรีมสร้างรายได้เพิ่มเติมตามจำนวนผู้ชมทุกแมตช์',
-          actionLabel: 'เปิดสัญญา',
-          onAction: () => onNavigate?.('f', 'commercial')
-        });
-      }
-
-      const merchLv = state.merchLv ?? 1;
-      const merchCap = state.megastore?.capital ?? 0;
-      if (merchLv > 0 && merchCap < 8) {
-        items.push({
-          id: 'fin-megastore-lowcap',
-          kind: 'alert',
-          tone: 'warn',
-          urgent: true,
-          icon: '🛍️',
-          tag: 'สัญญาการเงิน · เมกะสโตร์',
-          title: `ทุนสต็อกเมกะสโตร์ใกล้หมด (${fmtMoney(merchCap)})`,
-          detail: 'เติมเงินทุนหมุนเวียนเพื่อผลิตเสื้อขายก่อนเกมเหย้า',
-          actionLabel: 'เติมทุนร้าน',
-          onAction: () => onNavigate?.('f', 'megastore')
-        });
-      }
-
-      const bankRemain = state.bankLoan ? state.bankLoan.left * state.bankLoan.per : 0;
-      const payDue = state.payDue || 0;
-      if (payDue > 0 || (state.bankLoan && state.money < state.bankLoan.per * 2)) {
-        items.push({
-          id: 'fin-debt-watch',
-          kind: 'alert',
-          tone: payDue > 0 ? 'warn' : 'urg',
-          urgent: true,
-          icon: '🏦',
-          tag: 'สัญญาการเงิน · ภาระหนี้',
-          title: `มีภาระหนี้คงค้างรวม ${fmtMoney(bankRemain + payDue)}`,
-          detail: `${payDue > 0 ? `ผ่อนปลายปี ${fmtMoneyNum(payDue)}` : 'ค่างวดธนาคารใกล้ครบ'} · ตรวจสอบสภาพคล่อง`,
-          actionLabel: 'ดูบัญชีหนี้',
-          onAction: () => onNavigate?.('f', 'ledger')
-        });
-      } else if (state.money < 25 && !state.bankLoan) {
-        items.push({
-          id: 'fin-low-cash',
-          kind: 'alert',
-          tone: 'warn',
-          urgent: true,
-          icon: '💳',
-          tag: 'สัญญาการเงิน · สภาพคล่อง',
-          title: `งบหมุนเวียนเหลือน้อย (${fmtMoney(state.money)})`,
-          detail: 'กู้สินเชื่อสโมสรหรือจัดโปรดีลเชิงพาณิชย์เพิ่มเติมได้',
-          actionLabel: 'ดูสินเชื่อ',
-          onAction: () => onNavigate?.('f', 'ledger')
-        });
-      }
-
-      if (tx.wagePct >= 95) {
-        items.push({
-          id: 'fin-ffp-wage',
-          kind: 'alert',
-          tone: 'urg',
-          urgent: true,
-          icon: '📊',
-          tag: 'สัญญาการเงิน · เพดาน FFP',
-          title: `ค่าเหนื่อยใกล้เต็มเพดาน (${tx.wagePct}%)`,
-          detail: `${fmtMoneyNum(tx.curWage)} / ${fmtMoneyNum(tx.wageCap)} · ระวังติดล็อกซื้อตัว`,
-          actionLabel: 'ดูงบทีม',
-          onAction: () => onNavigate?.('f', 'overview')
-        });
-      }
-
-      const curTurn = state.season * 40 + state.md;
-      const actCool = state.clubActMd != null && curTurn - state.clubActMd < 3;
-      if (!actCool) {
-        items.push({
-          id: 'club-activity-ready',
-          kind: 'alert',
-          tone: 'ok',
-          urgent: true,
-          icon: '🎉',
-          tag: 'กิจกรรมสโมสร',
-          title: 'พร้อมจัดกิจกรรมกระตุ้นทีม',
-          detail: 'เพิ่มขวัญแฟนบอลและกำลังใจในห้องแต่งตัว',
-          actionLabel: 'จัดเลย',
-          onAction: () => onNavigate?.('u', 'activities')
         });
       }
 
@@ -641,13 +491,13 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: '😴',
           tag: 'ความฟิตทีม',
-          title: `นักเตะเริ่มล้า (ฟิตตัวจริง ${avgXiFit}%)`,
-          detail: `ตัวจริงล้า ${tiredStarters.length} คน · แนะนำพักฟื้น`,
-          actionLabel: 'สลับพักฟื้น',
+          title: `ตัวจริงล้า (ฟิต ${avgXiFit}%)`,
+          detail: `ล้า ${tiredStarters.length} คน · แนะนำพักฟื้น`,
+          actionLabel: 'พักฟื้น',
           onAction: () => {
             SFX.tap();
             onUpdateState((d) => { syncTrainingFocusToPlan(d, 'F'); });
-            onToast?.('สลับโปรแกรมซ้อมเป็น "😴 พักผ่อน & ฟื้นฟู" แล้ว');
+            onToast?.('สลับซ้อมเป็น "😴 พักผ่อน & ฟื้นฟู" แล้ว');
           }
         });
       }
@@ -660,14 +510,93 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: <StatIconBadge kind="injury" size="xs" />,
           tag: 'ห้องพยาบาล',
-          title: `นักเตะบาดเจ็บ ${injuredList.length} คน`,
-          detail: injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj}นัด)`).join(', '),
-          actionLabel: 'ฟื้นฟูทีม',
+          title: `บาดเจ็บ ${injuredList.length} คน`,
+          detail: injuredList.slice(0, 2).map((q) => `${q.n.split(' ')[0]} (${q.inj} นัด)`).join(', '),
+          actionLabel: 'ฟื้นฟู',
           onAction: () => onNavigate?.('r')
+        });
+      }
+
+      if (favPl && getActiveFavBoost(favPl, me, favPl.me ? state.p : null) === 0 && careQuota.remaining > 0) {
+        const fm = getPlayerMentalScore(favPl, favPl.me ? state.p : null);
+        const fp = getPlayerPhysScore(favPl, favPl.me ? state.p : null);
+        items.push({
+          id: 'fav-needs-care',
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '💖',
+          tag: 'ลูกรัก & จิตใจ',
+          title: `ลูกรักรอปลุกพลัง (${favPl.n.split(' ')[0]})`,
+          detail: `ใจ ${fm} · กาย ${fp} (ต้อง ≥72)`,
+          actionLabel: 'ดูแลทีม',
+          onAction: () => onNavigate?.('r')
+        });
+      } else if (avgMental < 60 && careQuota.remaining > 0) {
+        items.push({
+          id: 'team-morale-low',
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '💬',
+          tag: 'ทีมทอล์ก',
+          title: `ขวัญทีมต่ำ (${avgMental}/100)`,
+          detail: `เหลือโควตาดูแล ${careQuota.remaining}/${careQuota.limit} ครั้ง`,
+          actionLabel: 'พูดคุย',
+          onAction: () => onNavigate?.('r')
+        });
+      }
+
+      const expiringDeal = activeDeals.find((d) => d.left <= 2);
+      if (expiringDeal) {
+        items.push({
+          id: `sponsor-expiring-${expiringDeal.id}`,
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '🤝',
+          tag: 'พาร์ทเนอร์',
+          title: `ดีล ${expiringDeal.name} เหลือ ${expiringDeal.left} นัด`,
+          detail: 'ใกล้ครบสัญญา เตรียมเลือกดีลใหม่',
+          actionLabel: 'ดูดีล',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      }
+
+      const bankRemain = state.bankLoan ? state.bankLoan.left * state.bankLoan.per : 0;
+      const payDue = state.payDue || 0;
+      if (payDue > 0 || (state.bankLoan && state.money < state.bankLoan.per * 2)) {
+        items.push({
+          id: 'fin-debt-watch',
+          kind: 'alert',
+          tone: payDue > 0 ? 'warn' : 'urg',
+          urgent: true,
+          icon: '🏦',
+          tag: 'ภาระหนี้',
+          title: `หนี้คงค้าง ${fmtMoney(bankRemain + payDue)}`,
+          detail: payDue > 0 ? `ผ่อนปลายปี ${fmtMoneyNum(payDue)}` : 'ค่างวดใกล้ถึงกำหนด',
+          actionLabel: 'ดูหนี้',
+          onAction: () => onNavigate?.('f', 'ledger')
+        });
+      }
+
+      if (tx.wagePct >= 95) {
+        items.push({
+          id: 'fin-ffp-wage',
+          kind: 'alert',
+          tone: 'urg',
+          urgent: true,
+          icon: '📊',
+          tag: 'เพดานค่าเหนื่อย',
+          title: `ค่าเหนื่อยใกล้เต็ม (${tx.wagePct}%)`,
+          detail: `${fmtMoneyNum(tx.curWage)} / ${fmtMoneyNum(tx.wageCap)}`,
+          actionLabel: 'ดูงบ',
+          onAction: () => onNavigate?.('f', 'overview')
         });
       }
     } else if (state.p) {
       const p = state.p;
+      const mePl = me.sq.find((q) => q.me || q.n === p.name) || null;
       if ((p.en ?? 100) < 70 && (p.plan ?? 1) !== 3) {
         items.push({
           id: 'player-rest-warn',
@@ -676,8 +605,8 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: '😴',
           tag: 'ความฟิต',
-          title: `ความฟิตเหลือ ${p.en}% — แนะนำพักผ่อน`,
-          detail: 'ต่ำกว่า 58% โค้ชอาจดรอปเป็นสำรอง',
+          title: `ความฟิตเหลือ ${p.en}%`,
+          detail: 'ต่ำกว่า 58% เสี่ยงหลุดตัวจริง',
           actionLabel: 'ตั้งพักผ่อน',
           onAction: () => {
             SFX.tap();
@@ -694,9 +623,9 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: <StatIconBadge kind="injury" size="xs" />,
           tag: 'อาการเจ็บ',
-          title: `บาดเจ็บพักอีก ${p.inj} นัด`,
-          detail: 'ทำกายภาพส่วนตัวได้ที่หน้าอาชีพนักเตะ',
-          actionLabel: 'ไปฟื้นฟู',
+          title: `บาดเจ็บพัก ${p.inj} นัด`,
+          detail: 'ฟื้นฟูร่างกายได้ที่หน้าอาชีพ',
+          actionLabel: 'ฟื้นฟู',
           onAction: () => onNavigate?.('p')
         });
       }
@@ -708,8 +637,35 @@ export const LeagueView = React.memo<{
           urgent: true,
           icon: (p.sus || 0) > 0 ? '🟥' : '🟨',
           tag: 'วินัยสนาม',
-          title: (p.sus || 0) > 0 ? `ติดโทษแบน ${p.sus} นัด` : `สะสมใบเหลือง ${p.yc}/3 ใบ`,
-          detail: (p.sus || 0) > 0 ? 'รอชดใช้โทษแบนให้ครบ' : 'อีก 1 เหลืองจะโดนแบน 1 นัด'
+          title: (p.sus || 0) > 0 ? `ติดโทษแบน ${p.sus} นัด` : `ใบเหลือง ${p.yc}/3 ใบ`,
+          detail: (p.sus || 0) > 0 ? 'รอพ้นโทษแบน' : 'อีก 1 เหลืองโดนแบน 1 นัด'
+        });
+      }
+      if ((p.mental ?? 70) < 58 || (p.phys ?? 70) < 58) {
+        items.push({
+          id: 'player-wellbeing-low',
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '💬',
+          tag: 'สุขภาพใจ/กาย',
+          title: `ใจ ${p.mental ?? 70} · กาย ${p.phys ?? 70} ค่อนข้างต่ำ`,
+          detail: 'คุยปรับใจหรือฟื้นฟูกล้ามเนื้อ',
+          actionLabel: 'ดูแลตัวเอง',
+          onAction: () => onNavigate?.('p')
+        });
+      } else if (mePl && me.favPlayer === p.name && getActiveFavBoost(mePl, me, p) === 0) {
+        items.push({
+          id: 'player-fav-boost-wait',
+          kind: 'alert',
+          tone: 'ok',
+          urgent: true,
+          icon: '💖',
+          tag: 'ลูกรักทีม',
+          title: 'ลูกรักรอปลุกพลัง (+5~10)',
+          detail: `ทำใจ ${p.mental ?? 70} และกาย ${p.phys ?? 70} ให้ถึง 72`,
+          actionLabel: 'ฟื้นฟู',
+          onAction: () => onNavigate?.('p')
         });
       }
     }
@@ -734,7 +690,7 @@ export const LeagueView = React.memo<{
             </span>
           )
           : f.txt,
-        detail: `ซีซั่น ${f.s}`
+        detail: `S${f.s}`
       });
     });
 
@@ -763,7 +719,7 @@ export const LeagueView = React.memo<{
         ] as const)
       : ([
           ['all', 'ทั้งหมด'],
-          ['urg', `ด่วน (${urgentCount})`],
+          ['urg', `ต้องทำ (${urgentCount})`],
           ['feed', 'ข่าวทีม']
         ] as const);
 
@@ -771,7 +727,7 @@ export const LeagueView = React.memo<{
       <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1.5">
         <div className="flex items-center justify-between gap-2">
           <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">
-            📬 งานด่วน &amp; ข่าวสโมสร
+            📌 งานด่วน &amp; ข่าวทีม
           </div>
           <div className="seg-bar shrink-0">
             {filterTabs.map(([fid, flbl]) => (
@@ -779,7 +735,7 @@ export const LeagueView = React.memo<{
                 key={fid}
                 type="button"
                 onClick={() => { SFX.tap(); setNewsFilter(fid); }}
-                className={`seg-btn ${newsFilter === fid ? 'seg-btn-active' : ''}`}
+                className={`seg-btn ${newsFilter === fid ? 'seg-btn-active hover:text-white!' : ''}`}
               >
                 {flbl}
               </button>
@@ -791,25 +747,22 @@ export const LeagueView = React.memo<{
           {filteredItems.length === 0 ? (
             <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-3 text-center">
               {newsFilter === 'req'
-                ? 'ยังไม่มีคำเรียกร้องจากนักเตะหรือแฟนบอลในตอนนี้'
-                : 'ไม่มีเรื่องเร่งด่วนในขณะนี้ ทีมพร้อมลงสนาม!'}
+                ? 'ยังไม่มีคำเรียกร้องในตอนนี้'
+                : 'ไม่มีงานด่วนค้าง ทีมพร้อมลุยนัดถัดไป!'}
             </div>
           ) : (
             filteredItems.map((it) => (
               <div
                 key={it.id}
-                className={`p-2 mland:p-1.5 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 mland:gap-1.5 ${toneCls[it.tone]}`}
+                className={`px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg border flex items-center justify-between gap-2 mland:gap-1.5 ${toneCls[it.tone]}`}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] mland:text-[8px] font-semibold text-[var(--mut)] truncate flex items-center gap-1">
-                    {it.icon}
-                    <span className="truncate">{it.tag}</span>
+                  <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate flex items-center gap-1">
+                    <span className="shrink-0">{it.icon}</span>
+                    <span className="truncate">{it.title}</span>
                   </div>
-                  <div className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-tight truncate">
-                    {it.title}
-                  </div>
-                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug truncate">
-                    {it.detail}
+                  <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-snug truncate mt-0.5">
+                    {it.tag} · {it.detail}
                   </div>
                 </div>
                 {it.actionLabel && it.onAction && (
@@ -833,6 +786,31 @@ export const LeagueView = React.memo<{
     <div className="flex-1 min-h-0 grid grid-cols-[1.42fr_0.88fr] gap-2.5 mland:gap-2 overflow-hidden">
       <div className="space-y-1.5 mland:space-y-1 h-full flex flex-col min-h-0">
         <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden flex-1 min-h-0 flex flex-col">
+          {/* Active League & Season Banner */}
+          <div className="shrink-0 px-2.5 sm:px-3 mland:px-2 py-1 mland:py-0.5 bg-[var(--surface-2)]/55 border-b border-[var(--line)]/70 flex items-center justify-between gap-2 text-[10.5px] sm:text-xs mland:text-[9px]">
+            <div className="font-bold text-[var(--ink)] truncate flex items-center gap-1.5">
+              <span>🏆</span>
+              <span className="truncate">{TN[vt]}</span>
+              <span className="text-[var(--mut)] font-semibold shrink-0">· ซีซั่น {state.season}</span>
+            </div>
+            {vt !== me.tier ? (
+              <button
+                type="button"
+                onClick={() => {
+                  SFX.tap();
+                  if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
+                  else onUpdateState((d) => { d.lg = me.tier; });
+                }}
+                className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] hover:underline cursor-pointer shrink-0 whitespace-nowrap"
+              >
+                ↩ กลับลีกฉัน
+              </button>
+            ) : myLeaguePos ? (
+              <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] tabular shrink-0 whitespace-nowrap">
+                อันดับของคุณ #{myLeaguePos}
+              </span>
+            ) : null}
+          </div>
           {/* Table Column Header */}
           <div className="shrink-0 grid grid-cols-[18px_19px_minmax(0,1fr)_38px_24px_22px_26px_22px_25px_28px] sm:grid-cols-[24px_24px_minmax(0,1fr)_52px_30px_28px_32px_28px_32px_36px] mland:grid-cols-[18px_18px_minmax(0,1fr)_38px_24px_22px_26px_22px_24px_28px] items-center gap-0.5 sm:gap-1 mland:gap-0.5 px-1.5 sm:px-3 mland:px-1.5 py-1.5 mland:py-0.5 text-[9.5px] sm:text-[11px] mland:text-[8px] bg-[var(--surface-2)]/90 text-[var(--mut)] border-b border-[var(--line)] font-bold">
             <span className="text-center">#</span>
@@ -1491,7 +1469,7 @@ export const LeagueView = React.memo<{
 
   return (
     <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-      <div className="flex flex-row items-center justify-between gap-1.5 shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 shrink-0">
         {/* Competition Sub-Navigation Menu: Single compact horizontal pill strip */}
         <div className="order-2 w-auto max-w-full seg-bar bg-[var(--surface)] shadow-xs overflow-x-auto">
           {(
@@ -1520,7 +1498,7 @@ export const LeagueView = React.memo<{
               }}
               className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2.5 text-xs mland:text-[10.5px] shrink-0 min-w-0 ${
                 sub === tabIdx
-                  ? 'seg-btn-active'
+                  ? 'seg-btn-active hover:text-white!'
                   : 'hover:bg-[var(--surface-2)]/70'
               }`}
             >
@@ -1530,72 +1508,30 @@ export const LeagueView = React.memo<{
           ))}
         </div>
 
-        {/* Left Header Slot: Standings puts Season label in front of League Switcher; Stats/Power use tier pills */}
-        {sub === 0 ? (
-          <div className="order-1 flex items-center gap-1.5 min-w-0 shrink">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 mland:px-2.5 mland:py-1 rounded-xl bg-[var(--surface)] border border-[var(--line)] text-xs mland:text-[10.5px] font-bold text-[var(--ink)] shadow-xs shrink-0 whitespace-nowrap">
-              <span>🏆</span>
-              <span>ตารางคะแนน · ซีซั่น {state.season}</span>
-            </div>
-            <div className="relative inline-flex items-center min-w-0">
-              <select
-                aria-label="เลือกลีกในตารางคะแนน"
-                value={vt}
-                onChange={(e) => {
-                  const nextTier = Number(e.target.value);
-                  SFX.tap();
-                  if (onShallowPatch) {
-                    onShallowPatch(() => ({ lg: nextTier }));
-                  } else {
-                    onUpdateState((d) => { d.lg = nextTier; });
-                  }
-                }}
-                className="appearance-none bg-[var(--surface)] border border-[var(--line)] hover:border-[var(--g)] focus:border-[var(--g)] focus:outline-none rounded-xl pl-3 pr-7 mland:pl-2.5 mland:pr-6 py-1.5 mland:py-1 font-bold text-xs mland:text-[10.5px] text-[var(--ink)] cursor-pointer truncate max-w-[175px] sm:max-w-none transition-colors shadow-xs"
-              >
-                {[0, 1, 2].map((tierIdx) => (
-                  <option key={tierIdx} value={tierIdx}>
-                    {TN[tierIdx]}{tierIdx === me.tier ? ' ★' : ''}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--mut)] pointer-events-none absolute right-2 mland:right-1.5 top-1/2 -translate-y-1/2" />
-            </div>
-            {vt !== me.tier && (
-              <button
-                type="button"
-                title="กลับลีกของฉัน"
-                aria-label="กลับลีกของฉัน"
-                onClick={() => {
-                  SFX.tap();
-                  if (onShallowPatch) onShallowPatch(() => ({ lg: me.tier }));
-                  else onUpdateState((d) => { d.lg = me.tier; });
-                }}
-                className="btn btn-sm btn-gold shrink-0"
-              >
-                <span>↩</span>
-                <span>กลับลีกฉัน</span>
-                <MyTeamBadge size="xs" title="ลีกของคุณ" />
-              </button>
-            )}
-          </div>
-        ) : sub === 2 ? (
-          <div className="order-1 w-auto seg-bar bg-[var(--surface)] shadow-xs shrink-0">
-            {['จังหวัด', 'ในประเทศ 2', 'ในประเทศ 1'].map((lbl, idx) => {
-              const isMyTier = idx === me.tier;
-              const active = vt === idx;
+        {/* Left Header Slot: Direct 1-tap League Switcher for Standings & Stats */}
+        {sub === 0 || sub === 2 ? (
+          <div className="order-1 w-auto seg-bar bg-[var(--surface)] shadow-xs shrink-0 max-w-full overflow-x-auto">
+            {[
+              [0, 'จังหวัด'],
+              [1, 'ดิวิชั่น 2'],
+              [2, 'ดิวิชั่น 1']
+            ].map(([idx, lbl]) => {
+              const tierIdx = Number(idx);
+              const isMyTier = tierIdx === me.tier;
+              const active = vt === tierIdx;
               return (
                 <button
-                  key={lbl}
+                  key={tierIdx}
                   type="button"
-                  title={isMyTier ? `${lbl} (ลีกของคุณ)` : lbl}
+                  title={isMyTier ? `${TN[tierIdx]} (ลีกของคุณ)` : TN[tierIdx]}
                   onClick={() => {
                     SFX.tap();
-                    if (onShallowPatch) onShallowPatch(() => ({ lg: idx }));
-                    else onUpdateState((d) => { d.lg = idx; });
+                    if (onShallowPatch) onShallowPatch(() => ({ lg: tierIdx }));
+                    else onUpdateState((d) => { d.lg = tierIdx; });
                   }}
-                  className={`seg-btn py-1.5 mland:py-1 px-2.5 mland:px-2 text-xs mland:text-[10.5px] min-w-0 ${
+                  className={`seg-btn py-1.5 mland:py-1 px-3 mland:px-2.5 text-xs mland:text-[10.5px] min-w-0 ${
                     active
-                      ? 'bg-[var(--ink)] text-[var(--bg)] shadow-xs hover:text-[var(--bg)]'
+                      ? 'seg-btn-active hover:text-white!'
                       : 'hover:bg-[var(--surface-2)]/70'
                   }`}
                 >

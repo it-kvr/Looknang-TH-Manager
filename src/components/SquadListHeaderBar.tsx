@@ -106,6 +106,15 @@ export const SquadListHeaderBar: React.FC<SquadListHeaderBarProps> = ({
                     <span className="text-[var(--mut)] text-[9.5px] mland:text-[8px]">ลงสนามเต็มร้อย</span>
                   </div>
                 </div>
+                <div className="pt-1.5 border-t border-[var(--line)]/70 space-y-1">
+                  <div className="font-extrabold text-[var(--ink)]">📈 ลูกศรแนวโน้มฟอร์ม</div>
+                  <div className="grid grid-cols-2 gap-1 text-[9.5px] mland:text-[8px]">
+                    <span className="text-emerald-700 dark:text-emerald-300 font-bold">⏫/↗ ฟอร์มพุ่ง/ขาขึ้น</span>
+                    <span className="text-[var(--mut)] font-semibold">➡ ฟอร์มทรงตัว</span>
+                    <span className="text-amber-700 dark:text-amber-300 font-bold">↘ ฟอร์มแผ่วลง</span>
+                    <span className="text-rose-600 dark:text-rose-400 font-bold">⏬ ฟอร์มตกหนัก</span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
