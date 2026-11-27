@@ -30,7 +30,6 @@ export const SquadTacticsView: React.FC<{
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 3 ? 0 : (state.sub ?? 0);
-  const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [showCustomEditor, setShowCustomEditor] = useState(false);
   const [showFormationSheet, setShowFormationSheet] = useState(false);
   const [squadPosFilter, setSquadPosFilter] = useState<'ALL' | Position>('ALL');
@@ -921,11 +920,7 @@ export const SquadTacticsView: React.FC<{
                 {/* Squad Panel */}
                 <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
                   <SquadListHeaderBar
-                    luTab={luTab}
-                    onChangeTab={setLuTab}
                     totalCount={starters.length + bench.length}
-                    startersCount={starters.length}
-                    benchCount={bench.length}
                     canEdit={isMgr}
                     tiredCount={restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length}
                     isRestCritical={restNeededStarters.length > 0}
@@ -938,33 +933,25 @@ export const SquadTacticsView: React.FC<{
                     }}
                   />
 
-                  {/* Player Rows (Matching Post-Match Lineup Style) */}
+                  {/* Player Rows (Scrollable Starters + Bench) */}
                   <div className="flex-1 min-h-0 overflow-y-auto">
-                    {luTab !== 2 && (
-                      <>
-                        <div
-                          className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
-                          style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
-                        >
-                          <span>ตัวจริง</span>
-                          <span className="tabular">{starters.length} คน</span>
-                        </div>
-                        <div className="divide-y divide-[var(--line)]/50">
-                          {starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}
-                        </div>
-                      </>
-                    )}
-                    {luTab !== 1 && (
-                      <>
-                        <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
-                          <span>ตัวสำรอง</span>
-                          <span className="tabular text-[var(--mut)]">{bench.length} คน</span>
-                        </div>
-                        <div className="divide-y divide-[var(--line)]/50">
-                          {bench.map((q) => renderPlayerRow(q))}
-                        </div>
-                      </>
-                    )}
+                    <div
+                      className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+                      style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+                    >
+                      <span>ตัวจริง</span>
+                      <span className="tabular">{starters.length} คน</span>
+                    </div>
+                    <div className="divide-y divide-[var(--line)]/50">
+                      {starters.map((q, i) => renderPlayerRow(q, slots[i]?.sp))}
+                    </div>
+                    <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+                      <span>ตัวสำรอง</span>
+                      <span className="tabular text-[var(--mut)]">{bench.length} คน</span>
+                    </div>
+                    <div className="divide-y divide-[var(--line)]/50">
+                      {bench.map((q) => renderPlayerRow(q))}
+                    </div>
                   </div>
                 </div>
               </div>

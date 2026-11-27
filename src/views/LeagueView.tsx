@@ -863,8 +863,8 @@ export const LeagueView: React.FC<{
           q,
           t,
           primaryValue: `${q.sg || 0} ประตู`,
-          runnerValue: `${q.sg || 0} ลูก`,
-          breakdown: `${q.sa || 0} จ่าย · ${q.sp || t.p || 0} นัด · เฉลี่ย ${gpg}/นัด`,
+          runnerValue: `${q.sg || 0}`,
+          breakdown: `${q.sa || 0} จ่าย · ${q.sp || t.p || 0} นัด · ${gpg}/นัด`,
           scoreNum: q.sg || 0
         };
       });
@@ -888,8 +888,8 @@ export const LeagueView: React.FC<{
           q,
           t,
           primaryValue: `${q.cs || 0} คลีนชีต`,
-          runnerValue: `${q.cs || 0} CS`,
-          breakdown: `ทีมเสีย ${t.ga} ลูก · ${q.sp || t.p || 0} นัด · ${csPct}%`,
+          runnerValue: `${q.cs || 0}`,
+          breakdown: `ทีมเสีย ${t.ga} · ${q.sp || t.p || 0} นัด · ${csPct}%`,
           scoreNum: q.cs || 0
         };
       });
@@ -946,9 +946,10 @@ export const LeagueView: React.FC<{
       icon: React.ReactNode;
       title: string;
       enTitle: string;
-      criteria: string;
+      shortCriteria: string;
+      topStripe: string;
       accentText: string;
-      accentBg: string;
+      spotlightBg: string;
       entries: AwardEntry[];
       emptyText: string;
     }[] = [
@@ -957,9 +958,10 @@ export const LeagueView: React.FC<{
         icon: '⚽',
         title: 'รองเท้าทองคำ',
         enTitle: 'Golden Boot',
-        criteria: 'ผู้ทำประตูสูงสุดประจำลีก (วัดอัตราส่วนต่อนัดเมื่อเท่ากัน)',
+        shortCriteria: 'ดาวซัลโวสูงสุดประจำลีก',
+        topStripe: 'linear-gradient(90deg, #eab308, #f5c242)',
         accentText: 'text-[#b45309] dark:text-[var(--lamp)]',
-        accentBg: 'bg-[var(--lamp-soft)]/70 border-[var(--lamp)]/40',
+        spotlightBg: 'bg-[var(--lamp-soft)]/55 border-[var(--lamp)]/45',
         entries: goldenBootList,
         emptyText: 'ยังไม่มีผู้ทำประตูในลีกนี้ ลงสนามเพื่อเปิดบัญชีดาวยิง'
       },
@@ -968,88 +970,131 @@ export const LeagueView: React.FC<{
         icon: <StatIconBadge kind="cleansheet" size="md" title="ถุงมือทองคำ" />,
         title: 'ถุงมือทองคำ',
         enTitle: 'Golden Glove',
-        criteria: 'ผู้รักษาประตูคลีนชีตสูงสุด (วัดประตูเสียทีมเมื่อเท่ากัน)',
+        shortCriteria: 'ผู้รักษาประตูคลีนชีตสูงสุด',
+        topStripe: 'linear-gradient(90deg, #158049, #25b86c)',
         accentText: 'text-[var(--g)]',
-        accentBg: 'bg-[var(--g-soft)]/70 border-[var(--g)]/35',
+        spotlightBg: 'bg-[var(--g-soft)]/60 border-[var(--g)]/35',
         entries: goldenGloveList,
         emptyText: 'ยังไม่มีสถิติคลีนชีตในลีกนี้ รอการลงสนามนัดแรก'
       },
       {
         id: 'poy',
         icon: '🌟',
-        title: 'นักเตะยอดเยี่ยมประจำฤดูกาล',
+        title: 'นักเตะยอดเยี่ยม',
         enTitle: 'Player of the Season',
-        criteria: 'คะแนนรวมจากประตู แอสซิสต์ คลีนชีต วินัย และอันดับทีม',
+        shortCriteria: 'คะแนนรวมผลงานและอันดับทีม',
+        topStripe: 'linear-gradient(90deg, #0ea5e9, #158049)',
         accentText: 'text-[var(--ink)]',
-        accentBg: 'bg-[var(--surface-2)] border-[var(--line)]',
+        spotlightBg: 'bg-[var(--surface-2)]/85 border-[var(--line)]',
         entries: mvpList,
         emptyText: 'ยังไม่มีคะแนนผลงานประจำฤดูกาล รอการลงสนามนัดแรก'
       }
     ];
 
-    const board = (
+    const renderLeaderboardCard = (
       ic: React.ReactNode,
       title: string,
+      unitLabel: string,
       valFn: (q: Player) => number,
       fmt: (q: Player) => React.ReactNode,
       filterFn?: (q: Player) => boolean,
-      renderBadge?: (q: Player) => React.ReactNode
+      renderValue?: (q: Player, idx: number) => React.ReactNode
     ) => {
-      const list = ps.filter((x) => (!filterFn || filterFn(x.q)) && valFn(x.q) > 0).sort((a, b) => valFn(b.q) - valFn(a.q) || b.q.ov - a.q.ov).slice(0, 5);
+      const list = ps
+        .filter((x) => (!filterFn || filterFn(x.q)) && valFn(x.q) > 0)
+        .sort((a, b) => valFn(b.q) - valFn(a.q) || b.q.ov - a.q.ov)
+        .slice(0, 5);
       return (
-        <div className="p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs">
-          <h4 className="font-bold text-xs sm:text-sm mland:text-[11px] mb-2 mland:mb-1 flex items-center gap-1.5">{ic} <span>{title}</span></h4>
+        <section className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xs flex flex-col overflow-hidden">
+          <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/45 border-b border-[var(--line)] flex items-center justify-between gap-2">
+            <h4 className="font-bold text-xs sm:text-[13px] mland:text-[10.5px] text-[var(--ink)] flex items-center gap-1.5 min-w-0 truncate">
+              <span className="shrink-0 leading-none">{ic}</span>
+              <span className="truncate">{title}</span>
+            </h4>
+            <span className="text-[10px] mland:text-[8.5px] font-semibold text-[var(--mut)] whitespace-nowrap shrink-0">
+              {unitLabel}
+            </span>
+          </div>
           {list.length ? (
-            <div className="space-y-1">
+            <div className="divide-y divide-[var(--line)]/50 flex-1">
               {list.map((x, idx) => {
                 const isMine = x.t.id === state.me;
                 return (
                   <button
                     key={`${x.t.id}-${x.q.n}`}
                     type="button"
-                    onClick={() => onInspectPlayer(x.q, x.t)}
-                    className={`w-full flex items-center gap-2 mland:gap-1.5 p-1.5 mland:p-1 rounded-xl text-left cursor-pointer transition-colors ${isMine ? 'bg-[var(--lamp-soft)]' : 'hover:bg-[var(--surface-2)]'}`}
+                    onClick={() => {
+                      SFX.tap();
+                      onInspectPlayer(x.q, x.t);
+                    }}
+                    className={`w-full flex items-center gap-2 mland:gap-1.5 px-3 py-1.5 mland:px-2 mland:py-1 text-left cursor-pointer transition-colors ${
+                      isMine ? 'bg-[var(--lamp-soft)]/45 hover:bg-[var(--lamp-soft)]/75' : 'hover:bg-[var(--surface-2)]/65'
+                    }`}
                   >
-                    <span className={`w-4 text-[11px] font-bold text-left tabular shrink-0 ${idx === 0 ? 'text-[var(--lamp)]' : 'text-[var(--mut)]'}`}>{idx + 1}</span>
-                    <PlayerFace player={x.q} team={x.t} state={state} club={state.club} isMyClub={isMine && state.mode === 'm'} size={28} />
+                    <span
+                      className={`w-4 text-[11px] mland:text-[9.5px] font-extrabold tabular shrink-0 ${
+                        idx === 0 ? 'text-[#b45309] dark:text-[var(--lamp)]' : 'text-[var(--mut)]'
+                      }`}
+                    >
+                      {idx + 1}
+                    </span>
+                    <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
+                      <PlayerFace player={x.q} team={x.t} state={state} club={state.club} isMyClub={isMine && state.mode === 'm'} size={26} />
+                    </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-bold text-[11.5px] mland:text-[10px] flex items-center gap-1 min-w-0">
+                      <div className="font-bold text-[11.5px] mland:text-[9.5px] text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
                         <PositionBadge role={x.q.ro || x.q.pos} size="2xs" />
                         <span className="truncate">{x.q.n}</span>
                       </div>
-                      <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
-                        <ClubCrest name={x.t.name} size={12} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                      <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 leading-tight">
+                        <ClubCrest name={x.t.name} size={11} team={x.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
                         <span className="truncate">{x.t.name}</span>
                         {isMine && <MyTeamBadge size="2xs" />}
                       </div>
                     </div>
-                    {renderBadge ? (
-                      renderBadge(x.q)
+                    {renderValue ? (
+                      renderValue(x.q, idx)
                     ) : (
-                      <span className="px-2 py-0.5 rounded-lg bg-[var(--g)] text-white text-[11px] mland:text-[9.5px] font-bold tabular inline-flex items-center justify-center shrink-0">{fmt(x.q)}</span>
+                      <span
+                        className={`text-xs mland:text-[10px] font-extrabold tabular shrink-0 ${
+                          idx === 0 ? 'text-[var(--g)]' : 'text-[var(--ink)]'
+                        }`}
+                      >
+                        {fmt(x.q)}
+                      </span>
                     )}
                   </button>
                 );
               })}
             </div>
           ) : (
-            <p className="text-[11px] text-[var(--mut)]">ยังไม่มีข้อมูล</p>
+            <div className="flex-1 flex items-center justify-center py-5 mland:py-3 px-3 text-center">
+              <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)]">รอข้อมูลหลังการแข่งขัน</p>
+            </div>
           )}
-        </div>
+        </section>
       );
     };
 
     return (
-      <div className="flex-1 min-h-0 flex flex-col gap-2 mland:gap-1.5 overflow-hidden">
-        {/* Unified Context Strip */}
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shrink-0">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm mland:text-[11px]">
-            <span className="font-bold text-[var(--ink)]">🏅 สถิติและรางวัลส่วนตัวนักเตะ</span>
+      <div className="flex-1 min-h-0 flex flex-col gap-2.5 mland:gap-1.5 overflow-hidden">
+        {/* Clean Context Header Strip */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 mland:px-2.5 mland:py-1.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xs shrink-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
+            <span className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] whitespace-nowrap">
+              🏅 สถิติและรางวัลประจำฤดูกาล
+            </span>
             <span aria-hidden="true" className="text-[var(--mut)]">·</span>
-            <span className="text-[var(--mut)] font-medium">{TN[vt]}</span>
+            <span className="text-xs sm:text-sm mland:text-[10.5px] font-bold text-[var(--g)] truncate">
+              {TN[vt]}
+            </span>
+            <span aria-hidden="true" className="hidden sm:inline text-[var(--mut)]">·</span>
+            <span className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular whitespace-nowrap">
+              ซีซั่น {state.season} · แข่งแล้ว {maxPlayedInTier}/{totalRounds} นัด · {isSeasonDone ? 'สรุปผลแล้ว' : 'กำลังลุ้นรางวัล'}
+            </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs mland:text-[9.5px] text-[var(--mut)] tabular-nums">
-            <span>ซีซั่น {state.season} · แข่งแล้ว {maxPlayedInTier}/{totalRounds} นัด · {isSeasonDone ? 'สรุปผลประจำฤดูกาล' : 'กำลังลุ้นรางวัล'}</span>
+
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -1083,10 +1128,10 @@ export const LeagueView: React.FC<{
           </div>
         </div>
 
-        {/* Unified Scrollable Body: Awards Showcase + Stat Leaderboards */}
+        {/* Scrollable Awards + Leaderboards */}
         <div className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-3 mland:space-y-2">
-          {/* 3-Column Awards Showcase */}
-          <div className="grid grid-cols-3 gap-2.5 mland:gap-2 items-stretch">
+          {/* 3-Column Major Awards Showcase */}
+          <div className="grid grid-cols-1 md:grid-cols-3 mland:grid-cols-3 gap-2.5 mland:gap-2 items-stretch">
             {awards.map((aw) => {
               const leader = aw.entries[0];
               const runners = aw.entries.slice(1);
@@ -1095,140 +1140,147 @@ export const LeagueView: React.FC<{
               return (
                 <section
                   key={aw.id}
-                  className="p-3.5 sm:p-4 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] flex flex-col justify-between gap-2.5 mland:gap-1.5"
+                  className="relative rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-2xs flex flex-col overflow-hidden"
                 >
-                  <div className="space-y-2.5 mland:space-y-1.5">
+                  <div aria-hidden="true" className="h-[2.5px] w-full shrink-0" style={{ background: aw.topStripe }} />
+
+                  <div className="p-3 mland:p-2 flex flex-col flex-1 gap-2.5 mland:gap-1.5">
                     {/* Card Header */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-base mland:text-sm leading-none" aria-hidden="true">{aw.icon}</span>
-                          <h3 className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate">{aw.title}</h3>
+                    <div className="flex items-center justify-between gap-2 min-w-0">
+                      <div className="flex items-center gap-2 mland:gap-1.5 min-w-0">
+                        <span className="text-base mland:text-sm leading-none shrink-0" aria-hidden="true">{aw.icon}</span>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate leading-tight">
+                            {aw.title}
+                          </h3>
+                          <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] truncate leading-tight mt-0.5">
+                            {aw.enTitle} · {aw.shortCriteria}
+                          </p>
                         </div>
-                        <p className="text-[11px] mland:text-[9px] text-[var(--mut)] mt-0.5">{aw.enTitle} · {aw.criteria}</p>
                       </div>
                     </div>
 
-                    {/* Current #1 Leader Spotlight */}
+                    {/* #1 Leader Spotlight */}
                     {leader ? (
                       <button
                         type="button"
                         onClick={() => { SFX.tap(); onInspectPlayer(leader.q, leader.t); }}
-                        className={`w-full p-2.5 sm:p-3 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-colors hover:border-[var(--g)] ${
-                          leaderIsMe ? 'bg-[var(--lamp-soft)]/65 border-[var(--lamp)]' : aw.accentBg
+                        className={`w-full p-2.5 mland:p-1.5 rounded-xl border text-left cursor-pointer transition-colors hover:border-[var(--g)] ${
+                          leaderIsMe ? 'bg-[var(--lamp-soft)]/70 border-[var(--lamp)]' : aw.spotlightBg
                         }`}
                       >
                         <div className="flex items-center gap-2.5 mland:gap-2">
-                          <div className="shrink-0">
-                            <PlayerFace player={leader.q} team={leader.t} state={state} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} size={44} />
+                          <div className="shrink-0 mland:[&_svg]:w-9 mland:[&_svg]:h-9">
+                            <PlayerFace player={leader.q} team={leader.t} state={state} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} size={42} />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] mland:text-[9px] font-bold text-[var(--mut)] flex items-center gap-1">
-                                <span>อันดับ 1</span>
-                                {leaderIsMe && <MyTeamBadge size="sm" />}
+                            <div className="flex items-center justify-between gap-1.5">
+                              <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)] uppercase tracking-wide">
+                                อันดับ 1
                               </span>
-                              <span className={`text-sm sm:text-base mland:text-xs font-extrabold tabular-nums shrink-0 ${aw.accentText}`}>
+                              <span className={`text-sm mland:text-xs font-extrabold tabular shrink-0 ${aw.accentText}`}>
                                 {leader.primaryValue}
                               </span>
                             </div>
-                            <div className="font-bold text-sm sm:text-base mland:text-xs text-[var(--ink)] truncate mt-0.5">
+                            <div className="font-bold text-xs sm:text-sm mland:text-[11px] text-[var(--ink)] truncate leading-tight mt-0.5">
                               {leader.q.n}
                             </div>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[11px] mland:text-[9px] text-[var(--mut)] min-w-0">
-                              <ClubCrest name={leader.t.name} size={14} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
+                            <div className="flex items-center gap-1 mt-0.5 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] min-w-0">
+                              <ClubCrest name={leader.t.name} size={13} team={leader.t} club={state.club} isMyClub={leaderIsMe && state.mode === 'm'} />
                               <span className="truncate font-medium text-[var(--ink)]/85">{leader.t.name}</span>
                               {leaderIsMe && <MyTeamBadge size="2xs" />}
                               <PositionBadge role={leader.q.ro} size="2xs" />
                             </div>
                           </div>
                         </div>
-                        <div className="mt-2 mland:mt-1 pt-1.5 mland:pt-1 border-t border-[var(--line)]/70 text-[11px] mland:text-[9px] text-[var(--mut)] tabular-nums">
+                        <div className="mt-2 mland:mt-1 pt-1.5 mland:pt-1 border-t border-[var(--line)]/65 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] tabular truncate">
                           {leader.breakdown}
                         </div>
                       </button>
                     ) : (
-                      <div className="p-3.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/60 border border-[var(--line)] text-center space-y-1">
-                        <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)]">ยังไม่มีผู้ครองอันดับ 1</div>
-                        <p className="text-[11px] mland:text-[9px] text-[var(--mut)] leading-snug">{aw.emptyText}</p>
+                      <div className="p-3 mland:p-2 rounded-xl bg-[var(--surface-2)]/55 border border-[var(--line)] text-center space-y-0.5">
+                        <div className="text-xs mland:text-[10px] font-bold text-[var(--ink)]">ยังไม่มีผู้ครองอันดับ 1</div>
+                        <p className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] leading-snug">{aw.emptyText}</p>
                       </div>
                     )}
-                  </div>
 
-                  {/* Contenders #2 - #5 */}
-                  <div className="border-t border-[var(--line)] pt-2 mland:pt-1.5 space-y-1 mland:space-y-0.5">
-                    <div className="text-[11px] mland:text-[9px] font-semibold text-[var(--mut)] mb-1">
-                      ผู้ท้าชิงอันดับถัดไป
-                    </div>
-                    {runners.length ? (
-                      <div className="divide-y divide-[var(--line)]/50">
-                        {runners.map((entry, idx) => {
-                          const isMine = entry.t.id === state.me;
-                          return (
-                            <button
-                              key={`${aw.id}-${entry.t.id}-${entry.q.n}`}
-                              type="button"
-                              onClick={() => { SFX.tap(); onInspectPlayer(entry.q, entry.t); }}
-                              className={`w-full min-h-[38px] mland:min-h-[28px] flex items-center gap-2 mland:gap-1.5 px-1.5 py-1 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
-                                isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/75'
-                              }`}
-                            >
-                              <span className="w-4 text-xs mland:text-[9.5px] font-bold text-[var(--mut)] tabular-nums text-left shrink-0">
-                                {idx + 2}
-                              </span>
-                              <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
-                                <PlayerFace
-                                  player={entry.q}
-                                  team={entry.t}
-                                  state={state}
-                                  club={state.club}
-                                  isMyClub={isMine && state.mode === 'm'}
-                                  size={28}
-                                />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs mland:text-[10px] font-semibold text-[var(--ink)] flex items-center gap-1 min-w-0">
-                                  <PositionBadge role={entry.q.ro} size="2xs" />
-                                  <span className="truncate">{entry.q.n}</span>
-                                </div>
-                                <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5">
-                                  <ClubCrest name={entry.t.name} size={12} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
-                                  <span className="truncate">{entry.t.name}</span>
-                                  {isMine && <MyTeamBadge size="2xs" />}
-                                </div>
-                              </div>
-                              <span className="text-xs mland:text-[10px] font-bold text-[var(--ink)] tabular-nums shrink-0">
-                                {entry.runnerValue}
-                              </span>
-                            </button>
-                          );
-                        })}
+                    {/* Contenders #2 - #5 */}
+                    <div className="pt-1 border-t border-[var(--line)]/75 flex-1 flex flex-col">
+                      <div className="text-[10.5px] mland:text-[8.5px] font-semibold text-[var(--mut)] mb-1 flex items-center justify-between">
+                        <span>ผู้ท้าชิงอันดับ 2–5</span>
+                        {runners.length > 0 && <span className="opacity-75">ผลงาน</span>}
                       </div>
-                    ) : (
-                      <p className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-1.5">
-                        {leader ? 'ยังไม่มีผู้ท้าชิงอันดับรอง' : 'รอกรรมการบันทึกสถิติการแข่งขัน'}
-                      </p>
-                    )}
+                      {runners.length ? (
+                        <div className="divide-y divide-[var(--line)]/45">
+                          {runners.map((entry, idx) => {
+                            const isMine = entry.t.id === state.me;
+                            return (
+                              <button
+                                key={`${aw.id}-${entry.t.id}-${entry.q.n}`}
+                                type="button"
+                                onClick={() => { SFX.tap(); onInspectPlayer(entry.q, entry.t); }}
+                                className={`w-full flex items-center gap-2 mland:gap-1.5 px-1.5 py-1.5 mland:py-0.5 rounded-lg text-left cursor-pointer transition-colors ${
+                                  isMine ? 'bg-[var(--lamp-soft)]/50 hover:bg-[var(--lamp-soft)]/80' : 'hover:bg-[var(--surface-2)]/70'
+                                }`}
+                              >
+                                <span className="w-3.5 text-[11px] mland:text-[9px] font-bold text-[var(--mut)] tabular shrink-0">
+                                  {idx + 2}
+                                </span>
+                                <div className="shrink-0 mland:[&_svg]:w-5 mland:[&_svg]:h-5">
+                                  <PlayerFace
+                                    player={entry.q}
+                                    team={entry.t}
+                                    state={state}
+                                    club={state.club}
+                                    isMyClub={isMine && state.mode === 'm'}
+                                    size={26}
+                                  />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-[11.5px] mland:text-[9.5px] font-semibold text-[var(--ink)] flex items-center gap-1 min-w-0 leading-tight">
+                                    <PositionBadge role={entry.q.ro} size="2xs" />
+                                    <span className="truncate">{entry.q.n}</span>
+                                  </div>
+                                  <div className="text-[10px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1 mt-0.5 leading-tight">
+                                    <ClubCrest name={entry.t.name} size={11} team={entry.t} club={state.club} isMyClub={isMine && state.mode === 'm'} />
+                                    <span className="truncate">{entry.t.name}</span>
+                                    {isMine && <MyTeamBadge size="2xs" />}
+                                  </div>
+                                </div>
+                                <span className="text-xs mland:text-[10px] font-extrabold text-[var(--ink)] tabular shrink-0">
+                                  {entry.runnerValue}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] mland:text-[9px] text-[var(--mut)] py-2 text-center">
+                          {leader ? 'ยังไม่มีผู้ท้าชิงอันดับรอง' : 'รอกรรมการบันทึกสถิติการแข่งขัน'}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </section>
               );
             })}
           </div>
 
-          {/* 6 Complementary Stat Leaderboards (non-overlapping with Golden Boot & Golden Glove) */}
-          <div className="grid grid-cols-3 gap-2 mland:gap-1.5 content-start">
-            {board('👟', 'แอสซิสต์สูงสุด', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
-            {board('🔥', 'มีส่วนร่วมประตู (G+A)', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
-            {board('👑', 'แมนออฟเดอะแมตช์ (MOTM)', (q) => q.motm || 0, (q) => `${q.motm || 0} ครั้ง`)}
-            {board(
+          {/* 6 Complementary Stat Leaderboards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mland:grid-cols-3 gap-2.5 mland:gap-2 items-stretch">
+            {renderLeaderboardCard('👟', 'แอสซิสต์สูงสุด', 'ครั้ง', (q) => q.sa || 0, (q) => `${q.sa || 0}`)}
+            {renderLeaderboardCard('🔥', 'มีส่วนร่วมประตู (G+A)', 'รวม', (q) => (q.sg || 0) + (q.sa || 0), (q) => `${(q.sg || 0) + (q.sa || 0)}`)}
+            {renderLeaderboardCard('👑', 'แมนออฟเดอะแมตช์', 'MOTM', (q) => q.motm || 0, (q) => `${q.motm || 0}`)}
+            {renderLeaderboardCard(
               '⭐',
               'เรตติ้งเฉลี่ยสูงสุด',
+              'คะแนน',
               (q) => ((q.sra || 0) >= 1 ? Math.round(((q.srs || 0) / q.sra!) * 100) / 100 : 0),
               (q) => `${((q.srs || 0) / Math.max(1, q.sra || 1)).toFixed(2)}`,
               (q) => (q.sra || 0) >= 1
             )}
-            {board('💎', 'ค่าตัวสูงสุด', vlu, (q) => fmtMoneyNum(vlu(q)))}
-            {board('⚡', 'พลังรวมสูงสุด', (q) => q.ov, (q) => `${q.ov}`, undefined, (q) => <OvrBadge ov={q.ov} size="sm" />)}
+            {renderLeaderboardCard('💎', 'มูลค่าตลาดสูงสุด', 'ค่าตัว', vlu, (q) => fmtMoneyNum(vlu(q)))}
+            {renderLeaderboardCard('⚡', 'พลังรวมสูงสุด', 'OVR', (q) => q.ov, (q) => `${q.ov}`, undefined, (q) => <OvrBadge ov={q.ov} size="xs" />)}
           </div>
         </div>
       </div>

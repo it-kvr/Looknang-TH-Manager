@@ -114,18 +114,18 @@ export const PlayerBioStrip: React.FC<{
   if (variant === 'inline') {
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-1.5 py-[2px] rounded-md border bg-[var(--surface-2)]/75 border-[var(--line)] text-[10px] mland:text-[8.5px] font-bold tabular leading-none whitespace-nowrap ${className}`}
+        className={`inline-flex items-center gap-1 text-[10.5px] mland:text-[8.5px] text-[var(--mut)] font-medium tabular leading-snug whitespace-nowrap ${className}`}
         title={`ส่วนสูง ${bio.heightCm} ซม. · น้ำหนัก ${bio.weightKg} กก. · ${fm.titleText}`}
       >
-        <span className="text-[var(--ink)]/90">
-          {bio.heightCm}<span className="text-[var(--mut)] font-semibold ml-0.5">ซม.</span>
+        <span className="text-[var(--ink)]/85 font-semibold">
+          {bio.heightCm}<span className="text-[var(--mut)] font-normal ml-0.5">ซม.</span>
         </span>
-        <span className="text-[var(--mut)]/50">·</span>
-        <span className="text-[var(--ink)]/90">
-          {bio.weightKg}<span className="text-[var(--mut)] font-semibold ml-0.5">กก.</span>
+        <span aria-hidden="true">·</span>
+        <span className="text-[var(--ink)]/85 font-semibold">
+          {bio.weightKg}<span className="text-[var(--mut)] font-normal ml-0.5">กก.</span>
         </span>
-        <span className="w-[1px] h-2.5 bg-[var(--line)] shrink-0" />
-        <span className={`inline-flex items-center gap-1 font-extrabold ${fm.textCls}`}>
+        <span aria-hidden="true">·</span>
+        <span className={`inline-flex items-center gap-0.5 font-semibold ${fm.textCls}`}>
           <FootPairIcon foot={bio.foot} size="xs" />
           <span>{fm.shortLabel}</span>
         </span>

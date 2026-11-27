@@ -596,8 +596,8 @@ export const FinanceClubView: React.FC<{
             style={{ background: `linear-gradient(90deg, ${clubK.c1}, ${clubK.c2})` }}
           />
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 text-left min-w-0">
-            <div className="flex items-center px-2 py-1.5 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0 [&>svg]:w-10 [&>svg]:h-10 sm:[&>svg]:w-11 sm:[&>svg]:h-11 mland:[&>svg]:w-9 mland:[&>svg]:h-9">
-              <ClubCrest name={me.name} size={44} team={me} club={clubK} isMyClub />
+            <div className="flex items-center justify-center px-2 py-1 mland:px-1.5 mland:py-1 min-h-[56px] sm:min-h-[64px] mland:min-h-[52px] rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0 [&>svg]:w-11 [&>svg]:h-11 sm:[&>svg]:w-12 sm:[&>svg]:h-12 mland:[&>svg]:w-10 mland:[&>svg]:h-10">
+              <ClubCrest name={me.name} size={48} team={me} club={clubK} isMyClub />
             </div>
 
             <div className="space-y-0.5 min-w-0 flex-1">
@@ -2242,7 +2242,7 @@ export const FinanceClubView: React.FC<{
         />
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3 mland:gap-2 text-left min-w-0">
           <div className="flex items-stretch gap-1.5 sm:gap-2 mland:gap-1.5 shrink-0">
-            <div className="flex items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 py-1 mland:px-1.5 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 mland:gap-1 px-2 py-1 mland:px-1.5 mland:py-1 min-h-[56px] sm:min-h-[64px] mland:min-h-[52px] rounded-xl mland:rounded-lg bg-[var(--surface)]/80 border border-[var(--line)]/75 shrink-0">
               <button
                 type="button"
                 onClick={() => {

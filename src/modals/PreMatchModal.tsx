@@ -85,7 +85,6 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
   const isMgr = state.mode === 'm';
 
   const [viewMode, setViewMode] = useState<'H' | 'A' | 'compare'>(() => (meIsHome ? 'H' : 'A'));
-  const [luTab, setLuTab] = useState<0 | 1 | 2>(0);
   const [swapPickName, setSwapPickName] = useState<string | null>(null);
   const [recommendedPlanBanner, setRecommendedPlanBanner] = useState<AssistantAppliedPlanResult | null>(null);
   const isNeutralVenue = kind === 'sc';
@@ -1061,11 +1060,7 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
                   {/* Squad Panel (matching SquadTacticsView Lineup Header) */}
                   <div className="flex-1 min-h-[240px] sm:min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
                     <SquadListHeaderBar
-                      luTab={luTab}
-                      onChangeTab={setLuTab}
                       totalCount={activeXi.length + activeBench.length}
-                      startersCount={activeXi.length}
-                      benchCount={activeBench.length}
                       showMyTeamBadge={activeTeam.id === state.me}
                       canEdit={canEditActiveTeam}
                       tiredCount={restNeededStarters.length > 0 ? restNeededStarters.length : tiredWarningStarters.length}
@@ -1084,38 +1079,30 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
 
                     {/* Player Rows */}
                     <div className="flex-1 min-h-0 overflow-y-auto">
-                      {luTab !== 2 && (
-                        <>
-                          <div
-                            className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
-                            style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
-                          >
-                            <span>ตัวจริง</span>
-                            <span className="tabular">{activeXi.length} คน</span>
-                          </div>
-                          <div className="divide-y divide-[var(--line)]/50">
-                            {activeXi.map((pl, idx) =>
-                              renderPlayerRow(pl, activeSlots[idx]?.sp || pl.ro, activeTeam, true, pl.n === activeCap)
-                            )}
-                          </div>
-                        </>
-                      )}
-                      {luTab !== 1 && (
-                        <>
-                          <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
-                            <span>ตัวสำรอง</span>
-                            <span className="tabular text-[var(--mut)]">{activeBench.length} คน</span>
-                          </div>
-                          {activeBench.length > 0 ? (
-                            <div className="divide-y divide-[var(--line)]/50">
-                              {activeBench.map((pl) => renderPlayerRow(pl, pl.ro, activeTeam, false, false))}
-                            </div>
-                          ) : (
-                            <div className="text-center py-3 text-[10.5px] mland:text-[9px] text-[var(--mut)]">
-                              ไม่มีนักเตะสำรองในทีม
-                            </div>
-                          )}
-                        </>
+                      <div
+                        className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 border-b border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--g)]"
+                        style={{ backgroundColor: 'color-mix(in srgb, var(--g) 15%, var(--surface))' }}
+                      >
+                        <span>ตัวจริง</span>
+                        <span className="tabular">{activeXi.length} คน</span>
+                      </div>
+                      <div className="divide-y divide-[var(--line)]/50">
+                        {activeXi.map((pl, idx) =>
+                          renderPlayerRow(pl, activeSlots[idx]?.sp || pl.ro, activeTeam, true, pl.n === activeCap)
+                        )}
+                      </div>
+                      <div className="sticky top-0 z-10 px-2.5 py-0.5 mland:px-2 bg-[var(--surface-2)] border-y border-[var(--line)] flex items-center justify-between text-[10px] mland:text-[8.5px] font-extrabold text-[var(--ink)]">
+                        <span>ตัวสำรอง</span>
+                        <span className="tabular text-[var(--mut)]">{activeBench.length} คน</span>
+                      </div>
+                      {activeBench.length > 0 ? (
+                        <div className="divide-y divide-[var(--line)]/50">
+                          {activeBench.map((pl) => renderPlayerRow(pl, pl.ro, activeTeam, false, false))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-3 text-[10.5px] mland:text-[9px] text-[var(--mut)]">
+                          ไม่มีนักเตะสำรองในทีม
+                        </div>
                       )}
                     </div>
                   </div>
