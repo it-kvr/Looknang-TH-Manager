@@ -4,6 +4,8 @@ import {
   Film,
   Flag,
   Gauge,
+  Maximize2,
+  Minimize2,
   Pause,
   Play,
   Route,
@@ -408,6 +410,7 @@ export const MatchModal: React.FC<{
 
   const [penResult, setPenResult] = useState<{ winnerHome: boolean; text: string } | null>(null);
   const [done, setDone] = useState(false);
+  const [broadcastFullscreen, setBroadcastFullscreen] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const leftStageScrollRef = useRef<HTMLDivElement | null>(null);
@@ -420,8 +423,17 @@ export const MatchModal: React.FC<{
   useScrollTopOnChange(rightTacticsScrollRef, [mlandMatchTab, matchPhaseUi], { includeAncestors: false });
 
   useEffect(() => {
-    if (done) setMlandMatchTab('players');
+    if (done) {
+      setMlandMatchTab('players');
+      setBroadcastFullscreen(false);
+    }
   }, [done]);
+
+  useEffect(() => {
+    if (matchPhaseUi === 'halftime' || (state.mode === 'm' && mlandMatchTab === 'tactics')) {
+      setBroadcastFullscreen(false);
+    }
+  }, [matchPhaseUi, state.mode, mlandMatchTab]);
   const triggeredRulesRef = useRef<number[]>([]);
   const lastGoalSoundMsRef = useRef(0);
   const alertLoggedRef = useRef<Set<string>>(new Set());
@@ -9761,20 +9773,26 @@ export const MatchModal: React.FC<{
 
     if (isStaticState) {
       if (initialWorld && initialCanvas && !done && !simRef.current.done && initialWorld.phase !== 'halftime' && !isTacticsHidden) {
-        drawLivePitchToCanvas(
-          initialCanvas,
-          initialWorld,
-          homeKit,
-          awayKit,
-          homeGkKit,
-          awayGkKit,
-          showRunVectors,
-          homeTrim,
-          awayTrim,
-          showPositions,
-          showRatings,
-          simRef.current.liveForm
-        );
+        const redrawStatic = () => {
+          drawLivePitchToCanvas(
+            initialCanvas,
+            initialWorld,
+            homeKit,
+            awayKit,
+            homeGkKit,
+            awayGkKit,
+            showRunVectors,
+            homeTrim,
+            awayTrim,
+            showPositions,
+            showRatings,
+            simRef.current.liveForm
+          );
+        };
+        redrawStatic();
+        const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => redrawStatic()) : null;
+        ro?.observe(initialCanvas);
+        return () => ro?.disconnect();
       }
       return;
     }
@@ -10517,7 +10535,7 @@ export const MatchModal: React.FC<{
     rafId = window.requestAnimationFrame(frame);
     return () => window.cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused, done, speed, showRatings, showRunVectors, showPositions, cineSlowMo, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, matchPhaseUi, mlandMatchTab]);
+  }, [paused, done, speed, showRatings, showRunVectors, showPositions, cineSlowMo, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, matchPhaseUi, mlandMatchTab, broadcastFullscreen]);
 
   const skipToEnd = () => {
     if (done || simRef.current.done) return;
@@ -11568,9 +11586,25 @@ export const MatchModal: React.FC<{
     return <span className="inline-flex flex-nowrap items-center justify-center gap-1.5 min-w-0 max-w-full whitespace-nowrap">{nodes}</span>;
   }, [actionBanner, matchVisualIndex, homeId, awayId, homeOrig, awayOrig, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, state]);
 
+  const isLivePitchFullscreen =
+    broadcastFullscreen &&
+    !done &&
+    matchPhaseUi !== 'halftime' &&
+    !(state.mode === 'm' && mlandMatchTab === 'tactics');
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/88 flex items-center justify-center p-1.5 sm:p-2.5 mland:p-1 safe-all overflow-hidden">
-      <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
+    <div
+      className={`fixed inset-0 z-50 bg-black/88 flex items-center justify-center safe-all overflow-hidden ${
+        isLivePitchFullscreen ? 'p-0' : 'p-1.5 sm:p-2.5 mland:p-1'
+      }`}
+    >
+      <div
+        className={
+          isLivePitchFullscreen
+            ? 'w-full max-w-none h-[calc(var(--app-dvh,1dvh)*100)] max-h-[calc(var(--app-dvh,1dvh)*100)] rounded-none bg-[var(--surface)] border-0 flex flex-col overflow-hidden shadow-2xl'
+            : 'w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*96)] max-h-[calc(var(--app-dvh,1dvh)*96)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl'
+        }
+      >
         {/* Pinned Top Broadcast Scoreboard */}
         <MatchBroadcastHeader
           compTitle={compTitle}
@@ -11662,6 +11696,28 @@ export const MatchModal: React.FC<{
 
                     <button
                       type="button"
+                      title={broadcastFullscreen ? 'ออกจากโหมดถ่ายทอดสดเต็มจอ' : 'ดูถ่ายทอดสดแบบเต็มจอ'}
+                      aria-label={broadcastFullscreen ? 'ย่อจอถ่ายทอดสด' : 'ดูถ่ายทอดสดแบบเต็มจอ'}
+                      onClick={() => {
+                        SFX.tap();
+                        setBroadcastFullscreen((v) => !v);
+                      }}
+                      className={`btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 ${
+                        broadcastFullscreen
+                          ? 'bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
+                          : 'btn-surface'
+                      }`}
+                    >
+                      {broadcastFullscreen ? (
+                        <Minimize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                      ) : (
+                        <Maximize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+                      )}
+                      <span className="hidden md:inline mland:inline">{broadcastFullscreen ? 'ย่อจอ' : 'เต็มจอ'}</span>
+                    </button>
+
+                    <button
+                      type="button"
                       title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
                       onClick={skipToEnd}
@@ -11689,7 +11745,11 @@ export const MatchModal: React.FC<{
         />
 
         {/* Horizontal Landscape Broadcast Stage OR Live Tactical Formation & Drag-Drop Sub Studio */}
-        <div className="flex-1 min-h-0 overflow-hidden p-2.5 mland:p-1.5 flex flex-col">
+        <div
+          className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
+            isLivePitchFullscreen ? 'p-0' : 'p-2.5 mland:p-1.5'
+          }`}
+        >
           {state.mode === 'm' && !done && mlandMatchTab === 'tactics' ? (
             <LiveTacticsStudio
               state={state}
@@ -11870,10 +11930,29 @@ export const MatchModal: React.FC<{
               onOpenVarReplay={openVarReplayById}
             />
           ) : (
-            <div className="grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden">
+            <div
+              className={
+                isLivePitchFullscreen
+                  ? 'flex flex-col flex-1 min-h-0 overflow-hidden'
+                  : 'grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden'
+              }
+            >
             {/* Left Stage: Live 2D Pitch + Events Feed Below */}
-            <div ref={leftStageScrollRef} className="space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1">
-              <div className="rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col">
+            <div
+              ref={leftStageScrollRef}
+              className={
+                isLivePitchFullscreen
+                  ? 'min-w-0 flex-1 min-h-0 flex flex-col overflow-hidden'
+                  : 'space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1'
+              }
+            >
+              <div
+                className={
+                  isLivePitchFullscreen
+                    ? 'flex-1 min-h-0 overflow-hidden bg-[#0c351f] w-full flex flex-col'
+                    : 'rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col'
+                }
+              >
                   {/* Single-Row Top Broadcast Commentary + Compact Photo/Number Blessing Chips */}
                   {matchPhaseUi !== 'halftime' && !done && (() => {
                     const homeMiracle = miracleBannerUi?.side === 'H' ? miracleBannerUi : null;
@@ -11990,7 +12069,7 @@ export const MatchModal: React.FC<{
                     );
                   })()}
                   <div
-                    className="relative"
+                    className={`relative ${isLivePitchFullscreen ? 'flex-1 min-h-0 w-full' : ''}`}
                     style={{
                       backgroundColor:
                         matchEnv.timeOfDay === 'night'
@@ -12006,7 +12085,11 @@ export const MatchModal: React.FC<{
                       ref={canvasRef}
                       onContextMenu={(e) => e.preventDefault()}
                       style={{ WebkitTouchCallout: 'none', touchAction: 'manipulation' }}
-                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-128px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-112px)] object-contain mx-auto block select-none`}
+                      className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}${
+                        isLivePitchFullscreen
+                          ? 'w-full h-full mx-auto block select-none'
+                          : 'aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-128px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-112px)] object-contain mx-auto block select-none'
+                      }`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
                     />
 
@@ -12354,6 +12437,7 @@ export const MatchModal: React.FC<{
               )}
 
               {/* Live Commentary & Match Events Below the Pitch (Scroll Down to Read) */}
+              {!isLivePitchFullscreen && (
               <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
                 {/* Compact Single-Row Top Menu Band: Title + Unified Filter & Stadium Display Bar */}
                 <div className="bg-[var(--surface-2)]/65 border-b border-[var(--line)] px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 flex items-center justify-between gap-2">
@@ -12464,6 +12548,20 @@ export const MatchModal: React.FC<{
                         >
                           <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
                           <span>สโล</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          title="ดูถ่ายทอดสดแบบเต็มจอ"
+                          aria-label="ดูถ่ายทอดสดแบบเต็มจอ"
+                          onClick={() => {
+                            SFX.tap();
+                            setBroadcastFullscreen(true);
+                          }}
+                          className="h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70"
+                        >
+                          <Maximize2 className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                          <span>เต็มจอ</span>
                         </button>
                       </>
                     )}
@@ -12577,9 +12675,11 @@ export const MatchModal: React.FC<{
                   })()}
                 </div>
               </div>
+              )}
             </div>
 
             {/* Right Stage: Injury Alert + Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
+            {!isLivePitchFullscreen && (
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
               {injuryAlert && !done && (
                 <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-rose-950/95 border border-rose-400/55 shadow-sm flex flex-col gap-1.5 mland:gap-1 text-white shrink-0">
@@ -12998,21 +13098,37 @@ export const MatchModal: React.FC<{
                               <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
                                 {tierMeta.desc}
                               </span>
-                              <button
-                                type="button"
-                                disabled={!canClubShout}
-                                onClick={() => {
-                                  SFX.tap();
-                                  setClubShoutMin(minute);
-                                  pushStreamComment(minute, 'club', {
-                                    viewerBoost: Math.max(80, Math.round(streamProj.baseViewers * 0.08)),
-                                    burst: 1
-                                  });
-                                }}
-                                className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
-                              >
-                                {canClubShout ? '👋 ทักทายคนดู' : `รอสักครู่ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
-                              </button>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {matchPhaseUi !== 'halftime' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      SFX.tap();
+                                      setBroadcastFullscreen(true);
+                                    }}
+                                    title="ดูการถ่ายทอดสดแบบเต็มจอ"
+                                    className="btn btn-xs btn-secondary whitespace-nowrap shrink-0 inline-flex items-center gap-1"
+                                  >
+                                    <Maximize2 className="w-3 h-3 shrink-0" />
+                                    <span>เต็มจอ</span>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  disabled={!canClubShout}
+                                  onClick={() => {
+                                    SFX.tap();
+                                    setClubShoutMin(minute);
+                                    pushStreamComment(minute, 'club', {
+                                      viewerBoost: Math.max(80, Math.round(streamProj.baseViewers * 0.08)),
+                                      burst: 1
+                                    });
+                                  }}
+                                  className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                                >
+                                  {canClubShout ? '👋 ทักทายคนดู' : `รอสักครู่ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
+                                </button>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -13112,6 +13228,7 @@ export const MatchModal: React.FC<{
                 )}
               </div>
             </div>
+            )}
           </div>
           )}
         </div>
