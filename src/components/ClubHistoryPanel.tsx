@@ -453,7 +453,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
             <div className="font-extrabold text-sm mland:text-xs font-display tabular text-[var(--ink)]">{legacy.totalPlayed}</div>
           </div>
           <div className="py-1.5 mland:py-1 px-1 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)]/50">
-            <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">ชนะ-เสมอ-แพ้</div>
+            <div className="text-[10px] mland:text-[8px] text-[var(--mut)]">W-D-L</div>
             <div className="font-extrabold text-xs mland:text-[10px] font-display tabular text-[var(--ink)]">
               {legacy.totalWon}-{legacy.totalDrawn}-{legacy.totalLost}
             </div>
@@ -894,7 +894,7 @@ export const ClubHistoryPanel: React.FC<ClubHistoryPanelProps> = ({
                   <th className="py-1.5 px-2.5 font-semibold">ซีซั่น</th>
                   <th className="py-1.5 px-2 font-semibold">ลีก</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">อันดับ</th>
-                  <th className="py-1.5 px-1.5 text-center font-semibold whitespace-nowrap">แข่ง / ชนะ-เสมอ-แพ้</th>
+                  <th className="py-1.5 px-1.5 text-center font-semibold whitespace-nowrap">แข่ง / W-D-L</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">ได้-เสีย</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">แต้ม</th>
                   <th className="py-1.5 px-2 font-semibold">ถ้วย / ทวีป</th>

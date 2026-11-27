@@ -12532,7 +12532,7 @@ export const MatchModal: React.FC<{
         >
           <div className="flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
+              <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
               <span className={`font-bold truncate text-[var(--ink)] ${isLivePitchFullscreen ? 'text-[11px] mland:text-[9.5px]' : 'text-xs mland:text-[10.5px]'}`}>
                 {broadcastChannel.name}
               </span>
@@ -12574,7 +12574,7 @@ export const MatchModal: React.FC<{
                       SFX.tap();
                       setBroadcastFullscreen((v) => !v);
                     }}
-                    title={isLivePitchFullscreen ? 'ย่อจอกลับสู่มุมมองปกติ' : 'ดูไลฟ์สดแบบเต็มจอพร้อมแชทข้างๆ'}
+                    title={isLivePitchFullscreen ? 'ย่อจอกลับสู่มุมมองปกติ' : 'ดูออนไลน์แบบเต็มจอพร้อมแชทข้างๆ'}
                     className={`btn btn-xs whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
                       isLivePitchFullscreen
                         ? 'px-2 mland:px-1.5 bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
@@ -13941,8 +13941,8 @@ export const MatchModal: React.FC<{
                   onClick={() => setMlandMatchTab('chat')}
                   className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
                 >
-                  <span className="shrink-0">🔴</span>
-                  <span className="truncate">ไลฟ์สด</span>
+                  <span className="shrink-0">🎥</span>
+                  <span className="truncate">ออนไลน์</span>
                   <span className="tabular font-extrabold text-[9.5px] mland:text-[8px] opacity-85 shrink-0">
                     {fmtFansShort(liveViewers)}
                   </span>

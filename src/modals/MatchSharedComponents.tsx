@@ -1476,7 +1476,7 @@ export const MatchBroadcastHeader: React.FC<{
                   : `ถ่ายทอดสดทาง ${broadcastChannel.name} (${broadcastChannel.badge}) · กำลังรับชมสด ${liveViewers.toLocaleString()} คน (สูงสุด ${peakViewers.toLocaleString()})`
               }
             >
-              <span className={`leading-none shrink-0 text-[9px] mland:text-[7.5px] ${streamPlanId === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
+              <span className={`leading-none shrink-0 text-[9px] mland:text-[7.5px] ${streamPlanId === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
               <span className={streamPlanId === 'off' ? 'text-[var(--mut)]' : 'text-[var(--ink)]'}>
                 {liveViewers.toLocaleString()}
               </span>
@@ -3262,8 +3262,8 @@ export const FullTimeMatchStage: React.FC<{
             onClick={() => onChangeRightTab('chat')}
             className={`seg-btn w-full whitespace-nowrap ${rightTab === 'chat' ? 'seg-btn-active' : ''}`}
           >
-            <span>🔴</span>
-            <span>ไลฟ์สด</span>
+            <span>🎥</span>
+            <span>ออนไลน์</span>
             <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
               {fmtFansShort(liveViewers)}
             </span>
@@ -3291,7 +3291,7 @@ export const FullTimeMatchStage: React.FC<{
                   <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)] space-y-1.5 shrink-0">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
+                        <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
                         <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
                           {broadcastChannel.name}
                         </span>

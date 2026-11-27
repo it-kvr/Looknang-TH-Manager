@@ -445,7 +445,7 @@ export const TeamInspectorModal: React.FC<{
               <div className="text-[11px] mland:text-[9px] text-[var(--mut)] truncate tabular">
                 <span>{TN[team.tier] || 'สโมสรทวีป'}</span>
                 {rank ? <span> · อันดับ <b className="text-[var(--ink)]">{rank}</b> ({team.pts} แต้ม)</span> : null}
-                <span> · ชนะ {team.w} เสมอ {team.d} แพ้ {team.l} ({gd >= 0 ? `+${gd}` : gd})</span>
+                <span> · W {team.w} D {team.d} L {team.l} ({gd >= 0 ? `+${gd}` : gd})</span>
                 <span className="hidden sm:inline mland:inline"> · แฟน {fmtFans(ensureTeamFans(team))} คน</span>
                 <span className="hidden md:inline"> · อายุเฉลี่ย {st.age} ปี</span>
               </div>

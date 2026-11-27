@@ -993,8 +993,8 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
             onClick={() => (onCloseToChat ? onCloseToChat() : onCloseToStats())}
             className="seg-btn w-full whitespace-nowrap"
           >
-            <span>🔴</span>
-            <span>ไลฟ์สด</span>
+            <span>🎥</span>
+            <span>ออนไลน์</span>
             {liveViewers != null && (
               <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
                 {fmtFansShort(liveViewers)}
