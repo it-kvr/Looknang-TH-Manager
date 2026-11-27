@@ -1,10 +1,11 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
-import { getStadiumStyleSpec, getAiTeamStadiumStyleId } from '../data/crestAndKitData';
+import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
+import { simulateRealtimeHighlightClip, curateMatchHighlights, MAX_MATCH_HIGHLIGHTS } from './matchHighlights';
 
 export function rate(
   t: Team,
@@ -7196,6 +7197,216 @@ export function simulateInstantMatchPayload(
     { id: 'sim-ko', m: 0, text: `📣 กรรมการเป่านกหวีดเริ่มเกม! ${H.name} พบ ${A.name}`, tone: 'sys' }
   ];
 
+  const meIsHome = homeId === s.me;
+  const simSeason: 'rainy' | 'summer' = Math.random() < 0.5 ? 'rainy' : 'summer';
+  const simTimeOfDay: 'day' | 'night' = Math.random() < 0.5 ? 'night' : 'day';
+  const simClubSeed = (H.id + 1) * 97 + (H.name?.length || 5) * 31;
+  let simTurfLv = 4;
+  let simTurfCond = 90;
+  if (meIsHome) {
+    simTurfLv = clamp(s.turfLv ?? 1, 0, 10);
+    const rawCond = simTurfLv <= 0 ? 40 : getFacilityCondition(s, 'turfLv');
+    const deficitPenalty = s.money < -30 ? 14 : s.money < 0 ? 7 : 0;
+    simTurfCond = clamp(rawCond - deficitPenalty, 30, 100);
+  } else if (kind === 'asia' || kind === 'sc') {
+    simTurfLv = H.tier === 2 ? 9 : 8;
+    simTurfCond = 95;
+  } else {
+    simTurfLv = H.tier === 2 ? clamp(6 + (simClubSeed % 3), 4, 10) : H.tier === 1 ? clamp(2 + (simClubSeed % 4), 1, 7) : clamp(simClubSeed % 4, 0, 4);
+    simTurfCond = clamp(68 + ((simClubSeed + s.md * 7) % 28) - (simSeason === 'rainy' ? 6 : 0) + H.tier * 4, 46, 100);
+  }
+  const simTurfSpec = getTurfGradeForLevel(simTurfLv, simTurfCond);
+  const simStadiumStyle: StadiumStyleId =
+    kind === 'sc'
+      ? 'modern_bowl'
+      : meIsHome && s.mode === 'm'
+        ? s.club?.stadiumStyle || 'open_track'
+        : getAiTeamStadiumStyleId(H.id, H.name, H.tier);
+  const simStyleSpec = getStadiumStyleSpec(simStadiumStyle);
+  const rawPuddleCount = simSeason === 'rainy' ? Math.min(7, simTurfSpec.maxPuddles) : 0;
+  const puddleCount =
+    simStyleSpec.rainShield === 'full' ? 0 : simStyleSpec.rainShield === 'partial' ? Math.floor(rawPuddleCount * 0.5) : rawPuddleCount;
+  const simPuddles: MatchPitchPuddle[] =
+    puddleCount > 0
+      ? Array.from({ length: puddleCount }, () => ({
+          x: 12 + Math.random() * 76,
+          y: 12 + Math.random() * 76,
+          rx: 2.3 + Math.random() * 2.5,
+          ry: 1.4 + Math.random() * 1.6,
+          rot: (Math.random() - 0.5) * 1.4,
+          alpha: 0.14 + Math.random() * 0.1
+        }))
+      : [];
+  const simMatchEnv: MatchEnvironment = {
+    season: simSeason,
+    timeOfDay: simTimeOfDay,
+    puddles: simPuddles,
+    sunAngle: 0.25 + Math.random() * 0.4,
+    turfGrade: simTurfSpec.id,
+    turfCond: simTurfCond,
+    grassLength: simTurfLv >= 6 && simTurfCond >= 72 ? 'short' : simTurfLv <= 1 || simTurfCond < 58 ? 'long' : 'medium',
+    dirtMix: simTurfLv <= 0 ? 0.82 : simTurfLv === 1 ? 0.45 : simTurfLv <= 3 ? 0.16 : 0,
+    pitchSeed: simClubSeed,
+    stadiumStyle: simStadiumStyle
+  };
+
+  const homeTacCfg = { tac: H.tac || 'B', press: H.press ?? 1, pass: H.pass ?? 1, tempo: H.tempo ?? 1, width: H.wid ?? 1 };
+  const awayTacCfg = { tac: A.tac || 'B', press: A.press ?? 1, pass: A.pass ?? 1, tempo: A.tempo ?? 1, width: A.wid ?? 1 };
+  const findGkPlayer = (tm: Team, xiNames: string[]) =>
+    tm.sq.find((q) => xiNames.includes(q.n) && q.pos === 'GK') || tm.sq.find((q) => q.pos === 'GK');
+  const styleToFinishVerb = (st?: string): string => {
+    switch (st) {
+      case 'post_in':
+        return 'ซัดชนเสาในกระดอนเข้าประตู';
+      case 'bar_in':
+        return 'ซัดชนคานล่างกระดอนเข้าประตู';
+      case 'top_corner':
+        return 'ปั่นบอลพุ่งเสียบสามเหลี่ยมอย่างเฉียบขาด';
+      case 'gk_face':
+        return 'ตะบันเต็มข้อแสกหน้านายด่านเข้าประตู';
+      case 'gk_fumble_in':
+        return 'ซัดแรงจนผู้รักษาประตูปัดไม่ออก บอลปลิ้นเข้าประตู';
+      case 'deflected':
+        return 'ยิงแฉลบแนวรับเปลี่ยนทางเข้าประตู';
+      case 'own_goal':
+        return 'สกัดบอลพลาดแฉลบเข้าประตูตัวเอง';
+      default:
+        return 'ซัดด้วยความเฉียบคมส่งบอลตุงตาข่าย';
+    }
+  };
+  const celebCycle: GoalCelebrationStyle[] = ['knee_slide', 'siu_jump', 'finger_point', 'airplane', 'bow_crowd', 'group_huddle', 'backflip', 'calm_shush'];
+  const rawSimHighlights: MatchHighlightClip[] = [];
+  let hlSeq = 0;
+  let runGh = 0;
+  let runGa = 0;
+  const sortedSimGoals = (r.evs || []).slice().sort((u, v) => u.m - v.m);
+  sortedSimGoals.forEach((ev, idx) => {
+    const evSide: 'H' | 'A' = ev.t === H.id ? 'H' : 'A';
+    const scoreBefore = `${runGh}-${runGa}`;
+    if (evSide === 'H') runGh++;
+    else runGa++;
+    const scoreAfter = `${runGh}-${runGa}`;
+    const secondHalf = ev.m > 45;
+    const attRight = evSide === 'H' ? !secondHalf : secondHalf;
+    const concGk = evSide === 'H' ? findGkPlayer(A, awayXiNames) : findGkPlayer(H, homeXiNames);
+    const verb = ev.og ? styleToFinishVerb('own_goal') : styleToFinishVerb(ev.style);
+    hlSeq += 1;
+    rawSimHighlights.push(
+      simulateRealtimeHighlightClip({
+        id: `simhl-${hlSeq}-${ev.m}`,
+        seq: hlSeq,
+        minute: ev.m,
+        side: evSide,
+        attRight,
+        secondHalf,
+        homeTeam: H,
+        awayTeam: A,
+        homeLu: homeXiNames,
+        awayLu: awayXiNames,
+        homeTactics: homeTacCfg,
+        awayTactics: awayTacCfg,
+        scorerName: ev.who,
+        assisterName: ev.og ? undefined : ev.as || undefined,
+        victimName: concGk?.n,
+        finishVerb: verb,
+        shotStyle: ev.style,
+        isOwnGoal: Boolean(ev.og),
+        celebratePose: ev.og ? 'own_goal_modest' : celebCycle[(idx + ev.m) % celebCycle.length],
+        scoreBefore,
+        scoreAfter,
+        scoreAfterGh: runGh,
+        scoreAfterGa: runGa,
+        isDerby: Boolean(s.derby),
+        careerP: s.p,
+        matchEnv: simMatchEnv
+      })
+    );
+  });
+
+  if (rawSimHighlights.length < MAX_MATCH_HIGHLIGHTS) {
+    const woodInc = (r.incidents || []).find((inc) => inc.kind === 'woodwork');
+    if (woodInc) {
+      const wSide: 'H' | 'A' = woodInc.t === A.id ? 'A' : 'H';
+      const wTeam = wSide === 'H' ? H : A;
+      const dTeam = wSide === 'H' ? A : H;
+      const dXi = wSide === 'H' ? awayXiNames : homeXiNames;
+      const wShooter = (wSide === 'H' ? H.sq : A.sq).find((q) => (wSide === 'H' ? homeXiNames : awayXiNames).includes(q.n) && q.pos !== 'GK') || wTeam.sq[0];
+      const wGk = findGkPlayer(dTeam, dXi);
+      const secondHalf = woodInc.m > 45;
+      hlSeq += 1;
+      rawSimHighlights.push(
+        simulateRealtimeHighlightClip({
+          id: `simhl-${hlSeq}-${woodInc.m}`,
+          seq: hlSeq,
+          minute: woodInc.m,
+          kind: 'woodwork',
+          side: wSide,
+          attRight: wSide === 'H' ? !secondHalf : secondHalf,
+          secondHalf,
+          homeTeam: H,
+          awayTeam: A,
+          homeLu: homeXiNames,
+          awayLu: awayXiNames,
+          homeTactics: homeTacCfg,
+          awayTactics: awayTacCfg,
+          scorerName: wShooter?.n || wTeam.name,
+          victimName: wGk?.n,
+          finishVerb: 'ซัดบอลพุ่งชนเสา/คานอย่างจัง',
+          scoreBefore: `${r.gh}-${r.ga}`,
+          scoreAfter: `${r.gh}-${r.ga}`,
+          scoreAfterGh: r.gh,
+          scoreAfterGa: r.ga,
+          isDerby: Boolean(s.derby),
+          careerP: s.p,
+          matchEnv: simMatchEnv
+        })
+      );
+    }
+  }
+
+  if (rawSimHighlights.length < MAX_MATCH_HIGHLIGHTS && (savesH > 0 || savesA > 0)) {
+    const saveSide: 'H' | 'A' = savesH >= savesA ? 'H' : 'A';
+    const attOppSide: 'H' | 'A' = saveSide === 'H' ? 'A' : 'H';
+    const saveTeam = saveSide === 'H' ? H : A;
+    const saveXi = saveSide === 'H' ? homeXiNames : awayXiNames;
+    const oppTeam = attOppSide === 'H' ? H : A;
+    const oppXi = attOppSide === 'H' ? homeXiNames : awayXiNames;
+    const saveGk = findGkPlayer(saveTeam, saveXi);
+    const oppFw = oppTeam.sq.find((q) => oppXi.includes(q.n) && (q.pos === 'FW' || q.pos === 'MF')) || oppTeam.sq[0];
+    const saveInc = (r.incidents || []).find((inc) => inc.kind === 'save');
+    const saveMin = saveInc?.m || R(28, 84);
+    const secondHalf = saveMin > 45;
+    hlSeq += 1;
+    rawSimHighlights.push(
+      simulateRealtimeHighlightClip({
+        id: `simhl-${hlSeq}-${saveMin}`,
+        seq: hlSeq,
+        minute: saveMin,
+        kind: 'super_save',
+        side: saveSide,
+        attRight: attOppSide === 'H' ? !secondHalf : secondHalf,
+        secondHalf,
+        homeTeam: H,
+        awayTeam: A,
+        homeLu: homeXiNames,
+        awayLu: awayXiNames,
+        homeTactics: homeTacCfg,
+        awayTactics: awayTacCfg,
+        scorerName: saveGk?.n || 'ผู้รักษาประตู',
+        victimName: oppFw?.n,
+        finishVerb: 'พุ่งปัดปลายมือช่วยทีมรอดเสียประตูได้อย่างสุดยอด',
+        scoreBefore: `${r.gh}-${r.ga}`,
+        scoreAfter: `${r.gh}-${r.ga}`,
+        scoreAfterGh: r.gh,
+        scoreAfterGa: r.ga,
+        isDerby: Boolean(s.derby),
+        careerP: s.p,
+        matchEnv: simMatchEnv
+      })
+    );
+  }
+  const simHighlightClips = curateMatchHighlights(rawSimHighlights);
+
   return {
     gh: r.gh,
     ga: r.ga,
@@ -7239,6 +7450,8 @@ export function simulateInstantMatchPayload(
     formations: { H: H.form || '4-4-2', A: A.form || '4-4-2' },
     playedSlots: r.playedSlots || {},
     playerActions,
-    logs: simLogs
+    logs: simLogs,
+    matchEnv: simMatchEnv,
+    ...(simHighlightClips.length ? { highlightClips: simHighlightClips } : {})
   };
 }

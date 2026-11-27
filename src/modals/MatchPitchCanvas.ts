@@ -6267,23 +6267,25 @@ const sampleHighlightFrameAt = (frames: MatchHighlightFrame[], t: number) => {
           ap = 1;
         }
       } else if (!act0 && act1) {
-        if (alpha >= 0.3) {
+        const thresh = act1 === HL_ACT.CELEBRATE ? 0.78 : 0.3;
+        if (alpha >= thresh) {
           act = act1;
           dd = r1[5] ?? r0[5] ?? 1;
-          ap = clamp(((alpha - 0.3) / 0.7) * ap1, 0, 1);
+          ap = clamp(((alpha - thresh) / (1 - thresh)) * ap1, 0, 1);
         } else {
           act = 0;
           ap = 0;
         }
       } else if (act0 && act1) {
-        if (alpha < 0.5) {
+        const split = act1 === HL_ACT.CELEBRATE && act0 !== HL_ACT.CELEBRATE ? 0.78 : 0.5;
+        if (alpha < split) {
           act = act0;
           dd = r0[5] ?? 1;
-          ap = clamp(ap0 + (1 - ap0) * (alpha / 0.5), 0, 1);
+          ap = clamp(ap0 + (1 - ap0) * (alpha / split), 0, 1);
         } else {
           act = act1;
           dd = r1[5] ?? 1;
-          ap = clamp(ap1 * ((alpha - 0.5) / 0.5), 0, 1);
+          ap = clamp(ap1 * ((alpha - split) / (1 - split)), 0, 1);
         }
       }
 
@@ -6322,6 +6324,49 @@ const sampleHighlightFrameAt = (frames: MatchHighlightFrame[], t: number) => {
   }
 
   return { bx, by, bz, shot, style, ripL, ripR, car };
+};
+
+const resolveHighlightGoalImpactT = (clip: MatchHighlightClip): number => {
+  const frames = clip.frames;
+  if (!clip.kind.startsWith('goal_') || frames.length < 2) return clip.peakT;
+
+  const attRight = clip.attRight;
+  let maxInGoalX = attRight ? -Infinity : Infinity;
+  for (let i = 0; i < frames.length; i++) {
+    if (attRight) maxInGoalX = Math.max(maxInGoalX, frames[i].bx);
+    else maxInGoalX = Math.min(maxInGoalX, frames[i].bx);
+  }
+  const netTargetX = attRight
+    ? clamp(Math.min(100.35, maxInGoalX), 99.85, 100.35)
+    : clamp(Math.max(-0.35, maxInGoalX), -0.35, 0.15);
+
+  let crossT: number | null = null;
+  for (let i = 1; i < frames.length; i++) {
+    const f0 = frames[i - 1];
+    const f1 = frames[i];
+    const reached1 = attRight ? f1.bx >= netTargetX : f1.bx <= netTargetX;
+    const reached0 = attRight ? f0.bx >= netTargetX : f0.bx <= netTargetX;
+    if (reached1 && !reached0) {
+      const denom = f1.bx - f0.bx;
+      const frac = Math.abs(denom) > 0.001 ? clamp((netTargetX - f0.bx) / denom, 0, 1) : 1;
+      crossT = f0.t + (f1.t - f0.t) * frac;
+      break;
+    }
+  }
+
+  let firstRipT: number | null = null;
+  for (let i = 0; i < frames.length; i++) {
+    if ((frames[i].ripL || 0) > 0.04 || (frames[i].ripR || 0) > 0.04) {
+      firstRipT = frames[i].t;
+      break;
+    }
+  }
+
+  if (crossT !== null) {
+    return clamp(firstRipT !== null ? Math.max(crossT, Math.min(firstRipT, crossT + 0.02)) : crossT, 0.1, 0.96);
+  }
+  if (firstRipT !== null) return clamp(firstRipT, 0.1, 0.96);
+  return clamp(Math.max(clip.peakT, 0.55), 0.1, 0.96);
 };
 
 export const drawHighlightClipToCanvas = (
@@ -6492,7 +6537,12 @@ export const drawHighlightClipToCanvas = (
     });
   }
 
-  // 2. Goal Frames with Climax Net Ripple
+  // 2. Goal Frames with Climax Net Ripple (strictly after ball crosses goal line into net)
+  const isGoalClip = clip.kind.startsWith('goal_');
+  const goalImpactT = isGoalClip ? resolveHighlightGoalImpactT(clip) : clip.peakT;
+  const ballInGoalNow = !isGoalClip || (clip.attRight ? cur.bx >= 99.9 : cur.bx <= 0.1);
+  const netImpactReached = !isGoalClip || (cPct >= goalImpactT && ballInGoalNow);
+
   const goalTop = py(42);
   const goalBot = py(58);
   const goalD = Math.max(9, pitchW * 0.021);
@@ -6519,12 +6569,12 @@ export const drawHighlightClipToCanvas = (
     ctx.stroke();
     ctx.restore();
   };
-  drawHlGoal(true, cur.ripL);
-  drawHlGoal(false, cur.ripR);
+  drawHlGoal(true, netImpactReached ? cur.ripL : 0);
+  drawHlGoal(false, netImpactReached ? cur.ripR : 0);
 
   // 3. Ball Flight Trajectory Line & Motion Trail (live-match palette)
   const zScale = 0.78 * zoom;
-  if (hasTrail && cur.shot && cur.car === undefined && cPct < Math.min(0.95, clip.peakT + 0.14)) {
+  if (hasTrail && cur.shot && cur.car === undefined && cPct < Math.min(0.95, goalImpactT + 0.02)) {
     sampleBallOnlyAt(clip.frames, Math.min(1, cPct + 0.085), hlShotAheadPt);
     const tailPt = hlTrailPts[0];
     const aDx = hlShotAheadPt.x - cur.bx;
@@ -6600,8 +6650,6 @@ export const drawHighlightClipToCanvas = (
 
   // 3b. Climax Shockwave Ring & Kick Burst (before players/ball so ball sits crisply on top)
   const peakRel = cPct - clip.peakT;
-  const isGoalClip = clip.kind.startsWith('goal_');
-  const goalImpactT = isGoalClip ? Math.min(0.82, clip.peakT + 0.085) : clip.peakT;
   if (peakRel >= -0.02 && peakRel <= 0.24) {
     const burstProg = clamp((peakRel + 0.02) / 0.14, 0, 1);
     const burstAlpha = clamp(1 - burstProg, 0, 1);
@@ -6628,7 +6676,7 @@ export const drawHighlightClipToCanvas = (
   hlSortedAgentsBuf.sort((a, b) => a.y - b.y);
 
   const showNames = opts.showNames !== false;
-  const isCelebratingPhase = isGoalClip && cPct >= goalImpactT;
+  const isCelebratingPhase = isGoalClip && netImpactReached;
   const cElapsed = cPct * 4.8;
   const cPose = clip.celebratePose || 'group_huddle';
 
@@ -6652,14 +6700,14 @@ export const drawHighlightClipToCanvas = (
     const kit = meta.gk ? (meta.s === 'H' ? homeGkKit : awayGkKit) : meta.s === 'H' ? homeKit : awayKit;
     const trim = meta.gk ? '#ffffff' : meta.s === 'H' ? homeTrim : awayTrim;
 
-    const act = agPos.act;
+    const act = isGoalClip && !isCelebratingPhase && agPos.act === HL_ACT.CELEBRATE ? 0 : agPos.act;
     const prog = clamp(agPos.ap, 0, 1);
     const acAlpha = clamp(1 - prog * 0.72, 0.22, 1);
     const arcEnv = Math.sin(prog * Math.PI);
     const dirSign = agPos.dd === -1 ? -1 : 1;
 
-    // Resolve celebration role & phase matching live match
-    const isCelebAct = act === HL_ACT.CELEBRATE || (isCelebratingPhase && meta.s === clip.side);
+    // Resolve celebration role & phase matching live match — strictly gated until ball hits the net
+    const isCelebAct = isCelebratingPhase && (act === HL_ACT.CELEBRATE || meta.s === clip.side);
     const cRole: 'scorer' | 'assister' | 'teammate' | 'og_culprit' | null = isCelebAct
       ? agPos.dd === -1
         ? 'og_culprit'
@@ -6678,7 +6726,7 @@ export const drawHighlightClipToCanvas = (
                   : 'teammate'
       : null;
     const fallbackCelebPh = isCelebratingPhase ? clamp((cPct - goalImpactT) / Math.max(0.08, 1 - goalImpactT), 0, 1) : 0;
-    const cPh = act === HL_ACT.CELEBRATE && agPos.ap > 0.02 ? prog : fallbackCelebPh;
+    const cPh = isCelebratingPhase ? (act === HL_ACT.CELEBRATE && agPos.ap > 0.02 ? prog : fallbackCelebPh) : 0;
 
     ctx.save();
     ctx.translate(cx, cy);

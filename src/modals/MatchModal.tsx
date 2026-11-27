@@ -41,7 +41,7 @@ import {
   curateMatchHighlights,
   detectGoalHighlightKind,
   finalizeHighlightClipFromSamples,
-  synthesizeHighlightClip,
+  simulateRealtimeHighlightClip,
   type FinalizeClipParams,
   type RollingHighlightSample
 } from '../engine/matchHighlights';
@@ -6422,21 +6422,19 @@ export const MatchModal: React.FC<{
     const attRight = isAttackRight(w, side);
     const scorerAg = !isOwnGoal ? w.agents.find((a) => !a.sentOff && a.side === side && a.id === scorerName) : undefined;
     const assisterAg = !isOwnGoal && assisterName ? w.agents.find((a) => !a.sentOff && a.side === side && a.id === assisterName) : undefined;
-    const pickedCeleb = isSkippingRef.current
-      ? { style: 'knee_slide' as GoalCelebrationStyle, label: '⚽ ทำประตู!' }
-      : pickGoalCelebrationStyle(
-          w,
-          side,
-          scorerAg,
-          isOwnGoal,
-          isMyTeamGoal,
-          isMeScorer,
-          curMin,
-          sr.gh,
-          sr.ga,
-          Boolean(assisterAg),
-          finishVerb
-        );
+    const pickedCeleb = pickGoalCelebrationStyle(
+      w,
+      side,
+      scorerAg,
+      isOwnGoal,
+      isMyTeamGoal,
+      isMeScorer,
+      curMin,
+      sr.gh,
+      sr.ga,
+      Boolean(assisterAg),
+      finishVerb
+    );
     if (!isSkippingRef.current) {
       const celebDuration = isOwnGoal ? 1.45 : pickedCeleb.style === 'group_huddle' ? 2.55 : 2.35;
       const anchorX = clamp(
@@ -6504,7 +6502,11 @@ export const MatchModal: React.FC<{
     const hlId = `hl-${sr.highlightSeq}-${curMin}`;
 
     if (isSkippingRef.current) {
-      const synth = synthesizeHighlightClip({
+      const hCfgSkip = getEffectiveTeamCfg('H', curMin);
+      const aCfgSkip = getEffectiveTeamCfg('A', curMin);
+      const telSkip = lastShotTelemetryRef.current;
+      const defGkSkip = w.agents.find((a) => !a.sentOff && a.side === defSide && a.pos === 'GK');
+      const synth = simulateRealtimeHighlightClip({
         id: hlId,
         seq: sr.highlightSeq,
         minute: curMin,
@@ -6515,10 +6517,17 @@ export const MatchModal: React.FC<{
         awayTeam: awayOrig,
         homeLu: sr.homeLu,
         awayLu: sr.awayLu,
+        homeTactics: { tac: hCfgSkip.tac, press: hCfgSkip.press, pass: hCfgSkip.pass, tempo: hCfgSkip.tempo, width: hCfgSkip.wid },
+        awayTactics: { tac: aCfgSkip.tac, press: aCfgSkip.press, pass: aCfgSkip.pass, tempo: aCfgSkip.tempo, width: aCfgSkip.wid },
         scorerName: isOwnGoal ? ogCulpritName : scorerName,
         assisterName: isOwnGoal ? undefined : assisterName || undefined,
+        victimName: defGkSkip?.id,
         finishVerb,
+        shotStyle: telSkip?.style || inferredStyle,
+        shotDistM: telSkip?.distM,
+        shotSpeedKmh: telSkip?.speedKmh,
         isOwnGoal,
+        celebratePose: pickedCeleb.style,
         scoreBefore: scoreBeforeStr,
         scoreAfter: scoreAfterStr,
         scoreAfterGh: sr.gh,
@@ -7505,47 +7514,84 @@ export const MatchModal: React.FC<{
           };
           w.phaseLabel = `🥅 ชนเสา/คานอย่างจัง!`;
           w.phaseTone = 'danger';
-          if (!isSkippingRef.current) {
-            const sr = simRef.current;
+          const sr = simRef.current;
+          const nonGoalCount = sr.highlightClips.filter((c) => !c.kind.startsWith('goal_')).length;
+          if (!isSkippingRef.current || nonGoalCount < 3) {
             sr.highlightSeq += 1;
             const tel = lastShotTelemetryRef.current;
             const actorFullName = shooter?.id || attTeam.name;
-            const ed = buildHighlightEditorial({
-              kind: 'woodwork',
-              minute: curMin,
-              teamName: attTeam.name,
-              oppTeamName: defTeam.name,
-              actorName: actorFullName,
-              victimName: gk?.id,
-              finishVerb: plan.deflectedFrom ? `ยิงแฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง` : 'ซัดบอลพุ่งชนเสา/คานอย่างจัง',
-              shotDistM: tel?.distM,
-              shotSpeedKmh: tel?.speedKmh,
-              scoreAfterGh: sr.gh,
-              scoreAfterGa: sr.ga,
-              side,
-              isDerby
-            });
-            queueHighlightCapture(w, {
-              id: `hl-${sr.highlightSeq}-${curMin}`,
-              seq: sr.highlightSeq,
-              minute: curMin,
-              kind: 'woodwork',
-              side,
-              attRight: attRightNow,
-              title: ed.title,
-              subtitle: ed.subtitle,
-              crewTag: ed.crewTag,
-              commentary: ed.commentary,
-              actorName: actorFullName,
-              victimName: gk?.id,
-              scoreBefore: `${sr.gh}-${sr.ga}`,
-              scoreAfter: `${sr.gh}-${sr.ga}`,
-              dramaScore: ed.dramaScore,
-              shotDistM: tel?.distM,
-              shotSpeedKmh: tel?.speedKmh,
-              secondHalf: w.secondHalf,
-              matchEnv
-            });
+            const woodVerb = plan.deflectedFrom ? `ยิงแฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง` : 'ซัดบอลพุ่งชนเสา/คานอย่างจัง';
+            if (isSkippingRef.current) {
+              const hCfgSkip = getEffectiveTeamCfg('H', curMin);
+              const aCfgSkip = getEffectiveTeamCfg('A', curMin);
+              sr.highlightClips.push(
+                simulateRealtimeHighlightClip({
+                  id: `hl-${sr.highlightSeq}-${curMin}`,
+                  seq: sr.highlightSeq,
+                  minute: curMin,
+                  kind: 'woodwork',
+                  side,
+                  attRight: attRightNow,
+                  secondHalf: w.secondHalf,
+                  homeTeam: homeOrig,
+                  awayTeam: awayOrig,
+                  homeLu: sr.homeLu,
+                  awayLu: sr.awayLu,
+                  homeTactics: { tac: hCfgSkip.tac, press: hCfgSkip.press, pass: hCfgSkip.pass, tempo: hCfgSkip.tempo, width: hCfgSkip.wid },
+                  awayTactics: { tac: aCfgSkip.tac, press: aCfgSkip.press, pass: aCfgSkip.pass, tempo: aCfgSkip.tempo, width: aCfgSkip.wid },
+                  scorerName: actorFullName,
+                  victimName: gk?.id,
+                  finishVerb: woodVerb,
+                  shotStyle: tel?.style,
+                  shotDistM: tel?.distM,
+                  shotSpeedKmh: tel?.speedKmh,
+                  scoreBefore: `${sr.gh}-${sr.ga}`,
+                  scoreAfter: `${sr.gh}-${sr.ga}`,
+                  scoreAfterGh: sr.gh,
+                  scoreAfterGa: sr.ga,
+                  isDerby,
+                  careerP: state.p,
+                  matchEnv
+                })
+              );
+            } else {
+              const ed = buildHighlightEditorial({
+                kind: 'woodwork',
+                minute: curMin,
+                teamName: attTeam.name,
+                oppTeamName: defTeam.name,
+                actorName: actorFullName,
+                victimName: gk?.id,
+                finishVerb: woodVerb,
+                shotDistM: tel?.distM,
+                shotSpeedKmh: tel?.speedKmh,
+                scoreAfterGh: sr.gh,
+                scoreAfterGa: sr.ga,
+                side,
+                isDerby
+              });
+              queueHighlightCapture(w, {
+                id: `hl-${sr.highlightSeq}-${curMin}`,
+                seq: sr.highlightSeq,
+                minute: curMin,
+                kind: 'woodwork',
+                side,
+                attRight: attRightNow,
+                title: ed.title,
+                subtitle: ed.subtitle,
+                crewTag: ed.crewTag,
+                commentary: ed.commentary,
+                actorName: actorFullName,
+                victimName: gk?.id,
+                scoreBefore: `${sr.gh}-${sr.ga}`,
+                scoreAfter: `${sr.gh}-${sr.ga}`,
+                dramaScore: ed.dramaScore,
+                shotDistM: tel?.distM,
+                shotSpeedKmh: tel?.speedKmh,
+                secondHalf: w.secondHalf,
+                matchEnv
+              });
+            }
           }
           return;
         }
@@ -8075,55 +8121,92 @@ export const MatchModal: React.FC<{
           w.phaseTone = 'normal';
         }
         const shotFlightType = lastShotTelemetryRef.current?.flightType;
-        const highDramaSave =
-          !isSkippingRef.current &&
-          (shotFlightType === 'penalty' ||
-            Boolean(plan?.deflectedFrom) ||
-            ['bicycle', 'volley', 'diving_header', 'curler', 'trivela', 'knuckle', 'screamer'].includes(
-              lastShotTelemetryRef.current?.style || ''
-            ) ||
-            Math.random() < 0.45);
+        const srSave = simRef.current;
+        const nonGoalSavesCount = srSave.highlightClips.filter((c) => !c.kind.startsWith('goal_')).length;
+        const isNotableShot =
+          shotFlightType === 'penalty' ||
+          Boolean(plan?.deflectedFrom) ||
+          ['bicycle', 'volley', 'diving_header', 'curler', 'trivela', 'knuckle', 'screamer'].includes(
+            lastShotTelemetryRef.current?.style || ''
+          ) ||
+          Math.random() < 0.45;
+        const highDramaSave = isNotableShot && (!isSkippingRef.current || nonGoalSavesCount < 3);
         if (highDramaSave) {
-          const sr = simRef.current;
-          sr.highlightSeq += 1;
+          srSave.highlightSeq += 1;
           const tel = lastShotTelemetryRef.current;
           const gkName = gk?.id || 'ผู้รักษาประตู';
-          const ed = buildHighlightEditorial({
-            kind: 'super_save',
-            minute: curMin,
-            teamName: defTeam.name,
-            oppTeamName: attTeam.name,
-            actorName: gkName,
-            victimName: shooter?.id,
-            finishVerb: shotFlightType === 'penalty' ? 'อ่านทางพุ่งปัดจุดโทษไว้ได้อย่างเหลือเชื่อ' : saveTypeText,
-            shotDistM: tel?.distM,
-            shotSpeedKmh: tel?.speedKmh,
-            scoreAfterGh: sr.gh,
-            scoreAfterGa: sr.ga,
-            side: defSide,
-            isDerby
-          });
-          queueHighlightCapture(w, {
-            id: `hl-${sr.highlightSeq}-${curMin}`,
-            seq: sr.highlightSeq,
-            minute: curMin,
-            kind: 'super_save',
-            side: defSide,
-            attRight: attRightNow,
-            title: ed.title,
-            subtitle: ed.subtitle,
-            crewTag: ed.crewTag,
-            commentary: ed.commentary,
-            actorName: gkName,
-            victimName: shooter?.id,
-            scoreBefore: `${sr.gh}-${sr.ga}`,
-            scoreAfter: `${sr.gh}-${sr.ga}`,
-            dramaScore: shotFlightType === 'penalty' ? Math.max(ed.dramaScore, 89) : ed.dramaScore,
-            shotDistM: tel?.distM,
-            shotSpeedKmh: tel?.speedKmh,
-            secondHalf: w.secondHalf,
-            matchEnv
-          });
+          const saveVerb = shotFlightType === 'penalty' ? 'อ่านทางพุ่งปัดจุดโทษไว้ได้อย่างเหลือเชื่อ' : saveTypeText;
+          if (isSkippingRef.current) {
+            const hCfgSkip = getEffectiveTeamCfg('H', curMin);
+            const aCfgSkip = getEffectiveTeamCfg('A', curMin);
+            srSave.highlightClips.push(
+              simulateRealtimeHighlightClip({
+                id: `hl-${srSave.highlightSeq}-${curMin}`,
+                seq: srSave.highlightSeq,
+                minute: curMin,
+                kind: 'super_save',
+                side: defSide,
+                attRight: attRightNow,
+                secondHalf: w.secondHalf,
+                homeTeam: homeOrig,
+                awayTeam: awayOrig,
+                homeLu: srSave.homeLu,
+                awayLu: srSave.awayLu,
+                homeTactics: { tac: hCfgSkip.tac, press: hCfgSkip.press, pass: hCfgSkip.pass, tempo: hCfgSkip.tempo, width: hCfgSkip.wid },
+                awayTactics: { tac: aCfgSkip.tac, press: aCfgSkip.press, pass: aCfgSkip.pass, tempo: aCfgSkip.tempo, width: aCfgSkip.wid },
+                scorerName: gkName,
+                victimName: shooter?.id,
+                finishVerb: saveVerb,
+                shotStyle: tel?.style || (shotFlightType === 'penalty' ? 'penalty' : undefined),
+                shotDistM: tel?.distM,
+                shotSpeedKmh: tel?.speedKmh,
+                scoreBefore: `${srSave.gh}-${srSave.ga}`,
+                scoreAfter: `${srSave.gh}-${srSave.ga}`,
+                scoreAfterGh: srSave.gh,
+                scoreAfterGa: srSave.ga,
+                isDerby,
+                careerP: state.p,
+                matchEnv
+              })
+            );
+          } else {
+            const ed = buildHighlightEditorial({
+              kind: 'super_save',
+              minute: curMin,
+              teamName: defTeam.name,
+              oppTeamName: attTeam.name,
+              actorName: gkName,
+              victimName: shooter?.id,
+              finishVerb: saveVerb,
+              shotDistM: tel?.distM,
+              shotSpeedKmh: tel?.speedKmh,
+              scoreAfterGh: srSave.gh,
+              scoreAfterGa: srSave.ga,
+              side: defSide,
+              isDerby
+            });
+            queueHighlightCapture(w, {
+              id: `hl-${srSave.highlightSeq}-${curMin}`,
+              seq: srSave.highlightSeq,
+              minute: curMin,
+              kind: 'super_save',
+              side: defSide,
+              attRight: attRightNow,
+              title: ed.title,
+              subtitle: ed.subtitle,
+              crewTag: ed.crewTag,
+              commentary: ed.commentary,
+              actorName: gkName,
+              victimName: shooter?.id,
+              scoreBefore: `${srSave.gh}-${srSave.ga}`,
+              scoreAfter: `${srSave.gh}-${srSave.ga}`,
+              dramaScore: shotFlightType === 'penalty' ? Math.max(ed.dramaScore, 89) : ed.dramaScore,
+              shotDistM: tel?.distM,
+              shotSpeedKmh: tel?.speedKmh,
+              secondHalf: w.secondHalf,
+              matchEnv
+            });
+          }
         }
       }
       return;
