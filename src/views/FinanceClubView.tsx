@@ -3198,12 +3198,8 @@ export const FinanceClubView: React.FC<{
 
             {/* Dedicated Spacious Club Info Editor Modal (Easy Thai Input + Clear Buttons + Mobile Keyboard Safe) */}
             {editingClubInfo && (
-              <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 mland:p-2"
-                onClick={cancelClubEdit}
-              >
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 mland:p-2">
                 <form
-                  onClick={(e) => e.stopPropagation()}
                   onSubmit={(e) => {
                     e.preventDefault();
                     saveClubEdit();
@@ -3560,14 +3556,8 @@ export const FinanceClubView: React.FC<{
               };
 
               return (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 mland:p-2"
-                  onClick={closeCoachEditor}
-                >
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="w-full max-w-3xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden"
-                  >
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3 sm:p-4 mland:p-2">
+                  <div className="w-full max-w-3xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*95)] flex flex-col rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden">
                     {/* Modal Header */}
                     <div className="px-4 py-3 mland:py-2 border-b border-[var(--line)] flex items-center justify-between gap-3 shrink-0">
                       <div className="min-w-0">

@@ -1458,14 +1458,8 @@ export const LeagueView: React.FC<{
       )}
 
       {prizeModalTier !== null && (
-        <div
-          className="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-3 sm:p-5 mland:p-2.5"
-          onClick={() => setPrizeModalTier(null)}
-        >
-          <div
-            className="w-full max-w-lg max-h-[88dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 bg-black/65 flex items-center justify-center p-3 sm:p-5 mland:p-2.5">
+          <div className="w-full max-w-lg max-h-[88dvh] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl overflow-hidden flex flex-col">
             <div className="shrink-0 px-4 py-3 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]/70 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <h3 className="font-bold text-sm mland:text-xs font-display flex items-center gap-1.5">

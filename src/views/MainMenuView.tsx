@@ -2538,14 +2538,8 @@ export const MainMenu: React.FC<{
           : meTeam?.sq?.find((q) => q.me) || (d.p ? { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1, ov: OVF(d.p.pos, d.p.a) } : null);
         const ov = topPl?.ov || 0;
         return (
-          <div
-            className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4"
-            onClick={() => !slotActionBusy && setConfirmSaveSlot(null)}
-          >
-            <div
-              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 flex items-center justify-center text-[var(--g)] shrink-0">
                   <Save className="w-4 h-4" />
@@ -2624,14 +2618,8 @@ export const MainMenu: React.FC<{
           : meTeam?.sq?.find((q) => q.me) || (d.p ? { n: d.p.name, pos: d.p.pos, ro: d.p.sp, no: d.p.no, me: 1, ov: OVF(d.p.pos, d.p.a) } : null);
         const ov = topPl?.ov || 0;
         return (
-          <div
-            className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4"
-            onClick={() => setConfirmDelSlot(null)}
-          >
-            <div
-              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl space-y-3"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 flex items-center justify-center text-[var(--red)] shrink-0">
                   <AlertTriangle className="w-4 h-4" />
@@ -2690,14 +2678,8 @@ export const MainMenu: React.FC<{
         const canExpand = curSlots < MAX_SLOTS;
         const modeTitle = isMgr ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
         return (
-          <div
-            className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4"
-            onClick={() => setSlotFullPrompt(null)}
-          >
-            <div
-              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 shadow-2xl space-y-3"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-[75] bg-black/72 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 shadow-2xl space-y-3">
               <div className="flex items-start gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/50 flex items-center justify-center text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
                   <AlertTriangle className="w-5 h-5" />

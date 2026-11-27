@@ -161,14 +161,8 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-5xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl mland:rounded-xl bg-[#07111e] border border-sky-400/45 text-white shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden">
+      <div className="w-full max-w-5xl mland:max-w-[97vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl mland:rounded-xl bg-[#07111e] border border-sky-400/45 text-white shadow-2xl flex flex-col overflow-hidden">
         {/* Single-Row Top Broadcast Header */}
         <div className="shrink-0 px-2.5 py-1.5 sm:px-3.5 mland:px-2.5 mland:py-1 bg-[#0b192c] border-b border-white/12 flex items-center justify-between gap-2 whitespace-nowrap overflow-hidden">
           <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">

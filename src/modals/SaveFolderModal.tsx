@@ -682,14 +682,8 @@ export const SaveFolderModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-4xl h-[min(calc(var(--app-dvh,1dvh)*92),680px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[65] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-4xl h-[min(calc(var(--app-dvh,1dvh)*92),680px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
@@ -1347,14 +1341,8 @@ export const SaveFolderModal: React.FC<{
 
         {/* Confirm Save Checkpoint Sub-dialog */}
         {confirmSaveOpen && currentState && (
-          <div
-            className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4"
-            onClick={() => !busy && setConfirmSaveOpen(false)}
-          >
-            <div
-              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--line)] shadow-2xl space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-[var(--g-soft)] border border-[var(--g)]/35 flex items-center justify-center text-[var(--g)] shrink-0">
                   <Save className="w-4 h-4" />
@@ -1424,14 +1412,8 @@ export const SaveFolderModal: React.FC<{
 
         {/* Confirm Delete Sub-dialog */}
         {confirmDeleteEntry && (
-          <div
-            className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4"
-            onClick={() => !busy && setConfirmDeleteEntry(null)}
-          >
-            <div
-              className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl space-y-3"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4">
+            <div className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--red)]/45 shadow-2xl space-y-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-xl bg-[var(--red-soft)] border border-[var(--red)]/40 flex items-center justify-center text-[var(--red)] shrink-0">
                   <AlertTriangle className="w-4 h-4" />
@@ -1494,14 +1476,8 @@ export const SaveFolderModal: React.FC<{
           const canAddSlot = cnt < MAX_SLOTS;
           const modeLabel = confirmLoadEntry.mode === 'm' ? 'ผู้จัดการทีม' : 'นักเตะอาชีพ';
           return (
-            <div
-              className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4"
-              onClick={() => setConfirmLoadEntry(null)}
-            >
-              <div
-                className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 shadow-2xl space-y-3"
-                onClick={(e) => e.stopPropagation()}
-              >
+            <div className="fixed inset-0 z-[70] bg-black/72 flex items-center justify-center p-4">
+              <div className="w-full max-w-sm p-4 rounded-2xl bg-[var(--surface)] border border-[var(--lamp)]/55 shadow-2xl space-y-3">
                 <div className="flex items-start gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-[var(--lamp-soft)] border border-[var(--lamp)]/45 flex items-center justify-center text-[#8a5b00] dark:text-[var(--lamp)] shrink-0">
                     <AlertTriangle className="w-4 h-4" />

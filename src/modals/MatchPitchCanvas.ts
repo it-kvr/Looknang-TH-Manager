@@ -6841,9 +6841,13 @@ export const drawHighlightClipToCanvas = (
 
   // 2. Goal Frames with Climax Net Ripple (strictly after ball crosses goal line into net)
   const isGoalClip = clip.kind.startsWith('goal_');
-  const goalImpactT = isGoalClip ? resolveHighlightGoalImpactT(clip) : clip.peakT;
-  const ballInGoalNow = !isGoalClip || (clip.attRight ? cur.bx >= 99.9 : cur.bx <= 0.1);
-  const netImpactReached = !isGoalClip || (cPct >= goalImpactT && ballInGoalNow);
+  const isNetGoalShot =
+    isGoalClip ||
+    (clip.kind === 'shootout_kick' && clip.shootoutScored !== false) ||
+    (clip.kind === 'var_overturn' && (!clip.varVerdict || clip.varVerdict === 'no_goal'));
+  const goalImpactT = isNetGoalShot ? resolveHighlightGoalImpactT(clip) : clip.peakT;
+  const ballInGoalNow = !isNetGoalShot || (clip.attRight ? cur.bx >= 99.5 : cur.bx <= 0.5);
+  const netImpactReached = !isNetGoalShot || (cPct >= goalImpactT && ballInGoalNow);
 
   const goalTop = py(42);
   const goalBot = py(58);
@@ -6962,7 +6966,18 @@ export const drawHighlightClipToCanvas = (
       const goalDir = clip.attRight ? 0 : Math.PI;
       ctx.save();
       ctx.globalAlpha = burstAlpha * 0.85;
-      ctx.strokeStyle = clip.kind === 'super_save' ? '#38bdf8' : clip.kind === 'woodwork' ? '#fb923c' : '#fde047';
+      ctx.strokeStyle =
+        clip.kind === 'super_save' || clip.kind === 'var_overturn'
+          ? '#38bdf8'
+          : clip.kind === 'red_card' || clip.kind === 'injury'
+            ? '#ef4444'
+            : clip.kind === 'woodwork' || clip.kind === 'penalty_miss'
+              ? '#fb923c'
+              : clip.kind === 'shootout_kick'
+                ? clip.shootoutScored !== false
+                  ? '#4ade80'
+                  : '#f59e0b'
+                : '#fde047';
       ctx.lineWidth = 2.2;
       ctx.beginPath();
       ctx.arc(kx, ky, (6 + burstProg * 18) * Math.sqrt(zoom), goalDir - 0.95, goalDir + 0.95);
@@ -7735,13 +7750,44 @@ export const drawHighlightClipToCanvas = (
       ctx.fillText(roleStr, 0, ry + rh / 2);
     }
 
-    // Yellow card mini indicator
-    if (meta.yc) {
+    // Yellow / Red card & Injury mini indicators
+    if (meta.rc) {
+      if (clip.kind === 'red_card' && clip.cardType === 'Y2R' && isStarActor) {
+        ctx.fillStyle = '#facc15';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 0.85;
+        ctx.fillRect(playerRadius * 0.62, -playerRadius * 0.72, 3.8, 5.2);
+        ctx.strokeRect(playerRadius * 0.62, -playerRadius * 0.72, 3.8, 5.2);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(playerRadius * 0.84, -playerRadius * 0.56, 4.0, 5.4);
+        ctx.strokeRect(playerRadius * 0.84, -playerRadius * 0.56, 4.0, 5.4);
+      } else {
+        ctx.fillStyle = '#ef4444';
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 0.95;
+        ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+        ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+      }
+    } else if (meta.yc) {
       ctx.fillStyle = '#facc15';
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = 0.95;
       ctx.fillRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
       ctx.strokeRect(playerRadius * 0.78, -playerRadius * 0.62, 4.2, 5.8);
+    }
+    if (meta.inj) {
+      const ix = playerRadius * 0.92;
+      const iy = -playerRadius * 0.55;
+      ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 0.95;
+      ctx.beginPath();
+      ctx.arc(ix, iy, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(ix - 2.3, iy - 0.85, 4.6, 1.7);
+      ctx.fillRect(ix - 0.85, iy - 2.3, 1.7, 4.6);
     }
 
     // Sub-in upward emerald arrow (clear of captain & top position badge)
@@ -7830,10 +7876,34 @@ export const drawHighlightClipToCanvas = (
                     ? '🤦'
                     : clip.kind === 'super_save'
                       ? '🧤'
-                      : '⚽';
+                      : clip.kind === 'red_card'
+                        ? '🟥'
+                        : clip.kind === 'penalty_miss'
+                          ? '❌'
+                          : clip.kind === 'var_overturn'
+                            ? '🖥'
+                            : clip.kind === 'injury'
+                              ? '✚'
+                              : clip.kind === 'shootout_kick'
+                                ? clip.shootoutOutcome === 'save'
+                                  ? '🧤'
+                                  : clip.shootoutOutcome === 'woodwork'
+                                    ? '🥅'
+                                    : clip.shootoutOutcome === 'miss'
+                                      ? '❌'
+                                      : '🎯'
+                                : '⚽';
 
-    // Name label (live match rules: star/actor, assister, carrier, user player, victim GK on save)
-    if (showNames && (isStarActor || isAssister || isMe || isCarrier || (isVictim && clip.kind === 'super_save'))) {
+    // Name label (live match rules: star/actor, assister, carrier, user player, victim in key duels)
+    const showVictimLabel =
+      isVictim &&
+      (clip.kind === 'super_save' ||
+        clip.kind === 'red_card' ||
+        clip.kind === 'injury' ||
+        clip.kind === 'penalty_miss' ||
+        clip.kind === 'shootout_kick' ||
+        clip.kind === 'var_overturn');
+    if (showNames && (isStarActor || isAssister || isMe || isCarrier || showVictimLabel)) {
       const lbl = isStarActor
         ? `${isCelebratingPhase ? (clip.kind === 'goal_og' ? '🤦 ' : '⚽ ') : `${hlKindIcon} `}${meta.sn}`
         : isMe
@@ -7964,8 +8034,8 @@ export const drawHighlightClipToCanvas = (
   ctx.stroke();
   ctx.restore();
 
-  // 6. Climax Goal Sparkles, Save/Woodwork Callout & Live-Match Goal Broadcast Strip
-  if (isGoalClip && cPct >= goalImpactT && cPct <= Math.min(0.98, goalImpactT + 0.28)) {
+  // 6. Climax Goal Sparkles, Event Callout Pills & Live-Match Style Broadcast Strips
+  if ((isGoalClip || (clip.kind === 'shootout_kick' && clip.shootoutScored !== false)) && cPct >= goalImpactT && cPct <= Math.min(0.98, goalImpactT + 0.28)) {
     const spProg = clamp((cPct - goalImpactT) / 0.28, 0, 1);
     const spAlpha = clamp(1 - spProg, 0, 1);
     const gxAnchor = px(clip.attRight ? 99 : 1);
@@ -7994,11 +8064,42 @@ export const drawHighlightClipToCanvas = (
       ctx.fill();
     }
     ctx.restore();
-  } else if ((clip.kind === 'super_save' || clip.kind === 'woodwork') && cPct >= clip.peakT && cPct <= Math.min(0.95, clip.peakT + 0.24)) {
-    const spProg = clamp((cPct - clip.peakT) / 0.24, 0, 1);
+  } else if (
+    (clip.kind === 'super_save' ||
+      clip.kind === 'woodwork' ||
+      clip.kind === 'penalty_miss' ||
+      clip.kind === 'red_card' ||
+      clip.kind === 'injury' ||
+      (clip.kind === 'shootout_kick' && clip.shootoutScored === false)) &&
+    cPct >= clip.peakT &&
+    cPct <= Math.min(0.96, clip.peakT + 0.26)
+  ) {
+    const spProg = clamp((cPct - clip.peakT) / 0.26, 0, 1);
     const spAlpha = Math.min(clamp(spProg * 5, 0, 1), clamp((1 - spProg) * 1.4, 0, 1));
-    const fxLabel = clip.kind === 'super_save' ? '🧤 ซูเปอร์เซฟ!' : '🥅 ชนเสา/คาน!';
-    const fxCol = clip.kind === 'super_save' ? '#38bdf8' : '#fb923c';
+    const fxLabel =
+      clip.kind === 'super_save'
+        ? '🧤 ซูเปอร์เซฟ!'
+        : clip.kind === 'woodwork'
+          ? '🥅 ชนเสา/คาน!'
+          : clip.kind === 'penalty_miss'
+            ? '❌ จุดโทษหลุดกรอบ!'
+            : clip.kind === 'red_card'
+              ? clip.cardType === 'Y2R'
+                ? '🟨➡🟥 เหลืองแดงไล่ออก!'
+                : '🟥 ใบแดงโดยตรง!'
+              : clip.kind === 'injury'
+                ? `✚ บาดเจ็บ!${clip.injuryGames ? ` (${clip.injuryGames} นัด)` : ''}`
+                : clip.shootoutOutcome === 'save'
+                  ? '🧤 เซฟจุดโทษ!'
+                  : clip.shootoutOutcome === 'woodwork'
+                    ? '🥅 จุดโทษชนเสา/คาน!'
+                    : '❌ จุดโทษพลาดเป้า!';
+    const fxCol =
+      clip.kind === 'super_save' || (clip.kind === 'shootout_kick' && clip.shootoutOutcome === 'save')
+        ? '#38bdf8'
+        : clip.kind === 'red_card' || clip.kind === 'injury'
+          ? '#ef4444'
+          : '#fb923c';
     ctx.save();
     ctx.globalAlpha = spAlpha;
     ctx.font = '700 10.5px "Noto Sans Thai", sans-serif';
@@ -8025,7 +8126,22 @@ export const drawHighlightClipToCanvas = (
     ctx.restore();
   }
 
-  // 7. Broadcast Studio HUD Overlay (Top Bug + Event-Matched Goal Strip + Bottom Lower-Third)
+  // Dashed VAR spotlight ring on pitch around ball/incident during VAR drama
+  if (clip.kind === 'var_overturn' && cPct >= Math.max(0.15, clip.peakT - 0.15)) {
+    const varRingR = 13 + Math.sin(cPct * Math.PI * 10) * 2.5;
+    const varRingCol = clip.varVerdict === 'no_pen' ? '#facc15' : clip.varVerdict === 'pen' ? '#ef4444' : '#38bdf8';
+    ctx.save();
+    ctx.strokeStyle = varRingCol;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.arc(bx, by, varRingR, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // 7. Broadcast Studio HUD Overlay (Top Bug + Event-Matched Broadcast Strip + Bottom Lower-Third)
   const clipKindIcon =
     clip.kind === 'goal_acrobat'
       ? '🤸'
@@ -8043,13 +8159,32 @@ export const drawHighlightClipToCanvas = (
                   ? '🤦'
                   : clip.kind === 'super_save'
                     ? '🧤'
-                    : '⚽';
+                    : clip.kind === 'red_card'
+                      ? '🟥'
+                      : clip.kind === 'penalty_miss'
+                        ? '❌'
+                        : clip.kind === 'var_overturn'
+                          ? '🖥'
+                          : clip.kind === 'injury'
+                            ? '✚'
+                            : clip.kind === 'shootout_kick'
+                              ? clip.shootoutOutcome === 'save'
+                                ? '🧤'
+                                : clip.shootoutOutcome === 'woodwork'
+                                  ? '🥅'
+                                  : clip.shootoutOutcome === 'miss'
+                                    ? '❌'
+                                    : '🎯'
+                              : '⚽';
   const activeScoreStr = isGoalClip
     ? cPct >= goalImpactT
       ? clip.scoreAfter
       : clip.scoreBefore
     : clip.scoreAfter;
-  const bugText = `${clipKindIcon} ไฮไลท์ · น.${clip.minute}' · สกอร์ ${activeScoreStr}`;
+  const bugText =
+    clip.kind === 'shootout_kick'
+      ? `${clipKindIcon} ดวลจุดโทษ${clip.shootoutRound ? ` รอบ ${clip.shootoutRound}` : ''}${clip.shootoutScoreText ? ` · ${clip.shootoutScoreText}` : ''}`
+      : `${clipKindIcon} ไฮไลท์ · น.${clip.minute}' · สกอร์ ${activeScoreStr}`;
   ctx.save();
   ctx.font = '800 10px "Noto Sans Thai", sans-serif';
   const bugW = Math.min(cssW * 0.56, measureTextCached(ctx, bugText) + 28);
@@ -8160,6 +8295,151 @@ export const drawHighlightClipToCanvas = (
     ctx.font = '600 10px "Noto Sans Thai", sans-serif';
     ctx.fillText(sStr, gx + 3, gy + 27.5);
     ctx.restore();
+  } else if (clip.kind === 'red_card' && cPct >= clip.peakT && cPct <= 0.98) {
+    const rSpan = Math.max(0.08, 0.98 - clip.peakT);
+    const rProg = clamp((cPct - clip.peakT) / rSpan, 0, 1);
+    const rAlpha = Math.min(clamp(rProg * 5, 0, 1), clamp((1 - rProg) * 4, 0, 1));
+    const actorTeamName = (clip.side === 'H' ? opts.homeTeamName : opts.awayTeamName) || '';
+    const isY2R = clip.cardType === 'Y2R';
+    const rawTitle = clip.varVerdict === 'red'
+      ? `🖥 VAR ใบแดงไล่ออก!! ${clip.actorName.split(' ')[0]}`
+      : isY2R
+        ? `เหลืองที่สอง (ใบแดง)!! ${clip.actorName.split(' ')[0]}`
+        : `ใบแดงโดยตรง!! ${clip.actorName.split(' ')[0]}`;
+    const rawSub = `${actorTeamName ? `${actorTeamName} · ` : ''}${clip.varReasonText || 'เหลือผู้เล่นน้อยกว่า'}`;
+    const maxBW = cssW - 24;
+    ctx.save();
+    ctx.globalAlpha = rAlpha;
+    ctx.font = '800 11.5px "Noto Sans Thai", sans-serif';
+    const tStr = fitCanvasText(ctx, rawTitle, maxBW - 44);
+    const w1 = measureTextCached(ctx, tStr);
+    ctx.font = '600 9.5px "Noto Sans Thai", sans-serif';
+    const sStr = fitCanvasText(ctx, rawSub, maxBW - 44);
+    const w2 = measureTextCached(ctx, sStr);
+    const cardW = clamp(Math.max(w1, w2) + 46, 178, maxBW);
+    const cardH = 38;
+    const cx = cssW * 0.5;
+    const slideIn = 1 - Math.pow(1 - clamp(rProg / 0.22, 0, 1), 3);
+    const cy = 35 - (1 - slideIn) * 14;
+    ctx.fillStyle = 'rgba(11, 18, 28, 0.94)';
+    ctx.strokeStyle = '#ef4444';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(cx - cardW / 2, cy, cardW, cardH, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    if (isY2R) {
+      ctx.fillStyle = '#facc15';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.roundRect(cx - cardW / 2 + 8, cy + 8, 9, 14, 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#ef4444';
+      ctx.beginPath();
+      ctx.roundRect(cx - cardW / 2 + 13, cy + 12, 9, 14, 2);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ef4444';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(cx - cardW / 2 + 10, cy + 9, 12, 18, 2.5);
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ef4444';
+    ctx.font = '800 11.5px "Noto Sans Thai", sans-serif';
+    ctx.fillText(tStr, cx - cardW / 2 + 29, cy + 13.5);
+    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.font = '600 9.5px "Noto Sans Thai", sans-serif';
+    ctx.fillText(sStr, cx - cardW / 2 + 29, cy + 27.5);
+    ctx.restore();
+  } else if (clip.kind === 'var_overturn' && cPct >= Math.max(0.2, clip.peakT - 0.1) && cPct <= 0.98) {
+    const vStart = Math.max(0.2, clip.peakT - 0.1);
+    const vProg = clamp((cPct - vStart) / Math.max(0.08, 0.98 - vStart), 0, 1);
+    const vAlpha = Math.min(clamp(vProg * 5, 0, 1), clamp((1 - vProg) * 4, 0, 1));
+    const vAccent = clip.varVerdict === 'no_pen' ? '#facc15' : clip.varVerdict === 'pen' ? '#ef4444' : '#38bdf8';
+    const vLabel =
+      clip.varVerdict === 'no_pen'
+        ? '🖥🟡 VAR ยกเลิกจุดโทษ'
+        : clip.varVerdict === 'pen'
+          ? '🖥🚨 VAR ชี้จุดโทษ!'
+          : '🖥❌ VAR ริบประตู!';
+    const vSub = clip.varReasonText || 'ผู้ตัดสินเช็กภาพช้าและกลับคำตัดสิน';
+    const boxW = Math.min(390, cssW - 24);
+    const boxH = 26;
+    const cx = cssW / 2;
+    const cy = 35;
+    ctx.save();
+    ctx.globalAlpha = vAlpha;
+    ctx.fillStyle = 'rgba(11, 25, 44, 0.95)';
+    ctx.strokeStyle = vAccent;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.roundRect(cx - boxW / 2, cy, boxW, boxH, 7);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = vAccent;
+    ctx.beginPath();
+    ctx.arc(cx - boxW / 2 + 12, cy + 13, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 10.5px "Noto Sans Thai", sans-serif';
+    const pStr = `${vLabel} · `;
+    const pW = measureTextCached(ctx, pStr);
+    ctx.fillText(pStr, cx - boxW / 2 + 20, cy + 13);
+    ctx.fillStyle = 'rgba(248, 250, 252, 0.92)';
+    ctx.font = '600 10px "Noto Sans Thai", sans-serif';
+    ctx.fillText(fitCanvasText(ctx, vSub, Math.max(48, boxW - 28 - pW)), cx - boxW / 2 + 20 + pW, cy + 13);
+    ctx.restore();
+  } else if (clip.kind === 'shootout_kick' && cPct >= goalImpactT && cPct <= 0.98) {
+    const sSpan = Math.max(0.08, 0.98 - goalImpactT);
+    const sProg = clamp((cPct - goalImpactT) / sSpan, 0, 1);
+    const sAlpha = Math.min(clamp(sProg * 5.5, 0, 1), clamp((1 - sProg) * 4, 0, 1));
+    const kickerTeam = (clip.side === 'H' ? opts.homeTeamName : opts.awayTeamName) || '';
+    const out = clip.shootoutOutcome || (clip.shootoutScored !== false ? 'goal' : 'save');
+    const scLabel = clip.shootoutScoreText ? ` (${clip.shootoutScoreText})` : '';
+    const rawTitle = clip.shootoutDecisive
+      ? out === 'goal'
+        ? `🏆🎯 ปิดกล่อง! ${clip.actorName.split(' ')[0]} พา ${kickerTeam} ชนะ!${scLabel}`
+        : `🏆 ชี้ขาดดวลจุดโทษ! ${clip.actorName.split(' ')[0]}${scLabel}`
+      : out === 'goal'
+        ? `🎯 ยิงเข้า! ${clip.actorName.split(' ')[0]} (${kickerTeam})${scLabel}`
+        : out === 'save'
+          ? `🧤 เซฟ! ${clip.victimName ? clip.victimName.split(' ')[0] : 'ผู้รักษาประตู'}${scLabel}`
+          : out === 'woodwork'
+            ? `🥅 ชนเสา/คาน! ${clip.actorName.split(' ')[0]}${scLabel}`
+            : `❌ หลุดกรอบ! ${clip.actorName.split(' ')[0]}${scLabel}`;
+    const sAccent = out === 'goal' ? '#4ade80' : out === 'save' ? '#38bdf8' : '#f59e0b';
+    const maxBW = cssW - 24;
+    ctx.save();
+    ctx.globalAlpha = sAlpha;
+    ctx.font = '800 11.5px "Noto Sans Thai", sans-serif';
+    const tStr = fitCanvasText(ctx, rawTitle, maxBW - 32);
+    const tw = measureTextCached(ctx, tStr);
+    const cardW = clamp(tw + 32, 168, maxBW);
+    const cardH = 28;
+    const gx = cssW * 0.5;
+    const gy = 35;
+    ctx.fillStyle = out === 'goal' ? 'rgba(8, 24, 16, 0.94)' : 'rgba(11, 20, 34, 0.94)';
+    ctx.strokeStyle = sAccent;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.roundRect(gx - cardW / 2, gy, cardW, cardH, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = sAccent;
+    ctx.fillText(tStr, gx, gy + cardH / 2 + 0.5);
+    ctx.restore();
   }
 
   // Bottom Lower-Third Broadcast Graphic
@@ -8171,7 +8451,16 @@ export const drawHighlightClipToCanvas = (
   const accentKit = clip.side === 'H' ? homeKit : awayKit;
 
   ctx.fillStyle = 'rgba(7, 14, 24, 0.9)';
-  ctx.strokeStyle = clip.kind === 'super_save' ? 'rgba(56, 189, 248, 0.55)' : 'rgba(250, 204, 21, 0.52)';
+  ctx.strokeStyle =
+    clip.kind === 'red_card' || clip.kind === 'injury'
+      ? 'rgba(239, 68, 68, 0.65)'
+      : clip.kind === 'super_save' || clip.kind === 'var_overturn'
+        ? 'rgba(56, 189, 248, 0.58)'
+        : clip.kind === 'shootout_kick'
+          ? 'rgba(167, 139, 250, 0.62)'
+          : clip.kind === 'penalty_miss' || clip.kind === 'woodwork'
+            ? 'rgba(251, 146, 60, 0.60)'
+            : 'rgba(250, 204, 21, 0.52)';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.roundRect(l3X, l3Y, l3W, l3H, 8);

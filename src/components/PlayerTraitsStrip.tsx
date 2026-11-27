@@ -537,14 +537,8 @@ export const PlayerTraitsStrip: React.FC<{
       {showGuideModal &&
         typeof document !== 'undefined' &&
         createPortal(
-          <div
-            className="fixed inset-0 z-[90] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
-            onClick={() => setShowGuideModal(false)}
-          >
-            <div
-              className="w-full max-w-3xl h-[min(calc(var(--app-dvh,1dvh)*90),680px)] rounded-3xl bg-[var(--bg)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
-              onClick={(e) => e.stopPropagation()}
-            >
+          <div className="fixed inset-0 z-[90] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 overflow-hidden">
+            <div className="w-full max-w-3xl h-[min(calc(var(--app-dvh,1dvh)*90),680px)] rounded-3xl bg-[var(--bg)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden">
               {/* Modal Header */}
               <header className="shrink-0 px-4 py-2.5 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2">
                 <div className="min-w-0">

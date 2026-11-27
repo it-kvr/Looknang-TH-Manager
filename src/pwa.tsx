@@ -460,16 +460,12 @@ export const PWAInstallButton: React.FC<{
     const guide = GUIDE_STEPS[tab];
 
     return createPortal(
-      <div
-        className="fixed inset-0 z-[80] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 overflow-hidden"
-        onClick={() => setShowGuide(false)}
-      >
+      <div className="fixed inset-0 z-[80] bg-black/75 flex items-center justify-center p-2.5 sm:p-4 overflow-hidden">
         <div
           role="dialog"
           aria-modal="true"
           aria-labelledby="pwa-guide-title"
           className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*94)] rounded-3xl mland:rounded-2xl bg-[var(--surface)] border border-[var(--line)] overflow-hidden shadow-2xl my-auto flex flex-col"
-          onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
           <div className="shrink-0 px-4 py-3.5 mland:px-3 mland:py-1.5 bg-[var(--surface-2)] border-b border-[var(--line)] flex items-center justify-between gap-3 mland:gap-2">

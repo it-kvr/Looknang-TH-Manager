@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Lock, RefreshCw, Search, Unlock, X } from 'lucide-react';
+import { IdCard, Lock, RefreshCw, Search, Unlock, Users, X } from 'lucide-react';
 import type { SubRole, MainTab, Player, Team, ScoutMission, GameState } from '../types/game';
 import { clamp, fmtMoney, fmtMoneyNum } from '../utils/math';
 import { TN, LINE, SPX, ALL_SUB_ROLES, SPN, ROLE_L } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, type CreatedPlayerCandidate } from '../engine/playerCore';
+import { assignTeamShirtNumbers, ensureClubIdentity, vlu, wagOf, ensureCon, logFin, listCreatedPlayersForManager, deleteCustomPlayer, pushFeed, getPlayerBio, dtInfo, xi, type CreatedPlayerCandidate } from '../engine/playerCore';
 import { appendPlayerCareerLog } from '../engine/history';
 import {
   LEAGUE_TRANSFER_RULES,
@@ -537,14 +537,41 @@ export const MarketView: React.FC<{
               : `เสนอ ${offerDraft.pct}%`;
     const thirdCardDanger = false;
 
+    const starterNames = new Set(xi(me).map((p) => p.n));
+    const qRoles = new Set<SubRole>([q.ro, ...(q.altRoles || [])]);
+    const directCompetitors: { p: Player; matchKind: 'exact' | 'alt'; isStarter: boolean }[] = [];
+    const lineCompetitors: { p: Player; matchKind: 'line'; isStarter: boolean }[] = [];
+
+    for (const z of me.sq) {
+      const isStarter = starterNames.has(z.n);
+      if (z.ro === q.ro) {
+        directCompetitors.push({ p: z, matchKind: 'exact', isStarter });
+      } else if ((z.altRoles || []).includes(q.ro) || (q.altRoles || []).includes(z.ro) || qRoles.has(z.ro)) {
+        directCompetitors.push({ p: z, matchKind: 'alt', isStarter });
+      } else if (z.pos === q.pos) {
+        lineCompetitors.push({ p: z, matchKind: 'line', isStarter });
+      }
+    }
+
+    directCompetitors.sort((a, b) => {
+      if (a.matchKind !== b.matchKind) return a.matchKind === 'exact' ? -1 : 1;
+      if (a.isStarter !== b.isStarter) return a.isStarter ? -1 : 1;
+      return b.p.ov - a.p.ov;
+    });
+    lineCompetitors.sort((a, b) => {
+      if (a.isStarter !== b.isStarter) return a.isStarter ? -1 : 1;
+      return b.p.ov - a.p.ov;
+    });
+
+    const shownCompetitors = (
+      directCompetitors.length >= 2 ? directCompetitors : [...directCompetitors, ...lineCompetitors]
+    ).slice(0, 4);
+    const totalLineCompetitors = directCompetitors.length + lineCompetitors.length;
+
     return (
-      <div
-        className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center stage-viewport overflow-hidden"
-        onClick={() => setOfferDraft(null)}
-      >
+      <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center stage-viewport overflow-hidden">
         <div
           className="w-full max-w-[880px] mland:max-w-[min(94vw,840px)] h-[min(calc(var(--app-dvh,1dvh)*86),610px)] mland:h-[calc(var(--app-dvh,1dvh)*92)] max-h-full rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
         >
           {/* Fixed Header */}
           <div className="shrink-0 flex items-center gap-3 mland:gap-2 px-4 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
@@ -586,35 +613,33 @@ export const MarketView: React.FC<{
                 </span>
               </div>
             </div>
-            <div className="shrink-0 flex items-center gap-1.5 mland:gap-1">
-              <div className="hidden sm:flex flex-col items-end gap-0.5">
-                <PotentialBadge pot={q.pot || q.ov} size="xs" />
-                <span className="text-[9.5px] text-[var(--mut)] font-semibold tabular">POT สูงสุด</span>
-              </div>
+            <div className="shrink-0 flex items-center gap-2 mland:gap-1.5">
               <OvrBadge ov={q.ov} size="lg" />
               <button
                 type="button"
                 onClick={() => onInspectPlayer(q, sellerTeam || null)}
                 title="ดูการ์ดนักเตะและค่าพลังทั้งหมด"
-                className="btn btn-xs btn-secondary px-2"
+                className="h-8 mland:h-6.5 px-2.5 mland:px-2 inline-flex items-center justify-center gap-1.5 mland:gap-1 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] text-[var(--ink)] hover:border-[var(--g)]/65 hover:bg-[var(--surface-2)] hover:text-[var(--g)] shadow-2xs text-[11px] mland:text-[9.5px] font-bold whitespace-nowrap cursor-pointer select-none transition-all shrink-0"
               >
-                🔍 การ์ด
+                <IdCard className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--g)] shrink-0" />
+                <span>ดูการ์ด</span>
               </button>
               <button
                 type="button"
                 onClick={() => setOfferDraft(null)}
                 aria-label="ปิดหน้าต่างเจรจา"
+                title="ปิดหน้าต่างเจรจา"
                 className="btn-icon"
               >
-                ✕
+                <X className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Stable 2-Column Body */}
           <div className="flex-1 min-h-0 overflow-y-auto sm:overflow-hidden mland:overflow-hidden p-3.5 sm:p-4 mland:p-2.5 grid grid-cols-1 sm:grid-cols-[1.08fr_0.92fr] mland:grid-cols-[1.08fr_0.92fr] gap-3.5 mland:gap-2.5 items-stretch">
-            {/* Left Column: Offer Controls */}
-            <div className="min-h-0 flex flex-col gap-3 mland:gap-2 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
+            {/* Left Column: Offer Controls & Squad Depth */}
+            <div className="min-h-0 flex flex-col gap-2.5 mland:gap-1.5 sm:overflow-y-auto mland:overflow-y-auto pr-0.5">
               {/* 1) Offer Type */}
               <div>
                 <div className="flex items-center justify-between text-xs mland:text-[10.5px] font-bold text-[var(--mut)] mb-1.5 mland:mb-1">
@@ -794,6 +819,74 @@ export const MarketView: React.FC<{
                   ))}
                 </div>
               </div>
+
+              {/* 4) Competing Players in Squad */}
+              <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/65 border border-[var(--line)] space-y-1.5 mland:space-y-1">
+                <div className="flex items-center justify-between gap-2 text-xs mland:text-[10.5px]">
+                  <span className="font-bold text-[var(--mut)] inline-flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 mland:w-3 mland:h-3 text-[var(--g)] shrink-0" />
+                    <span>3) นักเตะที่ต้องเบียดในทีม</span>
+                  </span>
+                  <span className="text-[10.5px] mland:text-[9px] text-[var(--mut)] tabular font-semibold">
+                    ตำแหน่ง {q.ro} <b className="text-[var(--ink)]">{directCompetitors.length}</b> · สาย {q.pos} <b className="text-[var(--ink)]">{totalLineCompetitors}</b> คน
+                  </span>
+                </div>
+
+                {shownCompetitors.length > 0 ? (
+                  <div className="space-y-1">
+                    {shownCompetitors.map(({ p: z, matchKind, isStarter }) => {
+                      const ovDiff = q.ov - z.ov;
+                      const diffLabel = ovDiff > 0 ? `+${ovDiff}` : ovDiff < 0 ? `${ovDiff}` : 'เท่ากัน';
+                      const diffCls =
+                        ovDiff > 0
+                          ? 'text-[var(--g)] bg-[var(--g-soft)] border-[var(--g)]/25'
+                          : ovDiff < 0
+                            ? 'text-[var(--red)] bg-[var(--red-soft)] border-[var(--red)]/25'
+                            : 'text-[var(--mut)] bg-[var(--surface)] border-[var(--line)]';
+                      return (
+                        <button
+                          key={z.n}
+                          type="button"
+                          onClick={() => onInspectPlayer(z, me)}
+                          title={`ดูการ์ด ${z.n}`}
+                          className="w-full px-2 py-1 mland:py-0.5 rounded-lg bg-[var(--surface)]/85 hover:bg-[var(--surface)] border border-[var(--line)]/75 hover:border-[var(--g)]/45 flex items-center gap-1.5 text-left cursor-pointer transition-colors"
+                        >
+                          <PositionBadge role={z.ro} size="2xs" />
+                          <span className="flex-1 min-w-0 text-[11px] mland:text-[9.5px] font-semibold text-[var(--ink)] truncate">
+                            {z.n}
+                          </span>
+                          {isStarter && (
+                            <span className="px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-bold bg-[var(--g-soft)] text-[var(--g)] shrink-0">
+                              ตัวจริง
+                            </span>
+                          )}
+                          {!isStarter && matchKind === 'alt' && (
+                            <span className="px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-semibold bg-[var(--surface-2)] text-[var(--mut)] shrink-0">
+                              เล่นแทนได้
+                            </span>
+                          )}
+                          {z.loan && (
+                            <span className="px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-semibold bg-[var(--lamp-soft)] text-[#9a6700] dark:text-[var(--lamp)] shrink-0">
+                              ยืม
+                            </span>
+                          )}
+                          <span className="hidden sm:inline text-[10px] mland:text-[8.5px] text-[var(--mut)] tabular shrink-0">
+                            {z.age} ปี
+                          </span>
+                          <span className={`px-1.5 py-[1px] rounded border text-[9.5px] mland:text-[8px] font-bold tabular shrink-0 ${diffCls}`}>
+                            {diffLabel}
+                          </span>
+                          <OvrBadge ov={z.ov} size="xs" />
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="px-2.5 py-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/25 text-[11px] mland:text-[9.5px] text-[var(--g)] font-semibold">
+                    ✨ ยังไม่มีนักเตะสาย {q.pos} ในทีม — เซ็นเข้ามาลงตัวจริงได้ทันที
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Right Column: Complete Player Info, Financial Summary & Negotiation State */}
@@ -944,15 +1037,12 @@ export const MarketView: React.FC<{
           </div>
 
           {/* Fixed Footer */}
-          <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex items-center gap-2">
-            <button type="button" onClick={() => setOfferDraft(null)} className="btn btn-md btn-surface">
-              ปิด
-            </button>
+          <div className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 border-t border-[var(--line)] bg-[var(--surface-2)] flex items-center">
             <button
               type="button"
               disabled={!canAfford || !needSwapOk || fullSq || loanCapHit || wageOverCap || sellerMinBlocked || windowBlocked || !!q.locked}
               onClick={() => submitOffer(false)}
-              className="btn btn-md btn-gold flex-1"
+              className="btn btn-md btn-gold w-full"
             >
               {q.locked
                 ? 'การเจรจาล่มแล้ว'
@@ -991,8 +1081,8 @@ export const MarketView: React.FC<{
     const renewOverCap = tx.curWage + wageDelta > tx.wageCap;
 
     return (
-      <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden" onClick={() => setRenewIdx(null)}>
-        <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="fixed inset-0 z-50 bg-black/72 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+        <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
           <div className="shrink-0 flex items-center gap-3 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
             <PlayerFace player={q} team={me} state={state} size={42} />
             <div className="flex-1 min-w-0">

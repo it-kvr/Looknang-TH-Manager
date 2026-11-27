@@ -122,14 +122,8 @@ export const PlayerAppearanceModal: React.FC<PlayerAppearanceModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[72] bg-black/75 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-4xl mland:max-w-[95vw] h-[min(calc(var(--app-dvh,1dvh)*92),680px)] mland:h-[calc(var(--app-dvh,1dvh)*94)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-12px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[72] bg-black/75 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden">
+      <div className="w-full max-w-4xl mland:max-w-[95vw] h-[min(calc(var(--app-dvh,1dvh)*92),680px)] mland:h-[calc(var(--app-dvh,1dvh)*94)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-12px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <header className="shrink-0 px-4 py-2.5 mland:px-3 mland:py-1.5 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">

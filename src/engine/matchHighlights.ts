@@ -56,6 +56,8 @@ export interface SampledAgentFrame {
   cap?: 1;
   me?: 1;
   yc?: 1;
+  rc?: 1;
+  inj?: 1;
   sub?: 1;
   fit?: number;
   x: number;
@@ -79,7 +81,7 @@ export interface RollingHighlightSample {
   agents: SampledAgentFrame[];
 }
 
-export const MAX_MATCH_HIGHLIGHTS = 6;
+export const MAX_MATCH_HIGHLIGHTS = 8;
 
 const r1 = (n: number): number => Math.round(n * 10) / 10;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
@@ -172,12 +174,17 @@ const mapAgentAction = (ag: LivePitchAgent): { act?: number; dd?: number; ap?: n
   return {};
 };
 
-export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHighlightSample => {
+export const captureWorldSample = (
+  w: LiveMatchWorld,
+  tsSec: number,
+  keepActorIds?: Set<string>
+): RollingHighlightSample => {
   const b = w.ball;
   const inShot =
     b.flightType === 'shot' ||
     b.flightType === 'freekick' ||
     b.flightType === 'penalty' ||
+    b.flightType === 'shootout_kick' ||
     (b.flightType === 'bounce' && Boolean(b.bounceNext?.goalPayload));
 
   return {
@@ -186,12 +193,18 @@ export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHig
     by: r1(b.y),
     bz: r1(b.z),
     shot: inShot,
-    style: b.shotStyle || (b.flightType === 'freekick' ? 'freekick' : b.flightType === 'penalty' ? 'penalty' : undefined),
+    style:
+      b.shotStyle ||
+      (b.flightType === 'freekick'
+        ? 'freekick'
+        : b.flightType === 'penalty' || b.flightType === 'shootout_kick'
+          ? 'penalty'
+          : undefined),
     ...(b.carrierId ? { carId: b.carrierId } : {}),
     ripL: r2(w.goalNetRippleLeft || 0),
     ripR: r2(w.goalNetRippleRight || 0),
     agents: w.agents
-      .filter((a) => !a.sentOff)
+      .filter((a) => !a.sentOff || Boolean(keepActorIds?.has(a.id)))
       .map((ag) => {
         const { act, dd, ap } = mapAgentAction(ag);
         return {
@@ -206,6 +219,8 @@ export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHig
           ...(ag.isCaptain ? { cap: 1 as const } : {}),
           ...(ag.isMe ? { me: 1 as const } : {}),
           ...(ag.hasYellow ? { yc: 1 as const } : {}),
+          ...(ag.sentOff ? { rc: 1 as const } : {}),
+          ...(ag.injuredOut ? { inj: 1 as const } : {}),
           ...(ag.subbedIn ? { sub: 1 as const } : {}),
           ...(Number.isFinite(ag.fit) ? { fit: Math.round(ag.fit) } : {}),
           x: r1(ag.x),
@@ -268,6 +283,16 @@ export const getHighlightKindBadge = (kind: MatchHighlightKind): { icon: string;
       return { icon: '🧤', label: 'ซูเปอร์เซฟระดับโลก', toneClass: 'bg-sky-500/20 border-sky-400/60 text-sky-300' };
     case 'woodwork':
       return { icon: '🥅', label: 'ซัดเต็มข้อชนเสา/คาน', toneClass: 'bg-amber-500/20 border-amber-400/60 text-amber-300' };
+    case 'red_card':
+      return { icon: '🟥', label: 'ใบแดงไล่ออก', toneClass: 'bg-rose-500/20 border-rose-400/60 text-rose-300' };
+    case 'penalty_miss':
+      return { icon: '❌', label: 'จุดโทษพลาดเป้า', toneClass: 'bg-amber-500/20 border-amber-400/60 text-amber-300' };
+    case 'var_overturn':
+      return { icon: '🖥', label: 'ดราม่า VAR', toneClass: 'bg-sky-500/20 border-sky-400/60 text-sky-300' };
+    case 'shootout_kick':
+      return { icon: '🎯', label: 'ดวลจุดโทษตัดสิน', toneClass: 'bg-violet-500/20 border-violet-400/60 text-violet-300' };
+    case 'injury':
+      return { icon: '✚', label: 'บาดเจ็บในสนาม', toneClass: 'bg-red-500/20 border-red-400/60 text-red-300' };
     default:
       return { icon: '⚽', label: 'ประตูสุดสวย', toneClass: 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300' };
   }
@@ -288,6 +313,15 @@ interface HighlightEditorialInput {
   scoreAfterGa: number;
   side: 'H' | 'A';
   isDerby?: boolean;
+  cardType?: 'R' | 'Y2R';
+  varVerdict?: 'no_goal' | 'no_pen' | 'pen' | 'red';
+  varReasonText?: string;
+  shootoutScored?: boolean;
+  shootoutOutcome?: 'goal' | 'save' | 'woodwork' | 'miss';
+  shootoutRound?: number;
+  shootoutDecisive?: boolean;
+  shootoutScoreText?: string;
+  injuryGames?: number;
 }
 
 export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
@@ -380,6 +414,75 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
             : '🥅 จังหวะบอลชนเสา/คาน';
       break;
     }
+    case 'red_card': {
+      const isY2R = inp.cardType === 'Y2R';
+      const isVarRed = inp.varVerdict === 'red';
+      baseDrama = (isY2R ? 86 : 90) + (isVarRed ? 4 : 0);
+      title = isVarRed
+        ? `🖥🟥 VAR ยกระดับใบแดง! ${actorShort} โดนไล่ออก`
+        : isY2R
+          ? `🟨➡🟥 เหลืองที่สอง! ${actorShort} โดนไล่ออกจากสนาม`
+          : `🟥 ใบแดงโดยตรง! ${actorShort} สกัดอันตรายโดนไล่ออก`;
+      crewTag = isVarRed
+        ? '🖥🟥 จังหวะเช็ก VAR ใบแดง'
+        : isY2R
+          ? '🟨➡🟥 จังหวะฟาวล์เหลืองแดง'
+          : '🟥 จังหวะฟาวล์ใบแดง';
+      break;
+    }
+    case 'penalty_miss':
+      baseDrama = 86;
+      title = `❌ จุดโทษพลาดเป้า! ${actorShort} ซัดหลุดกรอบสุดช็อก`;
+      crewTag = '❌ ดวลจุดโทษหลุดกรอบ';
+      break;
+    case 'var_overturn': {
+      if (inp.varVerdict === 'no_pen') {
+        baseDrama = 84;
+        title = `🖥🟡 VAR ยกเลิกจุดโทษ! ${inp.varReasonText || 'ชี้จุดฟาวล์นอกกรอบ'}`;
+        crewTag = '🖥🟡 จังหวะ VAR ยกเลิกจุดโทษ';
+      } else if (inp.varVerdict === 'pen') {
+        baseDrama = 88;
+        title = `🖥🚨 VAR ชี้จุดโทษ! ${inp.varReasonText || 'ฟาวล์ในเขตโทษ'}`;
+        crewTag = '🖥🚨 จังหวะ VAR ให้จุดโทษ';
+      } else {
+        baseDrama = 93;
+        title = `🖥❌ VAR ริบประตู! ${actorShort}${inp.varReasonText ? ` (${inp.varReasonText})` : ''}`;
+        crewTag = '🖥❌ จังหวะ VAR ริบประตู';
+      }
+      break;
+    }
+    case 'shootout_kick': {
+      const rd = inp.shootoutRound || 1;
+      const out = inp.shootoutOutcome || (inp.shootoutScored !== false ? 'goal' : 'save');
+      const scStr = inp.shootoutScoreText ? ` (${inp.shootoutScoreText})` : '';
+      if (inp.shootoutDecisive) {
+        baseDrama = 108;
+        title =
+          out === 'goal'
+            ? `🏆🎯 ลูกปิดกล่องดวลจุดโทษ! ${actorShort} ซัดพาทีมชนะ${scStr}`
+            : out === 'save'
+              ? `🏆🧤 เซฟปิดเกมดวลจุดโทษ! ${actorShort} ยิงติดเซฟชี้ชะตา${scStr}`
+              : `🏆❌ จังหวะชี้ขาดดวลจุดโทษ! ${actorShort} ยิงพลาด${scStr}`;
+        crewTag = '🏆 ลูกชี้ชะตาดวลจุดโทษ';
+      } else {
+        baseDrama = out === 'save' ? 91 : out === 'woodwork' ? 89 : out === 'miss' ? 87 : 72 + rd * 3;
+        title =
+          out === 'goal'
+            ? `🎯 ดวลจุดโทษ (รอบ ${rd}) · ${actorShort} ซัดเข้าไม่พลาด${scStr}`
+            : out === 'save'
+              ? `🧤 ดวลจุดโทษ (รอบ ${rd}) · นายด่านพุ่งเซฟลูกยิง ${actorShort}!${scStr}`
+              : out === 'woodwork'
+                ? `🥅 ดวลจุดโทษ (รอบ ${rd}) · ${actorShort} ซัดชนเสา/คาน!${scStr}`
+                : `❌ ดวลจุดโทษ (รอบ ${rd}) · ${actorShort} ยิงหลุดกรอบ!${scStr}`;
+        crewTag = `🎯 ดวลจุดโทษ รอบ ${rd}`;
+      }
+      break;
+    }
+    case 'injury':
+      baseDrama = 74;
+      title = `✚ บาดเจ็บในสนาม! ${actorShort}${inp.injuryGames ? ` (พัก ${inp.injuryGames} นัด)` : ' ต้องเปลี่ยนตัว'}`;
+      crewTag = '✚ จังหวะปะทะบาดเจ็บ';
+      break;
     default:
       baseDrama = 78;
       title = `⚽ ${actorShort} จบสกอร์เด็ดขาดให้ ${inp.teamName}`;
@@ -399,8 +502,17 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
   const telemetryParts: string[] = [];
   if (inp.shotDistM && inp.shotDistM > 0) telemetryParts.push(`📏 ระยะยิง ~${inp.shotDistM} ม.`);
   if (inp.shotSpeedKmh && inp.shotSpeedKmh > 0) telemetryParts.push(`⚡ ${inp.shotSpeedKmh} กม./ชม.`);
-  if (assistShort && inp.kind !== 'goal_og' && inp.kind !== 'super_save') {
+  if (assistShort && inp.kind !== 'goal_og' && inp.kind !== 'super_save' && inp.kind !== 'red_card' && inp.kind !== 'injury') {
     telemetryParts.push(`👟 ${assistShort}`);
+  }
+  if (inp.kind === 'var_overturn' && inp.varReasonText) {
+    telemetryParts.push(`🖥 ${inp.varReasonText}`);
+  }
+  if (inp.kind === 'red_card' && inp.finishVerb) {
+    telemetryParts.push(inp.finishVerb);
+  }
+  if (inp.kind === 'shootout_kick' && inp.shootoutScoreText) {
+    telemetryParts.push(`🎯 สกอร์จุดโทษ ${inp.shootoutScoreText}`);
   }
 
   const subtitle =
@@ -415,16 +527,26 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
       ? `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) ${inp.finishVerb || 'พุ่งปัดปลายมือช่วยทีมรอดพ้นการเสียประตูอย่างเหลือเชื่อ'}${inp.victimName ? ` จากลูกยิงของ ${inp.victimName}` : ''}`
       : inp.kind === 'woodwork'
         ? `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) ${inp.finishVerb || 'ซัดบอลพุ่งชนเสา/คานอย่างจัง ท่ามกลางเสียงฮือฮาทั้งสนาม'}`
-        : inp.kind === 'goal_og'
-          ? `น.${inp.minute}': ${inp.actorName} สกัดบอลผิดเหลี่ยมเปลี่ยนทางเข้าประตู ทำให้ ${inp.teamName} ได้ประตูสำคัญ`
-          : `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) ${inp.finishVerb || 'ส่งบอลตุงตาข่ายอย่างสวยงาม!'}${inp.assisterName ? ` จากจังหวะจ่ายให้ของ ${inp.assisterName}` : ''}`;
+        : inp.kind === 'red_card'
+          ? `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) ${inp.finishVerb || 'โดนผู้ตัดสินชูใบแดงไล่ออกจากสนาม!'}${inp.victimName ? ` จากจังหวะปะทะใส่ ${inp.victimName}` : ''}`
+          : inp.kind === 'penalty_miss'
+            ? `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) รับหน้าที่สังหารจุดโทษแต่ซัดบอลหลุดกรอบออกไปอย่างน่าเสียดาย!`
+            : inp.kind === 'var_overturn'
+              ? `น.${inp.minute}': ดราม่า VAR! ${inp.varReasonText || inp.finishVerb || 'ผู้ตัดสินเช็กภาพช้าและกลับคำตัดสินสำคัญ'}`
+              : inp.kind === 'shootout_kick'
+                ? `ช่วงดวลจุดโทษ: ${inp.actorName} (${inp.teamName}) ${inp.finishVerb || 'รับหน้าที่สังหารจุดโทษตัดสิน'}${inp.shootoutScoreText ? ` · สกอร์จุดโทษ ${inp.shootoutScoreText}` : ''}`
+                : inp.kind === 'injury'
+                  ? `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) ได้รับบาดเจ็บในสนาม${inp.injuryGames ? ` คาดพัก ${inp.injuryGames} นัด` : ''}`
+                  : inp.kind === 'goal_og'
+                    ? `น.${inp.minute}': ${inp.actorName} สกัดบอลผิดเหลี่ยมเปลี่ยนทางเข้าประตู ทำให้ ${inp.teamName} ได้ประตูสำคัญ`
+                    : `น.${inp.minute}': ${inp.actorName} (${inp.teamName}) ${inp.finishVerb || 'ส่งบอลตุงตาข่ายอย่างสวยงาม!'}${inp.assisterName ? ` จากจังหวะจ่ายให้ของ ${inp.assisterName}` : ''}`;
 
   return {
     title,
     subtitle,
     commentary,
     crewTag,
-    dramaScore: Math.round(clamp(baseDrama, 50, 115))
+    dramaScore: Math.round(clamp(baseDrama, 50, 118))
   };
 };
 
@@ -449,6 +571,15 @@ export interface FinalizeClipParams {
   shotSpeedKmh?: number;
   secondHalf?: boolean;
   celebratePose?: GoalCelebrationStyle;
+  cardType?: 'R' | 'Y2R';
+  varVerdict?: 'no_goal' | 'no_pen' | 'pen' | 'red';
+  varReasonText?: string;
+  shootoutScored?: boolean;
+  shootoutOutcome?: 'goal' | 'save' | 'woodwork' | 'miss';
+  shootoutRound?: number;
+  shootoutDecisive?: boolean;
+  shootoutScoreText?: string;
+  injuryGames?: number;
   matchEnv?: MatchEnvironment;
   preSamples: RollingHighlightSample[];
   postSamples: RollingHighlightSample[];
@@ -479,6 +610,15 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
       peakT: 0.65,
       secondHalf: params.secondHalf,
       ...(params.celebratePose ? { celebratePose: params.celebratePose } : {}),
+      ...(params.cardType ? { cardType: params.cardType } : {}),
+      ...(params.varVerdict ? { varVerdict: params.varVerdict } : {}),
+      ...(params.varReasonText ? { varReasonText: params.varReasonText } : {}),
+      ...(params.shootoutScored !== undefined ? { shootoutScored: params.shootoutScored } : {}),
+      ...(params.shootoutOutcome ? { shootoutOutcome: params.shootoutOutcome } : {}),
+      ...(params.shootoutRound !== undefined ? { shootoutRound: params.shootoutRound } : {}),
+      ...(params.shootoutDecisive !== undefined ? { shootoutDecisive: params.shootoutDecisive } : {}),
+      ...(params.shootoutScoreText ? { shootoutScoreText: params.shootoutScoreText } : {}),
+      ...(params.injuryGames !== undefined ? { injuryGames: params.injuryGames } : {}),
       matchEnv: params.matchEnv ? { ...params.matchEnv, puddles: params.matchEnv.puddles?.slice(0, 4) } : undefined,
       actors: [],
       frames: []
@@ -513,6 +653,8 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
     if (existing !== undefined) return existing;
     const idx = actors.length;
     actorMap.set(key, idx);
+    const markRc = ag.rc === 1 || (params.kind === 'red_card' && ag.id === params.actorName && ag.s === params.side);
+    const markInj = ag.inj === 1 || (params.kind === 'injury' && ag.id === params.actorName && ag.s === params.side);
     actors.push({
       id: ag.id,
       sn: ag.sn,
@@ -525,6 +667,8 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
       ...(ag.cap ? { cap: 1 } : {}),
       ...(ag.me ? { me: 1 } : {}),
       ...(ag.yc ? { yc: 1 } : {}),
+      ...(markRc ? { rc: 1 } : {}),
+      ...(markInj ? { inj: 1 } : {}),
       ...(ag.sub ? { sub: 1 } : {}),
       ...(ag.fit !== undefined ? { fit: ag.fit } : {})
     });
@@ -601,6 +745,15 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
     peakT,
     secondHalf: params.secondHalf,
     ...(params.celebratePose ? { celebratePose: params.celebratePose } : {}),
+    ...(params.cardType ? { cardType: params.cardType } : {}),
+    ...(params.varVerdict ? { varVerdict: params.varVerdict } : {}),
+    ...(params.varReasonText ? { varReasonText: params.varReasonText } : {}),
+    ...(params.shootoutScored !== undefined ? { shootoutScored: params.shootoutScored } : {}),
+    ...(params.shootoutOutcome ? { shootoutOutcome: params.shootoutOutcome } : {}),
+    ...(params.shootoutRound !== undefined ? { shootoutRound: params.shootoutRound } : {}),
+    ...(params.shootoutDecisive !== undefined ? { shootoutDecisive: params.shootoutDecisive } : {}),
+    ...(params.shootoutScoreText ? { shootoutScoreText: params.shootoutScoreText } : {}),
+    ...(params.injuryGames !== undefined ? { injuryGames: params.injuryGames } : {}),
     matchEnv: params.matchEnv
       ? {
           season: params.matchEnv.season,
@@ -651,6 +804,15 @@ export interface SimulateRealtimeHighlightInput {
   shotSpeedKmh?: number;
   isOwnGoal?: boolean;
   celebratePose?: GoalCelebrationStyle;
+  cardType?: 'R' | 'Y2R';
+  varVerdict?: 'no_goal' | 'no_pen' | 'pen' | 'red';
+  varReasonText?: string;
+  shootoutScored?: boolean;
+  shootoutOutcome?: 'goal' | 'save' | 'woodwork' | 'miss';
+  shootoutRound?: number;
+  shootoutDecisive?: boolean;
+  shootoutScoreText?: string;
+  injuryGames?: number;
   scoreBefore: string;
   scoreAfter: string;
   scoreAfterGh: number;
@@ -724,10 +886,24 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
   const isGoal = kind.startsWith('goal_');
   const isSuperSave = kind === 'super_save';
   const isWoodwork = kind === 'woodwork';
+  const isPenaltyMiss = kind === 'penalty_miss';
+  const isShootout = kind === 'shootout_kick';
+  const shootoutOutcome = inp.shootoutOutcome || (inp.shootoutScored !== false ? 'goal' : 'save');
+  const isShootoutGoal = isShootout && shootoutOutcome === 'goal';
+  const isShootoutSave = isShootout && shootoutOutcome === 'save';
+  const isShootoutWoodwork = isShootout && shootoutOutcome === 'woodwork';
+  const isShootoutMiss = isShootout && shootoutOutcome === 'miss';
+  const isVarNoGoal = kind === 'var_overturn' && (!inp.varVerdict || inp.varVerdict === 'no_goal');
+  const isFoulDrama =
+    kind === 'red_card' ||
+    kind === 'injury' ||
+    (kind === 'var_overturn' && (inp.varVerdict === 'no_pen' || inp.varVerdict === 'pen'));
+
+  const isPenaltySpot = isPenalty || isPenaltyMiss || isShootout;
 
   const shotDistM =
     inp.shotDistM ??
-    (kind === 'goal_penalty'
+    (kind === 'goal_penalty' || isPenaltySpot
       ? 11
       : kind === 'goal_freekick'
         ? 23
@@ -748,12 +924,13 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
           ? 98
           : kind === 'goal_curler'
             ? 91
-            : kind === 'goal_penalty'
+            : kind === 'goal_penalty' || isPenaltySpot
               ? 104
               : 89);
 
-  // For super_save, inp.side is the defending/GK team; attacking side is opposite
-  const attSide: 'H' | 'A' = isSuperSave ? (inp.side === 'H' ? 'A' : 'H') : inp.side;
+  // For super_save, inp.side is defending GK team; for red_card/injury, inp.side is actor's team
+  const attSide: 'H' | 'A' =
+    isSuperSave || kind === 'red_card' ? (inp.side === 'H' ? 'A' : 'H') : inp.side;
   const defSide: 'H' | 'A' = attSide === 'H' ? 'A' : 'H';
   const attTeam = attSide === 'H' ? inp.homeTeam : inp.awayTeam;
   const defTeam = defSide === 'H' ? inp.homeTeam : inp.awayTeam;
@@ -772,7 +949,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
   const isDeflect = kind === 'goal_deflect' || inp.shotStyle === 'deflected';
 
   // Pick realistic shooting spot & target corner
-  const shootSpotX = isPenalty
+  const shootSpotX = isPenaltySpot
     ? inp.attRight
       ? 88.5
       : 11.5
@@ -783,7 +960,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
         : clamp(inp.attRight ? 100 - shotDistM * 0.92 : shotDistM * 0.92, 10, 90);
 
   const laneSign = ((inp.minute + inp.seq) % 2 === 0 ? -1 : 1);
-  const shootSpotY = isPenalty
+  const shootSpotY = isPenaltySpot
     ? 50
     : isFreekick
       ? clamp(50 + laneSign * (7 + ((inp.seq * 3) % 7)), 34, 66)
@@ -793,30 +970,39 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
           ? clamp(50 + laneSign * 4.5, 42, 58)
           : clamp(50 + laneSign * (5 + ((inp.minute * 3) % 9)), 33, 67);
 
-  const isWoodCorner = isWoodwork && inp.finishVerb.includes('สามเหลี่ยม');
-  const isWoodBar = isWoodwork && !isWoodCorner && inp.finishVerb.includes('คาน') && !inp.finishVerb.includes('เสา/คาน');
+  const isWoodCorner = (isWoodwork || isShootoutWoodwork) && inp.finishVerb.includes('สามเหลี่ยม');
+  const isWoodBar =
+    (isWoodwork || isShootoutWoodwork) &&
+    !isWoodCorner &&
+    inp.finishVerb.includes('คาน') &&
+    !inp.finishVerb.includes('เสา/คาน');
   const cornerSign = (inp.minute + inp.seq) % 2 === 0 ? 1 : -1;
-  const targetY = isPostOrBarIn
-    ? isBarIn
-      ? clamp(50 + cornerSign * 3.8, 44.5, 55.5)
-      : cornerSign < 0
-        ? 42.2
-        : 57.8
-    : isWoodwork
-      ? isWoodBar
-        ? clamp(50 + cornerSign * 3.6, 44.2, 55.8)
-        : isWoodCorner
-          ? cornerSign < 0
+  const targetY =
+    isPenaltyMiss || isShootoutMiss
+      ? cornerSign < 0
+        ? 37.6
+        : 62.4
+      : isPostOrBarIn
+        ? isBarIn
+          ? clamp(50 + cornerSign * 3.8, 44.5, 55.5)
+          : cornerSign < 0
             ? 42.2
             : 57.8
-          : cornerSign < 0
-            ? 42.0
-            : 58.0
-      : isPenalty
-        ? clamp(50 + cornerSign * 5.2, 43.2, 56.8)
-        : kind === 'goal_curler'
-          ? clamp(50 - laneSign * 6.4, 42.6, 57.4)
-          : clamp(50 + cornerSign * 5.6, 42.8, 57.2);
+        : isWoodwork || isShootoutWoodwork
+          ? isWoodBar
+            ? clamp(50 + cornerSign * 3.6, 44.2, 55.8)
+            : isWoodCorner
+              ? cornerSign < 0
+                ? 42.2
+                : 57.8
+              : cornerSign < 0
+                ? 42.0
+                : 58.0
+          : isPenaltySpot
+            ? clamp(50 + cornerSign * 5.2, 43.2, 56.8)
+            : kind === 'goal_curler'
+              ? clamp(50 - laneSign * 6.4, 42.6, 57.4)
+              : clamp(50 + cornerSign * 5.6, 42.8, 57.2);
 
   // Build 22 agents from real formations & attributes
   const buildAgents = (tm: Team, s: 'H' | 'A', lu: string[]): SimAgent[] => {
@@ -867,12 +1053,239 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
   const agents = [...hAgents, ...aAgents];
 
   // Identify key actors
-  const shooterName = isSuperSave ? inp.victimName : inp.scorerName;
+  const shooterName = isSuperSave || kind === 'red_card' ? inp.victimName : inp.scorerName;
   const shooter =
     (shooterName ? agents.find((a) => a.s === attSide && a.id === shooterName) : undefined) ||
     agents.find((a) => a.s === attSide && a.pos === 'FW') ||
     agents.find((a) => a.s === attSide && !a.gk) ||
     agents[0];
+
+  // Dedicated real-time foul / red-card / injury / VAR-penalty simulation branch
+  if (isFoulDrama) {
+    const foulCulpritName = kind === 'red_card' ? inp.scorerName : inp.victimName;
+    const culprit =
+      (foulCulpritName ? agents.find((a) => a.s === defSide && a.id === foulCulpritName) : undefined) ||
+      agents.find((a) => a.s === defSide && (a.pos === 'DF' || a.pos === 'MF') && !a.gk) ||
+      agents.find((a) => a.s === defSide && !a.gk) ||
+      agents[11] ||
+      agents[0];
+    const carrier = shooter;
+    const isBoxIncident = kind === 'var_overturn';
+    const clashX = isBoxIncident
+      ? inp.attRight
+        ? inp.varVerdict === 'pen'
+          ? 87.5
+          : 81.2
+        : inp.varVerdict === 'pen'
+          ? 12.5
+          : 18.8
+      : inp.attRight
+        ? clamp(62 + ((inp.minute * 3) % 18), 54, 80)
+        : clamp(38 - ((inp.minute * 3) % 18), 20, 46);
+    const clashY = clamp(50 + laneSign * (8 + ((inp.seq * 5) % 14)), 22, 78);
+    const startBallX = clamp(clashX - dir * 16, 10, 90);
+    const startBallY = clamp(clashY + (clashY < 50 ? 6 : -6), 14, 86);
+
+    const shiftFoulX = (ag: SimAgent, bxNow: number, inPoss: boolean, cfg: TeamTacticParams) => {
+      const aRight = ag.s === attSide ? inp.attRight : !inp.attRight;
+      const normSlotX = clamp(100 - ag.slotY, 10, 88);
+      const ballNorm = aRight ? bxNow : 100 - bxNow;
+      const tacPush = cfg.tac === 'X' ? 9 : cfg.tac === 'A' ? 5 : cfg.tac === 'D' ? -6 : cfg.tac === 'Z' ? -9 : 0;
+      const lineShift = clamp((ballNorm - 50) * 0.44 + tacPush + (inPoss ? 4 : -4), -20, 22);
+      const nx = ag.gk ? 3.0 : clamp(normSlotX + lineShift, 10, 90);
+      const rawY = aRight ? ag.slotX : 100 - ag.slotX;
+      const ny = ag.gk ? 50 : clamp(50 + (rawY - 50) * 0.94, 7, 93);
+      return { x: aRight ? nx : 100 - nx, y: ny };
+    };
+
+    agents.forEach((ag) => {
+      const p0 = shiftFoulX(ag, startBallX, ag.s === attSide, ag.s === attSide ? attCfg : defCfg);
+      ag.x = p0.x;
+      ag.y = p0.y;
+      ag.tx = p0.x;
+      ag.ty = p0.y;
+    });
+    carrier.x = startBallX;
+    carrier.y = startBallY;
+    culprit.x = clamp(clashX + dir * 4.5, 6, 94);
+    culprit.y = clamp(clashY + (clashY < 50 ? -5.5 : 5.5), 10, 90);
+
+    const tClimax = 1.48;
+    const totalFoulDur = 2.85;
+    const dtF = 0.05;
+    const fSteps = Math.ceil(totalFoulDur / dtF);
+    const fPre: RollingHighlightSample[] = [];
+    const fPost: RollingHighlightSample[] = [];
+    let bxF = startBallX;
+    let byF = startBallY;
+    let bzF = 0.15;
+    let carIdF: string | undefined = carrier.id;
+    let clashTriggered = false;
+    let lastFSample = -1;
+
+    for (let si = 0; si <= fSteps; si++) {
+      const t = r3(si * dtF);
+      const progMove = clamp(t / tClimax, 0, 1);
+      if (t < tClimax) {
+        bxF = startBallX + (clashX - startBallX) * progMove;
+        byF = startBallY + (clashY - startBallY) * progMove;
+        bzF = 0.15;
+        carIdF = carrier.id;
+      } else {
+        if (!clashTriggered) {
+          clashTriggered = true;
+          culprit.act = HL_ACT.SLIDE;
+          culprit.actTimer = 0.65;
+          culprit.actMax = 0.65;
+          culprit.ap = 10;
+          carrier.act = HL_ACT.CLASH;
+          carrier.actTimer = 0.72;
+          carrier.actMax = 0.72;
+          carrier.ap = 10;
+        }
+        carIdF = undefined;
+        const looseP = clamp((t - tClimax) / 0.85, 0, 1);
+        bxF = clamp(clashX + dir * looseP * 6.5, 4, 96);
+        byF = clamp(clashY + (clashY < 50 ? 5.2 : -5.2) * looseP, 6, 94);
+        bzF = Math.sin(looseP * Math.PI) * 1.4;
+      }
+
+      agents.forEach((ag) => {
+        if (ag.actTimer > 0) {
+          ag.actTimer = Math.max(0, ag.actTimer - dtF);
+          ag.ap = Math.round(clamp(1 - ag.actTimer / Math.max(0.15, ag.actMax), 0, 1) * 100);
+          if (ag.actTimer <= 0) {
+            ag.act = undefined;
+            ag.ap = undefined;
+          }
+        }
+        if (ag.id === carrier.id) {
+          ag.tx = t < tClimax ? clashX : clamp(clashX - dir * 1.2, 4, 96);
+          ag.ty = clashY;
+        } else if (ag.id === culprit.id) {
+          ag.tx = t < tClimax ? clamp(clashX + dir * 0.8, 4, 96) : clamp(clashX + dir * 3.8, 4, 96);
+          ag.ty = t < tClimax ? clashY : clamp(clashY + (clashY < 50 ? -2.2 : 2.2), 6, 94);
+        } else if (t >= tClimax && !ag.gk) {
+          const nearIncident = Math.hypot(ag.x - clashX, ag.y - clashY) < 22;
+          if (nearIncident) {
+            const angA = ((ag.slotIndex % 6) / 6) * Math.PI * 2;
+            ag.tx = clamp(clashX + Math.cos(angA) * 5.2, 5, 95);
+            ag.ty = clamp(clashY + Math.sin(angA) * 5.2, 6, 94);
+          } else {
+            const pT = shiftFoulX(ag, bxF, ag.s === attSide, ag.s === attSide ? attCfg : defCfg);
+            ag.tx = pT.x;
+            ag.ty = pT.y;
+          }
+        } else {
+          const pT = shiftFoulX(ag, bxF, ag.s === attSide, ag.s === attSide ? attCfg : defCfg);
+          ag.tx = pT.x;
+          ag.ty = pT.y;
+        }
+
+        const dx = ag.tx - ag.x;
+        const dy = ag.ty - ag.y;
+        const dist = Math.hypot(dx, dy);
+        const urgent = ag.id === carrier.id || ag.id === culprit.id;
+        const spdMax = ag.spd * (urgent ? 1.25 : 0.92);
+        if (dist > 0.16) {
+          ag.vx += ((dx / dist) * Math.min(dist * 6, spdMax) - ag.vx) * Math.min(1, dtF * 10);
+          ag.vy += ((dy / dist) * Math.min(dist * 6, spdMax) - ag.vy) * Math.min(1, dtF * 10);
+        } else {
+          ag.vx *= 0.72;
+          ag.vy *= 0.72;
+        }
+        ag.x = clamp(ag.x + ag.vx * dtF, ag.gk ? 1.6 : 3, ag.gk ? 98.4 : 97);
+        ag.y = clamp(ag.y + ag.vy * dtF, 4, 96);
+        const desF = Math.hypot(ag.vx, ag.vy) > 1.2 ? Math.atan2(ag.vy, ag.vx) : Math.atan2(clashY - ag.y, clashX - ag.x);
+        ag.facing = interpAngle(ag.facing, desF, Math.min(1, dtF * 9));
+      });
+
+      const isClimaxF = t >= tClimax && t - dtF < tClimax;
+      if (isClimaxF || t === 0 || t - lastFSample >= 0.14 || si === fSteps) {
+        lastFSample = t;
+        const smp: RollingHighlightSample = {
+          ts: t,
+          bx: r1(bxF),
+          by: r1(byF),
+          bz: r1(bzF),
+          shot: false,
+          ...(carIdF ? { carId: carIdF } : {}),
+          ripL: 0,
+          ripR: 0,
+          agents: agents.map((ag) => ({
+            id: ag.id,
+            sn: ag.sn,
+            s: ag.s,
+            no: ag.no,
+            ro: ag.ro,
+            ...(ag.gk ? { gk: 1 as const } : {}),
+            vis: ag.vis,
+            ...(ag.ov ? { ov: ag.ov } : {}),
+            ...(ag.cap ? { cap: 1 as const } : {}),
+            ...(ag.me ? { me: 1 as const } : {}),
+            ...(kind === 'red_card' && ag.id === culprit.id && t >= tClimax ? { rc: 1 as const } : {}),
+            ...(kind === 'injury' && ag.id === carrier.id && t >= tClimax ? { inj: 1 as const } : {}),
+            fit: ag.fit,
+            x: r1(ag.x),
+            y: r1(ag.y),
+            f: r2(ag.facing),
+            ...(ag.act ? { act: ag.act } : {}),
+            ...(ag.ap !== undefined ? { ap: ag.ap } : {})
+          }))
+        };
+        if (t <= tClimax + 0.001) fPre.push(smp);
+        else fPost.push(smp);
+      }
+    }
+
+    const edFTeam = kind === 'red_card' ? defTeam : attTeam;
+    const edFOpp = kind === 'red_card' ? attTeam : defTeam;
+    const edFActor = kind === 'red_card' ? culprit.id : carrier.id;
+    const edFVictim = kind === 'red_card' ? carrier.id : culprit.id;
+    const edF = buildHighlightEditorial({
+      kind,
+      minute: inp.minute,
+      teamName: edFTeam.name,
+      oppTeamName: edFOpp.name,
+      actorName: edFActor,
+      victimName: edFVictim,
+      finishVerb: inp.finishVerb,
+      scoreAfterGh: inp.scoreAfterGh,
+      scoreAfterGa: inp.scoreAfterGa,
+      side: inp.side,
+      isDerby: inp.isDerby,
+      cardType: inp.cardType,
+      varVerdict: inp.varVerdict,
+      varReasonText: inp.varReasonText,
+      injuryGames: inp.injuryGames
+    });
+
+    return finalizeHighlightClipFromSamples({
+      id: inp.id,
+      seq: inp.seq,
+      minute: inp.minute,
+      kind,
+      side: inp.side,
+      attRight: inp.attRight,
+      title: edF.title,
+      subtitle: edF.subtitle,
+      crewTag: edF.crewTag,
+      commentary: edF.commentary,
+      actorName: edFActor,
+      victimName: edFVictim,
+      scoreBefore: inp.scoreBefore,
+      scoreAfter: inp.scoreAfter,
+      dramaScore: edF.dramaScore,
+      secondHalf: inp.secondHalf,
+      cardType: inp.cardType,
+      varVerdict: inp.varVerdict,
+      varReasonText: inp.varReasonText,
+      injuryGames: inp.injuryGames,
+      matchEnv: inp.matchEnv,
+      preSamples: fPre,
+      postSamples: fPost
+    });
+  }
 
   const ogCulprit =
     kind === 'goal_og'
@@ -881,7 +1294,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
       : undefined;
 
   const assister =
-    !isPenalty && !isFreekick && kind !== 'goal_og'
+    !isPenaltySpot && !isFreekick && kind !== 'goal_og'
       ? (inp.assisterName ? agents.find((a) => a.s === attSide && a.id === inp.assisterName && a.id !== shooter.id) : undefined) ||
         agents
           .filter((a) => a.s === attSide && !a.gk && a.id !== shooter.id)
@@ -889,7 +1302,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
       : undefined;
 
   const buildupActor =
-    !isPenalty && !isFreekick
+    !isPenaltySpot && !isFreekick
       ? agents
           .filter((a) => a.s === attSide && !a.gk && a.id !== shooter.id && a.id !== assister?.id)
           .sort((u, v) => (v.pos === 'MF' ? 3 : v.pos === 'DF' ? 2 : 1) - (u.pos === 'MF' ? 3 : u.pos === 'DF' ? 2 : 1))[0] ||
@@ -909,7 +1322,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
   const wallDefs = isFreekick ? defOutfield.slice(0, 3) : [];
 
   // Buildup geometry & phase timing (real-time seconds)
-  const originX = clamp(shootSpotX - dir * (isPenalty || isFreekick ? 0 : 28), 16, 84);
+  const originX = clamp(shootSpotX - dir * (isPenaltySpot || isFreekick ? 0 : 28), 16, 84);
   const originY = clamp(50 - laneSign * 13, 18, 82);
   const assistSpotX = clamp(shootSpotX - dir * (kind === 'goal_header' || kind === 'goal_acrobat' ? 10 : 16), 14, 86);
   const assistSpotY = clamp(
@@ -922,20 +1335,20 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
     88
   );
 
-  const hasTwoPasses = !isPenalty && !isFreekick && Boolean(assister && buildupActor.id !== assister.id);
-  const tPass1 = isPenalty || isFreekick ? 99 : hasTwoPasses ? 0.52 : 99;
-  const tArrive1 = isPenalty || isFreekick ? 99 : hasTwoPasses ? 1.15 : 99;
-  const tPass2 = isPenalty || isFreekick ? 99 : hasTwoPasses ? 1.50 : 0.72;
-  const tShot = isPenalty ? 1.15 : isFreekick ? 1.25 : 2.35;
-  const flightDur = isPenalty
-    ? 0.42
+  const hasTwoPasses = !isPenaltySpot && !isFreekick && Boolean(assister && buildupActor.id !== assister.id);
+  const tPass1 = isPenaltySpot || isFreekick ? 99 : hasTwoPasses ? 0.52 : 99;
+  const tArrive1 = isPenaltySpot || isFreekick ? 99 : hasTwoPasses ? 1.15 : 99;
+  const tPass2 = isPenaltySpot || isFreekick ? 99 : hasTwoPasses ? 1.50 : 0.72;
+  const tShot = isPenaltySpot ? 1.15 : isFreekick ? 1.25 : 2.35;
+  const flightDur = isPenaltySpot
+    ? 0.44
     : isFreekick
       ? 0.62
       : clamp(Math.hypot(goalLineX - shootSpotX, targetY - shootSpotY) / 48, 0.36, 0.64);
   const tArriveGoal = tShot + flightDur;
   const bounceDur = isPostOrBarIn ? 0.24 : isDeflect ? 0.24 : isFumbleIn ? 0.25 : 0;
   const tImpact = tArriveGoal + bounceDur;
-  const totalDur = isGoal ? tImpact + 2.05 : tArriveGoal + 1.45;
+  const totalDur = isGoal || isShootoutGoal ? tImpact + 2.05 : isVarNoGoal ? tImpact + 1.75 : tArriveGoal + 1.45;
 
   // Position all 22 players realistically at t=0 based on origin ball position & each team's live tactics
   const shiftLineX = (ag: SimAgent, ballX: number, inPoss: boolean, cfg: TeamTacticParams) => {
@@ -960,14 +1373,17 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
     ag.ty = init.y;
   });
 
-  if (isPenalty) {
+  if (isPenaltySpot) {
     agents.forEach((ag) => {
       if (ag.gk) {
-        ag.x = ag.s === defSide ? (inp.attRight ? 98.0 : 2.0) : inp.attRight ? 4.5 : 95.5;
-        ag.y = 50;
+        ag.x = ag.s === defSide ? (inp.attRight ? 98.0 : 2.0) : isShootout ? 50 : inp.attRight ? 4.5 : 95.5;
+        ag.y = isShootout && ag.s !== defSide ? 48 : 50;
       } else if (ag.id === shooter.id) {
         ag.x = clamp(shootSpotX - dir * 4.2, 4, 96);
         ag.y = 50;
+      } else if (isShootout) {
+        ag.x = clamp(47 + ((ag.slotIndex % 5) - 2) * 3.5, 36, 64);
+        ag.y = ag.s === 'H' ? 40 - (ag.slotIndex % 2) * 4 : 60 + (ag.slotIndex % 2) * 4;
       } else {
         const edgeX = inp.attRight ? 76.5 - (ag.slotIndex % 3) * 2.3 : 23.5 + (ag.slotIndex % 3) * 2.3;
         ag.x = edgeX;
@@ -1053,12 +1469,12 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
   const sampleEvery = 0.14;
   let lastSampleT = -1;
 
-  let bx = isPenalty || isFreekick ? shootSpotX : (hasTwoPasses ? buildupActor : assister || shooter).x;
-  let by = isPenalty || isFreekick ? shootSpotY : (hasTwoPasses ? buildupActor : assister || shooter).y;
+  let bx = isPenaltySpot || isFreekick ? shootSpotX : (hasTwoPasses ? buildupActor : assister || shooter).x;
+  let by = isPenaltySpot || isFreekick ? shootSpotY : (hasTwoPasses ? buildupActor : assister || shooter).y;
   let bz = 0;
   let ripL = 0;
   let ripR = 0;
-  let carId: string | undefined = isPenalty || isFreekick ? undefined : (hasTwoPasses ? buildupActor : assister || shooter).id;
+  let carId: string | undefined = isPenaltySpot || isFreekick ? undefined : (hasTwoPasses ? buildupActor : assister || shooter).id;
   let inShot = false;
   let shotStyleTag: string | undefined;
   let goalCrossedLogged = false;
@@ -1108,7 +1524,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
             ? 'header'
             : kind === 'goal_freekick'
               ? 'freekick'
-              : kind === 'goal_penalty'
+              : kind === 'goal_penalty' || isPenaltySpot
                 ? 'penalty'
                 : kind === 'goal_deflect'
                   ? 'deflected'
@@ -1117,10 +1533,10 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
   const steps = Math.ceil(totalDur / dt);
   for (let sIdx = 0; sIdx <= steps; sIdx++) {
     const t = r3(sIdx * dt);
-    const celebratingNow = isGoal && t > tImpact + 0.03;
+    const celebratingNow = (isGoal || isShootoutGoal) && t > tImpact + 0.03;
 
     // 1. Update ball & discrete play triggers
-    if (isPenalty) {
+    if (isPenaltySpot) {
       if (t < tShot) {
         bx = shootSpotX;
         by = shootSpotY;
@@ -1129,28 +1545,44 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
       } else {
         if (!shotTriggered) {
           shotTriggered = true;
-          triggerAction(shooter, strikeAct, 0.45);
+          triggerAction(shooter, isPenaltyMiss || isShootoutMiss ? HL_ACT.WHIFF : strikeAct, 0.45);
         }
+        const spotSave = isSuperSave || isShootoutSave;
+        const spotWood = isWoodwork || isShootoutWoodwork;
+        const spotMiss = isPenaltyMiss || isShootoutMiss;
         if (t <= tArriveGoal) {
           inShot = true;
           shotStyleTag = shotStyleOut;
           const sp = clamp((t - tShot) / flightDur, 0, 1);
-          bx = shootSpotX + ((isSuperSave ? (inp.attRight ? 97.6 : 2.4) : isWoodwork ? postWoodX : goalBackX) - shootSpotX) * sp;
+          const spotDestX = spotSave
+            ? inp.attRight
+              ? 97.6
+              : 2.4
+            : spotWood
+              ? postWoodX
+              : goalBackX;
+          bx = shootSpotX + (spotDestX - shootSpotX) * sp;
           by = shootSpotY + (targetY - shootSpotY) * sp + Math.sin(sp * Math.PI) * 0.8;
-          bz = Math.sin(sp * Math.PI) * 2.2;
-        } else if (isSuperSave) {
+          bz = Math.sin(sp * Math.PI) * (spotMiss ? 3.8 : 2.2);
+        } else if (spotSave) {
           inShot = false;
           const bp = clamp((t - tArriveGoal) / 0.55, 0, 1);
           const saveX = inp.attRight ? 97.6 : 2.4;
           bx = saveX - dir * bp * 9.5;
           by = targetY + (targetY < 50 ? -10 : 10) * bp;
           bz = Math.sin(bp * Math.PI) * 3.4;
-        } else if (isWoodwork) {
+        } else if (spotWood) {
           inShot = false;
           const bp = clamp((t - tArriveGoal) / 0.55, 0, 1);
           bx = postWoodX - dir * bp * 11;
           by = targetY + (targetY < 50 ? -9 : 9) * bp;
           bz = Math.sin(bp * Math.PI) * 4.0;
+        } else if (spotMiss) {
+          inShot = false;
+          const bp = clamp((t - tArriveGoal) / 0.45, 0, 1);
+          bx = goalBackX + dir * bp * 1.4;
+          by = targetY + (targetY < 50 ? -1.5 : 1.5) * bp;
+          bz = 0.25;
         } else {
           inShot = false;
           bx = goalBackX;
@@ -1315,7 +1747,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
     }
 
     // Net ripple triggers ONLY at exact tImpact when ball crosses into net
-    if (isGoal && !goalCrossedLogged && t >= tImpact) {
+    if ((isGoal || isShootoutGoal || isVarNoGoal) && !goalCrossedLogged && t >= tImpact) {
       goalCrossedLogged = true;
       if (inp.attRight) ripR = 1.0;
       else ripL = 1.0;
@@ -1332,8 +1764,8 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
         const diveDir = targetY >= defGk.y ? 1 : -1;
         triggerAction(
           defGk,
-          isSuperSave ? HL_ACT.SUPERSAVE : HL_ACT.GK_DIVE,
-          isSuperSave ? 0.85 : 0.78,
+          isSuperSave || isShootoutSave ? HL_ACT.SUPERSAVE : HL_ACT.GK_DIVE,
+          isSuperSave || isShootoutSave ? 0.85 : 0.78,
           diveDir
         );
       }
@@ -1395,7 +1827,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
       }
 
       // Active play positioning (real-time tactics & off-ball runs)
-      if (isPenalty) {
+      if (isPenaltySpot) {
         if (ag.id === shooter.id && t >= 0.45 && t <= tShot + 0.25) {
           ag.tx = shootSpotX;
           ag.ty = shootSpotY;
@@ -1550,9 +1982,10 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
     }
 
     // 4. Capture sample every ~0.14s (plus guaranteed climax sample right at impactT!)
-    const isClimaxTick = isGoal
-      ? t >= tImpact && t - dt < tImpact
-      : t >= tArriveGoal && t - dt < tArriveGoal;
+    const isClimaxTick =
+      isGoal || isShootoutGoal || isVarNoGoal
+        ? t >= tImpact && t - dt < tImpact
+        : t >= tArriveGoal && t - dt < tArriveGoal;
     if (isClimaxTick || t === 0 || t - lastSampleT >= sampleEvery || sIdx === steps) {
       lastSampleT = t;
       const sample: RollingHighlightSample = {
@@ -1585,7 +2018,7 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
           ...(ag.ap !== undefined ? { ap: ag.ap } : {})
         }))
       };
-      const climaxCutoff = isGoal ? tImpact : tArriveGoal;
+      const climaxCutoff = isGoal || isShootoutGoal || isVarNoGoal ? tImpact : tArriveGoal;
       if (t <= climaxCutoff + 0.001) preSamples.push(sample);
       else postSamples.push(sample);
     }
@@ -1610,7 +2043,16 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
     scoreAfterGh: inp.scoreAfterGh,
     scoreAfterGa: inp.scoreAfterGa,
     side: inp.side,
-    isDerby: inp.isDerby
+    isDerby: inp.isDerby,
+    cardType: inp.cardType,
+    varVerdict: inp.varVerdict,
+    varReasonText: inp.varReasonText,
+    shootoutScored: inp.shootoutScored,
+    shootoutOutcome: inp.shootoutOutcome,
+    shootoutRound: inp.shootoutRound,
+    shootoutDecisive: inp.shootoutDecisive,
+    shootoutScoreText: inp.shootoutScoreText,
+    injuryGames: inp.injuryGames
   });
 
   return finalizeHighlightClipFromSamples({
@@ -1634,6 +2076,15 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
     shotSpeedKmh,
     secondHalf: inp.secondHalf,
     ...(isGoal ? { celebratePose: celebPose } : {}),
+    cardType: inp.cardType,
+    varVerdict: inp.varVerdict,
+    varReasonText: inp.varReasonText,
+    shootoutScored: inp.shootoutScored,
+    shootoutOutcome: inp.shootoutOutcome,
+    shootoutRound: inp.shootoutRound,
+    shootoutDecisive: inp.shootoutDecisive,
+    shootoutScoreText: inp.shootoutScoreText,
+    injuryGames: inp.injuryGames,
     matchEnv: inp.matchEnv,
     preSamples,
     postSamples
@@ -1677,23 +2128,52 @@ const compactClipFrames = (clip: MatchHighlightClip, targetMaxFrames: number): M
 
 /**
  * Pro-crew curator: ALWAYS preserves every single goal scored (even in 10+ goal matches),
- * fills remaining slots up to MAX_MATCH_HIGHLIGHTS with top saves / woodwork when goals < 6,
- * compacts frames slightly on high-scoring goal-fests to keep save size lean,
- * assigns broadcast rank badges, and sorts chronologically for cohesive playback.
+ * prioritizes high-drama incidents (VAR overturns, red cards, missed penalties, decisive shootout kicks,
+ * super saves, woodwork, injuries), compacts frames smoothly, assigns rank badges, and sorts chronologically.
  */
 export const curateMatchHighlights = (rawClips: MatchHighlightClip[]): MatchHighlightClip[] => {
   if (!rawClips.length) return [];
   const valid = rawClips.filter((c) => c.frames.length >= 2 && c.actors.length > 0);
   if (!valid.length) return [];
 
-  const goals = valid
+  // Deduplicate by id
+  const deduped: MatchHighlightClip[] = [];
+  const seenIds = new Set<string>();
+  for (const c of valid) {
+    if (seenIds.has(c.id)) continue;
+    seenIds.add(c.id);
+    deduped.push(c);
+  }
+
+  const goals = deduped
     .filter((c) => c.kind.startsWith('goal_'))
     .sort((a, b) => a.minute - b.minute || a.seq - b.seq);
-  const nonGoals = valid
-    .filter((c) => !c.kind.startsWith('goal_'))
+
+  // Keep up to 2 highest-drama shootout kicks (always preserving the decisive kick) so shootout doesn't flood playlist
+  const shootoutTop = deduped
+    .filter((c) => c.kind === 'shootout_kick')
+    .sort(
+      (a, b) =>
+        (b.shootoutDecisive ? 1 : 0) - (a.shootoutDecisive ? 1 : 0) ||
+        b.dramaScore - a.dramaScore ||
+        (b.shootoutRound || 0) - (a.shootoutRound || 0) ||
+        b.seq - a.seq
+    )
+    .slice(0, 2);
+
+  // Keep up to 1 injury clip unless nothing else fills the slot
+  const injuryTop = deduped
+    .filter((c) => c.kind === 'injury')
+    .sort((a, b) => b.dramaScore - a.dramaScore || a.seq - b.seq)
+    .slice(0, 1);
+
+  const otherNonGoals = deduped
+    .filter((c) => !c.kind.startsWith('goal_') && c.kind !== 'shootout_kick' && c.kind !== 'injury');
+
+  const nonGoals = [...shootoutTop, ...otherNonGoals, ...injuryTop]
     .sort((a, b) => b.dramaScore - a.dramaScore || a.seq - b.seq);
 
-  // Never drop a goal: keep all goals, and top up with dramatic saves/woodwork up to MAX_MATCH_HIGHLIGHTS
+  // Never drop a goal: keep all goals, and top up with top dramatic events up to MAX_MATCH_HIGHLIGHTS
   const selected: MatchHighlightClip[] = [...goals];
   for (const ng of nonGoals) {
     if (selected.length < MAX_MATCH_HIGHLIGHTS) {
@@ -1701,7 +2181,7 @@ export const curateMatchHighlights = (rawClips: MatchHighlightClip[]): MatchHigh
     }
   }
 
-  const frameBudget = selected.length > 9 ? 9 : selected.length > MAX_MATCH_HIGHLIGHTS ? 11 : 16;
+  const frameBudget = selected.length > 9 ? 9 : selected.length > 6 ? 12 : 16;
 
   // Assign #1 drama badge
   const byDrama = selected.slice().sort((a, b) => b.dramaScore - a.dramaScore);
@@ -1710,7 +2190,7 @@ export const curateMatchHighlights = (rawClips: MatchHighlightClip[]): MatchHigh
 
   return selected
     .slice()
-    .sort((a, b) => a.minute - b.minute || a.seq - b.seq)
+    .sort((a, b) => a.minute - b.minute || (a.shootoutRound || 0) - (b.shootoutRound || 0) || a.seq - b.seq)
     .map((clip) => {
       const compacted = frameBudget < 16 ? compactClipFrames(clip, frameBudget) : clip;
       return {

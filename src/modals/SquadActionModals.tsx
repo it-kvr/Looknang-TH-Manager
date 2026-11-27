@@ -43,14 +43,8 @@ export const SquadRenewModal: React.FC<{
   const renewOverCap = tx.curWage + wageDelta > tx.wageCap;
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 flex items-center gap-3 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <PlayerFace player={player} team={team} state={state} size={42} />
           <div className="flex-1 min-w-0">
@@ -246,14 +240,8 @@ export const SquadSellModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <div>
             <div className="font-bold text-sm mland:text-xs">💰 ขายนักเตะด่วน ({check.eligiblePlayers.length} ราย)</div>
@@ -431,14 +419,8 @@ export const SquadReleaseModal: React.FC<{
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-2.5 sm:p-4 mland:p-1.5 overflow-hidden">
+      <div className="w-full max-w-xl max-h-[calc(var(--app-dvh,1dvh)*92)] mland:max-h-[calc(var(--app-dvh,1dvh)*96)] rounded-2xl bg-[var(--surface)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         <div className="shrink-0 flex items-center justify-between gap-2 px-3.5 py-2.5 mland:px-3 mland:py-2 border-b border-[var(--line)] bg-[var(--surface-2)]">
           <div>
             <div className="font-bold text-sm mland:text-xs">🔓 ปล่อยตัว / ยกเลิกสัญญา ({check.eligiblePlayers.length} ราย)</div>

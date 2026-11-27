@@ -326,15 +326,11 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-[75] bg-black/88 flex items-center justify-center p-1.5 sm:p-3 mland:p-1 safe-all overflow-hidden"
-      onClick={onClose}
       role="dialog"
       aria-modal="true"
       aria-label="ไฮไลท์การแข่งขัน"
     >
-      <div
-        className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl mland:rounded-xl bg-[#07111e] border border-amber-400/45 text-white shadow-2xl flex flex-col overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="w-full max-w-6xl mland:max-w-[98vw] h-[calc(var(--app-dvh,1dvh)*94)] max-h-[calc(var(--app-dvh,1dvh)*94)] mland:h-[calc(var(--app-dvh,1dvh)*97)] mland:max-h-[calc(var(--app-dvh,1dvh)*97)] rounded-2xl mland:rounded-xl bg-[#07111e] border border-amber-400/45 text-white shadow-2xl flex flex-col overflow-hidden">
         {/* Top Broadcast Studio Header */}
         <div className="shrink-0 px-2.5 py-1.5 sm:px-3.5 mland:px-2.5 mland:py-1 bg-[#0b192c] border-b border-white/12 flex items-center justify-between gap-2 whitespace-nowrap overflow-hidden">
           <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
@@ -392,7 +388,12 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                 <div className="pointer-events-none absolute top-11 left-4 right-4 sm:left-auto sm:max-w-sm px-3 py-2 rounded-xl bg-slate-950/90 border border-amber-400/55 shadow-xl space-y-0.5">
                   <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-300">
                     <span>{badgeMeta.icon}</span>
-                    <span>ช็อตที่ {activeIdx + 1} · นาที {activeClip.minute}&apos;</span>
+                    <span>
+                      ช็อตที่ {activeIdx + 1} ·{' '}
+                      {activeClip.kind === 'shootout_kick'
+                        ? `ดวลจุดโทษ${activeClip.shootoutRound ? ` รอบ ${activeClip.shootoutRound}` : ''}`
+                        : `นาที ${activeClip.minute}'`}
+                    </span>
                   </div>
                   <div className="text-xs font-extrabold text-white truncate">{activeClip.title}</div>
                   <div className="text-[10px] text-white/90 flex items-center gap-1.5 min-w-0">
@@ -407,7 +408,7 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
               {/* Timeline progress bar with Climax Diamond */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-amber-300 w-9 shrink-0">
-                  น.{activeClip.minute}&apos;
+                  {activeClip.kind === 'shootout_kick' ? 'PEN' : `น.${activeClip.minute}'`}
                 </span>
                 <div
                   className="relative flex-1 h-4 flex items-center cursor-pointer group touch-none select-none"
@@ -594,10 +595,20 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                     <div className="flex items-center justify-between gap-1.5 text-[10px] mland:text-[8.5px]">
                       <span className={`px-1.5 py-[1px] rounded border font-extrabold inline-flex items-center gap-1 ${b.toneClass}`}>
                         <span>{b.icon}</span>
-                        <span>น.{clip.minute}&apos;</span>
+                        <span>
+                          {clip.kind === 'shootout_kick'
+                            ? `ดวลเป้า${clip.shootoutRound ? ` R${clip.shootoutRound}` : ''}`
+                            : `น.${clip.minute}'`}
+                        </span>
                       </span>
                       <span className="font-bold tabular text-white/70 truncate">
-                        {clip.kind.startsWith('goal_') ? `${clip.scoreBefore} → ${clip.scoreAfter}` : `สกอร์ ${clip.scoreAfter}`}
+                        {clip.kind.startsWith('goal_')
+                          ? `${clip.scoreBefore} → ${clip.scoreAfter}`
+                          : clip.kind === 'shootout_kick'
+                            ? clip.shootoutScoreText
+                              ? `จุดโทษ ${clip.shootoutScoreText}`
+                              : `รอบ ${clip.shootoutRound || 1}`
+                            : `สกอร์ ${clip.scoreAfter}`}
                       </span>
                     </div>
 

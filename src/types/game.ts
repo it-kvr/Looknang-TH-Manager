@@ -1615,7 +1615,12 @@ export type MatchHighlightKind =
   | 'goal_regular'
   | 'goal_og'
   | 'super_save'
-  | 'woodwork';
+  | 'woodwork'
+  | 'red_card'
+  | 'penalty_miss'
+  | 'var_overturn'
+  | 'shootout_kick'
+  | 'injury';
 
 export interface MatchHighlightActorMeta {
   id: string;
@@ -1629,6 +1634,8 @@ export interface MatchHighlightActorMeta {
   cap?: 1;
   me?: 1;
   yc?: 1;
+  rc?: 1;
+  inj?: 1;
   sub?: 1;
   fit?: number;
 }
@@ -1668,6 +1675,15 @@ export interface MatchHighlightClip {
   peakT: number;
   secondHalf?: boolean;
   celebratePose?: GoalCelebrationStyle;
+  cardType?: 'R' | 'Y2R';
+  varVerdict?: 'no_goal' | 'no_pen' | 'pen' | 'red';
+  varReasonText?: string;
+  shootoutScored?: boolean;
+  shootoutOutcome?: 'goal' | 'save' | 'woodwork' | 'miss';
+  shootoutRound?: number;
+  shootoutDecisive?: boolean;
+  shootoutScoreText?: string;
+  injuryGames?: number;
   matchEnv?: MatchEnvironment;
   actors: MatchHighlightActorMeta[];
   frames: MatchHighlightFrame[];

@@ -81,14 +81,8 @@ export const PlayerInspectorModal: React.FC<{
           : 'พร้อมลงสนาม';
 
   return (
-    <div
-      className="fixed inset-0 z-[60] bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(calc(var(--app-dvh,1dvh)*94),740px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[60] bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden">
+      <div className="w-full max-w-5xl mland:max-w-[96vw] h-[min(calc(var(--app-dvh,1dvh)*94),740px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Clean Compact Modal Header */}
         <header className="shrink-0 px-4 py-2 mland:px-3 mland:py-1 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 min-w-0">
@@ -424,14 +418,8 @@ export const TeamInspectorModal: React.FC<{
   }, [team.sq, posFilter]);
 
   return (
-    <div
-      className="fixed inset-0 z-[55] bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-5xl mland:max-w-[96vw] h-[min(calc(var(--app-dvh,1dvh)*92),720px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-[55] bg-black/72 flex items-center justify-center p-2 sm:p-4 mland:p-2 overflow-hidden">
+      <div className="w-full max-w-5xl mland:max-w-[96vw] h-[min(calc(var(--app-dvh,1dvh)*92),720px)] mland:h-[calc(var(--app-dvh,1dvh)*95)] mland:max-h-[calc(var(--app-dvh,1dvh)*100-14px)] rounded-3xl mland:rounded-2xl bg-[var(--bg)] border border-[var(--line)] flex flex-col overflow-hidden shadow-2xl">
         {/* Compact Modal Header */}
         <header className="shrink-0 px-4 py-2 mland:px-3 mland:py-1 bg-[var(--surface)] border-b border-[var(--line)] flex items-center justify-between gap-2.5">
           <div className="flex items-center gap-2.5 mland:gap-2 min-w-0">

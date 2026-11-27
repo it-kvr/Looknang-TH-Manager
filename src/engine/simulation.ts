@@ -7437,6 +7437,138 @@ export function simulateInstantMatchPayload(
       })
     );
   }
+  const redCardIncidents = (r.cards || []).filter((c) => c.type === 'R' || c.type === 'Y2R');
+  redCardIncidents.forEach((c) => {
+    if (rawSimHighlights.length >= MAX_MATCH_HIGHLIGHTS) return;
+    const cSide: 'H' | 'A' = c.t === A.id ? 'A' : 'H';
+    const oppTeam = cSide === 'H' ? A : H;
+    const oppXi = cSide === 'H' ? awayXiNames : homeXiNames;
+    const victim = oppTeam.sq.find((q) => oppXi.includes(q.n) && q.pos !== 'GK') || oppTeam.sq[0];
+    const secondHalf = c.m > 45;
+    const attOppSide: 'H' | 'A' = cSide === 'H' ? 'A' : 'H';
+    const attRight = attOppSide === 'H' ? !secondHalf : secondHalf;
+    hlSeq += 1;
+    rawSimHighlights.push(
+      simulateRealtimeHighlightClip({
+        id: `simhl-${hlSeq}-${c.m}`,
+        seq: hlSeq,
+        minute: c.m,
+        kind: 'red_card',
+        side: cSide,
+        attRight,
+        secondHalf,
+        homeTeam: H,
+        awayTeam: A,
+        homeLu: homeXiNames,
+        awayLu: awayXiNames,
+        homeTactics: homeTacCfg,
+        awayTactics: awayTacCfg,
+        scorerName: c.who,
+        victimName: victim?.n,
+        finishVerb: c.reason || (c.type === 'Y2R' ? 'โดนใบเหลืองที่สองไล่ออกจากสนาม' : 'เข้าสกัดหนักโดนใบแดงโดยตรง'),
+        cardType: c.type === 'Y2R' ? 'Y2R' : 'R',
+        scoreBefore: `${r.gh}-${r.ga}`,
+        scoreAfter: `${r.gh}-${r.ga}`,
+        scoreAfterGh: r.gh,
+        scoreAfterGa: r.ga,
+        isDerby: Boolean(s.derby),
+        careerP: s.p,
+        matchEnv: simMatchEnv
+      })
+    );
+  });
+
+  if (rawSimHighlights.length < MAX_MATCH_HIGHLIGHTS) {
+    const varInc = (r.incidents || []).find((inc) => inc.kind === 'var');
+    if (varInc) {
+      const vSide: 'H' | 'A' = varInc.t === A.id ? 'A' : 'H';
+      const vTeam = vSide === 'H' ? H : A;
+      const vOpp = vSide === 'H' ? A : H;
+      const vXi = vSide === 'H' ? homeXiNames : awayXiNames;
+      const dXi = vSide === 'H' ? awayXiNames : homeXiNames;
+      const vAtt = vTeam.sq.find((q) => vXi.includes(q.n) && (q.pos === 'FW' || q.pos === 'MF')) || vTeam.sq[0];
+      const vDef = vOpp.sq.find((q) => dXi.includes(q.n) && q.pos === 'DF') || vOpp.sq[0];
+      const secondHalf = varInc.m > 45;
+      hlSeq += 1;
+      rawSimHighlights.push(
+        simulateRealtimeHighlightClip({
+          id: `simhl-${hlSeq}-${varInc.m}`,
+          seq: hlSeq,
+          minute: varInc.m,
+          kind: 'var_overturn',
+          side: vSide,
+          attRight: vSide === 'H' ? !secondHalf : secondHalf,
+          secondHalf,
+          homeTeam: H,
+          awayTeam: A,
+          homeLu: homeXiNames,
+          awayLu: awayXiNames,
+          homeTactics: homeTacCfg,
+          awayTactics: awayTacCfg,
+          scorerName: vAtt?.n || vTeam.name,
+          victimName: vDef?.n,
+          finishVerb: 'VAR ริบประตูหลังเช็กภาพช้าล้ำหน้า',
+          varVerdict: 'no_goal',
+          varReasonText: 'VAR ริบประตู (ล้ำหน้า)',
+          scoreBefore: `${r.gh}-${r.ga}`,
+          scoreAfter: `${r.gh}-${r.ga}`,
+          scoreAfterGh: r.gh,
+          scoreAfterGa: r.ga,
+          isDerby: Boolean(s.derby),
+          careerP: s.p,
+          matchEnv: simMatchEnv
+        })
+      );
+    }
+  }
+
+  if (pen !== undefined) {
+    const winSide: 'H' | 'A' = pen ? 'H' : 'A';
+    const winTeam = pen ? H : A;
+    const loseTeam = pen ? A : H;
+    const winXi = pen ? homeXiNames : awayXiNames;
+    const loseXi = pen ? awayXiNames : homeXiNames;
+    const kicker =
+      winTeam.sq.filter((q) => winXi.includes(q.n) && q.pos !== 'GK').sort((u, v) => v.ov - u.ov)[0] ||
+      winTeam.sq[0];
+    const loseGk = findGkPlayer(loseTeam, loseXi);
+    const penScoreMatch = penText?.match(/(\d+-\d+)/);
+    const penScoreOnly = penScoreMatch ? penScoreMatch[1] : undefined;
+    hlSeq += 1;
+    rawSimHighlights.push(
+      simulateRealtimeHighlightClip({
+        id: `simhl-${hlSeq}-90`,
+        seq: hlSeq,
+        minute: 90,
+        kind: 'shootout_kick',
+        side: winSide,
+        attRight: true,
+        secondHalf: true,
+        homeTeam: H,
+        awayTeam: A,
+        homeLu: homeXiNames,
+        awayLu: awayXiNames,
+        homeTactics: homeTacCfg,
+        awayTactics: awayTacCfg,
+        scorerName: kicker?.n || winTeam.name,
+        victimName: loseGk?.n,
+        finishVerb: 'ซัดจุดโทษลูกชี้ขาดพาทีมคว้าชัย!',
+        shotStyle: 'penalty',
+        shootoutScored: true,
+        shootoutOutcome: 'goal',
+        shootoutRound: 5,
+        shootoutDecisive: true,
+        shootoutScoreText: penScoreOnly,
+        scoreBefore: `${r.gh}-${r.ga}`,
+        scoreAfter: `${r.gh}-${r.ga}`,
+        scoreAfterGh: r.gh,
+        scoreAfterGa: r.ga,
+        isDerby: Boolean(s.derby),
+        careerP: s.p,
+        matchEnv: simMatchEnv
+      })
+    );
+  }
   const simHighlightClips = curateMatchHighlights(rawSimHighlights);
 
   return {

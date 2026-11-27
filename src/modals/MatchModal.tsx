@@ -13,7 +13,7 @@ import {
   Tag,
   Zap
 } from 'lucide-react';
-import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, TimelineKind, MatchTimelineItem, ArchivedStreamComment, MatchHighlightClip } from '../types/game';
+import type { SubRole, Mentality, Player, Team, MatchEvent, MatchCardEvent, MatchSubEvent, PlayerPerfResult, MatchResult, GameState, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, BallFlightType, GoalCelebrationStyle, LivePitchAgent, LiveBallState, LivePitchFx, ShootoutState, LiveMatchWorld, LiveBenchSeat, LiveSidelineCoach, MatchEnvironment, CoachOutfitId, VarReviewState, TimelineKind, MatchTimelineItem, ArchivedStreamComment, MatchHighlightClip, MatchHighlightKind } from '../types/game';
 import { R, P, clamp, fmtMoneyNum } from '../utils/math';
 import { RN, TN, AR_T, TRAIT_BY_ID, COACH_OUTFITS, CLUB_PHILOSOPHIES, FSD, LINE, baseRoleOf } from '../data/thaiFootballData';
 import { getTurfGradeSpec, computeTurfMatchModifiers } from '../data/crestAndKitData';
@@ -2015,7 +2015,13 @@ export const MatchModal: React.FC<{
     forceType?: 'Y' | 'R',
     silentLog = false,
     reasonLabel?: string,
-    varReplayId?: string
+    varReplayId?: string,
+    hlMeta?: {
+      victimName?: string;
+      varVerdict?: 'red';
+      varReasonText?: string;
+      preOverride?: RollingHighlightSample[] | null;
+    }
   ) => {
     const sr = simRef.current;
     const w = worldRef.current;
@@ -2054,6 +2060,21 @@ export const MatchModal: React.FC<{
         triggerCoachMood(w, culprit.side, '🤬', 2.8);
         triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😮', 2.4);
       }
+      if (w) {
+        recordEventHighlight(w, curMin, {
+          kind: 'red_card',
+          side: culprit.side,
+          attRight: culprit.x >= 50,
+          actorName: culprit.id,
+          victimName: hlMeta?.victimName,
+          finishVerb: cardReason,
+          cardType: 'R',
+          varVerdict: hlMeta?.varVerdict,
+          varReasonText: hlMeta?.varReasonText,
+          dramaFloor: hlMeta?.varVerdict === 'red' ? 94 : 90,
+          preOverride: hlMeta?.preOverride
+        });
+      }
       ensureOnPitchCaptain(w, culprit.side, curMin, 'red', silentLog);
       return 'R' as const;
     }
@@ -2077,6 +2098,21 @@ export const MatchModal: React.FC<{
         triggerDramaSlow(w, 2.5, `🟨➡🟥 เหลืองที่สอง!! ${culprit.shortName}`);
         triggerCoachMood(w, culprit.side, '🤦', 2.7);
         triggerCoachMood(w, culprit.side === 'H' ? 'A' : 'H', '😤', 2.3);
+      }
+      if (w) {
+        recordEventHighlight(w, curMin, {
+          kind: 'red_card',
+          side: culprit.side,
+          attRight: culprit.x >= 50,
+          actorName: culprit.id,
+          victimName: hlMeta?.victimName,
+          finishVerb: `${cardReason} · โดนใบเหลืองที่สองไล่ออก`,
+          cardType: 'Y2R',
+          varVerdict: hlMeta?.varVerdict,
+          varReasonText: hlMeta?.varReasonText,
+          dramaFloor: hlMeta?.varVerdict === 'red' ? 92 : 87,
+          preOverride: hlMeta?.preOverride
+        });
       }
       ensureOnPitchCaptain(w, culprit.side, curMin, 'red', silentLog);
       return 'Y2R' as const;
@@ -2110,7 +2146,8 @@ export const MatchModal: React.FC<{
     victim: LivePitchAgent,
     curMin: number,
     severity: 'foul' | 'slide' | 'clash' | 'fatigue',
-    isInstantStep = false
+    isInstantStep = false,
+    tacklerName?: string
   ) => {
     const sr = simRef.current;
     if (!victim || victim.sentOff || victim.pos === 'GK' || victim.injuredOut) return false;
@@ -2154,6 +2191,16 @@ export const MatchModal: React.FC<{
     });
     pushLog(curMin, `✚ บาดเจ็บในสนาม!! ${victim.id} (${sideOrig.name}) เจ็บระหว่างเล่น · คาดพัก ${games} นัด`, 'card');
     pushTimeline(curMin, victim.side, 'injury', victim.id, `พัก ${games} นัด`);
+    recordEventHighlight(w, curMin, {
+      kind: 'injury',
+      side: victim.side,
+      attRight: victim.x >= 50,
+      actorName: victim.id,
+      victimName: tacklerName,
+      finishVerb: severity === 'fatigue' ? 'กล้ามเนื้อล้าจนเล่นต่อไม่ไหว' : 'ปะทะหนักจนบาดเจ็บต้องเปลี่ยนตัว',
+      injuryGames: games,
+      dramaFloor: 74
+    });
 
     const isHomeSide = victim.side === 'H';
     const curLu = isHomeSide ? sr.homeLu : sr.awayLu;
@@ -5383,7 +5430,7 @@ export const MatchModal: React.FC<{
         }
 
         const injSev = foulKind === 'late_slide' || foulKind === 'hard_tackle' ? 'slide' : 'foul';
-        tryTriggerInMatchInjury(w, carrier, curMin, injSev);
+        tryTriggerInMatchInjury(w, carrier, curMin, injSev, false, nearestDef.id);
 
         const shouldVarPen = (inBoxNow && Math.random() < 0.32) || (onBoxEdgeNow && Math.random() < 0.26);
         const existingReds = simRef.current.cards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
@@ -5431,6 +5478,7 @@ export const MatchModal: React.FC<{
               : penScenario === 'gk_clash_box'
                 ? `🖥 ผู้ตัดสินเช็ก VAR จังหวะผู้รักษาประตู ${defTeam.name} พุ่งปะทะ ${carrier.id} ในกรอบ!`
                 : `🖥 ผู้ตัดสินขอเช็ก VAR จังหวะ ${nearestDef.id} (${defTeam.name}) สกัดใส่ ${carrier.id} ในกรอบเขตโทษ!`;
+          varBuildupSamplesRef.current = rollingSamplesRef.current.slice();
           w.varReview = {
             kind: 'penalty',
             side,
@@ -5506,6 +5554,7 @@ export const MatchModal: React.FC<{
           const supMfFoul =
             attPool.find((a) => !a.sentOff && a.id !== carrier.id && a.pos === 'MF') ||
             attPool.find((a) => !a.sentOff && a.id !== carrier.id);
+          varBuildupSamplesRef.current = rollingSamplesRef.current.slice();
           w.varReview = {
             kind: 'foul_card',
             side,
@@ -5635,7 +5684,7 @@ export const MatchModal: React.FC<{
         let cardRes: 'Y' | 'R' | null = null;
         const cardRoll = Math.random();
         if (cardRoll < cardChance && simRef.current.cards.length < maxTotalCards) {
-          const r = issueCard(nearestDef, curMin, directRedBias, undefined, false, cardReason);
+          const r = issueCard(nearestDef, curMin, directRedBias, undefined, false, cardReason, undefined, { victimName: carrier.id });
           cardRes = r === 'Y' ? 'Y' : 'R';
           cardLbl =
             r === 'Y'
@@ -5788,11 +5837,11 @@ export const MatchModal: React.FC<{
             // Attacker wins the shoulder clash and keeps going!
             w.phaseLabel = `💪 ${carrier.shortName} แข็งแกร่งเบียดชนะ ${nearestDef.shortName}!`;
             w.phaseTone = 'attack';
-            tryTriggerInMatchInjury(w, nearestDef, curMin, 'clash');
+            tryTriggerInMatchInjury(w, nearestDef, curMin, 'clash', false, carrier.id);
           } else {
             // Defender wins the clash cleanly!
             bumpPlayerStat(nearestDef.id, 'tackles');
-            tryTriggerInMatchInjury(w, carrier, curMin, 'clash');
+            tryTriggerInMatchInjury(w, carrier, curMin, 'clash', false, nearestDef.id);
             nudgeAgentToward(nearestDef, carrier.x, carrier.y, 0.9);
             b.possessionSide = defSide;
             b.carrierId = nearestDef.id;
@@ -5852,7 +5901,7 @@ export const MatchModal: React.FC<{
           });
           if (isSlideTackle) {
             triggerDramaSlow(w, 0.75, `⚡ สไลด์สกัดบอล! · ${nearestDef.shortName}`);
-            tryTriggerInMatchInjury(w, carrier, curMin, 'slide');
+            tryTriggerInMatchInjury(w, carrier, curMin, 'slide', false, nearestDef.id);
           }
 
           bumpPlayerStat(nearestDef.id, 'tackles');
@@ -7126,10 +7175,12 @@ export const MatchModal: React.FC<{
       highlightClockRef.current = climaxTs;
       lastHighlightSampleClockRef.current = climaxTs;
     }
-    const climaxNow = captureWorldSample(w, climaxTs);
+    const keepIds = new Set<string>(activePostCapturesRef.current.map((e) => e.meta.actorName));
+    keepIds.add(meta.actorName);
+    const climaxNow = captureWorldSample(w, climaxTs, keepIds);
     const preSamples = [...basePre, climaxNow];
     activePostCapturesRef.current.push({
-      remainingSamples: meta.kind.startsWith('goal_') ? 13 : 8,
+      remainingSamples: meta.kind.startsWith('goal_') ? 13 : meta.kind === 'shootout_kick' ? 6 : 8,
       postSamples: [],
       preSamples,
       meta
@@ -7138,10 +7189,18 @@ export const MatchModal: React.FC<{
 
   const flushHighlightCaptures = (w?: LiveMatchWorld | null) => {
     if (!activePostCapturesRef.current.length) return;
-    const extraSample = w ? captureWorldSample(w, highlightClockRef.current + 0.14) : null;
+    const keepIds = new Set<string>(activePostCapturesRef.current.map((e) => e.meta.actorName));
+    const extraSample = w ? captureWorldSample(w, highlightClockRef.current + 0.14, keepIds) : null;
     const pending = activePostCapturesRef.current.splice(0);
     pending.forEach((entry) => {
-      const postSamples = extraSample ? [...entry.postSamples, extraSample] : entry.postSamples;
+      const postSamples = extraSample ? [...entry.postSamples, extraSample] : [...entry.postSamples];
+      if (entry.meta.kind === 'shootout_kick' && postSamples.length < 3) {
+        const tailBase = postSamples[postSamples.length - 1] || entry.preSamples[entry.preSamples.length - 1];
+        if (tailBase) {
+          postSamples.push({ ...tailBase, ts: tailBase.ts + 0.18 });
+          postSamples.push({ ...tailBase, ts: tailBase.ts + 0.36 });
+        }
+      }
       const clip = finalizeHighlightClipFromSamples({
         ...entry.meta,
         preSamples: entry.preSamples,
@@ -7149,6 +7208,147 @@ export const MatchModal: React.FC<{
       });
       simRef.current.highlightClips.push(clip);
     });
+  };
+
+  const recordEventHighlight = (
+    w: LiveMatchWorld,
+    curMin: number,
+    opts: {
+      kind: MatchHighlightKind;
+      side: 'H' | 'A';
+      attRight: boolean;
+      actorName: string;
+      victimName?: string;
+      finishVerb: string;
+      shotStyle?: string;
+      shotDistM?: number;
+      shotSpeedKmh?: number;
+      dramaFloor?: number;
+      cardType?: 'R' | 'Y2R';
+      varVerdict?: 'no_goal' | 'no_pen' | 'pen' | 'red';
+      varReasonText?: string;
+      shootoutScored?: boolean;
+      shootoutOutcome?: 'goal' | 'save' | 'woodwork' | 'miss';
+      shootoutRound?: number;
+      shootoutDecisive?: boolean;
+      shootoutScoreText?: string;
+      injuryGames?: number;
+      preOverride?: RollingHighlightSample[] | null;
+    }
+  ) => {
+    const sr = simRef.current;
+    const nonGoalCount = sr.highlightClips.filter((c) => !c.kind.startsWith('goal_')).length;
+    const skipMustKeep = opts.kind === 'red_card' || (opts.kind === 'shootout_kick' && opts.shootoutDecisive);
+    if (isSkippingRef.current && !skipMustKeep && nonGoalCount >= 5) return;
+
+    sr.highlightSeq += 1;
+    const hlId = `hl-${sr.highlightSeq}-${curMin}`;
+    const actorTeam = opts.side === 'H' ? homeOrig : awayOrig;
+    const oppTeam = opts.side === 'H' ? awayOrig : homeOrig;
+    const scoreStr = `${sr.gh}-${sr.ga}`;
+
+    if (isSkippingRef.current) {
+      const hCfgSkip = getEffectiveTeamCfg('H', curMin);
+      const aCfgSkip = getEffectiveTeamCfg('A', curMin);
+      sr.highlightClips.push(
+        simulateRealtimeHighlightClip({
+          id: hlId,
+          seq: sr.highlightSeq,
+          minute: curMin,
+          kind: opts.kind,
+          side: opts.side,
+          attRight: opts.attRight,
+          secondHalf: w.secondHalf,
+          homeTeam: homeOrig,
+          awayTeam: awayOrig,
+          homeLu: sr.homeLu,
+          awayLu: sr.awayLu,
+          homeTactics: { tac: hCfgSkip.tac, press: hCfgSkip.press, pass: hCfgSkip.pass, tempo: hCfgSkip.tempo, width: hCfgSkip.wid },
+          awayTactics: { tac: aCfgSkip.tac, press: aCfgSkip.press, pass: aCfgSkip.pass, tempo: aCfgSkip.tempo, width: aCfgSkip.wid },
+          scorerName: opts.actorName,
+          victimName: opts.victimName,
+          finishVerb: opts.finishVerb,
+          shotStyle: opts.shotStyle,
+          shotDistM: opts.shotDistM,
+          shotSpeedKmh: opts.shotSpeedKmh,
+          cardType: opts.cardType,
+          varVerdict: opts.varVerdict,
+          varReasonText: opts.varReasonText,
+          shootoutScored: opts.shootoutScored,
+          shootoutOutcome: opts.shootoutOutcome,
+          shootoutRound: opts.shootoutRound,
+          shootoutDecisive: opts.shootoutDecisive,
+          shootoutScoreText: opts.shootoutScoreText,
+          injuryGames: opts.injuryGames,
+          scoreBefore: scoreStr,
+          scoreAfter: scoreStr,
+          scoreAfterGh: sr.gh,
+          scoreAfterGa: sr.ga,
+          isDerby,
+          careerP: state.p,
+          matchEnv
+        })
+      );
+    } else {
+      const ed = buildHighlightEditorial({
+        kind: opts.kind,
+        minute: curMin,
+        teamName: actorTeam.name,
+        oppTeamName: oppTeam.name,
+        actorName: opts.actorName,
+        victimName: opts.victimName,
+        finishVerb: opts.finishVerb,
+        shotDistM: opts.shotDistM,
+        shotSpeedKmh: opts.shotSpeedKmh,
+        scoreAfterGh: sr.gh,
+        scoreAfterGa: sr.ga,
+        side: opts.side,
+        isDerby,
+        cardType: opts.cardType,
+        varVerdict: opts.varVerdict,
+        varReasonText: opts.varReasonText,
+        shootoutScored: opts.shootoutScored,
+        shootoutOutcome: opts.shootoutOutcome,
+        shootoutRound: opts.shootoutRound,
+        shootoutDecisive: opts.shootoutDecisive,
+        shootoutScoreText: opts.shootoutScoreText,
+        injuryGames: opts.injuryGames
+      });
+      queueHighlightCapture(
+        w,
+        {
+          id: hlId,
+          seq: sr.highlightSeq,
+          minute: curMin,
+          kind: opts.kind,
+          side: opts.side,
+          attRight: opts.attRight,
+          title: ed.title,
+          subtitle: ed.subtitle,
+          crewTag: ed.crewTag,
+          commentary: ed.commentary,
+          actorName: opts.actorName,
+          victimName: opts.victimName,
+          scoreBefore: scoreStr,
+          scoreAfter: scoreStr,
+          dramaScore: opts.dramaFloor ? Math.max(ed.dramaScore, opts.dramaFloor) : ed.dramaScore,
+          shotDistM: opts.shotDistM,
+          shotSpeedKmh: opts.shotSpeedKmh,
+          secondHalf: w.secondHalf,
+          cardType: opts.cardType,
+          varVerdict: opts.varVerdict,
+          varReasonText: opts.varReasonText,
+          shootoutScored: opts.shootoutScored,
+          shootoutOutcome: opts.shootoutOutcome,
+          shootoutRound: opts.shootoutRound,
+          shootoutDecisive: opts.shootoutDecisive,
+          shootoutScoreText: opts.shootoutScoreText,
+          injuryGames: opts.injuryGames,
+          matchEnv
+        },
+        opts.preOverride || undefined
+      );
+    }
   };
 
   const resolveVarReview = (w: LiveMatchWorld, curMin: number) => {
@@ -7162,6 +7362,7 @@ export const MatchModal: React.FC<{
     const sr = simRef.current;
     sr.varSeq += 1;
     const varId = `var-${sr.varSeq}-${curMin}`;
+    const preVarSamples = varBuildupSamplesRef.current;
     const recordVar = (
       verdictShort: string,
       verdictLabel: string,
@@ -7225,6 +7426,18 @@ export const MatchModal: React.FC<{
               : `🖥❌ VAR ริบประตู!! พบจังหวะล้ำหน้าก่อนยิงของ ${vr.shooterId || attTeam.name} สกอร์ยังคงเดิม`;
         pushLog(curMin, overturnLog, 'card', varId);
         pushTimeline(curMin, vr.side, 'var_no_goal', vr.shooterId || attTeam.name, overturnDetail, varId);
+        recordEventHighlight(w, curMin, {
+          kind: 'var_overturn',
+          side: vr.side,
+          attRight: isAttackRight(w, vr.side),
+          actorName: vr.shooterId || vr.replay?.attId || attTeam.name,
+          victimName: vr.replay?.defId,
+          finishVerb: overturnDetail,
+          varVerdict: 'no_goal',
+          varReasonText: overturnDetail,
+          dramaFloor: 93,
+          preOverride: preVarSamples
+        });
       } else {
         // Goal stands!
         const confirmShort = sc === 'goal_line_tech' ? '✅ ข้ามเส้น!' : '✅ ให้ประตู';
@@ -7269,6 +7482,7 @@ export const MatchModal: React.FC<{
     }
 
     // Foul / Red Card VAR Check
+    varBuildupSamplesRef.current = null;
     if (vr.kind === 'foul_card') {
       const defTeam = vr.culpritSide === 'H' ? homeOrig : awayOrig;
       const culprit = vr.culpritId ? w.agents.find((a) => a.id === vr.culpritId && !a.sentOff) : undefined;
@@ -7291,7 +7505,12 @@ export const MatchModal: React.FC<{
         recordVar('🟥 ใบแดง!', `🟥 VAR ยกระดับเป็นใบแดง (${vr.culpritShort || ''})`, 'red');
         SFX.whistle();
         SFX.boo(0.9);
-        issueCard(culprit, curMin, 1, 'R', true, undefined, varId);
+        issueCard(culprit, curMin, 1, 'R', true, undefined, varId, {
+          victimName: vr.replay?.attId,
+          varVerdict: 'red',
+          varReasonText: vr.reasonText,
+          preOverride: preVarSamples
+        });
         addWorldFx(w, {
           type: 'foul',
           x: vr.x,
@@ -7309,7 +7528,14 @@ export const MatchModal: React.FC<{
       } else {
         SFX.foul();
         SFX.boo(0.75);
-        const issued = culprit ? issueCard(culprit, curMin, 0, 'Y', true, undefined, varId) : 'Y';
+        const issued = culprit
+          ? issueCard(culprit, curMin, 0, 'Y', true, undefined, varId, {
+              victimName: vr.replay?.attId,
+              varVerdict: 'red',
+              varReasonText: vr.reasonText,
+              preOverride: preVarSamples
+            })
+          : 'Y';
         const isSecondRed = issued === 'Y2R' || issued === 'R';
         recordVar(
           isSecondRed ? '🟨➡🟥 เหลืองแดง' : '🟨 ใบเหลือง',
@@ -7370,7 +7596,10 @@ export const MatchModal: React.FC<{
       }
       let fkCardTxt = '';
       if (culprit && Math.random() < 0.28 && simRef.current.cards.length < 5) {
-        const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId);
+        const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId, {
+          victimName: vr.replay?.attId,
+          preOverride: preVarSamples
+        });
         fkCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 ใบแดง';
       }
       recordVar(
@@ -7400,6 +7629,24 @@ export const MatchModal: React.FC<{
         fkCardTxt ? 'card' : 'sys',
         varId
       );
+      const noPenReason =
+        sc === 'handball_box'
+          ? 'VAR ชี้ไม่แฮนด์บอล / นอกเขต'
+          : sc === 'gk_clash_box'
+            ? 'VAR ชี้ปะทะนอกเขต / ไม่ฟาวล์จุดโทษ'
+            : 'VAR ชี้จุดปะทะนอกกรอบเขตโทษ';
+      recordEventHighlight(w, curMin, {
+        kind: 'var_overturn',
+        side: vr.side,
+        attRight: penRightVar,
+        actorName: vr.replay?.attId || attTeam.name,
+        victimName: vr.culpritId,
+        finishVerb: noPenReason,
+        varVerdict: 'no_pen',
+        varReasonText: noPenReason,
+        dramaFloor: 85,
+        preOverride: preVarSamples
+      });
     } else {
       SFX.foul();
       SFX.boo(0.85);
@@ -7409,10 +7656,16 @@ export const MatchModal: React.FC<{
         const roll = Math.random();
         const culpritVolatile = culprit.tr === 1 || culprit.tr === 7 || culprit.tr === 15 || culprit.tr === 22;
         if (roll < (culpritVolatile ? 0.08 : 0.04)) {
-          issueCard(culprit, curMin, 1, 'R', true, undefined, varId);
+          issueCard(culprit, curMin, 1, 'R', true, undefined, varId, {
+            victimName: vr.replay?.attId,
+            preOverride: preVarSamples
+          });
           penCardTxt = ' + 🟥 ใบแดง!';
         } else if (roll < 0.36) {
-          const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId);
+          const res = issueCard(culprit, curMin, 0, 'Y', true, undefined, varId, {
+            victimName: vr.replay?.attId,
+            preOverride: preVarSamples
+          });
           penCardTxt = res === 'Y' ? ' + 🟨 ใบเหลือง' : ' + 🟥 เหลืองแดง!';
         }
       }
@@ -7445,6 +7698,24 @@ export const MatchModal: React.FC<{
         varId
       );
       pushTimeline(curMin, vr.side, 'pen_awarded', attTeam.name, sc === 'handball_box' ? 'VAR แฮนด์บอลจุดโทษ' : 'VAR ชี้จุดโทษ', varId);
+      const awardPenReason =
+        sc === 'handball_box'
+          ? 'VAR ชี้แฮนด์บอลในเขตโทษ!'
+          : sc === 'gk_clash_box'
+            ? 'VAR ชี้ผู้รักษาประตูฟาวล์จุดโทษ!'
+            : 'VAR ชี้ฟาวล์ในเขตโทษเป็นจุดโทษ!';
+      recordEventHighlight(w, curMin, {
+        kind: 'var_overturn',
+        side: vr.side,
+        attRight: penRightVar,
+        actorName: vr.replay?.attId || attTeam.name,
+        victimName: vr.culpritId,
+        finishVerb: awardPenReason,
+        varVerdict: 'pen',
+        varReasonText: awardPenReason,
+        dramaFloor: 89,
+        preOverride: preVarSamples
+      });
     }
   };
 
@@ -7840,8 +8111,46 @@ export const MatchModal: React.FC<{
         sh.aKicks.length <= 5 &&
         (sh.hScore > sh.aScore + aRem || sh.aScore > sh.hScore + hRem);
       const suddenDeathWin = sh.hKicks.length >= 5 && bothSameCount && sh.hScore !== sh.aScore;
+      const isDecisive = clinchedEarly || suddenDeathWin;
+      const shootoutOutcome: 'goal' | 'save' | 'woodwork' | 'miss' = scored
+        ? 'goal'
+        : plan?.outcome === 'save'
+          ? 'save'
+          : plan?.outcome === 'woodwork'
+            ? 'woodwork'
+            : 'miss';
+      const shootoutScoreText = `${sh.hScore}-${sh.aScore}`;
+      const kickSpeedKmh = Math.round(
+        clamp((Math.hypot(b.toX - b.fromX, b.toY - b.fromY) / Math.max(0.24, b.duration || 0.68)) * 2.15, 78, 124)
+      );
+      const shootoutVerb = scored
+        ? isDecisive
+          ? 'ซัดจุดโทษลูกชี้ขาดพาทีมคว้าชัย!'
+          : 'สังหารจุดโทษเข้าประตูไม่พลาด!'
+        : shootoutOutcome === 'save'
+          ? `ยิงติดเซฟปลายมือของ ${gk?.shortName || 'ผู้รักษาประตู'}!`
+          : shootoutOutcome === 'woodwork'
+            ? 'ซัดจุดโทษพุ่งชนเสา/คานอย่างจัง!'
+            : 'ซัดจุดโทษหลุดกรอบออกไปอย่างน่าเสียดาย!';
+      recordEventHighlight(w, 90, {
+        kind: 'shootout_kick',
+        side: sh.turn,
+        attRight: true,
+        actorName: kicker?.id || sh.kickerName,
+        victimName: gk?.id || sh.gkName,
+        finishVerb: shootoutVerb,
+        shotStyle: 'penalty',
+        shotDistM: 11,
+        shotSpeedKmh: kickSpeedKmh,
+        shootoutScored: scored,
+        shootoutOutcome,
+        shootoutRound: sh.round,
+        shootoutDecisive: isDecisive,
+        shootoutScoreText,
+        dramaFloor: isDecisive ? 108 : scored ? 74 : 90
+      });
 
-      if (clinchedEarly || suddenDeathWin) {
+      if (isDecisive) {
         sh.finished = true;
         const winnerHome = sh.hScore > sh.aScore;
         const text = `ดวลจุดโทษ: ${homeOrig.name} ${sh.hScore}-${sh.aScore} ${awayOrig.name}`;
@@ -7861,6 +8170,7 @@ export const MatchModal: React.FC<{
       sh.kickerName = nextPool[nextIdx]?.id || nextPool[0]?.id || 'นักเตะ';
       sh.gkName = nextGk?.id || 'ผู้รักษาประตู';
       sh.waitSec = 1.75;
+      rollingSamplesRef.current = [];
       b.x = 88.5;
       b.y = 50;
       b.z = 0;
@@ -8368,6 +8678,21 @@ export const MatchModal: React.FC<{
             shooter?.id || attTeam.name,
             b.flightType === 'penalty' ? 'ยิงจุดโทษพลาดกรอบ' : 'ยิงหลุดกรอบ'
           );
+        }
+        if (b.flightType === 'penalty') {
+          const tel = lastShotTelemetryRef.current;
+          recordEventHighlight(w, curMin, {
+            kind: 'penalty_miss',
+            side,
+            attRight: attRightNow,
+            actorName: shooter?.id || attTeam.name,
+            victimName: gk?.id,
+            finishVerb: 'รับหน้าที่สังหารจุดโทษแต่ซัดบอลหลุดกรอบออกไป',
+            shotStyle: tel?.style || 'penalty',
+            shotDistM: tel?.distM ?? 11,
+            shotSpeedKmh: tel?.speedKmh,
+            dramaFloor: 87
+          });
         }
         w.pendingSetPiece = {
           type: 'goalkick',
@@ -10597,7 +10922,7 @@ export const MatchModal: React.FC<{
     const sH = winnerHome ? R(4, 5) : R(2, 4);
     const sA = winnerHome ? Math.max(1, sH - R(1, 2)) : sH + R(1, 2);
     const text = `ดวลจุดโทษ: ${homeOrig.name} ${sH}-${sA} ${awayOrig.name}`;
-    return { winnerHome, text };
+    return { winnerHome, text, scoreText: `${sH}-${sA}` };
   };
 
   const startLiveShootout = (w: LiveMatchWorld) => {
@@ -10642,6 +10967,8 @@ export const MatchModal: React.FC<{
     setClockLabel('PEN');
     setStoppageBadge(0);
     setShootoutUi({ ...w.shootout });
+    rollingSamplesRef.current = [];
+    varBuildupSamplesRef.current = null;
   };
 
   const runAutoOnPitchRebalance = (
@@ -11073,6 +11400,31 @@ export const MatchModal: React.FC<{
         const pen = computePenWinnerInstant();
         finalPenText = pen.text;
         setPenResult(pen);
+        if (!sr.highlightClips.some((c) => c.kind === 'shootout_kick')) {
+          const winSide: 'H' | 'A' = pen.winnerHome ? 'H' : 'A';
+          const loseSide: 'H' | 'A' = pen.winnerHome ? 'A' : 'H';
+          const winPool = w.agents.filter((a) => !a.sentOff && a.side === winSide && a.pos !== 'GK').sort((u, v) => v.d.fin - u.d.fin);
+          const loseGk = w.agents.find((a) => !a.sentOff && a.side === loseSide && a.pos === 'GK');
+          recordEventHighlight(w, 90, {
+            kind: 'shootout_kick',
+            side: winSide,
+            attRight: true,
+            actorName: winPool[0]?.id || (winSide === 'H' ? homeOrig.name : awayOrig.name),
+            victimName: loseGk?.id,
+            finishVerb: 'ซัดจุดโทษลูกชี้ขาดพาทีมคว้าชัย!',
+            shotStyle: 'penalty',
+            shotDistM: 11,
+            shootoutScored: true,
+            shootoutOutcome: 'goal',
+            shootoutRound: 5,
+            shootoutDecisive: true,
+            shootoutScoreText: pen.scoreText,
+            dramaFloor: 108
+          });
+          const updatedCurated = curateMatchHighlights(sr.highlightClips);
+          sr.highlightClips = updatedCurated;
+          setHighlightClips(updatedCurated);
+        }
         if (wasSkipping && skipLogsRef.current) {
           skipLogsRef.current.unshift({ id: logSeqRef.current++, m: 90, text: `🎯 ${pen.text}`, tone: 'sys' });
           if (skipLogsRef.current.length > 65) skipLogsRef.current.length = 65;
@@ -11888,14 +12240,19 @@ export const MatchModal: React.FC<{
         }
 
         // Capture live rolling buffer & active post-climax frames for Pro-Crew Highlight Editor
-        if (!w.varReview && w.phase !== 'shootout') {
+        if (!w.varReview && (w.phase !== 'shootout' || Boolean(w.shootout))) {
           highlightClockRef.current += rawDt;
-          const hlSampleInterval = speedMul > 1.8 ? 0.095 : 0.14;
+          const hlSampleInterval = w.phase === 'shootout' ? 0.08 : speedMul > 1.8 ? 0.095 : 0.14;
           if (highlightClockRef.current - lastHighlightSampleClockRef.current >= hlSampleInterval) {
             lastHighlightSampleClockRef.current = highlightClockRef.current;
-            const isIdleKickoff = w.pendingSetPiece?.type === 'kickoff' && w.ball.x === 50 && w.ball.y === 50;
+            const isIdleKickoff =
+              (w.pendingSetPiece?.type === 'kickoff' && w.ball.x === 50 && w.ball.y === 50) ||
+              (w.phase === 'shootout' && Boolean(w.shootout) && !w.shootout!.activeShot && w.shootout!.waitSec > 0.75 && activePostCapturesRef.current.length === 0);
             if (!isIdleKickoff) {
-              const smp = captureWorldSample(w, highlightClockRef.current);
+              const keepIds = activePostCapturesRef.current.length
+                ? new Set(activePostCapturesRef.current.map((e) => e.meta.actorName))
+                : undefined;
+              const smp = captureWorldSample(w, highlightClockRef.current, keepIds);
               rollingSamplesRef.current.push(smp);
               if (rollingSamplesRef.current.length > 28) {
                 rollingSamplesRef.current.shift();
@@ -11949,7 +12306,7 @@ export const MatchModal: React.FC<{
     w.dramaLabel = null;
     clearWorldCelebration(w, 'SUPPORT');
     w.cardBanner = null;
-    let penOutcome: { winnerHome: boolean; text: string } | null = null;
+    let penOutcome: { winnerHome: boolean; text: string; scoreText?: string } | null = null;
     setSfxSuppressed(true);
     isSkippingRef.current = true;
     skipLogsRef.current = logs.slice(0, 65);
@@ -11967,6 +12324,28 @@ export const MatchModal: React.FC<{
       }
       if (w.phase === 'shootout' && w.shootout && !w.shootout.finished) {
         penOutcome = computePenWinnerInstant();
+        if (!simRef.current.highlightClips.some((c) => c.kind === 'shootout_kick')) {
+          const winSide: 'H' | 'A' = penOutcome.winnerHome ? 'H' : 'A';
+          const loseSide: 'H' | 'A' = penOutcome.winnerHome ? 'A' : 'H';
+          const winPool = w.agents.filter((a) => !a.sentOff && a.side === winSide && a.pos !== 'GK').sort((u, v) => v.d.fin - u.d.fin);
+          const loseGk = w.agents.find((a) => !a.sentOff && a.side === loseSide && a.pos === 'GK');
+          recordEventHighlight(w, 90, {
+            kind: 'shootout_kick',
+            side: winSide,
+            attRight: true,
+            actorName: winPool[0]?.id || (winSide === 'H' ? homeOrig.name : awayOrig.name),
+            victimName: loseGk?.id,
+            finishVerb: 'ซัดจุดโทษลูกชี้ขาดพาทีมคว้าชัย!',
+            shotStyle: 'penalty',
+            shotDistM: 11,
+            shootoutScored: true,
+            shootoutOutcome: 'goal',
+            shootoutRound: Math.max(w.shootout.round, 5),
+            shootoutDecisive: true,
+            shootoutScoreText: penOutcome.scoreText,
+            dramaFloor: 108
+          });
+        }
         w.shootout = null;
         setShootoutUi(null);
         pushLog(90, `🎯 ${penOutcome.text}`, 'sys');
