@@ -287,6 +287,16 @@ export interface Team {
   seasonObj?: number;
   favPlayer?: string;
   favChangedTurn?: number;
+  budget?: number;
+  boardBonus?: number;
+  bd?: number;
+  aiTraining?: {
+    program: TrainingProgramId;
+    intensity: TrainingIntensity;
+    focusPlayer?: string;
+    label?: string;
+  };
+  aiTalkNote?: string;
 }
 
 export type CoachStyleId = 'balanced' | 'attack' | 'defense' | 'youth' | 'motivator';

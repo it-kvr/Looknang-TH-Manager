@@ -1,4 +1,4 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ShortlistEntry, TransferLogEntry, TransferLogKind, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrainingIntensity, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
@@ -11,6 +11,7 @@ import {
   getActiveFavBoost,
   initPlayerWellbeing,
   refreshAiTeamFavoritePlayer,
+  runAiTeamTalkAndCare,
   syncFavoritePlayerBoost,
   updateTeamWellbeingAfterMatchday,
   type MatchdayWellbeingCtx
@@ -3124,6 +3125,25 @@ export function rollInitialBoardGrant(team: Team): NonNullable<GameState['initia
   };
 }
 
+export function ensureAiClubsInitialized(s: GameState, newSeason = false) {
+  const mg = s.mode === 'm';
+  s.teams.forEach((t) => {
+    if (mg && t.id === s.me) return;
+    if (t.budget == null) {
+      const grant = rollInitialBoardGrant(t);
+      t.budget = grant.totalBudget;
+      t.boardBonus = grant.amount;
+      if (t.bd == null) t.bd = grant.startBd;
+    } else if (newSeason && (s.season ?? 1) > 1) {
+      const seasonCash = ([200, 360, 580, 750][t.tier] ?? 320) + R(30, 110);
+      t.budget = capMoney(Math.max(80, Math.round((t.budget ?? 400) * 0.85 + seasonCash)));
+      const gm = getClubLevelAndGrantMeta(t);
+      t.bd = clamp(Math.round((t.bd ?? gm.startBd) * 0.5 + gm.startBd * 0.5), 40, 82);
+    }
+    if (t.tacFam == null) t.tacFam = 65 + R(-4, 6);
+  });
+}
+
 export function createNewGame(
   mode: GameMode,
   opts: {
@@ -3191,6 +3211,7 @@ export function createNewGame(
   const initSponsorSeed = R(1, 999999);
   s.sponsorSeed = initSponsorSeed;
   s.sponsorBrands = pickUniqueSponsorBrandIds(initSponsorSeed, MAIN_SPONSOR_PACKAGES.length);
+  ensureAiClubsInitialized(s, false);
   setBoardObjective(s);
   if (mode === 'm') {
     ensureClubIdentity(s);
@@ -3482,6 +3503,7 @@ export function startSeason(s: GameState) {
   };
   initAsia(s);
   initExtraCups(s);
+  ensureAiClubsInitialized(s, (s.season ?? 1) > 1);
   mkMarket(s);
   simulateAiLeagueTransfers(s, 4);
   s.schedRes = {};
@@ -5858,12 +5880,17 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
       if (mkCands.length) {
         const chosen = P(mkCands);
         const q = chosen.q;
-        s.mk.splice(chosen.idx, 1);
-
+        const val = Math.max(5, q.price || vlu(q));
         const isFree = !!q.free;
         const doLoan = !isFree && buyerLoanCount < 4 && (q.age <= 24 || Math.random() < 0.25) && Math.random() < 0.32;
-        const val = Math.max(5, q.price || vlu(q));
         const fee = isFree ? 0 : doLoan ? Math.max(2, Math.round(val * 0.18)) : Math.round(val * (0.9 + Math.random() * 0.22));
+        if (!isFree && buyer.budget != null && buyer.budget < fee) {
+          continue;
+        }
+        s.mk.splice(chosen.idx, 1);
+        if (buyer.budget != null && fee > 0) {
+          buyer.budget = Math.max(0, buyer.budget - fee);
+        }
         const kind: TransferLogKind = isFree ? 'free' : doLoan ? (Math.random() < 0.4 ? 'loanopt' : 'loan') : 'buy';
 
         const incoming: Player = { ...q };
@@ -5964,6 +5991,11 @@ export function simulateAiLeagueTransfers(s: GameState, maxDeals = 2) {
     const fee = canLoanOut
       ? Math.max(2, Math.round(val * 0.18 * (0.9 + Math.random() * 0.25)))
       : Math.max(6, Math.round(val * (0.92 + Math.random() * 0.3)));
+    if (buyer.budget != null && buyer.budget < fee) {
+      continue;
+    }
+    if (buyer.budget != null) buyer.budget = Math.max(0, buyer.budget - fee);
+    if (seller.budget != null) seller.budget = capMoney(seller.budget + fee);
 
     const moving = seller.sq.splice(idx, 1)[0];
     seller.lu = null;
@@ -6742,14 +6774,57 @@ export function afterMatchDay(
     if (s.p?.last) pushFeed(s, 'ฝึกซ้อม', s.p.last, /เพิ่มเป็น|ได้ \+1|พัฒนา/.test(s.p.last) ? 'ok' : '');
   }
 
+  // Ensure AI clubs also hold budgets/board confidence if loading an older save
+  ensureAiClubsInitialized(s, false);
+
   // Active in-season training & mission progression for AI bot clubs using symmetric progression rules
   s.teams.forEach((t) => {
     if (mg && t.id === s.me) return;
-    const aiXi = new Set(xi(t).map((z) => z.n));
-    const aiProg: TrainingProgramId = t.tac === 'X' || t.tac === 'A' ? 'attack' : t.tac === 'D' || t.tac === 'Z' ? 'defense' : 'balanced';
+    const aiXiList = xi(t);
+    const aiXi = new Set(aiXiList.map((z) => z.n));
+    const avgAiFit = aiXiList.length
+      ? aiXiList.reduce((sum, z) => sum + (z.fit ?? 100), 0) / aiXiList.length
+      : 85;
+    const tiredAiCnt = t.sq.filter((z) => z.inj === 0 && (z.fit ?? 100) < 72).length;
+    const injAiCnt = t.sq.filter((z) => z.inj > 0).length;
+    const avgAiAge = t.sq.length
+      ? t.sq.reduce((sum, z) => sum + (z.age || 24), 0) / t.sq.length
+      : 25;
+
+    let aiProg: TrainingProgramId = 'balanced';
+    if (avgAiFit < 73 || tiredAiCnt >= 3 || injAiCnt >= 3) {
+      aiProg = 'recovery';
+    } else if ((t.tacFam ?? 65) < 75) {
+      aiProg = 'tactics';
+    } else if ((t.philosophy && t.philosophy.includes('ดาวรุ่ง')) || avgAiAge <= 23.5) {
+      aiProg = 'fitness';
+    } else if (t.tac === 'X' || t.tac === 'A') {
+      aiProg = Math.random() < 0.28 ? 'setpiece' : 'attack';
+    } else if (t.tac === 'D' || t.tac === 'Z') {
+      aiProg = Math.random() < 0.28 ? 'setpiece' : 'defense';
+    } else {
+      aiProg = P(['balanced', 'tactics', 'setpiece'] as TrainingProgramId[]);
+    }
+
+    const aiInt: TrainingIntensity =
+      aiProg === 'recovery'
+        ? 'light'
+        : avgAiFit >= 86 && injAiCnt <= 1 && (t.fm || '').slice(-1) === 'L'
+          ? 'heavy'
+          : 'normal';
+
+    const aiProgMeta = TEAM_TRAINING_PROGRAMS[aiProg];
+    const aiIntMeta = TRAINING_INTENSITY_META[aiInt];
+
     const aiLv = clamp(([2.5, 5.0, 7.5, 8.8][t.tier] ?? 4.5) + ((t.id % 3) - 1) * 0.4, 1, 10);
     const aiAsst = clamp(([0.6, 1.8, 3.2, 4.0][t.tier] ?? 1.5) + (t.id % 2) * 0.3, 0, 5);
     const aiAnalytics = clamp(([1.5, 3.5, 6.0, 7.5][t.tier] ?? 3) + ((t.id % 3) - 1) * 0.5, 1, 10);
+    const aiTacDelta = Math.max(
+      0,
+      (aiProg === 'recovery' ? 1 : 2) + aiProgMeta.tacFamBonus + aiIntMeta.tacAdd + Math.floor(aiAsst * 0.65)
+    );
+    t.tacFam = clamp((t.tacFam ?? 65) + aiTacDelta, 30, 100);
+
     const aiVirtualState = {
       tr: Math.round(aiLv),
       staff: { asst: Math.round(aiAsst), fit: 0, scout: 0, physio: 0 },
@@ -6757,29 +6832,50 @@ export function afterMatchDay(
       season: s.season
     };
     const aiFocusCandidate = t.sq
-      .filter((q) => !q.me && q.inj === 0 && getPlayerDevProfile(q, null).phase !== 'declining')
+      .filter((q) => !q.me && q.inj === 0 && (q.fit ?? 100) >= 70 && getPlayerDevProfile(q, null).phase !== 'declining')
       .slice()
       .sort((a, b) => ((b.pot || b.ov) - b.ov) * 2 + (b.talent ?? 55) - (((a.pot || a.ov) - a.ov) * 2 + (a.talent ?? 55)))[0];
 
+    t.aiTraining = {
+      program: aiProg,
+      intensity: aiInt,
+      focusPlayer: aiFocusCandidate?.n,
+      label: `${aiProgMeta.icon} ${aiProgMeta.short} · ${aiIntMeta.icon}`
+    };
+
     t.sq.forEach((q) => {
       if (q.me || q.inj > 0) return;
+      const isIndivRest = (q.fit ?? 100) < 70;
+      if (isIndivRest) {
+        q.fit = clamp((q.fit ?? 100) + 7, 35, 100);
+        return;
+      }
+      if (aiProgMeta.fitMod !== 0 || aiIntMeta.fitDelta !== 0) {
+        q.fit = clamp((q.fit ?? 100) + Math.round((aiProgMeta.fitMod + aiIntMeta.fitDelta) * 0.5), 35, 100);
+      }
       const isStarter = aiXi.has(q.n);
       const isAiFocus = aiFocusCandidate?.n === q.n;
+      const matchesPos =
+        aiProgMeta.positions === 'YOUNG'
+          ? (q.age || 24) <= 25
+          : Array.isArray(aiProgMeta.positions) && aiProgMeta.positions.includes(q.pos);
       const devProf = getPlayerDevProfile(q, null);
-      if (devProf.phase !== 'declining') {
+      if (aiProgMeta.devMult > 0 && (matchesPos || isAiFocus) && devProf.phase !== 'declining') {
         const tlFactor = 0.72 + ((q.talent ?? 55) / 100) * 0.55;
         const persTr = devProf.D.tr;
         const persDevMul = persTr === 2 || persTr === 10 || persTr === 12 || persTr === 23 ? 1.12 : 1;
         const ovScale = getOvGrowthScale(q.ov, q.pot);
         const aiTrainChance =
           (0.0055 + 0.0022 * aiLv + aiAsst * 0.0018 + Math.max(0, aiAnalytics - 1) * 0.001) *
+          aiProgMeta.devMult *
+          aiIntMeta.devMult *
           (isStarter ? 1.05 : 0.92) *
           tlFactor *
           persDevMul *
           ovScale *
           devProf.ageMult *
           devProf.formMult *
-          (isAiFocus ? 1.35 : 1);
+          (isAiFocus ? 1.4 : 1);
 
         if (q.ov < 199 && Math.random() < aiTrainChance) {
           q.ov++;
@@ -6814,6 +6910,37 @@ export function afterMatchDay(
       subbedOut: teamCtx?.subbedOut ?? subbedOutByTeam[t.id],
       isUserClub: t.id === s.me
     });
+    if (!(mg && t.id === s.me)) {
+      runAiTeamTalkAndCare(t, s);
+      // Mirror board confidence & matchday operating cash flow for AI clubs
+      if (t.tier < 3) {
+        const { targetRank, totalTeams } = getTeamSeasonObjectiveInfo(t, s);
+        const aiHigh = targetRank <= Math.max(3, Math.round(totalTeams * 0.25));
+        const aiLow = targetRank >= Math.round(totalTeams * 0.6);
+        const aiDelta = inferredRes
+          ? aiHigh
+            ? inferredRes === 'W'
+              ? 2
+              : inferredRes === 'L'
+                ? -5
+                : -1
+            : aiLow
+              ? inferredRes === 'W'
+                ? 4
+                : inferredRes === 'L'
+                  ? -3
+                  : 1
+              : inferredRes === 'W'
+                ? 3
+                : inferredRes === 'L'
+                  ? -4
+                  : 0
+          : 0;
+        t.bd = clamp((t.bd ?? 55) + aiDelta, 10, 100);
+        const aiMatchNet = ([6, 12, 22][t.tier] ?? 10) + (inferredRes === 'W' ? 6 : 0);
+        t.budget = capMoney(Math.max(40, (t.budget ?? 450) + aiMatchNet));
+      }
+    }
   });
   if (me.favPlayer) {
     const favPl = me.sq.find((q) => q.n === me.favPlayer);

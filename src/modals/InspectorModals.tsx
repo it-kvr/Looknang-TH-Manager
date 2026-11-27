@@ -464,6 +464,7 @@ export const TeamInspectorModal: React.FC<{
   const myTeam = state.teams[state.me];
   const mySt = teamStats(myTeam, state);
   const isMeTeam = team.id === state.me;
+  const isClubMeManager = isMeTeam && state.mode === 'm';
   const tierTable = sortTable(state.teams.filter((t) => t.tier === team.tier));
   const rank = team.tier < 3 ? tierTable.findIndex((t) => t.id === team.id) + 1 : null;
   const objInfo = team.tier < 3 ? getTeamSeasonObjectiveInfo(team, state) : null;
@@ -474,6 +475,11 @@ export const TeamInspectorModal: React.FC<{
   const totalVal = team.sq.reduce((s, q) => s + vlu(q), 0);
   const formChars = (team.fm || '').slice(-5).split('');
   const gd = team.gf - team.ga;
+  const favPl = team.favPlayer ? team.sq.find((q) => q.n === team.favPlayer) || null : null;
+  const favBoostNow = favPl ? getActiveFavBoost(favPl, team, favPl.me ? state.p : null) : 0;
+  const displayBudget = isClubMeManager ? state.money : team.budget;
+  const displayBoard = isClubMeManager ? state.bd : team.bd;
+  const displayTacFam = Math.round(team.tacFam ?? 65);
 
   const filteredSquad = useMemo(() => {
     const base = team.sq.slice().sort((a, b) => {
@@ -739,6 +745,53 @@ export const TeamInspectorModal: React.FC<{
                       </div>
                     </div>
                   )}
+                  <div className="flex items-center justify-between gap-2 min-w-0 tabular">
+                    <div className="truncate text-[var(--mut)]">
+                      {displayBudget != null && (
+                        <>
+                          งบ <b className="text-[var(--ink)]">{fmtMoney(displayBudget)}</b>
+                          <span className="mx-1">·</span>
+                        </>
+                      )}
+                      {displayBoard != null && (
+                        <>
+                          บอร์ด <b className={displayBoard >= 60 ? 'text-[var(--g)]' : displayBoard < 40 ? 'text-[var(--red)]' : 'text-[var(--ink)]'}>{Math.round(displayBoard)}%</b>
+                          <span className="mx-1">·</span>
+                        </>
+                      )}
+                      เข้าใจแผน <b className="text-[var(--ink)]">{displayTacFam}%</b>
+                    </div>
+                    {favPl && (
+                      <div className="shrink-0 text-[var(--mut)]">
+                        💖{' '}
+                        <b className="text-[var(--ink)]">{favPl.n.split(' ')[0]}</b>
+                        {favBoostNow > 0 ? (
+                          <span className="ml-0.5 font-extrabold text-[var(--g)]">+{favBoostNow}</span>
+                        ) : (
+                          <span className="ml-0.5 text-[10px] mland:text-[8px]">(รอพร้อม)</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {!isClubMeManager && (team.aiTraining || team.aiTalkNote) && (
+                    <div className="flex items-center justify-between gap-2 min-w-0 text-[var(--mut)]">
+                      <div className="truncate">
+                        {team.aiTraining?.label && (
+                          <>
+                            ซ้อม: <b className="text-[var(--ink)]">{team.aiTraining.label}</b>
+                          </>
+                        )}
+                        {team.aiTraining?.focusPlayer && (
+                          <span className="text-[10px] mland:text-[8px]"> · ปั้น {team.aiTraining.focusPlayer.split(' ')[0]}</span>
+                        )}
+                      </div>
+                      {team.aiTalkNote && (
+                        <div className="shrink-0 truncate max-w-[48%] text-[10px] mland:text-[8px]">
+                          💬 {team.aiTalkNote}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-2 min-w-0">
                     <div className="truncate text-[var(--mut)] tabular flex items-center gap-1 min-w-0">
                       <span className="inline-flex items-center gap-0.5 shrink-0">
@@ -853,6 +906,17 @@ export const TeamInspectorModal: React.FC<{
                               {q.n}
                             </span>
                             {team.cap === q.n && <CaptainBadge team={team} state={state} size="xs" className="shrink-0" />}
+                            {team.favPlayer === q.n && (() => {
+                              const rBoost = getActiveFavBoost(q, team, isMe ? state.p : null);
+                              return (
+                                <span
+                                  title={rBoost > 0 ? `ลูกรักประจำทีม (ปลุกพลัง +${rBoost})` : 'ลูกรักประจำทีม'}
+                                  className="text-[10px] mland:text-[8.5px] font-bold text-rose-500 shrink-0 tabular"
+                                >
+                                  💖{rBoost > 0 ? `+${rBoost}` : ''}
+                                </span>
+                              );
+                            })()}
                             {isMe && (
                               <span
                                 title="ตัวคุณ"

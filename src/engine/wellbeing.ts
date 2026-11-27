@@ -564,9 +564,18 @@ export function setTeamFavoritePlayer(
 export function refreshAiTeamFavoritePlayer(team: Team, state?: GameState | null) {
   if (!team?.sq?.length) return;
   if (state?.mode === 'm' && team.id === state.me) return;
+  const curTurn = state ? (state.season ?? 1) * 100 + (state.md ?? 0) : 0;
   const curFav = team.favPlayer ? team.sq.find((q) => q.n === team.favPlayer) : null;
-  // Keep current favorite unless gone or performing poorly
-  if (curFav && curFav.inj < 3 && ((curFav.sra || 0) < 3 || curFav.srs! / Math.max(1, curFav.sra!) >= 6.45)) {
+  // Keep current favorite unless gone, severely injured, or performing poorly (and respect cooldown)
+  const onCooldown =
+    curFav &&
+    team.favChangedTurn != null &&
+    curTurn >= team.favChangedTurn &&
+    curTurn - team.favChangedTurn < FAV_SWITCH_COOLDOWN_TURNS;
+  if (
+    curFav &&
+    (onCooldown || (curFav.inj < 3 && ((curFav.sra || 0) < 3 || curFav.srs! / Math.max(1, curFav.sra!) >= 6.45)))
+  ) {
     syncFavoritePlayerBoost(team, state, false);
     return;
   }
@@ -581,6 +590,9 @@ export function refreshAiTeamFavoritePlayer(team: Team, state?: GameState | null
       return bScore - aScore;
     });
   if (candidates[0]) {
+    if (team.favPlayer !== candidates[0].n && state) {
+      team.favChangedTurn = curTurn;
+    }
     team.favPlayer = candidates[0].n;
     syncFavoritePlayerBoost(team, state, true);
   }
@@ -1424,3 +1436,140 @@ export function applyPlayerCareAction(
     deltaPhys: gain
   };
 }
+
+export function runAiTeamTalkAndCare(team: Team, state: GameState) {
+  if (!team?.sq?.length) return;
+  if (state.mode === 'm' && team.id === state.me) return;
+  ensureTeamWellbeing(team, state);
+
+  const curTurn = (state.season ?? 1) * 100 + (state.md ?? 0);
+  const avgMental =
+    team.sq.reduce((sum, q) => sum + getPlayerMentalScore(q, null), 0) / Math.max(1, team.sq.length);
+  const lowMentalCnt = team.sq.filter((q) => getPlayerMentalScore(q, null) < 62).length;
+  const lastRes = (team.fm || '').slice(-1);
+
+  // 1. AI Team Talk (1/turn, equivalent to Manager's applyTeamTalkAction)
+  const talkId: TeamTalkId =
+    lowMentalCnt >= 3 || avgMental < 63
+      ? 'calm'
+      : (team.tacFam ?? 65) < 75
+        ? 'tactics'
+        : lastRes === 'L'
+          ? 'inspire'
+          : 'praise';
+
+  if (talkId === 'tactics') {
+    team.tacFam = clamp((team.tacFam ?? 65) + 3, 30, 100);
+  }
+  const opt = TEAM_TALK_OPTIONS.find((x) => x.id === talkId) || TEAM_TALK_OPTIONS[0];
+  team.sq.forEach((q) => {
+    const careerP = q.me ? state.p : null;
+    const tr = resolvePersonalityId(q, careerP);
+    const curM = getPlayerMentalScore(q, careerP);
+    let dM = 0;
+    let dP = 0;
+    let note = opt.label;
+    if (talkId === 'inspire') {
+      dM = R(2, 4) + (isResilientPersonality(tr) || team.favPlayer === q.n ? 1 : 0);
+      note = 'ทีมทอล์กปลุกใจนักสู้';
+    } else if (talkId === 'calm') {
+      dM = curM < 66 ? R(4, 6) : R(1, 3);
+      note = 'ทีมทอล์กลดความกดดัน';
+    } else if (talkId === 'tactics') {
+      dM = team.cap === q.n || q.con?.role === 'key' || isResilientPersonality(tr) ? 3 : R(1, 2);
+      note = 'ทีมทอล์กย้ำวินัยแท็กติก';
+    } else {
+      dM = R(2, 3);
+      dP = 2;
+      q.fit = clamp((q.fit ?? 100) + 1, 20, 100);
+      note = 'ทีมทอล์กชื่นชมความทุ่มเท';
+    }
+    q.mental = clamp(curM + dM, 18, 99);
+    q.mentalFactors = [{ label: note, delta: dM }, ...(q.mentalFactors || [])].slice(0, 5);
+    q.mentalNote = note;
+    if (dP > 0) {
+      const cap = (q.inj || 0) > 0 ? 52 : 99;
+      q.phys = clamp(getPlayerPhysScore(q, careerP) + dP, 15, cap);
+      q.physFactors = [{ label: 'ผ่อนคลายหลังซ้อมร่วมกับทีม', delta: dP }, ...(q.physFactors || [])].slice(0, 5);
+    }
+    if (q.me && state.p) {
+      state.p.mental = q.mental;
+      state.p.mentalFactors = q.mentalFactors;
+      state.p.mentalNote = q.mentalNote;
+      if (dP > 0) {
+        state.p.phys = q.phys;
+        state.p.physFactors = q.physFactors;
+      }
+    }
+  });
+
+  // 2. AI Close-Care Quota (up to 3 actions per matchday, matching user's MAX_MGR_CARE_ACTIONS_PER_TURN)
+  let careUsed = 0;
+  const medBonus = [0, 1, 2][clamp(team.tier ?? 0, 0, 2)] ?? 1;
+  const priority = team.sq
+    .slice()
+    .sort((a, b) => {
+      const aFav = team.favPlayer === a.n ? 100 : 0;
+      const bFav = team.favPlayer === b.n ? 100 : 0;
+      const aNeed =
+        aFav +
+        ((a.inj || 0) > 0 ? 25 : 0) +
+        Math.max(0, GOOD_MENTAL_THRESHOLD - getPlayerMentalScore(a, null)) +
+        Math.max(0, GOOD_PHYS_THRESHOLD - getPlayerPhysScore(a, null));
+      const bNeed =
+        bFav +
+        ((b.inj || 0) > 0 ? 25 : 0) +
+        Math.max(0, GOOD_MENTAL_THRESHOLD - getPlayerMentalScore(b, null)) +
+        Math.max(0, GOOD_PHYS_THRESHOLD - getPlayerPhysScore(b, null));
+      return bNeed - aNeed || b.ov - a.ov;
+    });
+
+  for (const pl of priority) {
+    if (careUsed >= MAX_MGR_CARE_ACTIONS_PER_TURN) break;
+    const careerP = pl.me ? state.p : null;
+    const curM = getPlayerMentalScore(pl, careerP);
+    const curP = getPlayerPhysScore(pl, careerP);
+    const isFav = team.favPlayer === pl.n;
+    const needTalk = curM < (isFav ? GOOD_MENTAL_THRESHOLD + 2 : 62);
+    const needPhys = (pl.inj || 0) > 0 || curP < (isFav ? GOOD_PHYS_THRESHOLD + 2 : 66);
+
+    if (needTalk && pl.careTalkMd !== curTurn) {
+      const gainM = R(5, 8) + (isFav ? 1 : 0);
+      pl.mental = clamp(curM + gainM, 18, 99);
+      pl.careTalkMd = curTurn;
+      const lbl = 'โค้ชทีมพูดคุยดูแลตัวต่อตัว';
+      pl.mentalFactors = [{ label: lbl, delta: gainM }, ...(pl.mentalFactors || [])].slice(0, 5);
+      pl.mentalNote = lbl;
+      if (pl.me && state.p) {
+        state.p.mental = pl.mental;
+        state.p.careTalkMd = curTurn;
+        state.p.mentalFactors = pl.mentalFactors;
+        state.p.mentalNote = lbl;
+      }
+      careUsed++;
+    }
+    if (careUsed >= MAX_MGR_CARE_ACTIONS_PER_TURN) break;
+    if (needPhys && pl.carePhysMd !== curTurn) {
+      const gainP = R(5, 7) + medBonus;
+      const cap = (pl.inj || 0) > 0 ? 52 : 99;
+      pl.phys = clamp(curP + gainP, 15, cap);
+      pl.fit = clamp((pl.fit ?? 85) + 3, 20, 100);
+      pl.carePhysMd = curTurn;
+      const lbl = 'กายภาพฟื้นฟูกล้ามเนื้อสโมสร';
+      pl.physFactors = [{ label: lbl, delta: gainP }, ...(pl.physFactors || [])].slice(0, 5);
+      pl.physNote = lbl;
+      if (pl.me && state.p) {
+        state.p.phys = pl.phys;
+        state.p.en = pl.fit;
+        state.p.carePhysMd = curTurn;
+        state.p.physFactors = pl.physFactors;
+        state.p.physNote = lbl;
+      }
+      careUsed++;
+    }
+  }
+
+  team.aiTalkNote = `${opt.icon} ${opt.label}${careUsed > 0 ? ` · ดูแลใกล้ชิด ${careUsed}/${MAX_MGR_CARE_ACTIONS_PER_TURN}` : ''}`;
+  syncFavoritePlayerBoost(team, state, false);
+}
+
