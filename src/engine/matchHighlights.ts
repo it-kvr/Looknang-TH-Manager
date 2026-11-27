@@ -358,11 +358,28 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
       title = `🧤 ซูเปอร์เซฟระดับโลก! ${actorShort} บินปัดสุดปลายมือ`;
       crewTag = '🧤 เซฟสำคัญของนายด่าน';
       break;
-    case 'woodwork':
-      baseDrama = 77;
-      title = `🥅 หวิดเป็นประตู! ${actorShort} ซัดบอลสั่นเสา/คาน`;
-      crewTag = '🥅 จังหวะบอลชนเสา/คาน';
+    case 'woodwork': {
+      const fv = inp.finishVerb || '';
+      const isCorner = fv.includes('สามเหลี่ยม');
+      const isBar = !isCorner && fv.includes('คาน') && !fv.includes('เสา/คาน');
+      const isPost = !isCorner && fv.includes('เสา') && !fv.includes('เสา/คาน');
+      baseDrama = isCorner ? 81 : 77;
+      title = isCorner
+        ? `📐 หวิดเสียบมุม! ${actorShort} ซัดบอลชนสามเหลี่ยม`
+        : isBar
+          ? `🥅 หวิดเป็นประตู! ${actorShort} ซัดบอลสั่นคานเต็มๆ`
+          : isPost
+            ? `🥅 หวิดเป็นประตู! ${actorShort} ซัดบอลชนเสาอย่างจัง`
+            : `🥅 หวิดเป็นประตู! ${actorShort} ซัดบอลสั่นเสา/คาน`;
+      crewTag = isCorner
+        ? '📐 จังหวะบอลชนสามเหลี่ยม'
+        : isBar
+          ? '🥅 จังหวะบอลชนคาน'
+          : isPost
+            ? '🥅 จังหวะบอลชนเสา'
+            : '🥅 จังหวะบอลชนเสา/คาน';
       break;
+    }
     default:
       baseDrama = 78;
       title = `⚽ ${actorShort} จบสกอร์เด็ดขาดให้ ${inp.teamName}`;
@@ -776,6 +793,8 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
           ? clamp(50 + laneSign * 4.5, 42, 58)
           : clamp(50 + laneSign * (5 + ((inp.minute * 3) % 9)), 33, 67);
 
+  const isWoodCorner = isWoodwork && inp.finishVerb.includes('สามเหลี่ยม');
+  const isWoodBar = isWoodwork && !isWoodCorner && inp.finishVerb.includes('คาน') && !inp.finishVerb.includes('เสา/คาน');
   const cornerSign = (inp.minute + inp.seq) % 2 === 0 ? 1 : -1;
   const targetY = isPostOrBarIn
     ? isBarIn
@@ -784,9 +803,15 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
         ? 42.2
         : 57.8
     : isWoodwork
-      ? cornerSign < 0
-        ? 42.0
-        : 58.0
+      ? isWoodBar
+        ? clamp(50 + cornerSign * 3.6, 44.2, 55.8)
+        : isWoodCorner
+          ? cornerSign < 0
+            ? 42.2
+            : 57.8
+          : cornerSign < 0
+            ? 42.0
+            : 58.0
       : isPenalty
         ? clamp(50 + cornerSign * 5.2, 43.2, 56.8)
         : kind === 'goal_curler'
@@ -1246,7 +1271,11 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
           const curveAmt = kind === 'goal_curler' ? -laneSign * 3.8 : Math.sin(sp * Math.PI) * 1.1;
           bx = shootSpotX + (destX - shootSpotX) * sp;
           by = shootSpotY + (destY - shootSpotY) * sp + Math.sin(sp * Math.PI) * curveAmt;
-          bz = Math.sin(sp * Math.PI) * (kind === 'goal_screamer' ? 3.2 : isBarIn ? 5.6 : 2.6);
+          bz = isWoodBar
+            ? 6.0 * sp + Math.sin(sp * Math.PI) * 1.1
+            : isWoodCorner
+              ? 5.7 * sp + Math.sin(sp * Math.PI) * 1.0
+              : Math.sin(sp * Math.PI) * (kind === 'goal_screamer' ? 3.2 : isBarIn ? 5.6 : 2.6);
           bounceStartX = destX;
           bounceStartY = destY;
         } else if (isGoal && bounceDur > 0 && t <= tImpact) {
@@ -1265,9 +1294,17 @@ export const simulateRealtimeHighlightClip = (inp: SimulateRealtimeHighlightInpu
         } else if (isWoodwork) {
           inShot = false;
           const bp = clamp((t - tArriveGoal) / 0.55, 0, 1);
-          bx = postWoodX - dir * bp * 11.5;
-          by = targetY + (targetY < 50 ? -9.5 : 9.5) * bp;
-          bz = Math.sin(bp * Math.PI) * 4.2;
+          bx = postWoodX - dir * bp * (isWoodBar ? 9.5 : 8.5);
+          by = isWoodBar
+            ? targetY + cornerSign * 3.2 * bp
+            : isWoodCorner
+              ? targetY + (targetY < 50 ? 6.5 : -6.5) * bp
+              : targetY + (targetY < 50 ? 7.5 : -7.5) * bp;
+          bz = isWoodBar
+            ? 6.0 * (1 - bp) + Math.sin(bp * Math.PI) * 2.4
+            : isWoodCorner
+              ? 5.7 * (1 - bp) + Math.sin(bp * Math.PI) * 2.6
+              : Math.sin(bp * Math.PI) * 2.8;
         } else {
           inShot = false;
           bx = goalBackX;

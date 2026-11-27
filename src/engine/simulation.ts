@@ -706,11 +706,14 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
   if (Math.random() < (bg ? 0.42 : 0.24)) {
     const hitTeam = Math.random() < 0.5 ? h : a;
     const hitPlayer = (hitTeam.id === h.id ? H.x : G.x).find((q) => q.pos === 'FW' || q.pos === 'MF') || hitTeam.sq[0];
+    const wRoll = Math.random();
+    const wPart = wRoll < 0.45 ? 'เสา' : wRoll < 0.80 ? 'คาน' : 'สามเหลี่ยม';
+    const wIcon = wPart === 'สามเหลี่ยม' ? '📐' : '🥅';
     incidents.push({
       m: R(18, 87),
       t: hitTeam.id,
       kind: 'woodwork',
-      text: `🥅 หวุดหวิด! ${hitPlayer?.n || 'แนวรุก'} (${hitTeam.name}) ซัดบอลชนเสา/คานอย่างจัง`
+      text: `${wIcon} หวุดหวิด! ${hitPlayer?.n || 'แนวรุก'} (${hitTeam.name}) ซัดบอลชน${wPart}อย่างจัง`
     });
   }
   if ((bg || Math.abs(gh - ga) <= 1) && Math.random() < 0.28) {
@@ -7358,6 +7361,11 @@ export function simulateInstantMatchPayload(
       const wShooter = (wSide === 'H' ? H.sq : A.sq).find((q) => (wSide === 'H' ? homeXiNames : awayXiNames).includes(q.n) && q.pos !== 'GK') || wTeam.sq[0];
       const wGk = findGkPlayer(dTeam, dXi);
       const secondHalf = woodInc.m > 45;
+      const wVerbPart = woodInc.text.includes('สามเหลี่ยม')
+        ? 'สามเหลี่ยม'
+        : woodInc.text.includes('คาน')
+          ? 'คาน'
+          : 'เสา';
       hlSeq += 1;
       rawSimHighlights.push(
         simulateRealtimeHighlightClip({
@@ -7376,7 +7384,7 @@ export function simulateInstantMatchPayload(
           awayTactics: awayTacCfg,
           scorerName: wShooter?.n || wTeam.name,
           victimName: wGk?.n,
-          finishVerb: 'ซัดบอลพุ่งชนเสา/คานอย่างจัง',
+          finishVerb: `ซัดบอลพุ่งชน${wVerbPart}อย่างจัง`,
           scoreBefore: `${r.gh}-${r.ga}`,
           scoreAfter: `${r.gh}-${r.ga}`,
           scoreAfterGh: r.gh,

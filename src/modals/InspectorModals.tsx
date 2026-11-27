@@ -745,7 +745,8 @@ export const TeamInspectorModal: React.FC<{
                       const hasCardOrStat =
                         (q.sg || 0) > 0 ||
                         (q.sa || 0) > 0 ||
-                        (q.yc || 0) > 0;
+                        (q.yc || 0) > 0 ||
+                        (q.rc || 0) > 0;
 
                       return (
                         <button
@@ -815,6 +816,7 @@ export const TeamInspectorModal: React.FC<{
                                 {(q.sg || 0) > 0 && <StatIconBadge kind="goal" count={q.sg} size="xs" />}
                                 {(q.sa || 0) > 0 && <StatIconBadge kind="assist" count={q.sa} size="xs" />}
                                 {(q.yc || 0) > 0 && <StatIconBadge kind="yellow" count={q.yc || 1} size="xs" />}
+                                {(q.rc || 0) > 0 && <StatIconBadge kind="red" count={q.rc || 1} size="xs" />}
                               </>
                             ) : (
                               <span className="text-[var(--mut)]/55">—</span>

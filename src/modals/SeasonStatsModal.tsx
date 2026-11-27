@@ -7,6 +7,7 @@ import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { RatingBadge } from '../components/RatingBadge';
+import { WdlRecordBadges } from '../components/WdlBadge';
 
 type SortKey = 'avgRating' | 'sg' | 'sa' | 'sp' | 'motm' | 'ov';
 
@@ -58,6 +59,8 @@ export const SeasonStatsModal: React.FC<{
           sg: pl.sg + cSg,
           sa: pl.sa + cSa,
           cs: pl.cs + cCs,
+          yc: pl.yc + cYc,
+          rc: pl.rc + cRc,
           motm: pl.motm + cMotm,
           avgRating
         };
@@ -265,12 +268,9 @@ export const SeasonStatsModal: React.FC<{
                   #{rec.rank}/{rec.totalTeams}
                 </b>
               </div>
-              <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]/70">
-                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">แข่ง {rec.played} นัด</div>
-                <b className="text-xs mland:text-[10.5px] tabular">
-                  <span className="text-[var(--g)]">{rec.won}ช</span> · {rec.drawn}ส ·{' '}
-                  <span className="text-[var(--red)]">{rec.lost}พ</span>
-                </b>
+              <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]/70 flex flex-col items-center justify-center">
+                <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)] mb-0.5">แข่ง {rec.played} นัด</div>
+                <WdlRecordBadges w={rec.won} d={rec.drawn} l={rec.lost} size="2xs" className="text-xs mland:text-[10px]" />
               </div>
               <div className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]/70">
                 <div className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">ได้ / เสีย</div>

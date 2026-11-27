@@ -3128,6 +3128,18 @@ export const MatchModal: React.FC<{
           lockedTargetIds.add(ag.id);
           return;
         }
+        if (b.flightType === 'bounce' && b.bounceNext?.looseRebound && !b.carrierId && ag.side !== b.possessionSide) {
+          const ownGoalX = attRight ? 2.0 : 98.0;
+          if (Math.hypot(ownGoalX - b.toX, 50 - b.toY) < 13.5) {
+            ag.tx = clamp(b.toX, 1.8, 98.2);
+            ag.ty = clamp(b.toY, 40.5, 59.5);
+            ag.intent = 'PRESS';
+            ag.runToX = undefined;
+            ag.runToY = undefined;
+            lockedTargetIds.add(ag.id);
+            return;
+          }
+        }
         const goalX = attRight ? 2.2 : 97.8;
         const ballDistGoal = Math.hypot(b.x - goalX, b.y - 50);
         const ballThreat = attRight ? clamp((36 - b.x) / 34, 0, 1) : clamp((b.x - 64) / 34, 0, 1);
@@ -3166,6 +3178,25 @@ export const MatchModal: React.FC<{
       ag.intent = inPoss ? 'SUPPORT' : 'MARK';
       ag.runToX = undefined;
       ag.runToY = undefined;
+
+      if (b.flightType === 'bounce' && b.bounceNext?.looseRebound && !b.carrierId) {
+        const rb = b.bounceNext.looseRebound;
+        const penaltyTakerLocked = Boolean(rb.fromPenalty && rb.prevShooterId === ag.id);
+        if (!penaltyTakerLocked) {
+          const sideOutfield = activeAgents
+            .filter((z) => z.side === ag.side && z.pos !== 'GK' && !(rb.fromPenalty && rb.prevShooterId === z.id))
+            .sort((u, v) => Math.hypot(u.x - b.toX, u.y - b.toY) - Math.hypot(v.x - b.toX, v.y - b.toY));
+          const rankIdx = sideOutfield.findIndex((z) => z.id === ag.id);
+          const distToLanding = Math.hypot(ag.x - b.toX, ag.y - b.toY);
+          if (rankIdx >= 0 && rankIdx < 3 && distToLanding < 30) {
+            ag.tx = clamp(b.toX + (rankIdx === 0 ? 0 : (rankIdx === 1 ? -1.4 : 1.4)), 3.5, 96.5);
+            ag.ty = clamp(b.toY + (rankIdx === 0 ? 0 : (rankIdx === 1 ? -1.8 : 1.8)), 7, 93);
+            ag.intent = ag.side === b.possessionSide ? 'PASS_TARGET' : 'PRESS';
+            lockedTargetIds.add(ag.id);
+            return;
+          }
+        }
+      }
 
       if (b.carrierId === ag.id) {
         ag.intent = 'CARRY';
@@ -3670,6 +3701,212 @@ export const MatchModal: React.FC<{
     pushLog(curMin, `😱 จังหวะช็อก! ${culprit.id} (${culpritTeam.name}) ${reasonText}`);
   };
 
+  const pickWoodworkTarget = (opts: {
+    attRightNow: boolean;
+    fromY: number;
+    curveAmt: number;
+    maxZAmt: number;
+    shotStyle: LiveBallState['shotStyle'];
+    flightType: 'shot' | 'freekick' | 'penalty' | 'shootout_kick';
+  }): {
+    woodworkPart: 'post' | 'crossbar' | 'corner_junction';
+    postSide: -1 | 1;
+    toX: number;
+    toY: number;
+    endZ: number;
+    maxZ: number;
+  } => {
+    const { attRightNow, fromY, curveAmt, maxZAmt, shotStyle, flightType } = opts;
+    const isFinesse =
+      shotStyle === 'curler' ||
+      shotStyle === 'trivela' ||
+      flightType === 'freekick';
+    const isAerialHigh =
+      shotStyle === 'header' ||
+      shotStyle === 'diving_header' ||
+      shotStyle === 'volley' ||
+      shotStyle === 'chip' ||
+      shotStyle === 'panenka' ||
+      shotStyle === 'screamer' ||
+      shotStyle === 'knuckle' ||
+      maxZAmt >= 3.6;
+
+    const partRoll = Math.random();
+    let woodworkPart: 'post' | 'crossbar' | 'corner_junction';
+    if (isFinesse) {
+      woodworkPart = partRoll < 0.36 ? 'corner_junction' : partRoll < 0.66 ? 'crossbar' : 'post';
+    } else if (isAerialHigh) {
+      woodworkPart = partRoll < 0.46 ? 'crossbar' : partRoll < 0.72 ? 'corner_junction' : 'post';
+    } else {
+      woodworkPart = partRoll < 0.56 ? 'post' : partRoll < 0.84 ? 'crossbar' : 'corner_junction';
+    }
+
+    // Choose realistic post side from shooting lane & curve direction
+    let postSide: -1 | 1;
+    if (Math.abs(curveAmt) > 1.8) {
+      postSide = curveAmt > 0 ? (Math.random() < 0.72 ? 1 : -1) : Math.random() < 0.72 ? -1 : 1;
+    } else if (Math.abs(fromY - 50) > 8) {
+      // Wide-angle shots tend to clip the far post (~62%) or near post (~38%)
+      const farSide: -1 | 1 = fromY < 50 ? 1 : -1;
+      postSide = Math.random() < 0.62 ? farSide : (farSide === 1 ? -1 : 1);
+    } else {
+      postSide = Math.random() < 0.5 ? -1 : 1;
+    }
+
+    if (woodworkPart === 'corner_junction') {
+      return {
+        woodworkPart,
+        postSide,
+        toX: attRightNow ? 99.75 : 0.25,
+        toY: postSide < 0 ? 42.2 : 57.8,
+        endZ: 5.7,
+        maxZ: clamp(maxZAmt * 0.36, 0.75, 1.85)
+      };
+    }
+    if (woodworkPart === 'crossbar') {
+      const barBiasY = clamp(50 + (fromY < 50 ? 2.5 : -2.5) + (Math.random() - 0.5) * 9.5, 44.0, 56.0);
+      return {
+        woodworkPart,
+        postSide,
+        toX: attRightNow ? 99.65 : 0.35,
+        toY: barBiasY,
+        endZ: 6.0,
+        maxZ: clamp(maxZAmt * 0.36, 0.8, 1.95)
+      };
+    }
+    return {
+      woodworkPart,
+      postSide,
+      toX: attRightNow ? 99.75 : 0.25,
+      toY: postSide < 0 ? 42.0 : 58.0,
+      endZ: clamp(maxZAmt * 0.45, 0.4, 3.2),
+      maxZ: clamp(maxZAmt * 0.58, 1.2, 3.0)
+    };
+  };
+
+  const computeWoodworkBouncePhysics = (opts: {
+    woodworkPart: 'post' | 'crossbar' | 'corner_junction';
+    postSide: -1 | 1;
+    hitX: number;
+    hitY: number;
+    hitZ: number;
+    fromX: number;
+    fromY: number;
+    attRightNow: boolean;
+    reboundChain: number;
+  }): {
+    inPlay: boolean;
+    toX: number;
+    toY: number;
+    startZ: number;
+    endZ: number;
+    maxZ: number;
+    duration: number;
+  } => {
+    const { woodworkPart, postSide, hitX, hitY, hitZ, fromX, fromY, attRightNow, reboundChain } = opts;
+    const inDy = hitY - fromY;
+    const wideAngle = Math.abs(fromY - 50) > 10;
+    const farPost = postSide * (fromY - 50) < 0;
+    const forceOut = reboundChain >= 2;
+
+    if (woodworkPart === 'crossbar') {
+      const goesOver = forceOut || Math.random() < 0.36;
+      if (goesOver) {
+        const toX = attRightNow ? 102.2 : -2.2;
+        const toY = clamp(hitY + clamp(inDy * 0.2, -4.5, 4.5), 40.5, 59.5);
+        return {
+          inPlay: false,
+          toX,
+          toY,
+          startZ: Math.max(5.4, hitZ),
+          endZ: 0.4,
+          maxZ: 3.9,
+          duration: 0.38
+        };
+      }
+      const toX = attRightNow ? 87.5 + Math.random() * 8.2 : 4.3 + Math.random() * 8.2;
+      const toY = clamp(hitY + clamp(inDy * 0.22, -5.5, 5.5) + (Math.random() - 0.5) * 4.5, 38, 62);
+      const d = Math.hypot(toX - hitX, toY - hitY);
+      return {
+        inPlay: true,
+        toX,
+        toY,
+        startZ: Math.max(5.4, hitZ),
+        endZ: 0,
+        maxZ: 2.6,
+        duration: clamp(d / 23, 0.40, 0.58)
+      };
+    }
+
+    if (woodworkPart === 'corner_junction') {
+      const goesWideHigh = forceOut || Math.random() < 0.38;
+      if (goesWideHigh) {
+        const toX = attRightNow ? 102.0 : -2.0;
+        const toY = postSide < 0 ? 34.5 + Math.random() * 6.0 : 59.5 + Math.random() * 6.0;
+        return {
+          inPlay: false,
+          toX,
+          toY,
+          startZ: Math.max(5.1, hitZ),
+          endZ: 0.4,
+          maxZ: 3.6,
+          duration: 0.38
+        };
+      }
+      const inwardShift = 4.2 + Math.random() * 8.5;
+      const toX = attRightNow ? 85.8 + Math.random() * 8.0 : 6.2 + Math.random() * 8.0;
+      const toY = clamp(hitY + (postSide < 0 ? inwardShift : -inwardShift), 39, 61);
+      const d = Math.hypot(toX - hitX, toY - hitY);
+      return {
+        inPlay: true,
+        toX,
+        toY,
+        startZ: Math.max(5.1, hitZ),
+        endZ: 0,
+        maxZ: 3.1,
+        duration: clamp(d / 23, 0.42, 0.60)
+      };
+    }
+
+    // Upright Goalpost ('post'): cylindrical surface reflection
+    const glancesOut = forceOut || Math.random() < 0.28;
+    if (glancesOut) {
+      const toX = attRightNow ? 101.8 : -1.8;
+      const toY = postSide < 0 ? 33.5 + Math.random() * 6.5 : 60.0 + Math.random() * 6.5;
+      return {
+        inPlay: false,
+        toX,
+        toY,
+        startZ: clamp(hitZ, 0.4, 3.6),
+        endZ: 0.2,
+        maxZ: 1.9,
+        duration: 0.34
+      };
+    }
+
+    let toX: number;
+    let toY: number;
+    if (wideAngle && farPost) {
+      // Far-post strike ricochets across the 6-yard face of goal
+      toX = attRightNow ? 92.2 + Math.random() * 5.0 : 2.8 + Math.random() * 5.0;
+      toY = clamp(hitY + (postSide < 0 ? 5.5 + Math.random() * 9.0 : -(5.5 + Math.random() * 9.0)), 41, 59);
+    } else {
+      // Near-post or central strike rebounds diagonally back into the penalty area
+      toX = attRightNow ? 86.5 + Math.random() * 8.0 : 5.5 + Math.random() * 8.0;
+      toY = clamp(hitY + (postSide < 0 ? -3.0 + Math.random() * 9.0 : 3.0 - Math.random() * 9.0), 36, 64);
+    }
+    const d = Math.hypot(toX - hitX, toY - hitY);
+    return {
+      inPlay: true,
+      toX,
+      toY,
+      startZ: clamp(hitZ, 0.4, 3.6),
+      endZ: 0,
+      maxZ: clamp(hitZ * 0.45 + 1.0, 0.9, 2.9),
+      duration: clamp(d / 24, 0.34, 0.54)
+    };
+  };
+
   // Pre-compute physically accurate shot trajectory (block, woodwork, off-target, GK save spot, or net goal)
   const prepareShotFlight = (
     w: LiveMatchWorld,
@@ -3686,11 +3923,12 @@ export const MatchModal: React.FC<{
       durAmt: number;
       isPanenka?: boolean;
       startZAmt?: number;
+      reboundChain?: number;
     }
   ) => {
     const b = w.ball;
     const sr = simRef.current;
-    const { flightType, side, fromX, fromY, shooter, shotStyle, curveAmt, maxZAmt, durAmt, isPanenka, startZAmt } = opts;
+    const { flightType, side, fromX, fromY, shooter, shotStyle, curveAmt, maxZAmt, durAmt, isPanenka, startZAmt, reboundChain = 0 } = opts;
     const defSide: 'H' | 'A' = side === 'H' ? 'A' : 'H';
     const attRightNow = isAttackRight(w, side);
     const active = w.agents.filter((a) => !a.sentOff);
@@ -3853,7 +4091,7 @@ export const MatchModal: React.FC<{
           b.curve = curveAmt * 0.25;
           b.maxZ = Math.min(maxZAmt, 2.4);
           b.duration = clamp(Math.hypot(nearDef.x - fromX, nearDef.y - fromY) / 40, 0.16, 0.38);
-          b.shotPlan = { outcome: 'block', blockerId: nearDef.id };
+          b.shotPlan = { outcome: 'block', blockerId: nearDef.id, reboundChain };
           return;
         }
         if (contactRoll < blockChance + deflectChance) {
@@ -3862,7 +4100,7 @@ export const MatchModal: React.FC<{
           b.curve = curveAmt * 0.28;
           b.maxZ = clamp(maxZAmt * 0.52, 1.8, 5.2);
           b.duration = clamp(Math.hypot(b.toX - fromX, b.toY - fromY) / 42, 0.15, 0.38);
-          b.shotPlan = { outcome: 'deflect', blockerId: nearDef.id, deflectorId: nearDef.id };
+          b.shotPlan = { outcome: 'deflect', blockerId: nearDef.id, deflectorId: nearDef.id, reboundChain };
           return;
         }
       }
@@ -3891,13 +4129,17 @@ export const MatchModal: React.FC<{
         : clamp(0.46 + ((shooter?.d.fin || 60) - 60) * 0.004 + sigFinBoost + traitAccBoost + luckAccBoost - Math.max(0, dist - 22) * 0.007, 0.26, 0.93);
 
     if (Math.random() > accuracy) {
-      const hitWoodwork = Math.random() < (flightType === 'penalty' ? 0.35 : 0.16);
+      const hitWoodwork = Math.random() < (flightType === 'penalty' ? 0.35 : 0.18);
+      let woodworkPart: 'post' | 'crossbar' | 'corner_junction' | undefined;
+      let woodworkPostSide: -1 | 1 | undefined;
       if (hitWoodwork) {
-        const postSide = Math.random() < 0.5 ? -1 : 1;
-        const hitCrossbar = Math.random() < 0.45;
-        b.toX = attRightNow ? 99.8 : 0.2;
-        b.toY = hitCrossbar ? 44 + Math.random() * 12 : postSide < 0 ? 42.0 : 58.0;
-        if (hitCrossbar) b.maxZ = Math.max(maxZAmt, 6.2);
+        const wTarget = pickWoodworkTarget({ attRightNow, fromY, curveAmt, maxZAmt, shotStyle, flightType });
+        woodworkPart = wTarget.woodworkPart;
+        woodworkPostSide = wTarget.postSide;
+        b.toX = wTarget.toX;
+        b.toY = wTarget.toY;
+        b.endZ = wTarget.endZ;
+        b.maxZ = wTarget.maxZ;
       } else {
         const missSide = fromY < 50 ? (Math.random() < 0.62 ? -1 : 1) : Math.random() < 0.62 ? 1 : -1;
         b.toX = attRightNow ? 101.2 : -1.2;
@@ -3906,6 +4148,9 @@ export const MatchModal: React.FC<{
       const diveY = clamp(b.toY, 41.2, 58.8);
       b.shotPlan = {
         outcome: hitWoodwork ? 'woodwork' : 'miss',
+        woodworkPart,
+        woodworkPostSide,
+        reboundChain,
         gkDiveTargetY: diveY,
         gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
         gkDiveStartProg: diveReactionProg
@@ -7243,6 +7488,181 @@ export const MatchModal: React.FC<{
         awardGoalToTeam(w, gp.side, curMin, gp.scorerName, gp.scorerShort, gp.assisterName, gp.finishVerb, b.toX, b.toY);
         return;
       }
+      if (bn?.looseRebound) {
+        const rb = bn.looseRebound;
+        const attSide = side;
+        const attRightNow = isAttackRight(w, attSide);
+        const goalLineX = attRightNow ? 100 : 0;
+        const boxCenterDistGoal = Math.hypot(goalLineX - b.toX, 50 - b.toY);
+        const gkDef = defPool.find((a) => a.pos === 'GK');
+        const ineligiblePenaltyTakerId = rb.fromPenalty ? rb.prevShooterId : undefined;
+
+        // Evaluate all players racing for the rebound at (b.toX, b.toY)
+        const cands = active
+          .filter((a) => !(ineligiblePenaltyTakerId && a.id === ineligiblePenaltyTakerId))
+          .map((a) => {
+            const d = Math.hypot(a.x - b.toX, a.y - b.toY);
+            let reactBonus = 0;
+            if (a.pos === 'GK') {
+              // GK can only realistically smother rebounds inside/right outside the 6-yard box
+              if (a.side !== defSide || boxCenterDistGoal > 11.5) return { a, score: 999 };
+              const divePenalty = a.intent === 'DIVE' ? 3.4 : 0;
+              reactBonus = ((a.d.sv + (a.d.rfx ?? a.d.sv)) * 0.5 - 62) * 0.06 - divePenalty - (boxCenterDistGoal < 6.5 ? 1.4 : -1.2);
+            } else if (a.side === attSide) {
+              const poacherBonus = agentHasTrait(a, 'poacher_instinct') ? 2.4 : 0;
+              reactBonus =
+                ((a.d.fin + a.d.spd) * 0.5 - 60) * 0.055 +
+                poacherBonus +
+                (a.pos === 'FW' ? 1.6 : a.pos === 'MF' ? 0.6 : -0.8) +
+                ((a.blessedMins ?? 0) > 0 ? 2.2 : 0);
+            } else {
+              reactBonus =
+                ((a.d.blk + a.d.pos + a.d.spd) / 3 - 60) * 0.055 +
+                (a.pos === 'DF' ? 1.4 : a.pos === 'MF' ? 0.5 : -0.9) +
+                ((a.blessedMins ?? 0) > 0 ? 2.0 : 0);
+            }
+            const score = d - reactBonus + (Math.random() - 0.5) * 2.4;
+            return { a, score };
+          })
+          .sort((u, v) => u.score - v.score);
+
+        const winner = cands[0]?.a || gkDef || defPool[0] || attPool[0];
+        if (winner && winner.pos === 'GK' && winner.side === defSide) {
+          SFX.save();
+          resetGkDive(winner);
+          nudgeAgentToward(winner, b.toX, b.toY, 2.2, 1.6, 98.4);
+          winner.acrobatType = 'supersave';
+          winner.acrobatMax = 0.62;
+          winner.acrobatTimer = 0.62;
+          b.possessionSide = defSide;
+          b.carrierId = winner.id;
+          b.x = winner.x;
+          b.y = winner.y;
+          b.fromX = b.x;
+          b.fromY = b.y;
+          b.toX = b.x;
+          b.toY = b.y;
+          b.startZ = 0;
+          b.endZ = 0;
+          b.z = 0;
+          b.progress = 0;
+          b.duration = 0.72;
+          b.flightType = 'carry';
+          b.shotStyle = undefined;
+          w.phaseLabel = `🧤 ${winner.shortName} ตะครุบบอลกระดอนไว้ได้ทัน!`;
+          w.phaseTone = 'normal';
+          pushLog(curMin, `🧤 ${winner.id} (${defTeam.name}) รีบพุ่งตามตะครุบบอลเด้งไว้ได้ก่อนโดนซ้ำ!`);
+          return;
+        }
+
+        if (winner && winner.side === attSide) {
+          // Attacker wins the second ball -> IMMEDIATE REBOUND FOLLOW-UP SHOT!
+          nudgeAgentToward(winner, b.toX, b.toY, 3.0, 2.5, 97.5);
+          winner.facing = Math.atan2(50 - b.toY, goalLineX - b.toX);
+          const isHighRebound = rb.woodworkPart === 'crossbar' || rb.woodworkPart === 'corner_junction';
+          const rbStyle: LiveBallState['shotStyle'] = isHighRebound
+            ? Math.random() < 0.45
+              ? 'header'
+              : 'volley'
+            : Math.random() < 0.36
+              ? 'screamer'
+              : 'normal';
+          if (rbStyle === 'header' || rbStyle === 'volley') {
+            winner.acrobatType = rbStyle;
+            winner.acrobatMax = 0.56;
+            winner.acrobatTimer = 0.56;
+          }
+          const rbDist = Math.hypot(goalLineX - b.toX, 50 - b.toY);
+          const rbDur = clamp(rbDist / 34, 0.22, 0.46);
+          const rbMaxZ = rbStyle === 'header' ? 2.4 : rbStyle === 'volley' ? 2.8 : 1.9;
+          SFX.pass();
+          b.lastPasserId = null;
+          addWorldFx(w, {
+            type: 'skill',
+            x: b.toX,
+            y: b.toY,
+            label: `⚡ ซ้ำดาบสอง!`,
+            color: '#fde047',
+            ttl: 1.5,
+            maxTtl: 1.5
+          });
+          triggerDramaSlow(w, 1.3, `⚡ ${winner.shortName} วิ่งซ้ำดาบสอง!!`);
+          pushLog(curMin, `⚡ จังหวะซ้ำ! ${winner.id} (${attTeam.name}) ปรี่เข้าซัดบอลเด้งดาบสองทันที!`);
+          prepareShotFlight(w, curMin, {
+            flightType: 'shot',
+            side: attSide,
+            fromX: clamp(b.toX, 3.2, 96.8),
+            fromY: clamp(b.toY, 8, 92),
+            shooter: winner,
+            shotStyle: rbStyle,
+            curveAmt: (Math.random() - 0.5) * 1.8,
+            maxZAmt: rbMaxZ,
+            durAmt: rbDur,
+            startZAmt: isHighRebound ? 0.9 : 0.2,
+            reboundChain: (rb.reboundChain ?? 0) + 1
+          });
+          w.phaseLabel = `⚡ ${winner.shortName} วิ่งเข้าซ้ำดาบสอง!!`;
+          w.phaseTone = 'danger';
+          return;
+        }
+
+        // Defender wins the second ball -> controls & clears danger!
+        if (winner) {
+          nudgeAgentToward(winner, b.toX, b.toY, 2.8, 2.5, 97.5);
+          winner.acrobatType = 'kick';
+          winner.acrobatMax = 0.4;
+          winner.acrobatTimer = 0.4;
+          const clearOut = boxCenterDistGoal < 12 && Math.random() < 0.72;
+          if (clearOut) {
+            const clearDir = attRightNow ? -1 : 1;
+            const clearToX = clamp(winner.x + clearDir * (22 + Math.random() * 14), 16, 84);
+            const clearToY = clamp(winner.y + (winner.y < 50 ? -12 - Math.random() * 12 : 12 + Math.random() * 12), 10, 90);
+            const targetAlly = defPool
+              .filter((a) => a.pos !== 'GK' && a.id !== winner.id)
+              .sort((u, v) => Math.hypot(u.x - clearToX, u.y - clearToY) - Math.hypot(v.x - clearToX, v.y - clearToY))[0];
+            SFX.pass();
+            b.possessionSide = defSide;
+            b.carrierId = null;
+            b.targetId = targetAlly?.id || null;
+            b.lastPasserId = winner.id;
+            b.fromX = clamp(b.toX, 3, 97);
+            b.fromY = clamp(b.toY, 6, 94);
+            b.toX = targetAlly ? clamp(targetAlly.x, 8, 92) : clearToX;
+            b.toY = targetAlly ? clamp(targetAlly.y, 8, 92) : clearToY;
+            b.curve = (Math.random() - 0.5) * 3;
+            b.startZ = 0.2;
+            b.endZ = 0;
+            b.maxZ = 7.2;
+            b.progress = 0;
+            b.duration = 0.62;
+            b.flightType = 'lofted';
+            b.shotStyle = undefined;
+            w.phaseLabel = `🛡️ ${winner.shortName} สาดเคลียร์บอลซ้ำพ้นกรอบ!`;
+            w.phaseTone = 'normal';
+            pushLog(curMin, `🛡️ ${winner.id} (${defTeam.name}) ชิงจังหวะเตะเคลียร์บอลเด้งพ้นหน้าปากประตู!`);
+            return;
+          }
+          b.possessionSide = winner.side;
+          b.carrierId = winner.id;
+          b.x = winner.x;
+          b.y = winner.y;
+          b.fromX = b.x;
+          b.fromY = b.y;
+          b.toX = b.x;
+          b.toY = b.y;
+          b.startZ = 0;
+          b.endZ = 0;
+          b.z = 0;
+          b.progress = 0;
+          b.duration = 0.24;
+          b.flightType = 'carry';
+          b.shotStyle = undefined;
+          w.phaseLabel = `🛡️ ${winner.shortName} เก็บบอลจังหวะสองได้`;
+          w.phaseTone = 'normal';
+          pushLog(curMin, `🛡️ ${winner.id} (${defTeam.name}) เก็บบอลจังหวะกระดอนคุมสถานการณ์ไว้ได้`);
+          return;
+        }
+      }
       if (bn?.setPiece) {
         if (w.dramaLabel?.startsWith('🧤')) {
           w.dramaLabel = null;
@@ -7379,6 +7799,19 @@ export const MatchModal: React.FC<{
           sh.lastMsg = `🧤 ${gk.shortName} พุ่งปัดเซฟได้!! (${sh.hScore}-${sh.aScore})`;
           addWorldFx(w, { type: 'save', x: b.toX, y: b.toY, label: `🧤 เซฟ! ${gk.shortName}`, color: '#38bdf8', ttl: 2.2, maxTtl: 2.2 });
           triggerDramaSlow(w, 1.4, `🧤 ซูเปอร์เซฟ! ${gk.shortName}`);
+        } else if (plan?.outcome === 'woodwork') {
+          SFX.woodwork();
+          SFX.boo(0.45);
+          const partTxt =
+            plan.woodworkPart === 'corner_junction'
+              ? 'ชนสามเหลี่ยม'
+              : plan.woodworkPart === 'crossbar'
+                ? 'ชนคาน'
+                : 'ชนเสา';
+          const partIcon = plan.woodworkPart === 'corner_junction' ? '📐' : '🥅';
+          sh.lastMsg = `${partIcon} ${kicker?.shortName || sh.kickerName} ยิง${partTxt}เต็มๆ!! (${sh.hScore}-${sh.aScore})`;
+          addWorldFx(w, { type: 'woodwork', x: b.toX, y: b.toY, label: `${partIcon} ${partTxt}!`, color: '#f59e0b', ttl: 2.3, maxTtl: 2.3 });
+          triggerDramaSlow(w, 1.5, `${partIcon} ${partTxt}!`);
         } else {
           SFX.foul();
           SFX.boo(0.55);
@@ -7495,6 +7928,7 @@ export const MatchModal: React.FC<{
           const wrongY = clamp(50 - (goalY - 50) * 0.85, 42.2, 57.8);
           b.shotPlan = {
             outcome: 'goal',
+            reboundChain: plan.reboundChain,
             deflectedFrom: defShort,
             ownGoalCulpritId: isDeflectOwnGoal ? deflector?.id : undefined,
             gkDiveTargetY: wrongY,
@@ -7518,6 +7952,7 @@ export const MatchModal: React.FC<{
           const clampedSaveY = clamp(saveY, 42.2, 57.8);
           b.shotPlan = {
             outcome: 'save',
+            reboundChain: plan.reboundChain,
             parryCorner: Math.random() < 0.62,
             deflectedFrom: defShort,
             gkDiveTargetY: clampedSaveY,
@@ -7527,17 +7962,27 @@ export const MatchModal: React.FC<{
           };
         } else if (deflectRoll < deflectedGoalProb + 0.37) {
           // Deflected onto the woodwork!
-          const postSide = Math.random() < 0.5 ? -1 : 1;
-          const hitBar = Math.random() < 0.42;
-          b.toX = attRightNow ? 99.8 : 0.2;
-          b.toY = hitBar ? 44 + Math.random() * 12 : postSide < 0 ? 42.0 : 58.0;
+          const wTarget = pickWoodworkTarget({
+            attRightNow,
+            fromY: b.fromY,
+            curveAmt: swingSide * 2.5,
+            maxZAmt: 4.5,
+            shotStyle: 'deflected',
+            flightType: 'shot'
+          });
+          b.toX = wTarget.toX;
+          b.toY = wTarget.toY;
           b.curve = swingSide * 2.5;
-          b.maxZ = hitBar ? 6.4 : 4.0;
+          b.endZ = wTarget.endZ;
+          b.maxZ = wTarget.maxZ;
           const defShotDist = Math.hypot(b.toX - b.fromX, b.toY - b.fromY);
           b.duration = clamp(defShotDist / 28, 0.26, 0.52);
           const diveY = clamp(b.toY, 41.2, 58.8);
           b.shotPlan = {
             outcome: 'woodwork',
+            woodworkPart: wTarget.woodworkPart,
+            woodworkPostSide: wTarget.postSide,
+            reboundChain: plan.reboundChain,
             deflectedFrom: defShort,
             gkDiveTargetY: diveY,
             gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
@@ -7554,6 +7999,7 @@ export const MatchModal: React.FC<{
           const diveY = clamp(b.toY, 41.2, 58.8);
           b.shotPlan = {
             outcome: 'miss',
+            reboundChain: plan.reboundChain,
             deflectedFrom: defShort,
             gkDiveTargetY: diveY,
             gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
@@ -7681,64 +8127,134 @@ export const MatchModal: React.FC<{
         adjustLiveForm(shooter?.id, -0.12);
         const hitWoodwork = plan.outcome === 'woodwork';
         if (hitWoodwork) {
+          const woodPart = plan.woodworkPart || 'post';
+          const postSide: -1 | 1 = plan.woodworkPostSide ?? (b.toY < 50 ? -1 : 1);
+          const wasPenalty = b.flightType === 'penalty';
+          const partNoun =
+            woodPart === 'corner_junction' ? 'สามเหลี่ยม' : woodPart === 'crossbar' ? 'คาน' : 'เสา';
+          const partIcon = woodPart === 'corner_junction' ? '📐' : '🥅';
+          const isChainHit = (plan.reboundChain ?? 0) > 0;
+          const hitX = b.toX;
+          const hitY = b.toY;
+          const hitZ = b.endZ ?? b.z;
+          const origFromX = b.fromX;
+          const origFromY = b.fromY;
+
           SFX.woodwork();
           addWorldFx(w, {
             type: 'woodwork',
-            x: b.toX,
-            y: b.toY,
-            label: plan.deflectedFrom ? `🥅 แฉลบชนเสา/คาน!` : '🥅 ชนเสา/คาน!',
-            color: '#f59e0b',
+            x: hitX,
+            y: hitY,
+            label: plan.deflectedFrom
+              ? `${partIcon} แฉลบชน${partNoun}!`
+              : isChainHit
+                ? `${partIcon} ซ้ำชน${partNoun}อีก!!`
+                : `${partIcon} ชน${partNoun}!`,
+            color: woodPart === 'corner_junction' ? '#facc15' : '#f59e0b',
             ttl: 2.6,
             maxTtl: 2.6
           });
-          triggerDramaSlow(w, 1.5, `🥅 ${plan.deflectedFrom ? 'แฉลบ' : ''}ชนเสา/คาน! · ${shooter?.shortName || ''}`);
+          triggerDramaSlow(
+            w,
+            1.5,
+            `${partIcon} ${plan.deflectedFrom ? 'แฉลบ' : isChainHit ? 'ซ้ำ' : ''}ชน${partNoun}! · ${shooter?.shortName || ''}`
+          );
           triggerCoachMood(w, side, '😩', 2.3);
           triggerCoachMood(w, defSide, '😮‍💨', 2.3);
           pushLog(
             curMin,
             plan.deflectedFrom
-              ? `🥅 โอ้โห! ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง!`
-              : `🥅 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนเสา/คานอย่างจัง!`
+              ? `${partIcon} โอ้โห! ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} พุ่งชน${partNoun}อย่างจัง!`
+              : isChainHit
+                ? `${partIcon} เหลือเชื่อ!! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ตามซ้ำบอลพุ่งชน${partNoun}อีกหน!`
+                : `${partIcon} โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชน${partNoun}อย่างจัง!`
           );
           pushTimeline(
             curMin,
             side,
-            b.flightType === 'penalty' ? 'pen_miss' : 'miss',
+            wasPenalty ? 'pen_miss' : 'miss',
             shooter?.id || attTeam.name,
-            b.flightType === 'penalty' ? 'จุดโทษชนเสา/คาน' : 'ชนเสา/คาน'
+            wasPenalty ? `จุดโทษชน${partNoun}` : `ชน${partNoun}`
           );
-          b.fromX = b.toX;
-          b.fromY = b.toY;
-          b.toX = attRightNow ? 91 + Math.random() * 5 : 4 + Math.random() * 5;
-          b.toY = b.toY < 50 ? 31 + Math.random() * 5 : 64 + Math.random() * 5;
+
+          const bouncePhys = computeWoodworkBouncePhysics({
+            woodworkPart: woodPart,
+            postSide,
+            hitX,
+            hitY,
+            hitZ,
+            fromX: origFromX,
+            fromY: origFromY,
+            attRightNow,
+            reboundChain: plan.reboundChain ?? 0
+          });
+
+          b.fromX = hitX;
+          b.fromY = hitY;
+          b.toX = bouncePhys.toX;
+          b.toY = bouncePhys.toY;
           b.curve = 0;
-          b.maxZ = 5.4;
+          b.startZ = bouncePhys.startZ;
+          b.endZ = bouncePhys.endZ;
+          b.maxZ = bouncePhys.maxZ;
           b.progress = 0;
-          b.duration = 0.40;
+          b.duration = bouncePhys.duration;
           b.flightType = 'bounce';
           b.shotStyle = undefined;
           b.carrierId = null;
           b.targetId = null;
-          b.bounceNext = {
-            setPiece: {
-              type: 'goalkick',
-              side: defSide,
-              x: defRightNow ? 5.5 : 94.5,
-              y: 50,
-              waitSec: 1.1
-            },
-            phaseLabel: `🥅 ชนเสา/คานอย่างจัง! ตั้งเตะจากประตู`,
-            phaseTone: 'danger'
-          };
-          w.phaseLabel = `🥅 ชนเสา/คานอย่างจัง!`;
-          w.phaseTone = 'danger';
+
+          if (bouncePhys.inPlay) {
+            b.bounceNext = {
+              looseRebound: {
+                fromPenalty: wasPenalty,
+                prevShooterId: shooter?.id,
+                reboundChain: plan.reboundChain ?? 0,
+                source: 'woodwork',
+                woodworkPart: woodPart
+              },
+              phaseLabel: `${partIcon}⚡ ชน${partNoun}กระดอนเข้าเขตโทษ! ลุ้นซ้ำดาบสอง!!`,
+              phaseTone: 'danger'
+            };
+            w.phaseLabel = `${partIcon}⚡ บอลชน${partNoun}เด้งกลับเข้ากรอบ!!`;
+            w.phaseTone = 'danger';
+          } else if (plan.deflectedFrom) {
+            if (side === 'H') w.cornersH++;
+            else w.cornersA++;
+            const cy = hitY < 50 ? 2 : 98;
+            const cx = attRightNow ? 98.5 : 1.5;
+            b.bounceNext = {
+              setPiece: { type: 'corner', side, x: cx, y: cy, waitSec: 1.0 },
+              phaseLabel: `${partIcon}🚩 แฉลบชน${partNoun}ออกหลัง · ${attTeam.name} ได้เตะมุม!`,
+              phaseTone: 'setpiece'
+            };
+            w.phaseLabel = `${partIcon} บอลแฉลบชน${partNoun}ออกหลัง!`;
+            w.phaseTone = 'setpiece';
+          } else {
+            b.bounceNext = {
+              setPiece: {
+                type: 'goalkick',
+                side: defSide,
+                x: defRightNow ? 5.5 : 94.5,
+                y: 50,
+                waitSec: 1.05
+              },
+              phaseLabel: `${partIcon} ชน${partNoun}ออกหลัง! ตั้งเตะจากประตู`,
+              phaseTone: 'danger'
+            };
+            w.phaseLabel = `${partIcon} บอลชน${partNoun}กระดอนออกหลัง!`;
+            w.phaseTone = 'danger';
+          }
+
           const sr = simRef.current;
           const nonGoalCount = sr.highlightClips.filter((c) => !c.kind.startsWith('goal_')).length;
           if (!isSkippingRef.current || nonGoalCount < 3) {
             sr.highlightSeq += 1;
             const tel = lastShotTelemetryRef.current;
             const actorFullName = shooter?.id || attTeam.name;
-            const woodVerb = plan.deflectedFrom ? `ยิงแฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง` : 'ซัดบอลพุ่งชนเสา/คานอย่างจัง';
+            const woodVerb = plan.deflectedFrom
+              ? `ยิงแฉลบ ${plan.deflectedFrom} พุ่งชน${partNoun}อย่างจัง`
+              : `ซัดบอลพุ่งชน${partNoun}อย่างจัง`;
             if (isSkippingRef.current) {
               const hCfgSkip = getEffectiveTeamCfg('H', curMin);
               const aCfgSkip = getEffectiveTeamCfg('A', curMin);
@@ -9590,7 +10106,7 @@ export const MatchModal: React.FC<{
       w.ball.progress = 1;
       resolveSegmentArrival(w, curMin);
       let chainGuard = 0;
-      while ((w.ball.flightType === 'bounce' || Boolean(w.ball.bounceNext?.isOffsideCall) || Boolean(w.ball.bounceNext?.pendingShot) || (w.ball.flightType === 'shot' && w.ball.progress === 0)) && chainGuard < 4) {
+      while ((w.ball.flightType === 'bounce' || Boolean(w.ball.bounceNext?.isOffsideCall) || Boolean(w.ball.bounceNext?.pendingShot) || (w.ball.flightType === 'shot' && w.ball.progress === 0)) && chainGuard < 6) {
         chainGuard++;
         w.ball.x = w.ball.toX;
         w.ball.y = w.ball.toY;
@@ -9847,7 +10363,7 @@ export const MatchModal: React.FC<{
       w.ball.flightType === 'freekick' ||
       w.ball.flightType === 'penalty' ||
       w.ball.flightType === 'shootout_kick' ||
-      (w.ball.flightType === 'bounce' && Boolean(w.ball.bounceNext?.goalPayload));
+      (w.ball.flightType === 'bounce' && (Boolean(w.ball.bounceNext?.goalPayload) || Boolean(w.ball.bounceNext?.looseRebound)));
     const hasDrama = w.dramaSlowSec > 0 || isSlowShot;
     const baseBannerLabel =
       w.dramaLabel && w.dramaSlowSec > 0
@@ -10627,7 +11143,7 @@ export const MatchModal: React.FC<{
           w.ball.flightType === 'freekick' ||
           w.ball.flightType === 'penalty' ||
           w.ball.flightType === 'shootout_kick' ||
-          (w.ball.flightType === 'bounce' && Boolean(w.ball.bounceNext?.goalPayload));
+          (w.ball.flightType === 'bounce' && (Boolean(w.ball.bounceNext?.goalPayload) || Boolean(w.ball.bounceNext?.looseRebound)));
         const slowActive = cineSlowMo && (w.dramaSlowSec > 0 || isSlowShot);
         const isBigFx = (t: LivePitchFx['type']) =>
           t === 'goal' || t === 'var' || t === 'foul' || t === 'penalty' || t === 'save' || t === 'woodwork' || t === 'offside' || t === 'sub';
@@ -10818,17 +11334,43 @@ export const MatchModal: React.FC<{
                   gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
                   gkDiveStartProg: 0.50
                 };
-              } else if (Math.random() < 0.22) {
-                b.toX = 101.2;
-                b.toY = Math.random() < 0.5 ? 36.8 + Math.random() * 4.0 : 59.2 + Math.random() * 4.0;
-                const diveY = clamp(b.toY, 42.0, 58.0);
-                b.shotPlan = {
-                  outcome: 'miss',
-                  shootoutScored: false,
-                  gkDiveTargetY: diveY,
-                  gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
-                  gkDiveStartProg: 0.50
-                };
+              } else if (Math.random() < 0.25) {
+                const hitWood = Math.random() < 0.38;
+                if (hitWood) {
+                  const wTarget = pickWoodworkTarget({
+                    attRightNow: true,
+                    fromY: 50,
+                    curveAmt: b.curve,
+                    maxZAmt: 4.5,
+                    shotStyle: 'normal',
+                    flightType: 'shootout_kick'
+                  });
+                  b.toX = wTarget.toX;
+                  b.toY = wTarget.toY;
+                  b.endZ = wTarget.endZ;
+                  b.maxZ = wTarget.maxZ;
+                  const diveY = clamp(b.toY, 42.0, 58.0);
+                  b.shotPlan = {
+                    outcome: 'woodwork',
+                    woodworkPart: wTarget.woodworkPart,
+                    woodworkPostSide: wTarget.postSide,
+                    shootoutScored: false,
+                    gkDiveTargetY: diveY,
+                    gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+                    gkDiveStartProg: 0.50
+                  };
+                } else {
+                  b.toX = 101.2;
+                  b.toY = Math.random() < 0.5 ? 36.8 + Math.random() * 4.0 : 59.2 + Math.random() * 4.0;
+                  const diveY = clamp(b.toY, 42.0, 58.0);
+                  b.shotPlan = {
+                    outcome: 'miss',
+                    shootoutScored: false,
+                    gkDiveTargetY: diveY,
+                    gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
+                    gkDiveStartProg: 0.50
+                  };
+                }
               } else {
                 const gkSaveX = gk ? clamp(gk.x, 95.8, 98.4) : 97.8;
                 b.toX = gkSaveX;
@@ -11266,6 +11808,8 @@ export const MatchModal: React.FC<{
           w.ball.flightType === 'freekick' ||
           w.ball.flightType === 'penalty' ||
           Boolean(w.ball.bounceNext?.goalPayload) ||
+          Boolean(w.ball.bounceNext?.looseRebound) ||
+          w.ball.flightType === 'bounce' ||
           w.pendingSetPiece?.type === 'penalty';
         if (w.phase === 'play1' && w.minuteFloat >= 45) {
           w.phase = 'stop1';
@@ -12047,15 +12591,21 @@ export const MatchModal: React.FC<{
             </div>
             <div className="px-2 py-1 rounded-lg bg-[var(--surface-2)] flex items-center justify-between gap-1">
               <span className="inline-flex items-center gap-0.5 font-bold">
-                <span className={yH === 0 ? 'opacity-45' : ''}><StatIconBadge kind="yellow" count={Math.max(1, yH)} size="xs" /></span>
-                {yH === 0 && <span>0</span>}
-                {rH > 0 && <StatIconBadge kind="red" count={rH} size="xs" />}
+                <span className={`inline-flex items-center ${yH === 0 ? 'opacity-45' : ''}`}>
+                  <StatIconBadge kind="yellow" count={yH} size="xs" alwaysShowCount />
+                </span>
+                <span className={`inline-flex items-center ${rH === 0 ? 'opacity-45' : ''}`}>
+                  <StatIconBadge kind="red" count={rH} size="xs" alwaysShowCount />
+                </span>
               </span>
               <span className="text-[var(--mut)] font-semibold">ใบ</span>
               <span className="inline-flex items-center gap-0.5 font-bold">
-                {rA > 0 && <StatIconBadge kind="red" count={rA} size="xs" />}
-                <span className={yA === 0 ? 'opacity-45' : ''}><StatIconBadge kind="yellow" count={Math.max(1, yA)} size="xs" /></span>
-                {yA === 0 && <span>0</span>}
+                <span className={`inline-flex items-center ${rA === 0 ? 'opacity-45' : ''}`}>
+                  <StatIconBadge kind="red" count={rA} size="xs" alwaysShowCount />
+                </span>
+                <span className={`inline-flex items-center ${yA === 0 ? 'opacity-45' : ''}`}>
+                  <StatIconBadge kind="yellow" count={yA} size="xs" alwaysShowCount />
+                </span>
               </span>
             </div>
           </div>
@@ -12228,6 +12778,8 @@ export const MatchModal: React.FC<{
               const tlNo = tlPlayer ? getShirtNo(sideTeam, tlPlayer) : null;
               const sideKit = sideId === homeOrig.id ? homeKit : awayKit;
               const sideTrim = sideId === homeOrig.id ? homeTrim : awayTrim;
+              const sideCap = sideId === homeId ? liveCaptains.H : liveCaptains.A;
+              const isTlCap = Boolean(tlPlayer && (sideCap || sideTeam.cap) === tlPlayer.n);
 
               return (
                 <div key={item.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-1.5 text-[10.5px] mland:text-[9.5px] relative">
@@ -12236,7 +12788,7 @@ export const MatchModal: React.FC<{
                     {isHomeSide && (
                       <>
                         <div className="min-w-0 leading-tight">
-                          <div className={`truncate flex items-center justify-end gap-1 ${titleCls}`}>
+                          <div className={`min-w-0 pt-0.5 flex items-center justify-end gap-1 ${titleCls}`}>
                             <span className="shrink-0 inline-flex">
                               <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={sideId === state.me && state.mode === 'm'} />
                             </span>
@@ -12248,6 +12800,7 @@ export const MatchModal: React.FC<{
                                 kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
                                 trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
                                 size="sm"
+                                isCaptain={isTlCap}
                               />
                             )}
                             {tlPlayer && <PositionBadge role={tlPlayer.ro} size="2xs" />}
@@ -12300,7 +12853,7 @@ export const MatchModal: React.FC<{
                       <>
                         {iconForKind(item.kind)}
                         <div className="min-w-0 leading-tight">
-                          <div className={`truncate flex items-center gap-1 ${titleCls}`}>
+                          <div className={`min-w-0 pt-0.5 pl-0.5 flex items-center gap-1 ${titleCls}`}>
                             <span className="shrink-0 inline-flex">
                               <ClubCrest name={sideTeam.name} size={13} team={sideTeam} club={state.club} isMyClub={sideId === state.me && state.mode === 'm'} />
                             </span>
@@ -12312,6 +12865,7 @@ export const MatchModal: React.FC<{
                                 kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
                                 trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
                                 size="sm"
+                                isCaptain={isTlCap}
                               />
                             )}
                             {tlPlayer && <PositionBadge role={tlPlayer.ro} size="2xs" />}

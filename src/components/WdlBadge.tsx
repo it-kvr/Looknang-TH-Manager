@@ -3,9 +3,15 @@ import React from 'react';
 export type WdlKind = 'W' | 'D' | 'L';
 
 export function getWdlBadgeClass(kind: WdlKind): string {
-  if (kind === 'W') return 'bg-emerald-600 text-white border border-black';
-  if (kind === 'D') return 'bg-amber-400 text-black border border-black';
-  return 'bg-red-600 text-white border border-black';
+  if (kind === 'W') return 'bg-emerald-600 text-white';
+  if (kind === 'D') return 'bg-amber-500 text-white [text-shadow:0_1px_1px_rgba(0,0,0,0.22)]';
+  return 'bg-red-600 text-white';
+}
+
+export function getWdlDotClass(kind: WdlKind): string {
+  if (kind === 'W') return 'bg-emerald-600';
+  if (kind === 'D') return 'bg-amber-500';
+  return 'bg-red-600';
 }
 
 export const WdlCharBadge: React.FC<{
@@ -16,7 +22,7 @@ export const WdlCharBadge: React.FC<{
 }> = ({ kind, size = 'xs', title, className = '' }) => {
   const sizeCls =
     size === '2xs'
-      ? 'w-3.5 h-3.5 mland:w-3 mland:h-3 rounded-[4px] text-[8px] mland:text-[7px]'
+      ? 'w-3.5 h-3.5 mland:w-3 mland:h-3 rounded-[3px] text-[8px] mland:text-[7px]'
       : size === 'sm'
         ? 'w-[18px] h-[18px] mland:w-4 mland:h-4 rounded-[4px] text-[10px] mland:text-[8.5px]'
         : 'w-4 h-4 mland:w-3.5 mland:h-3.5 rounded-[4px] text-[9px] mland:text-[7.5px]';

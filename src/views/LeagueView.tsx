@@ -12,7 +12,7 @@ import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { OvrBadge } from '../components/OvrBadge';
-import { WdlFormStrip, WdlRecordBadges } from '../components/WdlBadge';
+import { WdlFormStrip, WdlRecordBadges, getWdlDotClass, type WdlKind } from '../components/WdlBadge';
 import { CupView } from './CupView';
 
 export const LeagueView: React.FC<{
@@ -94,7 +94,10 @@ export const LeagueView: React.FC<{
   }, [nextMatchResolved, state]);
 
   const renderFormDots = (fm?: string) => {
-    const chars = (fm || '').slice(-5).split('');
+    const chars = (fm || '')
+      .slice(-5)
+      .split('')
+      .filter((c): c is WdlKind => c === 'W' || c === 'D' || c === 'L');
     if (!chars.length) return <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">—</span>;
     const thaiForm = chars.map((c) => (c === 'W' ? 'ชนะ' : c === 'D' ? 'เสมอ' : 'แพ้')).join(' · ');
     return (
@@ -105,9 +108,7 @@ export const LeagueView: React.FC<{
         {chars.map((c, idx) => (
           <span
             key={idx}
-            className={`w-1.5 h-1.5 sm:w-2 sm:h-2 mland:w-1.5 mland:h-1.5 rounded-full border border-black shrink-0 ${
-              c === 'W' ? 'bg-emerald-600' : c === 'D' ? 'bg-amber-400' : 'bg-red-600'
-            }`}
+            className={`w-1.5 h-1.5 sm:w-2 sm:h-2 mland:w-1.5 mland:h-1.5 rounded-full shrink-0 ${getWdlDotClass(c)}`}
           />
         ))}
       </div>

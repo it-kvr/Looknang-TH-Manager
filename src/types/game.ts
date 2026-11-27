@@ -1391,6 +1391,9 @@ export interface LiveBallState {
   shotPlan?: {
     outcome: 'block' | 'deflect' | 'miss' | 'woodwork' | 'save' | 'goal';
     goalFinishKind?: 'normal' | 'top_corner' | 'gk_face' | 'post_in' | 'bar_in' | 'gk_fumble_in';
+    woodworkPart?: 'post' | 'crossbar' | 'corner_junction';
+    woodworkPostSide?: -1 | 1;
+    reboundChain?: number;
     blockerId?: string;
     deflectorId?: string;
     deflectedFrom?: string;
@@ -1416,6 +1419,13 @@ export interface LiveBallState {
     phaseTone?: LiveMatchWorld['phaseTone'];
     trailLog?: string;
     bounceHops?: number;
+    looseRebound?: {
+      fromPenalty?: boolean;
+      prevShooterId?: string;
+      reboundChain?: number;
+      source: 'woodwork' | 'parry';
+      woodworkPart?: 'post' | 'crossbar' | 'corner_junction';
+    };
     pendingShot?: {
       side: 'H' | 'A';
       shooterId: string;

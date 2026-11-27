@@ -185,7 +185,8 @@ export const MatchPlayerThumb: React.FC<{
   dark?: boolean;
   ringClassName?: string;
   isMotm?: boolean;
-}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName, isMotm = false }) => {
+  isCaptain?: boolean;
+}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName, isMotm = false, isCaptain = false }) => {
   const isMeClub = team.id === state.me && state.mode === 'm';
   const effKit = kitColor || '#15803d';
   const effTrim = player.pos === 'GK' ? undefined : trimColor;
@@ -214,20 +215,30 @@ export const MatchPlayerThumb: React.FC<{
     </span>
   );
 
-  if (!isMotm) return faceBox;
+  if (!isMotm && !isCaptain) return faceBox;
 
   return (
     <span className="relative inline-flex shrink-0">
       {faceBox}
-      <span
-        title="Man of the Match"
-        aria-label="Man of the Match"
-        className="pointer-events-none absolute -top-1 -left-1 z-10 inline-flex items-center justify-center w-[13px] h-[13px] mland:w-[11px] mland:h-[11px] rounded-full bg-[#111418] border border-[#facc15] shadow-xs"
-      >
-        <svg viewBox="-5 -5 10 10" className="w-[8.5px] h-[8.5px] mland:w-[7px] mland:h-[7px]" aria-hidden="true">
-          <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#fde047" />
-        </svg>
-      </span>
+      {isMotm && (
+        <span
+          title="Man of the Match"
+          aria-label="Man of the Match"
+          className="pointer-events-none absolute -top-1 -left-1 z-10 inline-flex items-center justify-center w-[13px] h-[13px] mland:w-[11px] mland:h-[11px] rounded-full bg-[#111418] border border-[#facc15] shadow-xs"
+        >
+          <svg viewBox="-5 -5 10 10" className="w-[8.5px] h-[8.5px] mland:w-[7px] mland:h-[7px]" aria-hidden="true">
+            <path d="M-3.2 2.2 L-3.8 -1.8 L-1.4 0.3 L0 -2.6 L1.4 0.3 L3.8 -1.8 L3.2 2.2 Z" fill="#fde047" />
+          </svg>
+        </span>
+      )}
+      {isCaptain && (
+        <CaptainBadge
+          team={team}
+          state={state}
+          size="xs"
+          className={`pointer-events-none absolute -top-1 z-10 ${isMotm ? '-right-1' : '-left-1'}`}
+        />
+      )}
     </span>
   );
 };
@@ -931,7 +942,7 @@ export const MatchStatsPanel: React.FC<{
           })}
         </div>
 
-        <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(0,1.15fr)_minmax(0,0.95fr)] gap-1 pt-1.5 mland:pt-1 border-t border-[var(--line)]/60 text-[10px] mland:text-[8.5px] tabular">
+        <div className="grid grid-cols-[minmax(0,0.78fr)_minmax(0,1.12fr)_minmax(0,1.1fr)] gap-1 pt-1.5 mland:pt-1 border-t border-[var(--line)]/60 text-[10px] mland:text-[8.5px] tabular">
           <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-1 min-w-0">
             <span className={`font-extrabold shrink-0 ${matchStats.cornersH >= matchStats.cornersA ? 'text-[var(--ink)]' : 'text-[var(--mut)]'}`}>{matchStats.cornersH}</span>
             <span className="text-[var(--mut)] font-semibold truncate text-center">เตะมุม</span>
@@ -942,20 +953,20 @@ export const MatchStatsPanel: React.FC<{
             <span className="text-[var(--mut)] font-semibold truncate text-center">ฟาวล์/ล้ำ</span>
             <span className="font-extrabold shrink-0 text-[var(--ink)]">{matchStats.foulsA}/{matchStats.offsidesA}</span>
           </div>
-          <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-1 min-w-0">
+          <div className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-[var(--surface-2)]/80 border border-[var(--line)]/50 flex items-center justify-between gap-0.5 min-w-0">
             <span className="inline-flex items-center gap-0.5 font-extrabold shrink-0">
               <span className={`inline-flex items-center ${yH === 0 ? 'opacity-45' : ''}`}>
                 <StatIconBadge kind="yellow" count={yH} size="sm" alwaysShowCount />
               </span>
-              {rH > 0 && (
+              <span className={`inline-flex items-center ${rH === 0 ? 'opacity-45' : ''}`}>
                 <StatIconBadge kind="red" count={rH} size="sm" alwaysShowCount />
-              )}
+              </span>
             </span>
             <span className="text-[var(--mut)] font-semibold shrink-0">ใบ</span>
             <span className="inline-flex items-center gap-0.5 font-extrabold shrink-0">
-              {rA > 0 && (
+              <span className={`inline-flex items-center ${rA === 0 ? 'opacity-45' : ''}`}>
                 <StatIconBadge kind="red" count={rA} size="sm" alwaysShowCount />
-              )}
+              </span>
               <span className={`inline-flex items-center ${yA === 0 ? 'opacity-45' : ''}`}>
                 <StatIconBadge kind="yellow" count={yA} size="sm" alwaysShowCount />
               </span>
@@ -1172,7 +1183,7 @@ export const MatchTimelinePanel: React.FC<{
                   {isHomeSide && (
                     <>
                       <div className="min-w-0 leading-tight">
-                        <div className={`truncate flex items-center justify-end gap-1 ${titleCls}`}>
+                        <div className={`min-w-0 pt-0.5 flex items-center justify-end gap-1 ${titleCls}`}>
                           {tlPlayer && (
                             <MatchPlayerThumb
                               player={tlPlayer}
@@ -1181,6 +1192,7 @@ export const MatchTimelinePanel: React.FC<{
                               kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
                               trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
                               size="sm"
+                              isCaptain={isTlCap}
                             />
                           )}
                           {tlPlayer?.ro && <PositionBadge role={tlPlayer.ro} size="2xs" />}
@@ -1190,7 +1202,6 @@ export const MatchTimelinePanel: React.FC<{
                             </span>
                           )}
                           <span className="truncate">{shortWho}</span>
-                          {isTlCap && <CaptainBadge team={sideTeam} state={state} size="xs" className="shrink-0" />}
                         </div>
                         <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center justify-end gap-1">
                           {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
@@ -1232,7 +1243,7 @@ export const MatchTimelinePanel: React.FC<{
                     <>
                       {iconForKind(item.kind, item.detail)}
                       <div className="min-w-0 leading-tight">
-                        <div className={`truncate flex items-center gap-1 ${titleCls}`}>
+                        <div className={`min-w-0 pt-0.5 pl-0.5 flex items-center gap-1 ${titleCls}`}>
                           {tlPlayer && (
                             <MatchPlayerThumb
                               player={tlPlayer}
@@ -1241,6 +1252,7 @@ export const MatchTimelinePanel: React.FC<{
                               kitColor={tlPlayer.pos === 'GK' ? (sideId === homeOrig.id ? homeGkKit : awayGkKit) : sideKit}
                               trimColor={tlPlayer.pos === 'GK' ? undefined : sideTrim}
                               size="sm"
+                              isCaptain={isTlCap}
                             />
                           )}
                           {tlPlayer?.ro && <PositionBadge role={tlPlayer.ro} size="2xs" />}
@@ -1250,7 +1262,6 @@ export const MatchTimelinePanel: React.FC<{
                             </span>
                           )}
                           <span className="truncate">{shortWho}</span>
-                          {isTlCap && <CaptainBadge team={sideTeam} state={state} size="xs" className="shrink-0" />}
                         </div>
                         <div className="text-[9px] mland:text-[8px] text-[var(--mut)] truncate flex items-center gap-1">
                           {item.kind === 'sub' && <StatIconBadge kind="subOut" size="xs" />}
