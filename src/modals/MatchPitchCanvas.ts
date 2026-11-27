@@ -3269,6 +3269,14 @@ export const drawLivePitchToCanvas = (
   drawGoal(false, world.goalNetRippleRight);
 
   // 2b. Sideline Dugouts (Substitutes Benches), Technical Areas, Warm-up Zones & Animated Coaches
+  const coachSpeechDrawQueue: {
+    c: LiveSidelineCoach;
+    cx: number;
+    cy: number;
+    cr: number;
+    kit: string;
+    warmupPhase: number;
+  }[] = [];
   if (world.sideline) {
     const sl = world.sideline;
     const touchBot = padY + ph;
@@ -3723,54 +3731,8 @@ export const drawLivePitchToCanvas = (
         ctx.fillText('★', bx, by + 0.45);
       }
 
-      // Tactical shout callout bubble or emotion emoji bubble with clean pointer tail
-      if (c.shoutText && c.shoutTimer > 0) {
-        const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
-        ctx.globalAlpha = sAlpha;
-        ctx.font = '700 8.5px "Noto Sans Thai", sans-serif';
-        const shoutStr = fitCanvasText(ctx, c.shoutText, Math.max(60, cssW * 0.28));
-        const sw = measureTextCached(ctx, shoutStr) + 12;
-        const sh = 14.5;
-        const bx0 = clamp(-sw / 2, -cx + 6, cssW - cx - sw - 6);
-        const by0 = -cr - 18.5;
-        ctx.fillStyle = 'rgba(7, 19, 13, 0.94)';
-        ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
-        ctx.lineWidth = 1.1;
-        ctx.beginPath();
-        ctx.roundRect(bx0, by0, sw, sh, 5);
-        ctx.fill();
-        ctx.stroke();
-        // Bubble pointer tail
-        ctx.beginPath();
-        ctx.moveTo(-2.5, by0 + sh - 0.5);
-        ctx.lineTo(0, by0 + sh + 3);
-        ctx.lineTo(2.5, by0 + sh - 0.5);
-        ctx.closePath();
-        ctx.fill();
-
-        ctx.fillStyle = c.isUserCoach ? '#fde047' : '#ffffff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(shoutStr, bx0 + sw / 2, by0 + sh / 2 + 0.3);
-      } else if (c.moodEmoji && (c.moodTimer || 0) > 0) {
-        const mTimer = c.moodTimer || 0;
-        const mAlpha = Math.min(clamp(mTimer / 0.35, 0, 1), 1);
-        const bob = Math.sin(sl.warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
-        ctx.save();
-        ctx.globalAlpha = mAlpha;
-        const emX = clamp(0, -cx + 8, cssW - cx - 8);
-        const emY = -cr - 7.5 + bob;
-        ctx.font = '11px Sarabun, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
-        ctx.shadowBlur = 3;
-        ctx.shadowOffsetY = 1;
-        ctx.fillText(c.moodEmoji, emX, emY);
-        ctx.restore();
-      }
-
       ctx.restore();
+      coachSpeechDrawQueue.push({ c, cx, cy, cr, kit, warmupPhase: sl.warmupPhase });
     };
 
     drawCoach(sl.coachH, homeKit, homeTrim);
@@ -5515,6 +5477,89 @@ export const drawLivePitchToCanvas = (
     ctx.font = '600 9.5px "Noto Sans Thai", sans-serif';
     ctx.fillText(sub, cx - cardW / 2 + 29, cy + 27);
     ctx.restore();
+  }
+
+  // 8c. Sideline Coach Speech Bubbles & Mood Emoticons (drawn above players/nameplates/FX so never occluded)
+  if (coachSpeechDrawQueue.length > 0 && !world.varReview) {
+    const bothShouting =
+      coachSpeechDrawQueue.filter((item) => Boolean(item.c.shoutText && item.c.shoutTimer > 0)).length >= 2;
+    const midSplitX = px(50);
+
+    coachSpeechDrawQueue.forEach(({ c, cx, cy, cr, kit, warmupPhase }) => {
+      if (c.shoutText && c.shoutTimer > 0) {
+        const sAlpha = clamp(c.shoutTimer / 0.4, 0, 1);
+        ctx.save();
+        ctx.globalAlpha = sAlpha;
+        ctx.font = '700 9px "Noto Sans Thai", sans-serif';
+        const maxShoutW = bothShouting ? Math.max(58, cssW * 0.24) : Math.max(72, cssW * 0.32);
+        const shoutStr = fitCanvasText(ctx, c.shoutText, maxShoutW);
+        const sw = measureTextCached(ctx, shoutStr) + 14;
+        const sh = 16;
+        let bx: number;
+        if (bothShouting) {
+          if (c.side === 'H') {
+            bx = clamp(cx - sw * 0.72, 6, Math.max(6, midSplitX - sw - 4));
+          } else {
+            bx = clamp(cx - sw * 0.28, Math.min(cssW - sw - 6, midSplitX + 4), cssW - sw - 6);
+          }
+        } else {
+          bx = clamp(cx - sw / 2, 6, cssW - sw - 6);
+        }
+        const by = clamp(cy - cr - sh - 5.5, 4, cssH - sh - 4);
+        const tailX = clamp(cx, bx + 6, bx + sw - 6);
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
+        ctx.shadowBlur = 7;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
+        ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.roundRect(bx, by, sw, sh, 5.5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // Pointer tail directed at the coach
+        ctx.fillStyle = 'rgba(7, 19, 13, 0.96)';
+        ctx.beginPath();
+        ctx.moveTo(tailX - 3, by + sh - 0.6);
+        ctx.lineTo(tailX, by + sh + 3.8);
+        ctx.lineTo(tailX + 3, by + sh - 0.6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = c.isUserCoach ? '#facc15' : kit;
+        ctx.lineWidth = 1.1;
+        ctx.beginPath();
+        ctx.moveTo(tailX - 2.8, by + sh);
+        ctx.lineTo(tailX, by + sh + 3.8);
+        ctx.lineTo(tailX + 2.8, by + sh);
+        ctx.stroke();
+
+        ctx.fillStyle = c.isUserCoach ? '#fde047' : '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(shoutStr, bx + sw / 2, by + sh / 2 + 0.3);
+        ctx.restore();
+      } else if (c.moodEmoji && (c.moodTimer || 0) > 0) {
+        const mTimer = c.moodTimer || 0;
+        const mAlpha = clamp(mTimer / 0.35, 0, 1);
+        const bob = Math.sin(warmupPhase * 1.8 + (c.side === 'H' ? 0 : 1.5)) * 1.0;
+        ctx.save();
+        ctx.globalAlpha = mAlpha;
+        const emX = clamp(cx, 10, cssW - 10);
+        const emY = clamp(cy - cr - 8 + bob, 8, cssH - 8);
+        ctx.font = '11px Sarabun, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+        ctx.shadowBlur = 3;
+        ctx.shadowOffsetY = 1;
+        ctx.fillText(c.moodEmoji, emX, emY);
+        ctx.restore();
+      }
+    });
   }
 
   // 9. VAR Check Broadcast Box & Mini Picture-in-Picture Replay Monitor

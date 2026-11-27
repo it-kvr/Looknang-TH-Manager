@@ -205,13 +205,13 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
         {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
-        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true" className="shrink-0">
-          <circle cx="10" cy="10" r="8.8" fill="#0d9488" stroke="#ccfbf1" strokeWidth="1.25" />
-          <path
-            d="M6.4 13.5 V9.1 C6.4 8.3 7.1 8.1 7.4 8.8 V7.1 C7.4 6.4 8.3 6.3 8.5 7 V5.9 C8.5 5.1 9.6 5.1 9.8 5.9 V6.7 C10.1 6.1 11.2 6.2 11.2 7 V8.1 C11.6 7.6 12.6 7.8 12.6 8.6 V11.2 L13.8 10 C14.4 9.5 15.1 10.2 14.6 10.9 L12.5 13.6 C12 14.3 11.2 14.6 10.2 14.6 H7.8 C7 14.6 6.4 14.1 6.4 13.5 Z"
-            fill="#ffffff"
-          />
-        </svg>
+        <span
+          aria-hidden="true"
+          className="shrink-0 leading-none"
+          style={{ fontSize: Math.round(px * 0.92), lineHeight: 1 }}
+        >
+          👋🏻
+        </span>
       </span>
     );
   }

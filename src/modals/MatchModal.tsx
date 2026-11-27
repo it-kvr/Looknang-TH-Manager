@@ -13773,7 +13773,7 @@ export const MatchModal: React.FC<{
                     {subFlashInfo && !liveVarActive && !done && matchPhaseUi !== 'halftime' && (
                       <div
                         key={subFlashInfo.key}
-                        className="sub-banner-in pointer-events-none absolute bottom-2 left-1/2 -translate-x-1/2 z-20 max-w-[92%] px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[#071f13]/95 border border-emerald-400/70 text-white shadow-xl flex items-center gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px] font-bold whitespace-nowrap"
+                        className="sub-banner-in pointer-events-none absolute top-7 sm:top-8 mland:top-6 left-1/2 -translate-x-1/2 z-20 max-w-[92%] px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[#071f13]/95 border border-emerald-400/70 text-white shadow-xl flex items-center gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px] font-bold whitespace-nowrap"
                       >
                         <span className="px-1.5 py-[1px] rounded bg-emerald-500/25 text-emerald-300 font-black tabular">
                           {subFlashInfo.minute}&apos;
