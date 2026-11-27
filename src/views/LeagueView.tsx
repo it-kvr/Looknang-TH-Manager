@@ -744,7 +744,7 @@ export const LeagueView: React.FC<{
                             )
                           }
                           className="px-1.5 py-[1px] rounded bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[9.5px] mland:text-[8.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer transition-colors whitespace-nowrap"
-                          title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                          title="ชมไฮไลท์การแข่งขัน"
                         >
                           🎬 {rec.highlightClips.length}
                         </button>
@@ -1872,7 +1872,7 @@ export const ScheduleCalendarView: React.FC<{
                               )
                             }
                             className="px-1.5 py-0.5 rounded-md bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[9.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer"
-                            title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                            title="ชมไฮไลท์การแข่งขัน"
                           >
                             🎬 {rec.highlightClips.length}
                           </button>
@@ -1958,7 +1958,7 @@ export const ScheduleCalendarView: React.FC<{
                                   )
                                 }
                                 className="px-1.5 py-0.5 rounded-md bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[10px] mland:text-[8.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer whitespace-nowrap"
-                                title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                                title="ชมไฮไลท์การแข่งขัน"
                               >
                                 🎬 {cl.highlightClips.length}
                               </button>
@@ -2214,7 +2214,7 @@ export const ScheduleCalendarView: React.FC<{
                               `${state.teams[rec.h]?.name || ''} ${rec.gh} - ${rec.ga} ${state.teams[rec.a]?.name || ''}`
                             )
                           }
-                          title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                          title="ชมไฮไลท์การแข่งขัน"
                           className="px-1.5 py-1 mland:py-0.5 rounded-lg bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[10px] mland:text-[8.5px] font-extrabold hover:bg-amber-500/28 cursor-pointer transition-colors whitespace-nowrap"
                         >
                           🎬 {rec.highlightClips.length}

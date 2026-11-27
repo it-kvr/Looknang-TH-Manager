@@ -2119,7 +2119,7 @@ export const FullTimeMatchStage: React.FC<{
                     SFX.tap();
                     onOpenHighlights();
                   }}
-                  title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                  title="ชมไฮไลท์การแข่งขัน"
                   className="absolute top-2 right-2 z-20 inline-flex items-center gap-1.5 px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl bg-amber-500/95 hover:bg-amber-400 text-slate-950 border border-amber-200/70 shadow-lg text-[11px] mland:text-[9.5px] font-extrabold cursor-pointer transition-all"
                 >
                   <span>🎬</span>

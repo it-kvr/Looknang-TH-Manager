@@ -3739,10 +3739,10 @@ export const MatchModal: React.FC<{
       isSave = false
     ) => {
       if (fType === 'penalty' || fType === 'shootout_kick') {
-        return isSave ? 0.34 : 0.36;
+        return isSave ? 0.48 : 0.50;
       }
-      const reactDist = isSave ? 9.5 : 8.2;
-      return clamp(1 - reactDist / Math.max(7.5, shotDist), 0.34, 0.72);
+      const reactDist = isSave ? 5.6 : 4.4;
+      return clamp(1 - reactDist / Math.max(7.2, shotDist), 0.52, 0.80);
     };
     const diveReactionProg = calcGkDiveStartProg(flightType, dist, false);
 
@@ -3954,7 +3954,7 @@ export const MatchModal: React.FC<{
           goalFinishKind: 'top_corner',
           gkDiveTargetY: diveY,
           gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
-          gkDiveStartProg: clamp(diveReactionProg + 0.08, 0.36, 0.78)
+          gkDiveStartProg: clamp(diveReactionProg + 0.08, 0.60, 0.85)
         };
       } else if (goalFinishKind === 'gk_face') {
         const gkCenterY = gk ? clamp(gk.y, 47.6, 52.4) : 50;
@@ -3969,7 +3969,7 @@ export const MatchModal: React.FC<{
           goalFinishKind: 'gk_face',
           gkDiveTargetY: flinchY,
           gkDiveDir: gk ? (flinchY >= gk.y ? 1 : -1) : 1,
-          gkDiveStartProg: clamp(diveReactionProg + 0.16, 0.45, 0.84)
+          gkDiveStartProg: clamp(diveReactionProg + 0.12, 0.62, 0.86)
         };
       } else if (goalFinishKind === 'gk_fumble_in') {
         const fumbleY = clamp(43.2 + Math.random() * 13.6, 43.2, 56.8);
@@ -4054,12 +4054,12 @@ export const MatchModal: React.FC<{
     const startY = plan.gkDiveStartY;
     const targetY = plan.gkDiveTargetY;
     const diveT = clamp((ball.progress - startProg) / Math.max(0.12, 1 - startProg), 0, 1);
-    const easeDive = diveT * 0.45 + (1 - Math.cos(diveT * Math.PI * 0.5)) * 0.55;
+    const easeDive = diveT * 0.28 + (1 - Math.cos(diveT * Math.PI * 0.5)) * 0.72;
     gkAgent.intent = 'DIVE';
     gkAgent.intentTimer = 0.38;
     gkAgent.diveDir = plan.gkDiveDir ?? (targetY >= startY ? 1 : -1);
     gkAgent.diveTargetY = targetY;
-    gkAgent.diveProgress = clamp(0.05 + diveT * 0.50, 0.05, 0.55);
+    gkAgent.diveProgress = clamp(0.04 + diveT * 0.56, 0.04, 0.60);
     gkAgent.y = clamp(startY + (targetY - startY) * easeDive, 39, 61);
     gkAgent.ty = gkAgent.y;
     if (plan.gkSaveX != null) {
@@ -4149,7 +4149,7 @@ export const MatchModal: React.FC<{
     };
     w.phaseLabel =
       flightType === 'cross'
-        ? `🪽 ${passer.shortName} เปิดบอลเข้าเขตโทษให้ ${receiver.shortName}`
+        ? `👟 ${passer.shortName} เปิดบอลเข้าเขตโทษให้ ${receiver.shortName}`
         : `↗️ ${passer.shortName} จ่ายบอลขึ้นหน้าให้ ${receiver.shortName}`;
     w.phaseTone = 'attack';
     if (flightType === 'lofted' || flightType === 'cross') SFX.kick();
@@ -5596,12 +5596,12 @@ export const MatchModal: React.FC<{
         maxZAmt: 8.2,
         durAmt: clamp(Math.hypot(goalX - carrier.x, 50 - carrier.y) / 34, 0.56, 0.80)
       });
-      w.phaseLabel = `↪️🌀 ${carrier.shortName} เลี้ยงตัดเข้าในแล้วปั่นโค้งเสียบเสา!!`;
+      w.phaseLabel = `🌀 ${carrier.shortName} เลี้ยงตัดเข้าในแล้วปั่นโค้งเสียบเสา!!`;
       w.phaseTone = 'danger';
-      triggerDramaSlow(w, 1.4, `↪️ ตัดเข้าในปั่นโค้ง! · ${carrier.shortName}`);
+      triggerDramaSlow(w, 1.4, `🌀 ตัดเข้าในปั่นโค้ง! · ${carrier.shortName}`);
       SFX.shot();
       SFX.cheer(0.68);
-      pushLog(curMin, `↪️🌀 ${carrier.id} (${attTeam.name}) เลี้ยงตัดจากริมเส้นเข้ากลางแล้วซัดปั่นโค้งอันตราย!`);
+      pushLog(curMin, `🌀 ${carrier.id} (${attTeam.name}) เลี้ยงตัดจากริมเส้นเข้ากลางแล้วซัดปั่นโค้งอันตราย!`);
       return;
     }
 
@@ -5712,8 +5712,8 @@ export const MatchModal: React.FC<{
         maxZAmt = 5.0;
         durAmt = clamp(distToGoal / 44, 0.50, 0.76);
         shotLabel = distToGoal >= 34
-          ? `💥 ${carrier.shortName} ตะบันไกลครึ่งสนามลุ้นประตู!!`
-          : `💥 ${carrier.shortName}${agentHasTrait(carrier, 'long_shot_lover') ? ' [จอมซัดไกล]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
+          ? `🚀 ${carrier.shortName} ตะบันไกลครึ่งสนามลุ้นประตู!!`
+          : `🚀 ${carrier.shortName}${agentHasTrait(carrier, 'long_shot_lover') ? ' [จอมซัดไกล]' : ''} ตะบันไกลพุ่งเป็นจรวด!`;
       } else if (inBoxNow && Math.random() < (agentHasTrait(carrier, 'acrobatic_finisher') ? 0.44 : 0.28)) {
         shotStyle = 'volley';
         carrier.acrobatType = 'volley';
@@ -5852,7 +5852,7 @@ export const MatchModal: React.FC<{
         b.lastPasserId = carrier.id;
         bumpPlayerStat(carrier.id, 'crossAssists');
         bumpPlayerStat(carrier.id, 'keyPasses');
-        w.phaseLabel = `🪽 ${carrier.shortName}${agentHasTrait(carrier, 'early_crosser') ? ' [ครอสไวข้าง]' : ''} เปิดบอลโด่งเข้ากรอบ!`;
+        w.phaseLabel = `👟 ${carrier.shortName}${agentHasTrait(carrier, 'early_crosser') ? ' [ครอสไวข้าง]' : ''} เปิดบอลโด่งเข้ากรอบ!`;
         w.phaseTone = 'attack';
         SFX.kick();
         return;
@@ -6577,6 +6577,7 @@ export const MatchModal: React.FC<{
           shotDistM: tel?.distM,
           shotSpeedKmh: tel?.speedKmh,
           secondHalf: w.secondHalf,
+          celebratePose: pickedCeleb.style,
           matchEnv
         },
         preOverride || undefined
@@ -6681,10 +6682,16 @@ export const MatchModal: React.FC<{
     preOverride?: RollingHighlightSample[]
   ) => {
     const basePre = (preOverride && preOverride.length ? preOverride : rollingSamplesRef.current).slice(-26);
-    const climaxNow = captureWorldSample(w, highlightClockRef.current);
+    const lastPreTs = basePre.length ? basePre[basePre.length - 1].ts : highlightClockRef.current;
+    const climaxTs = preOverride && preOverride.length ? lastPreTs + 0.08 : highlightClockRef.current;
+    if (preOverride && preOverride.length) {
+      highlightClockRef.current = climaxTs;
+      lastHighlightSampleClockRef.current = climaxTs;
+    }
+    const climaxNow = captureWorldSample(w, climaxTs);
     const preSamples = [...basePre, climaxNow];
     activePostCapturesRef.current.push({
-      remainingSamples: 8,
+      remainingSamples: meta.kind.startsWith('goal_') ? 13 : 8,
       postSamples: [],
       preSamples,
       meta
@@ -7148,9 +7155,9 @@ export const MatchModal: React.FC<{
         } else {
           SFX.foul();
           SFX.boo(0.55);
-          sh.lastMsg = `😮 ${kicker?.shortName || sh.kickerName} ยิงหลุดกรอบ! (${sh.hScore}-${sh.aScore})`;
-          addWorldFx(w, { type: 'woodwork', x: b.toX, y: b.toY, label: `😮 หลุดกรอบ!`, color: '#f59e0b', ttl: 2.2, maxTtl: 2.2 });
-          triggerDramaSlow(w, 1.4, `😮 ยิงพลาดเป้า!`);
+          sh.lastMsg = `❌ ${kicker?.shortName || sh.kickerName} ยิงหลุดกรอบ! (${sh.hScore}-${sh.aScore})`;
+          addWorldFx(w, { type: 'woodwork', x: b.toX, y: b.toY, label: `❌ หลุดกรอบ!`, color: '#f59e0b', ttl: 2.2, maxTtl: 2.2 });
+          triggerDramaSlow(w, 1.4, `❌ ยิงพลาดเป้า!`);
         }
       }
       sh.activeShot = false;
@@ -7265,7 +7272,7 @@ export const MatchModal: React.FC<{
             ownGoalCulpritId: isDeflectOwnGoal ? deflector?.id : undefined,
             gkDiveTargetY: wrongY,
             gkDiveDir: gk ? (wrongY >= gk.y ? 1 : -1) : 1,
-            gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
+            gkDiveStartProg: clamp(1 - 4.8 / Math.max(7.2, defShotDist), 0.52, 0.80)
           };
         } else if (deflectRoll < deflectedGoalProb + 0.27) {
           // Deflected onto target -> GK reflex save!
@@ -7288,7 +7295,7 @@ export const MatchModal: React.FC<{
             deflectedFrom: defShort,
             gkDiveTargetY: clampedSaveY,
             gkDiveDir: gk ? (clampedSaveY >= gk.y ? 1 : -1) : 1,
-            gkDiveStartProg: clamp(1 - 9.2 / Math.max(7.5, defShotDist), 0.30, 0.66),
+            gkDiveStartProg: clamp(1 - 5.6 / Math.max(7.2, defShotDist), 0.50, 0.78),
             gkSaveX
           };
         } else if (deflectRoll < deflectedGoalProb + 0.37) {
@@ -7307,7 +7314,7 @@ export const MatchModal: React.FC<{
             deflectedFrom: defShort,
             gkDiveTargetY: diveY,
             gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
-            gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
+            gkDiveStartProg: clamp(1 - 4.8 / Math.max(7.2, defShotDist), 0.52, 0.80)
           };
         } else {
           // Deflected wide past goal -> Corner Kick!
@@ -7323,7 +7330,7 @@ export const MatchModal: React.FC<{
             deflectedFrom: defShort,
             gkDiveTargetY: diveY,
             gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
-            gkDiveStartProg: clamp(1 - 8.0 / Math.max(7.5, defShotDist), 0.32, 0.68)
+            gkDiveStartProg: clamp(1 - 4.8 / Math.max(7.2, defShotDist), 0.52, 0.80)
           };
         }
         w.phaseLabel = `💫 ยิงแฉลบ ${defShort} เปลี่ยนทาง!`;
@@ -7452,19 +7459,19 @@ export const MatchModal: React.FC<{
             type: 'woodwork',
             x: b.toX,
             y: b.toY,
-            label: plan.deflectedFrom ? `🧱 แฉลบชนเสา/คาน!` : '🧱 ชนเสา/คาน!',
+            label: plan.deflectedFrom ? `🥅 แฉลบชนเสา/คาน!` : '🥅 ชนเสา/คาน!',
             color: '#f59e0b',
             ttl: 2.6,
             maxTtl: 2.6
           });
-          triggerDramaSlow(w, 1.5, `🧱 ${plan.deflectedFrom ? 'แฉลบ' : ''}ชนเสา/คาน! · ${shooter?.shortName || ''}`);
+          triggerDramaSlow(w, 1.5, `🥅 ${plan.deflectedFrom ? 'แฉลบ' : ''}ชนเสา/คาน! · ${shooter?.shortName || ''}`);
           triggerCoachMood(w, side, '😩', 2.3);
           triggerCoachMood(w, defSide, '😮‍💨', 2.3);
           pushLog(
             curMin,
             plan.deflectedFrom
-              ? `🧱 โอ้โห! ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง!`
-              : `🧱 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนเสา/คานอย่างจัง!`
+              ? `🥅 โอ้โห! ลูกยิงของ ${shooter?.id || 'กองหน้า'} แฉลบ ${plan.deflectedFrom} พุ่งชนเสา/คานอย่างจัง!`
+              : `🥅 โอ้โห! ${shooter?.id || 'กองหน้า'} (${attTeam.name}) ซัดบอลพุ่งชนเสา/คานอย่างจัง!`
           );
           pushTimeline(
             curMin,
@@ -7493,10 +7500,10 @@ export const MatchModal: React.FC<{
               y: 50,
               waitSec: 1.1
             },
-            phaseLabel: `🧱 ชนเสา/คานอย่างจัง! ตั้งเตะจากประตู`,
+            phaseLabel: `🥅 ชนเสา/คานอย่างจัง! ตั้งเตะจากประตู`,
             phaseTone: 'danger'
           };
-          w.phaseLabel = `🧱 ชนเสา/คานอย่างจัง!`;
+          w.phaseLabel = `🥅 ชนเสา/คานอย่างจัง!`;
           w.phaseTone = 'danger';
           if (!isSkippingRef.current) {
             const sr = simRef.current;
@@ -7726,12 +7733,12 @@ export const MatchModal: React.FC<{
             type: 'woodwork',
             x: b.toX,
             y: b.toY,
-            label: gKind === 'post_in' ? '🧱 ชนเสาใน!!' : '🧱 ชนคานล่าง!!',
+            label: gKind === 'post_in' ? '🥅 ชนเสาใน!!' : '🥅 ชนคานล่าง!!',
             color: '#facc15',
             ttl: 2.0,
             maxTtl: 2.0
           });
-          triggerDramaSlow(w, 1.35, gKind === 'post_in' ? '🧱 ชนเสาใน!' : '🧱 ชนคานล่าง!');
+          triggerDramaSlow(w, 1.35, gKind === 'post_in' ? '🥅 ชนเสาใน!' : '🥅 ชนคานล่าง!');
           b.fromX = b.toX;
           b.fromY = b.toY;
           b.toX = attRightNow ? 101.4 : -1.4;
@@ -7755,7 +7762,7 @@ export const MatchModal: React.FC<{
               finishVerb
             }
           };
-          w.phaseLabel = gKind === 'post_in' ? '🧱⚽ บอลชนเสากระดอนเข้าประตู!!' : '🧱⚽ บอลชนคานกระดอนข้ามเส้น!!';
+          w.phaseLabel = gKind === 'post_in' ? '🥅⚽ บอลชนเสากระดอนเข้าประตู!!' : '🥅⚽ บอลชนคานกระดอนข้ามเส้น!!';
           w.phaseTone = 'danger';
           return;
         }
@@ -8271,8 +8278,8 @@ export const MatchModal: React.FC<{
           target.acrobatMax = 0.68;
           target.acrobatTimer = 0.68;
           bumpPlayerStat(target.id, 'headers');
-          w.phaseLabel = `🗣️ ${target.shortName}${agentHasTrait(target, 'aerial_menace') ? ' [ราชาลูกกลางอากาศ]' : ''} เทกตัวโหม่งเต็มๆ!`;
-          triggerDramaSlow(w, 1.05, `🗣️ โหม่งลุ้นประตู · ${target.shortName}`);
+          w.phaseLabel = `⚽ ${target.shortName}${agentHasTrait(target, 'aerial_menace') ? ' [ราชาลูกกลางอากาศ]' : ''} เทกตัวโหม่งเต็มๆ!`;
+          triggerDramaSlow(w, 1.05, `⚽ โหม่งลุ้นประตู · ${target.shortName}`);
         }
         w.phaseTone = 'danger';
         SFX.shot();
@@ -8429,10 +8436,10 @@ export const MatchModal: React.FC<{
           b.bounceNext = {
             carrierId: outlet.id,
             possessionSide: defSide,
-            phaseLabel: `🗣️ ${topDef.shortName} โหม่งสกัดบอลพ้นอันตราย!`,
+            phaseLabel: `🛡️ ${topDef.shortName} โหม่งสกัดบอลพ้นอันตราย!`,
             phaseTone: 'normal'
           };
-          w.phaseLabel = `🗣️ ${topDef.shortName} เทกตัวโหม่งสกัดบอลทิ้ง!`;
+          w.phaseLabel = `🛡️ ${topDef.shortName} เทกตัวโหม่งสกัดบอลทิ้ง!`;
           w.phaseTone = 'normal';
           SFX.header();
         }
@@ -8516,7 +8523,7 @@ export const MatchModal: React.FC<{
             b.carrierId = null;
             b.targetId = partner.id;
             b.lastPasserId = receiver.id;
-            w.phaseLabel = `🗣️ ${receiver.shortName} โหม่งเช็ดตั้งให้ ${partner.shortName}!`;
+            w.phaseLabel = `⚽ ${receiver.shortName} โหม่งเช็ดตั้งให้ ${partner.shortName}!`;
             w.phaseTone = 'attack';
             SFX.header();
             return;
@@ -8527,7 +8534,7 @@ export const MatchModal: React.FC<{
           b.y = receiver.y;
           b.flightType = 'carry';
           b.shotStyle = undefined;
-          w.phaseLabel = `🗣️ ${receiver.shortName} เทกตัวโหม่งคุมจังหวะได้`;
+          w.phaseLabel = `⚽ ${receiver.shortName} เทกตัวโหม่งคุมจังหวะได้`;
           w.phaseTone = 'normal';
           SFX.header();
           return;
@@ -8567,10 +8574,10 @@ export const MatchModal: React.FC<{
           b.bounceNext = {
             carrierId: outlet.id,
             possessionSide: defSide,
-            phaseLabel: `🗣️ ${nearestOpp.shortName} เทกตัวโหม่งแย่งได้!`,
+            phaseLabel: `🛡️ ${nearestOpp.shortName} เทกตัวโหม่งแย่งได้!`,
             phaseTone: 'normal'
           };
-          w.phaseLabel = `🗣️ ${nearestOpp.shortName} โหม่งสกัดบอลโด่ง!`;
+          w.phaseLabel = `🛡️ ${nearestOpp.shortName} โหม่งสกัดบอลโด่ง!`;
           w.phaseTone = 'normal';
           SFX.header();
           return;
@@ -10292,7 +10299,7 @@ export const MatchModal: React.FC<{
                   shootoutScored: true,
                   gkDiveTargetY: diveY,
                   gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
-                  gkDiveStartProg: 0.36
+                  gkDiveStartProg: 0.50
                 };
               } else if (Math.random() < 0.22) {
                 b.toX = 101.2;
@@ -10303,7 +10310,7 @@ export const MatchModal: React.FC<{
                   shootoutScored: false,
                   gkDiveTargetY: diveY,
                   gkDiveDir: gk ? (diveY >= gk.y ? 1 : -1) : 1,
-                  gkDiveStartProg: 0.36
+                  gkDiveStartProg: 0.50
                 };
               } else {
                 const gkSaveX = gk ? clamp(gk.x, 95.8, 98.4) : 97.8;
@@ -10314,7 +10321,7 @@ export const MatchModal: React.FC<{
                   shootoutScored: false,
                   gkDiveTargetY: shotY,
                   gkDiveDir: gk ? (shotY >= gk.y ? 1 : -1) : 1,
-                  gkDiveStartProg: 0.34,
+                  gkDiveStartProg: 0.48,
                   gkSaveX
                 };
               }
@@ -10810,37 +10817,40 @@ export const MatchModal: React.FC<{
         }
 
         // Capture live rolling buffer & active post-climax frames for Pro-Crew Highlight Editor
-        highlightClockRef.current += rawDt;
-        if (!w.varReview && w.phase !== 'shootout' && highlightClockRef.current - lastHighlightSampleClockRef.current >= 0.14) {
-          lastHighlightSampleClockRef.current = highlightClockRef.current;
-          const isIdleKickoff = w.pendingSetPiece?.type === 'kickoff' && w.ball.x === 50 && w.ball.y === 50;
-          if (!isIdleKickoff) {
-            const smp = captureWorldSample(w, highlightClockRef.current);
-            rollingSamplesRef.current.push(smp);
-            if (rollingSamplesRef.current.length > 28) {
-              rollingSamplesRef.current.shift();
-            }
-            if (activePostCapturesRef.current.length > 0) {
-              const stillPending: typeof activePostCapturesRef.current = [];
-              let completedAny = false;
-              for (const entry of activePostCapturesRef.current) {
-                entry.postSamples.push(smp);
-                entry.remainingSamples -= 1;
-                if (entry.remainingSamples <= 0) {
-                  const finalizedClip = finalizeHighlightClipFromSamples({
-                    ...entry.meta,
-                    preSamples: entry.preSamples,
-                    postSamples: entry.postSamples
-                  });
-                  simRef.current.highlightClips.push(finalizedClip);
-                  completedAny = true;
-                } else {
-                  stillPending.push(entry);
-                }
+        if (!w.varReview && w.phase !== 'shootout') {
+          highlightClockRef.current += rawDt;
+          const hlSampleInterval = speedMul > 1.8 ? 0.095 : 0.14;
+          if (highlightClockRef.current - lastHighlightSampleClockRef.current >= hlSampleInterval) {
+            lastHighlightSampleClockRef.current = highlightClockRef.current;
+            const isIdleKickoff = w.pendingSetPiece?.type === 'kickoff' && w.ball.x === 50 && w.ball.y === 50;
+            if (!isIdleKickoff) {
+              const smp = captureWorldSample(w, highlightClockRef.current);
+              rollingSamplesRef.current.push(smp);
+              if (rollingSamplesRef.current.length > 28) {
+                rollingSamplesRef.current.shift();
               }
-              activePostCapturesRef.current = stillPending;
-              if (completedAny) {
-                setHighlightClips(curateMatchHighlights(simRef.current.highlightClips));
+              if (activePostCapturesRef.current.length > 0) {
+                const stillPending: typeof activePostCapturesRef.current = [];
+                let completedAny = false;
+                for (const entry of activePostCapturesRef.current) {
+                  entry.postSamples.push(smp);
+                  entry.remainingSamples -= 1;
+                  if (entry.remainingSamples <= 0) {
+                    const finalizedClip = finalizeHighlightClipFromSamples({
+                      ...entry.meta,
+                      preSamples: entry.preSamples,
+                      postSamples: entry.postSamples
+                    });
+                    simRef.current.highlightClips.push(finalizedClip);
+                    completedAny = true;
+                  } else {
+                    stillPending.push(entry);
+                  }
+                }
+                activePostCapturesRef.current = stillPending;
+                if (completedAny) {
+                  setHighlightClips(curateMatchHighlights(simRef.current.highlightClips));
+                }
               }
             }
           }
@@ -12234,7 +12244,7 @@ export const MatchModal: React.FC<{
                 {highlightClips.length > 0 && (
                   <button
                     type="button"
-                    title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                    title="ชมไฮไลท์การแข่งขัน"
                     aria-label="ชมไฮไลท์การแข่งขัน"
                     onClick={() => openHighlightsModal()}
                     className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-extrabold border border-amber-200/70 shadow-sm hover:brightness-105 active:scale-[0.98]"

@@ -1,4 +1,5 @@
 import type {
+  GoalCelebrationStyle,
   LiveMatchWorld,
   LivePitchAgent,
   MatchEnvironment,
@@ -24,7 +25,23 @@ export const HL_ACT = {
   GK_DIVE: 6,
   SUPERSAVE: 7,
   CLASH: 8,
-  CELEBRATE: 9
+  CELEBRATE: 9,
+  SLIDE: 10,
+  TACKLE: 11,
+  SHOOT_POWER: 12,
+  SHOOT_FINESSE: 13,
+  SHOOT_CHIP: 14,
+  BURST: 15,
+  STEPOVER: 16,
+  SHIELD: 17,
+  SPIN: 18,
+  SKILL_PASS: 19,
+  DRAGBACK: 20,
+  CUTINSIDE: 21,
+  SLIP: 22,
+  WHIFF: 23,
+  PRESS: 24,
+  WALL: 25
 } as const;
 
 export interface SampledAgentFrame {
@@ -46,6 +63,7 @@ export interface SampledAgentFrame {
   f: number;
   act?: number;
   dd?: number;
+  ap?: number;
 }
 
 export interface RollingHighlightSample {
@@ -67,33 +85,82 @@ const r1 = (n: number): number => Math.round(n * 10) / 10;
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 const r3 = (n: number): number => Math.round(n * 1000) / 1000;
 
-const mapAgentAction = (ag: LivePitchAgent): { act?: number; dd?: number } => {
+const mapAgentAction = (ag: LivePitchAgent): { act?: number; dd?: number; ap?: number } => {
   if (ag.intent === 'DIVE' && ag.diveProgress > 0) {
-    return { act: HL_ACT.GK_DIVE, dd: ag.diveDir || 1 };
+    return {
+      act: HL_ACT.GK_DIVE,
+      dd: ag.diveDir || 1,
+      ap: Math.round(clamp(ag.diveProgress, 0, 1) * 100)
+    };
   }
   if (ag.acrobatTimer && ag.acrobatTimer > 0) {
+    const maxAc = Math.max(0.2, ag.acrobatMax || 0.72);
+    const ap = Math.round(clamp(1 - ag.acrobatTimer / maxAc, 0, 1) * 100);
+    const spinDir = ag.skillSpinDir || 1;
     switch (ag.acrobatType) {
       case 'bicycle':
-        return { act: HL_ACT.BICYCLE };
+        return { act: HL_ACT.BICYCLE, ap };
       case 'volley':
-        return { act: HL_ACT.VOLLEY };
+        return { act: HL_ACT.VOLLEY, ap };
       case 'header':
-        return { act: HL_ACT.HEADER };
+        return { act: HL_ACT.HEADER, ap };
       case 'diving_header':
-        return { act: HL_ACT.DIVING_HEADER };
+        return { act: HL_ACT.DIVING_HEADER, ap };
       case 'supersave':
-        return { act: HL_ACT.SUPERSAVE, dd: ag.diveDir || 1 };
+        return { act: HL_ACT.SUPERSAVE, dd: ag.diveDir || 1, ap };
       case 'clash':
+        return { act: HL_ACT.CLASH, dd: (ag.actionDirX || 1) >= 0 ? 1 : -1, ap };
       case 'slide':
-        return { act: HL_ACT.CLASH };
+        return { act: HL_ACT.SLIDE, ap };
+      case 'tackle':
+        return { act: HL_ACT.TACKLE, ap };
       case 'shoot_power':
-        return { act: HL_ACT.KICK };
+        return { act: HL_ACT.SHOOT_POWER, ap };
+      case 'shoot_finesse':
+        return { act: HL_ACT.SHOOT_FINESSE, ap };
+      case 'shoot_chip':
+        return { act: HL_ACT.SHOOT_CHIP, ap };
+      case 'kick':
+        return { act: HL_ACT.KICK, ap };
+      case 'burst':
+        return { act: HL_ACT.BURST, ap };
+      case 'stepover':
+        return { act: HL_ACT.STEPOVER, ap };
+      case 'shield':
+        return { act: HL_ACT.SHIELD, ap };
+      case 'spin':
+        return { act: HL_ACT.SPIN, dd: spinDir, ap };
+      case 'skill_pass':
+        return { act: HL_ACT.SKILL_PASS, dd: spinDir, ap };
+      case 'dragback':
+        return { act: HL_ACT.DRAGBACK, ap };
+      case 'cutinside':
+        return { act: HL_ACT.CUTINSIDE, dd: spinDir, ap };
+      case 'slip':
+        return { act: HL_ACT.SLIP, dd: spinDir, ap };
+      case 'whiff':
+        return { act: HL_ACT.WHIFF, ap };
       default:
         break;
     }
   }
   if (ag.intent === 'CELEBRATE') {
-    return { act: HL_ACT.CELEBRATE };
+    const dd =
+      ag.celebrateRole === 'scorer'
+        ? 1
+        : ag.celebrateRole === 'assister'
+          ? 2
+          : ag.isOgCulprit
+            ? -1
+            : 3;
+    const ap = Math.round(clamp(ag.celebratePhase ?? 0, 0, 1) * 100);
+    return { act: HL_ACT.CELEBRATE, dd, ap };
+  }
+  if (ag.intent === 'PRESS') {
+    return { act: HL_ACT.PRESS };
+  }
+  if (ag.intent === 'WALL') {
+    return { act: HL_ACT.WALL };
   }
   return {};
 };
@@ -119,7 +186,7 @@ export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHig
     agents: w.agents
       .filter((a) => !a.sentOff)
       .map((ag) => {
-        const { act, dd } = mapAgentAction(ag);
+        const { act, dd, ap } = mapAgentAction(ag);
         return {
           id: ag.id,
           sn: ag.shortName,
@@ -138,7 +205,8 @@ export const captureWorldSample = (w: LiveMatchWorld, tsSec: number): RollingHig
           y: r1(ag.y),
           f: r2(ag.facing),
           ...(act ? { act } : {}),
-          ...(dd ? { dd } : {})
+          ...(dd ? { dd } : {}),
+          ...(ap !== undefined ? { ap } : {})
         };
       })
   };
@@ -174,7 +242,7 @@ export const getHighlightKindBadge = (kind: MatchHighlightKind): { icon: string;
     case 'goal_acrobat':
       return { icon: '🤸', label: 'โอเวอร์เฮด / วอลเลย์', toneClass: 'bg-amber-500/20 border-amber-400/60 text-amber-300' };
     case 'goal_curler':
-      return { icon: '🎯', label: 'ปั่นโค้งเสียบมุม', toneClass: 'bg-sky-500/20 border-sky-400/60 text-sky-300' };
+      return { icon: '🌀', label: 'ปั่นโค้งเสียบมุม', toneClass: 'bg-sky-500/20 border-sky-400/60 text-sky-300' };
     case 'goal_screamer':
       return { icon: '🚀', label: 'ยิงไกลสุดสวย', toneClass: 'bg-orange-500/20 border-orange-400/60 text-orange-300' };
     case 'goal_freekick':
@@ -182,9 +250,9 @@ export const getHighlightKindBadge = (kind: MatchHighlightKind): { icon: string;
     case 'goal_penalty':
       return { icon: '🎯', label: 'จุดโทษเฉียบขาด', toneClass: 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300' };
     case 'goal_header':
-      return { icon: '🗣️', label: 'ลูกโหม่งพิฆาต', toneClass: 'bg-cyan-500/20 border-cyan-400/60 text-cyan-300' };
+      return { icon: '⚽', label: 'ลูกโหม่งพิฆาต', toneClass: 'bg-cyan-500/20 border-cyan-400/60 text-cyan-300' };
     case 'goal_woodwork_in':
-      return { icon: '🪵', label: 'ชนเสา/คานกระดอนเข้า', toneClass: 'bg-yellow-500/20 border-yellow-400/60 text-yellow-300' };
+      return { icon: '🥅', label: 'ชนเสา/คานกระดอนเข้า', toneClass: 'bg-yellow-500/20 border-yellow-400/60 text-yellow-300' };
     case 'goal_deflect':
       return { icon: '💫', label: 'บอลแฉลบเข้าประตู', toneClass: 'bg-amber-500/20 border-amber-400/60 text-amber-300' };
     case 'goal_og':
@@ -192,7 +260,7 @@ export const getHighlightKindBadge = (kind: MatchHighlightKind): { icon: string;
     case 'super_save':
       return { icon: '🧤', label: 'ซูเปอร์เซฟระดับโลก', toneClass: 'bg-sky-500/20 border-sky-400/60 text-sky-300' };
     case 'woodwork':
-      return { icon: '🧱', label: 'ซัดเต็มข้อชนเสา/คาน', toneClass: 'bg-amber-500/20 border-amber-400/60 text-amber-300' };
+      return { icon: '🥅', label: 'ซัดเต็มข้อชนเสา/คาน', toneClass: 'bg-amber-500/20 border-amber-400/60 text-amber-300' };
     default:
       return { icon: '⚽', label: 'ประตูสุดสวย', toneClass: 'bg-emerald-500/20 border-emerald-400/60 text-emerald-300' };
   }
@@ -230,74 +298,74 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
 
   let baseDrama = 60;
   let title = `⚽ ${actorShort} ยิงประตูให้ ${inp.teamName}`;
-  let crewTag = '🎬 ตัดต่อมุมกล้องทีวี · ทีมงานมืออาชีพ';
+  let crewTag = '⚽ จังหวะต่อบอล & จบสกอร์';
 
   switch (inp.kind) {
     case 'goal_acrobat':
       baseDrama = 94;
       title = `🤸 มหัศจรรย์! ${actorShort} ฟาดลูกกลางอากาศตุงตาข่าย`;
-      crewTag = '🎥 มุมกล้องสโลว์โมชัน · ช็อตแห่งฤดูกาล';
+      crewTag = '🤸 ไฮไลท์ลูกยิงกลางอากาศ';
       break;
     case 'goal_freekick':
       baseDrama = 90;
       title = `🌀 ฟรีคิกปลิดวิญญาณ! ${actorShort} ปั่นโค้งเสียบมุม`;
-      crewTag = '🎯 มุมกล้องหลังลูกยิง · ทีมตัดต่อมืออาชีพ';
+      crewTag = '🌀 จังหวะปั่นฟรีคิก';
       break;
     case 'goal_curler':
       baseDrama = 87;
-      title = `🎯 ปั่นโค้งสุดคม! ${actorShort} โชว์ความเหนือชั้น`;
-      crewTag = '🎥 โฟกัสวิถีบอลโค้ง · ทีมตัดต่อมืออาชีพ';
+      title = `🌀 ปั่นโค้งสุดคม! ${actorShort} โชว์ความเหนือชั้น`;
+      crewTag = '🌀 วิถีบอลโค้งเสียบมุม';
       break;
     case 'goal_screamer':
       baseDrama = 89;
       title = `🚀 ตะบันไกลสะท้านสนาม! ${actorShort}${inp.shotDistM ? ` (${inp.shotDistM} ม.)` : ''}`;
-      crewTag = '⚡ จับสปีดลูกยิงเต็มข้อ · ทีมตัดต่อมืออาชีพ';
+      crewTag = '🚀 ลูกยิงไกลเต็มข้อ';
       break;
     case 'goal_woodwork_in':
       baseDrama = 88;
-      title = `🪵⚽ ชนเสา/คานกระดอนข้ามเส้น! ${actorShort} กดสุดเสียว`;
-      crewTag = '🎥 รีเพลย์มุมกรอบประตู · ทีมตัดต่อมืออาชีพ';
+      title = `🥅⚽ ชนเสา/คานกระดอนข้ามเส้น! ${actorShort} กดสุดเสียว`;
+      crewTag = '🥅 ชนเสา/คานกระดอนเข้า';
       break;
     case 'goal_header':
       baseDrama = 82;
-      title = `🗣️ เทกตัวโหม่งเช็ดเสา! ${actorShort} พังประตู`;
-      crewTag = '🎬 ตัดต่อจังหวะกลางอากาศ · ทีมตัดต่อมืออาชีพ';
+      title = `⚽ เทกตัวโหม่งเช็ดเสา! ${actorShort} พังประตู`;
+      crewTag = '⚽ จังหวะขึ้นโหม่งพังประตู';
       break;
     case 'goal_penalty':
       baseDrama = 76;
       title = `🎯 สังหารจุดโทษนิ่งสนิท! ${actorShort} ไม่พลาด`;
-      crewTag = '🎥 ดวลตัวต่อตัว 12 หลา · ทีมตัดต่อมืออาชีพ';
+      crewTag = '🎯 ดวลจุดโทษ 12 หลา';
       break;
     case 'goal_deflect':
       baseDrama = 74;
       title = `💫 บอลแฉลบเปลี่ยนทางเข้า! ${actorShort} ซัดตุงตาข่าย`;
-      crewTag = '🎬 ภาพช้ามุมแฉลบ · ทีมตัดต่อมืออาชีพ';
+      crewTag = '💫 บอลแฉลบเปลี่ยนทาง';
       break;
     case 'goal_og':
       baseDrama = 72;
       title = `🤦 จังหวะโชคร้าย! ${actorShort} สกัดพลาดเข้าประตูตัวเอง`;
-      crewTag = '🎞️ เก็บตกช็อตสำคัญ · ทีมตัดต่อมืออาชีพ';
+      crewTag = '🤦 จังหวะสกัดพลาดเข้าประตูตัวเอง';
       break;
     case 'super_save':
       baseDrama = 80;
       title = `🧤 ซูเปอร์เซฟระดับโลก! ${actorShort} บินปัดสุดปลายมือ`;
-      crewTag = '🧤 โฟกัสนายด่าน · ทีมตัดต่อมืออาชีพ';
+      crewTag = '🧤 เซฟสำคัญของนายด่าน';
       break;
     case 'woodwork':
       baseDrama = 77;
-      title = `🧱 หวิดเป็นประตู! ${actorShort} ซัดบอลสั่นเสา/คาน`;
-      crewTag = '🎥 มุมกรอบประตู · ทีมตัดต่อมืออาชีพ';
+      title = `🥅 หวิดเป็นประตู! ${actorShort} ซัดบอลสั่นเสา/คาน`;
+      crewTag = '🥅 จังหวะบอลชนเสา/คาน';
       break;
     default:
       baseDrama = 78;
       title = `⚽ ${actorShort} จบสกอร์เด็ดขาดให้ ${inp.teamName}`;
-      crewTag = '🎬 ตัดต่อจังหวะต่อบอล & ยิงประตู';
+      crewTag = '⚽ จังหวะต่อบอล & จบสกอร์';
       break;
   }
 
   if (isLateWinner) {
     baseDrama += 12;
-    title = `🔥 นาทีบาป ${inp.minute}'! ${actorShort} ซัดประตูชัย!`;
+    title = `🔥⚽ นาทีบาป ${inp.minute}'! ${actorShort} ซัดประตูชัย!`;
   } else if (isEqualizer && inp.minute >= 70) {
     baseDrama += 7;
   }
@@ -305,10 +373,10 @@ export const buildHighlightEditorial = (inp: HighlightEditorialInput): {
   if ((inp.shotDistM ?? 0) >= 24 && inp.kind !== 'super_save') baseDrama += 4;
 
   const telemetryParts: string[] = [];
-  if (inp.shotDistM && inp.shotDistM > 0) telemetryParts.push(`ระยะยิง ~${inp.shotDistM} ม.`);
-  if (inp.shotSpeedKmh && inp.shotSpeedKmh > 0) telemetryParts.push(`ความเร็ว ${inp.shotSpeedKmh} กม./ชม.`);
+  if (inp.shotDistM && inp.shotDistM > 0) telemetryParts.push(`📏 ระยะยิง ~${inp.shotDistM} ม.`);
+  if (inp.shotSpeedKmh && inp.shotSpeedKmh > 0) telemetryParts.push(`⚡ ${inp.shotSpeedKmh} กม./ชม.`);
   if (assistShort && inp.kind !== 'goal_og' && inp.kind !== 'super_save') {
-    telemetryParts.push(`แอสซิสต์: ${assistShort}`);
+    telemetryParts.push(`👟 แอสซิสต์: ${assistShort}`);
   }
 
   const subtitle =
@@ -356,6 +424,7 @@ export interface FinalizeClipParams {
   shotDistM?: number;
   shotSpeedKmh?: number;
   secondHalf?: boolean;
+  celebratePose?: GoalCelebrationStyle;
   matchEnv?: MatchEnvironment;
   preSamples: RollingHighlightSample[];
   postSamples: RollingHighlightSample[];
@@ -363,7 +432,6 @@ export interface FinalizeClipParams {
 
 export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): MatchHighlightClip => {
   const combined = [...params.preSamples, ...params.postSamples];
-  // Guarantee at least 2 samples
   if (combined.length === 0) {
     return {
       id: params.id,
@@ -386,14 +454,13 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
       shotSpeedKmh: params.shotSpeedKmh,
       peakT: 0.65,
       secondHalf: params.secondHalf,
+      ...(params.celebratePose ? { celebratePose: params.celebratePose } : {}),
       matchEnv: params.matchEnv ? { ...params.matchEnv, puddles: params.matchEnv.puddles?.slice(0, 4) } : undefined,
       actors: [],
       frames: []
     };
   }
 
-  // Downsample preSamples to max 10 (always keep oldest & latest pre sample = climax!)
-  // Downsample postSamples to max 6 (always keep newest post sample)
   const pickIndices = (len: number, maxCount: number, alwaysLast: boolean): number[] => {
     if (len <= maxCount) return Array.from({ length: len }, (_, i) => i);
     const out: number[] = [];
@@ -405,8 +472,9 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
   };
 
   const preLen = params.preSamples.length;
-  const preIndices = pickIndices(preLen, 10, true);
-  const postIndices = pickIndices(params.postSamples.length, 6, true).map((idx) => preLen + idx);
+  const isGoal = params.kind.startsWith('goal_');
+  const preIndices = pickIndices(preLen, isGoal ? 9 : 10, true);
+  const postIndices = pickIndices(params.postSamples.length, isGoal ? 7 : 6, true).map((idx) => preLen + idx);
   const chosenIndices = [...preIndices, ...postIndices];
 
   const chosenSamples = chosenIndices.map((idx) => combined[idx]);
@@ -452,9 +520,10 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
           ? r3((smp.ts - minTs) / tsSpan)
           : r3(i / (totalChosen - 1));
     let carIdx: number | undefined;
-    const p: [number, number, number, number, number?, number?][] = smp.agents.map((ag) => {
+    const p: [number, number, number, number, number?, number?, number?][] = smp.agents.map((ag) => {
       const idx = getActorIdx(ag);
       if (smp.carId && ag.id === smp.carId) carIdx = idx;
+      if (ag.act && ag.ap !== undefined) return [idx, ag.x, ag.y, ag.f, ag.act, ag.dd || 0, ag.ap];
       if (ag.act && ag.dd) return [idx, ag.x, ag.y, ag.f, ag.act, ag.dd];
       if (ag.act) return [idx, ag.x, ag.y, ag.f, ag.act];
       return [idx, ag.x, ag.y, ag.f];
@@ -507,6 +576,7 @@ export const finalizeHighlightClipFromSamples = (params: FinalizeClipParams): Ma
     shotSpeedKmh: params.shotSpeedKmh,
     peakT,
     secondHalf: params.secondHalf,
+    ...(params.celebratePose ? { celebratePose: params.celebratePose } : {}),
     matchEnv: params.matchEnv
       ? {
           season: params.matchEnv.season,
@@ -655,6 +725,19 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
   const frames: MatchHighlightFrame[] = [];
   const peakIdx = 8; // shot impact -> arrives goal around idx 11 -> celebration idx 12-13
 
+  const synthCelebratePose: GoalCelebrationStyle =
+    kind === 'goal_og'
+      ? 'own_goal_modest'
+      : kind === 'goal_acrobat'
+        ? 'backflip'
+        : kind === 'goal_screamer'
+          ? 'siu_jump'
+          : kind === 'goal_curler'
+            ? 'bow_crowd'
+            : kind === 'goal_freekick'
+              ? 'calm_shush'
+              : 'knee_slide';
+
   for (let fi = 0; fi < frameCount; fi++) {
     const t = r3(fi / (frameCount - 1));
     let bx = shootSpotX;
@@ -684,12 +767,10 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
       }
     } else {
       if (fi < 4) {
-        // Buildup carry by assister / teammate
         const bp = fi / 4;
         bx = passStartX + bp * dir * 2.5;
         by = passStartY - bp * 2.0;
       } else if (fi < peakIdx) {
-        // Pass to scorer
         const pp = (fi - 4) / (peakIdx - 4);
         bx = passStartX + dir * 2.5 + (shootSpotX - (passStartX + dir * 2.5)) * pp;
         by = passStartY - 2.0 + (shootSpotY - (passStartY - 2.0)) * pp;
@@ -710,12 +791,13 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
       }
     }
 
-    const p: [number, number, number, number, number?, number?][] = combined.map((ag, aIdx) => {
+    const p: [number, number, number, number, number?, number?, number?][] = combined.map((ag, aIdx) => {
       let ax = ag.x;
       let ay = ag.y;
       let facing = inp.attRight ? 0 : Math.PI;
       let act: number | undefined;
       let dd: number | undefined;
+      let ap: number | undefined;
 
       if (aIdx === scorerIdx) {
         if (fi < peakIdx) {
@@ -732,39 +814,60 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
               ? HL_ACT.BICYCLE
               : kind === 'goal_header'
                 ? HL_ACT.HEADER
-                : HL_ACT.KICK;
+                : kind === 'goal_curler'
+                  ? HL_ACT.SHOOT_FINESSE
+                  : kind === 'goal_screamer'
+                    ? HL_ACT.SHOOT_POWER
+                    : HL_ACT.KICK;
+          ap = 50;
         } else {
           ax = clamp(shootSpotX + dir * (fi - peakIdx) * 1.8, 5, 95);
           ay = clamp(shootSpotY + (fi - peakIdx) * (shootSpotY < 50 ? -1.4 : 1.4), 6, 94);
           facing = Math.atan2(50 - ay, goalX - ax);
-          if (fi >= 12) act = HL_ACT.CELEBRATE;
+          if (fi >= 12) {
+            act = HL_ACT.CELEBRATE;
+            dd = kind === 'goal_og' ? -1 : 1;
+            ap = fi === 12 ? 42 : 76;
+          }
         }
       } else if (aIdx === assisterIdx && kind !== 'goal_penalty' && kind !== 'goal_freekick') {
         ax = clamp(passStartX + Math.min(1, fi / 5) * dir * 3.2, 5, 95);
         ay = passStartY - Math.min(1, fi / 5) * 1.8;
         facing = Math.atan2(shootSpotY - ay, shootSpotX - ax);
-        if (fi === 4) act = HL_ACT.KICK;
-        if (fi >= 12) act = HL_ACT.CELEBRATE;
+        if (fi === 4) {
+          act = HL_ACT.KICK;
+          ap = 52;
+        }
+        if (fi >= 12) {
+          act = HL_ACT.CELEBRATE;
+          dd = 2;
+          ap = fi === 12 ? 42 : 76;
+        }
       } else if (aIdx === defGkIdx) {
         ax = inp.attRight ? 97.6 : 2.4;
-        if (fi >= peakIdx + 1 && fi <= 12) {
-          const dp = clamp((fi - peakIdx) / 3, 0, 1);
+        if (fi >= peakIdx + 2 && fi <= 12) {
+          const dp = clamp((fi - (peakIdx + 1)) / 3, 0, 1);
           ay = 50 + (50 - (targetY - 50) * 0.45 - 50) * dp;
           act = HL_ACT.GK_DIVE;
           dd = targetY >= 50 ? -1 : 1;
+          ap = fi === peakIdx + 2 ? 36 : fi === 11 ? 74 : 96;
         } else {
           ay = 50;
         }
-        facing = inp.attRight ? Math.PI : 0;
+        facing = Math.atan2(by - ay, bx - ax);
       } else {
-        // Gentle motion toward box during play
         const drift = (fi / frameCount) * (ag.gk ? 0 : ag.s === inp.side ? dir * 2.8 : dir * 1.6);
         ax = clamp(ag.x + drift, 3, 97);
         ay = ag.y;
         facing = Math.atan2(by - ay, bx - ax);
-        if (fi >= 12 && ag.s === inp.side && !ag.gk) act = HL_ACT.CELEBRATE;
+        if (fi >= 12 && ag.s === inp.side && !ag.gk) {
+          act = HL_ACT.CELEBRATE;
+          dd = 3;
+          ap = fi === 12 ? 42 : 76;
+        }
       }
 
+      if (act && ap !== undefined) return [aIdx, r1(ax), r1(ay), r2(facing), act, dd || 0, ap];
       if (act && dd) return [aIdx, r1(ax), r1(ay), r2(facing), act, dd];
       if (act) return [aIdx, r1(ax), r1(ay), r2(facing), act];
       return [aIdx, r1(ax), r1(ay), r2(facing)];
@@ -830,6 +933,7 @@ export const synthesizeHighlightClip = (inp: SynthesizeHighlightInput): MatchHig
     shotSpeedKmh,
     peakT: frames[peakIdx]?.t ?? 0.6,
     secondHalf: inp.secondHalf,
+    celebratePose: synthCelebratePose,
     matchEnv: inp.matchEnv
       ? {
           season: inp.matchEnv.season,
@@ -923,9 +1027,9 @@ export const curateMatchHighlights = (rawClips: MatchHighlightClip[]): MatchHigh
         ...compacted,
         crewTag:
           topByDrama && compacted.id === topByDrama.id
-            ? '⭐ ไฮไลท์อันดับ 1 · ทีมตัดต่อมืออาชีพ'
+            ? '⭐ ไฮไลท์อันดับ 1'
             : secondByDrama && compacted.id === secondByDrama.id && selected.length >= 3
-              ? '🎬 ช็อตเด็ดประจำเกม · ทีมตัดต่อมืออาชีพ'
+              ? '🔥 ช็อตเด็ดประจำเกม'
               : compacted.crewTag
       };
     });

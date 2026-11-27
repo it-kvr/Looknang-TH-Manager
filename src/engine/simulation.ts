@@ -709,7 +709,7 @@ export function simMatch(h: Team, a: Team, s?: GameState | null): MatchResult {
       m: R(18, 87),
       t: hitTeam.id,
       kind: 'woodwork',
-      text: `🧱 หวุดหวิด! ${hitPlayer?.n || 'แนวรุก'} (${hitTeam.name}) ซัดบอลชนเสา/คานอย่างจัง`
+      text: `🥅 หวุดหวิด! ${hitPlayer?.n || 'แนวรุก'} (${hitTeam.name}) ซัดบอลชนเสา/คานอย่างจัง`
     });
   }
   if ((bg || Math.abs(gh - ga) <= 1) && Math.random() < 0.28) {
@@ -6239,7 +6239,7 @@ export function buildMatchExtraEvents(h: Team, a: Team, s?: GameState | null) {
     (q) => `🔥 ${q.n} ซัดไกลเต็มข้อแต่บอลลอยข้ามคานไป`,
     (_, t) => `⚠️ ลูกฟรีคิกอันตรายของ ${t}`,
     (q, t) => `⚡ ${q.n} (${t}) สปีดกระชากหนีตัวประกบสร้างโอกาส`,
-    (q, t) => `🧱 ${q.n} (${t}) เทกตัวโหม่งชนคานอย่างจัง!`
+    (q, t) => `🥅 ${q.n} (${t}) เทกตัวโหม่งชนคานอย่างจัง!`
   ];
   return Array.from({ length: R(4, 7) }, () => {
     const i = R(0, 1);

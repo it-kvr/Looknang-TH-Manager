@@ -1536,7 +1536,7 @@ export interface MatchHighlightFrame {
   ripL?: number;
   ripR?: number;
   car?: number;
-  p: [number, number, number, number, number?, number?][];
+  p: [number, number, number, number, number?, number?, number?][];
 }
 
 export interface MatchHighlightClip {
@@ -1560,6 +1560,7 @@ export interface MatchHighlightClip {
   shotSpeedKmh?: number;
   peakT: number;
   secondHalf?: boolean;
+  celebratePose?: GoalCelebrationStyle;
   matchEnv?: MatchEnvironment;
   actors: MatchHighlightActorMeta[];
   frames: MatchHighlightFrame[];

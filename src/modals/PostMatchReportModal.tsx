@@ -681,7 +681,7 @@ export const PostMatchReportModal: React.FC<PostMatchReportModalProps> = ({
                       `${hTeam.name} ${report.gh} - ${report.ga} ${aTeam.name}${report.penText ? ` (${report.penText})` : ''}`
                     );
                   }}
-                  title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                  title="ชมไฮไลท์การแข่งขัน"
                   className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-extrabold border border-amber-200/70 shadow-sm hover:brightness-105 shrink-0"
                 >
                   <Film className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />

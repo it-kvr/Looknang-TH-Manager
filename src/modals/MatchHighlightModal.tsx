@@ -8,7 +8,6 @@ import {
   Pause,
   Play,
   RotateCcw,
-  Sparkles,
   Tv,
   X
 } from 'lucide-react';
@@ -295,10 +294,6 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
               <Film className="w-3 h-3" />
               <span>ไฮไลท์การแข่งขัน</span>
             </span>
-            <span className="hidden sm:inline-flex items-center gap-1 text-[10px] mland:text-[8.5px] font-bold text-emerald-300/90 bg-emerald-500/15 border border-emerald-400/35 px-1.5 py-0.5 rounded shrink-0">
-              <Sparkles className="w-2.5 h-2.5" />
-              <span>ตัดต่อโดยทีมงานมืออาชีพ</span>
-            </span>
             <div className="flex items-center gap-1.5 min-w-0 text-xs mland:text-[10px] font-bold text-white/90 truncate">
               <ClubCrest name={homeOrig.name} size={15} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
               <span className="truncate hidden md:inline">{homeOrig.name}</span>
@@ -535,7 +530,7 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
           <div className="shrink-0 lg:shrink lg:h-full mland:h-full bg-[#091525] border-t lg:border-t-0 lg:border-l mland:border-t-0 mland:border-l border-white/12 flex flex-col min-h-0 overflow-hidden">
             <div className="shrink-0 px-2.5 py-1.5 mland:px-2 mland:py-1 border-b border-white/10 flex items-center justify-between gap-2 bg-[#0d1d33]">
               <span className="text-[11px] mland:text-[9.5px] font-extrabold text-white/95 inline-flex items-center gap-1.5 truncate">
-                <span>🎞️ คลิปที่ทีมงานคัดสรร</span>
+                <span>🎞️ ช็อตสำคัญในเกม</span>
               </span>
               <span className="text-[10px] mland:text-[8.5px] font-bold tabular text-amber-300 shrink-0">
                 {orderedClips.length} ช็อต

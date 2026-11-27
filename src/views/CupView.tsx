@@ -662,7 +662,7 @@ export const CupView: React.FC<{
                                   )
                                 }
                                 className="px-1.5 py-[1px] rounded bg-amber-500/18 border border-amber-400/55 text-amber-700 dark:text-amber-300 text-[9.5px] mland:text-[8px] font-extrabold hover:bg-amber-500/28 cursor-pointer transition-colors whitespace-nowrap"
-                                title="ชมไฮไลท์การแข่งขัน (ตัดต่อโดยทีมงานมืออาชีพ)"
+                                title="ชมไฮไลท์การแข่งขัน"
                               >
                                 🎬 {matchedCupLog.highlightClips.length}
                               </button>
