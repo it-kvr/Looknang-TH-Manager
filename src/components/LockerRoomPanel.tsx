@@ -405,6 +405,7 @@ export const LockerRoomPanel: React.FC<{
                         away={kitSide === 'away'}
                         size={54}
                         team={team}
+                        state={state}
                         shirtNo={no}
                         isGK={q.pos === 'GK'}
                       />
@@ -461,6 +462,7 @@ export const LockerRoomPanel: React.FC<{
                         away={kitSide === 'away'}
                         size={52}
                         team={team}
+                        state={state}
                         shirtNo={selectedNo}
                         isGK={selectedPlayer.pos === 'GK'}
                       />

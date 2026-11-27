@@ -1,5 +1,11 @@
 import React from 'react';
 import type { LiveStreamPlanId } from '../types/game';
+import {
+  SHIRT_SPONSOR_BRANDS,
+  buildSponsorEmblemSvg,
+  resolveMainSponsorBrand,
+  type ShirtSponsorBrand
+} from '../data/sponsorBrands';
 
 interface LogoPalette {
   bg: string;
@@ -8,16 +14,64 @@ interface LogoPalette {
   abbr: string;
 }
 
-const MAIN_SPONSOR_PALETTES: readonly LogoPalette[] = [
-  { bg: '#0f766e', fg: '#ffffff', accent: '#5eead4', abbr: 'TLI' }, // 0: ไทยลีก อินชัวรันซ์
-  { bg: '#b91c1c', fg: '#ffffff', accent: '#fde047', abbr: 'KTG' }, // 1: กระทิงทอง เอเนอร์จี
-  { bg: '#1e293b', fg: '#ffffff', accent: '#38bdf8', abbr: 'SAM' }, // 2: สยาม ออโต้ โมบิล
-  { bg: '#6d28d9', fg: '#ffffff', accent: '#22d3ee', abbr: 'STV' }, // 3: สเตเดียม ทีวี พลัส
-  { bg: '#1d4ed8', fg: '#ffffff', accent: '#93c5fd', abbr: 'AGD' }, // 4: แอโร่การ์ด คอร์ป
-  { bg: '#0284c7', fg: '#ffffff', accent: '#fde047', abbr: 'SKY' }, // 5: สยามสกาย แอร์เวย์ส
-  { bg: '#1e3a8a', fg: '#ffffff', accent: '#fbbf24', abbr: 'BBP' }, // 6: บางกอก แบงก์ พรีเมียร์
-  { bg: '#064e3b', fg: '#ffffff', accent: '#34d399', abbr: '5G' }   // 7: อัลตร้า 5G ไทยแลนด์
-];
+export const MainSponsorLogo: React.FC<{
+  idx: number;
+  brand?: ShirtSponsorBrand | null;
+  sponsorSeed?: number;
+  size?: number;
+  className?: string;
+}> = ({
+  idx,
+  brand,
+  sponsorSeed,
+  size = 32,
+  className = ''
+}) => {
+  const uid = React.useId().replace(/:/g, '');
+  const resolved =
+    brand ||
+    (sponsorSeed != null ? resolveMainSponsorBrand(idx, sponsorSeed) : null) ||
+    SHIRT_SPONSOR_BRANDS[((idx % SHIRT_SPONSOR_BRANDS.length) + SHIRT_SPONSOR_BRANDS.length) % SHIRT_SPONSOR_BRANDS.length] ||
+    SHIRT_SPONSOR_BRANDS[0];
+  const shortTag = resolved.code.replace(/\s+/g, '').slice(0, 6);
+
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 36 36"
+      aria-hidden="true"
+      className={`shrink-0 rounded-lg shadow-2xs ${className}`}
+    >
+      <defs>
+        <linearGradient id={`msp-${uid}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor={resolved.badgeBg} />
+          <stop offset="100%" stopColor="#090d16" stopOpacity="0.95" />
+        </linearGradient>
+      </defs>
+      <rect width="36" height="36" rx="8" fill={resolved.badgeBg} />
+      <rect width="36" height="36" rx="8" fill={`url(#msp-${uid})`} opacity="0.45" />
+      <rect x="0.75" y="0.75" width="34.5" height="34.5" rx="7.25" fill="none" stroke={resolved.accent} strokeOpacity="0.55" strokeWidth="1" />
+      <g
+        transform="translate(8, 4.5) scale(1.25)"
+        dangerouslySetInnerHTML={{ __html: buildSponsorEmblemSvg(resolved.motif, '#ffffff', resolved.accent) }}
+      />
+      <rect x="3.5" y="25.5" width="29" height="7.5" rx="2.5" fill="#000000" fillOpacity="0.48" />
+      <text
+        x="18"
+        y="31"
+        textAnchor="middle"
+        fill="#ffffff"
+        fontSize={shortTag.length >= 6 ? '5.3' : '6'}
+        fontWeight="900"
+        letterSpacing="0.35"
+        fontFamily="ui-sans-serif, system-ui, sans-serif"
+      >
+        {shortTag}
+      </text>
+    </svg>
+  );
+};
 
 const PARTNER_PALETTES: Record<string, LogoPalette> = {
   drink: { bg: '#0284c7', fg: '#ffffff', accent: '#bae6fd', abbr: 'H2O' },
@@ -30,94 +84,6 @@ const PARTNER_PALETTES: Record<string, LogoPalette> = {
   fintech: { bg: '#7c3aed', fg: '#ffffff', accent: '#a7f3d0', abbr: 'DPY' },
   airline: { bg: '#0369a1', fg: '#ffffff', accent: '#fcd34d', abbr: 'TWG' },
   asia_tech: { bg: '#0f172a', fg: '#ffffff', accent: '#10b981', abbr: 'APT' }
-};
-
-export const MainSponsorLogo: React.FC<{ idx: number; size?: number; className?: string }> = ({
-  idx,
-  size = 32,
-  className = ''
-}) => {
-  const pal = MAIN_SPONSOR_PALETTES[idx] || MAIN_SPONSOR_PALETTES[0];
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 36 36"
-      aria-hidden="true"
-      className={`shrink-0 rounded-lg shadow-2xs ${className}`}
-    >
-      <defs>
-        <linearGradient id={`msp-${idx}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor={pal.bg} />
-          <stop offset="100%" stopColor="#090d16" stopOpacity="0.92" />
-        </linearGradient>
-      </defs>
-      <rect width="36" height="36" rx="8" fill={pal.bg} />
-      <rect width="36" height="36" rx="8" fill={`url(#msp-${idx})`} opacity="0.45" />
-      <rect x="0.75" y="0.75" width="34.5" height="34.5" rx="7.25" fill="none" stroke={pal.accent} strokeOpacity="0.45" strokeWidth="1" />
-
-      {idx === 0 && (
-        <>
-          <path d="M18 6 L27 9.5 V17 C27 22.5 23 26.8 18 29 C13 26.8 9 22.5 9 17 V9.5 Z" fill="none" stroke={pal.accent} strokeWidth="2" />
-          <path d="M14 17.5 L16.8 20.5 L22.5 14" fill="none" stroke={pal.fg} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      )}
-      {idx === 1 && (
-        <>
-          <path d="M9 12 C11 8 15 8 18 11 C21 8 25 8 27 12 C24.5 11.5 22 13 18 13 C14 13 11.5 11.5 9 12 Z" fill={pal.accent} />
-          <path d="M19.5 13 L14 21 H18.5 L16.5 29 L23 19.5 H18.5 Z" fill={pal.fg} />
-        </>
-      )}
-      {idx === 2 && (
-        <>
-          <circle cx="18" cy="18" r="9.5" fill="none" stroke={pal.accent} strokeWidth="2" />
-          <path d="M9.5 18 H26.5 M18 8.5 V27.5" stroke={pal.fg} strokeOpacity="0.4" strokeWidth="1.2" />
-          <path d="M12.5 22 L18 12 L23.5 22 Z" fill={pal.fg} />
-        </>
-      )}
-      {idx === 3 && (
-        <>
-          <rect x="7" y="10" width="22" height="15" rx="3.5" fill="none" stroke={pal.accent} strokeWidth="2" />
-          <path d="M15.5 14 L22.5 17.5 L15.5 21 Z" fill={pal.fg} />
-          <path d="M13 28 H23" stroke={pal.accent} strokeWidth="2" strokeLinecap="round" />
-        </>
-      )}
-      {idx === 4 && (
-        <>
-          <polygon points="18,6 28,12 28,24 18,30 8,24 8,12" fill="none" stroke={pal.accent} strokeWidth="1.9" />
-          <path d="M13 23 L18 11 L23 23 M15 19 H21" fill="none" stroke={pal.fg} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        </>
-      )}
-      {idx === 5 && (
-        <>
-          <path d="M7 22 C13 16 21 12 29 11 C24 16 19 20 12 24 Z" fill={pal.fg} />
-          <path d="M10 26 C16 25 22 23 28 19" fill="none" stroke={pal.accent} strokeWidth="2.2" strokeLinecap="round" />
-        </>
-      )}
-      {idx === 6 && (
-        <>
-          <path d="M10 13 H26 M12 13 V24 M18 13 V24 M24 13 V24 M9 26 H27" stroke={pal.fg} strokeWidth="2.1" strokeLinecap="round" />
-          <polygon points="18,7 26,11 10,11" fill={pal.accent} />
-        </>
-      )}
-      {idx === 7 && (
-        <>
-          <circle cx="18" cy="18" r="10.5" fill="none" stroke={pal.accent} strokeWidth="1.6" strokeDasharray="4 2" />
-          <text
-            x="18"
-            y="21.5"
-            textAnchor="middle"
-            fill={pal.fg}
-            fontSize="11.5"
-            fontWeight="900"
-            fontFamily="ui-sans-serif, system-ui, sans-serif"
-          >
-            5G
-          </text>
-        </>
-      )}
-    </svg>
-  );
 };
 
 export const PartnerBrandLogo: React.FC<{ id: string; name?: string; size?: number; className?: string }> = ({

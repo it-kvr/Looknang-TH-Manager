@@ -75,8 +75,10 @@ import {
   LIVE_STREAM_PLANS,
   resolveLiveStreamPlan,
   computeMatchStreamProjection,
+  checkClubDemandsCompletion,
   type ClubFinanceChartPoint
 } from '../engine/simulation';
+import { pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
 import { renderCrestPattern, ClubCrest, KitJersey, KitPatternThumb, PlayerFace } from '../components/SvgVisuals';
 import { MainSponsorLogo, PartnerBrandLogo, TicketPlanLogo, BroadcastPlanLogo } from '../components/SponsorLogos';
 import { FacilityUpgradeSvg, StaffRoleSvg, getFacilityTierLabel, getStaffTierLabel, getTravelTierLabel } from '../components/FacilityUpgradeSvg';
@@ -329,14 +331,20 @@ export const FinanceClubView: React.FC<{
       return;
     }
     SFX.tap();
+    let doneDemands: string[] = [];
     onUpdateState((d) => {
       d.money -= cost;
       const nextLv = (d[key] ?? 1) + 1;
       d[key] = nextLv;
       d.facCond = { ...(d.facCond || {}), [key]: 100 };
       logFin(d, `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title} Lv.${nextLv}`, -cost);
+      doneDemands = checkClubDemandsCompletion(d);
     });
-    onToast(`${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ!`);
+    onToast(
+      doneDemands.length
+        ? `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1} สำเร็จ! (ตอบรับคำเรียกร้องแล้ว ✓)`
+        : `${lv <= 0 ? 'ก่อสร้าง' : 'อัปเกรด'}${title}เป็น Lv.${lv + 1}/${MAX_FACILITY_LV} สำเร็จ!`
+    );
   };
 
   const renovateFac = (key: FacilityKey, title: string, baseCost: number) => {
@@ -356,6 +364,7 @@ export const FinanceClubView: React.FC<{
       return;
     }
     SFX.tap();
+    let doneDemands: string[] = [];
     onUpdateState((d) => {
       d.money -= cost;
       d.facCond = { ...(d.facCond || {}), [key]: 100 };
@@ -364,8 +373,13 @@ export const FinanceClubView: React.FC<{
         else d.mor = clamp((d.mor ?? 55) + 1, 0, 100);
       }
       logFin(d, `ปรับปรุงบำรุงรักษา${title} (${cond}% → 100%)`, -cost);
+      doneDemands = checkClubDemandsCompletion(d);
     });
-    onToast(`🔧 ปรับปรุง${title}กลับมาสภาพ 100% แล้ว`);
+    onToast(
+      doneDemands.length
+        ? `🔧 ปรับปรุง${title}กลับมาสภาพ 100% และตอบรับคำเรียกร้องแล้ว!`
+        : `🔧 ปรับปรุง${title}กลับมาสภาพ 100% แล้ว`
+    );
   };
 
   const demolishFac = (key: FacilityKey, title: string, baseCost: number, targetLv: number) => {
@@ -420,6 +434,7 @@ export const FinanceClubView: React.FC<{
       return;
     }
     SFX.tap();
+    let doneDemands: string[] = [];
     onUpdateState((d) => {
       d.money -= totalCost;
       const nextCond: Partial<Record<FacilityKey, number>> = { ...(d.facCond || {}) };
@@ -431,8 +446,13 @@ export const FinanceClubView: React.FC<{
         d.mor = clamp((d.mor ?? 55) + 2, 0, 100);
       }
       logFin(d, `ปรับปรุงสิ่งอำนวยความสะดวกทั้งสโมสร (${toFix.length} รายการ)`, -totalCost);
+      doneDemands = checkClubDemandsCompletion(d);
     });
-    onToast(`🔧 ปรับปรุงสิ่งอำนวยความสะดวกทั้ง ${toFix.length} แห่งเป็น 100% สำเร็จ!`);
+    onToast(
+      doneDemands.length
+        ? `🔧 ปรับปรุงทั้ง ${toFix.length} แห่งเป็น 100% และตอบรับคำเรียกร้องแล้ว!`
+        : `🔧 ปรับปรุงสิ่งอำนวยความสะดวกทั้ง ${toFix.length} แห่งเป็น 100% สำเร็จ!`
+    );
   };
 
   const curStadiumStyle: StadiumStyleId = state.club?.stadiumStyle || 'open_track';
@@ -472,6 +492,7 @@ export const FinanceClubView: React.FC<{
       club.stadiumStyle = styleId;
       d.facCond = { ...(d.facCond || {}), st: 100 };
       logFin(d, `ก่อสร้างรูปแบบสนาม: ${spec.name}`, -spec.buildCost);
+      checkClubDemandsCompletion(d);
     });
     onToast(`🏗️ ก่อสร้างสนามรูปแบบ "${spec.name}" สำเร็จ!`);
   };
@@ -488,12 +509,18 @@ export const FinanceClubView: React.FC<{
       return;
     }
     SFX.tap();
+    let doneDemands: string[] = [];
     onUpdateState((d) => {
       d.money -= cost;
       d.staff = { ...getStaffState(d), [role]: cur + 1 };
       logFin(d, `จ้าง/อัปเกรด${title} Lv.${cur + 1}`, -cost);
+      doneDemands = checkClubDemandsCompletion(d);
     });
-    onToast(`จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} เรียบร้อย`);
+    onToast(
+      doneDemands.length
+        ? `จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} และตอบรับคำเรียกร้องแล้ว!`
+        : `จ้าง${title} Lv.${cur + 1}/${MAX_STAFF_LV} เรียบร้อย`
+    );
   };
 
   const fireStaff = (role: StaffRoleKey, title: string) => {
@@ -558,6 +585,7 @@ export const FinanceClubView: React.FC<{
     const saveFinanceDraft = () => {
       if (!financeDraft || !hasFinanceChanges) return;
       SFX.confirm();
+      let doneDemands: string[] = [];
       onUpdateState((d) => {
         d.winBonus = financeDraft.winBonus;
         d.sp = financeDraft.sp;
@@ -565,8 +593,13 @@ export const FinanceClubView: React.FC<{
         d.tp = financeDraft.tp;
         d.liveStream = financeDraft.liveStream;
         ensureMegastoreState(d).stockTier = financeDraft.stockTier;
+        doneDemands = checkClubDemandsCompletion(d);
       });
-      onToast('บันทึกการตั้งค่าการเงินเรียบร้อยแล้ว!');
+      onToast(
+        doneDemands.length
+          ? 'บันทึกการเงินและตอบรับคำเรียกร้องสำเร็จ!'
+          : 'บันทึกการตั้งค่าการเงินเรียบร้อยแล้ว!'
+      );
     };
 
     const resetFinanceDraft = () => {
@@ -1117,61 +1150,85 @@ export const FinanceClubView: React.FC<{
               {(() => {
                 const activeSpIdx = clamp(activeFinanceValues.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
                 const activePkg = MAIN_SPONSOR_PACKAGES[activeSpIdx] || MAIN_SPONSOR_PACKAGES[0];
+                const activeBrand = resolveStateSponsorBrand(state, activeSpIdx);
                 const activeCalc = calcMainSponsorPayout({ sp: activeSpIdx, promo: 0 }, me);
                 const activeMerchPct = Math.round((activePkg.merchBoost || 0) * 100);
+                const rerollMainSponsors = () => {
+                  SFX.tap();
+                  onUpdateState((d) => {
+                    const nextSeed = ((d.sponsorSeed || 1) + R(173, 9973)) >>> 0;
+                    d.sponsorSeed = nextSeed;
+                    d.sponsorBrands = pickUniqueSponsorBrandIds(nextSeed, MAIN_SPONSOR_PACKAGES.length);
+                  });
+                  onToast('🎲 สุ่มรายชื่อสปอนเซอร์คาดอกชุดใหม่ไม่ซ้ำแบรนด์แล้ว!');
+                };
                 return (
                   <section className="p-3.5 mland:p-2.5 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] space-y-2.5 mland:space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <div>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
                         <h3 className="font-bold text-sm mland:text-xs">🤝 สปอนเซอร์หลักคาดอกเสื้อ</h3>
                         <p className="text-[10.5px] mland:text-[9px] text-[var(--mut)]">
-                          รายได้ประจำทุกแมตช์ + โบนัสตามผลงาน · แตะเพื่อเปลี่ยนแบรนด์คาดอก
+                          โลโก้คมชัดพิมพ์ลงหน้าอกเสื้อจริง · สุ่มจาก 32 แบรนด์ไม่ซ้ำ
                         </p>
                       </div>
-                      {changedFinItems.sp ? (
-                        <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)] shrink-0">
-                          รอการบันทึก
-                        </span>
-                      ) : (
-                        <span className="text-[10.5px] font-bold text-[var(--g)] shrink-0">
-                          {MAIN_SPONSOR_PACKAGES.length} แพ็กเกจ
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {changedFinItems.sp && (
+                          <span className="text-[10px] font-bold text-[#b47b00] dark:text-[var(--lamp)]">
+                            รอการบันทึก
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={rerollMainSponsors}
+                          className="btn btn-xs btn-secondary whitespace-nowrap"
+                          title="สุ่มแบรนด์สปอนเซอร์ใหม่ทั้ง 8 แพ็กเกจโดยไม่ซ้ำกัน"
+                        >
+                          <Dices className="w-3 h-3" />
+                          <span>สุ่มแบรนด์ไม่ซ้ำ</span>
+                        </button>
+                      </div>
                     </div>
 
-                    {/* 3-Column Active Main Sponsor Summary Strip */}
-                    <div className="grid grid-cols-3 divide-x divide-[var(--line)]/65 py-1.5 border-y border-[var(--line)]/65 text-center tabular items-center">
-                      <div className="px-1.5 flex items-center justify-center gap-2 min-w-0">
-                        <MainSponsorLogo idx={activePkg.idx} size={28} />
-                        <div className="min-w-0 text-left">
-                          <div className="text-[9.5px] text-[var(--mut)] leading-none">แบรนด์คาดอก</div>
-                          <div className="font-extrabold text-[11px] text-[var(--ink)] truncate mt-0.5">
-                            {activePkg.brand}
+                    {/* Live Home & Away Shirt Print Preview + 3-Column Active Summary */}
+                    <div className="p-2 rounded-xl bg-[var(--surface-2)]/45 border border-[var(--line)]/65 flex items-center gap-2.5">
+                      <div className="flex items-center gap-1 shrink-0 px-1.5 py-1 rounded-lg bg-[var(--surface)] border border-[var(--line)]/70">
+                        <KitJersey club={clubK} away={false} size={46} hideNumber sponsorBrand={activeBrand} />
+                        <KitJersey club={clubK} away={true} size={46} hideNumber sponsorBrand={activeBrand} />
+                      </div>
+                      <div className="flex-1 min-w-0 grid grid-cols-3 divide-x divide-[var(--line)]/65 text-center tabular items-center">
+                        <div className="px-1.5 flex items-center justify-center gap-1.5 min-w-0">
+                          <MainSponsorLogo idx={activePkg.idx} brand={activeBrand} size={28} />
+                          <div className="min-w-0 text-left">
+                            <div className="text-[9px] text-[var(--mut)] leading-none">พิมพ์บนอกเสื้อ</div>
+                            <div className="font-extrabold text-[10.5px] text-[var(--ink)] truncate mt-0.5">
+                              {activeBrand.thName}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="px-1">
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">รับพื้นฐาน / นัด</div>
-                        <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
-                          +{fmtMoneyNum(activeCalc.base)}
+                        <div className="px-1">
+                          <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">รับพื้นฐาน / นัด</div>
+                          <div className="font-extrabold text-xs sm:text-sm mland:text-xs text-[var(--g)] mt-0.5">
+                            +{fmtMoneyNum(activeCalc.base)}
+                          </div>
+                          <div className="text-[9px] text-[var(--mut)] truncate">{activePkg.tag}</div>
                         </div>
-                        <div className="text-[9.5px] text-[var(--mut)] truncate">{activePkg.tag}</div>
-                      </div>
-                      <div className="px-1">
-                        <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)]">เงื่อนไขโบนัส</div>
-                        <div className="font-bold text-[11px] text-[var(--ink)] mt-0.5 truncate">
-                          {activeMerchPct > 0 ? `สโตร์ +${activeMerchPct}%` : activePkg.tag}
+                        <div className="px-1">
+                          <div className="text-[9.5px] mland:text-[8.5px] text-[var(--mut)]">เงื่อนไขโบนัส</div>
+                          <div className="font-bold text-[10.5px] text-[var(--ink)] mt-0.5 truncate">
+                            {activeMerchPct > 0 ? `สโตร์ +${activeMerchPct}%` : activePkg.tag}
+                          </div>
+                          <div className="text-[9px] text-[var(--mut)] truncate">{activePkg.title}</div>
                         </div>
-                        <div className="text-[9.5px] text-[var(--mut)] truncate">{activePkg.title}</div>
                       </div>
                     </div>
 
-                    {/* Interactive 8-Row Main Sponsor List with Fictional Brand Logos */}
+                    {/* Interactive 8-Row Main Sponsor List with Non-Repeating Brand Logos */}
                     <div className="rounded-xl border border-[var(--line)]/80 divide-y divide-[var(--line)]/55 overflow-hidden bg-[var(--surface-2)]/20">
                       {MAIN_SPONSOR_PACKAGES.map((pkg) => {
                         const active = activeFinanceValues.sp === pkg.idx;
                         const elig = evaluateMainSponsorEligibility(pkg.idx, state, me);
                         const preview = calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me);
+                        const rowBrand = resolveStateSponsorBrand(state, pkg.idx);
                         return (
                           <button
                             key={pkg.idx}
@@ -1200,10 +1257,10 @@ export const FinanceClubView: React.FC<{
                               >
                                 {active && <Check className="w-2.5 h-2.5" />}
                               </span>
-                              <MainSponsorLogo idx={pkg.idx} size={30} />
+                              <MainSponsorLogo idx={pkg.idx} brand={rowBrand} size={30} />
                               <div className="min-w-0">
                                 <div className="text-xs font-bold text-[var(--ink)] truncate">
-                                  {pkg.brand} <span className="font-medium text-[var(--mut)]">· {pkg.title}</span>
+                                  {rowBrand.thName} <span className="font-medium text-[var(--mut)]">· {pkg.title}</span>
                                 </div>
                                 <div className={`text-[10px] truncate ${!elig.ok ? 'text-[var(--red)] font-semibold' : 'text-[var(--mut)]'}`}>
                                   {!elig.ok ? elig.reqText : pkg.desc}
@@ -1901,14 +1958,20 @@ export const FinanceClubView: React.FC<{
               return;
             }
             SFX.tap();
+            let doneDemands: string[] = [];
             onUpdateState((d) => {
               const ms = ensureMegastoreState(d);
               d.money -= amt;
               ms.capital = +(ms.capital + amt).toFixed(2);
               ms.capitalInvestedSeason = +(ms.capitalInvestedSeason + amt).toFixed(2);
               logFin(d, `เพิ่มเงินทุนหมุนเวียนเมกะสโตร์`, -amt);
+              doneDemands = checkClubDemandsCompletion(d);
             });
-            onToast(`เติมเงินทุนหมุนเวียนเมกะสโตร์ +${fmtMoney(amt)} สำเร็จ!`);
+            onToast(
+              doneDemands.length
+                ? `เติมเงินทุนเมกะสโตร์ +${fmtMoney(amt)} และตอบรับคำเรียกร้องแล้ว!`
+                : `เติมเงินทุนหมุนเวียนเมกะสโตร์ +${fmtMoney(amt)} สำเร็จ!`
+            );
           };
 
           return (
@@ -2130,6 +2193,7 @@ export const FinanceClubView: React.FC<{
                               <KitJersey
                                 club={ensureClubIdentity(state)}
                                 team={me}
+                                state={state}
                                 shirtNo={topSeller.no}
                                 isGK={topSeller.pos === 'GK'}
                                 size={36}
@@ -2636,7 +2700,7 @@ export const FinanceClubView: React.FC<{
                 }`}
               >
                 <div className="[&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-10 sm:[&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-center justify-center">
-                  <KitJersey club={dk} away={false} size={40} />
+                  <KitJersey club={dk} away={false} size={40} team={me} state={state} />
                 </div>
                 <span
                   className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${
@@ -2663,7 +2727,7 @@ export const FinanceClubView: React.FC<{
                 }`}
               >
                 <div className="[&>svg]:w-9 [&>svg]:h-9 sm:[&>svg]:w-10 sm:[&>svg]:h-10 mland:[&>svg]:w-8 mland:[&>svg]:h-8 flex items-center justify-center">
-                  <KitJersey club={dk} away={true} size={40} />
+                  <KitJersey club={dk} away={true} size={40} team={me} state={state} />
                 </div>
                 <span
                   className={`text-[8.5px] mland:text-[7.5px] font-bold leading-none mt-0.5 ${

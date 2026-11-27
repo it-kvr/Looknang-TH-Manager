@@ -14,6 +14,7 @@ import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
 import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
@@ -926,7 +927,7 @@ export default function App() {
           logFin(d, 'เมกะสโตร์ (เสื้อ & ของชำร่วยเหย้า)', merch);
         }
         d.money += sponsor;
-        logFin(d, `สปอนเซอร์หลัก${mainSp.bonusLabel ? ` + ${mainSp.bonusLabel}` : ''}`, sponsor);
+        logFin(d, `สปอนเซอร์หลัก (${resolveStateSponsorBrand(d).thName})${mainSp.bonusLabel ? ` + ${mainSp.bonusLabel}` : ''}`, sponsor);
         applyLiveStreamMatchSettlement(d, me, opp, {
           kind: 'league',
           isHome: isHomeMatch,

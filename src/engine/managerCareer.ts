@@ -26,7 +26,8 @@ import {
   pushFeed,
   xi
 } from './playerCore';
-import { getTeamSeasonObjectiveInfo, mkMarket, rate, setBoardObjective, sortTable } from './simulation';
+import { getTeamSeasonObjectiveInfo, mkMarket, rate, setBoardObjective, sortTable, syncAndEvaluateClubDemands } from './simulation';
+import { pickUniqueSponsorBrandIds } from '../data/sponsorBrands';
 
 export interface NationalOpponentTemplate {
   code: string;
@@ -451,6 +452,11 @@ export function switchManagerClub(
   s.payDue = 0;
   s.sponsorDeal = null;
   s.sponsorDeals = [];
+  const nextSpSeed = R(1, 999999);
+  s.sponsorSeed = nextSpSeed;
+  s.sponsorBrands = pickUniqueSponsorBrandIds(nextSpSeed, 8);
+  s.clubDemands = [];
+  syncAndEvaluateClubDemands(s, { initial: true });
   s.megastore = undefined;
   s.scout = null;
   s.off = null;

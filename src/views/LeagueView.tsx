@@ -3,10 +3,35 @@ import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Coins, Trophy, X } fr
 import type { ArchivedMatchReport, MainTab, MatchHighlightClip, Player, Team, GameState, VarReplayRecord } from '../types/game';
 import { RN, TN, getTeamTrainingPlan, syncTrainingFocusToPlan } from '../data/thaiFootballData';
 import { SFX } from '../utils/audioTheme';
-import { fmtMoney, fmtMoneyNum } from '../utils/math';
-import { xi, vlu, ensureCon } from '../engine/playerCore';
+import { fmtMoney, fmtMoneyNum, clamp } from '../utils/math';
+import { xi, vlu, ensureCon, logFin } from '../engine/playerCore';
 import { ovColor } from '../engine/missions';
-import { sortTable, getTransferWindowInfo, teamStats, getIncomingOffers, getActiveBoardEffects, getBoardDirectiveProgress, ensureTeamFans, fmtFansShort, EXTRA_CUP_META, getLeaguePrizeMoney } from '../engine/simulation';
+import {
+  sortTable,
+  getTransferWindowInfo,
+  teamStats,
+  getIncomingOffers,
+  getActiveBoardEffects,
+  getBoardDirectiveProgress,
+  ensureTeamFans,
+  fmtFansShort,
+  EXTRA_CUP_META,
+  getLeaguePrizeMoney,
+  MAIN_SPONSOR_PACKAGES,
+  evaluateMainSponsorEligibility,
+  calcMainSponsorPayout,
+  PARTNER_DEAL_CATALOG,
+  getActivePartnerDeals,
+  getMaxPartnerSlots,
+  getLeagueTransferContext,
+  getFacilityCondition,
+  getFacilityRenovateCost,
+  getFacilityUpgradeCost,
+  getActiveClubDemands,
+  checkClubDemandsCompletion
+} from '../engine/simulation';
+import { resolveStateSponsorBrand } from '../data/sponsorBrands';
+import type { FacilityKey } from '../types/game';
 import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
@@ -33,7 +58,7 @@ export const LeagueView: React.FC<{
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
   const sub = rawSub === 5 ? 2 : rawSub;
   const [cmpSort, setCmpSort] = useState<'ovSq' | 'ovXi' | 'at' | 'df'>('ovSq');
-  const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'feed'>('all');
+  const [newsFilter, setNewsFilter] = useState<'all' | 'urg' | 'req' | 'feed'>('all');
   const [prizeModalTier, setPrizeModalTier] = useState<number | null>(null);
   const [cupInitialStats, setCupInitialStats] = useState(false);
 
@@ -216,7 +241,7 @@ export const LeagueView: React.FC<{
     type NewsTone = 'urg' | 'warn' | 'ok' | 'info';
     interface InboxItem {
       id: string;
-      kind: 'alert' | 'feed';
+      kind: 'alert' | 'req' | 'feed';
       tone: NewsTone;
       icon: React.ReactNode;
       tag: string;
@@ -241,6 +266,13 @@ export const LeagueView: React.FC<{
       const expiringSoon = ownPlayers.filter((q) => ensureCon(q).yr === 1);
       const incomingOffers = getIncomingOffers(state);
       const curPlan = getTeamTrainingPlan(state);
+      const tx = getLeagueTransferContext(state, me);
+      const activeDeals = getActivePartnerDeals(state);
+      const maxPartnerSlots = getMaxPartnerSlots(state);
+      const tierMult = 1 + me.tier * 0.45;
+      const readyDeals = PARTNER_DEAL_CATALOG.filter(
+        (cat) => !activeDeals.some((d) => d.id === cat.id) && cat.checkReq(state, me).ok
+      );
 
       if (state.dilemma) {
         items.push({
@@ -269,6 +301,94 @@ export const LeagueView: React.FC<{
           onAction: () => onNavigate?.(state.money < 0 ? 'f' : 'u')
         });
       }
+
+      // Player & Fan Upgrade / Improvement Demands (คำเรียกร้องจากนักเตะ & แฟนบอล)
+      const facBaseCostMap: Record<FacilityKey, number> = {
+        st: 100,
+        tr: 90,
+        ya: 80,
+        med: 80,
+        merchLv: 75,
+        turfLv: 75,
+        analyticsLv: 85,
+        travelLv: 70
+      };
+      const activeDemands = getActiveClubDemands(state);
+      activeDemands.forEach((req) => {
+        const remMd = Math.max(0, req.dueMd - (state.md ?? 0));
+        const srcBadge = req.source === 'player' ? '🗣️ นักเตะเรียกร้อง' : '📣 แฟนบอลเรียกร้อง';
+        let actionLabel = 'ดำเนินการ';
+        let detailText = `${req.detail} · รางวัล: ${req.rewardText}`;
+        let onAction = () => onNavigate?.('u', 'infra');
+
+        if (req.kind === 'renovate_fac') {
+          const fk = req.targetKey as FacilityKey;
+          const lv = state[fk] ?? 1;
+          const cond = getFacilityCondition(state, fk);
+          const baseCost = facBaseCostMap[fk] ?? 80;
+          const renCost = lv > 0 ? getFacilityRenovateCost(baseCost, lv, cond) : 0;
+          if (lv > 0 && state.money >= renCost) {
+            actionLabel = `ซ่อม ${fmtMoneyNum(renCost)}`;
+            onAction = () => {
+              let done: string[] = [];
+              onUpdateState((d) => {
+                const curLv = d[fk] ?? 1;
+                const curCond = getFacilityCondition(d, fk);
+                const costNow = getFacilityRenovateCost(baseCost, curLv, curCond);
+                if (curLv <= 0 || d.money < costNow) return;
+                d.money -= costNow;
+                d.facCond = { ...(d.facCond || {}), [fk]: 100 };
+                logFin(d, `ซ่อมบำรุงตามคำเรียกร้อง (${curCond}% → 100%)`, -costNow);
+                done = checkClubDemandsCompletion(d);
+              });
+              onToast?.(done.length ? `✅ ซ่อมบำรุงและตอบรับคำเรียกร้องสำเร็จ!` : '🔧 ปรับปรุงสภาพเรียบร้อยแล้ว');
+            };
+          } else {
+            actionLabel = 'ไปซ่อม';
+            onAction = () => onNavigate?.('u', 'infra');
+          }
+        } else if (req.kind === 'upgrade_fac') {
+          const fk = req.targetKey as FacilityKey;
+          const lv = state[fk] ?? 1;
+          const upgCost = getFacilityUpgradeCost(facBaseCostMap[fk] ?? 80, lv);
+          detailText = `${req.detail} · งบอัป ~${fmtMoneyNum(upgCost)} · ${req.rewardText}`;
+          actionLabel = 'ไปอัปเกรด';
+          onAction = () => onNavigate?.('u', 'infra');
+        } else if (req.kind === 'hire_staff') {
+          actionLabel = 'จ้างทีมงาน';
+          onAction = () => onNavigate?.('u', 'infra');
+        } else if (req.kind === 'ticket_price') {
+          actionLabel = 'ปรับตั๋วมาตรฐาน';
+          onAction = () => {
+            let done: string[] = [];
+            onUpdateState((d) => {
+              d.ticketPlan = 'standard';
+              d.tp = 1;
+              done = checkClubDemandsCompletion(d);
+            });
+            onToast?.(done.length ? '✅ ปรับราคาตั๋วเป็นมาตรฐานตามคำขอแฟนบอลแล้ว!' : 'ปรับราคาตั๋วเรียบร้อย');
+          };
+        } else if (req.kind === 'live_stream') {
+          actionLabel = 'เลือกแพ็กเกจ';
+          onAction = () => onNavigate?.('f', 'commercial');
+        } else if (req.kind === 'megastore_stock') {
+          actionLabel = 'เติมทุนร้าน';
+          onAction = () => onNavigate?.('f', 'megastore');
+        }
+
+        items.push({
+          id: `demand-${req.id}`,
+          kind: 'req',
+          tone: remMd <= 1 ? 'urg' : 'warn',
+          urgent: true,
+          icon: req.source === 'player' ? '🗣️' : '📣',
+          tag: `${srcBadge} · ${req.requester} · อีก ${remMd} นัด`,
+          title: req.title,
+          detail: detailText,
+          actionLabel,
+          onAction
+        });
+      });
 
       if (state.boardDirective && state.boardDirective.status === 'active') {
         const dir = state.boardDirective;
@@ -345,7 +465,7 @@ export const LeagueView: React.FC<{
           tone: expiredCon.length > 0 ? 'urg' : 'warn',
           urgent: true,
           icon: '📄',
-          tag: 'สัญญาใกล้หมด',
+          tag: 'สัญญาการเงิน · นักเตะ',
           title: expiredCon.length > 0 ? `หมดสัญญา ${expiredCon.length} คน` : `สัญญาเหลือ 1 ปี (${expiringSoon.length} คน)`,
           detail: `${namesPreview}${totalNeed > 2 ? ` +${totalNeed - 2}` : ''}`,
           actionLabel: 'ต่อสัญญา',
@@ -353,31 +473,155 @@ export const LeagueView: React.FC<{
         });
       }
 
-      if (!state.sponsorDeal) {
+      // Financial & Commercial Contract To-Dos (สิ่งที่ต้องทำด้านสัญญาการเงิน)
+      const curSpIdx = clamp(state.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
+      const curSpBase = calcMainSponsorPayout({ sp: curSpIdx, promo: 0 }, me).base;
+      const betterMainPkgs = MAIN_SPONSOR_PACKAGES.filter(
+        (pkg) => pkg.idx !== curSpIdx && evaluateMainSponsorEligibility(pkg.idx, state, me).ok
+      )
+        .map((pkg) => ({
+          pkg,
+          base: calcMainSponsorPayout({ sp: pkg.idx, promo: 0 }, me).base
+        }))
+        .sort((a, b) => b.base - a.base);
+      const topMainUpgrade = betterMainPkgs[0];
+      if (topMainUpgrade && topMainUpgrade.base >= curSpBase + 2) {
+        const upgBrand = resolveStateSponsorBrand(state, topMainUpgrade.pkg.idx);
+        items.push({
+          id: 'fin-main-sponsor-upgrade',
+          kind: 'alert',
+          tone: 'ok',
+          urgent: true,
+          icon: '👕',
+          tag: 'สัญญาการเงิน · คาดอกเสื้อ',
+          title: `ปลดล็อกดีล ${upgBrand.thName} (+${fmtMoneyNum(topMainUpgrade.base)}/นัด)`,
+          detail: `จ่ายฐานสูงกว่าแพ็กเกจปัจจุบัน (+${fmtMoneyNum(topMainUpgrade.base - curSpBase)}/นัด) และได้โลโก้ใหม่บนเสื้อ`,
+          actionLabel: 'เปลี่ยนดีล',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      }
+
+      if (activeDeals.length === 0) {
         items.push({
           id: 'sponsor-unselected',
           kind: 'alert',
           tone: 'warn',
           urgent: true,
           icon: '🤝',
-          tag: 'สปอนเซอร์',
-          title: 'ยังไม่ได้เซ็นดีลพาร์ทเนอร์',
-          detail: 'เลือกเซ็นสัญญาเพื่อรับรายได้เสริมทุกนัด',
+          tag: `สัญญาการเงิน · ว่าง ${maxPartnerSlots} ช่อง`,
+          title: 'ยังไม่ได้เซ็นดีลพาร์ทเนอร์ธุรกิจ',
+          detail: readyDeals.length
+            ? `พร้อมเซ็นทันที เช่น ${readyDeals[0].name} (+${fmtMoneyNum(Math.round(readyDeals[0].basePerMatch * tierMult))}/นัด)`
+            : 'เลือกเซ็นสัญญาเพื่อรับรายได้เสริมทุกนัด',
           actionLabel: 'เลือกดีล',
           onAction: () => onNavigate?.('f', 'commercial')
         });
-      } else if (state.sponsorDeal.left <= 2) {
+      } else {
+        const expiringDeal = activeDeals.find((d) => d.left <= 2);
+        if (expiringDeal) {
+          items.push({
+            id: `sponsor-expiring-${expiringDeal.id}`,
+            kind: 'alert',
+            tone: 'warn',
+            urgent: true,
+            icon: '🤝',
+            tag: 'สัญญาการเงิน · พาร์ทเนอร์',
+            title: `ดีล ${expiringDeal.name} เหลือ ${expiringDeal.left} นัด`,
+            detail: 'เตรียมเซ็นสัญญาพาร์ทเนอร์ทดแทนเมื่อครบกำหนด',
+            actionLabel: 'ดูดีล',
+            onAction: () => onNavigate?.('f', 'commercial')
+          });
+        }
+        if (activeDeals.length < maxPartnerSlots && readyDeals.length > 0) {
+          items.push({
+            id: 'partner-slot-open',
+            kind: 'alert',
+            tone: 'ok',
+            urgent: true,
+            icon: '📑',
+            tag: `สัญญาการเงิน · ว่าง ${maxPartnerSlots - activeDeals.length}/${maxPartnerSlots} ช่อง`,
+            title: `เซ็นพาร์ทเนอร์เพิ่มได้ทันที (${readyDeals[0].name})`,
+            detail: `รับเงินเซ็น +${fmtMoneyNum(Math.round(readyDeals[0].baseSignBonus * tierMult))} และ +${fmtMoneyNum(Math.round(readyDeals[0].basePerMatch * tierMult))}/นัด`,
+            actionLabel: 'เซ็นเพิ่ม',
+            onAction: () => onNavigate?.('f', 'commercial')
+          });
+        }
+      }
+
+      if ((state.liveStream || 'off') === 'off') {
         items.push({
-          id: 'sponsor-expiring',
+          id: 'fin-livestream-off',
+          kind: 'alert',
+          tone: 'info',
+          urgent: true,
+          icon: '📺',
+          tag: 'สัญญาการเงิน · ถ่ายทอดสด',
+          title: 'ยังไม่ได้เปิดสัญญาถ่ายทอดสดสโมสร',
+          detail: 'เปิดสตรีมสร้างรายได้เพิ่มเติมตามจำนวนผู้ชมทุกแมตช์',
+          actionLabel: 'เปิดสัญญา',
+          onAction: () => onNavigate?.('f', 'commercial')
+        });
+      }
+
+      const merchLv = state.merchLv ?? 1;
+      const merchCap = state.megastore?.capital ?? 0;
+      if (merchLv > 0 && merchCap < 8) {
+        items.push({
+          id: 'fin-megastore-lowcap',
           kind: 'alert',
           tone: 'warn',
           urgent: true,
-          icon: '🤝',
-          tag: 'สปอนเซอร์',
-          title: `ดีล ${state.sponsorDeal.name} เหลือ ${state.sponsorDeal.left} นัด`,
-          detail: 'เตรียมต่อสัญญาใหม่หลังครบกำหนด',
-          actionLabel: 'ดูดีล',
-          onAction: () => onNavigate?.('f', 'commercial')
+          icon: '🛍️',
+          tag: 'สัญญาการเงิน · เมกะสโตร์',
+          title: `ทุนสต็อกเมกะสโตร์ใกล้หมด (${fmtMoney(merchCap)})`,
+          detail: 'เติมเงินทุนหมุนเวียนเพื่อผลิตเสื้อขายก่อนเกมเหย้า',
+          actionLabel: 'เติมทุนร้าน',
+          onAction: () => onNavigate?.('f', 'megastore')
+        });
+      }
+
+      const bankRemain = state.bankLoan ? state.bankLoan.left * state.bankLoan.per : 0;
+      const payDue = state.payDue || 0;
+      if (payDue > 0 || (state.bankLoan && state.money < state.bankLoan.per * 2)) {
+        items.push({
+          id: 'fin-debt-watch',
+          kind: 'alert',
+          tone: payDue > 0 ? 'warn' : 'urg',
+          urgent: true,
+          icon: '🏦',
+          tag: 'สัญญาการเงิน · ภาระหนี้',
+          title: `มีภาระหนี้คงค้างรวม ${fmtMoney(bankRemain + payDue)}`,
+          detail: `${payDue > 0 ? `ผ่อนปลายปี ${fmtMoneyNum(payDue)}` : 'ค่างวดธนาคารใกล้ครบ'} · ตรวจสอบสภาพคล่อง`,
+          actionLabel: 'ดูบัญชีหนี้',
+          onAction: () => onNavigate?.('f', 'ledger')
+        });
+      } else if (state.money < 25 && !state.bankLoan) {
+        items.push({
+          id: 'fin-low-cash',
+          kind: 'alert',
+          tone: 'warn',
+          urgent: true,
+          icon: '💳',
+          tag: 'สัญญาการเงิน · สภาพคล่อง',
+          title: `งบหมุนเวียนเหลือน้อย (${fmtMoney(state.money)})`,
+          detail: 'กู้สินเชื่อสโมสรหรือจัดโปรดีลเชิงพาณิชย์เพิ่มเติมได้',
+          actionLabel: 'ดูสินเชื่อ',
+          onAction: () => onNavigate?.('f', 'ledger')
+        });
+      }
+
+      if (tx.wagePct >= 95) {
+        items.push({
+          id: 'fin-ffp-wage',
+          kind: 'alert',
+          tone: 'urg',
+          urgent: true,
+          icon: '📊',
+          tag: 'สัญญาการเงิน · เพดาน FFP',
+          title: `ค่าเหนื่อยใกล้เต็มเพดาน (${tx.wagePct}%)`,
+          detail: `${fmtMoneyNum(tx.curWage)} / ${fmtMoneyNum(tx.wageCap)} · ระวังติดล็อกซื้อตัว`,
+          actionLabel: 'ดูงบทีม',
+          onAction: () => onNavigate?.('f', 'overview')
         });
       }
 
@@ -480,7 +724,7 @@ export const LeagueView: React.FC<{
       }
     }
 
-    (state.feed || []).slice(0, 6).forEach((f, idx) => {
+    (state.feed || []).slice(0, 8).forEach((f, idx) => {
       items.push({
         id: `feed-${idx}-${f.m}`,
         kind: 'feed',
@@ -505,9 +749,11 @@ export const LeagueView: React.FC<{
     });
 
     const urgentCount = items.filter((it) => it.urgent).length;
+    const reqCount = items.filter((it) => it.kind === 'req').length;
     const filteredItems = items.filter((it) => {
       if (newsFilter === 'all') return true;
       if (newsFilter === 'urg') return !!it.urgent;
+      if (newsFilter === 'req') return it.kind === 'req';
       return it.kind === 'feed';
     });
 
@@ -518,6 +764,19 @@ export const LeagueView: React.FC<{
       info: 'bg-[var(--surface-2)]/65 border-[var(--line)]/70'
     };
 
+    const filterTabs = isMgr
+      ? ([
+          ['all', 'ทั้งหมด'],
+          ['urg', `ต้องทำ (${urgentCount})`],
+          ['req', `คำขอ (${reqCount})`],
+          ['feed', 'ข่าวทีม']
+        ] as const)
+      : ([
+          ['all', 'ทั้งหมด'],
+          ['urg', `ด่วน (${urgentCount})`],
+          ['feed', 'ข่าวทีม']
+        ] as const);
+
     return (
       <div className="p-2.5 sm:p-3 mland:p-2 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs space-y-2 mland:space-y-1.5">
         <div className="flex items-center justify-between gap-2">
@@ -525,13 +784,7 @@ export const LeagueView: React.FC<{
             📬 งานด่วน &amp; ข่าวสโมสร
           </div>
           <div className="seg-bar shrink-0">
-            {(
-              [
-                ['all', 'ทั้งหมด'],
-                ['urg', `ด่วน (${urgentCount})`],
-                ['feed', 'ข่าวทีม']
-              ] as const
-            ).map(([fid, flbl]) => (
+            {filterTabs.map(([fid, flbl]) => (
               <button
                 key={fid}
                 type="button"
@@ -547,7 +800,9 @@ export const LeagueView: React.FC<{
         <div className="max-h-[210px] sm:max-h-[240px] mland:max-h-[148px] overflow-y-auto space-y-1.5 mland:space-y-1 pr-0.5">
           {filteredItems.length === 0 ? (
             <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] py-3 text-center">
-              ไม่มีเรื่องเร่งด่วนในขณะนี้ ทีมพร้อมลงสนาม!
+              {newsFilter === 'req'
+                ? 'ยังไม่มีคำเรียกร้องจากนักเตะหรือแฟนบอลในตอนนี้'
+                : 'ไม่มีเรื่องเร่งด่วนในขณะนี้ ทีมพร้อมลงสนาม!'}
             </div>
           ) : (
             filteredItems.map((it) => (

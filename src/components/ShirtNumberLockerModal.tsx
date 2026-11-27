@@ -130,6 +130,7 @@ export const ShirtNumberLockerModal: React.FC<{
                   away={false}
                   size={40}
                   team={team}
+                  state={state}
                   shirtNo={currentNo}
                   isGK={player.pos === 'GK'}
                 />

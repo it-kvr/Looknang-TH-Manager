@@ -1,7 +1,8 @@
-import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers } from '../types/game';
+import type { Position, SubRole, StatKey, GameMode, MatchKind, CupCompKey, PlayerCupStatRecord, CoreAttrs, Player, Team, PlayerCareerProfile, MatchEvent, MatchCardEvent, MatchSubEvent, MatchDramaticEvent, MatchHighlightLine, MatchHighlightsSummary, MatchHighlightClip, MatchEnvironment, MatchPitchPuddle, GoalCelebrationStyle, StadiumStyleId, PlayerPerfResult, MatchResult, TransferOffer, ScoutMission, GameState, DilemmaTemplate, FinishedMatchPayload, ArchivedMatchLog, PersonalMissionMetric, SeasonPlayerStatRecord, SeasonArchiveRecord, PlayerSeasonHistoryRecord, BoardDirective, BoardDirectiveKind, BoardTempEffect, BoardFeedbackEntry, FinanceHistoryPoint, FacilityKey, StaffRoleKey, TrainingProgramId, TrophyRecord, ActivePartnerDeal, SouvenirSaleRecord, MegastoreSeasonArchive, ClubMegastoreState, LiveStreamPlanId, TeamFacilityMatchModifiers, ClubDemandItem } from '../types/game';
 import { R, P, clamp, fmtMoney, fmtMoneyNum, capMoney } from '../utils/math';
 import { AN, RN, TN, BASE, POS, ATT, LINE, EQ, PM, SPX, ALL_SUB_ROLES, SPN, SKIN_P, HAIR_P, PACT, TEAM_TRAINING_PROGRAMS, TRAINING_INTENSITY_META, getTeamTrainingPlan, CLUB_PHILOSOPHIES, FSD, SIGL } from '../data/thaiFootballData';
 import { getStadiumStyleSpec, getAiTeamStadiumStyleId, getTurfGradeForLevel } from '../data/crestAndKitData';
+import { getDefaultSponsorSeed, pickUniqueSponsorBrandIds, resolveStateSponsorBrand } from '../data/sponsorBrands';
 import { clearNamePool, genClubNames, assignTeamShirtNumbers, getShirtNo, mkPlayer, mkTeam, getFormationSlots, getFormationCounts, pen, playerPen, ef, xi, DT, injD, ovMe, getOvGrowthScale, getPlayerDevProfile, trySuperstarBreakthrough, autoGrow, syncMe, vlu, wagOf, ensureCon, squadWage, logFin, pushFeed, ensureClubIdentity, ensureAiTeamPhilosophies, applyClubPhilosophy, hasTrait, rollPlayerTraits, rollPlayerBio, recordPlayerSeasonProgress, OVF, ROLE_ADAPT_THRESHOLD_ADJ, ROLE_ADAPT_THRESHOLD_CROSS, ROLE_ADAPT_TARGETS, applyRoleMasteryBonus, pickBestCaptain, autoAssignTeamRoles } from './playerCore';
 import { applyTrainingMissionProgress, applyAiClubMatchMissions, initPlayerSeasonMissions } from './missions';
 import { appendPlayerCareerLog, calcSeasonAvgRating, mergeClubAllTimePlayers, snapshotPlayerForRecord, getPlayerCupTotals } from './history';
@@ -2933,9 +2934,13 @@ export function createNewGame(
     ...(opts.diff !== undefined ? { diff: opts.diff } : {})
   };
 
+  const initSponsorSeed = R(1, 999999);
+  s.sponsorSeed = initSponsorSeed;
+  s.sponsorBrands = pickUniqueSponsorBrandIds(initSponsorSeed, MAIN_SPONSOR_PACKAGES.length);
   setBoardObjective(s);
   if (mode === 'm') {
     ensureClubIdentity(s);
+    syncAndEvaluateClubDemands(s, { initial: true });
   } else if (opts.player) {
     const p = opts.player;
     const chosenNo = clamp(p.no || (p.pos === 'GK' ? 1 : p.pos === 'DF' ? 4 : p.pos === 'MF' ? 8 : 10), 1, 99);
@@ -3104,6 +3109,15 @@ export function startSeason(s: GameState) {
   s.cupLog = [];
   setBoardObjective(s);
   if (s.mode === 'm') {
+    const nextSeed = ((s.sponsorSeed || getDefaultSponsorSeed(s.season ?? 1, s.me)) + (s.season ?? 1) * 97 + R(11, 89)) >>> 0;
+    const curSpIdx = clamp(s.sp ?? 0, 0, MAIN_SPONSOR_PACKAGES.length - 1);
+    const curBrandId = resolveStateSponsorBrand(s, curSpIdx).id;
+    s.sponsorSeed = nextSeed;
+    s.sponsorBrands = pickUniqueSponsorBrandIds(nextSeed, MAIN_SPONSOR_PACKAGES.length, {
+      idx: curSpIdx,
+      brandId: curBrandId
+    });
+
     s.boardDirective = null;
     s.boardDirectiveCd = 1;
     s.boardEffects = [];
@@ -3116,6 +3130,8 @@ export function startSeason(s: GameState) {
       msg: `บอร์ดบริหารตั้งเป้าหมายฤดูกาลที่ ${s.season}: จบอย่างน้อยอันดับ ${targetRank} พร้อมรักษาเสถียรภาพการเงิน`
     });
     if (s.boardFeedbackLog.length > 8) s.boardFeedbackLog.length = 8;
+    s.clubDemands = [];
+    syncAndEvaluateClubDemands(s, { seasonReset: true });
   }
   s.finPendIn = 0;
   s.finPendOut = 0;
@@ -5581,7 +5597,10 @@ export function afterMatchDay(
   }
 
   maybeTriggerDilemma(s);
-  if (mg) evaluateAndIssueBoardDirectives(s);
+  if (mg) {
+    evaluateAndIssueBoardDirectives(s);
+    syncAndEvaluateClubDemands(s);
+  }
   s.money = capMoney(s.money);
 }
 
@@ -7639,4 +7658,424 @@ export function simulateInstantMatchPayload(
     matchEnv: simMatchEnv,
     ...(simHighlightClips.length ? { highlightClips: simHighlightClips } : {})
   };
+}
+
+// ============================================================
+// PLAYER & FAN CLUB DEMANDS (คำเรียกร้องจากนักเตะ & แฟนบอล)
+// ============================================================
+
+function isClubDemandMet(s: GameState, req: ClubDemandItem): boolean {
+  if (req.kind === 'upgrade_fac') {
+    const fk = req.targetKey as FacilityKey;
+    return (s[fk] ?? 1) >= (req.targetLv ?? 2);
+  }
+  if (req.kind === 'renovate_fac') {
+    const fk = req.targetKey as FacilityKey;
+    return (s[fk] ?? 1) > 0 && getFacilityCondition(s, fk) >= (req.targetLv ?? 92);
+  }
+  if (req.kind === 'hire_staff') {
+    const stf = getStaffState(s);
+    const rk = req.targetKey as StaffRoleKey;
+    return (stf[rk] ?? 0) >= (req.targetLv ?? 1);
+  }
+  if (req.kind === 'ticket_price') {
+    return resolveTicketPlan(s).fanMoodDelta >= 0;
+  }
+  if (req.kind === 'live_stream') {
+    return (s.liveStream || 'off') !== 'off';
+  }
+  if (req.kind === 'megastore_stock') {
+    return (s.merchLv ?? 1) > 0 && (s.megastore?.capital ?? 0) >= (req.targetLv ?? 20);
+  }
+  if (req.kind === 'win_bonus') {
+    return (s.winBonus ?? 0) > 0;
+  }
+  return false;
+}
+
+function applyClubDemandReward(s: GameState, req: ClubDemandItem) {
+  const me = s.teams[s.me];
+  if (req.source === 'player') {
+    s.mor = clamp((s.mor ?? 55) + 4, 0, 100);
+    s.bd = clamp((s.bd ?? 55) + 2, 0, 100);
+    if (req.targetKey === 'tr' || req.targetKey === 'med' || req.targetKey === 'turfLv') {
+      me?.sq.forEach((q) => {
+        q.fit = clamp((q.fit ?? 90) + 2, 35, 100);
+      });
+    } else if (req.targetKey === 'analyticsLv' && me) {
+      me.tacFam = clamp((me.tacFam ?? 65) + 4, 30, 100);
+    }
+  } else {
+    s.fan = clamp((s.fan ?? 55) + 5, 5, 100);
+    s.bd = clamp((s.bd ?? 55) + 2, 0, 100);
+    if (me) adjustTeamFans(me, 320);
+  }
+  pushFeed(s, req.source === 'player' ? 'ห้องแต่งตัว' : 'แฟนบอล', `✅ ตอบรับคำเรียกร้องสำเร็จ: ${req.title} (${req.rewardText})`, 'ok');
+}
+
+function buildClubDemandCandidates(s: GameState): ClubDemandItem[] {
+  const me = s.teams[s.me];
+  if (!me) return [];
+  const curMd = s.md ?? 0;
+  const maxLvTier = clamp(me.tier * 2 + 3, 3, 9);
+  const capName = me.cap || xi(me)[0]?.n || 'กัปตันทีม';
+  const injuredPlayer = me.sq.find((q) => q.inj > 0);
+  const stf = getStaffState(s);
+  const cands: ClubDemandItem[] = [];
+
+  // 1. Worn facilities needing maintenance
+  const facLabels: Record<FacilityKey, string> = {
+    st: 'อัฒจันทร์สนามเหย้า',
+    tr: 'ศูนย์ฝึกซ้อม',
+    ya: 'อะคาเดมี่เยาวชน',
+    med: 'ศูนย์การแพทย์ & กายภาพ',
+    merchLv: 'ร้านเมกะสโตร์',
+    turfLv: 'พื้นสนามหญ้า & ระบายน้ำ',
+    analyticsLv: 'ห้องวิเคราะห์เกม',
+    travelLv: 'รถบัส & ที่พักทีมเยือน'
+  };
+  (['turfLv', 'tr', 'med', 'st', 'travelLv'] as FacilityKey[]).forEach((fk) => {
+    const lv = s[fk] ?? 1;
+    if (lv <= 0) return;
+    const cond = getFacilityCondition(s, fk);
+    if (cond < 84) {
+      const isFan = fk === 'st';
+      cands.push({
+        id: `renovate-${fk}-${s.season}-${curMd}`,
+        source: isFan ? 'fan' : 'player',
+        requester: isFan ? 'กลุ่มกองเชียร์เจ้าถิ่น' : capName,
+        kind: 'renovate_fac',
+        targetKey: fk,
+        targetLv: 95,
+        title: isFan ? `${facLabels[fk]}ทรุดโทรม (${cond}%)` : `ปรับปรุงซ่อมแซม${facLabels[fk]} (${cond}%)`,
+        detail: isFan ? 'แฟนบอลขอให้ซ่อมบำรุงเพื่อความปลอดภัยและบรรยากาศเชียร์' : 'นักเตะขอให้ซ่อมบำรุงให้สภาพกลับมา ≥ 95%',
+        rewardText: isFan ? 'ขวัญแฟน +5% · แฟนคลับ +320' : 'ขวัญทีม +4 · ความฟิต +2%',
+        createdMd: curMd,
+        dueMd: curMd + 5,
+        status: 'active'
+      });
+    }
+  });
+
+  // 2. Player upgrade / staff demands
+  if (injuredPlayer && (s.med ?? 1) < maxLvTier) {
+    const target = (s.med ?? 1) + 1;
+    cands.push({
+      id: `upg-med-${target}`,
+      source: 'player',
+      requester: `${injuredPlayer.n.split(' ')[0]} & กัปตัน`,
+      kind: 'upgrade_fac',
+      targetKey: 'med',
+      targetLv: target,
+      title: `อัปเกรดศูนย์การแพทย์เป็น Lv.${target}`,
+      detail: 'มีนักเตะบาดเจ็บในทีม ห้องแต่งตัวขออุปกรณ์ฟื้นฟูที่ทันสมัยขึ้น',
+      rewardText: 'ขวัญทีม +4 · ความฟิต +2%',
+      createdMd: curMd,
+      dueMd: curMd + 6,
+      status: 'active'
+    });
+  } else if (stf.physio < Math.min(3, me.tier + 1)) {
+    const target = stf.physio + 1;
+    cands.push({
+      id: `staff-physio-${target}`,
+      source: 'player',
+      requester: capName,
+      kind: 'hire_staff',
+      targetKey: 'physio',
+      targetLv: target,
+      title: `จ้างทีมแพทย์ & นักกายภาพ Lv.${target}`,
+      detail: 'นักเตะขอผู้เชี่ยวชาญดูแลกล้ามเนื้อและลดความเสี่ยงบาดเจ็บ',
+      rewardText: 'ขวัญทีม +4 · บอร์ด +2%',
+      createdMd: curMd,
+      dueMd: curMd + 6,
+      status: 'active'
+    });
+  }
+
+  if ((s.tr ?? 1) < maxLvTier) {
+    const target = (s.tr ?? 1) + 1;
+    cands.push({
+      id: `upg-tr-${target}`,
+      source: 'player',
+      requester: capName,
+      kind: 'upgrade_fac',
+      targetKey: 'tr',
+      targetLv: target,
+      title: `อัปเกรดศูนย์ฝึกซ้อมเป็น Lv.${target}`,
+      detail: 'แข้งตัวหลักเรียกร้องสนามซ้อมและฟิตเนสที่ได้มาตรฐานสูงขึ้น',
+      rewardText: 'ขวัญทีม +4 · ความฟิต +2%',
+      createdMd: curMd,
+      dueMd: curMd + 6,
+      status: 'active'
+    });
+  }
+
+  if ((s.turfLv ?? 1) < maxLvTier) {
+    const target = (s.turfLv ?? 1) + 1;
+    cands.push({
+      id: `upg-turf-${target}`,
+      source: 'player',
+      requester: 'แกนหลักเกมรุก',
+      kind: 'upgrade_fac',
+      targetKey: 'turfLv',
+      targetLv: target,
+      title: `ปูพื้นสนามหญ้า & ระบายน้ำ Lv.${target}`,
+      detail: 'นักเตะสายเทคนิคขอพื้นหญ้าเรียบเพื่อต่อบอลจังหวะเดียวได้แม่นขึ้น',
+      rewardText: 'ขวัญทีม +4 · ความฟิต +2%',
+      createdMd: curMd,
+      dueMd: curMd + 6,
+      status: 'active'
+    });
+  }
+
+  if ((me.tacFam ?? 65) < 78 && (s.analyticsLv ?? 1) < maxLvTier) {
+    const target = (s.analyticsLv ?? 1) + 1;
+    cands.push({
+      id: `upg-analytics-${target}`,
+      source: 'player',
+      requester: capName,
+      kind: 'upgrade_fac',
+      targetKey: 'analyticsLv',
+      targetLv: target,
+      title: `อัปเกรดห้องวิเคราะห์เกม Lv.${target}`,
+      detail: 'นักเตะขอระบบวิดีโอสเก๊าต์คู่แข่งเพื่อทำความเข้าใจแท็กติกเร็วขึ้น',
+      rewardText: 'เข้าใจแผน +4% · ขวัญทีม +4',
+      createdMd: curMd,
+      dueMd: curMd + 6,
+      status: 'active'
+    });
+  }
+
+  if ((s.travelLv ?? 1) < Math.min(6, me.tier + 2)) {
+    const target = (s.travelLv ?? 1) + 1;
+    cands.push({
+      id: `upg-travel-${target}`,
+      source: 'player',
+      requester: capName,
+      kind: 'upgrade_fac',
+      targetKey: 'travelLv',
+      targetLv: target,
+      title: `อัปเกรดรถบัส & ที่พักเกมเยือน Lv.${target}`,
+      detail: 'ลดความเหนื่อยล้าจากการเดินทางไปแข่งต่างจังหวัด',
+      rewardText: 'ขวัญทีม +4 · บอร์ด +2%',
+      createdMd: curMd,
+      dueMd: curMd + 7,
+      status: 'active'
+    });
+  }
+
+  // 3. Fan demands
+  const tPlan = resolveTicketPlan(s);
+  if (tPlan.fanMoodDelta < 0 && (s.fan ?? 55) < 70) {
+    cands.push({
+      id: `ticket-fair-${s.season}-${curMd}`,
+      source: 'fan',
+      requester: 'ชมรมแฟนบอลตั๋วปี',
+      kind: 'ticket_price',
+      targetKey: 'ticket',
+      title: 'ปรับลดราคาบัตรเข้าชมให้เข้าถึงง่าย',
+      detail: 'แฟนบอลร้องเรียนค่าตั๋วแพงเกินไป ขอปรับเป็นราคามาตรฐานหรือประหยัด',
+      rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
+      createdMd: curMd,
+      dueMd: curMd + 5,
+      status: 'active'
+    });
+  }
+
+  if ((s.liveStream || 'off') === 'off') {
+    cands.push({
+      id: `stream-enable-${s.season}`,
+      source: 'fan',
+      requester: 'แฟนคลับต่างจังหวัด',
+      kind: 'live_stream',
+      targetKey: 'stream',
+      title: 'เปิดสัญญาถ่ายทอดสดแมตช์สโมสร',
+      detail: 'แฟนบอลทางไกลเรียกร้องช่องทางรับชมสดทุกนัดพร้อมสร้างรายได้เสริม',
+      rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
+      createdMd: curMd,
+      dueMd: curMd + 5,
+      status: 'active'
+    });
+  }
+
+  if ((s.st ?? 1) < maxLvTier) {
+    const target = (s.st ?? 1) + 1;
+    cands.push({
+      id: `upg-st-${target}`,
+      source: 'fan',
+      requester: 'กลุ่มเชียร์อุลตร้า',
+      kind: 'upgrade_fac',
+      targetKey: 'st',
+      targetLv: target,
+      title: `ขยายอัฒจันทร์สนามเหย้าเป็น Lv.${target}`,
+      detail: 'ความต้องการเข้าชมเกมในบ้านสูง แฟนบอลอยากเห็นสนามใหญ่และจุคนเพิ่ม',
+      rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
+      createdMd: curMd,
+      dueMd: curMd + 7,
+      status: 'active'
+    });
+  }
+
+  if ((s.merchLv ?? 1) <= 0 || (s.merchLv ?? 1) < Math.min(7, me.tier + 2)) {
+    const target = Math.max(1, (s.merchLv ?? 0) + 1);
+    cands.push({
+      id: `upg-merch-${target}`,
+      source: 'fan',
+      requester: 'กลุ่มแฟนคลับสโมสร',
+      kind: 'upgrade_fac',
+      targetKey: 'merchLv',
+      targetLv: target,
+      title: target === 1 ? 'สร้างร้านเมกะสโตร์สโมสร' : `ขยายเมกะสโตร์ & แฟนโซน Lv.${target}`,
+      detail: 'เสื้อเชียร์และผ้าพันคอขายดี แฟนบอลเรียกร้องโซนสินค้าสโมสรที่ดีขึ้น',
+      rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
+      createdMd: curMd,
+      dueMd: curMd + 7,
+      status: 'active'
+    });
+  } else if ((s.megastore?.capital ?? 0) < 12) {
+    cands.push({
+      id: `merch-stock-${s.season}-${curMd}`,
+      source: 'fan',
+      requester: 'กลุ่มแฟนบอล',
+      kind: 'megastore_stock',
+      targetKey: 'capital',
+      targetLv: 20,
+      title: 'เติมทุนสต็อกเสื้อ & ของที่ระลึกเมกะสโตร์',
+      detail: 'สต็อกเสื้อหน้าร้านใกล้หมด แฟนบอลขอให้เติมทุนหมุนเวียนอย่างน้อย 20 ลบ.',
+      rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
+      createdMd: curMd,
+      dueMd: curMd + 5,
+      status: 'active'
+    });
+  }
+
+  if ((s.ya ?? 1) < Math.min(7, me.tier + 2)) {
+    const target = (s.ya ?? 1) + 1;
+    cands.push({
+      id: `upg-ya-${target}`,
+      source: 'fan',
+      requester: 'ชุมชนท้องถิ่น',
+      kind: 'upgrade_fac',
+      targetKey: 'ya',
+      targetLv: target,
+      title: `อัปเกรดอะคาเดมี่เยาวชน Lv.${target}`,
+      detail: 'ชาวเมืองอยากเห็นเยาวชนท้องถิ่นก้าวขึ้นมาติดทีมชุดใหญ่',
+      rewardText: 'ขวัญแฟน +5% · แฟนคลับ +320',
+      createdMd: curMd,
+      dueMd: curMd + 7,
+      status: 'active'
+    });
+  }
+
+  return cands;
+}
+
+export function checkClubDemandsCompletion(s: GameState): string[] {
+  if (s.mode !== 'm' || !Array.isArray(s.clubDemands) || s.clubDemands.length === 0) return [];
+  const doneTitles: string[] = [];
+  s.clubDemands.forEach((req) => {
+    if (req.status !== 'active') return;
+    if (isClubDemandMet(s, req)) {
+      req.status = 'done';
+      applyClubDemandReward(s, req);
+      doneTitles.push(req.title);
+    }
+  });
+  return doneTitles;
+}
+
+export function syncAndEvaluateClubDemands(
+  s: GameState,
+  opts?: { initial?: boolean; seasonReset?: boolean }
+): string[] {
+  if (s.mode !== 'm') return [];
+  const curMd = s.md ?? 0;
+  const completed = checkClubDemandsCompletion(s);
+  const prevList = Array.isArray(s.clubDemands) ? s.clubDemands : [];
+  const nextActive: ClubDemandItem[] = [];
+
+  prevList.forEach((req) => {
+    if (req.status !== 'active') return;
+    if (curMd > req.dueMd) {
+      req.status = 'expired';
+      if (req.source === 'player') {
+        s.mor = clamp((s.mor ?? 55) - 2, 0, 100);
+      } else {
+        s.fan = clamp((s.fan ?? 55) - 2, 5, 100);
+      }
+      pushFeed(
+        s,
+        req.source === 'player' ? 'ห้องแต่งตัว' : 'แฟนบอล',
+        `⏳ คำเรียกร้องหมดเวลา: ${req.title} (${req.source === 'player' ? 'ขวัญทีม -2' : 'ขวัญแฟน -2%'})`,
+        'urg'
+      );
+      return;
+    }
+    nextActive.push(req);
+  });
+
+  const maxActive = 3;
+  if (nextActive.length < maxActive) {
+    const candidates = buildClubDemandCandidates(s);
+    const activeKeys = new Set(nextActive.map((x) => `${x.kind}:${x.targetKey}`));
+    const hasPlayer = nextActive.some((x) => x.source === 'player');
+    const hasFan = nextActive.some((x) => x.source === 'fan');
+
+    const pickFromSource = (source: 'player' | 'fan') => {
+      const pool = candidates.filter((c) => c.source === source && !activeKeys.has(`${c.kind}:${c.targetKey}`));
+      if (!pool.length) return null;
+      const urgentPool = pool.filter((c) => c.kind === 'renovate_fac' || c.kind === 'ticket_price' || c.kind === 'live_stream' || c.kind === 'megastore_stock');
+      const finalPool = urgentPool.length ? urgentPool : pool;
+      return finalPool[R(0, Math.min(finalPool.length - 1, 2))];
+    };
+
+    if (!hasPlayer && nextActive.length < maxActive) {
+      const pPick = pickFromSource('player');
+      if (pPick) {
+        nextActive.push(pPick);
+        activeKeys.add(`${pPick.kind}:${pPick.targetKey}`);
+        if (!opts?.initial && !opts?.seasonReset) {
+          pushFeed(s, 'คำเรียกร้องนักเตะ', `🗣️ ${pPick.requester}: ${pPick.title}`, 'offer');
+        }
+      }
+    }
+    if (!hasFan && nextActive.length < maxActive) {
+      const fPick = pickFromSource('fan');
+      if (fPick) {
+        nextActive.push(fPick);
+        activeKeys.add(`${fPick.kind}:${fPick.targetKey}`);
+        if (!opts?.initial && !opts?.seasonReset) {
+          pushFeed(s, 'เสียงจากแฟนบอล', `📣 ${fPick.requester}: ${fPick.title}`, 'offer');
+        }
+      }
+    }
+    if (!opts?.initial && nextActive.length < maxActive) {
+      const extraPool = candidates.filter((c) => !activeKeys.has(`${c.kind}:${c.targetKey}`));
+      if (extraPool.length) {
+        const pick = extraPool[R(0, Math.min(extraPool.length - 1, 3))];
+        nextActive.push(pick);
+        pushFeed(
+          s,
+          pick.source === 'player' ? 'คำเรียกร้องนักเตะ' : 'เสียงจากแฟนบอล',
+          `${pick.source === 'player' ? '🗣️' : '📣'} ${pick.requester}: ${pick.title}`,
+          'offer'
+        );
+      }
+    }
+  }
+
+  s.clubDemands = nextActive;
+  return completed;
+}
+
+export function getActiveClubDemands(s: GameState): ClubDemandItem[] {
+  if (s.mode !== 'm') return [];
+  if (Array.isArray(s.clubDemands)) {
+    return s.clubDemands.filter((d) => d && d.status === 'active' && !isClubDemandMet(s, d));
+  }
+  // Legacy saves without initialized demands: derive clean deterministic starter requests
+  const cands = buildClubDemandCandidates(s);
+  const p = cands.find((c) => c.source === 'player');
+  const f = cands.find((c) => c.source === 'fan');
+  return [p, f].filter((x): x is ClubDemandItem => Boolean(x));
 }

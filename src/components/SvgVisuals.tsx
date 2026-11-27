@@ -8,6 +8,13 @@ import { getClubCaptainPalette } from './CaptainBadge';
 import { getPositionCanvasPalette } from './PositionBadge';
 import { getOvrCanvasPalette } from './OvrBadge';
 import { getRatingCanvasPalette } from './RatingBadge';
+import {
+  SHIRT_SPONSOR_BRANDS,
+  buildSponsorEmblemSvg,
+  getAiTeamSponsorBrand,
+  resolveStateSponsorBrand,
+  type ShirtSponsorBrand
+} from '../data/sponsorBrands';
 
 export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
   <>
@@ -397,6 +404,8 @@ export const KitJersey: React.FC<{
   away?: boolean;
   size?: number;
   team?: Team | null;
+  state?: GameState | null;
+  sponsorBrand?: ShirtSponsorBrand | null;
   hideNumber?: boolean;
   shirtNo?: number | string;
   isGK?: boolean;
@@ -405,6 +414,8 @@ export const KitJersey: React.FC<{
   away = false,
   size = 80,
   team = null,
+  state = null,
+  sponsorBrand,
   hideNumber = false,
   shirtNo = '10',
   isGK = false
@@ -431,7 +442,30 @@ export const KitJersey: React.FC<{
         ? '#ffffff'
         : d;
   const numText = String(shirtNo ?? '10');
-  const numFontSize = numText.length >= 2 ? 21 : 23;
+  const numFontSize = numText.length >= 2 ? 19 : 21;
+
+  const resolvedBrand =
+    sponsorBrand !== undefined
+      ? sponsorBrand
+      : state && (!team || team.id === state.me)
+        ? resolveStateSponsorBrand(state)
+        : team
+          ? getAiTeamSponsorBrand(team.id, state?.season ?? 1, state ? resolveStateSponsorBrand(state).id : null)
+          : SHIRT_SPONSOR_BRANDS[0];
+
+  const isDarkShirt = colLum(c) < 0.44;
+  const plateBg = isDarkShirt ? '#ffffff' : '#0f172a';
+  const plateInk = isDarkShirt ? '#0f172a' : '#ffffff';
+  const spCode = resolvedBrand ? resolvedBrand.code.trim() : '';
+  const plateY = hideNumber ? 45.5 : 40.5;
+  const plateH = hideNumber ? 16.5 : 12.5;
+  const emblemBoxSize = hideNumber ? 11.5 : 9;
+  const emblemBoxX = 26.5;
+  const emblemBoxY = plateY + (plateH - emblemBoxSize) / 2;
+  const emblemScale = (emblemBoxSize - 1.5) / 16;
+  const spFontSize = hideNumber
+    ? spCode.length >= 8 ? 5.9 : spCode.length >= 6 ? 6.6 : 7.3
+    : spCode.length >= 8 ? 5.2 : spCode.length >= 6 ? 5.8 : 6.5;
 
   return (
     <svg width={size} height={size} viewBox="5 7 90 81" className="shrink-0" aria-hidden="true">
@@ -483,10 +517,53 @@ export const KitJersey: React.FC<{
         dangerouslySetInnerHTML={{ __html: buildCrestSvgMarkup(resolveCrestSpec(club.name || team?.name || 'Club', team, club, true), `${uid}-jc`) }}
       />
 
+      {/* Printed Main Sponsor Chest Logo (high-contrast legible plate) */}
+      {resolvedBrand && (
+        <g>
+          <rect
+            x="24.5"
+            y={plateY}
+            width="51"
+            height={plateH}
+            rx={hideNumber ? 3.3 : 2.7}
+            fill={plateBg}
+            fillOpacity={isDarkShirt ? 0.94 : 0.9}
+            stroke={resolvedBrand.accent}
+            strokeWidth="0.75"
+          />
+          <rect
+            x={emblemBoxX}
+            y={emblemBoxY}
+            width={emblemBoxSize}
+            height={emblemBoxSize}
+            rx="2"
+            fill={resolvedBrand.badgeBg}
+          />
+          <g
+            transform={`translate(${(emblemBoxX + 0.75).toFixed(2)}, ${(emblemBoxY + 0.75).toFixed(2)}) scale(${emblemScale.toFixed(3)})`}
+            dangerouslySetInnerHTML={{
+              __html: buildSponsorEmblemSvg(resolvedBrand.motif, '#ffffff', resolvedBrand.accent)
+            }}
+          />
+          <text
+            x="56.5"
+            y={plateY + plateH * 0.66}
+            textAnchor="middle"
+            fontSize={spFontSize}
+            fontWeight="900"
+            letterSpacing="0.25"
+            fontFamily="ui-sans-serif, system-ui, sans-serif"
+            fill={plateInk}
+          >
+            {spCode}
+          </text>
+        </g>
+      )}
+
       {!hideNumber && (
         <text
           x="50"
-          y="71"
+          y="74.5"
           textAnchor="middle"
           fontSize={numFontSize}
           fontWeight="800"

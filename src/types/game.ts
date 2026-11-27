@@ -991,6 +991,35 @@ export interface GameState {
   sackReason?: string;
   natTeam?: NationalTeamState | null;
   clubRecordsByTeam?: Record<number, ClubRecords>;
+  sponsorSeed?: number;
+  sponsorBrands?: string[];
+  clubDemands?: ClubDemandItem[];
+}
+
+export type ClubDemandSource = 'player' | 'fan';
+
+export type ClubDemandKind =
+  | 'upgrade_fac'
+  | 'renovate_fac'
+  | 'hire_staff'
+  | 'ticket_price'
+  | 'live_stream'
+  | 'megastore_stock'
+  | 'win_bonus';
+
+export interface ClubDemandItem {
+  id: string;
+  source: ClubDemandSource;
+  requester: string;
+  kind: ClubDemandKind;
+  targetKey: string;
+  targetLv?: number;
+  title: string;
+  detail: string;
+  rewardText: string;
+  createdMd: number;
+  dueMd: number;
+  status: 'active' | 'done' | 'expired';
 }
 
 export interface ManagerClubStint {
