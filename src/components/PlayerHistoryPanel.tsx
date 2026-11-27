@@ -197,9 +197,24 @@ export const PlayerHistoryPanel: React.FC<PlayerHistoryPanelProps> = ({
                   <th className="py-1.5 px-2 font-semibold">สโมสร / ลีก</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">OVR</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">ลง</th>
-                  <th className="py-1.5 px-1.5 text-center font-semibold">ยิง</th>
-                  <th className="py-1.5 px-1.5 text-center font-semibold">จ่าย</th>
-                  <th className="py-1.5 px-1.5 text-center font-semibold">CS</th>
+                  <th className="py-1.5 px-1.5 text-center font-semibold">
+                    <span className="inline-flex items-center justify-center gap-0.5">
+                      <StatIconBadge kind="goal" size="xs" />
+                      <span>ยิง</span>
+                    </span>
+                  </th>
+                  <th className="py-1.5 px-1.5 text-center font-semibold">
+                    <span className="inline-flex items-center justify-center gap-0.5">
+                      <StatIconBadge kind="assist" size="xs" />
+                      <span>จ่าย</span>
+                    </span>
+                  </th>
+                  <th className="py-1.5 px-1.5 text-center font-semibold">
+                    <span className="inline-flex items-center justify-center gap-0.5">
+                      <StatIconBadge kind="cleansheet" size="xs" />
+                      <span>CS</span>
+                    </span>
+                  </th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">MOTM</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">ใบ</th>
                   <th className="py-1.5 px-1.5 text-center font-semibold">เรตติ้ง</th>

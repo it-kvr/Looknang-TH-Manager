@@ -1561,30 +1561,33 @@ export const FormationPitch: React.FC<{
                           >
                             {goalsCount}
                           </text>
-                          <g transform="translate(4.1, 0)">
-                            <circle r="3.9" fill="#ffffff" stroke="#0f172a" strokeWidth="0.65" />
-                            <polygon points="0,-1.8 1.7,-0.55 1.05,1.45 -1.05,1.45 -1.7,-0.55" fill="#0f172a" />
-                            <line x1="0" y1="-1.8" x2="0" y2="-3.8" stroke="#0f172a" strokeWidth="0.55" />
-                            <line x1="1.7" y1="-0.55" x2="3.6" y2="-1.25" stroke="#0f172a" strokeWidth="0.55" />
-                            <line x1="1.05" y1="1.45" x2="2.3" y2="3.1" stroke="#0f172a" strokeWidth="0.55" />
-                            <line x1="-1.05" y1="1.45" x2="-2.3" y2="3.1" stroke="#0f172a" strokeWidth="0.55" />
-                            <line x1="-1.7" y1="-0.55" x2="-3.6" y2="-1.25" stroke="#0f172a" strokeWidth="0.55" />
-                          </g>
+                          <text
+                            x="3.9"
+                            y="0.5"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="7.4"
+                          >
+                            ⚽
+                          </text>
                         </>
                       ) : (
                         <>
                           <circle
                             r="5.6"
-                            fill="#ffffff"
-                            stroke="#0f172a"
+                            fill="#0f172a"
+                            stroke="#ffffff"
                             strokeWidth="1.05"
                           />
-                          <polygon points="0,-2.5 2.4,-0.8 1.5,2.0 -1.5,2.0 -2.4,-0.8" fill="#0f172a" />
-                          <line x1="0" y1="-2.5" x2="0" y2="-5.4" stroke="#0f172a" strokeWidth="0.75" />
-                          <line x1="2.4" y1="-0.8" x2="5.2" y2="-1.8" stroke="#0f172a" strokeWidth="0.75" />
-                          <line x1="1.5" y1="2.0" x2="3.3" y2="4.4" stroke="#0f172a" strokeWidth="0.75" />
-                          <line x1="-1.5" y1="2.0" x2="-3.3" y2="4.4" stroke="#0f172a" strokeWidth="0.75" />
-                          <line x1="-2.4" y1="-0.8" x2="-5.2" y2="-1.8" stroke="#0f172a" strokeWidth="0.75" />
+                          <text
+                            x="0"
+                            y="0.5"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="7.8"
+                          >
+                            ⚽
+                          </text>
                         </>
                       )}
                     </g>
@@ -1599,7 +1602,7 @@ export const FormationPitch: React.FC<{
                             width="19"
                             height="11.4"
                             rx="5.7"
-                            fill="#0284c7"
+                            fill="#0f172a"
                             stroke="#ffffff"
                             strokeWidth="1.05"
                           />
@@ -1615,33 +1618,33 @@ export const FormationPitch: React.FC<{
                           >
                             {assistsCount}
                           </text>
-                          <g transform="translate(3.8, -0.2) scale(0.82)">
-                            <path
-                              d="M-3.3 -2.4 L-1.0 -2.4 L0.4 -0.5 C1.6 -0.2 3.0 0.2 3.6 0.9 C3.9 1.3 3.7 1.8 3.1 1.8 L-3.4 1.8 Z"
-                              fill="#ffffff"
-                            />
-                            <rect x="-3.1" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
-                            <rect x="-0.55" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
-                            <rect x="2.0" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
-                          </g>
+                          <text
+                            x="3.9"
+                            y="0.5"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="7.4"
+                          >
+                            👟
+                          </text>
                         </>
                       ) : (
                         <>
                           <circle
                             r="5.6"
-                            fill="#0284c7"
+                            fill="#0f172a"
                             stroke="#ffffff"
                             strokeWidth="1.05"
                           />
-                          <g transform="translate(0, -0.2)">
-                            <path
-                              d="M-3.3 -2.4 L-1.0 -2.4 L0.4 -0.5 C1.6 -0.2 3.0 0.2 3.6 0.9 C3.9 1.3 3.7 1.8 3.1 1.8 L-3.4 1.8 Z"
-                              fill="#ffffff"
-                            />
-                            <rect x="-3.1" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
-                            <rect x="-0.55" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
-                            <rect x="2.0" y="1.8" width="1.15" height="1.1" rx="0.3" fill="#ffffff" />
-                          </g>
+                          <text
+                            x="0"
+                            y="0.5"
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize="7.8"
+                          >
+                            👟
+                          </text>
                         </>
                       )}
                     </g>

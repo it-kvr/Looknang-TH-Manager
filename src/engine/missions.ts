@@ -395,7 +395,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
   },
   {
     id: 'assist_king',
-    icon: '🪄',
+    icon: '👟',
     name: 'แอสซิสต์ปลิดวิญญาณ',
     desc: 'ส่งบอลจังหวะสุดท้ายให้เพื่อนร่วมทีมซัดตุงตาข่ายโดยตรง',
     category: 'playmaking',
@@ -595,7 +595,7 @@ export const PERSONAL_MISSIONS: PersonalMissionDef[] = [
   },
   {
     id: 'gk_clean',
-    icon: '🔒',
+    icon: '🧤',
     name: 'เสาหลักเก็บคลีนชีต',
     desc: 'คุมแนวรับให้ทีมไม่เสียประตูจนจบเกม',
     category: 'gk',

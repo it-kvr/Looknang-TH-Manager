@@ -471,9 +471,24 @@ export const SeasonStatsModal: React.FC<{
                     <th className="py-2 mland:py-1 px-2 mland:px-1.5">นักเตะ</th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">OVR</th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">ลงเล่น</th>
-                    <th className="py-2 mland:py-1 px-1.5 text-center">ประตู</th>
-                    <th className="py-2 mland:py-1 px-1.5 text-center">แอสซิสต์</th>
-                    <th className="py-2 mland:py-1 px-1.5 text-center">คลีนชีต</th>
+                    <th className="py-2 mland:py-1 px-1.5 text-center">
+                      <span className="inline-flex items-center justify-center gap-0.5">
+                        <StatIconBadge kind="goal" size="xs" />
+                        <span>ประตู</span>
+                      </span>
+                    </th>
+                    <th className="py-2 mland:py-1 px-1.5 text-center">
+                      <span className="inline-flex items-center justify-center gap-0.5">
+                        <StatIconBadge kind="assist" size="xs" />
+                        <span>แอสซิสต์</span>
+                      </span>
+                    </th>
+                    <th className="py-2 mland:py-1 px-1.5 text-center">
+                      <span className="inline-flex items-center justify-center gap-0.5">
+                        <StatIconBadge kind="cleansheet" size="xs" />
+                        <span>คลีนชีต</span>
+                      </span>
+                    </th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">เหลือง/แดง</th>
                     <th className="py-2 mland:py-1 px-1.5 text-center">MOTM</th>
                     <th className="py-2 mland:py-1 px-2.5 mland:px-1.5 text-right">เฉลี่ย</th>

@@ -36,20 +36,13 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
         {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
-        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true" className="shrink-0">
-          <circle cx="10" cy="10" r="8.6" fill="#ffffff" stroke="#0f172a" strokeWidth="1.25" />
-          <polygon points="10,6.1 13.7,8.8 12.3,13.1 7.7,13.1 6.3,8.8" fill="#0f172a" />
-          <line x1="10" y1="6.1" x2="10" y2="1.6" stroke="#0f172a" strokeWidth="1.05" />
-          <line x1="13.7" y1="8.8" x2="17.9" y2="7.2" stroke="#0f172a" strokeWidth="1.05" />
-          <line x1="12.3" y1="13.1" x2="15.1" y2="16.9" stroke="#0f172a" strokeWidth="1.05" />
-          <line x1="7.7" y1="13.1" x2="4.9" y2="16.9" stroke="#0f172a" strokeWidth="1.05" />
-          <line x1="6.3" y1="8.8" x2="2.1" y2="7.2" stroke="#0f172a" strokeWidth="1.05" />
-          <polygon points="8.3,1.8 11.7,1.8 10,3.2" fill="#0f172a" />
-          <polygon points="18.3,6.0 18.5,9.0 17.0,7.5" fill="#0f172a" />
-          <polygon points="1.7,6.0 1.5,9.0 3.0,7.5" fill="#0f172a" />
-          <polygon points="3.7,16.1 6.2,17.8 4.9,15.6" fill="#0f172a" />
-          <polygon points="16.3,16.1 13.8,17.8 15.1,15.6" fill="#0f172a" />
-        </svg>
+        <span
+          aria-hidden="true"
+          className="shrink-0 leading-none"
+          style={{ fontSize: Math.round(px * 0.92), lineHeight: 1 }}
+        >
+          ⚽
+        </span>
       </span>
     );
   }
@@ -62,16 +55,13 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
         {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
-        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true" className="shrink-0">
-          <circle cx="10" cy="10" r="8.8" fill="#0284c7" stroke="#e0f2fe" strokeWidth="1.25" />
-          <path
-            d="M4.8 6.3 H8.2 L10.3 9.2 C12.1 9.6 14.3 10.2 15.2 11.3 C15.7 11.9 15.4 12.7 14.4 12.7 H4.7 Z"
-            fill="#ffffff"
-          />
-          <rect x="5.1" y="12.7" width="1.8" height="1.7" rx="0.45" fill="#ffffff" />
-          <rect x="9.1" y="12.7" width="1.8" height="1.7" rx="0.45" fill="#ffffff" />
-          <rect x="13.0" y="12.7" width="1.8" height="1.7" rx="0.45" fill="#ffffff" />
-        </svg>
+        <span
+          aria-hidden="true"
+          className="shrink-0 leading-none"
+          style={{ fontSize: Math.round(px * 0.92), lineHeight: 1 }}
+        >
+          👟
+        </span>
       </span>
     );
   }
@@ -173,19 +163,13 @@ export const StatIconBadge: React.FC<StatIconBadgeProps> = ({
         style={{ minHeight: px, fontSize: Math.max(10, Math.round(px * 0.78)) }}
       >
         {showNum && <span className="font-extrabold tracking-tight">{numText}</span>}
-        <svg viewBox="0 0 20 20" width={px} height={px} aria-hidden="true" className="shrink-0">
-          <path
-            d="M10 1.5 L17.1 4.2 V9.6 C17.1 14.0 14.0 17.2 10 18.6 C6.0 17.2 2.9 14.0 2.9 9.6 V4.2 Z"
-            fill="#d97706"
-            stroke="#fef3c7"
-            strokeWidth="1.25"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M6.8 12.9 V9.1 C6.8 8.45 7.4 8.3 7.65 8.9 V7.45 C7.65 6.85 8.4 6.75 8.6 7.35 V6.4 C8.6 5.7 9.55 5.7 9.7 6.4 V7.1 C9.95 6.6 10.9 6.65 10.9 7.35 V8.3 C11.25 7.85 12.1 8.05 12.1 8.75 V10.9 L13.1 9.9 C13.6 9.45 14.2 10.05 13.75 10.65 L12.0 12.95 C11.55 13.55 10.9 13.85 10.0 13.85 H8.0 C7.3 13.85 6.8 13.45 6.8 12.9 Z"
-            fill="#ffffff"
-          />
-        </svg>
+        <span
+          aria-hidden="true"
+          className="shrink-0 leading-none"
+          style={{ fontSize: Math.round(px * 0.92), lineHeight: 1 }}
+        >
+          🧤
+        </span>
       </span>
     );
   }
