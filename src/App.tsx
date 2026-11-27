@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Settings } from 'lucide-react';
-import { OfflineIndicator, PWAInstallButton, PWAUpdateBanner } from './pwa.tsx';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { OfflineIndicator, PWAUpdateBanner } from './pwa.tsx';
 import {
   bindAutoLandscapeFullscreen,
   enterAutoMobileFullscreen,
@@ -8,22 +7,16 @@ import {
   restoreAutoFullscreenMigration
 } from './utils/fullscreen';
 import type { GameMode, MainTab, Player, Team, PlayerCareerProfile, MatchCardEvent, MatchResult, GameState, AppSettings, FinishedMatchPayload, MatchEnvironment, VarReplayRecord, ArchivedMatchReport, MatchHighlightClip, NationalTeamMatchRecord } from './types/game';
-import { P, clamp, fmtMoney, capMoney } from './utils/math';
+import { P, clamp, capMoney } from './utils/math';
 import { RN, TN, BASE, POS } from './data/thaiFootballData';
-import { getStadiumStyleSpec } from './data/crestAndKitData';
 import { getSettings, applyTheme, SFX, triggerConfetti, unlockAudio } from './utils/audioTheme';
 import { saveGameToSlot, assignTeamShirtNumbers, mkPlayer, ovMe, logFin, pushFeed, matchKits, pickGK } from './engine/playerCore';
-import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, fmtFans, fmtFansShort, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
+import { simMatch, applyMatchResult, createNewGame, startSeason, tallyMatchPlayers, tallyCupMatchPlayers, applyPositionAdaptation, applyMatchCards, creditPlayerPerf, applyDilemmaChoice, pickWinner, afterMatchDay, growPlayers, finishSeasonComputation, simulateInstantMatchPayload, getIncomingOffers, recordFinanceSnapshot, getActiveBoardModifiers, getFacilityCondition, ensureTeamFans, adjustTeamFans, updateTeamsFanbaseOnMatch, FA_CUP_PRIZE, ASIA_CUP_PRIZE, EXTRA_CUP_META, ensureSeasonExtraCups, resolveTicketPlan, calcHomeTicketRevenue, calcMainSponsorPayout, getActivePartnerDeals, simulateHomeMegastoreMatchSales, applyLiveStreamMatchSettlement, sortTable } from './engine/simulation';
 import { resolveStateSponsorBrand } from './data/sponsorBrands';
 import { applyNationalMatchOutcomeToDraft, buildNationalVirtualMatchState, ensureManagerHistoryInitialized, recordManagerClubMatchResult, refreshNationalCampaignOnNewSeason, switchManagerClub, syncActiveStintTrophy } from './engine/managerCareer';
 import { applyMatchMissionProgress, applyAiClubMatchMissions } from './engine/missions';
 import { appendPlayerCareerLog } from './engine/history';
-import { ClubCrest, PlayerFace } from './components/SvgVisuals';
-import { StaminaBar } from './components/StaminaBar';
-import { TransferMarketIcon } from './components/TransferMarketIcon';
-import { OvrBadge } from './components/OvrBadge';
-import { AnimatedMoney, MoneyDeltaPill, type MoneyDeltaState } from './components/AnimatedMoney';
-import stadiumHeroBg from './assets/images/thai_stadium_hero_1795511663761.jpg';
+import { AppEntrySplash, AppToast, AppTopHud, AppNavDock, type NextMatchDescriptor } from './components/AppShellSections';
 import { MainMenu } from './views/MainMenuView';
 import { LeagueView } from './views/LeagueView';
 import { SquadTacticsView } from './views/SquadTacticsView';
@@ -52,7 +45,6 @@ export default function App() {
   const [state, setState] = useState<GameState | null>(null);
   const [slot, setSlot] = useState<number>(1);
   const [saveEpoch, setSaveEpoch] = useState<number>(0);
-  const [hudMoneyDelta, setHudMoneyDelta] = useState<MoneyDeltaState | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [inspectPlayer, setInspectPlayer] = useState<{ player: Player; team: Team | null; initialTab?: 'info' | 'history' | 'missions' } | null>(null);
   const [inspectTeamId, setInspectTeamId] = useState<number | null>(null);
@@ -102,6 +94,15 @@ export default function App() {
   const [navResetSeq, setNavResetSeq] = useState(0);
   const [navIntent, setNavIntent] = useState<{ tab: MainTab; sub?: string; ts: number } | null>(null);
 
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const appSettingsRef = useRef(appSettings);
+  appSettingsRef.current = appSettings;
+  const activeMatchRef = useRef(activeMatch);
+  activeMatchRef.current = activeMatch;
+  const ntActiveMatchRef = useRef(ntActiveMatch);
+  ntActiveMatchRef.current = ntActiveMatch;
+
   useEffect(() => {
     const unbindFs = bindAutoLandscapeFullscreen();
     return () => {
@@ -111,13 +112,51 @@ export default function App() {
 
   const mainRef = useRef<HTMLElement | null>(null);
   const toastTimerRef = useRef<number | null>(null);
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
     if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
+  }, []);
+
+  const cloneGameState = (prev: GameState): GameState => {
+    try {
+      if (typeof structuredClone === 'function') return structuredClone(prev);
+    } catch {
+      // fallback to JSON clone
+    }
+    return JSON.parse(JSON.stringify(prev)) as GameState;
   };
 
-  const navigateToTab = (tab: MainTab, sub?: string) => {
+  useEffect(() => {
+    const st = getSettings();
+    applyTheme(st.theme);
+  }, []);
+
+  const pendingSaveRef = useRef<{ state: GameState; slot: number } | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  const skipNextSaveRef = useRef(false);
+
+  const flushPendingSave = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const pending = pendingSaveRef.current;
+    if (pending) {
+      pendingSaveRef.current = null;
+      saveGameToSlot(pending.state, pending.slot);
+    }
+  }, []);
+
+  const navigateShallow = useCallback((patcher: (prev: GameState) => Partial<GameState>) => {
+    skipNextSaveRef.current = true;
+    setState((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...patcher(prev) };
+    });
+  }, []);
+
+  const navigateToTab = useCallback((tab: MainTab, sub?: string) => {
     const resolvedTab: MainTab = tab === 'f' && sub === 'infra' ? 'u' : tab;
     setNavIntent({ tab: resolvedTab, sub, ts: Date.now() });
     setNavResetSeq((n) => n + 1);
@@ -139,37 +178,7 @@ export default function App() {
         ...(tab === 't' ? { lg: d.teams[d.me].tier } : {})
       };
     });
-  };
-
-  const cloneGameState = (prev: GameState): GameState => {
-    try {
-      if (typeof structuredClone === 'function') return structuredClone(prev);
-    } catch {
-      // fallback to JSON clone
-    }
-    return JSON.parse(JSON.stringify(prev)) as GameState;
-  };
-
-  useEffect(() => {
-    const st = getSettings();
-    applyTheme(st.theme);
-  }, []);
-
-  const pendingSaveRef = useRef<{ state: GameState; slot: number } | null>(null);
-  const saveTimerRef = useRef<number | null>(null);
-  const skipNextSaveRef = useRef(false);
-
-  const flushPendingSave = () => {
-    if (saveTimerRef.current !== null) {
-      window.clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    const pending = pendingSaveRef.current;
-    if (pending) {
-      pendingSaveRef.current = null;
-      saveGameToSlot(pending.state, pending.slot);
-    }
-  };
+  }, [navigateShallow]);
 
   useEffect(() => {
     if (!state) {
@@ -213,15 +222,7 @@ export default function App() {
     };
   }, []);
 
-  const navigateShallow = (patcher: (prev: GameState) => Partial<GameState>) => {
-    skipNextSaveRef.current = true;
-    setState((prev) => {
-      if (!prev) return prev;
-      return { ...prev, ...patcher(prev) };
-    });
-  };
-
-  const updateState = (updater: (draft: GameState) => void) => {
+  const updateState = useCallback((updater: (draft: GameState) => void) => {
     skipNextSaveRef.current = false;
     setState((prev) => {
       if (!prev) return prev;
@@ -230,9 +231,9 @@ export default function App() {
       clone.money = capMoney(clone.money);
       return clone;
     });
-  };
+  }, []);
 
-  const handleStartManager = (targetSlot: number, names: string[][], t0: Team[], pick: number, diff: number) => {
+  const handleStartManager = useCallback((targetSlot: number, names: string[][], t0: Team[], pick: number, diff: number) => {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     const fresh = createNewGame('m', { names, t0, pick });
@@ -243,15 +244,14 @@ export default function App() {
     fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
-    setHudMoneyDelta(null);
     setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
     showToast(`รับตำแหน่งผู้จัดการทีม ${fresh.teams[fresh.me].name} แล้ว!`);
-  };
+  }, [showToast]);
 
-  const handleStartPlayer = (
+  const handleStartPlayer = useCallback((
     targetSlot: number,
     profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'> & { age?: number; diff?: number }
   ) => {
@@ -265,15 +265,14 @@ export default function App() {
     fresh.lg = fresh.teams[fresh.me]?.tier ?? 0;
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
-    setHudMoneyDelta(null);
     setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(fresh);
     saveGameToSlot(fresh, targetSlot);
     showToast(`เซ็นสัญญาเริ่มต้นกับ ${fresh.teams[fresh.me].name} แล้ว!`);
-  };
+  }, [showToast]);
 
-  const handleLoadSave = (_mode: GameMode, targetSlot: number, loaded: GameState) => {
+  const handleLoadSave = useCallback((_mode: GameMode, targetSlot: number, loaded: GameState) => {
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
     flushPendingSave();
@@ -284,15 +283,14 @@ export default function App() {
     setActiveMatch(null);
     setNavIntent(null);
     setNavResetSeq((n) => n + 1);
-    setHudMoneyDelta(null);
     setSaveEpoch((n) => n + 1);
     setSlot(targetSlot);
     setState(normalized);
     saveGameToSlot(normalized, targetSlot);
     showToast('โหลดเซฟเรียบร้อย');
-  };
+  }, [flushPendingSave, showToast]);
 
-  const nextMatchInfo = useMemo(() => {
+  const nextMatchInfo = useMemo<NextMatchDescriptor | null>(() => {
     if (!state) return null;
     if (state.pa && state.ac && state.ac.alive && !state.ac.done) {
       const idx = state.ac.ids.indexOf(state.me);
@@ -336,7 +334,9 @@ export default function App() {
       }
     }
     return null;
-  }, [state]);
+  }, [state?.pa, state?.ac, state?.psc, state?.sc, state?.plc, state?.lc, state?.pdc, state?.dc, state?.pc, state?.cup, state?.md, state?.fx, state?.me]);
+  const nextMatchInfoRef = useRef(nextMatchInfo);
+  nextMatchInfoRef.current = nextMatchInfo;
 
   const myLeagueRank = useMemo(() => {
     if (!state) return 1;
@@ -344,7 +344,12 @@ export default function App() {
     const sorted = sortTable(state.teams.filter((t) => t.tier === myTier));
     const idx = sorted.findIndex((t) => t.id === state.me);
     return idx >= 0 ? idx + 1 : 1;
-  }, [state]);
+  }, [state?.teams, state?.me]);
+
+  const incomingMarketBadgeCount = useMemo(() => {
+    if (!state || state.mode !== 'm') return 0;
+    return getIncomingOffers(state).length + (state.scout?.results ? 1 : 0);
+  }, [state?.mode, state?.teams, state?.me, state?.offers, state?.off, state?.scout]);
 
   const ntPreMatchVirtual = useMemo(() => {
     if (!state || !ntPreMatchFixture || !state.natTeam?.active) return null;
@@ -994,11 +999,12 @@ export default function App() {
       .forEach((tr) => syncActiveStintTrophy(d, tr.title));
   };
 
-  const handleMatchFinish = (payload: FinishedMatchPayload) => {
-    if (!state || !activeMatch) return;
-    const finished = activeMatch;
-    const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
-    const clone = cloneGameState(state);
+  const handleMatchFinish = useCallback((payload: FinishedMatchPayload) => {
+    const curState = stateRef.current;
+    const finished = activeMatchRef.current;
+    if (!curState || !finished) return;
+    const wasOnLeagueHome = curState.v === 't' && (curState.tv ?? 0) === 0;
+    const clone = cloneGameState(curState);
     const outcome = applyFinishedMatchToDraft(clone, finished, payload);
     syncManagerMatchStintStats(clone, finished.homeId, payload);
     navigateDraftToLeague(clone);
@@ -1010,12 +1016,13 @@ export default function App() {
     setState(clone);
     if (outcome.shouldConfetti) triggerConfetti();
     if (outcome.missionToast) showToast(outcome.missionToast);
-  };
+  }, [showToast]);
 
-  const runInstantNextMatch = (fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean }) => {
-    if (!state) return;
-    const wasOnLeagueHome = state.v === 't' && (state.tv ?? 0) === 0;
-    const clone = cloneGameState(state);
+  const runInstantNextMatch = useCallback((fixture: { kind: 'league' | 'cup' | 'asia' | 'lc' | 'sc' | 'dc'; homeId: number; awayId: number; isDerby: boolean }) => {
+    const curState = stateRef.current;
+    if (!curState) return;
+    const wasOnLeagueHome = curState.v === 't' && (curState.tv ?? 0) === 0;
+    const clone = cloneGameState(curState);
     if (fixture.isDerby) clone.derby = 1;
     const payload = simulateInstantMatchPayload(clone, fixture.kind, fixture.homeId, fixture.awayId);
     const outcome = applyFinishedMatchToDraft(clone, fixture, payload);
@@ -1035,17 +1042,18 @@ export default function App() {
     else SFX.confirm();
     const scoreMsg = `⏭️ จบเกม: ${H.name} ${payload.gh}-${payload.ga} ${A.name}${payload.penText ? ` (${payload.penText})` : ''}`;
     showToast(outcome.missionToast ? `${scoreMsg} · ${outcome.missionToast}` : scoreMsg);
-  };
+  }, [showToast]);
 
-  const launchNationalPreMatch = (fixture: NationalTeamMatchRecord) => {
-    if (!state?.natTeam?.active) return;
+  const launchNationalPreMatch = useCallback((fixture: NationalTeamMatchRecord) => {
+    if (!stateRef.current?.natTeam?.active) return;
     setManagerCareerModal(null);
     setNtPreMatchFixture(fixture);
-  };
+  }, []);
 
-  const handleQuickSimNationalMatch = (fixture: NationalTeamMatchRecord) => {
-    if (!state?.natTeam?.active) return;
-    const virtual = buildNationalVirtualMatchState(state, fixture);
+  const handleQuickSimNationalMatch = useCallback((fixture: NationalTeamMatchRecord) => {
+    const curState = stateRef.current;
+    if (!curState?.natTeam?.active) return;
+    const virtual = buildNationalVirtualMatchState(curState, fixture);
     const payload = simulateInstantMatchPayload(
       virtual.matchState,
       'nt',
@@ -1068,11 +1076,12 @@ export default function App() {
         `🇹🇭 จบเกม: ${fixture.home ? 'ทีมชาติไทย' : fixture.opponentName} ${payload.gh}-${payload.ga} ${fixture.home ? fixture.opponentName : 'ทีมชาติไทย'}${payload.penText ? ` (${payload.penText})` : ''}`
       );
     }
-  };
+  }, [showToast, updateState]);
 
-  const handleNationalMatchFinish = (payload: FinishedMatchPayload) => {
-    if (!state || !ntActiveMatch) return;
-    const finishedNt = ntActiveMatch;
+  const handleNationalMatchFinish = useCallback((payload: FinishedMatchPayload) => {
+    const curState = stateRef.current;
+    const finishedNt = ntActiveMatchRef.current;
+    if (!curState || !finishedNt) return;
     let ntRes: { trophyWon?: string; wonMatch: boolean } = { wonMatch: false };
     updateState((d) => {
       ntRes = applyNationalMatchOutcomeToDraft(d, finishedNt.fixture.id, payload, finishedNt.fixture.home);
@@ -1086,29 +1095,31 @@ export default function App() {
     } else if (ntRes.wonMatch) {
       showToast('🇹🇭 ช้างศึกคว้าชัยชนะได้สำเร็จ!');
     }
-  };
+  }, [showToast, updateState]);
 
-  const handleTriggerNextStep = () => {
-    if (!state) return;
-    if (state.mode === 'm' && state.sack === 1 && state.md < state.fx.length) {
+  const handleTriggerNextStep = useCallback(() => {
+    const curState = stateRef.current;
+    if (!curState) return;
+    if (curState.mode === 'm' && curState.sack === 1 && curState.md < curState.fx.length) {
       SFX.tap();
       showToast('⚠️ คุณถูกปลดจากสโมสรเดิมแล้ว กรุณาเลือกสโมสรใหม่เพื่อคุมทัพต่อ');
       return;
     }
     unlockAudio();
     enterAutoMobileFullscreen().catch(() => undefined);
-    if (nextMatchInfo) {
-      if (appSettings.autoSkipMatch) {
-        runInstantNextMatch(nextMatchInfo);
+    const curNextMatch = nextMatchInfoRef.current;
+    if (curNextMatch) {
+      if (appSettingsRef.current.autoSkipMatch) {
+        runInstantNextMatch(curNextMatch);
         return;
       }
       SFX.tap();
-      setPreMatch(nextMatchInfo);
+      setPreMatch(curNextMatch);
       return;
     }
     SFX.tap();
-    if (state.md >= state.fx.length) {
-      const clone = cloneGameState(state);
+    if (curState.md >= curState.fx.length) {
+      const clone = cloneGameState(curState);
       const summary = finishSeasonComputation(clone);
       clone.money = capMoney(clone.money);
       if (clone.mode === 'm') {
@@ -1120,18 +1131,20 @@ export default function App() {
       setState(clone);
       setSeasonSummary(summary);
     }
-  };
+  }, [runInstantNextMatch, showToast]);
 
-  const handleStartNextSeason = (transferToTeamId?: number) => {
-    if (!state) return;
+  const handleStartNextSeason = useCallback((transferToTeamId?: number) => {
+    const curState = stateRef.current;
+    if (!curState) return;
     setSeasonStatsTarget(null);
-    if (state.sack === 1 && transferToTeamId == null) {
+    if (curState.sack === 1 && transferToTeamId == null) {
       flushPendingSave();
       setSeasonSummary(null);
       setState(null);
       return;
     }
-    const targetTeamName = transferToTeamId != null ? state.teams[transferToTeamId]?.name : undefined;
+    const targetTeamName = transferToTeamId != null ? curState.teams[transferToTeamId]?.name : undefined;
+    const nextSeasonNum = curState.season + 1;
     setSeasonSummary(null);
     updateState((d) => {
       growPlayers(d);
@@ -1167,12 +1180,12 @@ export default function App() {
     });
     showToast(
       targetTeamName
-        ? `✍️ รับตำแหน่งคุมทัพ ${targetTeamName} ลุยฤดูกาลที่ ${state.season + 1} แล้ว!`
-        : `เริ่มต้นฤดูกาลที่ ${state.season + 1} แล้ว!`
+        ? `✍️ รับตำแหน่งคุมทัพ ${targetTeamName} ลุยฤดูกาลที่ ${nextSeasonNum} แล้ว!`
+        : `เริ่มต้นฤดูกาลที่ ${nextSeasonNum} แล้ว!`
     );
-  };
+  }, [flushPendingSave, showToast, updateState]);
 
-  const handleEnterGame = () => {
+  const handleEnterGame = useCallback(() => {
     unlockAudio();
     SFX.tap();
     const cur = getSettings();
@@ -1180,73 +1193,86 @@ export default function App() {
       enterLandscapeFullscreen(true).catch(() => undefined);
     }
     setEnteredGame(true);
-  };
+  }, []);
+
+  const handleSelectDockTab = useCallback((key: MainTab) => {
+    SFX.tap();
+    setNavIntent(null);
+    setNavResetSeq((n) => n + 1);
+    if (mainRef.current) mainRef.current.scrollTop = 0;
+    navigateShallow((d) => ({
+      v: key,
+      tv: 0,
+      sub: 0,
+      lg: d.teams[d.me].tier
+    }));
+  }, [navigateShallow]);
+
+  const handleOpenNtModal = useCallback(() => setManagerCareerModal('nt'), []);
+  const handleOpenSettings = useCallback(() => setShowSettings(true), []);
+  const handleInspectTeam = useCallback((tid: number) => setInspectTeamId(tid), []);
+  const handleInspectPlayer = useCallback(
+    (p: Player, t: Team | null, initialTab?: 'info' | 'history' | 'missions') =>
+      setInspectPlayer({ player: p, team: t, initialTab }),
+    []
+  );
+  const handleOpenSeasonStats = useCallback((seasonNum?: number) => {
+    const curState = stateRef.current;
+    if (!curState) return;
+    setSeasonStatsTarget(seasonNum ?? curState.seasonArchives?.[0]?.season ?? curState.season);
+  }, []);
+  const handleOpenVarReplay = useCallback((homeId: number, awayId: number, records: VarReplayRecord[]) => {
+    if (!records.length) return;
+    SFX.tap();
+    setHistoryVarModal({ homeId, awayId, records, activeId: records[0].id });
+  }, []);
+  const handleOpenHighlights = useCallback(
+    (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => {
+      if (!clips.length) return;
+      SFX.tap();
+      setHistoryHighlightModal({ homeId, awayId, clips, title, scoreSummary });
+    },
+    []
+  );
+  const handleOpenMatchReport = useCallback((report: ArchivedMatchReport, title?: string) => {
+    SFX.tap();
+    setMatchReportModal({ report, title });
+  }, []);
+  const handleOpenManagerCareer = useCallback((initialTab?: 'career' | 'nt') => {
+    SFX.tap();
+    setManagerCareerModal(initialTab || 'career');
+  }, []);
+  const handleCloseManagerCareer = useCallback(() => setManagerCareerModal(null), []);
+  const handleRetireToMenu = useCallback(() => {
+    flushPendingSave();
+    setManagerCareerModal(null);
+    setState(null);
+  }, [flushPendingSave]);
+  const handleInspectNationalReport = useCallback((fx: NationalTeamMatchRecord) => {
+    const curState = stateRef.current;
+    if (!curState || !fx.report) return;
+    const v = buildNationalVirtualMatchState(curState, fx);
+    const hTm = v.matchState.teams[v.homeId];
+    const aTm = v.matchState.teams[v.awayId];
+    const reportState: GameState = {
+      ...v.matchState,
+      me: v.homeId === v.thailandId ? 0 : 1,
+      teams: [hTm, aTm]
+    };
+    const fixedReport: ArchivedMatchReport = {
+      ...fx.report,
+      h: 0,
+      a: 1
+    };
+    setNtReportModal({
+      report: fixedReport,
+      title: `🇹🇭 ${fx.compName} · ${fx.roundLabel}`,
+      virtualState: reportState
+    });
+  }, []);
 
   if (!enteredGame && !state) {
-    return (
-      <div className="relative h-full w-full flex items-center justify-center overflow-hidden bg-[#040c08] stage-viewport">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[#040c08]">
-          <img
-            src={stadiumHeroBg}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover object-center brightness-[0.52] saturate-95"
-          />
-          <div className="absolute inset-0 bg-gradient-to-b from-[#020805]/86 via-[#05140c]/62 to-[#020805]/90" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,rgba(22,124,72,0.22),rgba(2,8,5,0.68)_75%)]" />
-        </div>
-
-        <div className="relative z-10 w-full max-w-md mx-auto rounded-3xl mland:rounded-2xl border border-white/15 bg-[#07130d]/88 shadow-[0_24px_64px_rgba(0,0,0,0.75)] px-6 py-7 mland:px-6 mland:py-4 flex flex-col items-center text-center gap-4 mland:gap-2.5">
-          <div className="w-16 h-16 mland:w-12 mland:h-12 rounded-2xl bg-white/10 border border-white/18 flex items-center justify-center shadow-xl">
-            <svg viewBox="0 0 40 40" className="w-11 h-11 mland:w-8 mland:h-8" aria-hidden="true">
-              <defs>
-                <linearGradient id="enter_pitch_crest" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0" stopColor="#123a26" />
-                  <stop offset="1" stopColor="#22794b" />
-                </linearGradient>
-                <radialGradient id="enter_flood_crest" cx="0.5" cy="0.15" r="0.65">
-                  <stop offset="0" stopColor="#fde68a" stopOpacity="0.72" />
-                  <stop offset="1" stopColor="#fde68a" stopOpacity="0" />
-                </radialGradient>
-              </defs>
-              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_pitch_crest)" />
-              <rect x="2" y="2" width="36" height="36" rx="8" fill="url(#enter_flood_crest)" />
-              <g fill="none" stroke="#e6f7ed" strokeWidth="1.2" opacity="0.88">
-                <path d="M5 24h30" />
-                <ellipse cx="20" cy="27" rx="7.5" ry="3.2" />
-              </g>
-              <circle cx="20" cy="22" r="3.4" fill="#ffffff" stroke="#0d2619" strokeWidth="1" />
-            </svg>
-          </div>
-
-          <div className="space-y-1 mland:space-y-0.5">
-            <h1 className="text-3xl sm:text-4xl mland:text-2xl font-extrabold font-display tracking-wide leading-none text-white">
-              ลูกหนัง<span className="text-[#fad05a]">ไทย</span>
-            </h1>
-            <p className="text-xs sm:text-sm mland:text-[11px] font-medium text-emerald-100/80">
-              เกมจำลองคุมสโมสร &amp; นักเตะอาชีพไทย
-            </p>
-          </div>
-
-          <button
-            type="button"
-            data-no-auto-fs="1"
-            onClick={handleEnterGame}
-            className="w-full py-3.5 mland:py-2.5 px-6 rounded-2xl mland:rounded-xl bg-gradient-to-r from-[#f7cb51] via-[#f5c242] to-[#e0a214] text-[#211500] font-extrabold text-base mland:text-sm font-display shadow-[0_10px_28px_rgba(245,194,66,0.35)] hover:brightness-105 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <span>⚽</span>
-            <span>กดเพื่อเข้าเกม</span>
-          </button>
-
-          <p className="text-[11px] mland:text-[9.5px] text-emerald-100/60">
-            แตะเพื่อเปิดเสียงเกมและเข้าสู่โหมดเต็มจอแนวนอนอัตโนมัติ
-          </p>
-        </div>
-
-        <OfflineIndicator />
-        <PWAUpdateBanner />
-      </div>
-    );
+    return <AppEntrySplash onEnterGame={handleEnterGame} />;
   }
 
   if (!state) {
@@ -1258,11 +1284,7 @@ export default function App() {
           onLoadSave={handleLoadSave}
           onToast={showToast}
         />
-        {toast && (
-          <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[70] max-w-[90vw] px-4 py-2.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs font-bold shadow-xl text-center pointer-events-none">
-            {toast}
-          </div>
-        )}
+        <AppToast message={toast} variant="menu" />
         <OfflineIndicator />
         <PWAUpdateBanner />
       </>
@@ -1285,287 +1307,37 @@ export default function App() {
         sb: state.p.sb
       }
     : null;
-  const tabs: [MainTab, ReactNode, string][] =
-    state.mode === 'm'
-      ? [
-          ['t', '🏆', 'การแข่งขัน'],
-          ['q', '⚽', 'ทีม & แผน'],
-          ['r', '🏋️', 'ฝึกซ้อม'],
-          ['k', <TransferMarketIcon size={18} className="w-[18px] h-[18px] mland:w-[15px] mland:h-[15px] mland:!text-[13px]" />, 'ตลาด'],
-          ['f', '💰', 'การเงิน'],
-          ['u', '🏟️', 'สโมสร']
-        ]
-      : [
-          ['t', '🏆', 'การแข่งขัน'],
-          ['p', '🌟', 'นักเตะ'],
-          ['q', '⚽', 'ทีม & แผน'],
-          ['k', '🧭', 'สโมสร']
-        ];
 
+  const validTabKeys: MainTab[] = state.mode === 'm' ? ['t', 'q', 'r', 'k', 'f', 'u'] : ['t', 'p', 'q', 'k'];
   const resolvedView: MainTab = state.v === 'c' ? 't' : state.v;
-  const curTab: MainTab = tabs.some(([k]) => k === resolvedView) ? resolvedView : tabs[0][0];
+  const curTab: MainTab = validTabKeys.includes(resolvedView) ? resolvedView : validTabKeys[0];
 
   const myFansCount = ensureTeamFans(me);
   const nextOppTeam = nextMatchInfo
     ? state.teams[nextMatchInfo.homeId === state.me ? nextMatchInfo.awayId : nextMatchInfo.homeId]
     : null;
   const nextIsHome = nextMatchInfo ? nextMatchInfo.homeId === state.me : false;
-  const boardVal = state.bd ?? 55;
-  const boardToneCls =
-    boardVal >= 65
-      ? 'text-[var(--g)]'
-      : boardVal >= 40
-        ? 'text-[#b47b00] dark:text-[var(--lamp)]'
-        : 'text-[var(--red)]';
-  const myStaminaVal = Math.round(state.p?.en ?? 100);
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-[var(--bg)] text-[var(--ink)] safe-all">
-        {/* Pinned Single-Row 3-Zone Top HUD Bar */}
-        <header className="shrink-0 z-30 bg-[var(--surface)]/98 border-t-2 border-t-[var(--g)] border-b border-[var(--line)] shadow-[0_1px_6px_rgba(12,31,21,0.05)] dark:shadow-[0_1px_8px_rgba(0,0,0,0.28)]">
-          <div className="w-full mx-auto px-3 sm:px-4 mland:px-2.5 py-1.5 sm:py-2 mland:py-1 flex items-center justify-between gap-2 sm:gap-4 mland:gap-2">
-          {/* Zone 1: Club / Player Identity */}
-          <div className="flex items-center gap-2 sm:gap-2.5 mland:gap-1.5 min-w-0 flex-1 lg:flex-none lg:max-w-[34%]">
-            <button
-              type="button"
-              onClick={() => {
-                SFX.tap();
-                navigateToTab(state.mode === 'm' ? 'u' : 'k');
-              }}
-              aria-label="สโมสร"
-              title="ข้อมูลสโมสร"
-              className="shrink-0 w-10 h-10 mland:w-8 mland:h-8 p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 flex items-center justify-center [&>svg]:w-[30px] [&>svg]:h-[30px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform shadow-2xs"
-            >
-              <ClubCrest name={me.name} size={30} team={me} club={state.club} isMyClub={state.mode === 'm'} />
-            </button>
-            {state.mode === 'p' && state.p && mePlayer && (
-              <button
-                type="button"
-                onClick={() => {
-                  SFX.tap();
-                  navigateToTab('p');
-                }}
-                aria-label="ข้อมูลนักเตะ"
-                title={state.p.name}
-                className="shrink-0 w-10 h-10 mland:w-8 mland:h-8 p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/90 border border-[var(--line)]/85 flex items-center justify-center [&>svg]:w-[32px] [&>svg]:h-[32px] mland:[&>svg]:w-6 mland:[&>svg]:h-6 cursor-pointer active:scale-95 transition-transform overflow-hidden shadow-2xs"
-              >
-                <PlayerFace player={mePlayer} team={me} state={state} careerProfile={state.p} size={32} bare />
-              </button>
-            )}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="font-bold text-xs sm:text-[15px] mland:text-xs truncate font-display leading-tight tracking-tight text-[var(--ink)]">
-                  {state.mode === 'p' && state.p ? state.p.name : me.name}
-                </span>
-                {state.mode === 'm' ? (
-                  <span className={`sm:hidden inline-flex items-center w-[76px] shrink-0 whitespace-nowrap text-[11px] font-extrabold tabular ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                    <AnimatedMoney value={state.money} resetKey={saveEpoch} deltaPlacement="below" />
-                  </span>
-                ) : (
-                  <OvrBadge ov={state.p ? ovMe(state.p) : 60} size="2xs" prefix="OVR" className="sm:hidden" />
-                )}
-              </div>
-              <div className="text-[10.5px] mland:text-[8.5px] text-[var(--mut)] flex items-center gap-x-1.5 truncate tabular leading-tight mt-0.5 mland:mt-0">
-                {state.mode === 'p' && (
-                  <>
-                    <span className="truncate font-semibold text-[var(--ink)]/80">{me.name}</span>
-                    <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
-                  </>
-                )}
-                <span className="truncate font-medium">{TN[me.tier]}</span>
-                <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
-                <span className="shrink-0">ซีซั่น {state.season}</span>
-                <span aria-hidden="true" className="opacity-40 shrink-0">·</span>
-                <span className="shrink-0">นัด {Math.min(state.md, state.fx.length)}/{state.fx.length}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Zone 2: Center Club / Player Telemetry Strip */}
-          <div className="hidden sm:flex items-center justify-center shrink-0 relative">
-            <div className="flex items-stretch h-10 mland:h-8 rounded-xl mland:rounded-lg bg-[var(--surface-2)]/65 border border-[var(--line)]/85 divide-x divide-[var(--line)]/80 overflow-hidden">
-              {state.mode === 'm' ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('f'); }}
-                    title="ไปหน้าการเงิน"
-                    className="w-[104px] mland:w-[86px] shrink-0 overflow-hidden flex flex-col justify-center px-2.5 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none whitespace-nowrap">งบสโมสร</div>
-                    <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 whitespace-nowrap ${state.money < 0 ? 'text-[var(--red)]' : 'text-[var(--g)]'}`}>
-                      <AnimatedMoney
-                        value={state.money}
-                        resetKey={saveEpoch}
-                        deltaPlacement="none"
-                        onDeltaChange={setHudMoneyDelta}
-                      />
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('t'); }}
-                    title="ดูตารางคะแนน"
-                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">อันดับ</div>
-                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
-                      #{myLeagueRank}
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('u'); }}
-                    title="ความเชื่อมั่นบอร์ดบริหาร"
-                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">บอร์ด</div>
-                    <div className={`text-xs mland:text-[10px] font-extrabold tabular leading-tight mt-0.5 ${boardToneCls}`}>
-                      {boardVal}%
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('u'); }}
-                    title={`แฟนบอลสโมสร ${fmtFans(myFansCount)} คน`}
-                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">แฟนบอล</div>
-                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
-                      {fmtFansShort(myFansCount)}
-                    </div>
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('p'); }}
-                    title="ข้อมูลนักเตะ"
-                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">OVR</div>
-                    <OvrBadge ov={state.p ? ovMe(state.p) : 60} variant="inline" size="xs" className="mt-0.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('t'); }}
-                    title="ดูตารางคะแนนทีม"
-                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">อันดับทีม</div>
-                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[var(--ink)] leading-tight mt-0.5">
-                      #{myLeagueRank}
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('p'); }}
-                    title={`ความฟิต ${myStaminaVal}%`}
-                    className="flex flex-col justify-center px-3 mland:px-2 py-1 mland:py-0.5 text-left hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ความฟิต</div>
-                    <div className="mt-0.5">
-                      <StaminaBar
-                        value={myStaminaVal}
-                        variant="inline"
-                        label=""
-                        barWidthClass="w-8 sm:w-10 mland:w-7"
-                      />
-                    </div>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { SFX.tap(); navigateToTab('p'); }}
-                    title={`แฟนบอลสโมสร ${fmtFans(myFansCount)} คน`}
-                    className="flex flex-col justify-center items-center px-3 mland:px-2 py-1 mland:py-0.5 text-center hover:bg-[var(--surface)]/80 transition-colors cursor-pointer"
-                  >
-                    <div className="text-[9.5px] mland:text-[7.5px] text-[var(--mut)] leading-none">ชื่อเสียง</div>
-                    <div className="text-xs mland:text-[10px] font-extrabold tabular text-[#b47b00] dark:text-[var(--lamp)] leading-tight mt-0.5">
-                      ★ {state.p?.rep ?? 0}
-                    </div>
-                  </button>
-                </>
-              )}
-            </div>
-            {state.mode === 'm' && (
-              <MoneyDeltaPill
-                delta={hudMoneyDelta}
-                placement="below"
-                className="!left-[52px] mland:!left-[43px] !-translate-x-1/2"
-              />
-            )}
-          </div>
-
-          {/* Zone 3: Matchday CTA & Settings */}
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2 mland:gap-1 shrink-0 lg:flex-1">
-            <PWAInstallButton variant="compact" onToast={showToast} />
-            {state.mode === 'm' && state.natTeam?.active && (() => {
-              const nextNt = state.natTeam.fixtures.find((f) => !f.played);
-              if (!nextNt) return null;
-              return (
-                <button
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setManagerCareerModal('nt');
-                  }}
-                  title={`ทีมชาติไทย: พบ ${nextNt.opponentName} (${nextNt.roundLabel})`}
-                  className="btn btn-surface h-10 mland:h-8 px-2.5 sm:px-3 mland:px-2 text-xs mland:text-[10px] border-blue-500/45 text-blue-700 dark:text-sky-300 font-extrabold whitespace-nowrap"
-                >
-                  <span>🇹🇭</span>
-                  <span className="hidden md:inline">ทีมชาติ</span>
-                </button>
-              );
-            })()}
-            <button
-              type="button"
-              onClick={handleTriggerNextStep}
-              title={
-                nextMatchInfo && nextOppTeam
-                  ? `นัดถัดไป: พบ ${nextOppTeam.name} (${nextIsHome ? 'เหย้า' : 'เยือน'})`
-                  : 'สรุปผลฤดูกาล'
-              }
-              className="btn btn-gold h-10 mland:h-8 px-3.5 sm:px-4.5 mland:px-3 text-xs sm:text-sm mland:text-[10.5px]"
-            >
-              {nextMatchInfo
-                ? appSettings.autoSkipMatch
-                  ? nextMatchInfo.kind === 'asia'
-                    ? '⏭️ ข้ามถ้วยทวีป'
-                    : nextMatchInfo.kind === 'sc'
-                      ? '⏭️ ข้ามแชมเปี้ยนส์คัพ'
-                      : nextMatchInfo.kind === 'lc'
-                        ? '⏭️ ข้ามลีกคัพ'
-                        : nextMatchInfo.kind === 'dc'
-                          ? '⏭️ ข้ามถ้วยดิวิชั่น'
-                          : nextMatchInfo.kind === 'cup'
-                            ? '⏭️ ข้ามถ้วยปชช.'
-                            : `⏭️ ข้ามนัดที่ ${state.md + 1}`
-                  : nextMatchInfo.kind === 'asia'
-                    ? '🌏 แข่งถ้วยทวีป'
-                    : nextMatchInfo.kind === 'sc'
-                      ? '🏅 แข่งแชมเปี้ยนส์คัพ'
-                      : nextMatchInfo.kind === 'lc'
-                        ? '🥇 แข่งลีกคัพ'
-                        : nextMatchInfo.kind === 'dc'
-                          ? '🛡️ แข่งถ้วยดิวิชั่น'
-                          : nextMatchInfo.kind === 'cup'
-                            ? '🏆 แข่งถ้วยปชช.'
-                            : `▶ แข่งนัดที่ ${state.md + 1}`
-                : '🏁 สรุปจบฤดูกาล'}
-            </button>
-            <button
-              type="button"
-              onClick={() => { SFX.tap(); setShowSettings(true); }}
-              aria-label="ตั้งค่า"
-              title="ตั้งค่าเกม"
-              className="btn-icon w-10 h-10 mland:w-8 mland:h-8"
-            >
-              <Settings className="w-4 h-4 mland:w-3.5 mland:h-3.5" />
-            </button>
-          </div>
-        </div>
-      </header>
+      {/* Pinned Single-Row 3-Zone Top HUD Bar */}
+      <AppTopHud
+        state={state}
+        me={me}
+        mePlayer={mePlayer}
+        saveEpoch={saveEpoch}
+        myLeagueRank={myLeagueRank}
+        myFansCount={myFansCount}
+        nextMatchInfo={nextMatchInfo}
+        nextOppTeam={nextOppTeam}
+        nextIsHome={nextIsHome}
+        autoSkipMatch={Boolean(appSettings.autoSkipMatch)}
+        onNavigateToTab={navigateToTab}
+        onTriggerNextStep={handleTriggerNextStep}
+        onOpenNtModal={handleOpenNtModal}
+        onOpenSettings={handleOpenSettings}
+        onToast={showToast}
+      />
 
       <div className="flex-1 min-h-0 flex flex-row overflow-hidden">
         {/* Center Game Stage */}
@@ -1576,28 +1348,15 @@ export default function App() {
             <LeagueView
               key={`t-${navResetSeq}`}
               state={state}
-              onInspectTeam={(tid) => setInspectTeamId(tid)}
-              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onInspectTeam={handleInspectTeam}
+              onInspectPlayer={handleInspectPlayer}
               onUpdateState={updateState}
               onShallowPatch={navigateShallow}
               onNavigate={navigateToTab}
-              onOpenSeasonStats={(seasonNum) =>
-                setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
-              }
-              onOpenVarReplay={(homeId, awayId, records) => {
-                if (!records.length) return;
-                SFX.tap();
-                setHistoryVarModal({ homeId, awayId, records, activeId: records[0].id });
-              }}
-              onOpenHighlights={(homeId, awayId, clips, title, scoreSummary) => {
-                if (!clips.length) return;
-                SFX.tap();
-                setHistoryHighlightModal({ homeId, awayId, clips, title, scoreSummary });
-              }}
-              onOpenMatchReport={(report, title) => {
-                SFX.tap();
-                setMatchReportModal({ report, title });
-              }}
+              onOpenSeasonStats={handleOpenSeasonStats}
+              onOpenVarReplay={handleOpenVarReplay}
+              onOpenHighlights={handleOpenHighlights}
+              onOpenMatchReport={handleOpenMatchReport}
               onToast={showToast}
             />
           )}
@@ -1607,7 +1366,7 @@ export default function App() {
               state={state}
               onUpdateState={updateState}
               onShallowPatch={navigateShallow}
-              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onInspectPlayer={handleInspectPlayer}
               onNavigate={navigateToTab}
               onToast={showToast}
             />
@@ -1617,7 +1376,7 @@ export default function App() {
               key={`r-${navResetSeq}`}
               state={state}
               onUpdateState={updateState}
-              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onInspectPlayer={handleInspectPlayer}
               onToast={showToast}
             />
           )}
@@ -1626,7 +1385,7 @@ export default function App() {
               key={`k-${navResetSeq}`}
               state={state}
               onUpdateState={updateState}
-              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onInspectPlayer={handleInspectPlayer}
               onToast={showToast}
               navIntent={navIntent}
             />
@@ -1639,14 +1398,9 @@ export default function App() {
               onUpdateState={updateState}
               onNavigate={navigateToTab}
               onToast={showToast}
-              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
-              onOpenSeasonStats={(seasonNum) =>
-                setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
-              }
-              onOpenManagerCareer={(initialTab) => {
-                SFX.tap();
-                setManagerCareerModal(initialTab || 'career');
-              }}
+              onInspectPlayer={handleInspectPlayer}
+              onOpenSeasonStats={handleOpenSeasonStats}
+              onOpenManagerCareer={handleOpenManagerCareer}
               navIntent={navIntent}
             />
           )}
@@ -1656,9 +1410,7 @@ export default function App() {
               state={state}
               onUpdateState={updateState}
               onToast={showToast}
-              onOpenSeasonStats={(seasonNum) =>
-                setSeasonStatsTarget(seasonNum ?? state.seasonArchives?.[0]?.season ?? state.season)
-              }
+              onOpenSeasonStats={handleOpenSeasonStats}
             />
           )}
           {curTab === 'k' && state.mode === 'p' && (
@@ -1666,8 +1418,8 @@ export default function App() {
               key={`pk-${navResetSeq}`}
               state={state}
               onUpdateState={updateState}
-              onInspectTeam={(tid) => setInspectTeamId(tid)}
-              onInspectPlayer={(p, t) => setInspectPlayer({ player: p, team: t })}
+              onInspectTeam={handleInspectTeam}
+              onInspectPlayer={handleInspectPlayer}
               onToast={showToast}
             />
           )}
@@ -1675,48 +1427,12 @@ export default function App() {
         </main>
 
         {/* Pinned Left-Rail Game Console Dock */}
-        <nav aria-label="เมนูหลักในเกม" className="shrink-0 z-30 bg-[var(--surface)]/98 border-r border-[var(--line)] order-first w-[74px] mland:w-[64px] h-full px-1.5 mland:px-1 py-2 mland:py-1.5 overflow-y-auto">
-          <div className="flex flex-col gap-1.5 mland:gap-1 h-full justify-center">
-            {tabs.map(([key, icon, label]) => {
-              const active = curTab === key;
-              let badgeCount = 0;
-              if (state.mode === 'm' && key === 'k') {
-                badgeCount = getIncomingOffers(state).length + (state.scout?.results ? 1 : 0);
-              }
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => {
-                    SFX.tap();
-                    setNavIntent(null);
-                    setNavResetSeq((n) => n + 1);
-                    if (mainRef.current) mainRef.current.scrollTop = 0;
-                    navigateShallow((d) => ({
-                      v: key,
-                      tv: 0,
-                      sub: 0,
-                      lg: d.teams[d.me].tier
-                    }));
-                  }}
-                  className={`relative flex-col py-1.5 px-1 mland:py-1 mland:px-0.5 text-[9.5px] mland:text-[8.5px] flex-1 min-h-[40px] max-h-[60px] mland:min-h-[36px] mland:max-h-[48px] rounded-xl mland:rounded-lg flex items-center justify-center gap-0.5 font-bold cursor-pointer transition-all min-w-0 ${
-                    active
-                      ? 'bg-gradient-to-b from-[#1a9657] to-[#147845] text-white shadow-[0_2px_8px_rgba(21,128,73,0.3)]'
-                      : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/85'
-                  }`}
-                >
-                  {badgeCount > 0 && (
-                    <span className="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-[var(--lamp)] text-[#261900] text-[8.5px] font-black leading-[15px] text-center tabular shadow-2xs">
-                      {badgeCount > 9 ? '9+' : badgeCount}
-                    </span>
-                  )}
-                  <span className="text-base mland:text-[13px] leading-none inline-flex items-center justify-center">{icon}</span>
-                  <span className="truncate max-w-full leading-tight">{label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </nav>
+        <AppNavDock
+          curTab={curTab}
+          mode={state.mode}
+          incomingBadgeCount={incomingMarketBadgeCount}
+          onSelectTab={handleSelectDockTab}
+        />
       </div>
 
       {/* Modals */}
@@ -2074,12 +1790,8 @@ export default function App() {
           onUpdateState={updateState}
           onPlayNationalMatch={launchNationalPreMatch}
           onQuickSimNationalMatch={handleQuickSimNationalMatch}
-          onRetireToMenu={() => {
-            flushPendingSave();
-            setManagerCareerModal(null);
-            setState(null);
-          }}
-          onClose={() => setManagerCareerModal(null)}
+          onRetireToMenu={handleRetireToMenu}
+          onClose={handleCloseManagerCareer}
           onToast={showToast}
         />
       )}
@@ -2091,42 +1803,14 @@ export default function App() {
           onUpdateState={updateState}
           onPlayNationalMatch={launchNationalPreMatch}
           onQuickSimNationalMatch={handleQuickSimNationalMatch}
-          onInspectNationalReport={(fx) => {
-            if (!fx.report) return;
-            const v = buildNationalVirtualMatchState(state, fx);
-            const hTm = v.matchState.teams[v.homeId];
-            const aTm = v.matchState.teams[v.awayId];
-            const reportState: GameState = {
-              ...v.matchState,
-              me: v.homeId === v.thailandId ? 0 : 1,
-              teams: [hTm, aTm]
-            };
-            const fixedReport: ArchivedMatchReport = {
-              ...fx.report,
-              h: 0,
-              a: 1
-            };
-            setNtReportModal({
-              report: fixedReport,
-              title: `🇹🇭 ${fx.compName} · ${fx.roundLabel}`,
-              virtualState: reportState
-            });
-          }}
-          onRetireToMenu={() => {
-            flushPendingSave();
-            setManagerCareerModal(null);
-            setState(null);
-          }}
-          onClose={() => setManagerCareerModal(null)}
+          onInspectNationalReport={handleInspectNationalReport}
+          onRetireToMenu={handleRetireToMenu}
+          onClose={handleCloseManagerCareer}
           onToast={showToast}
         />
       )}
 
-      {toast && (
-        <div className="fixed bottom-16 sm:bottom-20 mland:bottom-2.5 left-1/2 mland:left-[calc(50%+35px)] -translate-x-1/2 z-[70] max-w-[92vw] mland:max-w-[76vw] px-4 py-2 mland:py-1.5 rounded-xl bg-[var(--ink)]/95 text-[var(--bg)] border border-white/10 text-xs mland:text-[10.5px] font-bold shadow-xl text-center pointer-events-none">
-          {toast}
-        </div>
-      )}
+      <AppToast message={toast} variant="game" />
       <OfflineIndicator />
       <PWAUpdateBanner />
     </div>

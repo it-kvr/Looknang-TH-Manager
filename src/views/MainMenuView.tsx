@@ -219,13 +219,13 @@ function buildStarPosterPool(preloaded?: { m: (GameState | null)[]; p: (GameStat
   return pool;
 }
 
-export const MainMenu: React.FC<{
+export const MainMenu = React.memo<{
   onStartManager: (slot: number, names: string[][], t0: Team[], pick: number, diff: number) => void;
   onStartPlayer: (slot: number, profile: Omit<PlayerCareerProfile, 'b' | 'age' | 'gl' | 'as' | 'ap' | 'rs' | 'en' | 'plan'> & { age?: number; diff?: number }) => void;
   onLoadSave: (mode: GameMode, slot: number, state: GameState) => void;
   onToast: (msg: string) => void;
   onStepChange?: (step: 'menu' | 'ms' | 'cr') => void;
-}> = ({ onStartManager, onStartPlayer, onLoadSave, onToast, onStepChange }) => {
+}>(({ onStartManager, onStartPlayer, onLoadSave, onToast, onStepChange }) => {
   const [step, setStep] = useState<'menu' | 'ms' | 'cr'>('menu');
   const goStep = (next: 'menu' | 'ms' | 'cr') => {
     setStep(next);
@@ -2760,5 +2760,5 @@ export const MainMenu: React.FC<{
       })()}
     </div>
   );
-};
+});
 

@@ -136,7 +136,7 @@ interface DropTargetState {
 
 const TOUCH_LIFT_PX = 36;
 
-export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
+export const LiveTacticsStudio = React.memo<LiveTacticsStudioProps>(({
   state,
   meTeamOrig,
   oppTeamOrig,
@@ -1506,4 +1506,4 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
       </div>
     </div>
   );
-};
+});

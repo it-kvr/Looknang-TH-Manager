@@ -40,7 +40,7 @@ import { OvrBadge } from '../components/OvrBadge';
 import { WdlFormStrip, WdlRecordBadges, getWdlDotClass, type WdlKind } from '../components/WdlBadge';
 import { CupView } from './CupView';
 
-export const LeagueView: React.FC<{
+export const LeagueView = React.memo<{
   state: GameState;
   onInspectTeam: (teamId: number) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
@@ -52,7 +52,7 @@ export const LeagueView: React.FC<{
   onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
   onToast?: (msg: string) => void;
-}> = ({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, onToast }) => {
+}>(({ state, onInspectTeam, onInspectPlayer, onUpdateState, onShallowPatch, onNavigate, onOpenSeasonStats, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, onToast }) => {
   const me = state.teams[state.me];
   const vt = state.lg ?? me.tier;
   const rawSub = state.v === 'c' ? 4 : (state.tv ?? 0);
@@ -1792,9 +1792,9 @@ export const LeagueView: React.FC<{
       )}
     </div>
   );
-};
+});
 
-export const ScheduleCalendarView: React.FC<{
+export const ScheduleCalendarView = React.memo<{
   state: GameState;
   onInspectTeam: (teamId: number) => void;
   onPlayNext?: () => void;
@@ -1802,7 +1802,7 @@ export const ScheduleCalendarView: React.FC<{
   onOpenVarReplay?: (homeId: number, awayId: number, records: VarReplayRecord[]) => void;
   onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
-}> = ({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenHighlights, onOpenMatchReport }) => {
+}>(({ state, onInspectTeam, onPlayNext, onOpenMarket, onOpenVarReplay, onOpenHighlights, onOpenMatchReport }) => {
   const me = state.teams[state.me];
   const totalMd = state.fx.length || 30;
   const defaultMonth = state.md >= totalMd ? 4 : Math.min(4, Math.floor(state.md / 6));
@@ -2523,6 +2523,6 @@ export const ScheduleCalendarView: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 

@@ -54,7 +54,7 @@ function tierLabelOf(team: Team): string {
   return 'สโมสรต่างแดน';
 }
 
-export const CupView: React.FC<{
+export const CupView = React.memo<{
   state: GameState;
   onInspectTeam: (id: number) => void;
   onInspectPlayer?: (p: Player, t: Team) => void;
@@ -62,7 +62,7 @@ export const CupView: React.FC<{
   onOpenHighlights?: (homeId: number, awayId: number, clips: MatchHighlightClip[], title?: string, scoreSummary?: string) => void;
   onOpenMatchReport?: (report: ArchivedMatchReport, title?: string) => void;
   initialRightPane?: 'results' | 'stats';
-}> = ({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, initialRightPane = 'results' }) => {
+}>(({ state, onInspectTeam, onInspectPlayer, onOpenVarReplay, onOpenHighlights, onOpenMatchReport, initialRightPane = 'results' }) => {
   const initialTab: CupTabId = state.pc
     ? 'fa'
     : state.plc
@@ -1005,4 +1005,4 @@ export const CupView: React.FC<{
       )}
     </div>
   );
-};
+});

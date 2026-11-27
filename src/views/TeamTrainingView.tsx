@@ -17,12 +17,12 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { OvrBadge } from '../components/OvrBadge';
 
-export const TeamTrainingView: React.FC<{
+export const TeamTrainingView = React.memo<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast }) => {
+}>(({ state, onUpdateState, onInspectPlayer, onToast }) => {
   const [trainingMode, setTrainingMode] = useState<'program' | 'missions'>('program');
   const me = state.teams[state.me];
   const [selectedMissionPlayer, setSelectedMissionPlayer] = useState<string>(() => me.sq[0]?.n || '');
@@ -523,6 +523,6 @@ export const TeamTrainingView: React.FC<{
       )}
     </div>
   );
-};
+});
 
 

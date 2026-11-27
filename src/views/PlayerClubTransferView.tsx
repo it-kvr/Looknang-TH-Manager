@@ -23,13 +23,13 @@ import { CaptainBadge } from '../components/CaptainBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 
-export const PlayerClubTransferView: React.FC<{
+export const PlayerClubTransferView = React.memo<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectTeam: (tid: number) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onInspectTeam, onInspectPlayer, onToast }) => {
+}>(({ state, onUpdateState, onInspectTeam, onInspectPlayer, onToast }) => {
   const [subTab, setSubTab] = useState<'status' | 'transfer'>('status');
   const [boardTab, setBoardTab] = useState<'national' | 'division'>('national');
   const [tierFilter, setTierFilter] = useState<number>(state.teams[state.me]?.tier ?? 0);
@@ -751,4 +751,4 @@ export const PlayerClubTransferView: React.FC<{
       )}
     </div>
   );
-};
+});

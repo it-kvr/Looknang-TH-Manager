@@ -142,7 +142,7 @@ const ClubFinanceTooltip: React.FC<FinTooltipProps> = ({ active, payload }) => {
   );
 };
 
-export const FinanceClubView: React.FC<{
+export const FinanceClubView = React.memo<{
   tab: 'f' | 'u';
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
@@ -152,7 +152,7 @@ export const FinanceClubView: React.FC<{
   onOpenSeasonStats?: (season?: number) => void;
   onOpenManagerCareer?: (initialTab?: 'career' | 'nt') => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
-}> = ({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, onOpenManagerCareer, navIntent }) => {
+}>(({ tab, state, onUpdateState, onNavigate, onToast, onInspectPlayer, onOpenSeasonStats, onOpenManagerCareer, navIntent }) => {
   const [finTab, setFinTab] = useState<'overview' | 'commercial' | 'megastore' | 'ledger'>('overview');
   const [merchPeriod, setMerchPeriod] = useState<'season' | 'alltime' | 'seasons'>('season');
   const [partnerFilter, setPartnerFilter] = useState<'all' | 'ready' | 'merch'>('all');
@@ -6009,5 +6009,5 @@ export const FinanceClubView: React.FC<{
       })()}
     </div>
   );
-};
+});
 

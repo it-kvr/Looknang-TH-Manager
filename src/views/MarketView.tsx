@@ -97,13 +97,13 @@ export function evalOffer(q: Player, st: OfferDraft, me: Team) {
 
 type MarketTab = 'buy' | 'sell' | 'scout' | 'con';
 
-export const MarketView: React.FC<{
+export const MarketView = React.memo<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onInspectPlayer: (player: Player, team: Team | null) => void;
   onToast: (msg: string) => void;
   navIntent?: { tab: MainTab; sub?: string; ts: number } | null;
-}> = ({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
+}>(({ state, onUpdateState, onInspectPlayer, onToast, navIntent }) => {
   const me = state.teams[state.me];
   const tx = getLeagueTransferContext(state, me);
   const clubK = ensureClubIdentity(state);
@@ -2600,4 +2600,4 @@ export const MarketView: React.FC<{
       )}
     </div>
   );
-};
+});

@@ -19,14 +19,14 @@ import { PositionBadge } from '../components/PositionBadge';
 import { OvrBadge } from '../components/OvrBadge';
 import { SquadListHeaderBar } from '../components/SquadListHeaderBar';
 
-export const SquadTacticsView: React.FC<{
+export const SquadTacticsView = React.memo<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onShallowPatch?: (patcher: (prev: GameState) => Partial<GameState>) => void;
   onInspectPlayer: (player: Player, team: Team) => void;
   onNavigate?: (tab: MainTab, sub?: string) => void;
   onToast: (msg: string) => void;
-}> = ({ state, onUpdateState, onShallowPatch, onInspectPlayer, onNavigate, onToast }) => {
+}>(({ state, onUpdateState, onShallowPatch, onInspectPlayer, onNavigate, onToast }) => {
   const me = state.teams[state.me];
   const isMgr = state.mode === 'm';
   const sub = (state.sub ?? 0) > 3 ? 0 : (state.sub ?? 0);
@@ -2078,5 +2078,5 @@ export const SquadTacticsView: React.FC<{
       )}
     </div>
   );
-};
+});
 

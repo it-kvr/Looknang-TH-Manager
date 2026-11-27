@@ -1,7 +1,22 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  FastForward,
+  Film,
+  Flag,
+  Gauge,
+  Maximize2,
+  Minimize2,
+  Pause,
+  Play,
+  Route,
+  Star,
+  Tag,
+  Zap
+} from 'lucide-react';
 import type {
   ArchivedStreamComment,
   GameState,
+  LiveMatchWorld,
   MatchCardEvent,
   MatchEnvironment,
   MatchEvent,
@@ -10,12 +25,13 @@ import type {
   MatchTimelineItem,
   Player,
   PlayerPerfResult,
+  ShootoutState,
   SubRole,
   Team,
   TeamFacilityMatchModifiers,
   TimelineKind
 } from '../types/game';
-import { LINE } from '../data/thaiFootballData';
+import { AR_T, LINE } from '../data/thaiFootballData';
 import { clamp, fmtMoneyNum } from '../utils/math';
 import { SFX } from '../utils/audioTheme';
 import { useScrollTopOnChange } from '../utils/scrollReset';
@@ -24,14 +40,17 @@ import { computeMatchStreamProjection, fmtFansShort } from '../engine/simulation
 import {
   getStreamViewerTier,
   getViewerTierMeta,
-  type BroadcastChannelInfo
+  type BroadcastChannelInfo,
+  type LiveCommentItem
 } from '../engine/liveStreamChat';
 import { ClubCrest, FormationPitch, PlayerFace, type PitchPlayerMeta } from '../components/SvgVisuals';
 import { StatIconBadge } from '../components/StatIconBadge';
+import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
 import { RatingBadge } from '../components/RatingBadge';
+import type { LivePlayerMatchStats } from './LiveTacticsStudio';
 
 export interface MatchSubLogInfo {
   teamId: number;
@@ -194,7 +213,7 @@ const MATCH_THUMB_PX: Record<'xs' | 'sm' | 'md', number> = {
   md: 28
 };
 
-export const MatchPlayerThumb: React.FC<{
+export const MatchPlayerThumb = React.memo<{
   player: Player;
   team: Team;
   state: GameState;
@@ -205,7 +224,7 @@ export const MatchPlayerThumb: React.FC<{
   ringClassName?: string;
   isMotm?: boolean;
   isCaptain?: boolean;
-}> = ({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName, isMotm = false, isCaptain = false }) => {
+}>(({ player, team, state, kitColor, trimColor, size = 'sm', dark = false, ringClassName, isMotm = false, isCaptain = false }) => {
   const isMeClub = team.id === state.me && state.mode === 'm';
   const effKit = kitColor || '#15803d';
   const effTrim = player.pos === 'GK' ? undefined : trimColor;
@@ -260,9 +279,9 @@ export const MatchPlayerThumb: React.FC<{
       )}
     </span>
   );
-};
+});
 
-export const SubEventCard: React.FC<{
+export const SubEventCard = React.memo<{
   minute: number;
   team: Team;
   inName: string;
@@ -280,7 +299,7 @@ export const SubEventCard: React.FC<{
   awayTrim: string;
   state: GameState;
   captainName?: string;
-}> = ({
+}>(({
   minute,
   team,
   inName,
@@ -406,7 +425,7 @@ export const SubEventCard: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 export const MatchLogRow = React.memo<{
   l: MatchLogItem;
@@ -894,13 +913,13 @@ export interface MatchStatsSummary {
   offsidesA: number;
 }
 
-export const MatchStatsPanel: React.FC<{
+export const MatchStatsPanel = React.memo<{
   homeOrig: Team;
   awayOrig: Team;
   state: GameState;
   matchStats: MatchStatsSummary;
   matchCards: MatchCardEvent[];
-}> = ({ homeOrig, awayOrig, state, matchStats, matchCards }) => {
+}>(({ homeOrig, awayOrig, state, matchStats, matchCards }) => {
   const homeId = homeOrig.id;
   const awayId = awayOrig.id;
   const yH = matchCards.filter((c) => c.t === homeId && (c.type === 'Y' || c.type === 'Y2R')).length;
@@ -995,9 +1014,9 @@ export const MatchStatsPanel: React.FC<{
       </div>
     </div>
   );
-};
+});
 
-export const MatchTimelinePanel: React.FC<{
+export const MatchTimelinePanel = React.memo<{
   timelineEvents: MatchTimelineItem[];
   homeOrig: Team;
   awayOrig: Team;
@@ -1010,7 +1029,7 @@ export const MatchTimelinePanel: React.FC<{
   awayTrim: string;
   captains?: { H: string; A: string };
   standalone?: boolean;
-}> = ({
+}>(({
   timelineEvents,
   homeOrig,
   awayOrig,
@@ -1118,10 +1137,14 @@ export const MatchTimelinePanel: React.FC<{
     }
   };
 
-  const sortedTimeline = timelineEvents
-    .slice()
-    .sort((a, b) => (b.m - a.m) || (b.seq - a.seq));
-  const keyEventCount = sortedTimeline.filter((t) => t.side !== 'N').length;
+  const sortedTimeline = useMemo(
+    () => timelineEvents.slice().sort((a, b) => (b.m - a.m) || (b.seq - a.seq)),
+    [timelineEvents]
+  );
+  const keyEventCount = useMemo(
+    () => sortedTimeline.filter((t) => t.side !== 'N').length,
+    [sortedTimeline]
+  );
 
   return (
     <div className={standalone ? '' : 'border-t border-[var(--line)]'}>
@@ -1304,7 +1327,7 @@ export const MatchTimelinePanel: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 export interface GoalFlashUiState {
   side: 'H' | 'A';
@@ -1316,7 +1339,7 @@ export interface GoalFlashUiState {
   kit: string;
 }
 
-export const MatchBroadcastHeader: React.FC<{
+export const MatchBroadcastHeader = React.memo<{
   compTitle: string;
   compShortTitle: string;
   matchEnv: MatchEnvironment;
@@ -1343,7 +1366,7 @@ export const MatchBroadcastHeader: React.FC<{
   goalFlashInfo?: GoalFlashUiState | null;
   onInspectTeam?: (teamId: number) => void;
   rightControls: React.ReactNode;
-}> = ({
+}>(({
   compTitle,
   compShortTitle,
   matchEnv,
@@ -1667,7 +1690,7 @@ export const MatchBroadcastHeader: React.FC<{
       </div>
     </div>
   );
-};
+});
 
 export interface FullTimeAnalysisSummary {
   xgH: number;
@@ -1691,7 +1714,7 @@ export interface ShootoutSummary {
   finished?: boolean;
 }
 
-export const FullTimeMatchStage: React.FC<{
+export const FullTimeMatchStage = React.memo<{
   state: GameState;
   homeOrig: Team;
   awayOrig: Team;
@@ -1737,7 +1760,7 @@ export const FullTimeMatchStage: React.FC<{
   highlightClips?: MatchHighlightClip[];
   onOpenHighlights?: (clipId?: string) => void;
   onInspectPlayer?: (player: Player, team: Team) => void;
-}> = ({
+}>(({
   state,
   homeOrig,
   awayOrig,
@@ -3454,4 +3477,1770 @@ export const FullTimeMatchStage: React.FC<{
       </div>
     </div>
   );
+});
+
+export const MatchHeaderControls = React.memo<{
+  done: boolean;
+  matchPhaseUi: LiveMatchWorld['phase'];
+  paused: boolean;
+  speed: 0.25 | 0.5 | 1 | 2 | 5;
+  highlightCount: number;
+  onStartSecondHalf: () => void;
+  onSkipToEnd: () => void;
+  onTogglePause: () => void;
+  onCycleSpeed: () => void;
+  onOpenHighlights: () => void;
+  onConfirmFinish: () => void;
+}>(({
+  done,
+  matchPhaseUi,
+  paused,
+  speed,
+  highlightCount,
+  onStartSecondHalf,
+  onSkipToEnd,
+  onTogglePause,
+  onCycleSpeed,
+  onOpenHighlights,
+  onConfirmFinish
+}) => {
+  if (!done) {
+    if (matchPhaseUi === 'halftime') {
+      return (
+        <>
+          <button
+            type="button"
+            title="เริ่มครึ่งหลัง"
+            aria-label="เริ่มครึ่งหลัง"
+            onClick={onStartSecondHalf}
+            className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] px-3 sm:px-4 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px]"
+          >
+            <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
+            <span>เริ่มครึ่งหลัง</span>
+          </button>
+          <button
+            type="button"
+            title="ข้ามครึ่งหลังไปจบเกม"
+            aria-label="ข้ามครึ่งหลังไปจบเกม"
+            onClick={onSkipToEnd}
+            className="btn btn-surface h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px]"
+          >
+            <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+            <span className="hidden sm:inline mland:inline">ข้าม</span>
+          </button>
+        </>
+      );
+    }
+    return (
+      <>
+        <div className="inline-flex items-center h-10 sm:h-11 md:h-12 mland:h-[38px] p-1 mland:p-0.5 rounded-xl mland:rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs shrink-0">
+          <button
+            type="button"
+            title={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
+            aria-label={paused ? 'เล่นต่อ' : 'หยุดเกมชั่วคราว'}
+            onClick={onTogglePause}
+            className={`h-full w-9 sm:w-10 lg:w-[92px] mland:w-[34px] px-0 lg:px-2.5 mland:px-0 rounded-lg mland:rounded-md inline-flex items-center justify-center gap-1.5 text-xs sm:text-[13px] mland:text-[11px] font-bold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+              paused
+                ? 'bg-[var(--g)] text-white shadow-2xs'
+                : 'text-[var(--ink)] hover:bg-[var(--surface-2)]'
+            }`}
+          >
+            {paused ? <Play className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" /> : <Pause className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />}
+            <span className="hidden lg:inline mland:hidden">{paused ? 'เล่นต่อ' : 'หยุด'}</span>
+          </button>
+          <span className="w-px h-5 sm:h-6 mland:h-5 bg-[var(--line)] mx-0.5 shrink-0" />
+          <button
+            type="button"
+            title="ปรับความเร็วการแข่งขัน"
+            aria-label="ปรับความเร็วการแข่งขัน"
+            onClick={onCycleSpeed}
+            className="h-full w-[60px] sm:w-[66px] lg:w-[72px] mland:w-[54px] px-1 rounded-lg mland:rounded-md inline-flex items-center justify-center gap-1 text-xs sm:text-[13px] mland:text-[11px] font-bold text-[var(--ink)] hover:bg-[var(--surface-2)] tabular transition-colors cursor-pointer whitespace-nowrap shrink-0"
+          >
+            <Gauge className="w-4 h-4 mland:w-3.5 mland:h-3.5 opacity-80 shrink-0" />
+            <span className="w-[4.6ch] text-center">{speed}x</span>
+          </button>
+        </div>
+
+        <button
+          type="button"
+          title={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
+          aria-label={matchPhaseUi === 'shootout' ? 'ข้ามดวลจุดโทษ' : 'ข้ามจบเกม'}
+          onClick={onSkipToEnd}
+          className="btn btn-gold h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0"
+        >
+          <FastForward className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+          <span className="hidden sm:inline mland:inline">ข้าม</span>
+        </button>
+      </>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+      {highlightCount > 0 && (
+        <button
+          type="button"
+          title="ชมไฮไลท์การแข่งขัน"
+          aria-label="ชมไฮไลท์การแข่งขัน"
+          onClick={onOpenHighlights}
+          className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-2.5 sm:px-3.5 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-amber-400 to-amber-500 text-slate-950 font-extrabold border border-amber-200/70 shadow-sm hover:brightness-105 active:scale-[0.98]"
+        >
+          <Film className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
+          <span>ไฮไลท์ ({highlightCount})</span>
+        </button>
+      )}
+      <button
+        type="button"
+        title="จบเกมและดำเนินการต่อ"
+        aria-label="จบเกมและดำเนินการต่อ"
+        onClick={onConfirmFinish}
+        className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] px-4 sm:px-5 mland:px-3.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] bg-gradient-to-b from-emerald-500 to-[var(--g)] text-white border border-emerald-300/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_4px_14px_rgba(21,128,73,0.35)] hover:brightness-110 active:scale-[0.98]"
+      >
+        <Flag className="w-4 h-4 mland:w-3.5 mland:h-3.5 fill-current shrink-0" />
+        <span>จบเกม</span>
+      </button>
+    </div>
+  );
+});
+
+const getBlessingEmoji = (tag?: string): string => {
+  switch (tag) {
+    case 'พลิกนรก':
+      return '🌋';
+    case 'ยิงคม':
+      return '🎯';
+    case 'กลางเทพ':
+      return '🪄';
+    case 'เซฟเทพ':
+      return '🧤';
+    case 'รับแกร่ง':
+      return '🛡️';
+    case 'ใจสู้':
+      return '🔥';
+    default:
+      return '✨';
+  }
 };
+
+export interface ActionBannerState {
+  label: string;
+  tone: LiveMatchWorld['phaseTone'];
+  actors: { id: string; shortName: string; side: 'H' | 'A' }[];
+  teamSide?: 'H' | 'A';
+}
+
+export interface SubFlashBannerState {
+  side: 'H' | 'A';
+  teamName: string;
+  inName: string;
+  outName: string;
+  minute: number;
+  key: number;
+}
+
+export const MatchPitchOverlays = React.memo<{
+  pitchOverlayBoxRef: React.RefObject<HTMLDivElement | null>;
+  isSecondHalfUi: boolean;
+  miracleBannerUi: { side: 'H' | 'A'; teamName: string; minsLeft: number; goalsDuring: number; maxDeficit: number } | null;
+  blessedListUi: { id: string; shortName: string; no: number; side: 'H' | 'A'; tag: string; minsLeft: number }[];
+  actionBanner: ActionBannerState;
+  subFlashInfo: SubFlashBannerState | null;
+  liveVarActive: boolean;
+  matchPhaseUi: LiveMatchWorld['phase'];
+  done: boolean;
+  isLivePitchFullscreen: boolean;
+  homeOrig: Team;
+  awayOrig: Team;
+  homeId: number;
+  awayId: number;
+  homeKit: string;
+  awayKit: string;
+  homeGkKit: string;
+  awayGkKit: string;
+  homeTrim: string;
+  awayTrim: string;
+  state: GameState;
+  matchVisualIndex: MatchVisualIndex;
+  onOpenLiveVarReplay: () => void;
+  onSkipLiveVar: () => void;
+}>(({
+  pitchOverlayBoxRef,
+  isSecondHalfUi,
+  miracleBannerUi,
+  blessedListUi,
+  actionBanner,
+  subFlashInfo,
+  liveVarActive,
+  matchPhaseUi,
+  done,
+  isLivePitchFullscreen,
+  homeOrig,
+  awayOrig,
+  homeId,
+  awayId,
+  homeKit,
+  awayKit,
+  homeGkKit,
+  awayGkKit,
+  homeTrim,
+  awayTrim,
+  state,
+  matchVisualIndex,
+  onOpenLiveVarReplay,
+  onSkipLiveVar
+}) => {
+  const leftCornerBadgeRef = useRef<HTMLDivElement | null>(null);
+  const rightCornerBadgeRef = useRef<HTMLDivElement | null>(null);
+  const actionBannerPillRef = useRef<HTMLSpanElement | null>(null);
+  const [actionBannerScale, setActionBannerScale] = useState<number>(1);
+
+  const bannerCls =
+    actionBanner.tone === 'goal'
+      ? 'bg-[#03150b]/95 text-[#fde047] border-emerald-400'
+      : actionBanner.tone === 'danger'
+        ? 'bg-[#120407]/94 text-rose-200 border-rose-400/80'
+        : actionBanner.tone === 'offside' || actionBanner.tone === 'setpiece'
+          ? 'bg-[#120c03]/94 text-amber-200 border-amber-400/80'
+          : actionBanner.tone === 'attack'
+            ? 'bg-[#04110b]/94 text-emerald-200 border-emerald-400/75'
+            : 'bg-black/90 text-white border-white/30';
+
+  const actionBannerContent = useMemo(() => {
+    const label = actionBanner.label || '';
+    if (!label) return null;
+    const actors = actionBanner.actors || [];
+    type BannerHit = {
+      start: number;
+      end: number;
+      entry: (typeof matchVisualIndex.entries)[number];
+    };
+    const hits: BannerHit[] = [];
+
+    const findEntryForActor = (actorId: string, side: 'H' | 'A') =>
+      matchVisualIndex.entries.find(
+        (e) =>
+          (e.team.id === (side === 'H' ? homeId : awayId)) &&
+          (e.player.n === actorId || e.shortName === actorId)
+      );
+
+    const candidateEntries: (typeof matchVisualIndex.entries)[number][] = [];
+    actors.forEach((act) => {
+      const found = findEntryForActor(act.id, act.side);
+      if (found && !candidateEntries.includes(found)) candidateEntries.push(found);
+    });
+    matchVisualIndex.byFullLen.forEach((e) => {
+      if (!candidateEntries.includes(e)) candidateEntries.push(e);
+    });
+
+    for (const entry of candidateEntries) {
+      const terms = [entry.player.n, entry.shortName].filter((s) => s && s.length >= 2);
+      for (const term of terms) {
+        let from = 0;
+        while (from < label.length) {
+          const idx = label.indexOf(term, from);
+          if (idx < 0) break;
+          const end = idx + term.length;
+          const overlaps = hits.some((h) => !(end <= h.start || idx >= h.end));
+          if (!overlaps) {
+            hits.push({ start: idx, end, entry });
+            break;
+          }
+          from = end;
+        }
+        if (hits.some((h) => h.entry === entry)) break;
+      }
+    }
+
+    if (!hits.length) {
+      const sideTeam = actionBanner.teamSide === 'A' ? awayOrig : homeOrig;
+      const isSideMe = sideTeam.id === state.me && state.mode === 'm';
+      return (
+        <span className="inline-flex flex-nowrap items-center justify-center gap-1 whitespace-nowrap leading-none">
+          <span className="shrink-0 inline-flex">
+            <ClubCrest name={sideTeam.name} size={15} team={sideTeam} club={state.club} isMyClub={isSideMe} />
+          </span>
+          <span>{label}</span>
+        </span>
+      );
+    }
+
+    const renderBannerSeg = (seg: string, keyPrefix: string) => {
+      const tokens = seg.split(/(🔼|🔽)/);
+      if (tokens.length === 1) return seg;
+      return tokens.map((tok, tIdx) => {
+        if (tok === '🔼') return <StatIconBadge key={`${keyPrefix}-${tIdx}`} kind="subIn" size="xs" />;
+        if (tok === '🔽') return <StatIconBadge key={`${keyPrefix}-${tIdx}`} kind="subOut" size="xs" />;
+        return <React.Fragment key={`${keyPrefix}-${tIdx}`}>{tok}</React.Fragment>;
+      });
+    };
+
+    hits.sort((a, b) => a.start - b.start);
+    const nodes: React.ReactNode[] = [];
+    let cursor = 0;
+    hits.forEach((h, idx) => {
+      if (h.start > cursor) {
+        const segTxt = label.slice(cursor, h.start);
+        nodes.push(
+          <span
+            key={`bt-${idx}`}
+            className="whitespace-nowrap inline-flex flex-nowrap items-center gap-1 shrink-0"
+          >
+            {renderBannerSeg(segTxt, `bt-${idx}`)}
+          </span>
+        );
+      }
+      const htTeam = h.entry.team;
+      const htPlayer = h.entry.player;
+      const htIsHome = htTeam.id === homeId;
+      const htKit = htIsHome ? homeKit : awayKit;
+      const htGkKit = htIsHome ? homeGkKit : awayGkKit;
+      const htTrim = htIsHome ? homeTrim : awayTrim;
+      const htIsMe = htTeam.id === state.me && state.mode === 'm';
+      nodes.push(
+        <span key={`bp-${idx}`} className="inline-flex items-center gap-1 shrink-0 align-middle whitespace-nowrap">
+          <span className="shrink-0 inline-flex">
+            <ClubCrest name={htTeam.name} size={14} team={htTeam} club={state.club} isMyClub={htIsMe} />
+          </span>
+          <MatchPlayerThumb
+            player={htPlayer}
+            team={htTeam}
+            state={state}
+            kitColor={htPlayer.pos === 'GK' ? htGkKit : htKit}
+            trimColor={htPlayer.pos === 'GK' ? undefined : htTrim}
+            size="xs"
+            dark
+          />
+          <PositionBadge role={htPlayer.ro} size="2xs" />
+          <span className="text-[10.5px] sm:text-[11px] mland:text-[9px] font-black tabular text-[#fde047]">#{h.entry.no}</span>
+          <span className="font-extrabold">{h.entry.shortName}</span>
+        </span>
+      );
+      cursor = h.end;
+    });
+    if (cursor < label.length) {
+      const tailTxt = label.slice(cursor);
+      nodes.push(
+        <span key="bt-tail" className="whitespace-nowrap inline-flex flex-nowrap items-center gap-1 shrink-0">
+          {renderBannerSeg(tailTxt, 'bt-tail')}
+        </span>
+      );
+    }
+    return <span className="inline-flex flex-nowrap items-center justify-center gap-x-1.5 whitespace-nowrap leading-none">{nodes}</span>;
+  }, [actionBanner, matchVisualIndex, homeId, awayId, homeOrig, awayOrig, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, state]);
+
+  useLayoutEffect(() => {
+    const recalc = () => {
+      const box = pitchOverlayBoxRef.current;
+      const pill = actionBannerPillRef.current;
+      if (!box || !pill) {
+        setActionBannerScale(1);
+        return;
+      }
+      const boxW = box.clientWidth;
+      const pillW = pill.scrollWidth;
+      if (boxW <= 0 || pillW <= 0) {
+        setActionBannerScale(1);
+        return;
+      }
+      const leftW = leftCornerBadgeRef.current?.offsetWidth ?? 0;
+      const rightW = rightCornerBadgeRef.current?.offsetWidth ?? 0;
+      const sideReserve = Math.max(leftW, rightW);
+      const availW = sideReserve > 0
+        ? Math.max(120, boxW - sideReserve * 2 - 20)
+        : Math.max(160, boxW - 16);
+      const nextScale = pillW > availW ? clamp(availW / pillW, 0.42, 1) : 1;
+      setActionBannerScale((prev) => (Math.abs(prev - nextScale) < 0.01 ? prev : nextScale));
+    };
+    recalc();
+    const box = pitchOverlayBoxRef.current;
+    if (!box || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(recalc);
+    ro.observe(box);
+    if (actionBannerPillRef.current) ro.observe(actionBannerPillRef.current);
+    return () => ro.disconnect();
+  }, [pitchOverlayBoxRef, actionBanner, actionBannerContent, miracleBannerUi, blessedListUi, liveVarActive, matchPhaseUi, done, isLivePitchFullscreen]);
+
+  if (matchPhaseUi === 'halftime' || done) return null;
+
+  const leftSide: 'H' | 'A' = isSecondHalfUi ? 'A' : 'H';
+  const rightSide: 'H' | 'A' = isSecondHalfUi ? 'H' : 'A';
+  const leftMiracle = miracleBannerUi?.side === leftSide ? miracleBannerUi : null;
+  const rightMiracle = miracleBannerUi?.side === rightSide ? miracleBannerUi : null;
+  const leftBlessed = blessedListUi.filter((b) => b.side === leftSide);
+  const rightBlessed = blessedListUi.filter((b) => b.side === rightSide);
+  const leftTeamOrig = leftSide === 'H' ? homeOrig : awayOrig;
+  const rightTeamOrig = rightSide === 'H' ? homeOrig : awayOrig;
+  const leftKit = leftSide === 'H' ? homeKit : awayKit;
+  const rightKit = rightSide === 'H' ? homeKit : awayKit;
+  const leftGkKit = leftSide === 'H' ? homeGkKit : awayGkKit;
+  const rightGkKit = rightSide === 'H' ? homeGkKit : awayGkKit;
+  const leftTrim = leftSide === 'H' ? homeTrim : awayTrim;
+  const rightTrim = rightSide === 'H' ? homeTrim : awayTrim;
+  const hasLeft = Boolean(leftMiracle || leftBlessed.length > 0);
+  const hasRight = Boolean(rightMiracle || rightBlessed.length > 0);
+  const cornerShadow = '[text-shadow:0_1px_3px_rgba(0,0,0,0.98),0_0_6px_rgba(0,0,0,0.75)]';
+
+  return (
+    <>
+      {hasLeft && (
+        <div
+          ref={leftCornerBadgeRef}
+          className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1.5 sm:left-2 mland:left-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-start gap-0.5"
+        >
+          {leftMiracle && (
+            <span
+              className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] mland:text-[8px] font-extrabold tabular leading-tight ${cornerShadow} ${
+                leftMiracle.maxDeficit >= 3 ? 'text-orange-200' : 'text-amber-200'
+              }`}
+              title={`${leftMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}${leftSide === 'H' ? 'ฝั่งเจ้าบ้าน' : 'ฝั่งทีมเยือน'} (${leftMiracle.teamName}) เหลือ ${leftMiracle.minsLeft}'`}
+            >
+              <span>{leftMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+              <span>{leftMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'}</span>
+              <span>{leftMiracle.minsLeft}&apos;</span>
+            </span>
+          )}
+          {leftBlessed.map((bl) => {
+            const blPlayer = leftTeamOrig.sq.find((q) => q.n === bl.id);
+            const blEmoji = getBlessingEmoji(bl.tag);
+            return (
+              <span
+                key={bl.id}
+                className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold leading-tight ${cornerShadow}`}
+                title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${leftTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
+              >
+                {blPlayer && (
+                  <MatchPlayerThumb
+                    player={blPlayer}
+                    team={leftTeamOrig}
+                    state={state}
+                    kitColor={blPlayer.pos === 'GK' ? leftGkKit : leftKit}
+                    trimColor={blPlayer.pos === 'GK' ? undefined : leftTrim}
+                    size="xs"
+                    dark
+                    ringClassName="ring-amber-300/85"
+                  />
+                )}
+                <span className="tabular text-[#fde047] font-black leading-none">
+                  #{bl.no}
+                </span>
+                <span className="text-amber-100 leading-none whitespace-nowrap">
+                  {blEmoji} {bl.tag}
+                </span>
+                <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/95 leading-none">
+                  {bl.minsLeft}&apos;
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {!liveVarActive && actionBanner.label && (
+        <div className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 left-1/2 -translate-x-1/2 z-20 flex items-center justify-center">
+          <span
+            ref={actionBannerPillRef}
+            style={
+              actionBannerScale < 0.995
+                ? { transform: `scale(${actionBannerScale.toFixed(3)})`, transformOrigin: 'top center' }
+                : undefined
+            }
+            className={`inline-flex flex-nowrap items-center justify-center w-max px-2.5 sm:px-3.5 mland:px-2 py-0.5 sm:py-1 mland:py-[2px] rounded-lg border text-[10px] sm:text-xs mland:text-[9px] leading-none font-bold whitespace-nowrap backdrop-blur-[2px] ${bannerCls}`}
+            title={actionBanner.label}
+          >
+            {actionBannerContent}
+          </span>
+        </div>
+      )}
+
+      {hasRight && (
+        <div
+          ref={rightCornerBadgeRef}
+          className="pointer-events-none absolute top-1 sm:top-1.5 mland:top-1 right-1.5 sm:right-2 mland:right-1.5 z-20 max-w-[30%] sm:max-w-[28%] flex flex-col items-end gap-0.5"
+        >
+          {rightMiracle && (
+            <span
+              className={`inline-flex items-center gap-1 text-[9.5px] sm:text-[10.5px] mland:text-[8px] font-extrabold tabular leading-tight ${cornerShadow} ${
+                rightMiracle.maxDeficit >= 3 ? 'text-orange-200' : 'text-amber-200'
+              }`}
+              title={`${rightMiracle.maxDeficit >= 3 ? 'ปาฏิหาริย์พลิกนรก' : 'ปาฏิหาริย์'}${rightSide === 'H' ? 'ฝั่งเจ้าบ้าน' : 'ฝั่งทีมเยือน'} (${rightMiracle.teamName}) เหลือ ${rightMiracle.minsLeft}'`}
+            >
+              <span>{rightMiracle.maxDeficit >= 3 ? '🌋' : '⚡'}</span>
+              <span>{rightMiracle.maxDeficit >= 3 ? 'พลิกนรก' : 'ปาฏิหาริย์'}</span>
+              <span>{rightMiracle.minsLeft}&apos;</span>
+            </span>
+          )}
+          {rightBlessed.map((bl) => {
+            const blPlayer = rightTeamOrig.sq.find((q) => q.n === bl.id);
+            const blEmoji = getBlessingEmoji(bl.tag);
+            return (
+              <span
+                key={bl.id}
+                className={`inline-flex items-center gap-1 text-[9px] sm:text-[10px] mland:text-[8px] font-extrabold leading-tight ${cornerShadow}`}
+                title={`${blEmoji} พร: ${bl.tag} · ${bl.id} (#${bl.no} ${rightTeamOrig.name}) เหลือ ${bl.minsLeft}'`}
+              >
+                <span className="text-[8px] sm:text-[8.5px] mland:text-[7px] font-bold tabular text-amber-200/95 leading-none">
+                  {bl.minsLeft}&apos;
+                </span>
+                <span className="text-amber-100 leading-none whitespace-nowrap">
+                  {blEmoji} {bl.tag}
+                </span>
+                <span className="tabular text-[#fde047] font-black leading-none">
+                  #{bl.no}
+                </span>
+                {blPlayer && (
+                  <MatchPlayerThumb
+                    player={blPlayer}
+                    team={rightTeamOrig}
+                    state={state}
+                    kitColor={blPlayer.pos === 'GK' ? rightGkKit : rightKit}
+                    trimColor={blPlayer.pos === 'GK' ? undefined : rightTrim}
+                    size="xs"
+                    dark
+                    ringClassName="ring-amber-300/85"
+                  />
+                )}
+              </span>
+            );
+          })}
+        </div>
+      )}
+
+      {subFlashInfo && !liveVarActive && (
+        <div
+          key={subFlashInfo.key}
+          className="sub-banner-in pointer-events-none absolute top-7 sm:top-8 mland:top-6 left-1/2 -translate-x-1/2 z-20 max-w-[92%] px-2.5 py-1 mland:px-2 mland:py-0.5 rounded-lg bg-[#071f13]/95 border border-emerald-400/70 text-white flex items-center gap-1.5 text-[10.5px] sm:text-xs mland:text-[9px] font-bold whitespace-nowrap"
+        >
+          <span className="px-1.5 py-[1px] rounded bg-emerald-500/25 text-emerald-300 font-black tabular">
+            {subFlashInfo.minute}&apos;
+          </span>
+          <span className="hidden sm:inline text-white/75 truncate max-w-[110px]">
+            {subFlashInfo.teamName}
+          </span>
+          <span className="inline-flex items-center gap-1 text-emerald-300 font-extrabold">
+            <StatIconBadge kind="subIn" size="xs" />
+            <span className="truncate max-w-[95px]">{subFlashInfo.inName.split(' ')[0]}</span>
+          </span>
+          <span className="text-white/50">⇄</span>
+          <span className="inline-flex items-center gap-1 text-rose-300 font-bold">
+            <StatIconBadge kind="subOut" size="xs" />
+            <span className="truncate max-w-[95px]">{subFlashInfo.outName.split(' ')[0]}</span>
+          </span>
+        </div>
+      )}
+
+      {liveVarActive && (
+        <div className="pointer-events-auto absolute bottom-2 left-1/2 -translate-x-1/2 z-25 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-950/94 border border-sky-400/65 shadow-xl">
+          <button
+            type="button"
+            onClick={onOpenLiveVarReplay}
+            className="px-2.5 py-1 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10.5px] sm:text-xs mland:text-[9.5px] font-extrabold inline-flex items-center gap-1 cursor-pointer transition-colors whitespace-nowrap"
+          >
+            <span>🖥</span>
+            <span>ขยายจอ VAR / หยุดภาพ</span>
+          </button>
+          <button
+            type="button"
+            onClick={onSkipLiveVar}
+            className="px-2 py-1 rounded-md bg-white/12 hover:bg-white/22 text-white/90 text-[10px] sm:text-[11px] mland:text-[9px] font-bold cursor-pointer transition-colors whitespace-nowrap"
+          >
+            ⏭ ข้าม
+          </button>
+        </div>
+      )}
+    </>
+  );
+});
+
+export const MatchHalftimePitchPanel = React.memo<{
+  state: GameState;
+  homeOrig: Team;
+  awayOrig: Team;
+  liveHome: Team;
+  liveAway: Team;
+  meTeamOrig: Team;
+  homeId: number;
+  homeKit: string;
+  awayKit: string;
+  homeGkKit: string;
+  awayGkKit: string;
+  homeTrim: string;
+  awayTrim: string;
+  curHomeLu: string[];
+  curAwayLu: string[];
+  htPitchMode: 'all' | 'H' | 'A';
+  onChangeHtPitchMode: (m: 'all' | 'H' | 'A') => void;
+  htPickedPlayer: string | null;
+  onChangeHtPickedPlayer: (name: string | null) => void;
+  htStatMode: 'rating' | 'ovr';
+  liveFitMap: Record<string, number>;
+  liveFormMap: Record<string, number>;
+  evs: MatchEvent[];
+  matchCards: MatchCardEvent[];
+  sentOff: string[];
+  subLog: MatchSubEvent[];
+  injuredNamesUi: string[];
+  subsUsedCount: number;
+  benchCount: number;
+  subAlertFitTh: number;
+  matchStats: MatchStatsSummary;
+  onAutoSubstitute: (name: string) => Player | null;
+}>(({
+  state,
+  homeOrig,
+  awayOrig,
+  liveHome,
+  liveAway,
+  meTeamOrig,
+  homeId,
+  homeKit,
+  awayKit,
+  homeGkKit,
+  awayGkKit,
+  homeTrim,
+  awayTrim,
+  curHomeLu,
+  curAwayLu,
+  htPitchMode,
+  onChangeHtPitchMode,
+  htPickedPlayer,
+  onChangeHtPickedPlayer,
+  htStatMode,
+  liveFitMap,
+  liveFormMap,
+  evs,
+  matchCards,
+  sentOff,
+  subLog,
+  injuredNamesUi,
+  subsUsedCount,
+  benchCount,
+  subAlertFitTh,
+  matchStats,
+  onAutoSubstitute
+}) => {
+  const buildHtMeta = (team: Team, luNames: string[]) => {
+    const out: Record<string, PitchPlayerMeta> = {};
+    luNames.forEach((name, idx) => {
+      const pl = team.sq.find((q) => q.n === name) || team.sq[idx];
+      const pCards = matchCards.filter((c) => c.t === team.id && c.who === name);
+      const isRed = sentOff.includes(name) || pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
+      out[name] = {
+        fitVal: Math.round(liveFitMap[name] ?? pl?.fit ?? 100),
+        rating: Number((liveFormMap[name] ?? 6.5).toFixed(1)),
+        goals: evs.filter((e) => !e.og && e.t === team.id && e.who === name).length,
+        assists: evs.filter((e) => !e.og && e.t === team.id && e.as === name).length,
+        isRed,
+        isSecondYellowRed: pCards.some((c) => c.type === 'Y2R'),
+        yellowCards: !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0,
+        isInjured: injuredNamesUi.includes(name),
+        subInMin: subLog.find((s) => s.t === team.id && s.inPlayer === name)?.m
+      };
+    });
+    return out;
+  };
+
+  const hMeta = buildHtMeta(liveHome, curHomeLu);
+  const aMeta = buildHtMeta(liveAway, curAwayLu);
+  const htPickedInfo = htPickedPlayer
+    ? (() => {
+        const t = homeOrig.sq.find((q) => q.n === htPickedPlayer) ? homeOrig : awayOrig;
+        const isHome = t.id === homeId;
+        const p = t.sq.find((q) => q.n === htPickedPlayer);
+        const no = p ? getShirtNo(t, p) : 0;
+        const rt = liveFormMap[htPickedPlayer] ?? 6.5;
+        const fitVal = Math.round(liveFitMap[htPickedPlayer] ?? p?.fit ?? 100);
+        const gl = evs.filter((e) => !e.og && e.t === t.id && e.who === htPickedPlayer).length;
+        const as = evs.filter((e) => !e.og && e.t === t.id && e.as === htPickedPlayer).length;
+        const pCards = matchCards.filter((c) => c.t === t.id && c.who === htPickedPlayer);
+        const hasRed = sentOff.includes(htPickedPlayer) || pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
+        const subIn = subLog.find((s) => s.t === t.id && s.inPlayer === htPickedPlayer);
+        const kitColor = p?.pos === 'GK' ? (isHome ? homeGkKit : awayGkKit) : (isHome ? homeKit : awayKit);
+        const trimColor = p?.pos === 'GK' ? undefined : (isHome ? homeTrim : awayTrim);
+        return { name: htPickedPlayer, team: t, player: p, role: p?.ro || 'CM', no, rt, fitVal, gl, as, cards: pCards, hasRed, subIn, kitColor, trimColor };
+      })()
+    : null;
+
+  return (
+    <div className="flex flex-col bg-[#092818] text-[var(--ink)]">
+      <div className="bg-[#092818]">
+        <div className="flex flex-col min-w-0">
+          <div className="relative w-full p-1.5 sm:p-2 mland:p-1 bg-[#092818] h-[430px] sm:h-[500px] lg:h-[550px] mland:h-[calc(var(--app-dvh,1dvh)*97-105px)] mland:min-h-[200px] select-none overflow-hidden flex items-center justify-center">
+            <div className="absolute top-2 left-2 z-20 flex items-center gap-1 p-1 rounded-xl bg-[#05180e]/88 border border-white/25 shadow-lg">
+              <button
+                type="button"
+                title="แสดงแผนทั้งสองทีม"
+                aria-label="แสดงแผนทั้งสองทีม"
+                onClick={() => onChangeHtPitchMode('all')}
+                className={`h-9 sm:h-10 mland:h-8 px-2 sm:px-2.5 mland:px-1.5 rounded-lg flex items-center justify-center cursor-pointer transition-colors ${
+                  htPitchMode === 'all'
+                    ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                    : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                }`}
+              >
+                <span className="inline-flex items-center -space-x-2 [&>svg]:w-5 [&>svg]:h-5 sm:[&>svg]:w-6 sm:[&>svg]:h-6 mland:[&>svg]:w-4.5 mland:[&>svg]:h-4.5">
+                  <ClubCrest name={homeOrig.name} size={24} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+                  <ClubCrest name={awayOrig.name} size={24} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+                </span>
+              </button>
+              <button
+                type="button"
+                title={homeOrig.name}
+                aria-label={homeOrig.name}
+                onClick={() => onChangeHtPitchMode('H')}
+                className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                  htPitchMode === 'H'
+                    ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                    : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                }`}
+              >
+                <ClubCrest name={homeOrig.name} size={32} team={homeOrig} club={state.club} isMyClub={homeOrig.id === state.me && state.mode === 'm'} />
+              </button>
+              <button
+                type="button"
+                title={awayOrig.name}
+                aria-label={awayOrig.name}
+                onClick={() => onChangeHtPitchMode('A')}
+                className={`h-9 w-9 sm:h-10 sm:w-10 mland:h-8 mland:w-8 rounded-lg flex items-center justify-center cursor-pointer transition-colors [&>svg]:w-7 [&>svg]:h-7 sm:[&>svg]:w-8 sm:[&>svg]:h-8 mland:[&>svg]:w-6 mland:[&>svg]:h-6 ${
+                  htPitchMode === 'A'
+                    ? 'bg-emerald-500 shadow-xs ring-1 ring-white/50'
+                    : 'opacity-80 hover:opacity-100 hover:bg-white/10'
+                }`}
+              >
+                <ClubCrest name={awayOrig.name} size={32} team={awayOrig} club={state.club} isMyClub={awayOrig.id === state.me && state.mode === 'm'} />
+              </button>
+            </div>
+
+            {htPickedInfo && (
+              <div className="absolute bottom-2 left-2 right-2 sm:right-auto z-30 sm:max-w-[320px] px-2.5 py-1.5 rounded-xl bg-slate-950/95 border border-white/25 text-white text-[11px] shadow-xl flex items-center justify-between gap-2">
+                <div className="min-w-0 space-y-0.5">
+                  <div className="font-bold truncate flex items-center gap-1">
+                    <span className="shrink-0 inline-flex">
+                      <ClubCrest
+                        name={htPickedInfo.team.name}
+                        size={14}
+                        team={htPickedInfo.team}
+                        club={state.club}
+                        isMyClub={htPickedInfo.team.id === state.me && state.mode === 'm'}
+                      />
+                    </span>
+                    {htPickedInfo.player && (
+                      <MatchPlayerThumb
+                        player={htPickedInfo.player}
+                        team={htPickedInfo.team}
+                        state={state}
+                        kitColor={htPickedInfo.kitColor}
+                        trimColor={htPickedInfo.trimColor}
+                        size="xs"
+                        dark
+                      />
+                    )}
+                    <PositionBadge role={htPickedInfo.role} size="2xs" />
+                    <span className="text-[#facc15] font-extrabold tabular shrink-0">#{htPickedInfo.no}</span>
+                    <span className="truncate">{htPickedInfo.name}</span>
+                  </div>
+                  <div className="text-[10px] text-white/80 flex flex-wrap items-center gap-1.5 tabular">
+                    <span>{htPickedInfo.team.name}</span>
+                    <RatingBadge rt={htPickedInfo.rt} size="xs" showStar />
+                    <StaminaBar
+                      value={htPickedInfo.fitVal}
+                      variant="inline"
+                      darkSurface
+                      restThreshold={subAlertFitTh}
+                      barWidthClass="w-9"
+                    />
+                    {htPickedInfo.gl > 0 && <StatIconBadge kind="goal" count={htPickedInfo.gl} size="xs" />}
+                    {htPickedInfo.as > 0 && <StatIconBadge kind="assist" count={htPickedInfo.as} size="xs" />}
+                    {htPickedInfo.cards
+                      .slice()
+                      .sort((a, b) => a.m - b.m || (a.type === 'Y' ? 0 : 1) - (b.type === 'Y' ? 0 : 1))
+                      .map((c, idx) => (
+                        <span key={idx} className="inline-flex items-center gap-0.5">
+                          <StatIconBadge kind={c.type === 'Y' ? 'yellow' : c.type === 'Y2R' ? 'yellowRed' : 'red'} size="xs" />
+                          <span className="text-[9px] font-bold tabular text-white/80">{c.m}&apos;</span>
+                        </span>
+                      ))}
+                    {htPickedInfo.subIn && (
+                      <span className="inline-flex items-center gap-0.5 text-emerald-300 font-bold">
+                        <StatIconBadge kind="subIn" size="xs" />
+                        <span>เข้า {htPickedInfo.subIn.m}&apos;</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {state.mode === 'm' && htPickedInfo.team.id === meTeamOrig.id && !htPickedInfo.hasRed && subsUsedCount < 5 && benchCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const rep = onAutoSubstitute(htPickedInfo.name);
+                        if (rep) onChangeHtPickedPlayer(rep.n);
+                      }}
+                      className="btn btn-xs btn-primary"
+                    >
+                      🔄 เปลี่ยนตัวด่วน
+                    </button>
+                  )}
+                  <button type="button" onClick={() => onChangeHtPickedPlayer(null)} className="w-6 h-6 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 font-bold cursor-pointer">
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="h-full min-h-0 w-full flex items-center justify-center overflow-hidden">
+              {htPitchMode === 'all' ? (
+                <div className="w-full h-full grid grid-cols-2 gap-2 mland:gap-1 items-stretch">
+                  <div className="h-full min-h-0 w-full flex items-center justify-center">
+                    <FormationPitch
+                      team={liveHome}
+                      state={state}
+                      lineupNames={curHomeLu}
+                      kitOverride={homeKit}
+                      gkKitOverride={homeGkKit}
+                      trimOverride={homeTrim}
+                      matchMeta={hMeta}
+                      statMode={htStatMode}
+                      showFitBar={true}
+                      showPitchCrest={true}
+                      subAlertFitTh={subAlertFitTh}
+                      selectedPlayerName={htPickedPlayer}
+                      onPlayerClick={(pl) => onChangeHtPickedPlayer(htPickedPlayer === pl.n ? null : pl.n)}
+                      className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
+                    />
+                  </div>
+                  <div className="h-full min-h-0 w-full flex items-center justify-center">
+                    <FormationPitch
+                      team={liveAway}
+                      state={state}
+                      lineupNames={curAwayLu}
+                      kitOverride={awayKit}
+                      gkKitOverride={awayGkKit}
+                      trimOverride={awayTrim}
+                      matchMeta={aMeta}
+                      statMode={htStatMode}
+                      showFitBar={true}
+                      showPitchCrest={true}
+                      subAlertFitTh={subAlertFitTh}
+                      selectedPlayerName={htPickedPlayer}
+                      onPlayerClick={(pl) => onChangeHtPickedPlayer(htPickedPlayer === pl.n ? null : pl.n)}
+                      className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <FormationPitch
+                  team={htPitchMode === 'H' ? liveHome : liveAway}
+                  state={state}
+                  lineupNames={htPitchMode === 'H' ? curHomeLu : curAwayLu}
+                  kitOverride={htPitchMode === 'H' ? homeKit : awayKit}
+                  gkKitOverride={htPitchMode === 'H' ? homeGkKit : awayGkKit}
+                  trimOverride={htPitchMode === 'H' ? homeTrim : awayTrim}
+                  matchMeta={htPitchMode === 'H' ? hMeta : aMeta}
+                  statMode={htStatMode}
+                  showFitBar={true}
+                  showPitchCrest={true}
+                  subAlertFitTh={subAlertFitTh}
+                  selectedPlayerName={htPickedPlayer}
+                  onPlayerClick={(pl) => onChangeHtPickedPlayer(htPickedPlayer === pl.n ? null : pl.n)}
+                  className="aspect-[300/380] h-full w-auto max-w-full mx-auto rounded-xl block select-none"
+                />
+              )}
+            </div>
+          </div>
+
+          <div className="bg-[#082414]/95 border-t border-white/12 px-2.5 py-1.5 mland:px-2 mland:py-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-[10px] mland:text-[8.5px] text-white/85 tabular">
+            <span className="font-bold text-[#fde047]">📊 สรุปครึ่งแรก (45&apos;)</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span>ครองบอล <b className="text-white">{matchStats.possH}% - {100 - matchStats.possH}%</b></span>
+              <span>ยิง <b className="text-white">{matchStats.shotsH} - {matchStats.shotsA}</b></span>
+              <span>เข้ากรอบ <b className="text-white">{matchStats.onTargetH} - {matchStats.onTargetA}</b></span>
+              <span>xG <b className="text-white">{matchStats.xgH.toFixed(2)} - {matchStats.xgA.toFixed(2)}</b></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+export const MatchShootoutBanner = React.memo<{
+  shootoutUi: ShootoutState;
+  homeOrig: Team;
+  awayOrig: Team;
+  homeId: number;
+  homeKit: string;
+  awayKit: string;
+  homeGkKit: string;
+  awayGkKit: string;
+  homeTrim: string;
+  awayTrim: string;
+  state: GameState;
+}>(({ shootoutUi, homeOrig, awayOrig, homeId, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, state }) => {
+  const kHome = homeOrig.sq.find((q) => q.n === shootoutUi.kickerName);
+  const kTeam = kHome ? homeOrig : awayOrig;
+  const kPl = kHome || awayOrig.sq.find((q) => q.n === shootoutUi.kickerName) || null;
+  const kIsHome = kTeam.id === homeId;
+  const kKit = kPl?.pos === 'GK' ? (kIsHome ? homeGkKit : awayGkKit) : (kIsHome ? homeKit : awayKit);
+  const kTrim = kPl?.pos === 'GK' ? undefined : (kIsHome ? homeTrim : awayTrim);
+
+  return (
+    <div className="p-2.5 sm:p-3 rounded-2xl bg-[var(--surface-2)] border border-[var(--lamp)]/60 space-y-2">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="font-bold text-[#8a5b00] dark:text-[var(--lamp)]">
+          🎯 ดวลจุดโทษตัดสิน (รอบที่ {shootoutUi.round})
+        </span>
+        <span className="font-bold tabular text-sm">
+          {shootoutUi.hScore} - {shootoutUi.aScore}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <span className="font-bold truncate max-w-[110px]">{homeOrig.name}</span>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.max(5, shootoutUi.hKicks.length) }).map((_, i) => {
+              const res = shootoutUi.hKicks[i];
+              return (
+                <span
+                  key={i}
+                  className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                    res === 'G' ? 'bg-[var(--g)] text-white' : res === 'M' ? 'bg-[var(--red)] text-white' : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]'
+                  }`}
+                >
+                  {res === 'G' ? '✓' : res === 'M' ? '✕' : ''}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-[var(--surface)] border border-[var(--line)]">
+          <span className="font-bold truncate max-w-[110px]">{awayOrig.name}</span>
+          <div className="flex items-center gap-1">
+            {Array.from({ length: Math.max(5, shootoutUi.aKicks.length) }).map((_, i) => {
+              const res = shootoutUi.aKicks[i];
+              return (
+                <span
+                  key={i}
+                  className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                    res === 'G' ? 'bg-[var(--g)] text-white' : res === 'M' ? 'bg-[var(--red)] text-white' : 'bg-[var(--surface-2)] border border-[var(--line)] text-[var(--mut)]'
+                  }`}
+                >
+                  {res === 'G' ? '✓' : res === 'M' ? '✕' : ''}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      <div className="text-[11px] text-[var(--mut)] flex items-center justify-between gap-2">
+        <span className="truncate">{shootoutUi.lastMsg}</span>
+        {!shootoutUi.finished && (
+          <span className="shrink-0 font-semibold text-[var(--ink)] inline-flex items-center gap-1 min-w-0">
+            <span className="text-[var(--mut)]">คนยิง:</span>
+            <span className="shrink-0 inline-flex">
+              <ClubCrest name={kTeam.name} size={13} team={kTeam} club={state.club} isMyClub={kTeam.id === state.me && state.mode === 'm'} />
+            </span>
+            {kPl && (
+              <MatchPlayerThumb
+                player={kPl}
+                team={kTeam}
+                state={state}
+                kitColor={kKit}
+                trimColor={kTrim}
+                size="xs"
+              />
+            )}
+            {kPl && <PositionBadge role={kPl.ro} size="2xs" />}
+            {kPl && (
+              <span className="text-[10px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
+                #{getShirtNo(kTeam, kPl)}
+              </span>
+            )}
+            <span className="truncate font-bold">{shootoutUi.kickerName.split(' ')[0]}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+});
+
+export const MatchEventsFeedPanel = React.memo<{
+  eventFilter: 'all' | 'goal' | 'card' | 'var' | 'sub';
+  onChangeFilter: (k: 'all' | 'goal' | 'card' | 'var' | 'sub') => void;
+  done: boolean;
+  matchPhaseUi: LiveMatchWorld['phase'];
+  cardCount: number;
+  varCount: number;
+  subLog: MatchSubEvent[];
+  logs: MatchLogItem[];
+  showRunVectors: boolean;
+  onToggleRunVectors: () => void;
+  showRatings: boolean;
+  onToggleRatings: () => void;
+  showPositions: boolean;
+  onTogglePositions: () => void;
+  cineSlowMo: boolean;
+  onToggleCineSlowMo: () => void;
+  htStatMode: 'rating' | 'ovr';
+  onToggleHtStatMode: () => void;
+  subsRemaining: number;
+  onOpenTacticsStudio: () => void;
+  matchVisualIndex: MatchVisualIndex;
+  homeOrig: Team;
+  awayOrig: Team;
+  meTeamOrig: Team;
+  homeId: number;
+  awayId: number;
+  homeKit: string;
+  awayKit: string;
+  homeGkKit: string;
+  awayGkKit: string;
+  homeTrim: string;
+  awayTrim: string;
+  state: GameState;
+  isPlayerMode: boolean;
+  myPlayerName: string;
+  myPlayerSquadObj: Player | undefined;
+  captains: { H: string; A: string };
+  onOpenVarReplay: (varId: string) => void;
+}>(({
+  eventFilter,
+  onChangeFilter,
+  done,
+  matchPhaseUi,
+  cardCount,
+  varCount,
+  subLog,
+  logs,
+  showRunVectors,
+  onToggleRunVectors,
+  showRatings,
+  onToggleRatings,
+  showPositions,
+  onTogglePositions,
+  cineSlowMo,
+  onToggleCineSlowMo,
+  htStatMode,
+  onToggleHtStatMode,
+  subsRemaining,
+  onOpenTacticsStudio,
+  matchVisualIndex,
+  homeOrig,
+  awayOrig,
+  meTeamOrig,
+  homeId,
+  awayId,
+  homeKit,
+  awayKit,
+  homeGkKit,
+  awayGkKit,
+  homeTrim,
+  awayTrim,
+  state,
+  isPlayerMode,
+  myPlayerName,
+  myPlayerSquadObj,
+  captains,
+  onOpenVarReplay
+}) => {
+  const filteredLogs = useMemo(() => {
+    if (eventFilter === 'sub') return [];
+    return logs.filter((l) => {
+      if (eventFilter === 'goal') return l.tone === 'goal';
+      if (eventFilter === 'card') return isCardLogEntry(l);
+      if (eventFilter === 'var') return isVarLogEntry(l);
+      return true;
+    });
+  }, [logs, eventFilter]);
+
+  const reversedSubs = useMemo(() => subLog.slice().reverse(), [subLog]);
+
+  return (
+    <div className="rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs overflow-hidden">
+      <div className="bg-[var(--surface-2)]/65 border-b border-[var(--line)] px-2.5 py-1.5 sm:px-3 mland:px-2 mland:py-1 flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1 text-[11px] sm:text-xs mland:text-[9.5px] font-extrabold text-[var(--ink)] tracking-tight whitespace-nowrap shrink-0">
+          <span>🎙️</span>
+          <span>เหตุการณ์</span>
+          <span className="hidden xl:inline">ในสนาม</span>
+        </span>
+
+        <div className="inline-flex flex-nowrap items-center p-0.5 rounded-lg bg-[var(--surface)] border border-[var(--line)] shadow-2xs gap-0.5 min-w-0 max-w-full overflow-x-auto no-scrollbar ml-auto">
+          {(
+            [
+              ['all', 'ทั้งหมด'],
+              ['goal', <span key="g-tab" className="inline-flex items-center gap-1"><StatIconBadge kind="goal" size="xs" /><span>ประตู</span></span>],
+              [
+                'card',
+                <span key="c-tab" className="inline-flex items-center gap-1">
+                  <span className="inline-flex items-center -space-x-1">
+                    <StatIconBadge kind="yellow" size="xs" />
+                    <StatIconBadge kind="red" size="xs" />
+                  </span>
+                  <span>ใบ{cardCount ? ` (${cardCount})` : ''}</span>
+                </span>
+              ],
+              ['var', `🖥 VAR${varCount ? ` (${varCount})` : ''}`],
+              ['sub', `🔄 เปลี่ยน${subLog.length ? ` (${subLog.length})` : ''}`]
+            ] as const
+          ).map(([k, lbl]) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => onChangeFilter(k)}
+              className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                eventFilter === k
+                  ? 'bg-[var(--g)] text-white shadow-2xs'
+                  : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+              }`}
+            >
+              {lbl}
+            </button>
+          ))}
+
+          {!done && matchPhaseUi !== 'halftime' && (
+            <>
+              <span className="w-px h-4 mland:h-3.5 bg-[var(--line)] mx-0.5 shrink-0" />
+
+              <button
+                type="button"
+                title="เปิด/ปิด เส้นทิศทางการวิ่งและจ่ายบอล"
+                aria-label="เปิด/ปิด เส้นวิ่ง"
+                onClick={onToggleRunVectors}
+                className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                  showRunVectors
+                    ? 'bg-emerald-500/18 text-emerald-700 dark:text-emerald-300'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                }`}
+              >
+                <Route className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                <span>เส้น</span>
+              </button>
+
+              <button
+                type="button"
+                title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนาม"
+                aria-label="สลับเรตติ้งหรือพลัง"
+                onClick={onToggleRatings}
+                className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                  showRatings
+                    ? 'bg-amber-400/22 text-[#8a5b00] dark:text-[#fde047]'
+                    : 'bg-sky-500/18 text-sky-700 dark:text-sky-300'
+                }`}
+              >
+                {showRatings ? (
+                  <Star className="w-3 h-3 mland:w-2.5 mland:h-2.5 fill-current shrink-0" />
+                ) : (
+                  <Zap className="w-3 h-3 mland:w-2.5 mland:h-2.5 fill-current shrink-0" />
+                )}
+                <span>{showRatings ? 'เรตติ้ง' : 'พลัง'}</span>
+              </button>
+
+              <button
+                type="button"
+                title="เปิด/ปิด ป้ายตำแหน่งบนหัวผู้เล่น"
+                aria-label="เปิด/ปิด ป้ายตำแหน่ง"
+                onClick={onTogglePositions}
+                className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                  showPositions
+                    ? 'bg-sky-500/18 text-sky-700 dark:text-sky-300'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                }`}
+              >
+                <Tag className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                <span>ป้าย</span>
+              </button>
+
+              <button
+                type="button"
+                title="เปิด/ปิด เอฟเฟกต์สโลว์โมชันจังหวะสำคัญ"
+                aria-label="เปิด/ปิด สโลว์โมชัน"
+                onClick={onToggleCineSlowMo}
+                className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                  cineSlowMo
+                    ? 'bg-violet-500/18 text-violet-700 dark:text-violet-300'
+                    : 'text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70'
+                }`}
+              >
+                <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
+                <span>สโล</span>
+              </button>
+            </>
+          )}
+
+          {!done && matchPhaseUi === 'halftime' && (
+            <>
+              <span className="w-px h-4 mland:h-3.5 bg-[var(--line)] mx-0.5 shrink-0" />
+
+              <button
+                type="button"
+                title="สลับแสดงเรตติ้งสด หรือ ค่าพลัง OVR บนสนามพักครึ่ง"
+                onClick={onToggleHtStatMode}
+                className={`h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 ${
+                  htStatMode === 'rating'
+                    ? 'bg-amber-400/22 text-[#8a5b00] dark:text-[#fde047]'
+                    : 'bg-sky-500/18 text-sky-700 dark:text-sky-300'
+                }`}
+              >
+                {htStatMode === 'rating' ? <Star className="w-3 h-3 fill-current shrink-0" /> : <Zap className="w-3 h-3 fill-current shrink-0" />}
+                <span>{htStatMode === 'rating' ? 'เรตติ้ง' : 'พลัง'}</span>
+              </button>
+
+              {state.mode === 'm' && (
+                <button
+                  type="button"
+                  onClick={onOpenTacticsStudio}
+                  className="h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 text-[var(--ink)] hover:bg-[var(--surface-2)]/70"
+                >
+                  <span>📋 แผน/เปลี่ยนตัว</span>
+                  <span className="px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9px] mland:text-[7.5px]">
+                    {subsRemaining}
+                  </span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="p-2 sm:p-2.5 mland:p-1.5 space-y-1 mland:space-y-0.5">
+        {eventFilter === 'sub' ? (
+          reversedSubs.length === 0 ? (
+            <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีการเปลี่ยนตัวในแมตช์นี้</div>
+          ) : (
+            reversedSubs.map((sb, i) => {
+              const tObj = sb.t === homeOrig.id ? homeOrig : awayOrig;
+              const matchedLog = logs.find(
+                (l) => l.tone === 'sub' && l.subInfo?.teamId === sb.t && l.subInfo?.inName === sb.inPlayer && l.subInfo?.outName === sb.outPlayer
+              );
+              return (
+                <SubEventCard
+                  key={`${sb.t}-${sb.m}-${sb.inPlayer}-${i}`}
+                  minute={sb.m}
+                  team={tObj}
+                  inName={sb.inPlayer}
+                  outName={sb.outPlayer}
+                  badge={matchedLog?.subInfo?.badge}
+                  isInjury={matchedLog?.subInfo?.isInjury}
+                  isMeIn={isPlayerMode && sb.inPlayer === myPlayerName}
+                  isMeOut={isPlayerMode && sb.outPlayer === myPlayerName}
+                  homeId={homeId}
+                  homeKit={homeKit}
+                  awayKit={awayKit}
+                  homeGkKit={homeGkKit}
+                  awayGkKit={awayGkKit}
+                  homeTrim={homeTrim}
+                  awayTrim={awayTrim}
+                  state={state}
+                  captainName={sb.t === homeOrig.id ? captains.H : captains.A}
+                />
+              );
+            })
+          )
+        ) : !filteredLogs.length ? (
+          <div className="text-xs text-[var(--mut)] py-4 text-center">ยังไม่มีเหตุการณ์ในหมวดนี้</div>
+        ) : (
+          filteredLogs.map((l) => (
+            <MatchLogRow
+              key={l.id}
+              l={l}
+              matchVisualIndex={matchVisualIndex}
+              homeOrig={homeOrig}
+              awayOrig={awayOrig}
+              meTeamOrig={meTeamOrig}
+              homeId={homeId}
+              awayId={awayId}
+              homeKit={homeKit}
+              awayKit={awayKit}
+              homeGkKit={homeGkKit}
+              awayGkKit={awayGkKit}
+              homeTrim={homeTrim}
+              awayTrim={awayTrim}
+              state={state}
+              isPlayerMode={isPlayerMode}
+              myPlayerSquadObj={myPlayerSquadObj}
+              captains={captains}
+              onOpenVarReplay={onOpenVarReplay}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+});
+
+export const LiveStreamChatPanel = React.memo<{
+  liveViewers: number;
+  peakViewers: number;
+  gh: number;
+  ga: number;
+  meIsHome: boolean;
+  isDerby: boolean;
+  mode: GameState['mode'];
+  streamProj: ReturnType<typeof computeMatchStreamProjection>;
+  broadcastChannel: BroadcastChannelInfo;
+  done: boolean;
+  minute: number;
+  clubShoutMin: number;
+  matchPhaseUi: LiveMatchWorld['phase'];
+  isLivePitchFullscreen: boolean;
+  liveComments: LiveCommentItem[];
+  rightChatScrollRef: React.RefObject<HTMLDivElement | null>;
+  onToggleFullscreen: () => void;
+  onClubShout: () => void;
+}>(({
+  liveViewers,
+  peakViewers,
+  gh,
+  ga,
+  meIsHome,
+  isDerby,
+  mode,
+  streamProj,
+  broadcastChannel,
+  done,
+  minute,
+  clubShoutMin,
+  matchPhaseUi,
+  isLivePitchFullscreen,
+  liveComments,
+  rightChatScrollRef,
+  onToggleFullscreen,
+  onClubShout
+}) => {
+  const vTier = getStreamViewerTier(liveViewers);
+  const tierMeta = getViewerTierMeta(vTier);
+  const totalG = gh + ga;
+  const myG = meIsHome ? gh : ga;
+  const oppG = meIsHome ? ga : gh;
+  const winMul = myG > oppG ? 1.12 : myG === oppG ? 1.0 : 0.92;
+  const hypeMul = clamp(1 + totalG * 0.045 + (isDerby ? 0.14 : 0), 0.95, 1.45);
+  const estLiveIn =
+    mode === 'm' && streamProj.plan.id !== 'off'
+      ? Math.max(1, Math.round((streamProj.plan.revBase + (peakViewers / 1000) * streamProj.plan.revPer1k) * winMul * hypeMul))
+      : 0;
+  const canClubShout = !done && minute - clubShoutMin >= 15;
+
+  return (
+    <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+      <div
+        className={`bg-[var(--surface-2)]/70 border-b border-[var(--line)] shrink-0 ${
+          isLivePitchFullscreen
+            ? 'px-2 py-1.5 mland:px-1.5 mland:py-1 space-y-1'
+            : 'px-3 py-2 mland:px-2.5 mland:py-1.5 space-y-1.5'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🎥</span>
+            <span className={`font-bold truncate text-[var(--ink)] ${isLivePitchFullscreen ? 'text-[11px] mland:text-[9.5px]' : 'text-xs mland:text-[10.5px]'}`}>
+              {broadcastChannel.name}
+            </span>
+          </div>
+          <span className={`font-bold text-[var(--g)] shrink-0 ${isLivePitchFullscreen ? 'text-[9px] mland:text-[8px]' : 'text-[10px] mland:text-[8.5px]'}`}>
+            {broadcastChannel.badge}
+          </span>
+        </div>
+
+        <div className={`flex flex-wrap items-center justify-between gap-1.5 tabular ${isLivePitchFullscreen ? 'text-[9.5px] mland:text-[8.5px]' : 'text-[10.5px] mland:text-[9px]'}`}>
+          <span className="text-[var(--mut)] truncate">
+            กำลังดู <b className="text-[var(--ink)]">{liveViewers.toLocaleString()}</b> · สูงสุด <b className="text-[var(--ink)]">{peakViewers.toLocaleString()}</b>
+          </span>
+          {mode === 'm' && (
+            streamProj.plan.id === 'off' ? (
+              <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
+            ) : (
+              <span className="font-bold shrink-0">
+                <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
+                <span className="text-[var(--mut)] mx-0.5">/</span>
+                <span className="text-[var(--red)]">-{fmtMoneyNum(streamProj.plan.totalCost)}</span>
+              </span>
+            )
+          )}
+        </div>
+
+        {!done && (
+          <div className="flex items-center justify-between gap-1.5 pt-0.5">
+            {!isLivePitchFullscreen && (
+              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                {tierMeta.desc}
+              </span>
+            )}
+            <div className={`flex items-center gap-1 shrink-0 ${isLivePitchFullscreen ? 'w-full justify-between' : ''}`}>
+              {matchPhaseUi !== 'halftime' && (
+                <button
+                  type="button"
+                  onClick={onToggleFullscreen}
+                  title={isLivePitchFullscreen ? 'ย่อจอกลับสู่มุมมองปกติ' : 'ดูออนไลน์แบบเต็มจอพร้อมแชทข้างๆ'}
+                  className={`btn btn-xs whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
+                    isLivePitchFullscreen
+                      ? 'px-2 mland:px-1.5 bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
+                      : 'btn-secondary'
+                  }`}
+                >
+                  {isLivePitchFullscreen ? (
+                    <>
+                      <Minimize2 className="w-3 h-3 shrink-0" />
+                      <span>ย่อจอ</span>
+                    </>
+                  ) : (
+                    <>
+                      <Maximize2 className="w-3 h-3 shrink-0" />
+                      <span>เต็มจอ</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!canClubShout}
+                onClick={onClubShout}
+                className={`btn btn-xs btn-secondary whitespace-nowrap shrink-0 ${isLivePitchFullscreen ? 'px-2 mland:px-1.5' : ''}`}
+              >
+                {canClubShout ? '👋 ทักทายคนดู' : `รอ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div
+        ref={rightChatScrollRef}
+        className={`flex-1 min-h-0 overflow-y-auto no-scrollbar divide-y divide-[var(--line)]/45 ${
+          isLivePitchFullscreen ? 'p-2 mland:p-1.5' : 'p-2.5 mland:p-2'
+        }`}
+      >
+        {liveComments.map((cm) => (
+          <div
+            key={cm.id}
+            className={`py-1.5 mland:py-1 text-[11px] mland:text-[9.5px] leading-snug ${
+              cm.kind === 'club'
+                ? 'px-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 my-0.5'
+                : cm.donateBaht
+                  ? 'px-2 rounded-lg bg-[#facc15]/15 border border-[#facc15]/40 my-0.5'
+                  : ''
+            }`}
+          >
+            <div className="flex items-center justify-between gap-1.5">
+              <span className={`font-bold truncate ${
+                cm.kind === 'club'
+                  ? 'text-[var(--g)]'
+                  : cm.kind === 'goal'
+                    ? 'text-[var(--g)]'
+                    : cm.kind === 'var' || cm.kind === 'card'
+                      ? 'text-[var(--red)]'
+                      : 'text-[var(--ink)]'
+              }`}>
+                {cm.user}
+              </span>
+              <span className="inline-flex items-center gap-1.5 shrink-0 tabular">
+                {cm.donateBaht && (
+                  <span className="font-extrabold text-[#9a6700] dark:text-[var(--lamp)] text-[10px]">
+                    💎 {cm.donateBaht.toLocaleString()}฿
+                  </span>
+                )}
+                <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">{cm.m}&apos;</span>
+              </span>
+            </div>
+            <div className="text-[var(--mut)] mt-0.5 break-words">
+              <span className={cm.kind === 'goal' || cm.donateBaht || cm.kind === 'club' ? 'text-[var(--ink)] font-medium' : ''}>
+                {cm.text}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+export const MatchPlayerCoachPanel = React.memo<{
+  meIsHome: boolean;
+  liveHome: Team;
+  liveAway: Team;
+  meTeamOrig: Team;
+  state: GameState;
+  homeKit: string;
+  awayKit: string;
+  homeGkKit: string;
+  awayGkKit: string;
+  homeTrim: string;
+  awayTrim: string;
+  liveCaptains: { H: string; A: string };
+  liveSetPiecesUi: { corner?: string; freekick?: string; penalty?: string };
+  matchPhaseUi: LiveMatchWorld['phase'];
+  halftimeCoachOrder: {
+    headline: string;
+    detail: string;
+    playerNote: string;
+    form: string;
+    tacLabel: string;
+  } | null;
+  userPitchStatus: 'on' | 'bench' | 'subbed_out' | 'sent_off';
+  userSubOutMin?: number;
+  coachChatCount: number;
+  coachChatCooldownMin: number;
+  minute: number;
+  coachChatReplies: {
+    id: number;
+    m: number;
+    userMsg: string;
+    coachMsg: string;
+    accepted: boolean;
+    effectSummary?: string;
+  }[];
+  rightTacticsScrollRef: React.RefObject<HTMLDivElement | null>;
+  onPlayerVoiceToCoach: (topic: 'attack' | 'defend' | 'formation' | 'setpiece' | 'fitness') => void;
+}>(({
+  meIsHome,
+  liveHome,
+  liveAway,
+  meTeamOrig,
+  state,
+  homeKit,
+  awayKit,
+  homeGkKit,
+  awayGkKit,
+  homeTrim,
+  awayTrim,
+  liveCaptains,
+  liveSetPiecesUi,
+  matchPhaseUi,
+  halftimeCoachOrder,
+  userPitchStatus,
+  userSubOutMin,
+  coachChatCount,
+  coachChatCooldownMin,
+  minute,
+  coachChatReplies,
+  rightTacticsScrollRef,
+  onPlayerVoiceToCoach
+}) => {
+  const mySide: 'H' | 'A' = meIsHome ? 'H' : 'A';
+  const myTeamLive = meIsHome ? liveHome : liveAway;
+  const oppTeamLive = meIsHome ? liveAway : liveHome;
+  const quotaLeft = Math.max(0, 2 - coachChatCount);
+  const canSpeak =
+    userPitchStatus === 'on' &&
+    quotaLeft > 0 &&
+    minute >= 10 &&
+    minute - coachChatCooldownMin >= 20;
+  const waitSpeakMins =
+    minute < 10
+      ? Math.max(1, 10 - minute)
+      : Math.max(1, 20 - (minute - coachChatCooldownMin));
+  const curCap = mySide === 'H' ? liveCaptains.H : liveCaptains.A;
+  const capPl = myTeamLive.sq.find((q) => q.n === curCap) || meTeamOrig.sq.find((q) => q.n === curCap) || null;
+  const capKit = capPl?.pos === 'GK' ? (meIsHome ? homeGkKit : awayGkKit) : (meIsHome ? homeKit : awayKit);
+  const capTrim = capPl?.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
+
+  return (
+    <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+      <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/80 border-b border-[var(--line)] space-y-1 shrink-0">
+        <div className="flex items-center justify-between gap-2 text-xs mland:text-[10px] font-extrabold">
+          <span>🧠 แผนโค้ช &amp; กัปตันในสนาม</span>
+          <span className="px-1.5 py-0.5 rounded bg-[var(--g-soft)] text-[var(--g)] text-[10px] mland:text-[8.5px] font-bold">
+            {myTeamLive.form} · {AR_T[myTeamLive.tac]}
+          </span>
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 text-[10px] mland:text-[8.5px] text-[var(--mut)]">
+          <div className="truncate flex items-center gap-1 min-w-0">
+            <CaptainBadge team={myTeamLive} state={state} size="xs" />
+            <span className="shrink-0 inline-flex">
+              <ClubCrest name={meTeamOrig.name} size={13} team={meTeamOrig} club={state.club} isMyClub={false} />
+            </span>
+            {capPl && (
+              <MatchPlayerThumb
+                player={capPl}
+                team={meTeamOrig}
+                state={state}
+                kitColor={capKit}
+                trimColor={capTrim}
+                size="xs"
+              />
+            )}
+            {capPl && <PositionBadge role={capPl.ro} size="2xs" />}
+            {capPl && (
+              <span className="text-[9.5px] mland:text-[8px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular shrink-0">
+                #{getShirtNo(meTeamOrig, capPl)}
+              </span>
+            )}
+            <b className="text-[var(--ink)] truncate">{curCap || '-'}</b>
+          </div>
+          <div className="truncate text-right shrink-0">
+            คู่แข่ง: <b className="text-[var(--ink)]">{oppTeamLive.form} · {AR_T[oppTeamLive.tac]}</b>
+          </div>
+        </div>
+        <div className="grid grid-cols-3 gap-1 pt-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)]">
+          <div className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] truncate">
+            🚩 <b className="text-[var(--ink)]">{(liveSetPiecesUi.corner || 'AI').split(' ')[0]}</b>
+          </div>
+          <div className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] truncate">
+            🎯 <b className="text-[var(--ink)]">{(liveSetPiecesUi.freekick || 'AI').split(' ')[0]}</b>
+          </div>
+          <div className="px-1.5 py-0.5 rounded bg-[var(--surface)] border border-[var(--line)] truncate">
+            🥅 <b className="text-[var(--ink)]">{(liveSetPiecesUi.penalty || 'AI').split(' ')[0]}</b>
+          </div>
+        </div>
+      </div>
+
+      <div ref={rightTacticsScrollRef} className="flex-1 min-h-0 overflow-y-auto no-scrollbar p-2.5 mland:p-2 space-y-2 mland:space-y-1.5">
+        {matchPhaseUi === 'halftime' && (
+          <div className="rounded-xl mland:rounded-lg bg-amber-500/10 border border-amber-500/40 p-2.5 mland:p-2 space-y-1.5 mland:space-y-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-extrabold text-[11px] mland:text-[9.5px] text-amber-600 dark:text-amber-300 truncate">
+                👔 คำสั่งโค้ชพักครึ่ง
+              </span>
+              <span className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9.5px] mland:text-[8px] font-bold text-[var(--ink)] shrink-0">
+                {halftimeCoachOrder ? `${halftimeCoachOrder.form} · ${halftimeCoachOrder.tacLabel}` : `${myTeamLive.form} · ${AR_T[myTeamLive.tac]}`}
+              </span>
+            </div>
+            {halftimeCoachOrder ? (
+              <>
+                <div className="font-extrabold text-[11px] mland:text-[9.5px] text-[var(--ink)] leading-snug">
+                  {halftimeCoachOrder.headline}
+                </div>
+                <div className="text-[10px] mland:text-[8.5px] text-[var(--ink)]/90 leading-relaxed">
+                  📋 {halftimeCoachOrder.detail}
+                </div>
+                <div className="pt-1 border-t border-amber-500/25 text-[10px] mland:text-[8.5px] text-[var(--g)] font-semibold leading-relaxed">
+                  💬 {halftimeCoachOrder.playerNote}
+                </div>
+              </>
+            ) : (
+              <div className="text-[10px] mland:text-[8.5px] text-[var(--mut)] leading-relaxed">
+                โค้ชกำลังสรุปแท็กติกครึ่งหลังให้ทีมยึดวินัยและช่วยกันคุมจังหวะเกม กดปุ่ม &quot;เริ่มครึ่งหลัง&quot; ด้านบนเมื่อพร้อมลุยต่อ
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={matchPhaseUi === 'halftime' ? 'pt-2 border-t border-[var(--line)] space-y-2 mland:space-y-1.5' : 'space-y-2 mland:space-y-1.5'}>
+          <div className="flex items-center justify-between gap-2 text-[10.5px] mland:text-[9px] font-bold">
+            <span className="text-[var(--ink)] truncate">
+              🗣️ คุยโค้ช
+            </span>
+            {!(userPitchStatus === 'on' && quotaLeft <= 0) && (
+              <span
+                className={`px-1.5 py-0.5 rounded text-[9.5px] mland:text-[8px] font-extrabold tabular shrink-0 ${
+                  userPitchStatus !== 'on'
+                    ? 'bg-[var(--surface-2)] text-[var(--mut)] border border-[var(--line)]'
+                    : canSpeak
+                      ? 'bg-[var(--g-soft)] text-[var(--g)] border border-[var(--g)]/35'
+                      : 'bg-[var(--surface-2)] text-[var(--mut)] border border-[var(--line)]'
+                }`}
+              >
+                {userPitchStatus === 'subbed_out'
+                  ? '🔽 เปลี่ยนตัวออกแล้ว'
+                  : userPitchStatus === 'sent_off'
+                    ? '🟥 ถูกใบแดง'
+                    : userPitchStatus === 'bench'
+                      ? '🪑 นั่งสำรอง'
+                      : canSpeak
+                        ? '● พร้อมคุย'
+                        : `⏳ รอ ${waitSpeakMins} น.`}
+              </span>
+            )}
+          </div>
+
+          {userPitchStatus !== 'on' ? (
+            <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+              {userPitchStatus === 'subbed_out'
+                ? `คุณถูกเปลี่ยนตัวออกจากสนามแล้ว (${userSubOutMin ? `น.${userSubOutMin}'` : 'เกมนี้'}) — ไม่สามารถคุยแท็กติกในสนามกับโค้ชได้อีก`
+                : userPitchStatus === 'sent_off'
+                  ? 'คุณถูกใบแดงไล่ออกจากสนามแล้ว — งดคุยกับโค้ชในเกมนี้'
+                  : 'คุณยังนั่งอยู่ที่ม้านั่งสำรอง — ต้องรอลงสนามก่อนจึงจะคุยแท็กติกกับโค้ชได้'}
+            </div>
+          ) : quotaLeft <= 0 ? (
+            <div className="p-2.5 mland:p-2 rounded-xl bg-[var(--surface-2)]/75 border border-[var(--line)] text-[11px] mland:text-[9.5px] text-[var(--mut)] leading-snug">
+              โค้ชกำลังคุมเกมตามแผนในสนามต่อไป
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-1.5 mland:gap-1">
+              {[
+                {
+                  id: 'attack' as const,
+                  icon: '🔥',
+                  label: 'เสนอโค้ชเปิดเกมรุกกดดันเพิ่ม',
+                  pro: 'ข้อดี: ทีมบุกหนักขึ้น · ฟอร์ม +0.14 (หากโค้ชยอม)',
+                  con: 'ข้อเสีย: ฟิตคุณ -4% ทีม -2% · ถ้าโค้ชไม่ยอม ฟอร์ม -0.12'
+                },
+                {
+                  id: 'defend' as const,
+                  icon: '🛡️',
+                  label: 'เสนอโค้ชเน้นรับคุมโซนรอโต้กลับ',
+                  pro: 'ข้อดี: ปิดพื้นที่รับ · ประหยัดฟิต +2% (หากโค้ชยอม)',
+                  con: 'ข้อเสีย: ลดโอกาสบุก (ฟอร์ม -0.06) · ถ้าโค้ชไม่ยอม -0.12'
+                },
+                {
+                  id: 'formation' as const,
+                  icon: '🔀',
+                  label: 'เสนอโค้ชปรับแผน/เปลี่ยนระบบเล่น',
+                  pro: 'ข้อดี: ปรับ 11 ตัวจริงแก้ทางคู่แข่ง · ฟอร์ม +0.16',
+                  con: 'ข้อเสีย: โอกาสโค้ชยอมต่ำ · ยอม=ฟิต -3% · ปฏิเสธ=ฟอร์ม -0.16'
+                },
+                {
+                  id: 'setpiece' as const,
+                  icon: '🎯',
+                  label: 'อาสายิงฟรีคิก / เตะมุม / จุดโทษ',
+                  pro: 'ข้อดี: ได้สิทธิ์ยิงลูกนิ่งจริงในสนามถ้าพลัง/ฟอร์มถึง',
+                  con: 'ข้อเสีย: ยอม=กดดันฟิต -2% · ปฏิเสธ=เสียความมั่นใจ -0.10'
+                },
+                {
+                  id: 'fitness' as const,
+                  icon: '💬',
+                  label: 'รายงานสภาพฟิต / เช็กจังหวะเกมกับโค้ช',
+                  pro: 'ข้อดี: โค้ชรับฟังเสมอ · เตือนสติ/ปรับจังหวะ',
+                  con: 'ข้อเสีย: ถ้าฟิต <58% โค้ชอาจเปลี่ยนตัวคุณออกทันที · เสียจังหวะ -2%'
+                }
+              ].map((btn) => (
+                <button
+                  key={btn.id}
+                  type="button"
+                  disabled={!canSpeak}
+                  onClick={() => onPlayerVoiceToCoach(btn.id)}
+                  className="w-full text-left px-2.5 py-1.5 mland:px-2 mland:py-1 rounded-xl mland:rounded-lg bg-[var(--surface-2)] hover:bg-[var(--g-soft)] border border-[var(--line)] hover:border-[var(--g)]/50 disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-2 cursor-pointer transition-colors"
+                >
+                  <span className="text-xs mland:text-[10.5px] leading-snug shrink-0">{btn.icon}</span>
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate leading-tight">
+                      {btn.label}
+                    </div>
+                    <div className="text-[9px] mland:text-[7.5px] text-[var(--g)] truncate leading-tight">
+                      {btn.pro}
+                    </div>
+                    <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] truncate leading-tight">
+                      {btn.con}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {coachChatReplies.length > 0 && (
+            <div className="pt-1 border-t border-[var(--line)] space-y-1.5">
+              <div className="text-[10px] mland:text-[8.5px] font-bold text-[var(--mut)]">💬 บันทึกการพูดคุย</div>
+              {coachChatReplies.map((rp) => (
+                <div key={rp.id} className="p-2 mland:p-1.5 rounded-xl bg-[var(--surface-2)] border border-[var(--line)] space-y-0.5 text-[10px] mland:text-[8.5px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-[var(--ink)] truncate">{rp.m}&apos; {rp.userMsg}</span>
+                    <span className={`shrink-0 text-[9px] mland:text-[7.5px] font-bold ${rp.accepted ? 'text-[var(--g)]' : 'text-[var(--red)]'}`}>
+                      {rp.accepted ? '✅ โค้ชรับฟัง' : '❌ โค้ชปฏิเสธ'}
+                    </span>
+                  </div>
+                  <div className={rp.accepted ? 'text-[var(--g)] font-semibold' : 'text-[var(--mut)] font-medium'}>
+                    👔 โค้ช: {rp.coachMsg}
+                  </div>
+                  {rp.effectSummary && (
+                    <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] leading-snug">
+                      {rp.effectSummary}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+

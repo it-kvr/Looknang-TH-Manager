@@ -35,12 +35,12 @@ import { AthleteCard } from '../components/AthleteCard';
 import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 
-export const PlayerCareerView: React.FC<{
+export const PlayerCareerView = React.memo<{
   state: GameState;
   onUpdateState: (updater: (draft: GameState) => void) => void;
   onToast: (msg: string) => void;
   onOpenSeasonStats?: (season?: number) => void;
-}> = ({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
+}>(({ state, onUpdateState, onToast, onOpenSeasonStats }) => {
   const [careerTab, setCareerTab] = useState<'plan' | 'missions' | 'perks' | 'stats' | 'history'>('plan');
   const [skillSubTab, setSkillSubTab] = useState<'perks' | 'traits' | 'roles' | 'sig'>('perks');
   const [showLockerPicker, setShowLockerPicker] = useState(false);
@@ -678,6 +678,6 @@ export const PlayerCareerView: React.FC<{
       )}
     </div>
   );
-};
+});
 
 
