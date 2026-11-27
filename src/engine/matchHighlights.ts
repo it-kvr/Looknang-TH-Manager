@@ -145,6 +145,13 @@ const mapAgentAction = (ag: LivePitchAgent): { act?: number; dd?: number; ap?: n
     }
   }
   if (ag.intent === 'CELEBRATE') {
+    if (ag.celebrateRole === 'conceded') {
+      if (ag.isOgCulprit) {
+        const ap = Math.round(clamp(ag.celebratePhase ?? 0, 0, 1) * 100);
+        return { act: HL_ACT.CELEBRATE, dd: -1, ap };
+      }
+      return {};
+    }
     const dd =
       ag.celebrateRole === 'scorer'
         ? 1

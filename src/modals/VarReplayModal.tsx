@@ -57,6 +57,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
   const [playing, setPlaying] = useState<boolean>(true);
   const [replaySpeed, setReplaySpeed] = useState<0.25 | 0.5 | 1 | 1.5>(1);
   const [cameraMode, setCameraMode] = useState<VarCameraMode>('wide');
+  const [followBall, setFollowBall] = useState<boolean>(false);
 
   // Reset playback from start when switching between saved VAR incidents
   useEffect(() => {
@@ -104,7 +105,8 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
         awayGkKit,
         homeTrim,
         awayTrim,
-        cameraMode
+        cameraMode,
+        followBall
       );
     };
     render();
@@ -113,7 +115,7 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
     const ro = new ResizeObserver(() => render());
     ro.observe(target);
     return () => ro.disconnect();
-  }, [activeRecord, pct, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, cameraMode]);
+  }, [activeRecord, pct, homeKit, awayKit, homeGkKit, awayGkKit, homeTrim, awayTrim, cameraMode, followBall]);
 
   const phaseLabel =
     pct >= 0.64
@@ -335,6 +337,22 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
               type="button"
               onClick={() => {
                 SFX.tap();
+                setCameraMode('full');
+                setFollowBall(false);
+              }}
+              title="มุมกว้างทั้งสนาม"
+              className={`h-6 mland:h-5 px-1.5 rounded text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer transition-colors whitespace-nowrap ${
+                cameraMode === 'full'
+                  ? 'bg-sky-400 text-slate-950'
+                  : 'text-white/75 hover:text-white'
+              }`}
+            >
+              🏟️ ทั้งสนาม
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                SFX.tap();
                 setCameraMode('wide');
               }}
               title="กล้องระยะไกล"
@@ -362,6 +380,28 @@ export const VarReplayModal: React.FC<VarReplayModalProps> = ({
               🔍 ใกล้
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              SFX.tap();
+              setFollowBall((prev) => {
+                const next = !prev;
+                if (next && cameraMode === 'full') {
+                  setCameraMode('wide');
+                }
+                return next;
+              });
+            }}
+            title="ให้กล้องติดตามลูกบอลอัตโนมัติ"
+            className={`h-7 mland:h-6 px-2 rounded-md border text-[10px] mland:text-[8.5px] font-extrabold cursor-pointer transition-colors whitespace-nowrap shrink-0 ${
+              followBall && cameraMode !== 'full'
+                ? 'bg-emerald-400 border-emerald-300 text-slate-950'
+                : 'bg-white/8 border-white/15 text-white/80 hover:text-white hover:bg-white/14'
+            }`}
+          >
+            ⚽ ตามบอล
+          </button>
 
           <div className="inline-flex items-center p-0.5 rounded-md bg-white/8 border border-white/12 shrink-0">
             {([0.25, 0.5, 1, 1.5] as const).map((sp) => (

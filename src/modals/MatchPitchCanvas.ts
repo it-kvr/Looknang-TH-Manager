@@ -161,7 +161,7 @@ const fitCanvasText = (ctx: CanvasRenderingContext2D, text: string, maxW: number
   return lo > 0 ? `${text.slice(0, lo)}…` : '…';
 };
 
-export type VarCameraMode = 'wide' | 'zoom';
+export type VarCameraMode = 'full' | 'wide' | 'zoom';
 
 const renderVarMonitorPanel = (
   ctx: CanvasRenderingContext2D,
@@ -179,7 +179,8 @@ const renderVarMonitorPanel = (
   homeTrim: string,
   awayTrim: string,
   isStandalone = false,
-  cameraMode: VarCameraMode = 'wide'
+  cameraMode: VarCameraMode = 'wide',
+  followBall = false
 ) => {
   const rep = vr.replay;
   const accent = vr.kind === 'foul_card' ? '#f59e0b' : '#38bdf8';
@@ -295,9 +296,13 @@ const renderVarMonitorPanel = (
   ctx.fillStyle = '#f8fafc';
   ctx.font = `800 ${isStandalone ? 11 : smallText ? 8 : 9}px "Noto Sans Thai", sans-serif`;
   const hdrTitleRaw = isStandalone
-    ? cameraMode === 'wide'
-      ? '🖥 VAR · กล้องระยะไกล'
-      : '🖥 VAR · กล้องระยะใกล้'
+    ? followBall && cameraMode !== 'full'
+      ? `🖥 VAR · ตามบอล (${cameraMode === 'zoom' ? 'ใกล้' : 'ไกล'})`
+      : cameraMode === 'full'
+        ? '🖥 VAR · ทั้งสนาม'
+        : cameraMode === 'wide'
+          ? '🖥 VAR · ระยะไกล'
+          : '🖥 VAR · ระยะใกล้'
     : '🖥 VAR REPLAY';
   const hdrLeftX = monX + (isStandalone ? 22 : 16);
   const hdrMaxW = Math.max(40, monW - (hdrLeftX - monX) - tagW);
@@ -323,7 +328,8 @@ const renderVarMonitorPanel = (
   const defTrim = defSide === 'H' ? homeTrim : awayTrim;
   const defGkKit = defSide === 'H' ? homeGkKit : awayGkKit;
 
-  // Dynamic Broadcast Camera: Wide Tactical Framing vs Close-Up Zoom Framing
+  // Dynamic Broadcast Camera: Full Pitch vs Wide Tactical Framing vs Close-Up Zoom + Follow Ball
+  const isFullCam = cameraMode === 'full';
   const isWideCam = cameraMode === 'wide';
   const rawIncX = rep?.incidentX ?? vr.x;
   const rawIncY = rep?.incidentY ?? vr.y ?? 50;
@@ -333,7 +339,13 @@ const renderVarMonitorPanel = (
   let startCamX = rawIncX;
   let startCamY = rawIncY;
   let baseSpanX = isWideCam ? 52 : 28;
-  if (vr.kind === 'goal') {
+  if (isFullCam) {
+    baseCamX = 50;
+    baseCamY = 50;
+    startCamX = 50;
+    startCamY = 50;
+    baseSpanX = Math.max(109, (106 * Math.max(1, scrW)) / (Math.max(1, scrH) * pitchAspect));
+  } else if (vr.kind === 'goal') {
     if (sc === 'goal_line_tech') {
       const shooterX = attRight ? clamp(rep?.passFromX ?? 88, 76, 95.5) : clamp(rep?.passFromX ?? 12, 4.5, 24);
       const goalLineX = attRight ? 100 : 0;
@@ -440,23 +452,169 @@ const renderVarMonitorPanel = (
 
   const panT = clamp(simT / 0.5, 0, 1);
   const panEase = 1 - Math.pow(1 - panT, 2);
-  const zoomMaxDrop = isWideCam ? 0.05 : isStandalone ? 0.14 : 0.08;
+  const zoomMaxDrop = isFullCam ? 0 : isWideCam ? 0.05 : isStandalone ? 0.14 : 0.08;
   const spanX = baseSpanX * (1 - zoomMaxDrop * zoomEnv);
-  const rawCamCenterX = startCamX + (baseCamX - startCamX) * panEase;
-  const rawCamCenterY = startCamY + (baseCamY - startCamY) * panEase;
   const spanY = spanX * (scrH / Math.max(1, scrW)) * pitchAspect;
-  const halfSpanX = spanX / 2;
-  const halfSpanY = spanY / 2;
-  const camCenterX = spanX < 107 ? clamp(rawCamCenterX, -3.5 + halfSpanX, 103.5 - halfSpanX) : 50;
-  const camCenterY = spanY < 105 ? clamp(rawCamCenterY, -2.5 + halfSpanY, 102.5 - halfSpanY) : 50;
-  const minFX = camCenterX - halfSpanX;
-  const minFY = camCenterY - halfSpanY;
-  const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
-  const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
   const pxPerFx = scrW / Math.max(1, spanX);
   const pxPerFy = scrH / Math.max(1, spanY);
   const screenAngle = (fx0: number, fy0: number, fx1: number, fy1: number) =>
     Math.atan2((fy1 - fy0) * pxPerFy, (fx1 - fx0) * pxPerFx);
+
+  const modeSizeScale = isFullCam ? 0.68 : isWideCam ? 0.78 : 1;
+  const rawPlayT = clamp(simT / 0.49, 0, 1);
+  const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
+  const slideStartPlayT = 1 - Math.pow(1 - clamp(0.2 / 0.49, 0, 1), 2.05);
+  const slideActionProg = simT >= 0.2 ? clamp((simT - 0.2) / 0.58, 0, 1) : 0;
+  const slideExtendNow = Math.sin(clamp(slideActionProg * 2, 0, 1) * (Math.PI / 2));
+  const postT = clamp((simT - 0.51) / 0.49, 0, 1);
+  const dirSign = attRight ? 1 : -1;
+  const agentPixR = (isStandalone ? clamp(scrH * 0.072, 8.2, 12.6) : clamp(scrH * 0.074, 5.2, 7.4)) * modeSizeScale;
+  const agentFxR = agentPixR / pxPerFx;
+  const agentFyR = agentPixR / pxPerFy;
+  const baseBallPixR = (isStandalone ? 5.4 : smallText ? 3.4 : 4.0) * (isFullCam ? 0.72 : isWideCam ? 0.82 : 1);
+  const ballFxR = baseBallPixR / pxPerFx;
+  const ballFyR = baseBallPixR / pxPerFy;
+
+  let trackBallX = rawIncX;
+  let trackBallY = rawIncY;
+  if (followBall && !isFullCam) {
+    if (vr.kind === 'goal') {
+      if (sc === 'goal_line_tech') {
+        const goalLineX = attRight ? 100 : 0;
+        const incY = clamp(rep?.shotTargetY ?? rep?.incidentY ?? 50, 43.4, 56.6);
+        const startX = attRight ? clamp(rep?.passFromX ?? 90.5, 78, 95.5) : clamp(rep?.passFromX ?? 9.5, 4.5, 22);
+        const startY = clamp(rep?.passFromY ?? (incY + (incY < 50 ? 2.5 : -2.5)), 34, 66);
+        const mm = rep?.goalLineMm ?? 24;
+        const overlapFrac = clamp(mm / 110, 0.14, 0.78);
+        const apexX = vr.overturn
+          ? goalLineX + dirSign * ballFxR * (1 - overlapFrac)
+          : goalLineX + dirSign * ballFxR * (1 + overlapFrac);
+        const clearX = attRight ? 96.4 : 3.6;
+        const netSettleX = attRight ? 101.8 : -1.8;
+        const ballPhase = clamp((simT - 0.12) / 0.37, 0, 1);
+        const easeBall = 1 - Math.pow(1 - ballPhase, 1.85);
+        trackBallX =
+          postT > 0
+            ? vr.overturn
+              ? apexX + (clearX - apexX) * postT
+              : apexX + (netSettleX - apexX) * clamp(postT * 1.35, 0, 1)
+            : startX + (apexX - startX) * easeBall;
+        trackBallY = startY + (incY - startY) * easeBall + (vr.overturn ? postT * (incY < 50 ? 2.4 : -2.4) : 0);
+      } else if (sc === 'foul_buildup') {
+        const incX = rep?.incidentX ?? (attRight ? 80 : 20);
+        const incY = rep?.incidentY ?? 48;
+        const goalX = attRight ? 101.4 : -1.4;
+        const goalY = clamp(rep?.shotTargetY ?? 50, 43.8, 56.2);
+        const attShotFacing = screenAngle(incX, incY, goalX, goalY);
+        const stepT = clamp(postT / 0.35, 0, 1);
+        const attXNow = incX - dirSign * (1 - playT) * 4.5 + stepT * dirSign * 1.15;
+        const attYNow = incY + (1 - playT) * 1.5 + stepT * (goalY - incY) * 0.04;
+        const shootOriginX = incX + dirSign * 1.25;
+        const shootOriginY = incY + (goalY - incY) * 0.04;
+        const shotProg = clamp((postT - 0.14) / 0.86, 0, 1);
+        const dribbleBallX = attXNow + Math.cos(attShotFacing) * (agentFxR * 0.72);
+        const dribbleBallY = attYNow + Math.sin(attShotFacing) * (agentFyR * 0.72);
+        trackBallX =
+          shotProg > 0
+            ? shootOriginX + (goalX - shootOriginX) * shotProg
+            : dribbleBallX + (shootOriginX - dribbleBallX) * stepT;
+        trackBallY =
+          shotProg > 0
+            ? shootOriginY + (goalY - shootOriginY) * shotProg
+            : dribbleBallY + (shootOriginY - dribbleBallY) * stepT;
+      } else {
+        const incX = rep?.incidentX ?? (attRight ? 86 : 14);
+        const incY = rep?.incidentY ?? 48;
+        const goalX = attRight ? 101.4 : -1.4;
+        const targetGoalY = clamp(rep?.shotTargetY ?? 50, 43.8, 56.2);
+        const meetX = attRight ? clamp(incX + 2.4, 70, 95.8) : clamp(incX - 2.4, 4.2, 30);
+        const meetY = clamp(incY + (targetGoalY - incY) * 0.16, 12, 88);
+        const passStartX = rep?.passFromX ?? (incX - dirSign * 11);
+        const passStartY = rep?.passFromY ?? clamp(incY + 7, 18, 82);
+        const passAng = screenAngle(passStartX, passStartY, meetX, meetY);
+        const passerFootX = passStartX + Math.cos(passAng) * (agentFxR * 0.9);
+        const passerFootY = passStartY + Math.sin(passAng) * (agentFyR * 0.9);
+        const recvT = clamp(postT / 0.46, 0, 1);
+        const finishT = postT > 0.46 ? clamp((postT - 0.46) / 0.5, 0, 1) : 0;
+        const passTravelT = simT < 0.49 ? 0 : recvT;
+        trackBallX =
+          finishT > 0
+            ? meetX + (goalX - meetX) * finishT
+            : passerFootX + (meetX - passerFootX) * passTravelT;
+        trackBallY =
+          finishT > 0
+            ? meetY + (targetGoalY - meetY) * finishT
+            : passerFootY + (meetY - passerFootY) * passTravelT;
+      }
+    } else if (vr.kind === 'penalty') {
+      const incX = rep?.incidentX ?? (attRight ? 86 : 14);
+      const incY = rep?.incidentY ?? 48;
+      const boxLineX = rep?.defLineX ?? (attRight ? 83.5 : 16.5);
+      const inBox = rep?.inBox ?? !vr.overturn;
+      if (sc === 'handball_box') {
+        const crossFromX = rep?.passFromX ?? (incX - dirSign * 9.5);
+        const crossFromY = rep?.passFromY ?? clamp(incY + (incY < 50 ? 10 : -10), 14, 86);
+        const hitT = clamp((simT - 0.14) / 0.35, 0, 1);
+        const deflectT = postT;
+        const deflX = incX - dirSign * 4.4;
+        const deflY = incY + (incY < 50 ? 6.2 : -6.2);
+        trackBallX = deflectT > 0 ? incX + (deflX - incX) * deflectT : crossFromX + (incX - crossFromX) * hitT;
+        trackBallY = deflectT > 0 ? incY + (deflY - incY) * deflectT : crossFromY + (incY - crossFromY) * hitT;
+      } else if (sc === 'gk_clash_box') {
+        const attFacing = screenAngle(incX, incY, attRight ? 98 : 2, 50);
+        const attXNow = incX - dirSign * (agentFxR * 0.7 + (1 - playT) * 4.8) + postT * dirSign * 1.1;
+        const attYNow = incY + (1 - playT) * (incY < 50 ? -1.6 : 1.6);
+        const dribbleBX = attXNow + Math.cos(attFacing) * (agentFxR * 0.72);
+        const dribbleBY = attYNow + Math.sin(attFacing) * (agentFyR * 0.72);
+        const clearToX = !inBox ? incX - dirSign * 4.4 : incX + dirSign * 3.8;
+        const clearToY = incY + (incY < 50 ? -2.8 : 2.8);
+        trackBallX = postT > 0 ? incX + (clearToX - incX) * postT : dribbleBX + (incX - dribbleBX) * playT;
+        trackBallY = postT > 0 ? incY + (clearToY - incY) * postT : dribbleBY + (incY - dribbleBY) * playT;
+      } else {
+        const attFacing = screenAngle(incX, incY, attRight ? 96 : 4, 50);
+        const attXNow = incX - dirSign * (1 - playT) * 4.4 + postT * dirSign * 0.8;
+        const attYNow = incY + (1 - playT) * (incY < 50 ? -1.4 : 1.4);
+        const rawBallX = attXNow + Math.cos(attFacing) * (agentFxR * 0.85 + ballFxR * 0.45);
+        const preFreezeBallX = !inBox
+          ? attRight
+            ? Math.min(rawBallX, boxLineX - ballFxR * 1.1)
+            : Math.max(rawBallX, boxLineX + ballFxR * 1.1)
+          : rawBallX;
+        trackBallX = preFreezeBallX + postT * dirSign * 2.1;
+        trackBallY = attYNow + Math.sin(attFacing) * (agentFyR * 0.85 + ballFyR * 0.45) + postT * (incY < 50 ? 1.2 : -1.2);
+      }
+    } else {
+      const incX = rep?.incidentX ?? vr.x;
+      const incY = rep?.incidentY ?? vr.y;
+      const attStartX = incX - dirSign * 4.2;
+      const attStartY = clamp(incY + (incY < 50 ? -1.4 : 1.4), 6, 94);
+      const attFacing = screenAngle(attStartX, attStartY, attRight ? 100 : 0, 50);
+      const attXNow = attStartX + (incX - attStartX) * playT + postT * dirSign * 0.65;
+      const attYNow = attStartY + (incY - attStartY) * playT;
+      const isReckless = sc === 'reckless_duel';
+      trackBallX = attXNow + Math.cos(attFacing) * (agentFxR * 0.85 + ballFxR * 0.45) + postT * dirSign * 2.4;
+      trackBallY = attYNow + Math.sin(attFacing) * (agentFyR * 0.85 + ballFyR * 0.45) + (isReckless ? postT * 1.4 : 0);
+    }
+  }
+
+  const rawCamCenterX = isFullCam
+    ? 50
+    : followBall
+      ? trackBallX
+      : startCamX + (baseCamX - startCamX) * panEase;
+  const rawCamCenterY = isFullCam
+    ? 50
+    : followBall
+      ? trackBallY
+      : startCamY + (baseCamY - startCamY) * panEase;
+  const halfSpanX = spanX / 2;
+  const halfSpanY = spanY / 2;
+  const camCenterX = isFullCam ? 50 : spanX < 107 ? clamp(rawCamCenterX, -3.5 + halfSpanX, 103.5 - halfSpanX) : 50;
+  const camCenterY = isFullCam ? 50 : spanY < 105 ? clamp(rawCamCenterY, -2.5 + halfSpanY, 102.5 - halfSpanY) : 50;
+  const minFX = camCenterX - halfSpanX;
+  const minFY = camCenterY - halfSpanY;
+  const mx = (fx: number) => scrX + ((fx - minFX) / spanX) * scrW;
+  const my = (fy: number) => scrY + ((fy - minFY) / spanY) * scrH;
 
   // Stadium apron outside pitch bounds + clipped pitch turf & mowed bands (matching main pitch 12-band layout)
   const fullPitchX0 = mx(0);
@@ -698,8 +856,6 @@ const renderVarMonitorPanel = (
     ctx.restore();
   };
 
-  const modeSizeScale = isWideCam ? 0.78 : 1;
-
   const drawVarSoccerBall = (
     fx: number,
     fy: number,
@@ -713,8 +869,7 @@ const renderVarMonitorPanel = (
     }
   ) => {
     const zVal = opts?.z ?? 0;
-    const baseR = (isStandalone ? 5.4 : smallText ? 3.4 : 4.0) * (isWideCam ? 0.82 : 1);
-    const ballR = baseR * (1 + clamp(zVal / 26, 0, 0.45)) * (opts?.radiusScale ?? 1);
+    const ballR = baseBallPixR * (1 + clamp(zVal / 26, 0, 0.45)) * (opts?.radiusScale ?? 1);
     const bx = mx(fx);
     const byGround = my(fy);
     const drawBy = byGround - zVal * (isStandalone ? 1.05 : 0.72);
@@ -1253,19 +1408,7 @@ const renderVarMonitorPanel = (
   };
 
   // Decisive moment hits at simT = 0.49 (locked during pct 0.36..0.64!)
-  const rawPlayT = clamp(simT / 0.49, 0, 1);
-  const playT = 1 - Math.pow(1 - rawPlayT, 2.05);
-  const slideStartPlayT = 1 - Math.pow(1 - clamp(0.2 / 0.49, 0, 1), 2.05);
-  const slideActionProg = simT >= 0.2 ? clamp((simT - 0.2) / 0.58, 0, 1) : 0;
-  const slideExtendNow = Math.sin(clamp(slideActionProg * 2, 0, 1) * (Math.PI / 2));
-  const postT = clamp((simT - 0.51) / 0.49, 0, 1);
-  const dirSign = attRight ? 1 : -1;
-  const agentPixR = (isStandalone ? clamp(scrH * 0.072, 8.2, 12.6) : clamp(scrH * 0.074, 5.2, 7.4)) * modeSizeScale;
-  const agentFxR = agentPixR / pxPerFx;
-  const agentFyR = agentPixR / pxPerFy;
-  const baseBallPixR = (isStandalone ? 5.4 : smallText ? 3.4 : 4.0) * (isWideCam ? 0.82 : 1);
-  const ballFxR = baseBallPixR / pxPerFx;
-  const ballFyR = baseBallPixR / pxPerFy;
+  // (playT, postT, dirSign, agentPixR, ballFxR computed earlier for follow-ball tracking)
 
   // In wide camera mode, draw opposite goal frame if it happens to enter view
   const drawVisibleOtherGoal = () => {
@@ -2504,7 +2647,8 @@ export const drawVarReplayToCanvas = (
   awayGkKit = '#ea580c',
   homeTrim = '#ffffff',
   awayTrim = '#ffffff',
-  cameraMode: VarCameraMode = 'wide'
+  cameraMode: VarCameraMode = 'wide',
+  followBall = false
 ) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -2538,7 +2682,8 @@ export const drawVarReplayToCanvas = (
     homeTrim,
     awayTrim,
     true,
-    cameraMode
+    cameraMode,
+    followBall
   );
 };
 
@@ -6706,24 +6851,26 @@ export const drawHighlightClipToCanvas = (
     const arcEnv = Math.sin(prog * Math.PI);
     const dirSign = agPos.dd === -1 ? -1 : 1;
 
-    // Resolve celebration role & phase matching live match — strictly gated until ball hits the net
-    const isCelebAct = isCelebratingPhase && (act === HL_ACT.CELEBRATE || meta.s === clip.side);
-    const cRole: 'scorer' | 'assister' | 'teammate' | 'og_culprit' | null = isCelebAct
-      ? agPos.dd === -1
+    // Resolve celebration role & phase matching live match — strictly gated until ball hits the net & ONLY scoring team celebrates
+    const isScoringTeam = meta.s === clip.side;
+    const isOgCulpritActor =
+      !isScoringTeam && (agPos.dd === -1 || (clip.kind === 'goal_og' && isStarActor));
+    const cRole: 'scorer' | 'assister' | 'teammate' | 'og_culprit' | null = isCelebratingPhase
+      ? isOgCulpritActor
         ? 'og_culprit'
-        : agPos.dd === 1
-          ? 'scorer'
-          : agPos.dd === 2
-            ? 'assister'
-            : agPos.dd === 3
-              ? 'teammate'
-              : isStarActor
-                ? clip.kind === 'goal_og'
-                  ? 'og_culprit'
-                  : 'scorer'
-                : isAssister
-                  ? 'assister'
-                  : 'teammate'
+        : isScoringTeam && !meta.gk
+          ? agPos.dd === 1
+            ? 'scorer'
+            : agPos.dd === 2
+              ? 'assister'
+              : agPos.dd === 3
+                ? 'teammate'
+                : isStarActor && clip.kind !== 'goal_og'
+                  ? 'scorer'
+                  : isAssister
+                    ? 'assister'
+                    : 'teammate'
+          : null
       : null;
     const fallbackCelebPh = isCelebratingPhase ? clamp((cPct - goalImpactT) / Math.max(0.08, 1 - goalImpactT), 0, 1) : 0;
     const cPh = isCelebratingPhase ? (act === HL_ACT.CELEBRATE && agPos.ap > 0.02 ? prog : fallbackCelebPh) : 0;

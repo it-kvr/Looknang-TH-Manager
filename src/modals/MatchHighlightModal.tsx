@@ -402,8 +402,8 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
               )}
             </div>
 
-            {/* Scrubber & Commentary Bar */}
-            <div className="shrink-0 px-3 py-1.5 mland:px-2 mland:py-1 bg-[#081322] border-t border-white/10 space-y-1">
+            {/* Scrubber Bar */}
+            <div className="shrink-0 px-3 py-1.5 mland:px-2 mland:py-1 bg-[#081322] border-t border-white/10">
               {/* Timeline progress bar with Climax Diamond */}
               <div className="flex items-center gap-2">
                 <span className="text-[10px] mland:text-[8.5px] font-extrabold tabular text-amber-300 w-9 shrink-0">
@@ -455,17 +455,6 @@ export const MatchHighlightModal: React.FC<MatchHighlightModalProps> = ({
                 >
                   0%
                 </span>
-              </div>
-
-              {/* Commentary strip */}
-              <div className="flex items-center justify-between gap-2 text-[11px] mland:text-[9px]">
-                <span className="text-white/90 font-semibold truncate">{activeClip.commentary}</span>
-                {(activeClip.shotDistM || activeClip.shotSpeedKmh) && (
-                  <span className="hidden sm:inline-flex items-center gap-1.5 shrink-0 px-2 py-0.5 rounded bg-white/8 text-[10px] font-bold tabular text-amber-200">
-                    {activeClip.shotDistM ? <span>📏 {activeClip.shotDistM} ม.</span> : null}
-                    {activeClip.shotSpeedKmh ? <span>⚡ {activeClip.shotSpeedKmh} กม./ชม.</span> : null}
-                  </span>
-                )}
               </div>
             </div>
 
