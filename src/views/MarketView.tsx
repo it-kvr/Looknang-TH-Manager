@@ -28,6 +28,7 @@ import { AnimatedMoney } from '../components/AnimatedMoney';
 import { TransferMarketIcon } from '../components/TransferMarketIcon';
 import { OvrBadge } from '../components/OvrBadge';
 import { PlayerStatusBadge } from '../components/PlayerStatusBadge';
+import { getRatingPalette } from '../components/RatingBadge';
 import { SquadSellModal } from '../modals/SquadActionModals';
 
 export interface OfferDraft {
@@ -1154,7 +1155,7 @@ export const MarketView: React.FC<{
                             ) : null}
                           </div>
                           <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                            <span>{SPN[q.ro] || q.pos} · {q.age} ปี ·</span>
+                            <span>{q.age} ปี ·</span>
                             <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
                             <span aria-hidden="true">·</span>
                             <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
@@ -1217,7 +1218,7 @@ export const MarketView: React.FC<{
                             </span>
                           </div>
                           <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] truncate tabular leading-snug mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                            <span>{TN[team.tier]} · {SPN[q.ro] || q.pos} · {q.age} ปี ·</span>
+                            <span>{TN[team.tier]} · {q.age} ปี ·</span>
                             <PotentialBadge pot={q.pot || q.ov} variant="inline" size="xs" />
                             <span aria-hidden="true">·</span>
                             <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />
@@ -1397,7 +1398,7 @@ export const MarketView: React.FC<{
                               ) : (
                                 <span>· 👟 {cs.assists}</span>
                               )}
-                              {cs.avgRating > 0 && <span className="text-[#8a5b00] dark:text-[#fde047]">· ⭐ {cs.avgRating.toFixed(2)}</span>}
+                              {cs.avgRating > 0 && <span className={`font-bold ${getRatingPalette(cs.avgRating).textCls}`}>· ⭐ {cs.avgRating.toFixed(2)}</span>}
                               {cs.motm > 0 && <span>· 👑 {cs.motm}</span>}
                               {cs.ntCaps > 0 && <span>· 🇹🇭 {cs.ntCaps}</span>}
                             </span>
@@ -1954,7 +1955,7 @@ export const MarketView: React.FC<{
                           )}
                         </div>
                         <div className="text-[11px] mland:text-[9.5px] text-[var(--mut)] tabular truncate leading-snug mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                          <span>{SPN[q.ro] || q.pos} · {q.age} ปี ·</span>
+                          <span>{q.age} ปี ·</span>
                           <PotentialBadge pot={q.pot} variant="inline" size="xs" />
                           <span aria-hidden="true">·</span>
                           <PlayerBioStrip bio={getPlayerBio(q)} variant="inline" />

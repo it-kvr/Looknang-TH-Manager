@@ -10,6 +10,7 @@ import { ClubCrest, PlayerFace } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { getRatingPalette } from '../components/RatingBadge';
 
 type CupTabId = 'fa' | 'lc' | 'dc' | 'sc' | 'asia';
 type CupStatCat = 'sg' | 'sa' | 'cs' | 'motm' | 'rt' | 'sp';
@@ -923,7 +924,7 @@ export const CupView: React.FC<{
                                       <span className="truncate">{item.t.name}</span>
                                       {isMine && <MyTeamBadge size="2xs" />}
                                       <span aria-hidden="true">·</span>
-                                      <span className="shrink-0">{item.st.sp}น</span>
+                                      <span className="shrink-0">{item.st.sp} นัด</span>
                                     </div>
                                   </div>
                                   <div className="text-right shrink-0">
@@ -931,7 +932,7 @@ export const CupView: React.FC<{
                                       {formatVal(item)}
                                     </div>
                                     {(statCat === 'sg' || statCat === 'sa' || statCat === 'sp') && (item.st.avgRating > 0) && (
-                                      <div className="text-[9px] mland:text-[7.5px] text-[var(--mut)] tabular mt-0.5">
+                                      <div className={`text-[9px] mland:text-[7.5px] font-bold tabular mt-0.5 ${getRatingPalette(item.st.avgRating).textCls}`}>
                                         ⭐ {item.st.avgRating.toFixed(1)}
                                       </div>
                                     )}

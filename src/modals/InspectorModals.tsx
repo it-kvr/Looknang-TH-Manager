@@ -754,7 +754,7 @@ export const TeamInspectorModal: React.FC<{
                           key={q.n}
                           type="button"
                           onClick={() => onInspectPlayer(q, team)}
-                          className={`w-full text-left grid grid-cols-[22px_34px_26px_minmax(0,1fr)_52px_62px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_54px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
+                          className={`w-full text-left grid grid-cols-[22px_34px_26px_minmax(0,1fr)_52px_70px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_42px_60px_24px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors cursor-pointer ${
                             unavailable
                               ? 'bg-rose-500/[0.05] hover:bg-rose-500/[0.09] opacity-85'
                               : isMe
@@ -797,7 +797,7 @@ export const TeamInspectorModal: React.FC<{
                             )}
                             {(q.hg || q.customCreated) ? <span title="เด็กปั้นสโมสร" className="text-[10px] mland:text-[8.5px] shrink-0">🌱</span> : null}
                             <span className="hidden sm:inline text-[9.5px] mland:text-[8px] text-[var(--mut)] tabular shrink-0">
-                              · {q.age}ป
+                              · {q.age} ปี
                             </span>
                           </div>
 

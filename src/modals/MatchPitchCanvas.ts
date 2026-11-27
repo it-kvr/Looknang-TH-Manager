@@ -6,6 +6,7 @@ import { getShirtNo, visOf, getFormationSlots, DT, colDist, getPlayerTraits } fr
 import { faceBodySvg } from '../components/SvgVisuals';
 import { getClubCaptainPalette } from '../components/CaptainBadge';
 import { getPositionCanvasPalette } from '../components/PositionBadge';
+import { getRatingCanvasPalette } from '../components/RatingBadge';
 
 export const buildAgentsForTeam = (
   team: Team,
@@ -4854,10 +4855,11 @@ export const drawLivePitchToCanvas = (
 
       if (showRatings) {
         const rtVal = liveRatings?.[ag.id] ?? 6.5;
+        const rtPal = getRatingCanvasPalette(rtVal);
         pillStr = rtVal.toFixed(1);
-        pillBg = rtVal >= 8.2 ? '#facc15' : rtVal >= 7.1 ? '#10b981' : rtVal >= 6.2 ? '#0f172a' : '#e11d48';
-        pillFg = rtVal >= 8.2 ? '#1c1300' : '#ffffff';
-        pillStroke = rtVal >= 8.2 ? '#fef08a' : rtVal >= 7.1 ? '#a7f3d0' : rtVal >= 6.2 ? '#94a3b8' : '#fecdd3';
+        pillBg = rtPal.bg;
+        pillFg = rtPal.text;
+        pillStroke = rtPal.stroke;
       } else {
         const ovVal = Math.round(ag.ov ?? 60);
         pillStr = String(ovVal);

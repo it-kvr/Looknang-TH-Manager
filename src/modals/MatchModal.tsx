@@ -33,6 +33,7 @@ import { StaminaBar } from '../components/StaminaBar';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
+import { RatingBadge } from '../components/RatingBadge';
 import { buildAgentsForTeam, drawLivePitchToCanvas } from './MatchPitchCanvas';
 import { LiveTacticsStudio, type LivePlayerMatchStats } from './LiveTacticsStudio';
 import { VarReplayModal, type VarReplayRecord } from './VarReplayModal';
@@ -454,7 +455,7 @@ export const MatchModal: React.FC<{
     injuries: [] as { teamId: number; name: string; games: number }[],
     injuredNames: [] as string[],
     liveFit: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, Math.round(q.fit ?? 100)])) as Record<string, number>,
-    liveForm: Object.fromEntries([...homeOrig.sq, ...awayOrig.sq].map((q) => [q.n, 6.5])) as Record<string, number>,
+    liveForm: Object.fromEntries([...initialHomeXi, ...initialAwayXi].map((n) => [n, 6.5])) as Record<string, number>,
     playerStats: {} as Record<string, LivePlayerMatchStats>,
     userStarted: myInitialStarted,
     userSubInMin: null as number | null,
@@ -1587,7 +1588,8 @@ export const MatchModal: React.FC<{
           const outIdx = curLu.indexOf(myPlayerName);
           if (outIdx >= 0) {
             curLu[outIdx] = subReplace.n;
-            curPlayed.push(subReplace.n);
+            if (!curPlayed.includes(subReplace.n)) curPlayed.push(subReplace.n);
+            if (sr.liveForm[subReplace.n] == null) sr.liveForm[subReplace.n] = 6.5;
             if (isHomeSide) sr.homeSubsCount++;
             else sr.awaySubsCount++;
             sr.userSubOutMin = curMin;
@@ -2145,6 +2147,7 @@ export const MatchModal: React.FC<{
         if (subIn && idx >= 0) {
           curLu[idx] = subIn.n;
           if (!curPlayed.includes(subIn.n)) curPlayed.push(subIn.n);
+          if (sr.liveForm[subIn.n] == null) sr.liveForm[subIn.n] = 6.5;
           if (isHomeSide) sr.homeSubsCount++;
           else sr.awaySubsCount++;
           sr.subs.push({ m: curMin, t: sideOrig.id, inPlayer: subIn.n, outPlayer: victim.id });
@@ -2195,6 +2198,7 @@ export const MatchModal: React.FC<{
     if (subIn && idx >= 0) {
       curLu[idx] = subIn.n;
       if (!curPlayed.includes(subIn.n)) curPlayed.push(subIn.n);
+      if (sr.liveForm[subIn.n] == null) sr.liveForm[subIn.n] = 6.5;
       if (isHomeSide) sr.homeSubsCount++;
       else sr.awaySubsCount++;
       sr.subs.push({ m: curMin, t: sideOrig.id, inPlayer: subIn.n, outPlayer: victim.id });
@@ -8716,7 +8720,8 @@ export const MatchModal: React.FC<{
       const idx = curLu.indexOf(outPlayer.n);
       if (idx < 0) return;
       curLu[idx] = inPlayer.n;
-      curPlayed.push(inPlayer.n);
+      if (!curPlayed.includes(inPlayer.n)) curPlayed.push(inPlayer.n);
+      if (sr.liveForm[inPlayer.n] == null) sr.liveForm[inPlayer.n] = 6.5;
       if (isHomeSide) sr.homeSubsCount++;
       else sr.awaySubsCount++;
       const subEv: MatchSubEvent = { m: curMin, t: sideOrig.id, inPlayer: inPlayer.n, outPlayer: outPlayer.n };
@@ -9497,6 +9502,7 @@ export const MatchModal: React.FC<{
       const { cand, tl, isTalentedYouth, fitCand } = bestCand;
       myLu[outPick.idx] = cand.n;
       if (!myPlayed.includes(cand.n)) myPlayed.push(cand.n);
+      if (sr.liveForm[cand.n] == null) sr.liveForm[cand.n] = 6.5;
       if (meIsHome) sr.homeSubsCount++;
       else sr.awaySubsCount++;
       const subEv: MatchSubEvent = { m: curMin, t: meTeamOrig.id, inPlayer: cand.n, outPlayer: outPl.n };
@@ -9672,6 +9678,7 @@ export const MatchModal: React.FC<{
         if (subIn) {
           curLu[idx] = subIn.n;
           if (!curPlayed.includes(subIn.n)) curPlayed.push(subIn.n);
+          if (sr.liveForm[subIn.n] == null) sr.liveForm[subIn.n] = 6.5;
           if (isHomeSide) sr.homeSubsCount++;
           else sr.awaySubsCount++;
           sr.subs.push({ m: 90, t: sideOrig.id, inPlayer: subIn.n, outPlayer: injName });
@@ -10645,6 +10652,7 @@ export const MatchModal: React.FC<{
     SFX.sub();
     myLu[idx] = benchPlayer.n;
     if (!myPlayed.includes(benchPlayer.n)) myPlayed.push(benchPlayer.n);
+    if (sr.liveForm[benchPlayer.n] == null) sr.liveForm[benchPlayer.n] = 6.5;
     if (meIsHome) sr.homeSubsCount++;
     else sr.awaySubsCount++;
     const subEv: MatchSubEvent = { m: minute, t: meTeamOrig.id, inPlayer: benchPlayer.n, outPlayer: outName };
@@ -10743,6 +10751,7 @@ export const MatchModal: React.FC<{
     SFX.sub();
     myLu[idx] = bestSub.n;
     if (!myPlayed.includes(bestSub.n)) myPlayed.push(bestSub.n);
+    if (sr.liveForm[bestSub.n] == null) sr.liveForm[bestSub.n] = 6.5;
     if (meIsHome) sr.homeSubsCount++;
     else sr.awaySubsCount++;
     sr.subs.push({ m: minute, t: meTeamOrig.id, inPlayer: bestSub.n, outPlayer: injuryAlert.name });
@@ -10824,6 +10833,7 @@ export const MatchModal: React.FC<{
     SFX.tap();
     myLu[idx] = bestSub.n;
     if (!myPlayed.includes(bestSub.n)) myPlayed.push(bestSub.n);
+    if (sr.liveForm[bestSub.n] == null) sr.liveForm[bestSub.n] = 6.5;
     if (meIsHome) sr.homeSubsCount++;
     else sr.awaySubsCount++;
     const subEv: MatchSubEvent = { m: minute, t: meTeamOrig.id, inPlayer: bestSub.n, outPlayer: outName };
@@ -10975,7 +10985,7 @@ export const MatchModal: React.FC<{
       const st = srDone.playerStats[plName] || { shots: 0, onTarget: 0, passes: 0, tackles: 0, saves: 0, blocks: 0 };
       const qGoals = srDone.evs.filter((e) => !e.og && e.t === meTeamOrig.id && e.who === plName).length;
       const qAssists = srDone.evs.filter((e) => !e.og && e.t === meTeamOrig.id && e.as === plName).length;
-      const qRt = fullTimeAnalysis.ratings[plName] ?? 6.5;
+      const qRt = fullTimeAnalysis.ratings[plName] ?? 0;
       const qHadCard = srDone.cards.some((c) => c.who === plName);
       playerActions[plName] = {
         matches: 1,
@@ -11590,7 +11600,152 @@ export const MatchModal: React.FC<{
     broadcastFullscreen &&
     !done &&
     matchPhaseUi !== 'halftime' &&
-    !(state.mode === 'm' && mlandMatchTab === 'tactics');
+    mlandMatchTab === 'chat';
+
+  const renderLiveStreamChatPanel = () => {
+    const vTier = getStreamViewerTier(liveViewers);
+    const tierMeta = getViewerTierMeta(vTier);
+    const totalG = gh + ga;
+    const myG = meIsHome ? gh : ga;
+    const oppG = meIsHome ? ga : gh;
+    const winMul = myG > oppG ? 1.12 : myG === oppG ? 1.0 : 0.92;
+    const hypeMul = clamp(1 + totalG * 0.045 + (isDerby ? 0.14 : 0), 0.95, 1.45);
+    const estLiveIn =
+      state.mode === 'm' && streamProj.plan.id !== 'off'
+        ? Math.max(1, Math.round((streamProj.plan.revBase + (peakViewers / 1000) * streamProj.plan.revPer1k) * winMul * hypeMul))
+        : 0;
+    const canClubShout = !done && minute - clubShoutMin >= 15;
+    return (
+      <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
+        {/* Stream Broadcast Info Header */}
+        <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)] space-y-1.5 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
+              <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
+                {broadcastChannel.name}
+              </span>
+            </div>
+            <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
+              {broadcastChannel.badge}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
+            <span className="text-[var(--mut)]">
+              กำลังดู <b className="text-[var(--ink)]">{liveViewers.toLocaleString()}</b> · สูงสุด <b className="text-[var(--ink)]">{peakViewers.toLocaleString()}</b>
+            </span>
+            {state.mode === 'm' && (
+              streamProj.plan.id === 'off' ? (
+                <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
+              ) : (
+                <span className="font-bold">
+                  <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
+                  <span className="text-[var(--mut)] mx-1">/</span>
+                  <span className="text-[var(--red)]">-{fmtMoneyNum(streamProj.plan.totalCost)}</span>
+                </span>
+              )
+            )}
+          </div>
+
+          {!done && (
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
+                {tierMeta.desc}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {matchPhaseUi !== 'halftime' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      SFX.tap();
+                      setBroadcastFullscreen((v) => !v);
+                    }}
+                    title={isLivePitchFullscreen ? 'ย่อจอกลับสู่มุมมองปกติ' : 'ดูไลฟ์สดแบบเต็มจอพร้อมแชทข้างๆ'}
+                    className={`btn btn-xs whitespace-nowrap shrink-0 inline-flex items-center gap-1 ${
+                      isLivePitchFullscreen
+                        ? 'bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
+                        : 'btn-secondary'
+                    }`}
+                  >
+                    {isLivePitchFullscreen ? (
+                      <>
+                        <Minimize2 className="w-3 h-3 shrink-0" />
+                        <span>ย่อจอ</span>
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="w-3 h-3 shrink-0" />
+                        <span>เต็มจอ</span>
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={!canClubShout}
+                  onClick={() => {
+                    SFX.tap();
+                    setClubShoutMin(minute);
+                    pushStreamComment(minute, 'club', {
+                      viewerBoost: Math.max(80, Math.round(streamProj.baseViewers * 0.08)),
+                      burst: 1
+                    });
+                  }}
+                  className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
+                >
+                  {canClubShout ? '👋 ทักทายคนดู' : `รอสักครู่ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Live Chat Messages Stream */}
+        <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
+          {liveComments.map((cm) => (
+            <div
+              key={cm.id}
+              className={`py-1.5 mland:py-1 text-[11px] mland:text-[9.5px] leading-snug ${
+                cm.kind === 'club'
+                  ? 'px-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 my-0.5'
+                  : cm.donateBaht
+                    ? 'px-2 rounded-lg bg-[#facc15]/15 border border-[#facc15]/40 my-0.5'
+                    : ''
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <span className={`font-bold truncate ${
+                  cm.kind === 'club'
+                    ? 'text-[var(--g)]'
+                    : cm.kind === 'goal'
+                      ? 'text-[var(--g)]'
+                      : cm.kind === 'var' || cm.kind === 'card'
+                        ? 'text-[var(--red)]'
+                        : 'text-[var(--ink)]'
+                }`}>
+                  {cm.user}
+                </span>
+                <span className="inline-flex items-center gap-1.5 shrink-0 tabular">
+                  {cm.donateBaht && (
+                    <span className="font-extrabold text-[#9a6700] dark:text-[var(--lamp)] text-[10px]">
+                      💎 {cm.donateBaht.toLocaleString()}฿
+                    </span>
+                  )}
+                  <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">{cm.m}&apos;</span>
+                </span>
+              </div>
+              <div className="text-[var(--mut)] mt-0.5 break-words">
+                <span className={cm.kind === 'goal' || cm.donateBaht || cm.kind === 'club' ? 'text-[var(--ink)] font-medium' : ''}>
+                  {cm.text}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div
@@ -11694,27 +11849,21 @@ export const MatchModal: React.FC<{
                       </button>
                     </div>
 
-                    <button
-                      type="button"
-                      title={broadcastFullscreen ? 'ออกจากโหมดถ่ายทอดสดเต็มจอ' : 'ดูถ่ายทอดสดแบบเต็มจอ'}
-                      aria-label={broadcastFullscreen ? 'ย่อจอถ่ายทอดสด' : 'ดูถ่ายทอดสดแบบเต็มจอ'}
-                      onClick={() => {
-                        SFX.tap();
-                        setBroadcastFullscreen((v) => !v);
-                      }}
-                      className={`btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 ${
-                        broadcastFullscreen
-                          ? 'bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400'
-                          : 'btn-surface'
-                      }`}
-                    >
-                      {broadcastFullscreen ? (
+                    {isLivePitchFullscreen && (
+                      <button
+                        type="button"
+                        title="ออกจากโหมดถ่ายทอดสดเต็มจอ"
+                        aria-label="ย่อจอถ่ายทอดสด"
+                        onClick={() => {
+                          SFX.tap();
+                          setBroadcastFullscreen(false);
+                        }}
+                        className="btn h-10 sm:h-11 md:h-12 mland:h-[38px] min-w-10 sm:min-w-0 px-2.5 sm:px-3 mland:px-2.5 rounded-xl mland:rounded-lg text-xs sm:text-[13px] mland:text-[11px] shrink-0 bg-sky-500 text-slate-950 border border-sky-300/70 hover:bg-sky-400"
+                      >
                         <Minimize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-                      ) : (
-                        <Maximize2 className="w-4 h-4 mland:w-3.5 mland:h-3.5 shrink-0" />
-                      )}
-                      <span className="hidden md:inline mland:inline">{broadcastFullscreen ? 'ย่อจอ' : 'เต็มจอ'}</span>
-                    </button>
+                        <span className="hidden md:inline mland:inline">ย่อจอ</span>
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -11747,7 +11896,7 @@ export const MatchModal: React.FC<{
         {/* Horizontal Landscape Broadcast Stage OR Live Tactical Formation & Drag-Drop Sub Studio */}
         <div
           className={`flex-1 min-h-0 overflow-hidden flex flex-col ${
-            isLivePitchFullscreen ? 'p-0' : 'p-2.5 mland:p-1.5'
+            isLivePitchFullscreen ? 'p-1.5 sm:p-2 mland:p-1' : 'p-2.5 mland:p-1.5'
           }`}
         >
           {state.mode === 'm' && !done && mlandMatchTab === 'tactics' ? (
@@ -11933,7 +12082,7 @@ export const MatchModal: React.FC<{
             <div
               className={
                 isLivePitchFullscreen
-                  ? 'flex flex-col flex-1 min-h-0 overflow-hidden'
+                  ? 'grid grid-cols-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[minmax(0,1fr)_300px] lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_370px] sm:grid-rows-[minmax(0,1fr)] mland:grid-cols-[minmax(0,1fr)_240px] mland:grid-rows-[minmax(0,1fr)] gap-1.5 sm:gap-2 mland:gap-1.5 items-stretch flex-1 min-h-0 overflow-hidden'
                   : 'grid grid-cols-[1.68fr_1fr] gap-2.5 mland:gap-2 items-stretch flex-1 min-h-0 overflow-hidden'
               }
             >
@@ -11942,14 +12091,14 @@ export const MatchModal: React.FC<{
               ref={leftStageScrollRef}
               className={
                 isLivePitchFullscreen
-                  ? 'min-w-0 flex-1 min-h-0 flex flex-col overflow-hidden'
+                  ? 'min-w-0 min-h-0 flex flex-col overflow-hidden'
                   : 'space-y-2.5 mland:space-y-2 min-w-0 h-full overflow-y-auto pr-1'
               }
             >
               <div
                 className={
                   isLivePitchFullscreen
-                    ? 'flex-1 min-h-0 overflow-hidden bg-[#0c351f] w-full flex flex-col'
+                    ? 'rounded-xl overflow-hidden border border-[var(--line)] bg-[#06190f] shadow-inner w-full sm:flex-1 sm:min-h-0 mland:flex-1 mland:min-h-0 flex flex-col'
                     : 'rounded-2xl mland:rounded-xl overflow-hidden border border-[var(--line)] bg-[#0c351f] shadow-inner mx-auto w-full flex flex-col'
                 }
               >
@@ -12069,7 +12218,11 @@ export const MatchModal: React.FC<{
                     );
                   })()}
                   <div
-                    className={`relative ${isLivePitchFullscreen ? 'flex-1 min-h-0 w-full' : ''}`}
+                    className={`relative ${
+                      isLivePitchFullscreen
+                        ? 'w-full flex items-center justify-center overflow-hidden sm:flex-1 sm:min-h-0 sm:[container-type:size] mland:flex-1 mland:min-h-0 mland:[container-type:size]'
+                        : ''
+                    }`}
                     style={{
                       backgroundColor:
                         matchEnv.timeOfDay === 'night'
@@ -12087,7 +12240,7 @@ export const MatchModal: React.FC<{
                       style={{ WebkitTouchCallout: 'none', touchAction: 'manipulation' }}
                       className={`${matchPhaseUi === 'halftime' && !done ? 'hidden ' : ''}${
                         isLivePitchFullscreen
-                          ? 'w-full h-full mx-auto block select-none'
+                          ? 'aspect-[16/8.2] w-full max-h-[44dvh] sm:max-h-none mland:max-h-none sm:aspect-auto mland:aspect-auto sm:[width:min(100cqw,calc(100cqh_*_16_/_8.2))] sm:[height:min(100cqh,calc(100cqw_*_8.2_/_16))] mland:[width:min(100cqw,calc(100cqh_*_16_/_8.2))] mland:[height:min(100cqh,calc(100cqw_*_8.2_/_16))] mx-auto block select-none'
                           : 'aspect-[16/8.2] w-full max-h-[calc(var(--app-dvh,1dvh)*96-128px)] mland:max-h-[calc(var(--app-dvh,1dvh)*97-112px)] object-contain mx-auto block select-none'
                       }`}
                       aria-label="สนามแข่งขัน 2 มิติแบบเรียลไทม์ 11 ต่อ 11"
@@ -12256,7 +12409,7 @@ export const MatchModal: React.FC<{
                                       </div>
                                       <div className="text-[10px] text-white/80 flex flex-wrap items-center gap-1.5 tabular">
                                         <span>{htPickedInfo.team.name}</span>
-                                        <span className="px-1.5 rounded bg-[#facc15]/20 text-[#facc15] font-extrabold">⭐ {htPickedInfo.rt.toFixed(1)}</span>
+                                        <RatingBadge rt={htPickedInfo.rt} size="xs" showStar />
                                         <StaminaBar
                                           value={htPickedInfo.fitVal}
                                           variant="inline"
@@ -12549,20 +12702,6 @@ export const MatchModal: React.FC<{
                           <Film className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
                           <span>สโล</span>
                         </button>
-
-                        <button
-                          type="button"
-                          title="ดูถ่ายทอดสดแบบเต็มจอ"
-                          aria-label="ดูถ่ายทอดสดแบบเต็มจอ"
-                          onClick={() => {
-                            SFX.tap();
-                            setBroadcastFullscreen(true);
-                          }}
-                          className="h-6 mland:h-5.5 px-1.5 sm:px-2 mland:px-1.5 rounded-md text-[10.5px] mland:text-[9px] font-bold inline-flex items-center justify-center gap-1 whitespace-nowrap cursor-pointer transition-colors shrink-0 text-[var(--mut)] hover:text-[var(--ink)] hover:bg-[var(--surface-2)]/70"
-                        >
-                          <Maximize2 className="w-3 h-3 mland:w-2.5 mland:h-2.5 shrink-0" />
-                          <span>เต็มจอ</span>
-                        </button>
                       </>
                     )}
 
@@ -12679,7 +12818,6 @@ export const MatchModal: React.FC<{
             </div>
 
             {/* Right Stage: Injury Alert + Stats + Live Stream Chat + Key Match Timeline (Plus Live Tactics Switch for Manager) */}
-            {!isLivePitchFullscreen && (
             <div className="space-y-1.5 min-w-0 h-full flex flex-col min-h-0">
               {injuryAlert && !done && (
                 <div className="px-2.5 py-2 mland:px-2 mland:py-1.5 rounded-2xl mland:rounded-xl bg-rose-950/95 border border-rose-400/55 shadow-sm flex flex-col gap-1.5 mland:gap-1 text-white shrink-0">
@@ -12719,22 +12857,28 @@ export const MatchModal: React.FC<{
                   </div>
                 </div>
               )}
+              {isLivePitchFullscreen ? (
+                <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+                  {renderLiveStreamChatPanel()}
+                </div>
+              ) : (
+              <>
               <div className="seg-bar grid w-full shrink-0 grid-cols-3">
                 <button
                   type="button"
                   onClick={() => setMlandMatchTab('stats')}
-                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
+                  className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 ${mlandMatchTab === 'stats' ? 'seg-btn-active' : ''}`}
                 >
-                  <span>📊 สถิติ</span>
+                  <span className="truncate">📊 สถิติ</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setMlandMatchTab('chat')}
-                  className={`seg-btn w-full whitespace-nowrap ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
+                  className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 ${mlandMatchTab === 'chat' ? 'seg-btn-active' : ''}`}
                 >
-                  <span>🔴</span>
-                  <span>ไลฟ์สด</span>
-                  <span className="tabular font-extrabold text-[9.5px] mland:text-[8.5px] opacity-85">
+                  <span className="shrink-0">🔴</span>
+                  <span className="truncate">ไลฟ์สด</span>
+                  <span className="tabular font-extrabold text-[9.5px] mland:text-[8px] opacity-85 shrink-0">
                     {fmtFansShort(liveViewers)}
                   </span>
                 </button>
@@ -12742,33 +12886,39 @@ export const MatchModal: React.FC<{
                   <button
                     type="button"
                     onClick={() => openTacticsStudio()}
-                    className={`seg-btn w-full whitespace-nowrap px-1.5 mland:px-1 ${
+                    title={
+                      matchPhaseUi === 'halftime'
+                        ? `พักครึ่ง · ปรับแผนและเปลี่ยนตัวได้ (เหลือ ${5 - subsUsed.length} คน · ออโต้${autoSubEnabled ? 'เปิด' : 'ปิด'})`
+                        : `ปรับแผนและเปลี่ยนตัว (เหลือ ${5 - subsUsed.length} คน · ออโต้${autoSubEnabled ? 'เปิด' : 'ปิด'})`
+                    }
+                    className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 gap-1 mland:gap-0.5 ${
                       mlandMatchTab === 'tactics'
                         ? 'seg-btn-active'
                         : matchPhaseUi === 'halftime'
-                          ? 'border border-amber-500/60 text-amber-700 dark:text-amber-300 font-extrabold'
+                          ? 'bg-amber-500/12 border border-amber-500/55 text-amber-700 dark:text-amber-300 font-extrabold'
                           : ''
                     }`}
                   >
-                    <span className="inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded bg-black/10 dark:bg-white/15 tabular font-extrabold text-[9.5px] mland:text-[8.5px]">
-                      {5 - subsUsed.length}
-                    </span>
-                    <span>📋 แผน</span>
+                    <span className="truncate">📋 แผน</span>
                     <span
-                      title={autoSubEnabled ? 'ระบบออโต้เปิดอยู่' : 'ระบบออโต้ปิดอยู่'}
-                      className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-black leading-none shrink-0 ${
-                        autoSubEnabled
-                          ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/40'
-                          : 'bg-black/8 dark:bg-white/10 text-[var(--mut)] border border-[var(--line)]/60'
+                      className={`inline-flex items-center justify-center min-w-[15px] h-[15px] mland:min-w-[13px] mland:h-[13px] px-1 rounded text-[9px] mland:text-[8px] font-black tabular leading-none shrink-0 ${
+                        matchPhaseUi === 'halftime'
+                          ? 'bg-amber-500 text-white'
+                          : 'bg-black/10 dark:bg-white/15'
                       }`}
                     >
-                      {autoSubEnabled ? '🤖เปิด' : '🤖ปิด'}
+                      {5 - subsUsed.length}
                     </span>
-                    {matchPhaseUi === 'halftime' && (
-                      <span className="px-1 py-[1px] rounded bg-amber-500 text-white text-[8.5px] mland:text-[7.5px] font-black shrink-0">
-                        พักครึ่ง
-                      </span>
-                    )}
+                    <span
+                      aria-label={autoSubEnabled ? 'เปลี่ยนตัวอัตโนมัติเปิดอยู่' : 'เปลี่ยนตัวอัตโนมัติปิดอยู่'}
+                      className={`inline-flex items-center justify-center w-4 h-[15px] mland:w-3.5 mland:h-[13px] rounded text-[9px] mland:text-[8px] leading-none shrink-0 ${
+                        autoSubEnabled
+                          ? 'bg-emerald-500/20 border border-emerald-500/45'
+                          : 'bg-black/8 dark:bg-white/10 opacity-45 grayscale border border-[var(--line)]/50'
+                      }`}
+                    >
+                      🤖
+                    </span>
                   </button>
                 ) : (
                   (() => {
@@ -12789,34 +12939,38 @@ export const MatchModal: React.FC<{
                           SFX.tap();
                           setMlandMatchTab('tactics');
                         }}
-                        className={`seg-btn w-full whitespace-nowrap ${
+                        className={`seg-btn w-full min-w-0 overflow-hidden whitespace-nowrap px-1 mland:px-0.5 gap-1 mland:gap-0.5 ${
                           activeTab
                             ? 'seg-btn-active'
-                            : canSpeakTab
-                              ? 'border border-[var(--g)]/55 text-[var(--g)] font-extrabold'
-                              : ''
+                            : matchPhaseUi === 'halftime'
+                              ? 'bg-amber-500/12 border border-amber-500/55 text-amber-700 dark:text-amber-300 font-extrabold'
+                              : canSpeakTab
+                                ? 'border border-[var(--g)]/55 text-[var(--g)] font-extrabold'
+                                : ''
                         }`}
                       >
-                        <span>🧠 แผนโค้ช</span>
+                        <span className="truncate">
+                          🧠 <span className="hidden sm:inline mland:hidden">แผน</span>โค้ช
+                        </span>
                         {matchPhaseUi === 'halftime' ? (
                           <span
-                            className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
+                            className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-black leading-none shrink-0 ${
                               activeTab
                                 ? 'bg-amber-400/25 text-amber-200'
                                 : 'bg-amber-500 text-white'
                             }`}
                           >
-                            พักครึ่ง
+                            พัก
                           </span>
                         ) : userPitchStatus === 'subbed_out' ? (
-                          <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">ออกแล้ว</span>
+                          <span className="text-[8.5px] mland:text-[7.5px] opacity-70 shrink-0">ออก</span>
                         ) : userPitchStatus === 'sent_off' ? (
-                          <span className="text-[9px] mland:text-[8px] text-[var(--red)] shrink-0">ใบแดง</span>
+                          <span className="text-[8.5px] mland:text-[7.5px] text-[var(--red)] shrink-0">แดง</span>
                         ) : userPitchStatus === 'bench' ? (
-                          <span className="text-[9px] mland:text-[8px] opacity-70 shrink-0">สำรอง</span>
+                          <span className="text-[8.5px] mland:text-[7.5px] opacity-70 shrink-0">สำรอง</span>
                         ) : coachChatCount >= 2 ? null : canSpeakTab ? (
                           <span
-                            className={`px-1.5 py-[1px] rounded text-[9px] mland:text-[8px] font-black shrink-0 ${
+                            className={`px-1 py-[1px] rounded text-[8.5px] mland:text-[7.5px] font-black leading-none shrink-0 ${
                               activeTab
                                 ? 'bg-white/20 text-white'
                                 : 'bg-[var(--g)] text-white'
@@ -12825,8 +12979,8 @@ export const MatchModal: React.FC<{
                             พร้อม
                           </span>
                         ) : (
-                          <span className="tabular text-[9.5px] mland:text-[8px] opacity-75 shrink-0">
-                            {waitTabMins}น.
+                          <span className="tabular text-[9px] mland:text-[7.5px] opacity-75 shrink-0">
+                            {waitTabMins}&apos;
                           </span>
                         )}
                       </button>
@@ -13047,137 +13201,7 @@ export const MatchModal: React.FC<{
                     );
                   })()
                 ) : mlandMatchTab === 'chat' ? (
-                  (() => {
-                    const vTier = getStreamViewerTier(liveViewers);
-                    const tierMeta = getViewerTierMeta(vTier);
-                    const totalG = gh + ga;
-                    const myG = meIsHome ? gh : ga;
-                    const oppG = meIsHome ? ga : gh;
-                    const winMul = myG > oppG ? 1.12 : myG === oppG ? 1.0 : 0.92;
-                    const hypeMul = clamp(1 + totalG * 0.045 + (isDerby ? 0.14 : 0), 0.95, 1.45);
-                    const estLiveIn =
-                      state.mode === 'm' && streamProj.plan.id !== 'off'
-                        ? Math.max(1, Math.round((streamProj.plan.revBase + (peakViewers / 1000) * streamProj.plan.revPer1k) * winMul * hypeMul))
-                        : 0;
-                    const canClubShout = !done && minute - clubShoutMin >= 15;
-                    return (
-                      <div className="flex-1 min-h-0 rounded-2xl mland:rounded-xl bg-[var(--surface)] border border-[var(--line)] shadow-xs flex flex-col overflow-hidden">
-                        {/* Stream Broadcast Info Header */}
-                        <div className="px-3 py-2 mland:px-2.5 mland:py-1.5 bg-[var(--surface-2)]/70 border-b border-[var(--line)] space-y-1.5 shrink-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className={`leading-none shrink-0 text-[11px] ${streamProj.plan.id === 'off' ? 'opacity-50 grayscale' : ''}`}>🔴</span>
-                              <span className="font-bold text-xs mland:text-[10.5px] truncate text-[var(--ink)]">
-                                {broadcastChannel.name}
-                              </span>
-                            </div>
-                            <span className="text-[10px] mland:text-[8.5px] font-bold text-[var(--g)] shrink-0">
-                              {broadcastChannel.badge}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center justify-between gap-2 text-[10.5px] mland:text-[9px] tabular">
-                            <span className="text-[var(--mut)]">
-                              กำลังดู <b className="text-[var(--ink)]">{liveViewers.toLocaleString()}</b> · สูงสุด <b className="text-[var(--ink)]">{peakViewers.toLocaleString()}</b>
-                            </span>
-                            {state.mode === 'm' && (
-                              streamProj.plan.id === 'off' ? (
-                                <span className="text-[var(--mut)]">ช่องกลาง ({tierMeta.label})</span>
-                              ) : (
-                                <span className="font-bold">
-                                  <span className="text-[var(--g)]">+{fmtMoneyNum(estLiveIn)}</span>
-                                  <span className="text-[var(--mut)] mx-1">/</span>
-                                  <span className="text-[var(--red)]">-{fmtMoneyNum(streamProj.plan.totalCost)}</span>
-                                </span>
-                              )
-                            )}
-                          </div>
-
-                          {!done && (
-                            <div className="flex items-center justify-between gap-2 pt-0.5">
-                              <span className="text-[10px] mland:text-[8.5px] text-[var(--mut)] truncate">
-                                {tierMeta.desc}
-                              </span>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                {matchPhaseUi !== 'halftime' && (
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      SFX.tap();
-                                      setBroadcastFullscreen(true);
-                                    }}
-                                    title="ดูการถ่ายทอดสดแบบเต็มจอ"
-                                    className="btn btn-xs btn-secondary whitespace-nowrap shrink-0 inline-flex items-center gap-1"
-                                  >
-                                    <Maximize2 className="w-3 h-3 shrink-0" />
-                                    <span>เต็มจอ</span>
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  disabled={!canClubShout}
-                                  onClick={() => {
-                                    SFX.tap();
-                                    setClubShoutMin(minute);
-                                    pushStreamComment(minute, 'club', {
-                                      viewerBoost: Math.max(80, Math.round(streamProj.baseViewers * 0.08)),
-                                      burst: 1
-                                    });
-                                  }}
-                                  className="btn btn-xs btn-secondary whitespace-nowrap shrink-0"
-                                >
-                                  {canClubShout ? '👋 ทักทายคนดู' : `รอสักครู่ (${Math.max(1, 15 - (minute - clubShoutMin))}')`}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Live Chat Messages Stream */}
-                        <div ref={rightChatScrollRef} className="flex-1 min-h-0 overflow-y-auto p-2.5 mland:p-2 divide-y divide-[var(--line)]/45">
-                          {liveComments.map((cm) => (
-                            <div
-                              key={cm.id}
-                              className={`py-1.5 mland:py-1 text-[11px] mland:text-[9.5px] leading-snug ${
-                                cm.kind === 'club'
-                                  ? 'px-2 rounded-lg bg-[var(--g-soft)] border border-[var(--g)]/30 my-0.5'
-                                  : cm.donateBaht
-                                    ? 'px-2 rounded-lg bg-[#facc15]/15 border border-[#facc15]/40 my-0.5'
-                                    : ''
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-1.5">
-                                <span className={`font-bold truncate ${
-                                  cm.kind === 'club'
-                                    ? 'text-[var(--g)]'
-                                    : cm.kind === 'goal'
-                                      ? 'text-[var(--g)]'
-                                      : cm.kind === 'var' || cm.kind === 'card'
-                                        ? 'text-[var(--red)]'
-                                        : 'text-[var(--ink)]'
-                                }`}>
-                                  {cm.user}
-                                </span>
-                                <span className="inline-flex items-center gap-1.5 shrink-0 tabular">
-                                  {cm.donateBaht && (
-                                    <span className="font-extrabold text-[#9a6700] dark:text-[var(--lamp)] text-[10px]">
-                                      💎 {cm.donateBaht.toLocaleString()}฿
-                                    </span>
-                                  )}
-                                  <span className="text-[9.5px] mland:text-[8px] text-[var(--mut)]">{cm.m}&apos;</span>
-                                </span>
-                              </div>
-                              <div className="text-[var(--mut)] mt-0.5 break-words">
-                                <span className={cm.kind === 'goal' || cm.donateBaht || cm.kind === 'club' ? 'text-[var(--ink)] font-medium' : ''}>
-                                  {cm.text}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()
+                  renderLiveStreamChatPanel()
                 ) : (
                   <div ref={rightStageScrollRef} className="flex-1 min-h-0 overflow-y-auto pr-0.5 space-y-1.5">
                     {/* Compact Live Stream Ticker Strip (always visible alongside stats) */}
@@ -13227,8 +13251,9 @@ export const MatchModal: React.FC<{
                   </div>
                 )}
               </div>
+              </>
+              )}
             </div>
-            )}
           </div>
           )}
         </div>

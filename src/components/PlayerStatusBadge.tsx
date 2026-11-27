@@ -34,7 +34,8 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
       return (
         <span
           title={`ติดโทษแบน ${susN} นัด`}
-          className={`inline-flex items-center gap-1 px-1.5 py-[1.5px] mland:px-1 mland:py-[1px] rounded-md border bg-rose-500/14 border-rose-500/40 text-rose-700 dark:text-rose-300 text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular whitespace-nowrap shrink-0 ${className}`}
+          aria-label={`ติดโทษแบน ${susN} นัด`}
+          className={`inline-flex items-center gap-1 mland:gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border bg-rose-500/14 border-rose-500/40 text-rose-700 dark:text-rose-300 text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
         >
           <StatIconBadge kind="red" count={1} size="xs" />
           <span>แบน {susN} นัด</span>
@@ -46,7 +47,8 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
       return (
         <span
           title={`บาดเจ็บพัก ${injN} นัด`}
-          className={`inline-flex items-center gap-1 px-1.5 py-[1.5px] mland:px-1 mland:py-[1px] rounded-md border bg-red-500/12 border-red-500/38 text-red-700 dark:text-red-300 text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular whitespace-nowrap shrink-0 ${className}`}
+          aria-label={`บาดเจ็บพัก ${injN} นัด`}
+          className={`inline-flex items-center gap-1 mland:gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border bg-red-500/12 border-red-500/38 text-red-700 dark:text-red-300 text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
         >
           <StatIconBadge kind="injury" size="xs" />
           <span>เจ็บ {injN} นัด</span>
@@ -59,7 +61,7 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
       return (
         <span
           title={nearBan ? `สะสมใบเหลือง ${ycN}/3 (อีก 1 ใบโดนแบน!)` : `สะสมใบเหลือง ${ycN}/3`}
-          className={`inline-flex items-center gap-1 px-1.5 py-[1.5px] mland:px-1 mland:py-[1px] rounded-md border text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 ${
+          className={`inline-flex items-center gap-1 mland:gap-0.5 px-1.5 py-[2px] mland:px-1 mland:py-[1px] rounded-md border text-[9.5px] mland:text-[8px] font-bold leading-none tabular whitespace-nowrap shrink-0 [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${
             nearBan
               ? 'bg-amber-500/18 border-amber-500/50 text-amber-800 dark:text-amber-200'
               : 'bg-amber-500/10 border-amber-500/30 text-amber-800 dark:text-amber-300'
@@ -79,10 +81,11 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
     return (
       <div
         title={`ติดโทษแบน ${susN} นัด`}
-        className={`w-full h-[22px] mland:h-[18px] px-1 rounded-md border bg-rose-500/14 border-rose-500/42 text-rose-700 dark:text-rose-300 inline-flex items-center justify-center gap-1 text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular whitespace-nowrap select-none ${className}`}
+        aria-label={`ติดโทษแบน ${susN} นัด`}
+        className={`w-full h-[22px] mland:h-[18px] px-1 mland:px-0.5 rounded-md border bg-rose-500/14 border-rose-500/42 text-rose-700 dark:text-rose-300 inline-flex items-center justify-center gap-[3px] mland:gap-[2px] text-[9.5px] mland:text-[8px] font-bold tracking-tight leading-none tabular whitespace-nowrap select-none shadow-2xs [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
       >
         <StatIconBadge kind="red" count={1} size="xs" />
-        <span>แบน {susN}น</span>
+        <span>แบน {susN} นัด</span>
       </div>
     );
   }
@@ -91,10 +94,11 @@ export const PlayerStatusBadge: React.FC<PlayerStatusBadgeProps> = ({
     return (
       <div
         title={`บาดเจ็บพัก ${injN} นัด`}
-        className={`w-full h-[22px] mland:h-[18px] px-1 rounded-md border bg-red-500/12 border-red-500/40 text-red-700 dark:text-red-300 inline-flex items-center justify-center gap-1 text-[9.5px] mland:text-[8px] font-extrabold leading-none tabular whitespace-nowrap select-none ${className}`}
+        aria-label={`บาดเจ็บพัก ${injN} นัด`}
+        className={`w-full h-[22px] mland:h-[18px] px-1 mland:px-0.5 rounded-md border bg-red-500/12 border-red-500/40 text-red-700 dark:text-red-300 inline-flex items-center justify-center gap-[3px] mland:gap-[2px] text-[9.5px] mland:text-[8px] font-bold tracking-tight leading-none tabular whitespace-nowrap select-none shadow-2xs [&>span]:!w-[11px] [&>span]:!h-[11px] mland:[&>span]:!w-[9.5px] mland:[&>span]:!h-[9.5px] ${className}`}
       >
         <StatIconBadge kind="injury" size="xs" />
-        <span>เจ็บ {injN}น</span>
+        <span>เจ็บ {injN} นัด</span>
       </div>
     );
   }

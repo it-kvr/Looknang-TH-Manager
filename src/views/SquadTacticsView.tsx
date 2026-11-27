@@ -640,7 +640,7 @@ export const SquadTacticsView: React.FC<{
             onInspectPlayer(q, me);
           }
         }}
-        className={`w-full grid grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_30px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_26px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
+        className={`w-full grid grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_30px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_26px] items-center gap-1 mland:gap-0.5 px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] text-left select-none transition-colors ${
           isTarget
             ? 'bg-[var(--lamp-soft)] ring-1 ring-inset ring-[var(--lamp)]'
             : isSource

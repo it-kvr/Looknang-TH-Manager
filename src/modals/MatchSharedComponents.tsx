@@ -30,21 +30,7 @@ import { StatIconBadge } from '../components/StatIconBadge';
 import { CaptainBadge } from '../components/CaptainBadge';
 import { PositionBadge } from '../components/PositionBadge';
 import { MyTeamBadge } from '../components/MyTeamBadge';
-
-const ftRatingTextColor = (rt: number | null): string => {
-  if (rt == null) return 'text-[var(--mut)]/55';
-  if (rt >= 8.0) return 'text-[#b45309] dark:text-[#fde047]';
-  if (rt >= 7.0) return 'text-emerald-600 dark:text-emerald-400';
-  if (rt >= 6.0) return 'text-sky-600 dark:text-sky-400';
-  return 'text-rose-600 dark:text-rose-400';
-};
-
-const ftRatingDarkTextColor = (rt: number): string => {
-  if (rt >= 8.0) return 'text-[#fde047]';
-  if (rt >= 7.0) return 'text-emerald-300';
-  if (rt >= 6.0) return 'text-sky-300';
-  return 'text-rose-300';
-};
+import { RatingBadge } from '../components/RatingBadge';
 
 export interface MatchSubLogInfo {
   teamId: number;
@@ -1537,24 +1523,32 @@ export const FullTimeMatchStage: React.FC<{
   const awayId = awayOrig.id;
   const meIsHome = homeId === state.me;
 
+  const hasRatingsMap = Object.keys(fullTimeAnalysis.ratings).length > 0;
+
   const buildFtMeta = (team: Team, xiNames: string[]): Record<string, PitchPlayerMeta> => {
     const out: Record<string, PitchPlayerMeta> = {};
+    const playedArr = fullTimeAnalysis.playedNames[team.id] || [];
+    const hasPlayedArr = playedArr.length > 0;
+    const playedSet = new Set(playedArr);
     xiNames.forEach((name) => {
-      const rt = fullTimeAnalysis.ratings[name] ?? 6.5;
-      const goals = evs.filter((e) => !e.og && e.t === team.id && e.who === name).length;
-      const assists = evs.filter((e) => !e.og && e.t === team.id && e.as === name).length;
-      const pCards = fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name);
+      const didPlay = hasPlayedArr
+        ? playedSet.has(name)
+        : !hasRatingsMap || fullTimeAnalysis.ratings[name] != null;
+      const rt = didPlay ? (fullTimeAnalysis.ratings[name] ?? (hasRatingsMap ? undefined : 6.5)) : undefined;
+      const goals = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.who === name).length : 0;
+      const assists = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.as === name).length : 0;
+      const pCards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name) : [];
       const isRed = pCards.some((c) => c.type === 'R' || c.type === 'Y2R');
       const yellowCards = !isRed && pCards.some((c) => c.type === 'Y') ? 1 : 0;
-      const subOutEv = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name);
-      const isMotm = fullTimeAnalysis.motm === name;
+      const subOutEv = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name) : undefined;
+      const isMotm = didPlay && fullTimeAnalysis.motm === name;
       out[name] = {
         rating: rt,
         goals,
         assists,
         isRed,
         yellowCards,
-        isInjured: injuredNames.includes(name),
+        isInjured: didPlay && injuredNames.includes(name),
         subOutMin: subOutEv?.m,
         isMotm
       };
@@ -1576,20 +1570,27 @@ export const FullTimeMatchStage: React.FC<{
               : homeOrig;
         const p = t.sq.find((q) => q.n === ftPickedPlayer) || null;
         const no = p ? getShirtNo(t, p) : 0;
-        const rt = fullTimeAnalysis.ratings[ftPickedPlayer] ?? 6.5;
-        const gl = evs.filter((e) => !e.og && e.t === t.id && e.who === ftPickedPlayer).length;
-        const as = evs.filter((e) => !e.og && e.t === t.id && e.as === ftPickedPlayer).length;
+        const playedArr = fullTimeAnalysis.playedNames[t.id] || [];
+        const hasPlayedArr = playedArr.length > 0;
+        const didPlay = hasPlayedArr
+          ? playedArr.includes(ftPickedPlayer)
+          : hasRatingsMap
+            ? fullTimeAnalysis.ratings[ftPickedPlayer] != null
+            : (t.id === homeId ? initialHomeXi : initialAwayXi).includes(ftPickedPlayer);
+        const rt = didPlay ? (fullTimeAnalysis.ratings[ftPickedPlayer] ?? (hasRatingsMap ? null : 6.5)) : null;
+        const gl = didPlay ? evs.filter((e) => !e.og && e.t === t.id && e.who === ftPickedPlayer).length : 0;
+        const as = didPlay ? evs.filter((e) => !e.og && e.t === t.id && e.as === ftPickedPlayer).length : 0;
         const slotRole = playedSlots?.[t.id]?.[ftPickedPlayer];
         const role = p?.ro || slotRole || ((t.id === homeId ? initialHomeXi : initialAwayXi)[0] === ftPickedPlayer ? 'GK' : 'CM');
         const linePos = p?.pos || LINE[role] || 'MF';
         const oppGoals = t.id === homeId ? ga : gh;
-        const cleanSheet = oppGoals === 0 && (linePos === 'GK' || linePos === 'DF');
-        const saves = playerSavesMap[ftPickedPlayer] || 0;
-        const subIn = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.inPlayer === ftPickedPlayer);
-        const subOut = fullTimeAnalysis.subs.find((s) => s.t === t.id && s.outPlayer === ftPickedPlayer);
-        const cards = fullTimeAnalysis.cards.filter((c) => c.t === t.id && c.who === ftPickedPlayer);
-        const isMotm = fullTimeAnalysis.motm === ftPickedPlayer;
-        return { name: ftPickedPlayer, team: t, pl: p, role, no, rt, gl, as, cleanSheet, saves, subIn, subOut, cards, isMotm };
+        const cleanSheet = didPlay && oppGoals === 0 && (linePos === 'GK' || linePos === 'DF');
+        const saves = didPlay ? (playerSavesMap[ftPickedPlayer] || 0) : 0;
+        const subIn = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === t.id && s.inPlayer === ftPickedPlayer) : undefined;
+        const subOut = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === t.id && s.outPlayer === ftPickedPlayer) : undefined;
+        const cards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === t.id && c.who === ftPickedPlayer) : [];
+        const isMotm = didPlay && fullTimeAnalysis.motm === ftPickedPlayer;
+        return { name: ftPickedPlayer, team: t, pl: p, role, no, didPlay, rt, gl, as, cleanSheet, saves, subIn, subOut, cards, isMotm };
       })()
     : null;
 
@@ -1668,7 +1669,9 @@ export const FullTimeMatchStage: React.FC<{
       .filter((s) => ftRosterTeam === s.side)
       .forEach(({ side, team, oppGoals, kit, gkKit, trim, xiList, captainName }) => {
         const xiSet = new Set(xiList);
-        const played = fullTimeAnalysis.playedNames[team.id] || xiList;
+        const rawPlayed = fullTimeAnalysis.playedNames[team.id] || [];
+        const hasPlayedNames = rawPlayed.length > 0;
+        const played = hasPlayedNames ? rawPlayed : xiList;
         const playedSet = new Set(played);
 
         const buildRow = (name: string, pl: Player | null, isStarter: boolean, didPlay: boolean, xiIndex: number): FtPlayerRow => {
@@ -1676,7 +1679,7 @@ export const FullTimeMatchStage: React.FC<{
           const slotRole = playedSlots?.[team.id]?.[name];
           const role = pl?.ro || slotRole || (isStarter && xiIndex === 0 ? 'GK' : null);
           const linePos = pl?.pos || (role ? LINE[role] : undefined);
-          const rt = didPlay ? (fullTimeAnalysis.ratings[name] ?? 6.5) : null;
+          const rt = didPlay ? (fullTimeAnalysis.ratings[name] ?? (hasRatingsMap ? null : 6.5)) : null;
           const goals = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.who === name).length : 0;
           const ownGoals = didPlay ? evs.filter((e) => e.og && e.t !== team.id && e.who === name).length : 0;
           const assists = didPlay ? evs.filter((e) => !e.og && e.t === team.id && e.as === name).length : 0;
@@ -1685,8 +1688,8 @@ export const FullTimeMatchStage: React.FC<{
           const pCards = didPlay ? fullTimeAnalysis.cards.filter((c) => c.t === team.id && c.who === name) : [];
           const yellowCards = pCards.filter((c) => c.type === 'Y').length;
           const redCards = pCards.filter((c) => c.type === 'R' || c.type === 'Y2R').length;
-          const subIn = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.inPlayer === name);
-          const subOut = fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name);
+          const subIn = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === team.id && s.inPlayer === name) : undefined;
+          const subOut = didPlay ? fullTimeAnalysis.subs.find((s) => s.t === team.id && s.outPlayer === name) : undefined;
           const isMotm = didPlay && fullTimeAnalysis.motm === name;
           const isInjured = didPlay && injuredNames.includes(name);
           const isCaptain = captainName === name;
@@ -1724,7 +1727,10 @@ export const FullTimeMatchStage: React.FC<{
 
         xiList.forEach((name, idx) => {
           const pl = team.sq.find((q) => q.n === name) || null;
-          starterRows.push(buildRow(name, pl, true, true, idx));
+          const starterDidPlay = hasPlayedNames
+            ? playedSet.has(name)
+            : !hasRatingsMap || fullTimeAnalysis.ratings[name] != null;
+          starterRows.push(buildRow(name, pl, true, starterDidPlay, idx));
         });
 
         const subPlayedNames = played.filter((name) => !xiSet.has(name));
@@ -1759,12 +1765,11 @@ export const FullTimeMatchStage: React.FC<{
     });
 
     const gridColsCls =
-      'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_34px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_28px]';
+      'grid-cols-[22px_34px_26px_minmax(0,1fr)_62px_36px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_54px_30px]';
 
     const renderPlayerRow = (item: FtPlayerRow) => {
       const isPicked = ftPickedPlayer === item.name;
       const rt = item.rt;
-      const rtColorCls = ftRatingTextColor(rt);
       const hasAnyStat =
         item.goals > 0 ||
         item.assists > 0 ||
@@ -1896,10 +1901,14 @@ export const FullTimeMatchStage: React.FC<{
           </div>
 
           {/* 6. เรตติ้ง */}
-          <div className="flex items-center justify-start">
-            <span className={`text-[11px] mland:text-[9.5px] font-extrabold tabular leading-none shrink-0 ${rtColorCls}`}>
-              {rt != null ? rt.toFixed(1) : '—'}
-            </span>
+          <div className="flex items-center justify-end">
+            {rt != null ? (
+              <RatingBadge rt={rt} isMotm={item.isMotm} size="2xs" fixedWidth />
+            ) : (
+              <span className="w-[32px] mland:w-[27px] text-center text-[10.5px] mland:text-[9px] font-semibold text-[var(--mut)]/55 tabular">
+                —
+              </span>
+            )}
           </div>
         </button>
       );
@@ -2071,7 +2080,13 @@ export const FullTimeMatchStage: React.FC<{
                       </div>
                       <div className="text-[10px] text-white/75 flex flex-wrap items-center gap-1.5 tabular mt-0.5">
                         <span>{pickedInfo.team.name}</span>
-                        <span className={`font-extrabold ${ftRatingDarkTextColor(pickedInfo.rt)}`}>{pickedInfo.rt.toFixed(1)}</span>
+                        {pickedInfo.rt != null ? (
+                          <RatingBadge rt={pickedInfo.rt} isMotm={pickedInfo.isMotm} size="xs" />
+                        ) : (
+                          <span className="px-1.5 py-[1px] rounded bg-white/10 text-white/65 font-semibold">
+                            ไม่ได้ลงสนาม
+                          </span>
+                        )}
                         {pickedInfo.gl > 0 && <StatIconBadge kind="goal" count={pickedInfo.gl} size="sm" />}
                         {pickedInfo.as > 0 && <StatIconBadge kind="assist" count={pickedInfo.as} size="sm" />}
                         {pickedInfo.cleanSheet && <StatIconBadge kind="cleansheet" count={1} size="xs" title={pickedInfo.saves > 0 ? `คลีนชีต · เซฟ ${pickedInfo.saves} ครั้ง` : 'คลีนชีต'} />}
@@ -2171,14 +2186,13 @@ export const FullTimeMatchStage: React.FC<{
                   const subTeam = sb.t === homeOrig.id ? homeOrig : awayOrig;
                   const subPl = subTeam.sq.find((q) => q.n === sb.inPlayer);
                   const subNo = subPl ? getShirtNo(subTeam, subPl) : 0;
-                  const subRt = fullTimeAnalysis.ratings[sb.inPlayer] ?? 6.5;
+                  const subRt = fullTimeAnalysis.ratings[sb.inPlayer] ?? (hasRatingsMap ? null : 6.5);
                   const isSubMotm = fullTimeAnalysis.motm === sb.inPlayer;
                   const isPicked = ftPickedPlayer === sb.inPlayer;
                   const subGl = evs.filter((e) => !e.og && e.t === subTeam.id && e.who === sb.inPlayer).length;
                   const subAs = evs.filter((e) => !e.og && e.t === subTeam.id && e.as === sb.inPlayer).length;
                   const subCards = fullTimeAnalysis.cards.filter((c) => c.t === subTeam.id && c.who === sb.inPlayer);
                   const subTeamKit = subTeam.id === homeId ? homeKit : awayKit;
-                  const subRtColorCls = ftRatingDarkTextColor(subRt);
                   return (
                     <button
                       key={idx}
@@ -2247,9 +2261,7 @@ export const FullTimeMatchStage: React.FC<{
                           )}
                         </div>
                       </div>
-                      <span className={`ml-0.5 text-[11px] mland:text-[9px] font-black tabular leading-none shrink-0 ${subRtColorCls}`}>
-                        {subRt.toFixed(1)}
-                      </span>
+                      <RatingBadge rt={subRt} isMotm={isSubMotm} size="xs" className="ml-0.5" />
                     </button>
                   );
                 })}
@@ -2404,7 +2416,19 @@ export const FullTimeMatchStage: React.FC<{
                           const culpritTeam = ev.og ? (isHomeSide ? awayOrig : homeOrig) : scoringTeam;
                           const scorerPl = culpritTeam.sq.find((q) => q.n === ev.who) || null;
                           const scorerNo = scorerPl ? getShirtNo(culpritTeam, scorerPl) : null;
+                          const scorerSlotRole = playedSlots?.[culpritTeam.id]?.[ev.who];
+                          const scorerRole = scorerPl?.ro || scorerSlotRole || null;
+                          const culpritCaptain = culpritTeam.id === homeId ? captains.H : captains.A;
+                          const isScorerCaptain = culpritCaptain === ev.who;
+                          const isScorerMe = Boolean(scorerPl?.me || (isPlayerMode && myPlayerName === ev.who));
+                          const isScorerMotm = fullTimeAnalysis.motm === ev.who;
                           const assisterPl = !ev.og && ev.as ? scoringTeam.sq.find((q) => q.n === ev.as) || null : null;
+                          const assisterNo = assisterPl ? getShirtNo(scoringTeam, assisterPl) : null;
+                          const assisterSlotRole = !ev.og && ev.as ? playedSlots?.[scoringTeam.id]?.[ev.as] : undefined;
+                          const assisterRole = assisterPl?.ro || assisterSlotRole || null;
+                          const scoringCaptain = scoringTeam.id === homeId ? captains.H : captains.A;
+                          const isAssisterCaptain = Boolean(ev.as && scoringCaptain === ev.as);
+                          const isAssisterMe = Boolean(assisterPl?.me || (isPlayerMode && ev.as && myPlayerName === ev.as));
                           const isPenGoal = !ev.og && (ev.style === 'penalty' || ev.style === 'panenka');
                           const isPicked = ftPickedPlayer === ev.who;
                           return (
@@ -2412,75 +2436,126 @@ export const FullTimeMatchStage: React.FC<{
                               key={`${ev.m}-${ev.t}-${ev.who}-${gIdx}`}
                               type="button"
                               onClick={() => {
+                                SFX.tap();
                                 setFtPickedPlayer((prev) => (prev === ev.who ? null : ev.who));
                                 if (ftPitchMode !== 'all') {
                                   setFtPitchMode(culpritTeam.id === homeOrig.id ? 'H' : 'A');
                                 }
                               }}
-                              className={`w-full text-left px-2 py-1 mland:px-1.5 mland:py-0.5 transition-colors flex flex-col gap-0.5 cursor-pointer ${
-                                isPicked ? 'bg-[var(--g)]/10' : 'hover:bg-[var(--surface)]/85'
+                              className={`w-full text-left px-2 py-[3.5px] mland:px-1.5 mland:py-[2.5px] transition-colors flex flex-col gap-0.5 cursor-pointer ${
+                                isPicked ? 'bg-[var(--g-soft)]/75' : 'hover:bg-[var(--surface-2)]/65'
                               }`}
                             >
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span
-                                  className={`min-w-[24px] h-4.5 px-1 rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
-                                    ev.og
-                                      ? 'bg-rose-500/18 text-rose-600 dark:text-rose-300'
-                                      : isHomeSide
-                                        ? 'bg-[var(--g)] text-white'
-                                        : 'bg-amber-500 text-white'
-                                  }`}
-                                >
-                                  {ev.m}&apos;
-                                </span>
-                                {scorerPl && (
-                                  <MatchPlayerThumb
-                                    player={scorerPl}
-                                    team={culpritTeam}
-                                    state={state}
-                                    kitColor={
-                                      culpritTeam.id === homeId
-                                        ? (scorerPl.pos === 'GK' ? homeGkKit : homeKit)
-                                        : (scorerPl.pos === 'GK' ? awayGkKit : awayKit)
-                                    }
-                                    trimColor={scorerPl.pos === 'GK' ? undefined : (culpritTeam.id === homeId ? homeTrim : awayTrim)}
-                                    size="xs"
-                                  />
-                                )}
-                                {scorerPl?.ro && <PositionBadge role={scorerPl.ro} size="2xs" />}
-                                <span className="font-bold text-[11px] mland:text-[9.5px] text-[var(--ink)] truncate min-w-0 flex-1">
-                                  {ev.who}
-                                </span>
-                                {scorerNo != null && (
-                                  <span className="text-[9.5px] mland:text-[8px] font-extrabold tabular text-[#b45309] dark:text-[var(--lamp)] shrink-0">
-                                    #{scorerNo}
+                              <div className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 min-w-0">
+                                {/* 1. รูป */}
+                                <div className="flex items-center justify-start">
+                                  {scorerPl ? (
+                                    <MatchPlayerThumb
+                                      player={scorerPl}
+                                      team={culpritTeam}
+                                      state={state}
+                                      kitColor={
+                                        culpritTeam.id === homeId
+                                          ? (scorerPl.pos === 'GK' ? homeGkKit : homeKit)
+                                          : (scorerPl.pos === 'GK' ? awayGkKit : awayKit)
+                                      }
+                                      trimColor={scorerPl.pos === 'GK' ? undefined : (culpritTeam.id === homeId ? homeTrim : awayTrim)}
+                                      size="xs"
+                                      ringClassName={isScorerMotm ? 'ring-2 ring-amber-400' : undefined}
+                                      isMotm={isScorerMotm}
+                                    />
+                                  ) : (
+                                    <span className="w-[20px] h-[21px] rounded-lg bg-[var(--surface-2)] border border-[var(--line)]/60 inline-block" />
+                                  )}
+                                </div>
+
+                                {/* 2. ตำแหน่ง */}
+                                <div className="flex items-center justify-start">
+                                  {scorerRole ? <PositionBadge role={scorerRole} size="2xs" /> : <span className="text-[10px] text-[var(--mut)]">—</span>}
+                                </div>
+
+                                {/* 3. เบอร์ */}
+                                <div className="text-left text-[10px] mland:text-[8.5px] font-extrabold text-[#b45309] dark:text-[var(--lamp)] tabular whitespace-nowrap">
+                                  {scorerNo != null ? `#${scorerNo}` : '—'}
+                                </div>
+
+                                {/* 4. ชื่อ + สัญลักษณ์ */}
+                                <div className="flex items-center justify-start gap-1 min-w-0">
+                                  <span className="text-[11px] mland:text-[9.5px] font-bold text-[var(--ink)] truncate">
+                                    {ev.who}
                                   </span>
-                                )}
-                                {ev.og && (
+                                  {isScorerCaptain && <CaptainBadge team={culpritTeam} state={state} size="xs" className="shrink-0" />}
+                                  {isScorerMe && (
+                                    <span
+                                      title="ตัวคุณ"
+                                      aria-label="ตัวคุณ"
+                                      className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-[var(--lamp)] text-[#261900] text-[8px] font-black shrink-0"
+                                    >
+                                      ★
+                                    </span>
+                                  )}
+                                  {ev.og && (
+                                    <span
+                                      title="ทำเข้าประตูตัวเอง"
+                                      className="text-[9px] mland:text-[7.5px] font-black text-rose-600 dark:text-rose-300 shrink-0"
+                                    >
+                                      OG
+                                    </span>
+                                  )}
+                                  {isPenGoal && (
+                                    <span
+                                      title="ประตูจุดโทษ"
+                                      className="text-[9.5px] mland:text-[8px] font-extrabold text-amber-700 dark:text-amber-300 shrink-0"
+                                    >
+                                      🎯
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* 5. นาทีที่ทำประตู */}
+                                <div className="flex items-center justify-end">
                                   <span
-                                    title="ทำเข้าประตูตัวเอง"
-                                    className="text-[9px] mland:text-[7.5px] font-black text-rose-600 dark:text-rose-300 shrink-0"
+                                    className={`min-w-[24px] mland:min-w-[20px] h-4.5 mland:h-4 px-1 rounded-md text-[9.5px] mland:text-[8px] font-extrabold tabular inline-flex items-center justify-center shrink-0 ${
+                                      ev.og
+                                        ? 'bg-rose-500/18 text-rose-600 dark:text-rose-300'
+                                        : isHomeSide
+                                          ? 'bg-[var(--g)] text-white'
+                                          : 'bg-amber-500 text-white'
+                                    }`}
                                   >
-                                    OG
+                                    {ev.m}&apos;
                                   </span>
-                                )}
-                                {isPenGoal && (
-                                  <span
-                                    title="ประตูจุดโทษ"
-                                    className="text-[9.5px] mland:text-[8px] font-extrabold text-amber-700 dark:text-amber-300 shrink-0"
-                                  >
-                                    🎯
-                                  </span>
-                                )}
+                                </div>
                               </div>
+
                               {!ev.og && ev.as && (
                                 <div
                                   title={`ผู้จ่ายบอล: ${ev.as}`}
-                                  className="pl-[30px] mland:pl-[28px] flex items-center gap-1 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight min-w-0"
+                                  className="grid grid-cols-[22px_34px_26px_minmax(0,1fr)_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_auto] items-center gap-1 mland:gap-0.5 text-[9.5px] mland:text-[8px] text-[var(--mut)] leading-tight min-w-0"
                                 >
-                                  <span className="leading-none shrink-0">👟</span>
-                                  {assisterPl?.ro && <PositionBadge role={assisterPl.ro} size="2xs" />}
-                                  <span className="font-medium text-[var(--ink)]/85 truncate">{ev.as}</span>
+                                  <span className="flex items-center justify-center leading-none shrink-0" aria-label="ผู้จ่ายบอล">
+                                    👟
+                                  </span>
+                                  <div className="flex items-center justify-start">
+                                    {assisterRole ? <PositionBadge role={assisterRole} size="2xs" /> : <span className="text-[9px] text-[var(--mut)]">—</span>}
+                                  </div>
+                                  <div className="text-left text-[9.5px] mland:text-[8px] font-extrabold text-[#b45309]/85 dark:text-[var(--lamp)]/85 tabular whitespace-nowrap">
+                                    {assisterNo != null ? `#${assisterNo}` : '—'}
+                                  </div>
+                                  <div className="flex items-center justify-start gap-1 min-w-0">
+                                    <span className="font-medium text-[var(--ink)]/85 truncate">{ev.as}</span>
+                                    {isAssisterCaptain && <CaptainBadge team={scoringTeam} state={state} size="xs" className="shrink-0" />}
+                                    {isAssisterMe && (
+                                      <span
+                                        title="ตัวคุณ"
+                                        aria-label="ตัวคุณ"
+                                        className="inline-flex items-center justify-center w-3 h-3 rounded-full bg-[var(--lamp)] text-[#261900] text-[7.5px] font-black shrink-0"
+                                      >
+                                        ★
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span />
                                 </div>
                               )}
                             </button>
@@ -2770,7 +2845,9 @@ export const FullTimeMatchStage: React.FC<{
               ) : (
                 <>
                   <span className="inline-flex flex-wrap items-center gap-1.5">
-                    <span>ฟอร์มคุณ ({fullTimeAnalysis.pf.mins} น.): <b>⭐ {fullTimeAnalysis.pf.rt.toFixed(1)}</b> ·</span>
+                    <span>ฟอร์มคุณ ({fullTimeAnalysis.pf.mins} น.):</span>
+                    <RatingBadge rt={fullTimeAnalysis.pf.rt} isMotm={fullTimeAnalysis.pf.motm} size="xs" showStar />
+                    <span>·</span>
                     <span className="inline-flex items-center gap-1 tabular font-extrabold">
                       <span>{fullTimeAnalysis.pf.gl}</span>
                       <StatIconBadge kind="goal" count={1} size="sm" title={`ทำประตู ${fullTimeAnalysis.pf.gl} ลูก`} />

@@ -6,6 +6,7 @@ import { ClubCrest } from '../components/SvgVisuals';
 import { PositionBadge } from '../components/PositionBadge';
 import { StatIconBadge } from '../components/StatIconBadge';
 import { OvrBadge } from '../components/OvrBadge';
+import { RatingBadge } from '../components/RatingBadge';
 
 type SortKey = 'avgRating' | 'sg' | 'sa' | 'sp' | 'motm' | 'ov';
 
@@ -348,9 +349,9 @@ export const SeasonStatsModal: React.FC<{
               {scopedTopRating ? (
                 <>
                   <div className="font-bold text-xs sm:text-sm mland:text-[11px] truncate">{scopedTopRating.name}</div>
-                  <div className="text-[11px] mland:text-[9.5px] font-semibold tabular">
-                    <span className="text-[var(--g)] font-extrabold">{scopedTopRating.avgRating.toFixed(2)}</span> ·{' '}
-                    {scopedTopRating.sp} นัด{scopedTopRating.motm > 0 ? ` · 👑${scopedTopRating.motm}` : ''}
+                  <div className="text-[11px] mland:text-[9.5px] font-semibold tabular flex items-center gap-1.5">
+                    <RatingBadge rt={scopedTopRating.avgRating} decimals={2} size="2xs" />
+                    <span>· {scopedTopRating.sp} นัด{scopedTopRating.motm > 0 ? ` · 👑${scopedTopRating.motm}` : ''}</span>
                   </div>
                 </>
               ) : (
@@ -518,10 +519,8 @@ export const SeasonStatsModal: React.FC<{
                           {pl.motm > 0 ? <b className="text-[#b45309] dark:text-[var(--lamp)]">{pl.motm}</b> : <span className="text-[var(--mut)]">-</span>}
                         </td>
                         <td className="py-1.5 mland:py-1 px-2.5 mland:px-1.5 text-right font-extrabold tabular">
-                          {pl.avgRating > 0 ? (
-                            <span className={pl.avgRating >= 7.2 ? 'text-[var(--g)]' : 'text-[var(--ink)]'}>
-                              {pl.avgRating.toFixed(2)}
-                            </span>
+                          {pl.avgRating > 0 && pl.sp > 0 ? (
+                            <RatingBadge rt={pl.avgRating} decimals={2} size="xs" />
                           ) : (
                             <span className="text-[var(--mut)] font-normal">-</span>
                           )}

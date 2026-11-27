@@ -1199,8 +1199,8 @@ export const LiveTacticsStudio: React.FC<LiveTacticsStudioProps> = ({
                   const meTrimColor = pl.pos === 'GK' ? undefined : (meIsHome ? homeTrim : awayTrim);
                   const isMePlayer = Boolean(pl.me || (state.mode === 'p' && state.p?.name === pl.n));
                   const rowCols = canQuickSub
-                    ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_30px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_26px_auto]'
-                    : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_64px_34px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_56px_28px]';
+                    ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_30px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_26px_auto]'
+                    : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_34px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_28px]';
 
                   return (
                     <div

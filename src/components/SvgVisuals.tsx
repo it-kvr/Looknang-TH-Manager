@@ -7,6 +7,7 @@ import { getShirtNo, visOf, getFormationSlots, playerPen, xi, colLum, colDist, t
 import { getClubCaptainPalette } from './CaptainBadge';
 import { getPositionCanvasPalette } from './PositionBadge';
 import { getOvrCanvasPalette } from './OvrBadge';
+import { getRatingCanvasPalette } from './RatingBadge';
 
 export const renderCrestPattern = (pat: number, uid: string, c1: string, c2: string) => (
   <>
@@ -1295,17 +1296,10 @@ export const FormationPitch: React.FC<{
         const ratingVal = meta?.rating;
         const useRating = statMode === 'rating' && ratingVal != null;
         const ovPal = getOvrCanvasPalette(q.ov);
-        const rtBg = !useRating
-          ? ovPal.bg
-          : meta?.isMotm || ratingVal >= 8.2
-            ? '#facc15'
-            : ratingVal >= 7.1
-              ? '#10b981'
-              : ratingVal >= 6.2
-                ? '#0f172a'
-                : '#e11d48';
-        const rtFg = !useRating ? ovPal.text : meta?.isMotm || ratingVal >= 8.2 ? '#1c1300' : '#ffffff';
-        const rtStroke = !useRating ? ovPal.stroke : meta?.isMotm || ratingVal >= 8.2 ? '#fef08a' : ratingVal >= 7.1 ? '#a7f3d0' : ratingVal >= 6.2 ? '#94a3b8' : '#fecdd3';
+        const rtPal = useRating ? getRatingCanvasPalette(ratingVal, meta?.isMotm) : ovPal;
+        const rtBg = rtPal.bg;
+        const rtFg = rtPal.text;
+        const rtStroke = rtPal.stroke;
 
         const hasCard = isRed || isSus || (meta?.yellowCards || 0) > 0;
         const goalsCount = meta?.goals || 0;

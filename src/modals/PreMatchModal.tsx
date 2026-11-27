@@ -513,8 +513,8 @@ export const PreMatchModal: React.FC<PreMatchModalProps> = ({
     const isCrossGroupSwap = Boolean(swapPickName && swapPickName !== pl.n && pickedIsStarter !== isStarter);
     const showSwapCol = canEditRow && !compact;
     const gridColsCls = showSwapCol
-      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_62px_26px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_54px_23px_auto]'
-      : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_62px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_54px_24px]';
+      ? 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_26px_auto] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_23px_auto]'
+      : 'grid-cols-[22px_34px_26px_minmax(0,1fr)_70px_28px] mland:grid-cols-[19px_30px_24px_minmax(0,1fr)_60px_24px]';
 
     return (
       <div

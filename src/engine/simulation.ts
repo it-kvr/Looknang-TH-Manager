@@ -7081,7 +7081,7 @@ export function simulateInstantMatchPayload(
     if (s.mode === 'p' && q.me && pf && pf.played === false) return;
     const qGoals = r.evs.filter((e) => !e.og && e.t === s.me && e.who === q.n).length;
     const qAssists = r.evs.filter((e) => !e.og && e.t === s.me && e.as === q.n).length;
-    const qRt = ratings[q.n] || 6.5;
+    const qRt = ratings[q.n] ?? 0;
     const act: Partial<Record<PersonalMissionMetric, number>> = {
       matches: 1,
       wins: myGoalsCount > oppGoalsCount ? 1 : 0,
